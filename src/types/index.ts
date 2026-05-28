@@ -1,0 +1,54 @@
+export interface ExcelRow {
+  Cliente: string | number;
+  "Razon Social"?: string;
+  "Razón social"?: string; // Support variations
+  "Tipo Doc": string;
+  Serie: string;
+  "Número": string | number;
+  "Fec. Doc.": string;
+  "Fec. Ven.": string;
+  Cuenta?: string | number;
+  "Mon.": string;
+  Debe: number | string;
+  Haber: number | string;
+  Saldo: number | string;
+}
+
+export interface Documento {
+  tipoDoc: string;
+  serie: string;
+  numero: string;
+  fechaDoc: string;
+  fechaVen: string;
+  cuenta?: string;
+  moneda: string;
+  debe: number;
+  haber: number;
+  saldo: number;
+}
+
+export interface MonedaResumen {
+  debe: number;
+  haber: number;
+  saldo: number; // Positive is debt, negative is credit
+}
+
+export interface ClienteGroup {
+  clienteId: string; // RUC/DNI (column 'Cliente')
+  razonSocial: string;
+  documentos: Documento[];
+  saldosPorMoneda: Record<string, MonedaResumen>;
+  // Flags for status
+  tieneDeuda: boolean;
+  tieneSaldoFavor: boolean;
+  saldoPrincipalTexto: string; // Preformatted text e.g., "Debe S/ 1,200.00" or "Saldo a favor US$ 50.00"
+}
+
+export interface DashboardMetrics {
+  totalClientes: number;
+  clientesDeudores: number;
+  clientesConSaldoFavor: number;
+  clientesAlDia: number;
+  deudaTotalPorMoneda: Record<string, number>;
+  saldoFavorTotalPorMoneda: Record<string, number>;
+}
