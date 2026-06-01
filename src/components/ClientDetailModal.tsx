@@ -100,15 +100,23 @@ export default function ClientDetailModal({ client, onClose, onOpenEmailComposer
             <div className={`p-5 rounded-2xl flex flex-col items-center justify-center border text-center ${
               client.tieneDeuda
                 ? 'bg-rose-50/50 dark:bg-rose-950/20 border-rose-100 dark:border-rose-900/30 text-rose-800 dark:text-rose-400'
-                : client.tieneSaldoFavor
-                  ? 'bg-emerald-50/50 dark:bg-emerald-950/20 border-emerald-100 dark:border-emerald-900/30 text-emerald-800 dark:text-emerald-400'
-                  : 'bg-slate-50 dark:bg-slate-800/60 border-slate-200/50 dark:border-slate-700/50 text-slate-700 dark:text-slate-300'
+                : client.tieneCredito
+                  ? 'bg-amber-50/50 dark:bg-amber-950/20 border-amber-100 dark:border-amber-900/30 text-amber-800 dark:text-amber-400'
+                  : client.tieneSaldoFavor
+                    ? 'bg-emerald-50/50 dark:bg-emerald-950/20 border-emerald-100 dark:border-emerald-900/30 text-emerald-800 dark:text-emerald-400'
+                    : 'bg-slate-50 dark:bg-slate-800/60 border-slate-200/50 dark:border-slate-700/50 text-slate-700 dark:text-slate-300'
             }`}>
               {client.tieneDeuda ? (
                 <>
                   <AlertCircle className="w-8 h-8 mb-2 animate-bounce" />
                   <span className="text-sm font-bold uppercase tracking-wider">Cliente deudor</span>
                   <span className="text-xs mt-1 opacity-80">Requiere gestión de cobro</span>
+                </>
+              ) : client.tieneCredito ? (
+                <>
+                  <Calendar className="w-8 h-8 mb-2" />
+                  <span className="text-sm font-bold uppercase tracking-wider">Crédito vigente</span>
+                  <span className="text-xs mt-1 opacity-80">Deuda aún no vencida</span>
                 </>
               ) : client.tieneSaldoFavor ? (
                 <>
@@ -220,7 +228,7 @@ export default function ClientDetailModal({ client, onClose, onOpenEmailComposer
             Cerrar
           </button>
           
-          {client.tieneDeuda && (
+          {(client.tieneDeuda || client.tieneCredito) && (
             <button
               onClick={() => onOpenEmailComposer(client)}
               className="flex items-center space-x-2 px-6 py-2.5 rounded-xl bg-gradient-to-tr from-sky-500 to-blue-600 hover:from-sky-600 hover:to-blue-700 text-sm font-bold text-white shadow-md shadow-sky-500/10 hover:shadow-sky-500/20 hover:scale-[1.03] transition-all duration-300"

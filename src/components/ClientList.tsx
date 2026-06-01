@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { Search, ChevronRight, AlertCircle, CheckCircle2, SlidersHorizontal, UserCheck } from 'lucide-react';
+import { Search, ChevronRight, SlidersHorizontal } from 'lucide-react';
 import { ClienteGroup } from '../types';
 import { formatNumber } from '../utils/excelParser';
 
@@ -8,7 +8,7 @@ interface ClientListProps {
   onSelectClient: (client: ClienteGroup) => void;
 }
 
-type FilterStatus = 'all' | 'debtors' | 'credits' | 'clean';
+type FilterStatus = 'all' | 'debtors' | 'credito' | 'credits' | 'clean';
 
 export default function ClientList({ clients, onSelectClient }: ClientListProps) {
   const [searchTerm, setSearchTerm] = useState('');
@@ -26,8 +26,9 @@ export default function ClientList({ clients, onSelectClient }: ClientListProps)
       const matchesFilter = 
         filterStatus === 'all' ||
         (filterStatus === 'debtors' && c.tieneDeuda) ||
+        (filterStatus === 'credito' && c.tieneCredito) ||
         (filterStatus === 'credits' && c.tieneSaldoFavor) ||
-        (filterStatus === 'clean' && !c.tieneDeuda && !c.tieneSaldoFavor);
+        (filterStatus === 'clean' && !c.tieneDeuda && !c.tieneCredito && !c.tieneSaldoFavor);
         
       return matchesSearch && matchesFilter;
     });
@@ -50,8 +51,9 @@ export default function ClientList({ clients, onSelectClient }: ClientListProps)
     return {
       all: clients.length,
       debtors: clients.filter(c => c.tieneDeuda).length,
+      credito: clients.filter(c => c.tieneCredito).length,
       credits: clients.filter(c => c.tieneSaldoFavor).length,
-      clean: clients.filter(c => !c.tieneDeuda && !c.tieneSaldoFavor).length
+      clean: clients.filter(c => !c.tieneDeuda && !c.tieneCredito && !c.tieneSaldoFavor).length
     };
   }, [clients]);
 
@@ -96,6 +98,18 @@ export default function ClientList({ clients, onSelectClient }: ClientListProps)
           >
             <span className="w-1.5 h-1.5 rounded-full bg-rose-500"></span>
             <span>Deudores ({tabCounts.debtors})</span>
+          </button>
+
+          <button
+            onClick={() => setFilterStatus('credito')}
+            className={`px-4 py-2 rounded-xl flex items-center space-x-1.5 transition-all ${
+              filterStatus === 'credito'
+                ? 'bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400 shadow-sm border border-amber-200/10'
+                : 'hover:text-slate-900 dark:hover:text-slate-200'
+            }`}
+          >
+            <span className="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
+            <span>Crédito ({tabCounts.credito})</span>
           </button>
           
           <button
@@ -162,22 +176,44 @@ export default function ClientList({ clients, onSelectClient }: ClientListProps)
                     })}
                   </td>
                   <td className="px-6 py-4 text-center">
-                    {c.tieneDeuda ? (
-                      <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-rose-50 dark:bg-rose-950/30 text-rose-700 dark:text-rose-400 border border-rose-100 dark:border-rose-900/30">
-                        <AlertCircle className="w-3.5 h-3.5 mr-1 shrink-0" />
-                        Debe
-                      </span>
-                    ) : c.tieneSaldoFavor ? (
-                      <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-400 border border-emerald-100 dark:border-emerald-900/30">
-                        <CheckCircle2 className="w-3.5 h-3.5 mr-1 shrink-0" />
-                        Saldo a favor
-                      </span>
-                    ) : (
-                      <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-100 dark:border-slate-700/60">
-                        <UserCheck className="w-3.5 h-3.5 mr-1 shrink-0" />
-                        Al día
-                      </span>
-                    )}
+                    <div className="inline-flex items-center gap-2">
+                      {c.facturasCredito > 0 && (
+                        <span
+                          className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-bold bg-amber-50 dark:bg-amber-950/30 text-amber-700 dark:text-amber-400 border border-amber-200/60 dark:border-amber-900/30"
+                          title={`${c.facturasCredito} factura(s) a crédito (no vencidas)`}
+                        >
+                          <span>🚧</span>
+                          <span>{c.facturasCredito}</span>
+                        </span>
+                      )}
+                      {c.facturasAFavor > 0 && (
+                        <span
+                          className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-bold bg-emerald-50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-400 border border-emerald-200/60 dark:border-emerald-900/30"
+                          title={`${c.facturasAFavor} factura(s) a favor`}
+                        >
+                          <span>✅</span>
+                          <span>{c.facturasAFavor}</span>
+                        </span>
+                      )}
+                      {c.facturasVencidas > 0 && (
+                        <span
+                          className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-bold bg-rose-50 dark:bg-rose-950/30 text-rose-700 dark:text-rose-400 border border-rose-200/60 dark:border-rose-900/30"
+                          title={`${c.facturasVencidas} factura(s) vencida(s)`}
+                        >
+                          <span>🟥</span>
+                          <span>{c.facturasVencidas}</span>
+                        </span>
+                      )}
+                      {c.facturasCredito === 0 && c.facturasAFavor === 0 && c.facturasVencidas === 0 && (
+                        <span
+                          className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-bold bg-slate-50 dark:bg-slate-800 text-slate-500 dark:text-slate-400 border border-slate-200/60 dark:border-slate-700/50"
+                          title="Al día"
+                        >
+                          <span>✔️</span>
+                          <span>Al día</span>
+                        </span>
+                      )}
+                    </div>
                   </td>
                   <td className="px-6 py-4 text-center" onClick={(e) => e.stopPropagation()}>
                     <button

@@ -10,6 +10,24 @@ function normalizeHeader(str: string): string {
     .replace(/[^a-z0-9]/g, ""); // Remove spaces/symbols
 }
 
+// Helper to check if date DD/MM/YYYY is in the past (overdue)
+function isPastDue(dateStr: string): boolean {
+  if (!dateStr) return false;
+  try {
+    const parts = dateStr.split('/');
+    if (parts.length !== 3) return false;
+    const day = parseInt(parts[0], 10);
+    const month = parseInt(parts[1], 10) - 1;
+    const year = parseInt(parts[2], 10);
+    const date = new Date(year, month, day);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    return date < today;
+  } catch {
+    return false;
+  }
+}
+
 export function parseExcelData(arrayBuffer: ArrayBuffer): ClienteGroup[] {
   const data = new Uint8Array(arrayBuffer);
   const workbook = XLSX.read(data, { type: 'array' });
@@ -112,6 +130,11 @@ export function parseExcelData(arrayBuffer: ArrayBuffer): ClienteGroup[] {
     
     const saldosPorMoneda: Record<string, MonedaResumen> = {};
     
+    // Count invoices by status
+    let facturasCredito = 0;   // Positive balance, not yet due
+    let facturasAFavor = 0;    // Zero or negative balance
+    let facturasVencidas = 0;  // Positive balance, past due
+
     documentos.forEach(doc => {
       const mon = doc.moneda || 'S/';
       if (!saldosPorMoneda[mon]) {
@@ -120,10 +143,23 @@ export function parseExcelData(arrayBuffer: ArrayBuffer): ClienteGroup[] {
       saldosPorMoneda[mon].debe += doc.debe;
       saldosPorMoneda[mon].haber += doc.haber;
       saldosPorMoneda[mon].saldo += doc.saldo;
+
+      // Classify each document
+      if (doc.saldo > 0.01) {
+        if (isPastDue(doc.fechaVen)) {
+          facturasVencidas++;
+        } else {
+          facturasCredito++;
+        }
+      } else if (doc.saldo < -0.01) {
+        facturasAFavor++;
+      }
+      // Documents with saldo ~0 are not counted
     });
 
     // Check if client has a net debt or credit
     let tieneDeuda = false;
+    let tieneCredito = false;
     let tieneSaldoFavor = false;
     const saldoTexts: string[] = [];
 
@@ -136,13 +172,27 @@ export function parseExcelData(arrayBuffer: ArrayBuffer): ClienteGroup[] {
       saldosPorMoneda[mon].haber = Math.round(saldosPorMoneda[mon].haber * 100) / 100;
 
       if (roundedSaldo > 0.01) {
-        tieneDeuda = true;
+        // Client has debt – determine if it's overdue or just credit
+        if (facturasVencidas > 0) {
+          tieneDeuda = true;
+        } else {
+          tieneCredito = true;
+        }
         saldoTexts.push(`Debe ${mon} ${formatNumber(roundedSaldo)}`);
       } else if (roundedSaldo < -0.01) {
         tieneSaldoFavor = true;
         saldoTexts.push(`Saldo a favor ${mon} ${formatNumber(Math.abs(roundedSaldo))}`);
       }
     });
+
+    // If has overdue invoices, it's "deuda"; if only has non-overdue debt, it's "credito"
+    // tieneDeuda takes priority over tieneCredito
+    if (facturasVencidas > 0) {
+      tieneDeuda = true;
+    }
+    if (facturasCredito > 0 && !tieneDeuda) {
+      tieneCredito = true;
+    }
 
     const saldoPrincipalTexto = saldoTexts.length > 0 ? saldoTexts.join(" / ") : "Al día";
 
@@ -152,8 +202,12 @@ export function parseExcelData(arrayBuffer: ArrayBuffer): ClienteGroup[] {
       documentos,
       saldosPorMoneda,
       tieneDeuda,
-      tieneSaldoFavor: tieneSaldoFavor && !tieneDeuda, // Net status
-      saldoPrincipalTexto
+      tieneCredito,
+      tieneSaldoFavor: tieneSaldoFavor && !tieneDeuda && !tieneCredito, // Net status
+      saldoPrincipalTexto,
+      facturasCredito,
+      facturasAFavor,
+      facturasVencidas
     };
   });
 

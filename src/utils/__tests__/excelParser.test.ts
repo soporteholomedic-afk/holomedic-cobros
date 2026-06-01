@@ -29,8 +29,12 @@ describe('calculateMetrics', () => {
           'S/': { debe: 1500, haber: 500, saldo: 1000 }
         },
         tieneDeuda: true,
+        tieneCredito: false,
         tieneSaldoFavor: false,
-        saldoPrincipalTexto: 'Debe S/ 1,000.00'
+        saldoPrincipalTexto: 'Debe S/ 1,000.00',
+        facturasCredito: 0,
+        facturasAFavor: 0,
+        facturasVencidas: 1
       },
       {
         clienteId: '10444555666',
@@ -40,8 +44,12 @@ describe('calculateMetrics', () => {
           '$': { debe: 100, haber: 300, saldo: -200 }
         },
         tieneDeuda: false,
+        tieneCredito: false,
         tieneSaldoFavor: true,
-        saldoPrincipalTexto: 'Saldo a favor $ 200.00'
+        saldoPrincipalTexto: 'Saldo a favor $ 200.00',
+        facturasCredito: 0,
+        facturasAFavor: 1,
+        facturasVencidas: 0
       },
       {
         clienteId: '20111222333',
@@ -51,8 +59,12 @@ describe('calculateMetrics', () => {
           'S/': { debe: 100, haber: 100, saldo: 0 }
         },
         tieneDeuda: false,
+        tieneCredito: false,
         tieneSaldoFavor: false,
-        saldoPrincipalTexto: 'Al día'
+        saldoPrincipalTexto: 'Al día',
+        facturasCredito: 0,
+        facturasAFavor: 0,
+        facturasVencidas: 0
       }
     ];
 

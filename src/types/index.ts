@@ -39,9 +39,14 @@ export interface ClienteGroup {
   documentos: Documento[];
   saldosPorMoneda: Record<string, MonedaResumen>;
   // Flags for status
-  tieneDeuda: boolean;
+  tieneDeuda: boolean;       // Has overdue invoices (past due date with positive balance)
+  tieneCredito: boolean;     // Has debt but NOT yet overdue (due date in the future)
   tieneSaldoFavor: boolean;
   saldoPrincipalTexto: string; // Preformatted text e.g., "Debe S/ 1,200.00" or "Saldo a favor US$ 50.00"
+  // Invoice counts by status
+  facturasCredito: number;   // Invoices with positive balance, not yet due
+  facturasAFavor: number;    // Invoices with zero or negative balance (paid/credit notes)
+  facturasVencidas: number;  // Invoices with positive balance, past due date
 }
 
 export interface DashboardMetrics {
