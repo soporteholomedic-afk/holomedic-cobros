@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { Search, ChevronRight, SlidersHorizontal } from 'lucide-react';
+import { Search, ChevronRight, FileWarning, CheckCircle2, X } from 'lucide-react';
 import { ClienteGroup } from '../types';
 import { formatNumber } from '../utils/excelParser';
 
@@ -19,17 +19,17 @@ export default function ClientList({ clients, onSelectClient }: ClientListProps)
   // Filter and search logic
   const filteredClients = useMemo(() => {
     return clients.filter(c => {
-      const matchesSearch = 
+      const matchesSearch =
         c.clienteId.toLowerCase().includes(searchTerm.toLowerCase()) ||
         c.razonSocial.toLowerCase().includes(searchTerm.toLowerCase());
-      
-      const matchesFilter = 
+
+      const matchesFilter =
         filterStatus === 'all' ||
         (filterStatus === 'debtors' && c.tieneDeuda) ||
         (filterStatus === 'credito' && c.tieneCredito) ||
         (filterStatus === 'credits' && c.tieneSaldoFavor) ||
         (filterStatus === 'clean' && !c.tieneDeuda && !c.tieneCredito && !c.tieneSaldoFavor);
-        
+
       return matchesSearch && matchesFilter;
     });
   }, [clients, searchTerm, filterStatus]);
@@ -59,10 +59,10 @@ export default function ClientList({ clients, onSelectClient }: ClientListProps)
 
   return (
     <div className="bg-white dark:bg-slate-900 border border-slate-200/60 dark:border-slate-800/80 rounded-3xl p-6 shadow-md shadow-slate-100/50 dark:shadow-none animate-fade-in delay-100">
-      
+
       {/* Search and Filters Bar */}
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 mb-6">
-        
+
         {/* Search Input */}
         <div className="relative flex-1 max-w-md">
           <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
@@ -79,22 +79,20 @@ export default function ClientList({ clients, onSelectClient }: ClientListProps)
         <div className="flex flex-wrap items-center gap-1.5 p-1 bg-slate-100/80 dark:bg-slate-950/80 rounded-2xl border border-slate-200/40 dark:border-slate-800/40 text-xs font-semibold text-slate-600 dark:text-slate-400">
           <button
             onClick={() => setFilterStatus('all')}
-            className={`px-4 py-2 rounded-xl transition-all ${
-              filterStatus === 'all'
-                ? 'bg-white dark:bg-slate-800 text-sky-600 dark:text-sky-300 shadow-sm border border-slate-200/10'
-                : 'hover:text-slate-900 dark:hover:text-slate-200'
-            }`}
+            className={`px-4 py-2 rounded-xl transition-all ${filterStatus === 'all'
+              ? 'bg-white dark:bg-slate-800 text-sky-600 dark:text-sky-300 shadow-sm border border-slate-200/10'
+              : 'hover:text-slate-900 dark:hover:text-slate-200'
+              }`}
           >
             Todos ({tabCounts.all})
           </button>
-          
+
           <button
             onClick={() => setFilterStatus('debtors')}
-            className={`px-4 py-2 rounded-xl flex items-center space-x-1.5 transition-all ${
-              filterStatus === 'debtors'
-                ? 'bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400 shadow-sm border border-rose-200/10'
-                : 'hover:text-slate-900 dark:hover:text-slate-200'
-            }`}
+            className={`px-4 py-2 rounded-xl flex items-center space-x-1.5 transition-all ${filterStatus === 'debtors'
+              ? 'bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400 shadow-sm border border-rose-200/10'
+              : 'hover:text-slate-900 dark:hover:text-slate-200'
+              }`}
           >
             <span className="w-1.5 h-1.5 rounded-full bg-rose-500"></span>
             <span>Deudores ({tabCounts.debtors})</span>
@@ -102,23 +100,21 @@ export default function ClientList({ clients, onSelectClient }: ClientListProps)
 
           <button
             onClick={() => setFilterStatus('credito')}
-            className={`px-4 py-2 rounded-xl flex items-center space-x-1.5 transition-all ${
-              filterStatus === 'credito'
-                ? 'bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400 shadow-sm border border-amber-200/10'
-                : 'hover:text-slate-900 dark:hover:text-slate-200'
-            }`}
+            className={`px-4 py-2 rounded-xl flex items-center space-x-1.5 transition-all ${filterStatus === 'credito'
+              ? 'bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400 shadow-sm border border-amber-200/10'
+              : 'hover:text-slate-900 dark:hover:text-slate-200'
+              }`}
           >
             <span className="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
             <span>Crédito ({tabCounts.credito})</span>
           </button>
-          
+
           <button
             onClick={() => setFilterStatus('credits')}
-            className={`px-4 py-2 rounded-xl flex items-center space-x-1.5 transition-all ${
-              filterStatus === 'credits'
-                ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 shadow-sm border border-emerald-200/10'
-                : 'hover:text-slate-900 dark:hover:text-slate-200'
-            }`}
+            className={`px-4 py-2 rounded-xl flex items-center space-x-1.5 transition-all ${filterStatus === 'credits'
+              ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 shadow-sm border border-emerald-200/10'
+              : 'hover:text-slate-900 dark:hover:text-slate-200'
+              }`}
           >
             <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
             <span>Con Saldo a Favor ({tabCounts.credits})</span>
@@ -126,11 +122,10 @@ export default function ClientList({ clients, onSelectClient }: ClientListProps)
 
           <button
             onClick={() => setFilterStatus('clean')}
-            className={`px-4 py-2 rounded-xl flex items-center space-x-1.5 transition-all ${
-              filterStatus === 'clean'
-                ? 'bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300 shadow-sm border border-slate-200/10'
-                : 'hover:text-slate-900 dark:hover:text-slate-200'
-            }`}
+            className={`px-4 py-2 rounded-xl flex items-center space-x-1.5 transition-all ${filterStatus === 'clean'
+              ? 'bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300 shadow-sm border border-slate-200/10'
+              : 'hover:text-slate-900 dark:hover:text-slate-200'
+              }`}
           >
             <span className="w-1.5 h-1.5 rounded-full bg-slate-400"></span>
             <span>Al Día ({tabCounts.clean})</span>
@@ -182,7 +177,7 @@ export default function ClientList({ clients, onSelectClient }: ClientListProps)
                           className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-bold bg-amber-50 dark:bg-amber-950/30 text-amber-700 dark:text-amber-400 border border-amber-200/60 dark:border-amber-900/30"
                           title={`${c.facturasCredito} factura(s) a crédito (no vencidas)`}
                         >
-                          <span>🚧</span>
+                          <FileWarning size={16}></FileWarning>
                           <span>{c.facturasCredito}</span>
                         </span>
                       )}
@@ -191,7 +186,7 @@ export default function ClientList({ clients, onSelectClient }: ClientListProps)
                           className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-bold bg-emerald-50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-400 border border-emerald-200/60 dark:border-emerald-900/30"
                           title={`${c.facturasAFavor} factura(s) a favor`}
                         >
-                          <span>✅</span>
+                          <CheckCircle2 size={16} />
                           <span>{c.facturasAFavor}</span>
                         </span>
                       )}
@@ -200,7 +195,7 @@ export default function ClientList({ clients, onSelectClient }: ClientListProps)
                           className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-bold bg-rose-50 dark:bg-rose-950/30 text-rose-700 dark:text-rose-400 border border-rose-200/60 dark:border-rose-900/30"
                           title={`${c.facturasVencidas} factura(s) vencida(s)`}
                         >
-                          <span>🟥</span>
+                          <X size={16} />
                           <span>{c.facturasVencidas}</span>
                         </span>
                       )}
@@ -255,11 +250,10 @@ export default function ClientList({ clients, onSelectClient }: ClientListProps)
               <button
                 key={i}
                 onClick={() => setCurrentPage(i + 1)}
-                className={`w-7 h-7 rounded-lg border transition-all ${
-                  currentPage === i + 1
-                    ? 'bg-sky-500 text-white border-sky-500 shadow-sm'
-                    : 'border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300'
-                }`}
+                className={`w-7 h-7 rounded-lg border transition-all ${currentPage === i + 1
+                  ? 'bg-sky-500 text-white border-sky-500 shadow-sm'
+                  : 'border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300'
+                  }`}
               >
                 {i + 1}
               </button>
@@ -274,7 +268,7 @@ export default function ClientList({ clients, onSelectClient }: ClientListProps)
           </div>
         </div>
       )}
-      
+
     </div>
   );
 }
