@@ -9,25 +9,71 @@ interface ClientDetailModalProps {
   onOpenEmailComposer: (client: ClienteGroup) => void;
 }
 
-// Helper to check if date DD/MM/YYYY is in the past
-function isPastDue(dateStr: string): boolean {
-  if (!dateStr) return false;
+// Helper to parse date DD/MM/YYYY
+function parseDate(dateStr: string): Date | null {
+  if (!dateStr) return null;
   try {
     const parts = dateStr.split('/');
-    if (parts.length !== 3) return false;
+    if (parts.length !== 3) return null;
     const day = parseInt(parts[0], 10);
     const month = parseInt(parts[1], 10) - 1;
     const year = parseInt(parts[2], 10);
-    const date = new Date(year, month, day);
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    return date < today;
+    return new Date(year, month, day);
   } catch {
-    return false;
+    return null;
   }
 }
 
+// Helper to check if date DD/MM/YYYY is in the past
+function isPastDue(dateStr: string): boolean {
+  const date = parseDate(dateStr);
+  if (!date) return false;
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  return date < today;
+}
+
+// Calculate days difference (positive = future, negative = past)
+function daysDiff(dateStr: string): number | null {
+  const date = parseDate(dateStr);
+  if (!date) return null;
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  return Math.round((date.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+}
+
+// Get credit remaining days (min days until due among non-overdue docs with positive balance)
+function getCreditDaysRemaining(docs: Documento[]): number | null {
+  let min: number | null = null;
+  for (const doc of docs) {
+    if (doc.saldo > 0.01) {
+      const diff = daysDiff(doc.fechaVen);
+      if (diff !== null && diff >= 0) {
+        if (min === null || diff < min) min = diff;
+      }
+    }
+  }
+  return min;
+}
+
+// Get max overdue days (max days past due among overdue docs with positive balance)
+function getOverdueDays(docs: Documento[]): number | null {
+  let max: number | null = null;
+  for (const doc of docs) {
+    if (doc.saldo > 0.01) {
+      const diff = daysDiff(doc.fechaVen);
+      if (diff !== null && diff < 0) {
+        const overdue = Math.abs(diff);
+        if (max === null || overdue > max) max = overdue;
+      }
+    }
+  }
+  return max;
+}
+
 export default function ClientDetailModal({ client, onClose, onOpenEmailComposer }: ClientDetailModalProps) {
+  const creditDaysRemaining = getCreditDaysRemaining(client.documentos);
+  const overdueDays = getOverdueDays(client.documentos);
   
   // Format document type code to full name
   const getDocTypeName = (code: string) => {
@@ -110,13 +156,23 @@ export default function ClientDetailModal({ client, onClose, onOpenEmailComposer
                 <>
                   <AlertCircle className="w-8 h-8 mb-2 animate-bounce" />
                   <span className="text-sm font-bold uppercase tracking-wider">Cliente deudor</span>
-                  <span className="text-xs mt-1 opacity-80">Requiere gestión de cobro</span>
+                  {overdueDays !== null && (
+                    <span className="text-lg font-black mt-1">{overdueDays} día{overdueDays !== 1 ? 's' : ''}</span>
+                  )}
+                  <span className="text-xs mt-1 opacity-80">
+                    {overdueDays !== null ? 'vencido' : 'Requiere gestión de cobro'}
+                  </span>
                 </>
               ) : client.tieneCredito ? (
                 <>
                   <Calendar className="w-8 h-8 mb-2" />
                   <span className="text-sm font-bold uppercase tracking-wider">Crédito vigente</span>
-                  <span className="text-xs mt-1 opacity-80">Deuda aún no vencida</span>
+                  {creditDaysRemaining !== null && (
+                    <span className="text-lg font-black mt-1">{creditDaysRemaining} día{creditDaysRemaining !== 1 ? 's' : ''}</span>
+                  )}
+                  <span className="text-xs mt-1 opacity-80">
+                    {creditDaysRemaining !== null ? 'restante de crédito' : 'Deuda aún no vencida'}
+                  </span>
                 </>
               ) : client.tieneSaldoFavor ? (
                 <>
