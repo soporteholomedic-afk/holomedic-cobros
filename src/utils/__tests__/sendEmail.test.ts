@@ -30,7 +30,7 @@ describe('sendEmail', () => {
     mockSendMail.mockResolvedValue({ messageId: '<abc123@outlook.com>' });
 
     const result = await sendEmail({
-      to: 'cliente@example.com',
+      to: ['cliente@example.com'],
       subject: 'Test Subject',
       html: '<p>Hola</p>',
     });
@@ -45,14 +45,14 @@ describe('sendEmail', () => {
     mockSendMail.mockResolvedValue({ messageId: '<abc@outlook.com>' });
 
     await sendEmail({
-      to: 'cliente@example.com',
+      to: ['cliente@example.com'],
       subject: 'Estado de cuenta',
       html: '<h1>Test</h1>',
     });
 
     expect(mockSendMail).toHaveBeenCalledWith(
       expect.objectContaining({
-        to: 'cliente@example.com',
+        to: ['cliente@example.com'],
         subject: 'Estado de cuenta',
         html: '<h1>Test</h1>',
       })
@@ -63,7 +63,7 @@ describe('sendEmail', () => {
     delete process.env.SMTP_HOST;
 
     const result = await sendEmail({
-      to: 'cliente@example.com',
+      to: ['cliente@example.com'],
       subject: 'Test',
       html: '<p>Test</p>',
     });
@@ -79,7 +79,7 @@ describe('sendEmail', () => {
     delete process.env.SMTP_PORT;
 
     const result = await sendEmail({
-      to: 'cliente@example.com',
+      to: ['cliente@example.com'],
       subject: 'Test',
       html: '<p>Test</p>',
     });
@@ -96,7 +96,7 @@ describe('sendEmail', () => {
     mockSendMail.mockRejectedValue(authError);
 
     const result = await sendEmail({
-      to: 'cliente@example.com',
+      to: ['cliente@example.com'],
       subject: 'Test',
       html: '<p>Test</p>',
     });
@@ -114,7 +114,7 @@ describe('sendEmail', () => {
     mockSendMail.mockRejectedValue(timeoutError);
 
     const result = await sendEmail({
-      to: 'cliente@example.com',
+      to: ['cliente@example.com'],
       subject: 'Test',
       html: '<p>Test</p>',
     });
@@ -129,7 +129,7 @@ describe('sendEmail', () => {
     mockSendMail.mockRejectedValue(new Error('Connection refused'));
 
     const result = await sendEmail({
-      to: 'cliente@example.com',
+      to: ['cliente@example.com'],
       subject: 'Test',
       html: '<p>Test</p>',
     });
@@ -143,8 +143,8 @@ describe('sendEmail', () => {
   it('should reuse the same transport on subsequent calls (lazy singleton)', async () => {
     mockSendMail.mockResolvedValue({ messageId: '<first@outlook.com>' });
 
-    await sendEmail({ to: 'a@b.com', subject: 'First', html: '<p>1</p>' });
-    await sendEmail({ to: 'c@d.com', subject: 'Second', html: '<p>2</p>' });
+    await sendEmail({       to: ['a@b.com'], subject: 'First', html: '<p>1</p>' });
+    await sendEmail({       to: ['c@d.com'], subject: 'Second', html: '<p>2</p>' });
 
     // createTransport should have been called only once
     const nodemailer = await import('nodemailer');
@@ -155,7 +155,7 @@ describe('sendEmail', () => {
     delete process.env.SMTP_USER;
 
     const result = await sendEmail({
-      to: 'test@example.com',
+      to: ['test@example.com'],
       subject: 'Test',
       html: '<p>Test</p>',
     });
@@ -171,7 +171,7 @@ describe('sendEmail', () => {
     delete process.env.SMTP_PASS;
 
     const result = await sendEmail({
-      to: 'test@example.com',
+      to: ['test@example.com'],
       subject: 'Test',
       html: '<p>Test</p>',
     });
@@ -190,7 +190,7 @@ describe('sendEmail', () => {
     delete process.env.SMTP_PASS;
 
     const result = await sendEmail({
-      to: 'test@example.com',
+      to: ['test@example.com'],
       subject: 'Test',
       html: '<p>Test</p>',
     });
@@ -209,7 +209,7 @@ describe('sendEmail', () => {
     mockSendMail.mockRejectedValue(new Error('Invalid credentials'));
 
     const result = await sendEmail({
-      to: 'test@example.com',
+      to: ['test@example.com'],
       subject: 'Test',
       html: '<p>Test</p>',
     });
@@ -218,5 +218,41 @@ describe('sendEmail', () => {
     if (!result.success) {
       expect(result.code).toBe('SMTP_AUTH_ERROR');
     }
+  });
+
+  it('should accept multiple To recipients as an array', async () => {
+    mockSendMail.mockResolvedValue({ messageId: '<multi@outlook.com>' });
+
+    const result = await sendEmail({
+      to: ['a@b.com', 'c@d.com'],
+      subject: 'Multi',
+      html: '<p>Test</p>',
+    });
+
+    expect(result.success).toBe(true);
+    expect(mockSendMail).toHaveBeenCalledWith(
+      expect.objectContaining({
+        to: ['a@b.com', 'c@d.com'],
+      })
+    );
+  });
+
+  it('should pass CC recipients to nodemailer when provided', async () => {
+    mockSendMail.mockResolvedValue({ messageId: '<cc@outlook.com>' });
+
+    const result = await sendEmail({
+      to: ['primary@b.com'],
+      cc: ['cc@b.com'],
+      subject: 'With CC',
+      html: '<p>Test</p>',
+    });
+
+    expect(result.success).toBe(true);
+    expect(mockSendMail).toHaveBeenCalledWith(
+      expect.objectContaining({
+        to: ['primary@b.com'],
+        cc: ['cc@b.com'],
+      })
+    );
   });
 });
