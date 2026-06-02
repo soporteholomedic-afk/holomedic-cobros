@@ -1,14 +1,14 @@
 'use client';
 
-import React, { useState } from 'react';
+import { useState } from 'react';
+import { Sparkles, ShieldCheck, CheckCircle2 } from 'lucide-react';
 import Navbar from '../components/Navbar';
 import FileUpload from '../components/FileUpload';
 import DashboardStats from '../components/DashboardStats';
 import ClientList from '../components/ClientList';
 import ClientDetailModal from '../components/ClientDetailModal';
-import EmailComposerModal from '../components/EmailComposerModal';
+import { EmailComposerModal } from '@/components/EmailComposerModal';
 import { ClienteGroup } from '../types';
-import { Activity, Sparkles, ShieldCheck, Mail, CheckCircle2, ArrowRight } from 'lucide-react';
 
 export default function Home() {
   const [uploadedData, setUploadedData] = useState<ClienteGroup[] | null>(null);
@@ -57,9 +57,9 @@ export default function Home() {
 
             {/* Interactive Client list */}
             <div className="flex-1">
-              <ClientList 
-                clients={uploadedData} 
-                onSelectClient={(client) => setSelectedClient(client)} 
+              <ClientList
+                clients={uploadedData}
+                onSelectClient={(client) => setSelectedClient(client)}
               />
             </div>
           </div>
@@ -71,14 +71,14 @@ export default function Home() {
                 <Sparkles className="w-3.5 h-3.5" />
                 <span>Gestión Financiera Inteligente</span>
               </div>
-              
+
               <h1 className="text-4xl sm:text-5xl font-black text-slate-900 dark:text-white tracking-tight leading-[1.1] animate-fade-in delay-75">
                 Plataforma de Cobranza <br />
                 <span className="bg-gradient-to-r from-sky-500 via-blue-500 to-indigo-600 bg-clip-text text-transparent">
                   Holomedic Cobros
                 </span>
               </h1>
-              
+
               <p className="text-base sm:text-lg text-slate-500 dark:text-slate-400 max-w-2xl mx-auto leading-relaxed animate-fade-in delay-100">
                 Optimiza la recepción de reportes contables. Sube el Excel consolidado de cuentas por cobrar para auditar saldos por cliente, separar cuentas vencidas y enviar recordatorios automáticamente.
               </p>

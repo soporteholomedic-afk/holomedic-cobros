@@ -1,7 +1,9 @@
-import React, { useState } from 'react';
-import { X, Send, Mail, CheckCircle2, ChevronRight, Edit3, Landmark, ExternalLink } from 'lucide-react';
-import { ClienteGroup, Documento } from '../types';
-import { formatNumber } from '../utils/excelParser';
+"use client";
+import React, { useState, useMemo } from 'react';
+import { X, Send, Mail, CheckCircle2, Landmark, ExternalLink } from 'lucide-react';
+import { ClienteGroup } from '../types';
+import { buildEmailHtml } from '../utils/buildEmailHtml';
+import { buildDocsTextList, buildOutstandingTotalsText } from '../utils/emailTextUtils';
 
 interface EmailComposerModalProps {
   client: ClienteGroup;
@@ -9,64 +11,29 @@ interface EmailComposerModalProps {
   onSuccess: (message: string) => void;
 }
 
-export default function EmailComposerModal({ client, onClose, onSuccess }: EmailComposerModalProps) {
+export function EmailComposerModal({ client, onClose, onSuccess }: EmailComposerModalProps) {
   const [to, setTo] = useState(`administracion@${client.razonSocial.toLowerCase().replace(/[^a-z0-9]/g, '') || 'cliente'}.com`);
   const [subject, setSubject] = useState(`RECORDATORIO DE PAGO - HOLOMEDIC - ${client.razonSocial}`);
   
-  // Build details list of outstanding documents
-  const outstandingDocs = client.documentos.filter(d => d.saldo > 0.01);
-  
-  const getDocsTextList = () => {
-    return outstandingDocs.map(d => 
-      `- Doc: ${d.tipoDoc} ${d.serie}-${d.numero} | Venc.: ${d.fechaVen || 'S/V'} | Saldo Pendiente: ${d.moneda} ${formatNumber(d.saldo)}`
-    ).join('\n');
-  };
 
-  const getOutstandingTotalsText = () => {
-    return Object.keys(client.saldosPorMoneda)
-      .map(mon => `${mon} ${formatNumber(client.saldosPorMoneda[mon].saldo)}`)
-      .join(' / ');
-  };
-
-  const initialBody = `Estimados señores de ${client.razonSocial},
-
-Les saludamos cordialmente de parte del área de Cobranzas de HOLOMEDIC.
-
-A través de la presente, le hacemos llegar un estado resumido de sus facturas y documentos que registran saldos pendientes de pago en nuestra cuenta corriente al día de hoy:
-
-${getDocsTextList()}
-
-TOTAL PENDIENTE DE PAGO: ${getOutstandingTotalsText()}
-
-Agradecemos puedan programar la regularización de estos importes a la brevedad en nuestras cuentas bancarias autorizadas:
-
-- BANCO DE CRÉDITO DEL PERÚ (BCP)
-  * Cuenta Corriente Soles: 193-2345678-0-91
-  * CCI Soles: 002-193-002345678091-14
-  * Cuenta Corriente Dólares: 193-8765432-1-89
-  * CCI Dólares: 002-193-008765432189-10
-  * Beneficiario: HOLOMEDIC S.A.C.
-  * RUC: 20601234567
-
-Una vez realizada la transferencia, les solicitamos por favor enviar el comprobante de pago a este correo (cobranzas@holomedic.com) indicando el RUC del cliente y los números de documentos cancelados para su debida conciliación.
-
-Si tiene alguna consulta o si ya realizó el pago en las últimas 24 horas, por favor no dude en contactarnos para actualizar nuestros registros.
-
-Atentamente,
-
-Área de Cobranzas y Créditos
-HOLOMEDIC S.A.C.
-Teléfono: (01) 456-7890
-cobranzas@holomedic.com`;
-
-  const [body, setBody] = useState(initialBody);
+  // body is purely derived from client — no side effects needed
+  const body = useMemo(() => buildEmailHtml(client), [client]);
   const [isSending, setIsSending] = useState(false);
   const [sentSuccess, setSentSuccess] = useState(false);
 
-  // Generate mailto link
-  const mailtoLink = useMemoMailto(to, subject, body);
+  // Generate plain-text body for the mailto link fallback
+  const mailtoPlainText = [
+    `Estimados señores de ${client.razonSocial},`,
+    '',
+    buildDocsTextList(client) || 'No hay documentos pendientes.',
+    '',
+    `TOTAL PENDIENTE DE PAGO: ${buildOutstandingTotalsText(client)}`,
+  ].join('\n');
 
-  function useMemoMailto(toAddress: string, sub: string, textBody: string) {
+  // Generate mailto link (uses plain-text fallback since mailto: doesn't support HTML)
+  const mailtoLink = buildMailtoLink(to, subject, mailtoPlainText);
+
+  function buildMailtoLink(toAddress: string, sub: string, textBody: string) {
     const encodedSubject = encodeURIComponent(sub);
     const encodedBody = encodeURIComponent(textBody);
     return `mailto:${toAddress}?subject=${encodedSubject}&body=${encodedBody}`;
@@ -155,16 +122,17 @@ cobranzas@holomedic.com`;
                 />
               </div>
 
-              {/* Email Body */}
+              {/* Email Body — HTML Preview */}
               <div className="space-y-1.5 flex-1 flex flex-col min-h-[220px]">
                 <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-                  Cuerpo del Mensaje
+                  Cuerpo del Mensaje (Vista Previa HTML)
                 </label>
-                <textarea
-                  required
-                  value={body}
-                  onChange={(e) => setBody(e.target.value)}
-                  className="w-full flex-1 px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 transition-all text-slate-800 dark:text-slate-100 font-sans resize-none min-h-[180px] leading-relaxed"
+                {/* Sandboxed iframe: scripts/forms/popups are blocked; avoids dangerouslySetInnerHTML entirely */}
+                <iframe
+                  srcDoc={body}
+                  title="Vista previa del correo HTML"
+                  className="w-full flex-1 rounded-xl border border-slate-200 dark:border-slate-800 min-h-[180px]"
+                  sandbox=""
                 />
               </div>
 
