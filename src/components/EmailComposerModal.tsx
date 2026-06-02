@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
-import { X, Send, Mail, CheckCircle2, ChevronRight, Edit3, Landmark, ExternalLink } from 'lucide-react';
-import { ClienteGroup, Documento } from '../types';
-import { formatNumber } from '../utils/excelParser';
+"use client";
+import React, { useState, useMemo } from 'react';
+import { X, Send, Mail, CheckCircle2, Landmark, AlertTriangle } from 'lucide-react';
+import { ClienteGroup } from '../types';
+import { buildEmailHtml } from '../utils/buildEmailHtml';
 
 interface EmailComposerModalProps {
   client: ClienteGroup;
@@ -9,82 +10,72 @@ interface EmailComposerModalProps {
   onSuccess: (message: string) => void;
 }
 
-export default function EmailComposerModal({ client, onClose, onSuccess }: EmailComposerModalProps) {
+/** Split comma-separated email string into trimmed non-empty array */
+function parseEmailList(value: string): string[] {
+  return value
+    .split(',')
+    .map((email) => email.trim())
+    .filter((email) => email.length > 0);
+}
+
+export function EmailComposerModal({ client, onClose, onSuccess }: EmailComposerModalProps) {
   const [to, setTo] = useState(`administracion@${client.razonSocial.toLowerCase().replace(/[^a-z0-9]/g, '') || 'cliente'}.com`);
+  const [cc, setCc] = useState('');
   const [subject, setSubject] = useState(`RECORDATORIO DE PAGO - HOLOMEDIC - ${client.razonSocial}`);
-  
-  // Build details list of outstanding documents
-  const outstandingDocs = client.documentos.filter(d => d.saldo > 0.01);
-  
-  const getDocsTextList = () => {
-    return outstandingDocs.map(d => 
-      `- Doc: ${d.tipoDoc} ${d.serie}-${d.numero} | Venc.: ${d.fechaVen || 'S/V'} | Saldo Pendiente: ${d.moneda} ${formatNumber(d.saldo)}`
-    ).join('\n');
-  };
 
-  const getOutstandingTotalsText = () => {
-    return Object.keys(client.saldosPorMoneda)
-      .map(mon => `${mon} ${formatNumber(client.saldosPorMoneda[mon].saldo)}`)
-      .join(' / ');
-  };
-
-  const initialBody = `Estimados señores de ${client.razonSocial},
-
-Les saludamos cordialmente de parte del área de Cobranzas de HOLOMEDIC.
-
-A través de la presente, le hacemos llegar un estado resumido de sus facturas y documentos que registran saldos pendientes de pago en nuestra cuenta corriente al día de hoy:
-
-${getDocsTextList()}
-
-TOTAL PENDIENTE DE PAGO: ${getOutstandingTotalsText()}
-
-Agradecemos puedan programar la regularización de estos importes a la brevedad en nuestras cuentas bancarias autorizadas:
-
-- BANCO DE CRÉDITO DEL PERÚ (BCP)
-  * Cuenta Corriente Soles: 193-2345678-0-91
-  * CCI Soles: 002-193-002345678091-14
-  * Cuenta Corriente Dólares: 193-8765432-1-89
-  * CCI Dólares: 002-193-008765432189-10
-  * Beneficiario: HOLOMEDIC S.A.C.
-  * RUC: 20601234567
-
-Una vez realizada la transferencia, les solicitamos por favor enviar el comprobante de pago a este correo (cobranzas@holomedic.com) indicando el RUC del cliente y los números de documentos cancelados para su debida conciliación.
-
-Si tiene alguna consulta o si ya realizó el pago en las últimas 24 horas, por favor no dude en contactarnos para actualizar nuestros registros.
-
-Atentamente,
-
-Área de Cobranzas y Créditos
-HOLOMEDIC S.A.C.
-Teléfono: (01) 456-7890
-cobranzas@holomedic.com`;
-
-  const [body, setBody] = useState(initialBody);
+  // body is purely derived from client — no side effects needed
+  const body = useMemo(() => buildEmailHtml(client), [client]);
   const [isSending, setIsSending] = useState(false);
   const [sentSuccess, setSentSuccess] = useState(false);
+  const [sendError, setSendError] = useState<string | null>(null);
+  const [showConfirm, setShowConfirm] = useState(false);
 
-  // Generate mailto link
-  const mailtoLink = useMemoMailto(to, subject, body);
-
-  function useMemoMailto(toAddress: string, sub: string, textBody: string) {
-    const encodedSubject = encodeURIComponent(sub);
-    const encodedBody = encodeURIComponent(textBody);
-    return `mailto:${toAddress}?subject=${encodedSubject}&body=${encodedBody}`;
-  }
-
-  const handleSimulateSend = (e: React.FormEvent) => {
-    e.preventDefault();
+  const doSend = async () => {
     setIsSending(true);
-    
-    // Simulate API call
-    setTimeout(() => {
-      setIsSending(false);
+    setSendError(null);
+    try {
+      const toArray = parseEmailList(to);
+      const ccArray = parseEmailList(cc);
+      const payload: Record<string, unknown> = {
+        to: toArray,
+        subject,
+        html: body,
+      };
+      if (ccArray.length > 0) {
+        payload.cc = ccArray;
+      }
+      const res = await fetch('/api/send-email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      if (!res.ok) {
+        // HTTP error — extract API error message
+        const data = await res.json().catch(() => ({}));
+        setSendError(data.error || 'Error al enviar el correo');
+        return;
+      }
       setSentSuccess(true);
       setTimeout(() => {
         onSuccess(`Correo de cobro enviado con éxito a ${client.razonSocial}`);
         onClose();
       }, 1800);
-    }, 1500);
+    } catch {
+      // Network error (fetch rejected, server unreachable)
+      setSendError('Error de conexión');
+    } finally {
+      setIsSending(false);
+    }
+  };
+
+  const handleSendEmail = (e: React.FormEvent) => {
+    e.preventDefault();
+    setShowConfirm(true);
+  };
+
+  const handleConfirmSend = () => {
+    setShowConfirm(false);
+    doSend();
   };
 
   return (
@@ -118,26 +109,88 @@ cobranzas@holomedic.com`;
             <div>
               <h3 className="text-xl font-bold text-slate-900 dark:text-white">¡Correo Enviado!</h3>
               <p className="text-sm text-slate-500 dark:text-slate-400 mt-1 max-w-sm">
-                La simulación de cobranza se ha completado con éxito. Se envió la notificación de pago para {client.razonSocial}.
+                El correo de cobranza se ha enviado correctamente a {client.razonSocial}.
               </p>
             </div>
           </div>
+        ) : showConfirm ? (
+          <div className="p-8 flex flex-col items-center justify-center text-center space-y-6 flex-1">
+            <div className="w-16 h-16 rounded-full bg-amber-50 dark:bg-amber-950/40 text-amber-500 border border-amber-200 dark:border-amber-800/30 flex items-center justify-center">
+              <AlertTriangle className="w-8 h-8" />
+            </div>
+            <div>
+              <h3 className="text-lg font-bold text-slate-900 dark:text-white">¿Confirmar envío?</h3>
+              <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
+                El correo se enviará al siguiente destinatario:
+              </p>
+            </div>
+            <div className="w-full max-w-md text-left space-y-2 p-4 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800">
+              <p className="text-sm">
+                <span className="font-semibold text-slate-700 dark:text-slate-300">Para:</span>{' '}
+                <span className="text-slate-900 dark:text-white font-mono text-sm">{parseEmailList(to).join(', ')}</span>
+              </p>
+              {parseEmailList(cc).length > 0 && (
+                <p className="text-sm">
+                  <span className="font-semibold text-slate-700 dark:text-slate-300">Cc:</span>{' '}
+                  <span className="text-slate-900 dark:text-white font-mono text-sm">{parseEmailList(cc).join(', ')}</span>
+                </p>
+              )}
+              <p className="text-sm">
+                <span className="font-semibold text-slate-700 dark:text-slate-300">Asunto:</span>{' '}
+                <span className="text-slate-900 dark:text-white">{subject}</span>
+              </p>
+              <p className="text-xs text-slate-400">
+                Razón social: {client.razonSocial} — Documentos pendientes: {client.documentos.filter(d => d.saldo > 0.01).length}
+              </p>
+            </div>
+            <div className="flex gap-3">
+              <button
+                type="button"
+                onClick={() => setShowConfirm(false)}
+                className="px-6 py-2.5 rounded-xl border border-slate-200 dark:border-slate-800 hover:bg-slate-100 dark:hover:bg-slate-800 text-sm font-semibold text-slate-700 dark:text-slate-300 transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmSend}
+                className="inline-flex items-center space-x-2 px-6 py-2.5 rounded-xl bg-gradient-to-tr from-sky-500 to-blue-600 hover:from-sky-600 hover:to-blue-700 text-sm font-bold text-white shadow-md shadow-sky-500/10 hover:shadow-sky-500/20 hover:scale-[1.02] transition-all"
+              >
+                <Send className="w-4 h-4" />
+                <span>Confirmar envío</span>
+              </button>
+            </div>
+          </div>
         ) : (
-          <form onSubmit={handleSimulateSend} className="flex flex-col flex-1 overflow-hidden">
+          <form onSubmit={handleSendEmail} className="flex flex-col flex-1 overflow-hidden">
             <div className="p-6 space-y-4 overflow-y-auto flex-1">
               
               {/* Recipient Email */}
               <div className="space-y-1.5">
                 <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-                  Para (Destinatario)
+                  Para (Destinatarios)
                 </label>
-                <input
-                  type="email"
+                <textarea
                   required
                   value={to}
                   onChange={(e) => setTo(e.target.value)}
+                  rows={2}
                   className="w-full px-4 py-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 transition-all text-slate-800 dark:text-slate-100 font-mono"
-                  placeholder="correo@cliente.com"
+                  placeholder="correo1@dominio.com, correo2@dominio.com"
+                />
+              </div>
+
+              {/* CC Email */}
+              <div className="space-y-1.5">
+                <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                  CC (Con Copia)
+                </label>
+                <textarea
+                  value={cc}
+                  onChange={(e) => setCc(e.target.value)}
+                  rows={2}
+                  className="w-full px-4 py-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 transition-all text-slate-800 dark:text-slate-100 font-mono"
+                  placeholder="cc@dominio.com, cc2@dominio.com (opcional)"
                 />
               </div>
 
@@ -155,18 +208,41 @@ cobranzas@holomedic.com`;
                 />
               </div>
 
-              {/* Email Body */}
+              {/* Email Body — HTML Preview */}
               <div className="space-y-1.5 flex-1 flex flex-col min-h-[220px]">
                 <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-                  Cuerpo del Mensaje
+                  Cuerpo del Mensaje (Vista Previa HTML)
                 </label>
-                <textarea
-                  required
-                  value={body}
-                  onChange={(e) => setBody(e.target.value)}
-                  className="w-full flex-1 px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 transition-all text-slate-800 dark:text-slate-100 font-sans resize-none min-h-[180px] leading-relaxed"
+                {/* Sandboxed iframe: scripts/forms/popups are blocked; avoids dangerouslySetInnerHTML entirely */}
+                <iframe
+                  srcDoc={body}
+                  title="Vista previa del correo HTML"
+                  className="w-full flex-1 rounded-xl border border-slate-200 dark:border-slate-800 min-h-[180px]"
+                  sandbox=""
                 />
               </div>
+
+              {/* Error message */}
+              {sendError && (
+                <div className="p-4 rounded-xl bg-red-50/50 dark:bg-red-950/20 border border-red-200 dark:border-red-900/30 flex items-start space-x-3">
+                  <div className="flex-1">
+                    <p className="text-sm font-semibold text-red-700 dark:text-red-400">
+                      Error al enviar
+                    </p>
+                    <p className="text-xs text-red-600 dark:text-red-300 mt-0.5">
+                      {sendError}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={doSend}
+                    disabled={isSending}
+                    className="shrink-0 px-4 py-1.5 rounded-lg bg-red-100 dark:bg-red-900/40 hover:bg-red-200 dark:hover:bg-red-800/60 text-xs font-bold text-red-700 dark:text-red-300 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    Reintentar
+                  </button>
+                </div>
+              )}
 
               {/* Payment Details Warning info */}
               <div className="p-4 rounded-xl bg-sky-50/50 dark:bg-sky-950/20 border border-sky-100 dark:border-sky-900/30 flex items-start space-x-2 text-sky-800 dark:text-sky-400">
@@ -185,21 +261,12 @@ cobranzas@holomedic.com`;
                 type="button"
                 onClick={onClose}
                 disabled={isSending}
-                className="w-full sm:w-auto order-3 sm:order-1 px-5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-800 hover:bg-slate-100 dark:hover:bg-slate-800 text-sm font-semibold text-slate-700 dark:text-slate-300 transition-colors"
+                className="w-full sm:w-auto order-3 sm:order-1 px-5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-800 hover:bg-slate-100 dark:hover:bg-slate-800 text-sm font-semibold text-slate-700 dark:text-slate-300 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 Cancelar
               </button>
               
               <div className="w-full sm:w-auto flex flex-col sm:flex-row gap-2 order-1 sm:order-2">
-                <a
-                  href={mailtoLink}
-                  onClick={() => setTimeout(onClose, 200)}
-                  className="w-full sm:w-auto inline-flex items-center justify-center space-x-2 px-5 py-2.5 rounded-xl text-sm font-bold text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700/80 transition-all"
-                >
-                  <ExternalLink className="w-4 h-4" />
-                  <span>Abrir en Outlook/Gmail</span>
-                </a>
-
                 <button
                   type="submit"
                   disabled={isSending}
@@ -213,7 +280,7 @@ cobranzas@holomedic.com`;
                   ) : (
                     <>
                       <Send className="w-4 h-4" />
-                      <span>Enviar (Simulación)</span>
+                      <span>Enviar correo</span>
                     </>
                   )}
                 </button>
