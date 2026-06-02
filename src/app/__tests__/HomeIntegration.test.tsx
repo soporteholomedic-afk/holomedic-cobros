@@ -20,8 +20,14 @@ vi.mock('../../components/FileUpload', () => {
 });
 
 describe('Home Page Flow Integration', () => {
-  it('debe completar el flujo desde la carga del archivo hasta el envío de correo con éxito', () => {
+  it('debe completar el flujo desde la carga del archivo hasta el envío de correo con éxito', async () => {
     vi.useFakeTimers();
+    
+    // Mock global.fetch to return success for the send-email API call
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ success: true }),
+    }) as any;
     
     render(<Home />);
     
@@ -55,18 +61,24 @@ describe('Home Page Flow Integration', () => {
     // Se abre el editor de correo
     expect(screen.getByText('Redactar Correo de Cobro')).toBeInTheDocument();
     
-    // 5. Enviar el correo simulado
-    const submitButton = screen.getByText('Enviar (Simulación)');
+    // 5. Enviar el correo real (via fetch API)
+    const submitButton = screen.getByText('Enviar correo');
     fireEvent.click(submitButton);
     
+    // Confirmar el envío en la pantalla de confirmación
+    const confirmButton = screen.getByText('Confirmar envío');
+    fireEvent.click(confirmButton);
+    
+    // El botón cambia a "Enviando..." inmediatamente
     expect(screen.getByText('Enviando...')).toBeInTheDocument();
     
-    // Avanzar temporizadores (1500ms + 1800ms)
-    act(() => {
-      vi.advanceTimersByTime(1500);
+    // La fetch mock resuelve inmediatamente → success view aparece sin delays de red
+    // Necesitamos permitir que la microtask de fetch se complete
+    await vi.waitFor(() => {
+      expect(screen.getByText('¡Correo Enviado!')).toBeInTheDocument();
     });
-    expect(screen.getByText('¡Correo Enviado!')).toBeInTheDocument();
     
+    // Avanzar el timer de auto-cierre (1800ms)
     act(() => {
       vi.advanceTimersByTime(1800);
     });
