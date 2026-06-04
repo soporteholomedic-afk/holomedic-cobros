@@ -49,6 +49,16 @@ export interface ClienteGroup {
   facturasVencidas: number;  // Invoices with positive balance, past due date
 }
 
+// Envío de Resultados — domain types
+export type { SpitchType } from '@/features/envio-resultados/domain/entities';
+export type {
+  Company,
+  Patient,
+  PatientFile,
+  Spitch,
+  EmailAttachment,
+} from '@/features/envio-resultados/domain/entities';
+
 export interface DashboardMetrics {
   totalClientes: number;
   clientesDeudores: number;
