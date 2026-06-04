@@ -86,7 +86,7 @@ describe('ValoracionesPage — Upload → List → Detail', () => {
 
   it('debe mostrar la vista de carga inicialmente con el título', () => {
     render(<ValoracionesPage />);
-    expect(screen.getByText('Valoraciones por Empresa')).toBeInTheDocument();
+    expect(screen.getByText('Generación de Valoraciones')).toBeInTheDocument();
     expect(screen.getByText('Arrastra tu archivo CSV')).toBeInTheDocument();
   });
 
