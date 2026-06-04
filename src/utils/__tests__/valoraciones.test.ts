@@ -14,13 +14,13 @@ EMPRESA A,CONTRAT A,PROYECTO A,CR A,DNI 12345678,JUAN PEREZ,30,15/05/1995,INGENI
 // ---- Tests for parseValoracionesCsvContent ----
 
 describe('parseValoracionesCsvContent', () => {
-  it('should filter rows with total <= 0 or empty, and group remaining by company', () => {
+  it('should filter out non-numeric rows and group remaining by company (include zero-cost)', () => {
     const result = parseValoracionesCsvContent(SAMPLE_CSV);
 
-    // EMPRESA A: 150.00 + 75.50 + 200.00 = 425.50 (0.00 and empty filtered out)
+    // EMPRESA A: 150.00 + 75.50 + 200.00 + 0.00 = 425.50 (empty row filtered out)
     const empresaA = result.companies.find(c => c.company === 'EMPRESA A');
     expect(empresaA).toBeDefined();
-    expect(empresaA!.rows).toHaveLength(3);
+    expect(empresaA!.rows).toHaveLength(4);
     expect(empresaA!.subtotal).toBeCloseTo(425.50, 2);
     expect(empresaA!.igv).toBeCloseTo(76.59, 2);
     expect(empresaA!.total).toBeCloseTo(502.09, 2);
@@ -65,13 +65,20 @@ describe('parseValoracionesCsvContent', () => {
     expect(result.companies).toHaveLength(0);
   });
 
-  it('should handle CSV with only filtered-out rows', () => {
+  it('should include zero-cost rows and group them by company', () => {
     const allZeroCsv = `facturar a,total
 EMPRESA X,0.00
 EMPRESA X,0
 EMPRESA Y,`;
     const result = parseValoracionesCsvContent(allZeroCsv);
-    expect(result.companies).toHaveLength(0);
+    // Row with empty total is filtered out; 0.00 and 0 are kept
+    expect(result.companies).toHaveLength(1);
+    const empresaX = result.companies[0];
+    expect(empresaX.company).toBe('EMPRESA X');
+    expect(empresaX.rows).toHaveLength(2);
+    expect(empresaX.subtotal).toBe(0);
+    expect(empresaX.igv).toBe(0);
+    expect(empresaX.total).toBe(0);
   });
 
   it('should handle special characters in company names', () => {

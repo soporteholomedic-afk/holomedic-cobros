@@ -42,7 +42,8 @@ function round2(value: number): number {
 
 /**
  * Parse a CSV string containing valoraciones data into grouped company data.
- * Filters out rows where total is 0, empty, or falsy.
+ * Keeps all rows with a valid numeric total (including zero-cost rows).
+ * Filters out rows with non-numeric total values.
  */
 export function parseValoracionesCsvContent(csvContent: string): GroupedData {
   // raw: true prevents xlsx from converting date strings (01/01/2026) to serial numbers
@@ -53,11 +54,11 @@ export function parseValoracionesCsvContent(csvContent: string): GroupedData {
     defval: '',
   });
 
-  // Filter: keep rows with total > 0 (numeric)
+  // Filter: keep rows with a valid numeric total (include zero-cost rows)
   const filteredRows = rawRows.filter((row) => {
     const total = row['total'];
     const costo = typeof total === 'number' ? total : parseFloat(String(total));
-    return !isNaN(costo) && costo > 0;
+    return !isNaN(costo) && costo >= 0;
   });
 
   // Group by facturar a

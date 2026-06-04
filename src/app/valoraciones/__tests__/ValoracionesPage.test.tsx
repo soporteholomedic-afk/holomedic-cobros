@@ -79,14 +79,14 @@ describe('ValoracionesPage — Upload → List → Detail', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:mock');
-    vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {});
+    vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => { });
   });
 
   // ---- Upload View ----
 
   it('debe mostrar la vista de carga inicialmente con el título', () => {
     render(<ValoracionesPage />);
-    expect(screen.getByText('Valoraciones por Empresa')).toBeInTheDocument();
+    expect(screen.getByText('Generación de Valoraciones')).toBeInTheDocument();
     expect(screen.getByText('Arrastra tu archivo CSV')).toBeInTheDocument();
   });
 

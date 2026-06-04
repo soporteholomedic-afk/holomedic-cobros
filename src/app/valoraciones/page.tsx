@@ -202,7 +202,7 @@ export default function ValoracionesPage() {
             <div className="flex items-center justify-between">
               <div>
                 <h1 className="text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight">
-                  Valoraciones por Empresa
+Generación de Valoraciones
                 </h1>
                 <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
                   Arrastra el archivo CSV de valoraciones para generar un Excel
