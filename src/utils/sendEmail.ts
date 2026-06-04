@@ -2,11 +2,18 @@ import nodemailer from 'nodemailer';
 
 // ---- Types ----
 
+export interface EmailAttachment {
+  filename: string;
+  content: Buffer | string;
+  contentType?: string;
+}
+
 export interface SendEmailParams {
   to: string[];
   cc?: string[];
   subject: string;
   html: string;
+  attachments?: EmailAttachment[];
 }
 
 export type SendEmailErrorCode =
@@ -70,6 +77,7 @@ export async function sendEmail(
       from: process.env.SMTP_USER,
       to: params.to,
       ...(params.cc ? { cc: params.cc } : {}),
+      ...(params.attachments ? { attachments: params.attachments } : {}),
       subject: params.subject,
       html: params.html,
     });

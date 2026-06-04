@@ -255,4 +255,69 @@ describe('sendEmail', () => {
       })
     );
   });
+
+  // ---- Attachment tests (PR #2 - Consolidados) ----
+
+  it('should pass attachments to nodemailer when provided', async () => {
+    mockSendMail.mockResolvedValue({ messageId: '<attach@outlook.com>' });
+
+    const result = await sendEmail({
+      to: ['cliente@example.com'],
+      subject: 'With attachments',
+      html: '<p>Adjuntos</p>',
+      attachments: [
+        { filename: 'report.pdf', content: Buffer.from('fake-pdf'), contentType: 'application/pdf' },
+        { filename: 'results.csv', content: 'a,b,c\n1,2,3' },
+      ],
+    });
+
+    expect(result.success).toBe(true);
+    expect(mockSendMail).toHaveBeenCalledWith(
+      expect.objectContaining({
+        to: ['cliente@example.com'],
+        subject: 'With attachments',
+        html: '<p>Adjuntos</p>',
+        attachments: [
+          { filename: 'report.pdf', content: Buffer.from('fake-pdf'), contentType: 'application/pdf' },
+          { filename: 'results.csv', content: 'a,b,c\n1,2,3' },
+        ],
+      })
+    );
+  });
+
+  it('should send email without attachments when none provided (backward compat)', async () => {
+    mockSendMail.mockResolvedValue({ messageId: '<no-attach@outlook.com>' });
+
+    const result = await sendEmail({
+      to: ['cliente@example.com'],
+      subject: 'No attachments',
+      html: '<p>Sin adjuntos</p>',
+    });
+
+    expect(result.success).toBe(true);
+    expect(mockSendMail).toHaveBeenCalledWith(
+      expect.not.objectContaining({ attachments: expect.anything() })
+    );
+  });
+
+  it('should accept string content attachments', async () => {
+    mockSendMail.mockResolvedValue({ messageId: '<str-attach@outlook.com>' });
+
+    await sendEmail({
+      to: ['cliente@example.com'],
+      subject: 'String content',
+      html: '<p>Test</p>',
+      attachments: [
+        { filename: 'note.txt', content: 'plain text content' },
+      ],
+    });
+
+    expect(mockSendMail).toHaveBeenCalledWith(
+      expect.objectContaining({
+        attachments: [
+          { filename: 'note.txt', content: 'plain text content' },
+        ],
+      })
+    );
+  });
 });
