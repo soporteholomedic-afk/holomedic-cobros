@@ -73,20 +73,22 @@ export function PatientTable({ companyId, onSelectionChange, onPatientsLoaded }:
           ? patient.files.filter((f) => f !== fileId)
           : [...patient.files, fileId];
 
-        const updated = {
+        return {
           ...prev,
           [patientId]: {
             ...patient,
             files: newFiles,
           },
         };
-
-        onSelectionChange(updated);
-        return updated;
       });
     },
-    [onSelectionChange],
+    [],
   );
+
+  // Sync selected state changes to parent (outside updater to avoid React 19 side-effect error)
+  useEffect(() => {
+    onSelectionChange(selected);
+  }, [selected, onSelectionChange]);
 
   if (loading) {
     return (
