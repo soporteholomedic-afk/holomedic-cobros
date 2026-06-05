@@ -21,10 +21,11 @@ describe('Sidebar Component', () => {
     expect(screen.getByText('Facturación')).toBeInTheDocument();
   });
 
-  it('debe mostrar los ítems de navegación: Inicio, Cobranza, Valoraciones', () => {
+  it('debe mostrar los ítems de navegación: Inicio, Cobranza, Consolidados, Valoraciones', () => {
     render(<Sidebar />);
     expect(screen.getByText('Inicio')).toBeInTheDocument();
     expect(screen.getByText('Cobranza')).toBeInTheDocument();
+    expect(screen.getByText('Consolidados')).toBeInTheDocument();
     expect(screen.getByText('Valoraciones')).toBeInTheDocument();
   });
 
@@ -44,6 +45,22 @@ describe('Sidebar Component', () => {
     render(<Sidebar />);
     const link = screen.getByText('Valoraciones').closest('a');
     expect(link).toHaveAttribute('href', '/valoraciones');
+  });
+
+  it('debe enlazar Consolidados a "/consolidados"', () => {
+    render(<Sidebar />);
+    const link = screen.getByText('Consolidados').closest('a');
+    expect(link).toHaveAttribute('href', '/consolidados');
+  });
+
+  it('debe mostrar Consolidados entre Cobranza y Valoraciones en el orden de navegación', () => {
+    render(<Sidebar />);
+    const navLinks = screen.getAllByRole('link').map((l) => l.textContent?.trim());
+    const cobranzaIdx = navLinks.indexOf('Cobranza');
+    const consolidadosIdx = navLinks.indexOf('Consolidados');
+    const valoracionesIdx = navLinks.indexOf('Valoraciones');
+    expect(cobranzaIdx).toBeLessThan(consolidadosIdx);
+    expect(consolidadosIdx).toBeLessThan(valoracionesIdx);
   });
 
   it('debe mostrar el botón hamburguesa en mobile con aria-label', () => {
