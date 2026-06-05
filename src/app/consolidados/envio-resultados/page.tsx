@@ -2,12 +2,31 @@
 
 import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
-import { Suspense } from 'react';
+import { Suspense, useState } from 'react';
 import { PatientTable } from '@/features/envio-resultados/presentation/components/PatientTable';
+import { EmailEditor } from '@/features/envio-resultados/presentation/components/EmailEditor';
+import type { Patient } from '@/features/envio-resultados/domain/entities';
+
+interface SelectedPatients {
+  [patientId: string]: {
+    patientName: string;
+    files: string[];
+  };
+}
 
 function EnvioResultadosContent() {
   const searchParams = useSearchParams();
   const companyId = searchParams.get('companyId');
+  const [selectedPatients, setSelectedPatients] = useState<SelectedPatients>({});
+  const [patients, setPatients] = useState<Patient[]>([]);
+
+  const handleSelectionChange = (selected: SelectedPatients) => {
+    setSelectedPatients(selected);
+  };
+
+  const handlePatientsLoaded = (loadedPatients: Patient[]) => {
+    setPatients(loadedPatients);
+  };
 
   if (!companyId) {
     return (
@@ -30,18 +49,19 @@ function EnvioResultadosContent() {
         <h2 className="text-xl font-semibold text-slate-800 mb-4">Seleccionar pacientes</h2>
         <PatientTable
           companyId={companyId}
-          onSelectionChange={(selected) => {
-            // Will be used in PR #4 for sending
-          }}
+          onSelectionChange={handleSelectionChange}
+          onPatientsLoaded={handlePatientsLoaded}
         />
       </div>
 
-      {/* Right column — Email editor placeholder (PR #4) */}
+      {/* Right column — Email editor */}
       <div>
         <h2 className="text-xl font-semibold text-slate-800 mb-4">Editor de correo</h2>
-        <div className="rounded-xl border border-slate-200 bg-white p-8 text-center">
-          <p className="text-slate-400 text-lg">Editor de correo — próximo paso</p>
-        </div>
+        <EmailEditor
+          companyId={companyId}
+          selectedPatients={selectedPatients}
+          patients={patients}
+        />
       </div>
     </div>
   );

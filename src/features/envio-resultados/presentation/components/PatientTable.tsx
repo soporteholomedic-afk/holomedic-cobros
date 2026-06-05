@@ -15,11 +15,12 @@ interface SelectedPatients {
 interface PatientTableProps {
   companyId: string;
   onSelectionChange: (selected: SelectedPatients) => void;
+  onPatientsLoaded?: (patients: Patient[]) => void;
 }
 
 const getPatientsUseCase = new GetPatientsByCompanyUseCase(new MockPatientRepo());
 
-export function PatientTable({ companyId, onSelectionChange }: PatientTableProps) {
+export function PatientTable({ companyId, onSelectionChange, onPatientsLoaded }: PatientTableProps) {
   const [patients, setPatients] = useState<Patient[]>([]);
   const [loading, setLoading] = useState(true);
   const [expandedPatient, setExpandedPatient] = useState<string | null>(null);
@@ -33,6 +34,7 @@ export function PatientTable({ companyId, onSelectionChange }: PatientTableProps
       .then((data) => {
         if (!cancelled) {
           setPatients(data);
+          onPatientsLoaded?.(data);
 
           // Initialize all patients with all files selected
           const initialSelected: SelectedPatients = {};
