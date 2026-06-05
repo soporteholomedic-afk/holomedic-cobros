@@ -59,7 +59,7 @@ describe('POST /api/valoraciones/generate', () => {
       /^attachment; filename="valoraciones_por_empresa_\d{4}-\d{2}-\d{2}\.xlsx"$/,
     );
 
-    const body = toBuffer(await response.arrayBuffer());
+    const body = toBuffer(new Uint8Array(await response.arrayBuffer()));
     expect(body.equals(fakeBuffer)).toBe(true);
   });
 

@@ -1,11 +1,11 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useMemo } from 'react';
 import { SpitchSelector } from './SpitchSelector';
 import { AttachmentList } from './AttachmentList';
 import { SendConfirmation } from './SendConfirmation';
 import { useSendResults } from '../hooks/useSendResults';
-import type { Patient, Spitch } from '../../domain/entities';
+import type { Patient, PatientFile, Spitch } from '../../domain/entities';
 
 interface EmailEditorProps {
   companyId: string;
@@ -25,20 +25,33 @@ export function EmailEditor({ companyId, selectedPatients, patients }: EmailEdit
   const [subject, setSubject] = useState('');
   const [htmlBody, setHtmlBody] = useState('');
   const [showConfirmation, setShowConfirmation] = useState(false);
+  const [showNoFilesWarning, setShowNoFilesWarning] = useState(false);
 
   // Determine recipients based on selected patients
-  const recipients = Object.keys(selectedPatients).length > 0
-    ? [`${Object.keys(selectedPatients).length} paciente(s) seleccionado(s)`]
+  const recipientNames = Object.values(selectedPatients).map((s) => s.patientName);
+  const recipients = recipientNames.length > 0
+    ? recipientNames
     : [];
 
-  // Build to addresses for the send call
-  const toAddresses: string[] = [];
+  // Build selected PatientFile[] objects from selection state
+  const selectedFiles: PatientFile[] = useMemo(() => {
+    const files: PatientFile[] = [];
+    for (const [patientId, selection] of Object.entries(selectedPatients)) {
+      const patient = patients.find((p) => p.id === patientId);
+      if (!patient) continue;
+      for (const fileId of selection.files) {
+        const file = patient.files.find((f) => f.id === fileId);
+        if (file) files.push(file);
+      }
+    }
+    return files;
+  }, [selectedPatients, patients]);
 
   const { send, isSending, result, error } = useSendResults({
-    to: toAddresses,
+    to: recipientNames,
     subject,
     html: htmlBody,
-    attachments: [],
+    files: selectedFiles,
   });
 
   const handleSpitchSelect = useCallback((spitch: Spitch) => {
@@ -52,9 +65,20 @@ export function EmailEditor({ companyId, selectedPatients, patients }: EmailEdit
     // Reset spitch selection when target changes — SpitchSelector handles reload
   }, []);
 
-  const handleSend = useCallback(async () => {
-    await send();
-  }, [send]);
+  const handleRequestSend = useCallback(() => {
+    // Check if any files are selected
+    const hasFiles = Object.values(selectedFiles).length > 0;
+    if (!hasFiles) {
+      setShowNoFilesWarning(true);
+      return;
+    }
+    setShowConfirmation(true);
+  }, [selectedFiles]);
+
+  const handleConfirmNoFiles = useCallback(() => {
+    setShowNoFilesWarning(false);
+    setShowConfirmation(true);
+  }, []);
 
   const handleConfirmSend = useCallback(async () => {
     await send();
@@ -156,7 +180,7 @@ export function EmailEditor({ companyId, selectedPatients, patients }: EmailEdit
 
         {/* Send button */}
         <button
-          onClick={() => setShowConfirmation(true)}
+          onClick={handleRequestSend}
           disabled={isSending || Object.keys(selectedPatients).length === 0}
           className="w-full py-2.5 bg-sky-600 text-white rounded-lg hover:bg-sky-700 transition-colors font-medium text-sm cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center justify-center gap-2"
         >
@@ -166,6 +190,37 @@ export function EmailEditor({ companyId, selectedPatients, patients }: EmailEdit
           Enviar
         </button>
       </div>
+
+      {/* ===== No Files Warning ===== */}
+      {showNoFilesWarning && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+          <div className="bg-white rounded-2xl p-8 max-w-md w-full mx-4 shadow-xl text-center">
+            <div className="w-16 h-16 bg-amber-100 rounded-full flex items-center justify-center mx-auto mb-4">
+              <svg className="w-8 h-8 text-amber-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01M12 3a9 9 0 100 18 9 9 0 000-18z" />
+              </svg>
+            </div>
+            <h3 className="text-xl font-semibold text-slate-800 mb-2">No hay archivos adjuntos</h3>
+            <p className="text-sm text-slate-500 mb-6">
+              No hay archivos adjuntos seleccionados. ¿Enviar de todas formas?
+            </p>
+            <div className="flex justify-center gap-3">
+              <button
+                onClick={handleConfirmNoFiles}
+                className="px-6 py-2 bg-sky-600 text-white rounded-lg hover:bg-sky-700 transition-colors font-medium text-sm cursor-pointer"
+              >
+                Enviar de todas formas
+              </button>
+              <button
+                onClick={() => setShowNoFilesWarning(false)}
+                className="px-6 py-2 border border-slate-300 text-slate-700 rounded-lg hover:bg-slate-50 transition-colors font-medium text-sm cursor-pointer"
+              >
+                Cancelar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ===== Send Confirmation Modal ===== */}
       <SendConfirmation

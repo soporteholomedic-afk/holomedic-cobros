@@ -8,7 +8,7 @@ const defaultArgs = {
   to: ['test@example.com'],
   subject: 'Test Subject',
   html: '<p>Test</p>',
-  attachments: [],
+  files: [],
 };
 
 beforeEach(() => {

@@ -1,13 +1,13 @@
 'use client';
 
 import { useState, useCallback } from 'react';
-import type { EmailAttachment } from '../../domain/entities';
+import type { PatientFile } from '../../domain/entities';
 
 export interface UseSendResultsArgs {
   to: string[];
   subject: string;
   html: string;
-  attachments: EmailAttachment[];
+  files: PatientFile[];
 }
 
 export interface UseSendResultsReturn {
@@ -28,15 +28,21 @@ export function useSendResults(args: UseSendResultsArgs): UseSendResultsReturn {
     setResult(null);
 
     try {
+      const formData = new FormData();
+      formData.append('to', args.to.join(','));
+      formData.append('subject', args.subject);
+      formData.append('html', args.html);
+
+      for (const file of args.files) {
+        const blob = new Blob(['Contenido mock para ' + file.name], {
+          type: file.type || 'application/pdf',
+        });
+        formData.append('files', blob, file.name);
+      }
+
       const response = await fetch('/api/consolidados/send-results', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          to: args.to,
-          subject: args.subject,
-          html: args.html,
-          attachments: args.attachments,
-        }),
+        body: formData,
       });
 
       const data = await response.json();
@@ -52,7 +58,7 @@ export function useSendResults(args: UseSendResultsArgs): UseSendResultsReturn {
     } finally {
       setIsSending(false);
     }
-  }, [args.to, args.subject, args.html, args.attachments]);
+  }, [args.to, args.subject, args.html, args.files]);
 
   return {
     send,
