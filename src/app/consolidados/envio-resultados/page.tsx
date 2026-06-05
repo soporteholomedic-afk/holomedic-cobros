@@ -2,7 +2,7 @@
 
 import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
-import { Suspense, useState } from 'react';
+import { Suspense, useState, useCallback } from 'react';
 import { PatientTable } from '@/features/envio-resultados/presentation/components/PatientTable';
 import { EmailEditor } from '@/features/envio-resultados/presentation/components/EmailEditor';
 import type { Patient } from '@/features/envio-resultados/domain/entities';
@@ -20,13 +20,13 @@ function EnvioResultadosContent() {
   const [selectedPatients, setSelectedPatients] = useState<SelectedPatients>({});
   const [patients, setPatients] = useState<Patient[]>([]);
 
-  const handleSelectionChange = (selected: SelectedPatients) => {
+  const handleSelectionChange = useCallback((selected: SelectedPatients) => {
     setSelectedPatients(selected);
-  };
+  }, []);
 
-  const handlePatientsLoaded = (loadedPatients: Patient[]) => {
+  const handlePatientsLoaded = useCallback((loadedPatients: Patient[]) => {
     setPatients(loadedPatients);
-  };
+  }, []);
 
   if (!companyId) {
     return (
