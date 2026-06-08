@@ -26,6 +26,57 @@ body {
   overflow-y: scroll;
 }
 
+/* Email preview custom typography (replaces missing @tailwindcss/typography) */
+.prose {
+  color: #333333;
+  font-family: Arial, sans-serif;
+  line-height: 1.6;
+  font-size: 0.875rem;
+}
+
+.prose p {
+  margin-top: 0;
+  margin-bottom: 1rem;
+}
+
+.prose ul, .prose ol {
+  margin-top: 0;
+  margin-bottom: 1rem;
+  padding-left: 1.5rem;
+}
+
+.prose ul {
+  list-style-type: disc;
+}
+
+.prose ol {
+  list-style-type: decimal;
+}
+
+.prose li {
+  margin-bottom: 0.25rem;
+}
+
+.prose strong {
+  font-weight: 700;
+  color: #111111;
+}
+
+.prose a {
+  color: #0284c7;
+  text-decoration: underline;
+}
+
+.prose a:hover {
+  color: #0369a1;
+}
+
+.prose hr {
+  margin: 1.5rem 0;
+  border: 0;
+  border-top: 1px solid #e2e8f0;
+}
+
 /* Custom Premium Micro-animations */
 @keyframes fadeIn {
   from { opacity: 0; transform: translateY(4px); }

@@ -3,11 +3,12 @@
 import { useState, useCallback } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Activity, FileSpreadsheet, Home, DollarSign, Menu, X } from 'lucide-react';
+import { Activity, FileSpreadsheet, Home, DollarSign, FileText, Menu, X } from 'lucide-react';
 
 const navItems = [
   { href: '/', label: 'Inicio', icon: Home },
   { href: '/cobranza', label: 'Cobranza', icon: DollarSign },
+  { href: '/consolidados', label: 'Consolidados', icon: FileText },
   { href: '/valoraciones', label: 'Valoraciones', icon: FileSpreadsheet },
 ];
 
