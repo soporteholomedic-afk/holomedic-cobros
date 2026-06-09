@@ -59,6 +59,13 @@ export type {
   EmailAttachment,
 } from '@/features/envio-resultados/domain/entities';
 
+// Consolidados — SP result types
+export type {
+  SpResultRow,
+  WorkerRow,
+  CompanyGroup,
+} from './sp-result';
+
 export interface DashboardMetrics {
   totalClientes: number;
   clientesDeudores: number;
