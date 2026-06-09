@@ -6,8 +6,8 @@ import { CompanySelector } from '@/features/envio-resultados/presentation/compon
 export default function ConsolidadosPage() {
   const router = useRouter();
 
-  const handleCompanySelect = (companyId: string) => {
-    router.push(`/consolidados/envio-resultados?companyId=${companyId}`);
+  const handleCompanySelect = (companyName: string) => {
+    router.push(`/consolidados/envio-resultados?companyName=${encodeURIComponent(companyName)}`);
   };
 
   return (

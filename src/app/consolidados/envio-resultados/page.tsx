@@ -2,33 +2,14 @@
 
 import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
-import { Suspense, useState, useCallback } from 'react';
-import { PatientTable } from '@/features/envio-resultados/presentation/components/PatientTable';
-import { EmailEditor } from '@/features/envio-resultados/presentation/components/EmailEditor';
-import type { Patient } from '@/features/envio-resultados/domain/entities';
-
-interface SelectedPatients {
-  [patientId: string]: {
-    patientName: string;
-    files: string[];
-  };
-}
+import { Suspense } from 'react';
+import { WorkerDetailTable } from '@/features/envio-resultados/presentation/components/WorkerDetailTable';
 
 function EnvioResultadosContent() {
   const searchParams = useSearchParams();
-  const companyId = searchParams.get('companyId');
-  const [selectedPatients, setSelectedPatients] = useState<SelectedPatients>({});
-  const [patients, setPatients] = useState<Patient[]>([]);
+  const companyName = searchParams.get('companyName');
 
-  const handleSelectionChange = useCallback((selected: SelectedPatients) => {
-    setSelectedPatients(selected);
-  }, []);
-
-  const handlePatientsLoaded = useCallback((loadedPatients: Patient[]) => {
-    setPatients(loadedPatients);
-  }, []);
-
-  if (!companyId) {
+  if (!companyName) {
     return (
       <div className="text-center py-16">
         <p className="text-slate-500 text-lg">No se ha seleccionado una empresa</p>
@@ -42,35 +23,13 @@ function EnvioResultadosContent() {
     );
   }
 
-  return (
-    <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-      {/* Left column — Patient selection */}
-      <div>
-        <h2 className="text-xl font-semibold text-slate-800 mb-4">Seleccionar pacientes</h2>
-        <PatientTable
-          companyId={companyId}
-          onSelectionChange={handleSelectionChange}
-          onPatientsLoaded={handlePatientsLoaded}
-        />
-      </div>
-
-      {/* Right column — Email editor */}
-      <div>
-        <h2 className="text-xl font-semibold text-slate-800 mb-4">Editor de correo</h2>
-        <EmailEditor
-          companyId={companyId}
-          selectedPatients={selectedPatients}
-          patients={patients}
-        />
-      </div>
-    </div>
-  );
+  return <WorkerDetailTable companyName={companyName} />;
 }
 
 export default function EnvioResultadosPage() {
   return (
     <main className="min-h-screen bg-slate-50 py-12 px-4">
-      <div className="max-w-6xl mx-auto">
+      <div className="max-w-4xl mx-auto">
         {/* Breadcrumb */}
         <div className="mb-6">
           <Link

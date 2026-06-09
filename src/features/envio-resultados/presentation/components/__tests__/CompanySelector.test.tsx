@@ -2,101 +2,103 @@ import React from 'react';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-// ---- Mock the GetCompaniesUseCase ----
-
-const mockExecute = vi.hoisted(() => vi.fn());
-
-vi.mock('../../../application/getCompanies', () => ({
-  GetCompaniesUseCase: vi.fn().mockImplementation(function () {
-    return { execute: mockExecute };
-  }),
-}));
-
-// ---- Import the component being tested ----
-
 import { CompanySelector } from '../CompanySelector';
-import type { Company } from '../../../domain/entities';
+import type { CompanyGroup } from '@/types/sp-result';
 
-const mockCompanies: Company[] = [
+// ---- Fixture data matching SP result structure from SQLSERVER/ejemplo_resultados.txt ----
+
+const mockCompanies: CompanyGroup[] = [
   {
-    id: 'comp-001',
-    name: 'Clínica San Pablo',
-    ruc: '20123456789',
-    email: 'resultados@clinicasanpablo.pe',
+    companyName: 'CIME INGENIEROS S R L',
+    workers: [
+      { nombre: 'FALLA PEÑA GILMER DUBERLY', tipoExamen: 'PERIODICO', proyecto: 'UNACEM' },
+    ],
+    workerCount: 1,
   },
   {
-    id: 'comp-002',
-    name: 'Laboratorio Médico',
-    ruc: '20234567890',
-    email: 'lab@labmedico.pe',
+    companyName: 'CHOICE SERVICE S.A.C.',
+    workers: [
+      { nombre: 'ASTORGA FLORES MARTIN ADRIAN', tipoExamen: 'PREOCUPACIONAL', proyecto: 'NEXA CAJAMARQUILLA' },
+      { nombre: 'ASTORGA FLORES MARTIN ADRIAN', tipoExamen: 'ADICIONALES', proyecto: 'ADICIONALES' },
+    ],
+    workerCount: 2,
   },
   {
-    id: 'comp-003',
-    name: 'Centro de Diagnóstico',
-    ruc: '20345678901',
-    email: 'resultados@centrodiagnostico.pe',
+    companyName: 'INTELLISOFT S.A.',
+    workers: [
+      { nombre: 'RODRIGUEZ MEDINA JHORDAN JOSE', tipoExamen: 'PREOCUPACIONAL', proyecto: 'DISEÑO Y ADECUACIÓN DE OF PARA NVO EDIFICIO DEL CONGRESO DE LA REPÚBLICA' },
+      { nombre: 'CENTURION DIAZ NILDER ROMER', tipoExamen: 'PREOCUPACIONAL', proyecto: 'DISEÑO Y ADECUACIÓN DE OF PARA NVO EDIFICIO DEL CONGRESO DE LA REPÚBLICA' },
+      { nombre: 'RAMOS FLORES LUIS MARTIN JUNIOR', tipoExamen: 'PREOCUPACIONAL', proyecto: 'DISEÑO Y ADECUACIÓN DE OF PARA NVO EDIFICIO DEL CONGRESO DE LA REPÚBLICA' },
+    ],
+    workerCount: 3,
   },
 ];
 
+const mockFetch = vi.fn();
+
 beforeEach(() => {
   vi.clearAllMocks();
-  mockExecute.mockReset();
+  global.fetch = mockFetch;
 });
 
 describe('CompanySelector', () => {
   it('should show loading indicator while fetching companies', () => {
     // Keep the promise pending so loading persists
-    mockExecute.mockReturnValue(new Promise<Company[]>(() => {}));
+    mockFetch.mockReturnValue(new Promise(() => {}));
 
     render(<CompanySelector onSelect={() => {}} />);
 
     expect(screen.getByText('Cargando empresas...')).toBeInTheDocument();
   });
 
-  it('should display company cards with name, RUC, and email after loading', async () => {
-    mockExecute.mockResolvedValue(mockCompanies);
+  it('should display company cards with name and worker count after loading', async () => {
+    mockFetch.mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ companies: mockCompanies }),
+    });
 
     render(<CompanySelector onSelect={() => {}} />);
 
-    // Wait for loading to finish
     await waitFor(() => {
-      expect(screen.getByText('Clínica San Pablo')).toBeInTheDocument();
+      expect(screen.getByText('CIME INGENIEROS S R L')).toBeInTheDocument();
     });
 
-    expect(screen.getByText('Clínica San Pablo')).toBeInTheDocument();
-    expect(screen.getByText('Laboratorio Médico')).toBeInTheDocument();
-    expect(screen.getByText('Centro de Diagnóstico')).toBeInTheDocument();
+    // All three company names should be visible
+    expect(screen.getByText('CIME INGENIEROS S R L')).toBeInTheDocument();
+    expect(screen.getByText('CHOICE SERVICE S.A.C.')).toBeInTheDocument();
+    expect(screen.getByText('INTELLISOFT S.A.')).toBeInTheDocument();
 
-    // Check RUC is displayed
-    expect(screen.getByText('20123456789')).toBeInTheDocument();
-    expect(screen.getByText('20234567890')).toBeInTheDocument();
-    expect(screen.getByText('20345678901')).toBeInTheDocument();
-
-    // Check email is displayed
-    expect(screen.getByText('resultados@clinicasanpablo.pe')).toBeInTheDocument();
-    expect(screen.getByText('lab@labmedico.pe')).toBeInTheDocument();
-    expect(screen.getByText('resultados@centrodiagnostico.pe')).toBeInTheDocument();
+    // Worker counts should be displayed (singular/plural)
+    expect(screen.getByText('1 trabajador')).toBeInTheDocument();
+    expect(screen.getByText('2 trabajadores')).toBeInTheDocument();
+    expect(screen.getByText('3 trabajadores')).toBeInTheDocument();
   });
 
-  it('should call onSelect with company ID when a company card is clicked', async () => {
-    mockExecute.mockResolvedValue(mockCompanies);
+  it('should call onSelect with companyName when a company card is clicked', async () => {
+    mockFetch.mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ companies: mockCompanies }),
+    });
 
     const handleSelect = vi.fn();
     render(<CompanySelector onSelect={handleSelect} />);
 
     await waitFor(() => {
-      expect(screen.getByText('Clínica San Pablo')).toBeInTheDocument();
+      expect(screen.getByText('CIME INGENIEROS S R L')).toBeInTheDocument();
     });
 
-    fireEvent.click(screen.getByText('Clínica San Pablo'));
-    expect(handleSelect).toHaveBeenCalledWith('comp-001');
+    fireEvent.click(screen.getByText('CIME INGENIEROS S R L'));
+    expect(handleSelect).toHaveBeenCalledWith('CIME INGENIEROS S R L');
 
-    fireEvent.click(screen.getByText('Laboratorio Médico'));
-    expect(handleSelect).toHaveBeenCalledWith('comp-002');
+    fireEvent.click(screen.getByText('CHOICE SERVICE S.A.C.'));
+    expect(handleSelect).toHaveBeenCalledWith('CHOICE SERVICE S.A.C.');
   });
 
-  it('should show empty message when no companies are returned', async () => {
-    mockExecute.mockResolvedValue([]);
+  it('should show empty message when API returns no companies', async () => {
+    mockFetch.mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ companies: [] }),
+    });
 
     render(<CompanySelector onSelect={() => {}} />);
 
@@ -105,15 +107,72 @@ describe('CompanySelector', () => {
     });
   });
 
-  it('should not display loading after companies have loaded', async () => {
-    mockExecute.mockResolvedValue(mockCompanies);
+  it('should show error state with retry button when fetch fails', async () => {
+    mockFetch.mockRejectedValue(new Error('Network error'));
 
     render(<CompanySelector onSelect={() => {}} />);
 
     await waitFor(() => {
-      expect(screen.getByText('Clínica San Pablo')).toBeInTheDocument();
+      expect(screen.getByText(/Error al cargar las empresas/i)).toBeInTheDocument();
+    });
+
+    const retryButton = screen.getByRole('button', { name: /reintentar/i });
+    expect(retryButton).toBeInTheDocument();
+  });
+
+  it('should retry fetch when retry button is clicked after error', async () => {
+    mockFetch
+      .mockRejectedValueOnce(new Error('Network error'))
+      .mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({ companies: mockCompanies }),
+      });
+
+    render(<CompanySelector onSelect={() => {}} />);
+
+    // Wait for error state
+    await waitFor(() => {
+      expect(screen.getByText(/Error al cargar las empresas/i)).toBeInTheDocument();
+    });
+
+    // Click retry
+    fireEvent.click(screen.getByRole('button', { name: /reintentar/i }));
+
+    // Should now show company cards (re-fetched successfully)
+    await waitFor(() => {
+      expect(screen.getByText('CIME INGENIEROS S R L')).toBeInTheDocument();
+    });
+
+    expect(mockFetch).toHaveBeenCalledTimes(2);
+  });
+
+  it('should not display loading indicator after companies have loaded', async () => {
+    mockFetch.mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ companies: mockCompanies }),
+    });
+
+    render(<CompanySelector onSelect={() => {}} />);
+
+    await waitFor(() => {
+      expect(screen.getByText('CIME INGENIEROS S R L')).toBeInTheDocument();
     });
 
     expect(screen.queryByText('Cargando empresas...')).not.toBeInTheDocument();
+  });
+
+  it('should call the API endpoint /api/consolidados/results', async () => {
+    mockFetch.mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ companies: mockCompanies }),
+    });
+
+    render(<CompanySelector onSelect={() => {}} />);
+
+    await waitFor(() => {
+      expect(screen.getByText('CIME INGENIEROS S R L')).toBeInTheDocument();
+    });
+
+    expect(mockFetch).toHaveBeenCalledWith('/api/consolidados/results', expect.any(Object));
   });
 });
