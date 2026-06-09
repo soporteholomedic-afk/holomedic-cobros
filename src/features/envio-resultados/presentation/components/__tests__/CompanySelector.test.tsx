@@ -173,6 +173,9 @@ describe('CompanySelector', () => {
       expect(screen.getByText('CIME INGENIEROS S R L')).toBeInTheDocument();
     });
 
-    expect(mockFetch).toHaveBeenCalledWith('/api/consolidados/results', expect.any(Object));
+    expect(mockFetch).toHaveBeenCalledWith(
+      expect.stringContaining('/api/consolidados/results'),
+      expect.any(Object)
+    );
   });
 });

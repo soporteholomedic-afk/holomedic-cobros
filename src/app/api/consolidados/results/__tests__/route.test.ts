@@ -128,8 +128,8 @@ describe('GET /api/consolidados/results', () => {
     expect(res.status).toBe(200);
 
     // Verify SP was called with the date params
-    expect(mockRequestInput).toHaveBeenCalledWith('FechaInicio', expect.anything(), '2026-01-01');
-    expect(mockRequestInput).toHaveBeenCalledWith('FechaFin', expect.anything(), '2026-06-09');
+    expect(mockRequestInput).toHaveBeenCalledWith('FecIni', expect.anything(), '2026-01-01 00:00:00');
+    expect(mockRequestInput).toHaveBeenCalledWith('FecFin', expect.anything(), '2026-06-09 23:59:59');
   });
 
   // ---- No query params: null defaults ----
@@ -148,8 +148,8 @@ describe('GET /api/consolidados/results', () => {
     expect(res.status).toBe(200);
 
     // SP should be called with null date parameters
-    expect(mockRequestInput).toHaveBeenCalledWith('FechaInicio', expect.anything(), null);
-    expect(mockRequestInput).toHaveBeenCalledWith('FechaFin', expect.anything(), null);
+    expect(mockRequestInput).toHaveBeenCalledWith('FecIni', expect.anything(), null);
+    expect(mockRequestInput).toHaveBeenCalledWith('FecFin', expect.anything(), null);
   });
 
   // ---- Error: 500 on connection failure ----
