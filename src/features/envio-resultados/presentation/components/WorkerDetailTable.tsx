@@ -5,9 +5,11 @@ import type { CompanyGroup, WorkerRow } from '@/types/sp-result';
 
 interface WorkerDetailTableProps {
   companyName: string;
+  fechaInicio: string;
+  fechaFin: string;
 }
 
-export function WorkerDetailTable({ companyName }: WorkerDetailTableProps) {
+export function WorkerDetailTable({ companyName, fechaInicio, fechaFin }: WorkerDetailTableProps) {
   const [workers, setWorkers] = useState<WorkerRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -19,7 +21,10 @@ export function WorkerDetailTable({ companyName }: WorkerDetailTableProps) {
       setLoading(true);
       setError(null);
       try {
-        const res = await fetch('/api/consolidados/results');
+        const queryParams = new URLSearchParams();
+        if (fechaInicio) queryParams.set('fechaInicio', fechaInicio);
+        if (fechaFin) queryParams.set('fechaFin', fechaFin);
+        const res = await fetch(`/api/consolidados/results?${queryParams.toString()}`);
         if (!cancelled) {
           if (!res.ok) {
             throw new Error(`HTTP ${res.status}`);
@@ -45,7 +50,7 @@ export function WorkerDetailTable({ companyName }: WorkerDetailTableProps) {
     return () => {
       cancelled = true;
     };
-  }, [companyName]);
+  }, [companyName, fechaInicio, fechaFin]);
 
   if (loading) {
     return (

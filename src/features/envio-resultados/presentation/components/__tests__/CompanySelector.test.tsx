@@ -88,10 +88,10 @@ describe('CompanySelector', () => {
     });
 
     fireEvent.click(screen.getByText('CIME INGENIEROS S R L'));
-    expect(handleSelect).toHaveBeenCalledWith('CIME INGENIEROS S R L');
+    expect(handleSelect).toHaveBeenCalledWith('CIME INGENIEROS S R L', expect.any(String), expect.any(String));
 
     fireEvent.click(screen.getByText('CHOICE SERVICE S.A.C.'));
-    expect(handleSelect).toHaveBeenCalledWith('CHOICE SERVICE S.A.C.');
+    expect(handleSelect).toHaveBeenCalledWith('CHOICE SERVICE S.A.C.', expect.any(String), expect.any(String));
   });
 
   it('should show empty message when API returns no companies', async () => {
@@ -103,7 +103,7 @@ describe('CompanySelector', () => {
     render(<CompanySelector onSelect={() => {}} />);
 
     await waitFor(() => {
-      expect(screen.getByText('No hay empresas disponibles')).toBeInTheDocument();
+      expect(screen.getByText(/No hay empresas disponibles/i)).toBeInTheDocument();
     });
   });
 

@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import type { CompanyGroup } from '@/types/sp-result';
 
 interface CompanySelectorProps {
-  onSelect: (companyName: string) => void;
+  onSelect: (companyName: string, fechaInicio: string, fechaFin: string) => void;
 }
 
 const getLocalDateString = () => {
@@ -122,7 +122,7 @@ export function CompanySelector({ onSelect }: CompanySelectorProps) {
           {companies.map((company) => (
             <button
               key={company.companyName}
-              onClick={() => onSelect(company.companyName)}
+              onClick={() => onSelect(company.companyName, fechaInicio, fechaFin)}
               className="text-left p-6 rounded-xl border border-slate-200 bg-white hover:border-sky-300 hover:shadow-md hover:shadow-sky-100/50 transition-all duration-200 cursor-pointer"
             >
               <h3 className="text-lg font-semibold text-slate-800 mb-2">{company.companyName}</h3>

@@ -6,8 +6,13 @@ import { CompanySelector } from '@/features/envio-resultados/presentation/compon
 export default function ConsolidadosPage() {
   const router = useRouter();
 
-  const handleCompanySelect = (companyName: string) => {
-    router.push(`/consolidados/envio-resultados?companyName=${encodeURIComponent(companyName)}`);
+  const handleCompanySelect = (companyName: string, fechaInicio: string, fechaFin: string) => {
+    const params = new URLSearchParams({
+      companyName,
+      fechaInicio,
+      fechaFin,
+    });
+    router.push(`/consolidados/envio-resultados?${params.toString()}`);
   };
 
   return (

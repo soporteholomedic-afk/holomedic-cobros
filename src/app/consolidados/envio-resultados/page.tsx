@@ -8,6 +8,8 @@ import { WorkerDetailTable } from '@/features/envio-resultados/presentation/comp
 function EnvioResultadosContent() {
   const searchParams = useSearchParams();
   const companyName = searchParams.get('companyName');
+  const fechaInicio = searchParams.get('fechaInicio') ?? '';
+  const fechaFin = searchParams.get('fechaFin') ?? '';
 
   if (!companyName) {
     return (
@@ -23,7 +25,7 @@ function EnvioResultadosContent() {
     );
   }
 
-  return <WorkerDetailTable companyName={companyName} />;
+  return <WorkerDetailTable companyName={companyName} fechaInicio={fechaInicio} fechaFin={fechaFin} />;
 }
 
 export default function EnvioResultadosPage() {
