@@ -64,6 +64,9 @@ export type {
   SpResultRow,
   WorkerRow,
   CompanyGroup,
+  OrderRow,
+  UnifiedFicha,
+  UnifiedPerson,
 } from './sp-result';
 
 export interface DashboardMetrics {

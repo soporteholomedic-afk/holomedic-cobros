@@ -60,3 +60,30 @@ export interface OrderRow {
   NroDId: string;
   [key: string]: unknown;
 }
+
+/**
+ * Alternate patient/work-order entry within a UnifiedPerson.
+ * Represents a single matched row from SP_SEL_ORDEN.
+ * When fichas.length > 1, the component renders a chevron-based expandable sub-row.
+ */
+export interface UnifiedFicha {
+  idAten: string;
+  nroRuc: string;
+  nomCFa: string;
+}
+
+/**
+ * Unified person row formed by merging worker exam data (SP_RPT_MATRIZICCGSA)
+ * with patient order data (SP_SEL_ORDEN) using normalized DNI as the correlation key.
+ *
+ * FULL OUTER JOIN semantics: worker-only and order-only persons both included.
+ * Missing fields from the absent side remain empty strings.
+ */
+export interface UnifiedPerson {
+  dni: string;              // normalized DNI (bare digits, no prefix/whitespace)
+  nombre: string;           // SpResultRow.Pacien
+  empresa: string;          // SpResultRow.NomCom
+  tipoExamen: string;       // SpResultRow.DesTCh
+  proyecto: string;         // SpResultRow.DesDes
+  fichas: UnifiedFicha[];   // matched order entries; empty when worker-only
+}

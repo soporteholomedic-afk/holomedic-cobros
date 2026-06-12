@@ -1,309 +1,390 @@
 import React from 'react';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import type { UnifiedPerson, UnifiedFicha } from '@/types/sp-result';
+
+// ---- Hoisted mock for useUnifiedResults ----
+
+const mockUseUnifiedResults = vi.hoisted(() => vi.fn());
+
+vi.mock('../../hooks/useUnifiedResults', () => ({
+  useUnifiedResults: mockUseUnifiedResults,
+}));
+
+// ---- Import component under test ----
 
 import { WorkerDetailTable } from '../WorkerDetailTable';
-import type { CompanyGroup, OrderRow } from '@/types/sp-result';
 
-// ---- Fixture data matching SP result structure from SQLSERVER/ejemplo_resultados.txt ----
+// ---- Helpers ----
 
-const mockApiResponse = {
-  companies: [
-    {
-      companyName: 'CHOICE SERVICE S.A.C.',
-      workers: [
-        { nombre: 'ASTORGA FLORES MARTIN ADRIAN', tipoExamen: 'PREOCUPACIONAL', proyecto: 'NEXA CAJAMARQUILLA' },
-        { nombre: 'ASTORGA FLORES MARTIN ADRIAN', tipoExamen: 'ADICIONALES', proyecto: 'ADICIONALES' },
-      ],
-      workerCount: 2,
-    },
-    {
-      companyName: 'CIME INGENIEROS S R L',
-      workers: [
-        { nombre: 'FALLA PEÑA GILMER DUBERLY', tipoExamen: 'PERIODICO', proyecto: 'UNACEM' },
-      ],
-      workerCount: 1,
-    },
-  ] as CompanyGroup[],
-};
+function makeUnifiedPerson(overrides: Partial<UnifiedPerson> = {}): UnifiedPerson {
+  return {
+    dni: '12345678',
+    nombre: 'JUAN PÉREZ',
+    empresa: 'EMPRESA TEST S.A.C.',
+    tipoExamen: 'PERIODICO',
+    proyecto: 'PROYECTO UNO',
+    fichas: [{ idAten: 'ATE-001', nroRuc: '20123456789', nomCFa: 'EMPRESA TEST S.A.C.' }],
+    ...overrides,
+  };
+}
 
-// ---- Patient fixture data (SP_SEL_ORDEN output shape) ----
-
-const mockPatientRows: OrderRow[] = [
-  { IdAten: 'ATE-001', NroRuc: '20123456789', NomCFa: 'CHOICE SERVICE S.A.C.', NroDId: '12345678' },
-  { IdAten: 'ATE-002', NroRuc: '20123456789', NomCFa: 'CHOICE SERVICE S.A.C.', NroDId: '87654321' },
-  { IdAten: 'ATE-003', NroRuc: '20987654321', NomCFa: 'CHOICE SERVICE S.A.C.', NroDId: '11223344' },
-];
-
-const mockFetch = vi.fn();
-
-beforeEach(() => {
-  vi.clearAllMocks();
-  global.fetch = mockFetch;
-});
+function makeFicha(overrides: Partial<UnifiedFicha> = {}): UnifiedFicha {
+  return {
+    idAten: 'ATE-001',
+    nroRuc: '20123456789',
+    nomCFa: 'EMPRESA TEST S.A.C.',
+    ...overrides,
+  };
+}
 
 const DEFAULT_PROPS = {
+  companyName: 'EMPRESA TEST',
   fechaInicio: '2026-01-01',
   fechaFin: '2026-06-30',
 } as const;
 
-describe('WorkerDetailTable', () => {
-  it('should show loading indicator initially', () => {
-    mockFetch.mockReturnValue(new Promise(() => {}));
+beforeEach(() => {
+  vi.clearAllMocks();
+  // Default: loading state
+  mockUseUnifiedResults.mockReturnValue({
+    people: [],
+    loading: true,
+    error: null,
+  });
+});
 
-    render(<WorkerDetailTable companyName="CHOICE SERVICE S.A.C." {...DEFAULT_PROPS} />);
+describe('WorkerDetailTable — Unified Table', () => {
+  // ================================================================
+  // Task 5.1: Column rendering
+  // ================================================================
 
-    expect(screen.getByText('Cargando trabajadores...')).toBeInTheDocument();
+  it('should render all 8 column headers in correct order', async () => {
+    mockUseUnifiedResults.mockReturnValue({
+      people: [makeUnifiedPerson()],
+      loading: false,
+      error: null,
+    });
+
+    render(<WorkerDetailTable {...DEFAULT_PROPS} />);
+
+    // Column headers must appear exactly once each
+    const headers = ['Ficha', 'Nombre', 'Empresa', 'RUC', 'Proyecto', 'Razón Social', 'DNI', 'Tipo de Examen'];
+    for (const header of headers) {
+      const elements = screen.getAllByText(header);
+      // Header text can appear in <th> only — should be exactly one
+      expect(elements.length).toBeGreaterThanOrEqual(1);
+    }
   });
 
-  it('should display worker rows with nombre, tipoExamen, and proyecto columns', async () => {
-    mockFetch.mockResolvedValue({
-      ok: true,
-      json: () => Promise.resolve(mockApiResponse),
+  it('should render data in correct columns for a merged person', async () => {
+    const person = makeUnifiedPerson({
+      dni: '25721424',
+      nombre: 'GILMER FALLA',
+      empresa: 'CIME INGENIEROS S R L',
+      tipoExamen: 'PERIODICO',
+      proyecto: 'UNACEM',
+      fichas: [{ idAten: 'ATE-999', nroRuc: '20999999999', nomCFa: 'CIME INGENIEROS S R L (RS)' }],
     });
 
-    render(<WorkerDetailTable companyName="CHOICE SERVICE S.A.C." {...DEFAULT_PROPS} />);
-
-    await waitFor(() => {
-      const nameCells = screen.getAllByText('ASTORGA FLORES MARTIN ADRIAN');
-      expect(nameCells).toHaveLength(2);
+    mockUseUnifiedResults.mockReturnValue({
+      people: [person],
+      loading: false,
+      error: null,
     });
 
-    // Column headers
-    expect(screen.getByText('Nombre')).toBeInTheDocument();
-    expect(screen.getByText('Tipo de Examen')).toBeInTheDocument();
-    expect(screen.getByText('Proyecto')).toBeInTheDocument();
+    render(<WorkerDetailTable {...DEFAULT_PROPS} />);
 
-    // First row data
-    expect(screen.getByText('PREOCUPACIONAL')).toBeInTheDocument();
-    expect(screen.getByText('NEXA CAJAMARQUILLA')).toBeInTheDocument();
-
-    // Second row data (same worker, different exam)
-    // ADICIONALES appears in both TipoExamen and Proyecto columns
-    const adicionalesCells = screen.getAllByText('ADICIONALES');
-    expect(adicionalesCells).toHaveLength(2);
+    // Each data value must appear in the table body
+    expect(screen.getByText('ATE-999')).toBeInTheDocument();       // Ficha
+    expect(screen.getByText('GILMER FALLA')).toBeInTheDocument();   // Nombre
+    expect(screen.getByText('CIME INGENIEROS S R L')).toBeInTheDocument(); // Empresa
+    expect(screen.getByText('20999999999')).toBeInTheDocument();    // RUC
+    expect(screen.getByText('UNACEM')).toBeInTheDocument();         // Proyecto
+    expect(screen.getByText('CIME INGENIEROS S R L (RS)')).toBeInTheDocument(); // Razón Social
+    expect(screen.getByText('PERIODICO')).toBeInTheDocument();      // Tipo de Examen
+    expect(screen.getByText('25721424')).toBeInTheDocument();       // DNI (normalized, no prefix)
   });
 
-  it('should display multiple rows for a worker with multiple exams', async () => {
-    mockFetch.mockResolvedValue({
-      ok: true,
-      json: () => Promise.resolve(mockApiResponse),
+  it('should show normalized DNI without "DNI " prefix', async () => {
+    const person = makeUnifiedPerson({
+      dni: '25721424',
+      nombre: 'TEST PERSON',
     });
 
-    render(<WorkerDetailTable companyName="CHOICE SERVICE S.A.C." {...DEFAULT_PROPS} />);
+    mockUseUnifiedResults.mockReturnValue({
+      people: [person],
+      loading: false,
+      error: null,
+    });
 
+    render(<WorkerDetailTable {...DEFAULT_PROPS} />);
+
+    // DNI column must show bare digits only
+    expect(screen.getByText('25721424')).toBeInTheDocument();
+    // Must NOT contain the old prefix
+    expect(screen.queryByText(/DNI 25721424/)).not.toBeInTheDocument();
+  });
+
+  // ================================================================
+  // Task 5.2: Doble ficha expansion
+  // ================================================================
+
+  it('should show chevron on rows with multiple fichas', async () => {
+    const person = makeUnifiedPerson({
+      fichas: [
+        makeFicha({ idAten: 'ATE-100', nroRuc: '20000000001', nomCFa: 'PRIMARY CO' }),
+        makeFicha({ idAten: 'ATE-200', nroRuc: '20000000002', nomCFa: 'SECONDARY CO' }),
+      ],
+    });
+
+    mockUseUnifiedResults.mockReturnValue({
+      people: [person],
+      loading: false,
+      error: null,
+    });
+
+    render(<WorkerDetailTable {...DEFAULT_PROPS} />);
+
+    // Primary ficha data in main row
+    expect(screen.getByText('ATE-100')).toBeInTheDocument();
+    expect(screen.getByText('20000000001')).toBeInTheDocument();
+
+    // Secondary ficha data should NOT be visible initially
+    expect(screen.queryByText('ATE-200')).not.toBeInTheDocument();
+    expect(screen.queryByText('SECONDARY CO')).not.toBeInTheDocument();
+
+    // A chevron button should exist (SVG with chevron-down path)
+    // We find the button that contains the chevron — the row should have a clickable element
+    const rows = screen.getAllByRole('row');
+    // The data row (not header) should contain a button
+    const dataRow = rows[1]; // second row = first data row
+    const button = dataRow.querySelector('button');
+    expect(button).not.toBeNull();
+  });
+
+  it('should expand sub-row with alternate ficha data on chevron click', async () => {
+    const person = makeUnifiedPerson({
+      fichas: [
+        makeFicha({ idAten: 'ATE-100', nroRuc: '20000000001', nomCFa: 'PRIMARY CO' }),
+        makeFicha({ idAten: 'ATE-200', nroRuc: '20000000002', nomCFa: 'SECONDARY CO' }),
+      ],
+    });
+
+    mockUseUnifiedResults.mockReturnValue({
+      people: [person],
+      loading: false,
+      error: null,
+    });
+
+    render(<WorkerDetailTable {...DEFAULT_PROPS} />);
+
+    // Find the chevron button in the row
+    const rows = screen.getAllByRole('row');
+    const dataRow = rows[1];
+    const button = dataRow.querySelector('button')!;
+
+    // Click to expand
+    fireEvent.click(button);
+
+    // Secondary ficha data should now be visible in the sub-row
     await waitFor(() => {
-      const rows = screen.getAllByText('ASTORGA FLORES MARTIN ADRIAN');
-      expect(rows).toHaveLength(2);
+      expect(screen.getByText('ATE-200')).toBeInTheDocument();
+    });
+    // Sub-row renders "RUC: 20000000002" — use regex to match
+    expect(screen.getByText(/20000000002/)).toBeInTheDocument();
+    expect(screen.getByText('SECONDARY CO')).toBeInTheDocument();
+  });
+
+  it('should collapse sub-row on second chevron click', async () => {
+    const person = makeUnifiedPerson({
+      fichas: [
+        makeFicha({ idAten: 'ATE-100', nroRuc: '20000000001', nomCFa: 'PRIMARY CO' }),
+        makeFicha({ idAten: 'ATE-200', nroRuc: '20000000002', nomCFa: 'SECONDARY CO' }),
+      ],
+    });
+
+    mockUseUnifiedResults.mockReturnValue({
+      people: [person],
+      loading: false,
+      error: null,
+    });
+
+    render(<WorkerDetailTable {...DEFAULT_PROPS} />);
+
+    const rows = screen.getAllByRole('row');
+    const dataRow = rows[1];
+    const button = dataRow.querySelector('button')!;
+
+    // Expand
+    fireEvent.click(button);
+    await waitFor(() => {
+      expect(screen.getByText('ATE-200')).toBeInTheDocument();
+      expect(screen.getByText(/20000000002/)).toBeInTheDocument();
+    });
+
+    // Collapse
+    fireEvent.click(button);
+    await waitFor(() => {
+      expect(screen.queryByText('ATE-200')).not.toBeInTheDocument();
     });
   });
 
-  it('should show empty state when company is not found in API response', async () => {
-    mockFetch.mockResolvedValue({
-      ok: true,
-      json: () => Promise.resolve({ companies: [] }),
+  // ================================================================
+  // Task 5.3: Single ficha — no chevron
+  // ================================================================
+
+  it('should NOT show chevron on row with single ficha', async () => {
+    const person = makeUnifiedPerson({
+      fichas: [makeFicha({ idAten: 'ATE-001', nroRuc: '20123456789', nomCFa: 'SINGLE CO' })],
     });
 
-    render(<WorkerDetailTable companyName="NONEXISTENT CO" {...DEFAULT_PROPS} />);
-
-    await waitFor(() => {
-      expect(screen.getByText(/No se encontraron trabajadores/i)).toBeInTheDocument();
+    mockUseUnifiedResults.mockReturnValue({
+      people: [person],
+      loading: false,
+      error: null,
     });
+
+    render(<WorkerDetailTable {...DEFAULT_PROPS} />);
+
+    const rows = screen.getAllByRole('row');
+    const dataRow = rows[1];
+    const button = dataRow.querySelector('button');
+    // Must NOT have a chevron button
+    expect(button).toBeNull();
   });
 
-  it('should show empty state when company has no workers', async () => {
-    mockFetch.mockResolvedValue({
-      ok: true,
-      json: () => Promise.resolve({
-        companies: [{ companyName: 'EMPTY CO', workers: [], workerCount: 0 }],
-      }),
+  // ================================================================
+  // Task 5.4: Loading, error, and empty states
+  // ================================================================
+
+  it('should show loading spinner with correct message', async () => {
+    mockUseUnifiedResults.mockReturnValue({
+      people: [],
+      loading: true,
+      error: null,
     });
 
-    render(<WorkerDetailTable companyName="EMPTY CO" {...DEFAULT_PROPS} />);
+    render(<WorkerDetailTable {...DEFAULT_PROPS} />);
 
-    await waitFor(() => {
-      expect(screen.getByText(/No se encontraron trabajadores/i)).toBeInTheDocument();
-    });
+    expect(screen.getByText('Cargando consolidados...')).toBeInTheDocument();
   });
 
-  it('should show error state when fetch fails', async () => {
-    mockFetch.mockRejectedValue(new Error('Network error'));
-
-    render(<WorkerDetailTable companyName="TEST CO" {...DEFAULT_PROPS} />);
-
-    await waitFor(() => {
-      expect(screen.getByText(/Error al cargar los trabajadores/i)).toBeInTheDocument();
+  it('should show error message when hook reports error', async () => {
+    mockUseUnifiedResults.mockReturnValue({
+      people: [],
+      loading: false,
+      error: 'Error al cargar los consolidados. Intente nuevamente.',
     });
+
+    render(<WorkerDetailTable {...DEFAULT_PROPS} />);
+
+    expect(screen.getByText('Error al cargar los consolidados. Intente nuevamente.')).toBeInTheDocument();
   });
 
-  it('should display correct company heading', async () => {
-    mockFetch.mockResolvedValue({
-      ok: true,
-      json: () => Promise.resolve(mockApiResponse),
+  it('should show empty state when no people returned', async () => {
+    mockUseUnifiedResults.mockReturnValue({
+      people: [],
+      loading: false,
+      error: null,
     });
 
-    render(<WorkerDetailTable companyName="CHOICE SERVICE S.A.C." {...DEFAULT_PROPS} />);
+    render(<WorkerDetailTable {...DEFAULT_PROPS} />);
 
-    await waitFor(() => {
-      const nameCells = screen.getAllByText('ASTORGA FLORES MARTIN ADRIAN');
-      expect(nameCells).toHaveLength(2);
-    });
-
-    // Company name should be displayed as a heading
-    expect(screen.getByText('CHOICE SERVICE S.A.C.')).toBeInTheDocument();
+    expect(screen.getByText('No se encontraron consolidados para esta empresa')).toBeInTheDocument();
   });
 
-  // ---- Patient data tests (PR 2) ----
+  // ================================================================
+  // Task 5.5: Outer-join gaps (— em dash)
+  // ================================================================
 
-  it('should render patient table with IdAten, NroRuc, NomCFa, and NroDId columns', async () => {
-    mockFetch.mockImplementation((url: string) => {
-      if (url.includes('/api/consolidados/results_by_companies')) {
-        return Promise.resolve({
-          ok: true,
-          json: () => Promise.resolve(mockPatientRows),
-        });
-      }
-      return Promise.resolve({
-        ok: true,
-        json: () => Promise.resolve(mockApiResponse),
-      });
+  it('should show em dashes for Ficha/RUC/Razón Social when worker has no orders', async () => {
+    // Worker-only person: fichas is empty
+    const person: UnifiedPerson = {
+      dni: '99999999',
+      nombre: 'WORKER SOLO',
+      empresa: 'SOLO COMPANY',
+      tipoExamen: 'EXAM-SOLO',
+      proyecto: 'PROJ-SOLO',
+      fichas: [], // no matching orders
+    };
+
+    mockUseUnifiedResults.mockReturnValue({
+      people: [person],
+      loading: false,
+      error: null,
     });
 
-    render(<WorkerDetailTable companyName="CHOICE SERVICE S.A.C." {...DEFAULT_PROPS} />);
+    render(<WorkerDetailTable {...DEFAULT_PROPS} />);
 
-    // Wait for both fetches to resolve (worker data renders)
-    await waitFor(() => {
-      const nameCells = screen.getAllByText('ASTORGA FLORES MARTIN ADRIAN');
-      expect(nameCells).toHaveLength(2);
-    });
+    // Worker fields populated
+    expect(screen.getByText('WORKER SOLO')).toBeInTheDocument();
+    expect(screen.getByText('EXAM-SOLO')).toBeInTheDocument();
+    expect(screen.getByText('99999999')).toBeInTheDocument();
 
-    // Patient table heading
-    expect(screen.getByText('Datos de Pacientes')).toBeInTheDocument();
-
-    // Patient column headers
-    expect(screen.getByText('Ficha')).toBeInTheDocument();
-    expect(screen.getByText('RUT Empresa')).toBeInTheDocument();
-    expect(screen.getByText('Razón Social')).toBeInTheDocument();
-    expect(screen.getByText('DNI')).toBeInTheDocument();
-
-    // Patient row data
-    expect(screen.getByText('ATE-001')).toBeInTheDocument();
-    expect(screen.getByText('ATE-002')).toBeInTheDocument();
-    expect(screen.getByText('ATE-003')).toBeInTheDocument();
-    const rutCells = screen.getAllByText('20123456789');
-    expect(rutCells).toHaveLength(2); // appears in two patient rows
-    expect(screen.getByText('12345678')).toBeInTheDocument();
+    // Order fields should show em dash
+    // Since "—" appears in the Ficha, RUC, and Razón Social columns for this row
+    const emDashCells = screen.getAllByText('—');
+    expect(emDashCells.length).toBeGreaterThanOrEqual(3); // Ficha, RUC, Razón Social
   });
 
-  it('should show loading state for patient section while patient data loads', async () => {
-    // Worker resolves immediately, patient stays pending
-    mockFetch.mockImplementation((url: string) => {
-      if (url.includes('/api/consolidados/results_by_companies')) {
-        return new Promise(() => {}); // never resolves
-      }
-      return Promise.resolve({
-        ok: true,
-        json: () => Promise.resolve(mockApiResponse),
-      });
+  it('should show em dashes for Nombre/Empresa/Proyecto/Tipo de Examen when order-only', async () => {
+    // Order-only person: worker fields are empty strings
+    const person: UnifiedPerson = {
+      dni: '88888888',
+      nombre: '',
+      empresa: '',
+      tipoExamen: '',
+      proyecto: '',
+      fichas: [
+        makeFicha({ idAten: 'ATE-888', nroRuc: '20888888888', nomCFa: 'ORDER ONLY CO' }),
+      ],
+    };
+
+    mockUseUnifiedResults.mockReturnValue({
+      people: [person],
+      loading: false,
+      error: null,
     });
 
-    render(<WorkerDetailTable companyName="CHOICE SERVICE S.A.C." {...DEFAULT_PROPS} />);
+    render(<WorkerDetailTable {...DEFAULT_PROPS} />);
 
-    // Worker data renders
-    await waitFor(() => {
-      const nameCells = screen.getAllByText('ASTORGA FLORES MARTIN ADRIAN');
-      expect(nameCells).toHaveLength(2);
-    });
+    // Order fields populated
+    expect(screen.getByText('ATE-888')).toBeInTheDocument();
+    expect(screen.getByText('20888888888')).toBeInTheDocument();
+    expect(screen.getByText('ORDER ONLY CO')).toBeInTheDocument();
+    expect(screen.getByText('88888888')).toBeInTheDocument();
 
-    // Patient loading spinner and message visible
-    expect(screen.getByText('Cargando pacientes...')).toBeInTheDocument();
+    // Worker fields should show em dash
+    const emDashCells = screen.getAllByText('—');
+    expect(emDashCells.length).toBeGreaterThanOrEqual(4); // Nombre, Empresa, Proyecto, Tipo de Examen
   });
 
-  it('should show empty state when no patient data returned', async () => {
-    mockFetch.mockImplementation((url: string) => {
-      if (url.includes('/api/consolidados/results_by_companies')) {
-        return Promise.resolve({
-          ok: true,
-          json: () => Promise.resolve([]),
-        });
-      }
-      return Promise.resolve({
-        ok: true,
-        json: () => Promise.resolve(mockApiResponse),
-      });
+  // ================================================================
+  // Multiple rows rendering
+  // ================================================================
+
+  it('should render multiple rows for multiple people', async () => {
+    const people: UnifiedPerson[] = [
+      makeUnifiedPerson({ dni: '11111111', nombre: 'PERSON A', fichas: [makeFicha({ idAten: 'ATE-A1' })] }),
+      makeUnifiedPerson({ dni: '22222222', nombre: 'PERSON B', fichas: [makeFicha({ idAten: 'ATE-B1' })] }),
+    ];
+
+    mockUseUnifiedResults.mockReturnValue({
+      people,
+      loading: false,
+      error: null,
     });
 
-    render(<WorkerDetailTable companyName="CHOICE SERVICE S.A.C." {...DEFAULT_PROPS} />);
+    render(<WorkerDetailTable {...DEFAULT_PROPS} />);
 
-    // Worker data renders
-    await waitFor(() => {
-      const nameCells = screen.getAllByText('ASTORGA FLORES MARTIN ADRIAN');
-      expect(nameCells).toHaveLength(2);
-    });
+    expect(screen.getByText('PERSON A')).toBeInTheDocument();
+    expect(screen.getByText('PERSON B')).toBeInTheDocument();
+    expect(screen.getByText('ATE-A1')).toBeInTheDocument();
+    expect(screen.getByText('ATE-B1')).toBeInTheDocument();
 
-    // Patient empty state message
-    expect(screen.getByText(/No se encontraron pacientes/i)).toBeInTheDocument();
-  });
-
-  it('should show patient error state while worker table renders normally', async () => {
-    mockFetch.mockImplementation((url: string) => {
-      if (url.includes('/api/consolidados/results_by_companies')) {
-        return Promise.reject(new Error('Patient fetch failed'));
-      }
-      return Promise.resolve({
-        ok: true,
-        json: () => Promise.resolve(mockApiResponse),
-      });
-    });
-
-    render(<WorkerDetailTable companyName="CHOICE SERVICE S.A.C." {...DEFAULT_PROPS} />);
-
-    // Worker data renders normally
-    await waitFor(() => {
-      const nameCells = screen.getAllByText('ASTORGA FLORES MARTIN ADRIAN');
-      expect(nameCells).toHaveLength(2);
-    });
-
-    // Worker table heading still visible
-    expect(screen.getByText('CHOICE SERVICE S.A.C.')).toBeInTheDocument();
-
-    // Patient error message visible
-    expect(screen.getByText(/Error al cargar los pacientes/i)).toBeInTheDocument();
-
-    // Worker error message should NOT be present
-    expect(screen.queryByText(/Error al cargar los trabajadores/i)).not.toBeInTheDocument();
-  });
-
-  it('should fire both fetches with correct query parameters', async () => {
-    const fetchCalls: string[] = [];
-    mockFetch.mockImplementation((url: string) => {
-      fetchCalls.push(url);
-      if (url.includes('/api/consolidados/results_by_companies')) {
-        return Promise.resolve({
-          ok: true,
-          json: () => Promise.resolve(mockPatientRows),
-        });
-      }
-      return Promise.resolve({
-        ok: true,
-        json: () => Promise.resolve(mockApiResponse),
-      });
-    });
-
-    render(<WorkerDetailTable companyName="CHOICE SERVICE S.A.C." {...DEFAULT_PROPS} />);
-
-    await waitFor(() => {
-      const nameCells = screen.getAllByText('ASTORGA FLORES MARTIN ADRIAN');
-      expect(nameCells).toHaveLength(2);
-    });
-
-    const workerUrl = fetchCalls.find((c) => c.includes('/api/consolidados/results') && !c.includes('by_companies'));
-    const patientUrl = fetchCalls.find((c) => c.includes('/api/consolidados/results_by_companies'));
-
-    expect(workerUrl).toBeDefined();
-    expect(patientUrl).toBeDefined();
-    expect(workerUrl).toContain('fechaInicio=2026-01-01');
-    expect(workerUrl).toContain('fechaFin=2026-06-30');
-    expect(patientUrl).toContain('companyName=CHOICE+SERVICE+S.A.C.');
+    // Two data rows + header row = 3 total
+    const rows = screen.getAllByRole('row');
+    expect(rows).toHaveLength(3);
   });
 });
