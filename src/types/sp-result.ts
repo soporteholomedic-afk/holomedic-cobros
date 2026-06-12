@@ -47,3 +47,16 @@ export interface CompanyGroup {
   workers: WorkerRow[];
   workerCount: number;
 }
+
+/**
+ * Raw row from SP_SEL_ORDEN execution.
+ * Named columns consumed by the patient/work-order UI (Ficha, RUT, Razón Social, DNI).
+ * Index signature allows forward-compatibility with the full result set.
+ */
+export interface OrderRow {
+  IdAten: string;
+  NroRuc: string;
+  NomCFa: string;
+  NroDId: string;
+  [key: string]: unknown;
+}

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import type { SpResultRow, WorkerRow, CompanyGroup } from '../sp-result';
+import type { SpResultRow, WorkerRow, CompanyGroup, OrderRow } from '../sp-result';
 
 describe('SpResultRow', () => {
   it('should have all 21 named columns as string/number properties', () => {
@@ -133,5 +133,49 @@ describe('CompanyGroup', () => {
     expect(group.workers[0].nombre).toBe('WORKER A');
     expect(group.workers[1].nombre).toBe('WORKER A');
     expect(group.workers[0].tipoExamen).not.toBe(group.workers[1].tipoExamen);
+  });
+});
+
+describe('OrderRow', () => {
+  it('should have all 4 named columns as string properties', () => {
+    const row: OrderRow = {
+      IdAten: 'ATE-001',
+      NroRuc: '20123456789',
+      NomCFa: 'ACME CORP S.A.C.',
+      NroDId: '12345678',
+    };
+
+    expect(row.IdAten).toBe('ATE-001');
+    expect(row.NroRuc).toBe('20123456789');
+    expect(row.NomCFa).toBe('ACME CORP S.A.C.');
+    expect(row.NroDId).toBe('12345678');
+  });
+
+  it('should allow index signature for future columns', () => {
+    const row: OrderRow = {
+      IdAten: 'ATE-001',
+      NroRuc: '20123456789',
+      NomCFa: 'ACME CORP S.A.C.',
+      NroDId: '12345678',
+      futureColumn: 'extra',
+      anotherColumn: 42,
+    };
+
+    expect(row.futureColumn).toBe('extra');
+    expect(row.anotherColumn).toBe(42);
+  });
+
+  it('should accept different order data (triangulation)', () => {
+    const row: OrderRow = {
+      IdAten: 'ATE-999',
+      NroRuc: '20987654321',
+      NomCFa: 'BETA S.A.',
+      NroDId: '87654321',
+    };
+
+    expect(row.IdAten).toBe('ATE-999');
+    expect(row.NroRuc).toBe('20987654321');
+    expect(row.NomCFa).toBe('BETA S.A.');
+    expect(row.NroDId).toBe('87654321');
   });
 });
