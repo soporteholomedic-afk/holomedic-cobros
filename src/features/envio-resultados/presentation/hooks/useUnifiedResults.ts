@@ -154,7 +154,8 @@ export function useUnifiedResults(
         const map = new Map<string, UnifiedPerson>();
 
         for (const [dni, entry] of tempMap.entries()) {
-          const fichasCount = Math.max(entry.workers.length, entry.orders.length);
+          const workerCountForFichas = entry.workers.length > 1 ? entry.workers.length : 0;
+          const fichasCount = Math.max(entry.orders.length, workerCountForFichas);
           const fichas: UnifiedFicha[] = [];
 
           for (let i = 0; i < fichasCount; i++) {
