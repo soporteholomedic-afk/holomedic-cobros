@@ -18,10 +18,10 @@ function cellValue(value: string): string {
 
 export function WorkerDetailTable({ companyName, fechaInicio, fechaFin }: WorkerDetailTableProps) {
   const { people, loading, error } = useUnifiedResults(companyName, fechaInicio, fechaFin);
-  const [expandedDni, setExpandedDni] = useState<string | null>(null);
+  const [expandedKey, setExpandedKey] = useState<string | null>(null);
 
-  const toggleExpand = useCallback((dni: string) => {
-    setExpandedDni((prev) => (prev === dni ? null : dni));
+  const toggleExpand = useCallback((key: string) => {
+    setExpandedKey((prev) => (prev === key ? null : key));
   }, []);
 
   // ---- Loading state ----
@@ -76,16 +76,17 @@ export function WorkerDetailTable({ companyName, fechaInicio, fechaFin }: Worker
           </thead>
           <tbody className="divide-y divide-slate-100">
             {people.map((person) => {
+              const rowKey = `${person.dni}|${person.proyecto}`;
               const hasMultipleFichas = person.fichas.length > 1;
-              const isExpanded = expandedDni === person.dni;
+              const isExpanded = expandedKey === rowKey;
 
               return (
                 <PersonRow
-                  key={person.dni}
+                  key={rowKey}
                   person={person}
                   hasMultipleFichas={hasMultipleFichas}
                   isExpanded={isExpanded}
-                  onToggleExpand={hasMultipleFichas ? () => toggleExpand(person.dni) : undefined}
+                  onToggleExpand={hasMultipleFichas ? () => toggleExpand(rowKey) : undefined}
                 />
               );
             })}
@@ -145,17 +146,18 @@ function PersonRow({ person, hasMultipleFichas, isExpanded, onToggleExpand }: Pe
         <td className="px-4 py-3 text-slate-600">{cellValue(person.tipoExamen)}</td>
       </tr>
 
-      {/* Expanded sub-rows (fichas beyond the first) */}
+      {/* Expanded sub-rows (fichas beyond the first) — same columns as primary row */}
       {hasMultipleFichas && isExpanded &&
         person.fichas.slice(1).map((ficha, idx) => (
-          <tr key={`${person.dni}-alt-${idx}`} className="bg-slate-50/50 hover:bg-slate-100">
-            <td className="px-4 py-2 text-slate-500 text-xs pl-10">{ficha.idAten}</td>
-            <td className="px-4 py-2 text-slate-400 text-xs" colSpan={3}>
-              <span className="text-slate-400">RUC: {ficha.nroRuc}</span>
-              <span className="mx-2 text-slate-300">|</span>
-              <span className="text-slate-400">{ficha.nomCFa}</span>
-            </td>
-            <td className="px-4 py-2 text-slate-400 text-xs" colSpan={4}></td>
+          <tr key={`${person.dni}-alt-${idx}`} className="bg-sky-50/40 hover:bg-sky-50">
+            <td className="px-4 py-2 text-slate-500 text-xs pl-10">{ficha.idAten || EM_DASH}</td>
+            <td className="px-4 py-2 text-slate-400 text-xs">{cellValue(person.nombre)}</td>
+            <td className="px-4 py-2 text-slate-400 text-xs">{cellValue(person.empresa)}</td>
+            <td className="px-4 py-2 text-slate-400 text-xs">{ficha.nroRuc || EM_DASH}</td>
+            <td className="px-4 py-2 text-slate-400 text-xs">{ficha.proyecto || cellValue(person.proyecto)}</td>
+            <td className="px-4 py-2 text-slate-400 text-xs">{ficha.nomCFa || EM_DASH}</td>
+            <td className="px-4 py-2 text-slate-400 text-xs">{person.dni}</td>
+            <td className="px-4 py-2 text-slate-400 text-xs">{cellValue(person.tipoExamen)}</td>
           </tr>
         ))}
     </>

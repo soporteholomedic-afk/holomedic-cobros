@@ -62,14 +62,19 @@ export interface OrderRow {
 }
 
 /**
- * Alternate patient/work-order entry within a UnifiedPerson.
- * Represents a single matched row from SP_SEL_ORDEN.
+ * A single entry within a UnifiedPerson, representing either:
+ * - An order row from SP_SEL_ORDEN (idAten/nroRuc/nomCFa populated, proyecto may be empty), or
+ * - An additional worker row from SP_RPT_MATRIZICCGSA with a distinct DesDes
+ *   (proyecto populated, order fields empty).
+ *
  * When fichas.length > 1, the component renders a chevron-based expandable sub-row.
  */
 export interface UnifiedFicha {
   idAten: string;
   nroRuc: string;
   nomCFa: string;
+  /** SpResultRow.DesDes for worker-sourced fichas; '' for order-sourced fichas. */
+  proyecto: string;
 }
 
 /**
@@ -78,12 +83,16 @@ export interface UnifiedFicha {
  *
  * FULL OUTER JOIN semantics: worker-only and order-only persons both included.
  * Missing fields from the absent side remain empty strings.
+ *
+ * When a DNI appears in multiple worker rows (same person, different DesDes),
+ * each additional occurrence is stored as a UnifiedFicha with proyecto set and
+ * order fields empty, so the UI can expand them as sub-rows.
  */
 export interface UnifiedPerson {
   dni: string;              // normalized DNI (bare digits, no prefix/whitespace)
-  nombre: string;           // SpResultRow.Pacien
-  empresa: string;          // SpResultRow.NomCom
-  tipoExamen: string;       // SpResultRow.DesTCh
-  proyecto: string;         // SpResultRow.DesDes
-  fichas: UnifiedFicha[];   // matched order entries; empty when worker-only
+  nombre: string;           // SpResultRow.Pacien  (first occurrence)
+  empresa: string;          // SpResultRow.NomCom  (first occurrence)
+  tipoExamen: string;       // SpResultRow.DesTCh  (first occurrence)
+  proyecto: string;         // SpResultRow.DesDes  (first occurrence)
+  fichas: UnifiedFicha[];   // order entries + extra worker rows with distinct DesDes
 }

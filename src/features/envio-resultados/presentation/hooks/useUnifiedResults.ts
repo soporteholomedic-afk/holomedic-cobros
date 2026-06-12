@@ -91,17 +91,21 @@ export function useUnifiedResults(
 
         if (cancelled) return;
 
-        // ---- Merge: Map<normalizedDni, UnifiedPerson> ----
+        // ---- Merge: one primary row per (normalizedDni, DesDes) ----
+        // This gives each project its own table row with its own tipoExamen (DesTCh).
         const map = new Map<string, UnifiedPerson>();
+        // Tracks the composite key of the first project row for each DNI, so order
+        // fichas (which have no DesDes) can be attached to a deterministic row.
+        const dniFirstKey = new Map<string, string>();
 
-        // Pass 1: Worker rows
+        // Pass 1: Worker rows → one entry per (DNI + DesDes)
         for (const row of workerRows) {
           const dni = normalizeDni(row.NroDId);
-          if (!dni) continue; // skip rows with no extractable DNI
+          if (!dni) continue;
 
-          const existing = map.get(dni);
-          if (!existing) {
-            map.set(dni, {
+          const key = `${dni}|${row.DesDes}`;
+          if (!map.has(key)) {
+            map.set(key, {
               dni,
               nombre: row.Pacien,
               empresa: row.NomCom,
@@ -109,14 +113,16 @@ export function useUnifiedResults(
               proyecto: row.DesDes,
               fichas: [],
             });
+            // Record the first key seen for this DNI (order fichas will attach here)
+            if (!dniFirstKey.has(dni)) {
+              dniFirstKey.set(dni, key);
+            }
           }
-          // If same DNI appears multiple times in workers (different exams),
-          // the first occurrence wins for nombre/empresa/tipoExamen/proyecto.
-          // The spec doesn't specify dedup behavior for multi-exam workers
-          // in the unified table — first-occurrence is a safe default.
+          // Same (DNI + DesDes) appearing again → skip; dedup within same project.
         }
 
-        // Pass 2: Order rows
+        // Pass 2: Order rows → attach to the first project row for that DNI.
+        // SP_SEL_ORDEN has no DesDes, so we cannot correlate to a specific project.
         for (const row of orderRows) {
           const dni = normalizeDni(row.NroDId);
           if (!dni) continue;
@@ -125,21 +131,29 @@ export function useUnifiedResults(
             idAten: row.IdAten,
             nroRuc: row.NroRuc,
             nomCFa: row.NomCFa,
+            proyecto: '',
           };
 
-          const existing = map.get(dni);
-          if (existing) {
-            existing.fichas.push(ficha);
+          const firstKey = dniFirstKey.get(dni);
+          if (firstKey) {
+            map.get(firstKey)!.fichas.push(ficha);
           } else {
-            // Order-only person (no matching worker)
-            map.set(dni, {
-              dni,
-              nombre: '',
-              empresa: '',
-              tipoExamen: '',
-              proyecto: '',
-              fichas: [ficha],
-            });
+            // Order-only person (no matching worker row at all)
+            const orderKey = `${dni}|`;
+            const existing = map.get(orderKey);
+            if (existing) {
+              existing.fichas.push(ficha);
+            } else {
+              map.set(orderKey, {
+                dni,
+                nombre: '',
+                empresa: '',
+                tipoExamen: '',
+                proyecto: '',
+                fichas: [ficha],
+              });
+              dniFirstKey.set(dni, orderKey);
+            }
           }
         }
 
