@@ -51,7 +51,8 @@ export async function GET(request: Request): Promise<NextResponse> {
     // ---- Group by company ----
     const companies = groupByCompany(rows);
 
-    return NextResponse.json({ companies });
+    // Include raw rows for DNI-based correlation with order data
+    return NextResponse.json({ companies, rows });
   } catch (error) {
     // Production-safe error — never expose raw DB details, SP names, or data
     const message =

@@ -109,7 +109,7 @@ describe('GET /api/consolidados/results', () => {
 
     expect(res.status).toBe(200);
     const body = await res.json();
-    expect(body).toEqual({ companies: [] });
+    expect(body).toEqual({ companies: [], rows: [] });
   });
 
   // ---- Query params: fechaInicio and fechaFin ----
