@@ -75,6 +75,8 @@ export interface UnifiedFicha {
   nomCFa: string;
   /** SpResultRow.DesDes for worker-sourced fichas; '' for order-sourced fichas. */
   proyecto: string;
+  /** SpResultRow.DesTCh for worker-sourced fichas; '' for order-sourced fichas. */
+  tipoExamen: string;
 }
 
 /**

@@ -91,70 +91,92 @@ export function useUnifiedResults(
 
         if (cancelled) return;
 
-        // ---- Merge: one primary row per (normalizedDni, DesDes) ----
-        // This gives each project its own table row with its own tipoExamen (DesTCh).
-        const map = new Map<string, UnifiedPerson>();
-        // Tracks the composite key of the first project row for each DNI, so order
-        // fichas (which have no DesDes) can be attached to a deterministic row.
-        const dniFirstKey = new Map<string, string>();
+        // ---- Merge: Map<normalizedDni, UnifiedPerson> by zipping workers and orders ----
+        interface TempPerson {
+          dni: string;
+          nombre: string;
+          empresa: string;
+          workers: { proyecto: string; tipoExamen: string }[];
+          orders: { idAten: string; nroRuc: string; nomCFa: string }[];
+        }
 
-        // Pass 1: Worker rows → one entry per (DNI + DesDes)
+        const tempMap = new Map<string, TempPerson>();
+
+        const getOrCreateTemp = (dni: string): TempPerson => {
+          let entry = tempMap.get(dni);
+          if (!entry) {
+            entry = {
+              dni,
+              nombre: '',
+              empresa: '',
+              workers: [],
+              orders: [],
+            };
+            tempMap.set(dni, entry);
+          }
+          return entry;
+        };
+
+        // Pass 1: Worker rows
         for (const row of workerRows) {
           const dni = normalizeDni(row.NroDId);
           if (!dni) continue;
 
-          const key = `${dni}|${row.DesDes}`;
-          if (!map.has(key)) {
-            map.set(key, {
-              dni,
-              nombre: row.Pacien,
-              empresa: row.NomCom,
-              tipoExamen: row.DesTCh,
+          const entry = getOrCreateTemp(dni);
+          if (!entry.nombre) entry.nombre = row.Pacien;
+          if (!entry.empresa) entry.empresa = row.NomCom;
+
+          // Dedup exact same project + test type combination
+          const isDuplicate = entry.workers.some(
+            (w) => w.proyecto === row.DesDes && w.tipoExamen === row.DesTCh
+          );
+          if (!isDuplicate) {
+            entry.workers.push({
               proyecto: row.DesDes,
-              fichas: [],
+              tipoExamen: row.DesTCh,
             });
-            // Record the first key seen for this DNI (order fichas will attach here)
-            if (!dniFirstKey.has(dni)) {
-              dniFirstKey.set(dni, key);
-            }
           }
-          // Same (DNI + DesDes) appearing again → skip; dedup within same project.
         }
 
-        // Pass 2: Order rows → attach to the first project row for that DNI.
-        // SP_SEL_ORDEN has no DesDes, so we cannot correlate to a specific project.
+        // Pass 2: Order rows
         for (const row of orderRows) {
           const dni = normalizeDni(row.NroDId);
           if (!dni) continue;
 
-          const ficha: UnifiedFicha = {
+          const entry = getOrCreateTemp(dni);
+          entry.orders.push({
             idAten: row.IdAten,
             nroRuc: row.NroRuc,
             nomCFa: row.NomCFa,
-            proyecto: '',
-          };
+          });
+        }
 
-          const firstKey = dniFirstKey.get(dni);
-          if (firstKey) {
-            map.get(firstKey)!.fichas.push(ficha);
-          } else {
-            // Order-only person (no matching worker row at all)
-            const orderKey = `${dni}|`;
-            const existing = map.get(orderKey);
-            if (existing) {
-              existing.fichas.push(ficha);
-            } else {
-              map.set(orderKey, {
-                dni,
-                nombre: '',
-                empresa: '',
-                tipoExamen: '',
-                proyecto: '',
-                fichas: [ficha],
-              });
-              dniFirstKey.set(dni, orderKey);
-            }
+        const map = new Map<string, UnifiedPerson>();
+
+        for (const [dni, entry] of tempMap.entries()) {
+          const fichasCount = Math.max(entry.workers.length, entry.orders.length);
+          const fichas: UnifiedFicha[] = [];
+
+          for (let i = 0; i < fichasCount; i++) {
+            fichas.push({
+              idAten: entry.orders[i]?.idAten ?? '',
+              nroRuc: entry.orders[i]?.nroRuc ?? '',
+              nomCFa: entry.orders[i]?.nomCFa ?? '',
+              proyecto: entry.workers[i]?.proyecto ?? '',
+              tipoExamen: entry.workers[i]?.tipoExamen ?? '',
+            });
           }
+
+          const primaryFicha = fichas[0];
+
+          map.set(dni, {
+            dni,
+            nombre: entry.nombre,
+            empresa: entry.empresa,
+            proyecto: primaryFicha?.proyecto ?? entry.workers[0]?.proyecto ?? '',
+            tipoExamen: primaryFicha?.tipoExamen ?? entry.workers[0]?.tipoExamen ?? '',
+            fichas,
+          });
         }
 
         if (cancelled) return;

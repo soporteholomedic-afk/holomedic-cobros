@@ -351,21 +351,58 @@ describe('useUnifiedResults', () => {
     expect(result.current.people[1].nombre).toBe('PERSON B');
   });
 
-  // ---- Scenario 10: Cancellation — stale results discarded on rapid prop changes ----
+  // ---- Scenario 11: Same DNI, different projects (DesDes) ----
 
-  it('should not update state after unmount (cancellation guard)', async () => {
-    // Use a never-resolving fetch so we can unmount while loading
-    vi.spyOn(globalThis, 'fetch').mockReturnValue(new Promise(() => {}));
+  it('should group same DNI with different projects under a single UnifiedPerson with multiple combined fichas', async () => {
+    const workerRows: SpResultRow[] = [
+      makeWorkerRow({ NroDId: 'DNI 12345678', Pacien: 'DUPLICATE WORKER', DesTCh: 'PERIODICO', DesDes: 'UNACEM', NomCom: 'DUPLICATE CO' }),
+      makeWorkerRow({ NroDId: 'DNI 12345678', Pacien: 'DUPLICATE WORKER', DesTCh: 'PREOCUPACIONAL', DesDes: 'MINSUR', NomCom: 'DUPLICATE CO' }),
+    ];
+    const orderRows: OrderRow[] = [
+      makeOrderRow({ IdAten: 'ATE-U1', NroRuc: '20111111111', NomCFa: 'DUPLICATE CO', NroDId: '12345678' }),
+    ];
 
-    const { result, unmount } = renderHook(() =>
-      useUnifiedResults('CANCEL CO', '2026-01-01', '2026-06-30'),
+    vi.spyOn(globalThis, 'fetch').mockImplementation((input) => {
+      const url = String(input);
+      if (url.includes('/api/consolidados/results_by_companies')) {
+        return Promise.resolve(mockFetchResponse(orderRows));
+      }
+      return Promise.resolve(mockFetchResponse({ companies: [], rows: workerRows }));
+    });
+
+    const { result } = renderHook(() =>
+      useUnifiedResults('DUPLICATE CO', '2026-01-01', '2026-06-30'),
     );
 
-    expect(result.current.loading).toBe(true);
+    await waitFor(() => {
+      expect(result.current.loading).toBe(false);
+    });
 
-    unmount();
+    // Should generate only 1 person row for this DNI
+    expect(result.current.people).toHaveLength(1);
 
-    // After unmount, the state should not update — no assertion needed,
-    // the test passes if it doesn't throw "state update on unmounted component"
+    const person = result.current.people[0];
+    expect(person.dni).toBe('12345678');
+    expect(person.nombre).toBe('DUPLICATE WORKER');
+    expect(person.empresa).toBe('DUPLICATE CO');
+    
+    // Main person row should show the first project's details
+    expect(person.proyecto).toBe('UNACEM');
+    expect(person.tipoExamen).toBe('PERIODICO');
+
+    // Should contain 2 fichas (zipped)
+    expect(person.fichas).toHaveLength(2);
+
+    // Ficha 1 (UNACEM worker + ATE-U1 order)
+    expect(person.fichas[0].idAten).toBe('ATE-U1');
+    expect(person.fichas[0].nroRuc).toBe('20111111111');
+    expect(person.fichas[0].proyecto).toBe('UNACEM');
+    expect(person.fichas[0].tipoExamen).toBe('PERIODICO');
+
+    // Ficha 2 (MINSUR worker + no order)
+    expect(person.fichas[1].idAten).toBe('');
+    expect(person.fichas[1].nroRuc).toBe('');
+    expect(person.fichas[1].proyecto).toBe('MINSUR');
+    expect(person.fichas[1].tipoExamen).toBe('PREOCUPACIONAL');
   });
 });

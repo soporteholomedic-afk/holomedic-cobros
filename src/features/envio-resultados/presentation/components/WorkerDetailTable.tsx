@@ -18,10 +18,10 @@ function cellValue(value: string): string {
 
 export function WorkerDetailTable({ companyName, fechaInicio, fechaFin }: WorkerDetailTableProps) {
   const { people, loading, error } = useUnifiedResults(companyName, fechaInicio, fechaFin);
-  const [expandedKey, setExpandedKey] = useState<string | null>(null);
+  const [expandedDni, setExpandedDni] = useState<string | null>(null);
 
-  const toggleExpand = useCallback((key: string) => {
-    setExpandedKey((prev) => (prev === key ? null : key));
+  const toggleExpand = useCallback((dni: string) => {
+    setExpandedDni((prev) => (prev === dni ? null : dni));
   }, []);
 
   // ---- Loading state ----
@@ -76,17 +76,16 @@ export function WorkerDetailTable({ companyName, fechaInicio, fechaFin }: Worker
           </thead>
           <tbody className="divide-y divide-slate-100">
             {people.map((person) => {
-              const rowKey = `${person.dni}|${person.proyecto}`;
               const hasMultipleFichas = person.fichas.length > 1;
-              const isExpanded = expandedKey === rowKey;
+              const isExpanded = expandedDni === person.dni;
 
               return (
                 <PersonRow
-                  key={rowKey}
+                  key={person.dni}
                   person={person}
                   hasMultipleFichas={hasMultipleFichas}
                   isExpanded={isExpanded}
-                  onToggleExpand={hasMultipleFichas ? () => toggleExpand(rowKey) : undefined}
+                  onToggleExpand={hasMultipleFichas ? () => toggleExpand(person.dni) : undefined}
                 />
               );
             })}
@@ -157,7 +156,7 @@ function PersonRow({ person, hasMultipleFichas, isExpanded, onToggleExpand }: Pe
             <td className="px-4 py-2 text-slate-400 text-xs">{ficha.proyecto || cellValue(person.proyecto)}</td>
             <td className="px-4 py-2 text-slate-400 text-xs">{ficha.nomCFa || EM_DASH}</td>
             <td className="px-4 py-2 text-slate-400 text-xs">{person.dni}</td>
-            <td className="px-4 py-2 text-slate-400 text-xs">{cellValue(person.tipoExamen)}</td>
+            <td className="px-4 py-2 text-slate-400 text-xs">{ficha.tipoExamen || cellValue(person.tipoExamen)}</td>
           </tr>
         ))}
     </>
