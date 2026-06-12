@@ -3,9 +3,27 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { UnifiedPerson, UnifiedFicha } from '@/types/sp-result';
 
-// ---- Hoisted mock for useUnifiedResults ----
+// ---- Hoisted mocks ----
 
 const mockUseUnifiedResults = vi.hoisted(() => vi.fn());
+const mockFilesModalProps = vi.hoisted(() => vi.fn());
+
+// Stub the FilesModal so the WorkerDetailTable test does not have to
+// deal with the modal's internal usePatientFiles fetch lifecycle.
+// The stub records the props it received so the test can assert the
+// modal is opened with the right (ruc, dni, idAten) triple.
+vi.mock('../FilesModal', () => ({
+  FilesModal: (props: Record<string, unknown>) => {
+    mockFilesModalProps(props);
+    return (
+      <div data-testid="files-modal-stub">
+        {String(props['idAten'] ?? '')}
+        {String(props['ruc'] ?? '')}
+        {String(props['dni'] ?? '')}
+      </div>
+    );
+  },
+}));
 
 vi.mock('../../hooks/useUnifiedResults', () => ({
   useUnifiedResults: mockUseUnifiedResults,
@@ -63,7 +81,7 @@ describe('WorkerDetailTable — Unified Table', () => {
   // Task 5.1: Column rendering
   // ================================================================
 
-  it('should render all 9 column headers in correct order', async () => {
+  it('should render all 10 column headers in correct order', async () => {
     mockUseUnifiedResults.mockReturnValue({
       people: [makeUnifiedPerson()],
       loading: false,
@@ -72,16 +90,16 @@ describe('WorkerDetailTable — Unified Table', () => {
 
     render(<WorkerDetailTable {...DEFAULT_PROPS} />);
 
-    // Column headers must appear exactly once each (now 9 — Aptitud added)
-    const headers = ['Ficha', 'Nombre', 'Empresa', 'RUC', 'Proyecto', 'Razón Social', 'DNI', 'Tipo de Examen', 'Aptitud'];
+    // Column headers must appear exactly once each (now 10 — Archivos added)
+    const headers = ['Ficha', 'Nombre', 'Empresa', 'RUC', 'Proyecto', 'Razón Social', 'DNI', 'Tipo de Examen', 'Aptitud', 'Archivos'];
     for (const header of headers) {
       const elements = screen.getAllByText(header);
       // Header text can appear in <th> only — should be exactly one
       expect(elements.length).toBeGreaterThanOrEqual(1);
     }
-    // The thead row should contain exactly 9 <th> elements
+    // The thead row should contain exactly 10 <th> elements
     const ths = document.querySelectorAll('thead th');
-    expect(ths).toHaveLength(9);
+    expect(ths).toHaveLength(10);
   });
 
   it('should render data in correct columns for a merged person', async () => {
@@ -256,9 +274,10 @@ describe('WorkerDetailTable — Unified Table', () => {
 
     const rows = screen.getAllByRole('row');
     const dataRow = rows[1];
-    const button = dataRow.querySelector('button');
-    // Must NOT have a chevron button
-    expect(button).toBeNull();
+    // The chevron button has an aria-label; the new "Ver Archivos" button does not.
+    // A single-ficha row must NOT render the chevron.
+    const chevronButton = dataRow.querySelector('button[aria-label]');
+    expect(chevronButton).toBeNull();
   });
 
   // ================================================================
@@ -489,5 +508,155 @@ describe('WorkerDetailTable — Unified Table', () => {
       expect(screen.getAllByText('APTO').length).toBeGreaterThanOrEqual(1);
       expect(screen.getByText('NO APTO')).toBeInTheDocument();
     });
+  });
+
+  // ================================================================
+  // Task 5.7: Archivos column + modal (spec REQ-WT-2, REQ-FD-3)
+  // ================================================================
+
+  it('should render a "Ver Archivos" button on every data row', async () => {
+    const people: UnifiedPerson[] = [
+      makeUnifiedPerson({ dni: '11111111', nombre: 'PERSON A', fichas: [makeFicha({ idAten: 'ATE-A1', nroRuc: '20111111111' })] }),
+      makeUnifiedPerson({ dni: '22222222', nombre: 'PERSON B', fichas: [makeFicha({ idAten: 'ATE-B1', nroRuc: '20222222222' })] }),
+    ];
+
+    mockUseUnifiedResults.mockReturnValue({
+      people,
+      loading: false,
+      error: null,
+    });
+
+    render(<WorkerDetailTable {...DEFAULT_PROPS} />);
+
+    // Two data rows => two "Ver Archivos" buttons.
+    const buttons = screen.getAllByRole('button', { name: /Ver Archivos/ });
+    expect(buttons).toHaveLength(2);
+  });
+
+  it('should render a "Ver Archivos" button on every sub-row when expanded', async () => {
+    const person = makeUnifiedPerson({
+      fichas: [
+        makeFicha({ idAten: 'ATE-100', nroRuc: '20000000001', nomCFa: 'PRIMARY CO' }),
+        makeFicha({ idAten: 'ATE-200', nroRuc: '20000000002', nomCFa: 'SECONDARY CO' }),
+        makeFicha({ idAten: 'ATE-300', nroRuc: '20000000003', nomCFa: 'TERTIARY CO' }),
+      ],
+    });
+
+    mockUseUnifiedResults.mockReturnValue({
+      people: [person],
+      loading: false,
+      error: null,
+    });
+
+    render(<WorkerDetailTable {...DEFAULT_PROPS} />);
+
+    // Expand the chevron.
+    const rows = screen.getAllByRole('row');
+    const dataRow = rows[1];
+    const chevron = dataRow.querySelector('button')!;
+    fireEvent.click(chevron);
+
+    await waitFor(() => {
+      // Primary + 2 sub-rows = 3 "Ver Archivos" buttons.
+      const buttons = screen.getAllByRole('button', { name: /Ver Archivos/ });
+      expect(buttons).toHaveLength(3);
+    });
+  });
+
+  it('should open the FilesModal with the row\'s (ruc, dni, idAten) on click', async () => {
+    const person = makeUnifiedPerson({
+      dni: '25721424',
+      nombre: 'GILMER FALLA',
+      empresa: 'CIME INGENIEROS S R L',
+      fichas: [makeFicha({ idAten: 'ATE-999', nroRuc: '20999999999', nomCFa: 'CIME INGENIEROS S R L (RS)' })],
+    });
+
+    mockUseUnifiedResults.mockReturnValue({
+      people: [person],
+      loading: false,
+      error: null,
+    });
+
+    render(<WorkerDetailTable {...DEFAULT_PROPS} />);
+
+    mockFilesModalProps.mockClear();
+    fireEvent.click(screen.getByRole('button', { name: /Ver Archivos/ }));
+
+    expect(mockFilesModalProps).toHaveBeenCalled();
+    const lastProps = mockFilesModalProps.mock.calls[mockFilesModalProps.mock.calls.length - 1][0];
+    expect(lastProps['ruc']).toBe('20999999999');
+    expect(lastProps['dni']).toBe('25721424');
+    expect(lastProps['idAten']).toBe('ATE-999');
+    expect(lastProps['nombrePaciente']).toBe('GILMER FALLA');
+    expect(lastProps['empresa']).toBe('CIME INGENIEROS S R L');
+  });
+
+  it('should key sub-row modals independently — clicking sub-row N opens with that sub-ficha\'s idAten', async () => {
+    const person = makeUnifiedPerson({
+      dni: '11111111',
+      nombre: 'PERSON MULTI',
+      empresa: 'MULTI CO',
+      fichas: [
+        makeFicha({ idAten: 'ATE-100', nroRuc: '20000000001', nomCFa: 'PRIMARY CO' }),
+        makeFicha({ idAten: 'ATE-200', nroRuc: '20000000002', nomCFa: 'SECONDARY CO' }),
+      ],
+    });
+
+    mockUseUnifiedResults.mockReturnValue({
+      people: [person],
+      loading: false,
+      error: null,
+    });
+
+    render(<WorkerDetailTable {...DEFAULT_PROPS} />);
+
+    // Expand the chevron.
+    const rows = screen.getAllByRole('row');
+    const dataRow = rows[1];
+    const chevron = dataRow.querySelector('button')!;
+    fireEvent.click(chevron);
+
+    await waitFor(() => {
+      expect(screen.getByText('ATE-200')).toBeInTheDocument();
+    });
+
+    // The sub-row's "Ver Archivos" button is the SECOND one (after the primary row's).
+    const buttons = screen.getAllByRole('button', { name: /Ver Archivos/ });
+    expect(buttons).toHaveLength(2);
+
+    mockFilesModalProps.mockClear();
+    fireEvent.click(buttons[1]);
+
+    const lastProps = mockFilesModalProps.mock.calls[mockFilesModalProps.mock.calls.length - 1][0];
+    expect(lastProps['idAten']).toBe('ATE-200');
+    expect(lastProps['ruc']).toBe('20000000002');
+  });
+
+  it('should open the FilesModal for a worker-only row (no idAten, no nroRuc) with empty args', async () => {
+    const workerOnly: UnifiedPerson = {
+      dni: '99999999',
+      nombre: 'WORKER SOLO',
+      empresa: 'SOLO COMPANY',
+      tipoExamen: 'EXAM-SOLO',
+      proyecto: 'PROJ-SOLO',
+      condic: '',
+      fichas: [],
+    };
+
+    mockUseUnifiedResults.mockReturnValue({
+      people: [workerOnly],
+      loading: false,
+      error: null,
+    });
+
+    render(<WorkerDetailTable {...DEFAULT_PROPS} />);
+
+    mockFilesModalProps.mockClear();
+    fireEvent.click(screen.getByRole('button', { name: /Ver Archivos/ }));
+
+    const lastProps = mockFilesModalProps.mock.calls[mockFilesModalProps.mock.calls.length - 1][0];
+    expect(lastProps['dni']).toBe('99999999');
+    expect(lastProps['idAten']).toBe('');
+    expect(lastProps['ruc']).toBe('');
   });
 });
