@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import type { SpResultRow, OrderRow, UnifiedPerson, UnifiedFicha } from '@/types/sp-result';
 import { normalizeDni } from '@/lib/normalize-dni';
+import { normalizeCondic } from '@/lib/condic';
 
 interface UseUnifiedResultsReturn {
   people: UnifiedPerson[];
@@ -96,7 +97,7 @@ export function useUnifiedResults(
           dni: string;
           nombre: string;
           empresa: string;
-          workers: { proyecto: string; tipoExamen: string }[];
+          workers: { proyecto: string; tipoExamen: string; condic: string }[];
           orders: { idAten: string; nroRuc: string; nomCFa: string }[];
         }
 
@@ -134,6 +135,12 @@ export function useUnifiedResults(
             entry.workers.push({
               proyecto: row.DesDes,
               tipoExamen: row.DesTCh,
+              // normalizeCondic is called exactly once per Condic value in the
+              // dedup block. The first non-empty normalized value wins, so
+              // duplicate SP rows for the same (proyecto+tipoExamen) keep
+              // their original condic. The UI receives a pre-normalized
+              // string and never has to re-check 'NULL'.
+              condic: normalizeCondic(row.Condic),
             });
           }
         }
@@ -165,6 +172,7 @@ export function useUnifiedResults(
               nomCFa: entry.orders[i]?.nomCFa ?? '',
               proyecto: entry.workers[i]?.proyecto ?? '',
               tipoExamen: entry.workers[i]?.tipoExamen ?? '',
+              condic: entry.workers[i]?.condic ?? '',
             });
           }
 
@@ -176,6 +184,7 @@ export function useUnifiedResults(
             empresa: entry.empresa,
             proyecto: primaryFicha?.proyecto ?? entry.workers[0]?.proyecto ?? '',
             tipoExamen: primaryFicha?.tipoExamen ?? entry.workers[0]?.tipoExamen ?? '',
+            condic: primaryFicha?.condic ?? entry.workers[0]?.condic ?? '',
             fichas,
           });
         }

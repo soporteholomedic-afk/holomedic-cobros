@@ -72,6 +72,7 @@ export function WorkerDetailTable({ companyName, fechaInicio, fechaFin }: Worker
               <th className="px-4 py-3 font-medium text-slate-600">Razón Social</th>
               <th className="px-4 py-3 font-medium text-slate-600">DNI</th>
               <th className="px-4 py-3 font-medium text-slate-600">Tipo de Examen</th>
+              <th className="px-4 py-3 font-medium text-slate-600">Aptitud</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
@@ -143,6 +144,7 @@ function PersonRow({ person, hasMultipleFichas, isExpanded, onToggleExpand }: Pe
         <td className="px-4 py-3 text-slate-600">{primaryFicha ? primaryFicha.nomCFa : EM_DASH}</td>
         <td className="px-4 py-3 text-slate-600">{person.dni}</td>
         <td className="px-4 py-3 text-slate-600">{cellValue(person.tipoExamen)}</td>
+        <td className="px-4 py-3 text-slate-600">{cellValue(person.condic)}</td>
       </tr>
 
       {/* Expanded sub-rows (fichas beyond the first) — same columns as primary row */}
@@ -157,6 +159,7 @@ function PersonRow({ person, hasMultipleFichas, isExpanded, onToggleExpand }: Pe
             <td className="px-4 py-2 text-slate-400 text-xs">{ficha.nomCFa || EM_DASH}</td>
             <td className="px-4 py-2 text-slate-400 text-xs">{person.dni}</td>
             <td className="px-4 py-2 text-slate-400 text-xs">{ficha.tipoExamen || cellValue(person.tipoExamen)}</td>
+            <td className="px-4 py-2 text-slate-400 text-xs">{ficha.condic || cellValue(person.condic)}</td>
           </tr>
         ))}
     </>

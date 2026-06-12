@@ -24,7 +24,8 @@ function makeUnifiedPerson(overrides: Partial<UnifiedPerson> = {}): UnifiedPerso
     empresa: 'EMPRESA TEST S.A.C.',
     tipoExamen: 'PERIODICO',
     proyecto: 'PROYECTO UNO',
-    fichas: [{ idAten: 'ATE-001', nroRuc: '20123456789', nomCFa: 'EMPRESA TEST S.A.C.' }],
+    condic: '',
+    fichas: [makeFicha()],
     ...overrides,
   };
 }
@@ -34,6 +35,9 @@ function makeFicha(overrides: Partial<UnifiedFicha> = {}): UnifiedFicha {
     idAten: 'ATE-001',
     nroRuc: '20123456789',
     nomCFa: 'EMPRESA TEST S.A.C.',
+    proyecto: '',
+    tipoExamen: '',
+    condic: '',
     ...overrides,
   };
 }
@@ -59,7 +63,7 @@ describe('WorkerDetailTable — Unified Table', () => {
   // Task 5.1: Column rendering
   // ================================================================
 
-  it('should render all 8 column headers in correct order', async () => {
+  it('should render all 9 column headers in correct order', async () => {
     mockUseUnifiedResults.mockReturnValue({
       people: [makeUnifiedPerson()],
       loading: false,
@@ -68,13 +72,16 @@ describe('WorkerDetailTable — Unified Table', () => {
 
     render(<WorkerDetailTable {...DEFAULT_PROPS} />);
 
-    // Column headers must appear exactly once each
-    const headers = ['Ficha', 'Nombre', 'Empresa', 'RUC', 'Proyecto', 'Razón Social', 'DNI', 'Tipo de Examen'];
+    // Column headers must appear exactly once each (now 9 — Aptitud added)
+    const headers = ['Ficha', 'Nombre', 'Empresa', 'RUC', 'Proyecto', 'Razón Social', 'DNI', 'Tipo de Examen', 'Aptitud'];
     for (const header of headers) {
       const elements = screen.getAllByText(header);
       // Header text can appear in <th> only — should be exactly one
       expect(elements.length).toBeGreaterThanOrEqual(1);
     }
+    // The thead row should contain exactly 9 <th> elements
+    const ths = document.querySelectorAll('thead th');
+    expect(ths).toHaveLength(9);
   });
 
   it('should render data in correct columns for a merged person', async () => {
@@ -84,7 +91,7 @@ describe('WorkerDetailTable — Unified Table', () => {
       empresa: 'CIME INGENIEROS S R L',
       tipoExamen: 'PERIODICO',
       proyecto: 'UNACEM',
-      fichas: [{ idAten: 'ATE-999', nroRuc: '20999999999', nomCFa: 'CIME INGENIEROS S R L (RS)' }],
+      fichas: [{ idAten: 'ATE-999', nroRuc: '20999999999', nomCFa: 'CIME INGENIEROS S R L (RS)', proyecto: '', tipoExamen: '', condic: '' }],
     });
 
     mockUseUnifiedResults.mockReturnValue({
@@ -306,6 +313,7 @@ describe('WorkerDetailTable — Unified Table', () => {
       empresa: 'SOLO COMPANY',
       tipoExamen: 'EXAM-SOLO',
       proyecto: 'PROJ-SOLO',
+      condic: '',
       fichas: [], // no matching orders
     };
 
@@ -334,6 +342,7 @@ describe('WorkerDetailTable — Unified Table', () => {
       dni: '88888888',
       nombre: '',
       empresa: '',
+      condic: '',
       tipoExamen: '',
       proyecto: '',
       fichas: [
@@ -386,5 +395,99 @@ describe('WorkerDetailTable — Unified Table', () => {
     // Two data rows + header row = 3 total
     const rows = screen.getAllByRole('row');
     expect(rows).toHaveLength(3);
+  });
+
+  // ================================================================
+  // Task 5.6: Aptitud column (spec REQ-WT-1)
+  // The cell shows person.condic verbatim when non-empty,
+  // em-dash when empty (or the post-normalization equivalent of 'NULL').
+  // ================================================================
+
+  it('should render condic "APTO" verbatim in the Aptitud cell', async () => {
+    const person = makeUnifiedPerson({ condic: 'APTO' });
+
+    mockUseUnifiedResults.mockReturnValue({
+      people: [person],
+      loading: false,
+      error: null,
+    });
+
+    render(<WorkerDetailTable {...DEFAULT_PROPS} />);
+
+    expect(screen.getByText('APTO')).toBeInTheDocument();
+  });
+
+  it('should render em-dash in the Aptitud cell when condic is empty (e.g. normalized "NULL")', async () => {
+    // The hook layer normalizes 'NULL' / 'null' / 'Null' / whitespace → ''.
+    // The component treats '' as em-dash, so the UI never displays the raw literal.
+    const person = makeUnifiedPerson({ condic: '' });
+
+    mockUseUnifiedResults.mockReturnValue({
+      people: [person],
+      loading: false,
+      error: null,
+    });
+
+    render(<WorkerDetailTable {...DEFAULT_PROPS} />);
+
+    // Multiple em-dashes can appear; we just need at least one
+    expect(screen.getAllByText('—').length).toBeGreaterThanOrEqual(1);
+    // The literal "NULL" must never be displayed
+    expect(screen.queryByText('NULL')).not.toBeInTheDocument();
+  });
+
+  it('should render em-dash in the Aptitud cell for worker-only person (no order, no condic)', async () => {
+    const person: UnifiedPerson = {
+      dni: '99999999',
+      nombre: 'WORKER SOLO',
+      empresa: 'SOLO COMPANY',
+      tipoExamen: 'EXAM-SOLO',
+      proyecto: 'PROJ-SOLO',
+      condic: '',
+      fichas: [],
+    };
+
+    mockUseUnifiedResults.mockReturnValue({
+      people: [person],
+      loading: false,
+      error: null,
+    });
+
+    render(<WorkerDetailTable {...DEFAULT_PROPS} />);
+
+    // At least 4 em-dashes expected: Ficha, RUC, Razón Social, Aptitud
+    const emDashCells = screen.getAllByText('—');
+    expect(emDashCells.length).toBeGreaterThanOrEqual(4);
+  });
+
+  it('should show each sub-ficha its own condic when expanded', async () => {
+    // Primary row: APTO. Sub-ficha #2: NO APTO. Both must be visible after expand.
+    const person = makeUnifiedPerson({
+      condic: 'APTO',
+      fichas: [
+        makeFicha({ idAten: 'ATE-100', nroRuc: '20000000001', nomCFa: 'PRIMARY CO', condic: 'APTO' }),
+        makeFicha({ idAten: 'ATE-200', nroRuc: '20000000002', nomCFa: 'SECONDARY CO', condic: 'NO APTO' }),
+      ],
+    });
+
+    mockUseUnifiedResults.mockReturnValue({
+      people: [person],
+      loading: false,
+      error: null,
+    });
+
+    render(<WorkerDetailTable {...DEFAULT_PROPS} />);
+
+    // Expand the chevron
+    const rows = screen.getAllByRole('row');
+    const dataRow = rows[1];
+    const button = dataRow.querySelector('button')!;
+    fireEvent.click(button);
+
+    await waitFor(() => {
+      // Both condic values must be visible: primary "APTO" and sub-ficha "NO APTO"
+      expect(screen.getAllByText('APTO').length).toBeGreaterThanOrEqual(1);
+      expect(screen.getByText('NO APTO')).toBeInTheDocument();
+    });
   });
 });
