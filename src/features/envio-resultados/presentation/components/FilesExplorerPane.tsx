@@ -30,6 +30,16 @@ export interface FilesExplorerPaneProps {
   ruc: string;
   dni: string;
   idAten: string;
+  /**
+   * Set of fileRefs currently selected. Each ref is
+   * `"${currentPath}::${file.name}"`. When `undefined` the pane
+   * defaults every row to `checked` — preserves backward compatibility
+   * for callers that haven't been wired up to the selection map yet
+   * (this PR is the primitive; PR #3 will own the actual `Map`).
+   */
+  selectedRefs?: ReadonlySet<string>;
+  /** Fired when the user toggles a row's checkbox. */
+  onToggle?: (ref: string, file: import('@/features/envio-resultados/domain/ports').FileNode) => void;
 }
 
 function iconByExtension(name: string): { Icon: typeof FileGeneric; color: string } {
@@ -174,13 +184,19 @@ function renderNode(node: FileSystemNode, props: FilesExplorerPaneProps): ReactE
     }
     case 'file': {
       const file = node as import('@/features/envio-resultados/domain/ports').FileNode;
+      const currentPath = props.viewState.kind === 'ready' ? props.viewState.currentPath : '';
+      const fileRef = `${currentPath}::${file.name}`;
+      const isChecked = props.selectedRefs?.has(fileRef) ?? true;
       return (
         <FileRow
-          key={`file:${file.name}`}
+          key={`file:${fileRef}`}
           name={file.name}
           sizeBytes={file.sizeBytes}
           onSelect={() => props.onSelect(file)}
           downloadHref={downloadHref(props, file.name)}
+          fileRef={fileRef}
+          checked={isChecked}
+          onToggle={() => props.onToggle?.(fileRef, file)}
         />
       );
     }
@@ -213,17 +229,34 @@ function FileRow({
   sizeBytes,
   onSelect,
   downloadHref,
+  fileRef,
+  checked,
+  onToggle,
 }: {
   name: string;
   sizeBytes: number;
   onSelect: () => void;
   downloadHref: string;
+  fileRef: string;
+  checked: boolean;
+  onToggle: () => void;
 }): ReactElement {
   const { Icon, color } = iconByExtension(name);
   const previewable = isPreviewable(name);
   return (
     <li className="flex items-center justify-between px-3 py-2 rounded-lg border border-slate-100 dark:border-slate-800 hover:bg-slate-50/50 dark:hover:bg-slate-950/20">
-      <div className="flex items-center space-x-2 min-w-0 flex-1">
+      <label className="flex items-center space-x-2 min-w-0 flex-1 cursor-pointer">
+        <input
+          type="checkbox"
+          checked={checked}
+          onChange={(e) => {
+            e.stopPropagation();
+            onToggle();
+          }}
+          aria-label={`Seleccionar ${name}`}
+          data-file-ref={fileRef}
+          className="w-4 h-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500 cursor-pointer"
+        />
         <Icon className={`w-4 h-4 flex-shrink-0 ${color}`} />
         <span className="text-sm font-medium text-slate-800 dark:text-slate-200 truncate">
           {name}
@@ -231,7 +264,7 @@ function FileRow({
         <span className="text-xs font-mono text-slate-400 flex-shrink-0">
           {formatSize(sizeBytes)}
         </span>
-      </div>
+      </label>
       <div className="flex items-center space-x-1.5 flex-shrink-0">
         {previewable && (
           <button
