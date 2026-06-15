@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, type ReactElement } from 'react';
+import { useCallback, useEffect, useMemo, useState, type ReactElement } from 'react';
 import { Maximize2, Minimize2, X } from 'lucide-react';
 import { FilesExplorerPane } from '@/features/envio-resultados/presentation/components/FilesExplorerPane';
 import { FilesPreviewPane } from '@/features/envio-resultados/presentation/components/FilesPreviewPane';
@@ -23,6 +23,14 @@ export interface FilesModalProps {
   nombrePaciente: string;
   empresa: string;
   onClose: () => void;
+  /**
+   * Fired when the user clicks the "Enviar" footer button. Receives
+   * the selected `FileNode[]` in insertion order. Optional: when not
+   * provided, the click is a no-op (defensive — the modal can be
+   * mounted in read-only contexts). The parent decides when to close
+   * the modal after consuming the selection.
+   */
+  onSend?: (files: FileNode[]) => void;
 }
 
 /**
@@ -47,6 +55,7 @@ export function FilesModal({
   nombrePaciente,
   empresa,
   onClose,
+  onSend,
 }: FilesModalProps): ReactElement {
   const { viewState, selectionState, navigate, goUp, selectFile, closeSelection } = useFileTree(
     ruc,
@@ -57,6 +66,12 @@ export function FilesModal({
   const [activeTab, setActiveTab] = useState<FilesTab>(DEFAULT_TAB);
   const [zipInFlight, setZipInFlight] = useState(false);
   const [isMaximized, setIsMaximized] = useState(false);
+  // PR #3 — selection state. Keyed by `${folderPath}::${file.name}`.
+  // For the ready pane, `folderPath` is `''` → ref is `::name`.
+  // For the explorer pane, `folderPath` is `viewState.currentPath`.
+  const [selectedFilesMap, setSelectedFilesMap] = useState<Map<string, FileNode>>(
+    () => new Map(),
+  );
 
   // Escape-key close handler.
   useEffect(() => {
@@ -66,6 +81,56 @@ export function FilesModal({
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [onClose]);
+
+  // Identity reset — when the patient changes, drop the previous
+  // selection. Mirrors the reset semantics of `useFileTree` and
+  // `useReadyFiles` (both re-fetch on identity change). The functional
+  // update with the same-reference bailout keeps the first mount
+  // quiet so consumers (preview pane, etc.) don't see a phantom
+  // re-render when the modal opens with an empty selection.
+  useEffect(() => {
+    setSelectedFilesMap((prev) => (prev.size === 0 ? prev : new Map()));
+    /* eslint-disable react-hooks/set-state-in-effect */
+  }, [ruc, dni, idAten]);
+
+  // Pre-check — when the ready pane's files arrive, populate the map
+  // with entries that are NOT already present (the `if (!next.has(ref))`
+  // guard preserves any explorer selections the user already made).
+  // Bail on the same-reference pattern when no new entries are added.
+  useEffect(() => {
+    if (readyState.kind !== 'ready') return;
+    setSelectedFilesMap((prev) => {
+      let changed = false;
+      const next = new Map(prev);
+      for (const file of readyState.files) {
+        const ref = `::${file.name}`;
+        if (!next.has(ref)) {
+          next.set(ref, file);
+          changed = true;
+        }
+      }
+      return changed ? next : prev;
+    });
+    /* eslint-disable react-hooks/set-state-in-effect */
+  }, [readyState]);
+
+  const handleToggleFile = useCallback((ref: string, file: FileNode): void => {
+    setSelectedFilesMap((prev) => {
+      const next = new Map(prev);
+      if (next.has(ref)) next.delete(ref);
+      else next.set(ref, file);
+      return next;
+    });
+  }, []);
+
+  const handleSendClick = useCallback((): void => {
+    onSend?.(Array.from(selectedFilesMap.values()));
+  }, [onSend, selectedFilesMap]);
+
+  const selectedRefs = useMemo<ReadonlySet<string>>(
+    () => new Set(selectedFilesMap.keys()),
+    [selectedFilesMap],
+  );
 
   const isAtRoot = !(viewState.kind === 'ready' && viewState.currentPath !== '');
   // Folder the preview pane sources from. Comes from selectionState
@@ -154,6 +219,8 @@ export function FilesModal({
                   dni={dni}
                   idAten={idAten}
                   onSelect={handleSelectFromReady}
+                  selectedRefs={selectedRefs}
+                  onToggle={handleToggleFile}
                 />
               ) : (
                 <FilesExplorerPane
@@ -165,6 +232,8 @@ export function FilesModal({
                   ruc={ruc}
                   dni={dni}
                   idAten={idAten}
+                  selectedRefs={selectedRefs}
+                  onToggle={handleToggleFile}
                 />
               )}
             </div>
@@ -194,29 +263,41 @@ export function FilesModal({
           >
             Cerrar
           </button>
-          {hasFiles ? (
-            <a
-              href={downloadAllHref}
-              onClick={() => setZipInFlight(true)}
-              className={`px-6 py-2.5 rounded-xl text-sm font-bold text-white shadow-lg transition-all duration-300 ${
-                zipInFlight
-                  ? 'bg-slate-400 cursor-wait'
-                  : 'bg-gradient-to-r from-sky-500 to-sky-600 hover:from-sky-600 hover:to-sky-700 shadow-sky-500/20 hover:scale-[1.03]'
-              }`}
-              aria-disabled={zipInFlight ? 'true' : 'false'}
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={handleSendClick}
+              disabled={selectedFilesMap.size === 0}
+              aria-label="Enviar archivos seleccionados"
+              data-testid="files-modal-send"
+              className="px-6 py-2.5 rounded-xl text-sm font-bold text-white shadow-lg transition-all duration-300 bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-300 disabled:cursor-not-allowed disabled:shadow-none"
             >
-              {zipInFlight ? 'Generando zip...' : 'Descargar todos'}
-            </a>
-          ) : (
-            <a
-              href={downloadAllHref}
-              onClick={(e) => e.preventDefault()}
-              className="px-6 py-2.5 rounded-xl text-sm font-bold text-white bg-slate-300 dark:bg-slate-700 cursor-not-allowed"
-              aria-disabled="true"
-            >
-              Descargar todos
-            </a>
-          )}
+              Enviar ({selectedFilesMap.size})
+            </button>
+            {hasFiles ? (
+              <a
+                href={downloadAllHref}
+                onClick={() => setZipInFlight(true)}
+                className={`px-6 py-2.5 rounded-xl text-sm font-bold text-white shadow-lg transition-all duration-300 ${
+                  zipInFlight
+                    ? 'bg-slate-400 cursor-wait'
+                    : 'bg-gradient-to-r from-sky-500 to-sky-600 hover:from-sky-600 hover:to-sky-700 shadow-sky-500/20 hover:scale-[1.03]'
+                }`}
+                aria-disabled={zipInFlight ? 'true' : 'false'}
+              >
+                {zipInFlight ? 'Generando zip...' : 'Descargar todos'}
+              </a>
+            ) : (
+              <a
+                href={downloadAllHref}
+                onClick={(e) => e.preventDefault()}
+                className="px-6 py-2.5 rounded-xl text-sm font-bold text-white bg-slate-300 dark:bg-slate-700 cursor-not-allowed"
+                aria-disabled="true"
+              >
+                Descargar todos
+              </a>
+            )}
+          </div>
         </div>
       </div>
     </div>
