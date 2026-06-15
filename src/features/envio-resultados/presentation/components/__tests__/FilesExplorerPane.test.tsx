@@ -98,7 +98,7 @@ describe('FilesExplorerPane', () => {
     expect(baseProps.onNavigate).toHaveBeenCalledWith('subdir');
   });
 
-  it('PDF row renders a Descargar link (no Visualizar in PR-A — concrete viewers land in PR-B1)', () => {
+  it('PDF row renders BOTH a Visualizar button (PR-B1: PdfViewer registered) and a Descargar link', () => {
     const pdf = createFileNode({ name: 'informe.pdf', sizeBytes: 100, modifiedAt: '2026-01-01T00:00:00.000Z' });
     render(
       <FilesExplorerPane
@@ -108,14 +108,32 @@ describe('FilesExplorerPane', () => {
     );
     const row = screen.getByText('informe.pdf').closest('li');
     expect(row).toBeTruthy();
-    // No Visualizar button in PR-A: the only viewer is NoPreviewViewer.
-    expect(within(row as HTMLElement).queryByRole('button', { name: /Visualizar/ })).not.toBeInTheDocument();
+    // PR-B1: PdfViewer is now registered in the factory, so PDF rows
+    // expose BOTH actions (per REQ-FE-7 in the spec).
+    expect(within(row as HTMLElement).getByRole('button', { name: /Visualizar/ })).toBeInTheDocument();
     const downloadLink = within(row as HTMLElement).getByText(/Descargar/);
     expect(downloadLink).toBeInTheDocument();
     expect((downloadLink as HTMLAnchorElement).tagName).toBe('A');
   });
 
+  it('clicking the Visualizar button on a PDF row calls onSelect with the file', () => {
+    const pdf = createFileNode({ name: 'informe.pdf', sizeBytes: 100, modifiedAt: '2026-01-01T00:00:00.000Z' });
+    render(
+      <FilesExplorerPane
+        {...baseProps}
+        viewState={makeReady([pdf])}
+      />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: /Visualizar/ }));
+    expect(baseProps.onSelect).toHaveBeenCalledTimes(1);
+    expect(baseProps.onSelect).toHaveBeenCalledWith(pdf);
+  });
+
   it('clicking the Descargar link on a PDF row does NOT call onSelect (it triggers a download)', () => {
+    // The shared `baseProps.onSelect` is polluted by the previous test
+    // (which deliberately clicks Visualizar). Reset the mock so this
+    // assertion is hermetic.
+    baseProps.onSelect.mockClear();
     const pdf = createFileNode({ name: 'informe.pdf', sizeBytes: 100, modifiedAt: '2026-01-01T00:00:00.000Z' });
     render(
       <FilesExplorerPane
@@ -125,8 +143,33 @@ describe('FilesExplorerPane', () => {
     );
     const link = screen.getByText(/Descargar/).closest('a');
     fireEvent.click(link as HTMLElement);
-    // onSelect is for Visualizar (future PR-B1). For now it must not fire.
+    // onSelect is for Visualizar only. Descargar is a plain anchor that
+    // triggers a browser download and must NOT mutate selection state.
     expect(baseProps.onSelect).not.toHaveBeenCalled();
+  });
+
+  it('TXT row renders BOTH a Visualizar button (TxtViewer) and a Descargar link', () => {
+    const txt = createFileNode({ name: 'reporte.txt', sizeBytes: 100, modifiedAt: '2026-01-01T00:00:00.000Z' });
+    render(
+      <FilesExplorerPane
+        {...baseProps}
+        viewState={makeReady([txt])}
+      />,
+    );
+    expect(screen.getByRole('button', { name: /Visualizar/ })).toBeInTheDocument();
+    expect(screen.getByText(/Descargar/)).toBeInTheDocument();
+  });
+
+  it('JPG row renders BOTH a Visualizar button (ImageViewer) and a Descargar link', () => {
+    const jpg = createFileNode({ name: 'foto.jpg', sizeBytes: 100, modifiedAt: '2026-01-01T00:00:00.000Z' });
+    render(
+      <FilesExplorerPane
+        {...baseProps}
+        viewState={makeReady([jpg])}
+      />,
+    );
+    expect(screen.getByRole('button', { name: /Visualizar/ })).toBeInTheDocument();
+    expect(screen.getByText(/Descargar/)).toBeInTheDocument();
   });
 
   it('Descargas link on a PDF row points to /api/files/download with the right query string', () => {
