@@ -51,15 +51,22 @@
 - Test behavior, not implementation details
 - Mock external dependencies (fetch, Supabase client) at the module boundary
 - Aim for coverage on utilities and custom hooks; UI tests for critical user flows
+- In `sdd-apply` mode, run tests only on modified or affected files; global testing is strictly reserved for `sdd-verify` mode. Running global tests in `sdd-apply` mode is strictly forbidden.
 
 ## Style & Formatting
 
 - Follow the existing ESLint config (`eslint.config.mjs`) — no disabling rules without a comment explaining why
 - No commented-out code in committed files — use `git stash` or a branch instead
 - Imports: external packages first, then internal paths; no unused imports
+- In `sdd-apply` mode, run linting only on modified files; global linting is strictly reserved for `sdd-verify` mode. Running global linting in `sdd-apply` mode is strictly forbidden.
 
 ## Security
 
 - Never log sensitive data (tokens, passwords, PII) to the console
 - Sanitize any HTML rendered via `dangerouslySetInnerHTML`
 - Do not commit secrets, API keys, or `.env` files — use environment variables and `.env.local`
+
+## Environment & Shell
+
+- Write and execute all terminal commands specifically for PowerShell compatibility
+
