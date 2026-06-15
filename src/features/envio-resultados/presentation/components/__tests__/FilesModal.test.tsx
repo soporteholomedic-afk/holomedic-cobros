@@ -1,5 +1,6 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type { ReactElement } from 'react';
 import {
   createFileNode,
   createFolderNode,
@@ -7,6 +8,10 @@ import {
   type FileSystemNode,
 } from '@/features/envio-resultados/domain/ports';
 import type { UseFileTreeReturn, ViewState } from '@/features/envio-resultados/presentation/hooks/useFileTree';
+import type {
+  FileViewer,
+  PreviewArgs,
+} from '@/features/envio-resultados/presentation/viewers/FileViewer';
 
 /**
  * Stub the `useFileTree` hook so each test controls its return value
@@ -340,6 +345,214 @@ describe('FilesModal', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'subdir' }));
     expect(navigate).toHaveBeenCalledWith('subdir');
+  });
+
+  // ─── PR-B2 — master-detail layout + maximize toggle ──────────────
+
+  it('renders both the explorer pane and the preview pane (master-detail layout)', () => {
+    mockUseFileTree.mockReturnValue({
+      viewState: readyView('', sampleFiles),
+      selectionState: { kind: 'none' },
+      navigate: vi.fn(),
+      goUp: vi.fn(),
+      selectFile: vi.fn(),
+      closeSelection: vi.fn(),
+    });
+
+    render(
+      <FilesModal
+        ruc="RUC-1"
+        dni="12345678"
+        idAten="AT-001"
+        nombrePaciente="Juan Pérez"
+        empresa="Acme Corp"
+        onClose={vi.fn()}
+      />,
+    );
+
+    // The explorer pane exposes the file list.
+    expect(screen.getByText('informe.pdf')).toBeInTheDocument();
+    // The preview pane exposes its placeholder.
+    expect(
+      screen.getByText(/Selecciona un archivo para previsualizarlo/),
+    ).toBeInTheDocument();
+    // At least one maximize toggle exists (header + preview pane).
+    expect(screen.getAllByRole('button', { name: 'Maximizar' }).length).toBeGreaterThan(0);
+  });
+
+  it('clicking the header maximize toggle hides the explorer pane and shows a full-width preview', () => {
+    mockUseFileTree.mockReturnValue({
+      viewState: readyView('', sampleFiles),
+      selectionState: { kind: 'none' },
+      navigate: vi.fn(),
+      goUp: vi.fn(),
+      selectFile: vi.fn(),
+      closeSelection: vi.fn(),
+    });
+
+    const { container } = render(
+      <FilesModal
+        ruc="RUC-1"
+        dni="12345678"
+        idAten="AT-001"
+        nombrePaciente="Juan Pérez"
+        empresa="Acme Corp"
+        onClose={vi.fn()}
+      />,
+    );
+
+    // Click the header's maximize toggle (the one in the header container
+    // is identified by being a direct child of the header div). We
+    // simply click the FIRST one (header comes first in document order).
+    const headerToggles = screen.getAllByRole('button', { name: 'Maximizar' });
+    fireEvent.click(headerToggles[0]!);
+
+    // The explorer pane container has the 'hidden' class.
+    const explorerContainer = container.querySelector('[data-testid="files-explorer-container"]');
+    expect(explorerContainer).toBeTruthy();
+    expect(explorerContainer!.className).toContain('hidden');
+    // All toggles now show "Minimizar".
+    expect(screen.queryByRole('button', { name: 'Maximizar' })).not.toBeInTheDocument();
+    expect(screen.getAllByRole('button', { name: 'Minimizar' }).length).toBeGreaterThan(0);
+  });
+
+  it('clicking minimize after maximize restores the explorer pane', () => {
+    mockUseFileTree.mockReturnValue({
+      viewState: readyView('', sampleFiles),
+      selectionState: { kind: 'none' },
+      navigate: vi.fn(),
+      goUp: vi.fn(),
+      selectFile: vi.fn(),
+      closeSelection: vi.fn(),
+    });
+
+    const { container } = render(
+      <FilesModal
+        ruc="RUC-1"
+        dni="12345678"
+        idAten="AT-001"
+        nombrePaciente="Juan Pérez"
+        empresa="Acme Corp"
+        onClose={vi.fn()}
+      />,
+    );
+
+    // Maximize then minimize.
+    const headerToggles = screen.getAllByRole('button', { name: 'Maximizar' });
+    fireEvent.click(headerToggles[0]!);
+    const headerMinimize = screen.getAllByRole('button', { name: 'Minimizar' });
+    fireEvent.click(headerMinimize[0]!);
+
+    // The explorer's container is no longer hidden.
+    const explorerContainer = container.querySelector('[data-testid="files-explorer-container"]');
+    expect(explorerContainer).toBeTruthy();
+    expect(explorerContainer!.className).not.toContain('hidden');
+    // Toggles flipped back to "Maximizar".
+    expect(screen.getAllByRole('button', { name: 'Maximizar' }).length).toBeGreaterThan(0);
+  });
+
+  it('the preview pane close (X) button calls closeSelection (NOT onClose)', () => {
+    const onClose = vi.fn();
+    const closeSelection = vi.fn();
+    const viewer: FileViewer = {
+      supportedExtensions: ['x'],
+      canPreview: () => true,
+      buildPreviewUrl: () => '',
+      renderPreview: (): ReactElement => <div data-testid="mock-viewer" />,
+    };
+    mockUseFileTree.mockReturnValue({
+      viewState: readyView('', sampleFiles),
+      selectionState: { kind: 'previewing', file: sampleFiles[0]!, viewer },
+      navigate: vi.fn(),
+      goUp: vi.fn(),
+      selectFile: vi.fn(),
+      closeSelection,
+    });
+
+    render(
+      <FilesModal
+        ruc="RUC-1"
+        dni="12345678"
+        idAten="AT-001"
+        nombrePaciente="Juan Pérez"
+        empresa="Acme Corp"
+        onClose={onClose}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /Cerrar vista previa/i }));
+    expect(closeSelection).toHaveBeenCalledTimes(1);
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it('plumbs currentPath to the preview pane (folder path is forwarded to the viewer)', () => {
+    // The mock viewer renders the folderPath as a data-folder attribute.
+    const renderPreview = vi.fn(
+      (args: PreviewArgs): ReactElement => (
+        <div data-testid="mock-viewer" data-folder={args.folderPath} />
+      ),
+    );
+    const viewer: FileViewer = {
+      supportedExtensions: ['x'],
+      canPreview: () => true,
+      buildPreviewUrl: () => '',
+      renderPreview,
+    };
+    mockUseFileTree.mockReturnValue({
+      viewState: readyView('subfolder/inner', sampleFiles),
+      selectionState: { kind: 'previewing', file: sampleFiles[0]!, viewer },
+      navigate: vi.fn(),
+      goUp: vi.fn(),
+      selectFile: vi.fn(),
+      closeSelection: vi.fn(),
+    });
+
+    const { container } = render(
+      <FilesModal
+        ruc="RUC-1"
+        dni="12345678"
+        idAten="AT-001"
+        nombrePaciente="Juan Pérez"
+        empresa="Acme Corp"
+        onClose={vi.fn()}
+      />,
+    );
+
+    // The viewer received folderPath = 'subfolder/inner'.
+    expect(renderPreview).toHaveBeenCalledTimes(1);
+    const args = renderPreview.mock.calls[0]?.[0];
+    expect(args?.folderPath).toBe('subfolder/inner');
+    const element = container.querySelector('[data-folder="subfolder/inner"]');
+    expect(element).toBeTruthy();
+  });
+
+  it('isMaximized is initialized to false (no hidden class on the explorer container on a fresh mount)', () => {
+    mockUseFileTree.mockReturnValue({
+      viewState: readyView('', sampleFiles),
+      selectionState: { kind: 'none' },
+      navigate: vi.fn(),
+      goUp: vi.fn(),
+      selectFile: vi.fn(),
+      closeSelection: vi.fn(),
+    });
+
+    const { container } = render(
+      <FilesModal
+        ruc="RUC-1"
+        dni="12345678"
+        idAten="AT-001"
+        nombrePaciente="Juan Pérez"
+        empresa="Acme Corp"
+        onClose={vi.fn()}
+      />,
+    );
+
+    // The explorer's container does NOT have the 'hidden' class.
+    const explorerContainer = container.querySelector('[data-testid="files-explorer-container"]');
+    expect(explorerContainer).toBeTruthy();
+    expect(explorerContainer!.className).not.toContain('hidden');
+    // Toggles show "Maximizar" (not "Minimizar").
+    expect(screen.getAllByRole('button', { name: 'Maximizar' }).length).toBeGreaterThan(0);
   });
 });
 
