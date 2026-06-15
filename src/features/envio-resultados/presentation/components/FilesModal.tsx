@@ -73,7 +73,7 @@ export function FilesModal({
       data-testid="files-modal-backdrop"
     >
       <div
-        className="w-full max-w-5xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl overflow-hidden shadow-2xl flex flex-col max-h-[90vh]"
+        className="w-full max-w-5xl h-[80vh] min-h-[600px] bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl overflow-hidden shadow-2xl flex flex-col max-h-[90vh]"
         onClick={(e) => e.stopPropagation()}
         role="dialog"
         aria-label={headerTitle}

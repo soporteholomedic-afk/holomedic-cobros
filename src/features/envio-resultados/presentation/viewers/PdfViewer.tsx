@@ -7,10 +7,10 @@ import type { FileViewer, PreviewArgs } from './FileViewer';
  * v1 (deferred to a follow-up change) — the iframe lets the browser
  * handle rendering, scrolling, and download.
  *
- * The `sandbox` attribute is set to `allow-same-origin` ONLY (no
- * `allow-scripts`, no `allow-top-navigation`) so the embedded PDF
- * viewer can read its blob URL but cannot execute scripts or escape
- * the iframe.
+ * We do NOT apply the `sandbox` attribute to the `<iframe>` because
+ * Chromium-based browsers (Chrome, Brave, Edge) completely disable
+ * built-in PDF viewer plugins inside sandboxed iframes, resulting
+ * in a blocked content error.
  */
 export class PdfViewer implements FileViewer {
   readonly supportedExtensions: readonly string[] = ['pdf'];
@@ -35,7 +35,6 @@ export class PdfViewer implements FileViewer {
       <iframe
         src={this.buildPreviewUrl(args)}
         title={args.name}
-        sandbox="allow-same-origin"
         className="w-full h-full"
       />
     );

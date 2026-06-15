@@ -90,14 +90,11 @@ describe('PdfViewer', () => {
       expect(iframe?.getAttribute('title')).toBe('informe.pdf');
     });
 
-    it('the iframe has sandbox="allow-same-origin" (no allow-scripts, no allow-top-navigation)', () => {
+    it('the iframe does NOT have a sandbox attribute (to allow native PDF plugins to load)', () => {
       const element = viewer.renderPreview(baseArgs);
       const { container } = render(element);
       const iframe = container.querySelector('iframe');
-      const sandbox = iframe?.getAttribute('sandbox') ?? '';
-      expect(sandbox).toBe('allow-same-origin');
-      expect(sandbox).not.toContain('allow-scripts');
-      expect(sandbox).not.toContain('allow-top-navigation');
+      expect(iframe?.getAttribute('sandbox')).toBeNull();
     });
 
     it('renders an iframe that is findable via title (smoke)', () => {
