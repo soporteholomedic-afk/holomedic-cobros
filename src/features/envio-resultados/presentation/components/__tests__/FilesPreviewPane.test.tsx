@@ -72,7 +72,7 @@ describe('FilesPreviewPane', () => {
     render(
       <FilesPreviewPane
         {...baseProps}
-        selectionState={{ kind: 'previewing', file: sampleFile, viewer }}
+        selectionState={{ kind: 'previewing', file: sampleFile, viewer, folderPath: '' }}
       />,
     );
     expect(screen.getByTestId('mock-viewer-element')).toBeInTheDocument();
@@ -85,7 +85,7 @@ describe('FilesPreviewPane', () => {
       <FilesPreviewPane
         {...baseProps}
         currentPath="subfolder/inner"
-        selectionState={{ kind: 'previewing', file: sampleFile, viewer }}
+        selectionState={{ kind: 'previewing', file: sampleFile, viewer, folderPath: '' }}
       />,
     );
     const element = container.querySelector('[data-testid="mock-viewer-element"]');
@@ -113,7 +113,7 @@ describe('FilesPreviewPane', () => {
         ruc="RUC-Z"
         dni="99999999"
         idAten="AT-Z"
-        selectionState={{ kind: 'previewing', file: sampleFile, viewer }}
+        selectionState={{ kind: 'previewing', file: sampleFile, viewer, folderPath: '' }}
       />,
     );
     expect(renderSpy).toHaveBeenCalledTimes(1);
@@ -131,7 +131,7 @@ describe('FilesPreviewPane', () => {
     render(
       <FilesPreviewPane
         {...baseProps}
-        selectionState={{ kind: 'previewing', file: sampleFile, viewer }}
+        selectionState={{ kind: 'previewing', file: sampleFile, viewer, folderPath: '' }}
       />,
     );
     expect(
@@ -146,7 +146,7 @@ describe('FilesPreviewPane', () => {
       <FilesPreviewPane
         {...baseProps}
         onClose={onClose}
-        selectionState={{ kind: 'previewing', file: sampleFile, viewer }}
+        selectionState={{ kind: 'previewing', file: sampleFile, viewer, folderPath: '' }}
       />,
     );
     fireEvent.click(screen.getByRole('button', { name: /Cerrar vista previa/i }));
@@ -158,7 +158,7 @@ describe('FilesPreviewPane', () => {
     render(
       <FilesPreviewPane
         {...baseProps}
-        selectionState={{ kind: 'previewing', file: sampleFile, viewer }}
+        selectionState={{ kind: 'previewing', file: sampleFile, viewer, folderPath: '' }}
       />,
     );
     const toggle = screen.getByRole('button', { name: /Maximizar/i });
@@ -172,7 +172,7 @@ describe('FilesPreviewPane', () => {
       <FilesPreviewPane
         {...baseProps}
         onToggleMaximize={onToggleMaximize}
-        selectionState={{ kind: 'previewing', file: sampleFile, viewer }}
+        selectionState={{ kind: 'previewing', file: sampleFile, viewer, folderPath: '' }}
       />,
     );
     fireEvent.click(screen.getByRole('button', { name: /Maximizar/i }));
@@ -185,7 +185,7 @@ describe('FilesPreviewPane', () => {
       <FilesPreviewPane
         {...baseProps}
         isMaximized
-        selectionState={{ kind: 'previewing', file: sampleFile, viewer }}
+        selectionState={{ kind: 'previewing', file: sampleFile, viewer, folderPath: '' }}
       />,
     );
     expect(screen.getByRole('button', { name: /Minimizar/i })).toBeInTheDocument();
@@ -198,7 +198,7 @@ describe('FilesPreviewPane', () => {
       <FilesPreviewPane
         {...baseProps}
         isMaximized={false}
-        selectionState={{ kind: 'previewing', file: sampleFile, viewer }}
+        selectionState={{ kind: 'previewing', file: sampleFile, viewer, folderPath: '' }}
       />,
     );
     expect(screen.getByRole('button', { name: /Maximizar/i })).toBeInTheDocument();
@@ -214,7 +214,7 @@ describe('FilesPreviewPane', () => {
     render(
       <FilesPreviewPane
         {...baseProps}
-        selectionState={{ kind: 'previewing', file: docx, viewer }}
+        selectionState={{ kind: 'previewing', file: docx, viewer, folderPath: '' }}
       />,
     );
     expect(screen.getByText(/No hay vista previa disponible/)).toBeInTheDocument();

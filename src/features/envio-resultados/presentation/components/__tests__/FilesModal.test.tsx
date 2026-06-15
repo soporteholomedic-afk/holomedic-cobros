@@ -8,28 +8,47 @@ import {
   type FileSystemNode,
 } from '@/features/envio-resultados/domain/ports';
 import type { UseFileTreeReturn, ViewState } from '@/features/envio-resultados/presentation/hooks/useFileTree';
+import type { UseReadyFilesReturn } from '@/features/envio-resultados/presentation/hooks/useReadyFiles';
 import type {
   FileViewer,
   PreviewArgs,
 } from '@/features/envio-resultados/presentation/viewers/FileViewer';
 
 /**
- * Stub the `useFileTree` hook so each test controls its return value
- * without ever issuing a real network request.
+ * Stub the `useFileTree` and `useReadyFiles` hooks so each test controls
+ * their return values without ever issuing a real network request.
  */
 const mockUseFileTree = vi.fn<() => UseFileTreeReturn>();
+const mockUseReadyFiles = vi.fn<() => UseReadyFilesReturn>();
 
 vi.mock('@/features/envio-resultados/presentation/hooks/useFileTree', () => ({
   useFileTree: () => mockUseFileTree(),
 }));
 
+vi.mock('@/features/envio-resultados/presentation/hooks/useReadyFiles', () => ({
+  useReadyFiles: () => mockUseReadyFiles(),
+}));
+
 beforeEach(() => {
   mockUseFileTree.mockReset();
+  mockUseReadyFiles.mockReset();
+  // Default: ready pane is empty so the modal opens cleanly. Each
+  // test that exercises the ready pane overrides this mock.
+  mockUseReadyFiles.mockReturnValue({ state: { kind: 'empty' } });
 });
 
 afterEach(() => {
   vi.restoreAllMocks();
 });
+
+/**
+ * Helper — switch to the "Todos" tab. Default tab is "Listo para enviar",
+ * so every test that asserts behavior of the explorer pane must first
+ * call this. New tests that exercise the ready pane skip it.
+ */
+function selectAllTab(): void {
+  fireEvent.click(screen.getByRole('tab', { name: /Todos/ }));
+}
 
 const sampleFiles: FileNode[] = [
   createFileNode({ name: 'informe.pdf', sizeBytes: 4096, modifiedAt: '2026-06-01T00:00:00.000Z' }),
@@ -64,6 +83,7 @@ describe('FilesModal', () => {
       />,
     );
 
+    selectAllTab();
     expect(screen.getByText(/Juan Pérez/)).toBeInTheDocument();
     expect(screen.queryByText('informe.pdf')).not.toBeInTheDocument();
     expect(screen.queryByText(/No hay archivos/)).not.toBeInTheDocument();
@@ -91,6 +111,7 @@ describe('FilesModal', () => {
       />,
     );
 
+    selectAllTab();
     expect(screen.getByText(/No hay archivos para esta ficha/)).toBeInTheDocument();
     const downloadAll = screen.getByRole('link', { name: /Descargar todos/ });
     expect(downloadAll).toHaveAttribute('aria-disabled', 'true');
@@ -117,6 +138,7 @@ describe('FilesModal', () => {
       />,
     );
 
+    selectAllTab();
     expect(screen.getByText(/No se pudieron cargar los archivos/)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Reintentar/ })).toBeInTheDocument();
   });
@@ -142,6 +164,7 @@ describe('FilesModal', () => {
       />,
     );
 
+    selectAllTab();
     const informeRow = screen.getByText('informe.pdf').closest('li');
     expect(informeRow).toBeTruthy();
     const informeLink = informeRow!.querySelector('a');
@@ -212,6 +235,7 @@ describe('FilesModal', () => {
       />,
     );
 
+    selectAllTab();
     const back = screen.getByRole('button', { name: /Atr/i });
     fireEvent.click(back);
     expect(goUp).toHaveBeenCalledTimes(1);
@@ -238,6 +262,7 @@ describe('FilesModal', () => {
       />,
     );
 
+    selectAllTab();
     expect(screen.queryByRole('button', { name: /Atr/i })).not.toBeInTheDocument();
   });
 
@@ -343,6 +368,7 @@ describe('FilesModal', () => {
       />,
     );
 
+    selectAllTab();
     fireEvent.click(screen.getByRole('button', { name: 'subdir' }));
     expect(navigate).toHaveBeenCalledWith('subdir');
   });
@@ -370,6 +396,7 @@ describe('FilesModal', () => {
       />,
     );
 
+    selectAllTab();
     // The explorer pane exposes the file list.
     expect(screen.getByText('informe.pdf')).toBeInTheDocument();
     // The preview pane exposes its placeholder.
@@ -410,7 +437,7 @@ describe('FilesModal', () => {
     // The explorer pane container has the 'hidden' class.
     const explorerContainer = container.querySelector('[data-testid="files-explorer-container"]');
     expect(explorerContainer).toBeTruthy();
-    expect(explorerContainer!.className).toContain('hidden');
+    expect(explorerContainer!.classList.contains('hidden')).toBe(true);
     // All toggles now show "Minimizar".
     expect(screen.queryByRole('button', { name: 'Maximizar' })).not.toBeInTheDocument();
     expect(screen.getAllByRole('button', { name: 'Minimizar' }).length).toBeGreaterThan(0);
@@ -446,7 +473,7 @@ describe('FilesModal', () => {
     // The explorer's container is no longer hidden.
     const explorerContainer = container.querySelector('[data-testid="files-explorer-container"]');
     expect(explorerContainer).toBeTruthy();
-    expect(explorerContainer!.className).not.toContain('hidden');
+    expect(explorerContainer!.classList.contains('hidden')).toBe(false);
     // Toggles flipped back to "Maximizar".
     expect(screen.getAllByRole('button', { name: 'Maximizar' }).length).toBeGreaterThan(0);
   });
@@ -462,7 +489,7 @@ describe('FilesModal', () => {
     };
     mockUseFileTree.mockReturnValue({
       viewState: readyView('', sampleFiles),
-      selectionState: { kind: 'previewing', file: sampleFiles[0]!, viewer },
+      selectionState: { kind: 'previewing', file: sampleFiles[0]!, viewer, folderPath: '' },
       navigate: vi.fn(),
       goUp: vi.fn(),
       selectFile: vi.fn(),
@@ -485,7 +512,7 @@ describe('FilesModal', () => {
     expect(onClose).not.toHaveBeenCalled();
   });
 
-  it('plumbs currentPath to the preview pane (folder path is forwarded to the viewer)', () => {
+  it('plumbs selectionState.folderPath to the preview pane (folder path is forwarded to the viewer)', () => {
     // The mock viewer renders the folderPath as a data-folder attribute.
     const renderPreview = vi.fn(
       (args: PreviewArgs): ReactElement => (
@@ -500,7 +527,12 @@ describe('FilesModal', () => {
     };
     mockUseFileTree.mockReturnValue({
       viewState: readyView('subfolder/inner', sampleFiles),
-      selectionState: { kind: 'previewing', file: sampleFiles[0]!, viewer },
+      selectionState: {
+        kind: 'previewing',
+        file: sampleFiles[0]!,
+        viewer,
+        folderPath: 'subfolder/inner',
+      },
       navigate: vi.fn(),
       goUp: vi.fn(),
       selectFile: vi.fn(),
@@ -518,7 +550,10 @@ describe('FilesModal', () => {
       />,
     );
 
-    // The viewer received folderPath = 'subfolder/inner'.
+    // The viewer received folderPath = 'subfolder/inner' — sourced from
+    // selectionState.folderPath, NOT viewState.currentPath. This proves
+    // that a preview opened from any pane (explorer or ready) carries
+    // its own folder context.
     expect(renderPreview).toHaveBeenCalledTimes(1);
     const args = renderPreview.mock.calls[0]?.[0];
     expect(args?.folderPath).toBe('subfolder/inner');
@@ -550,9 +585,227 @@ describe('FilesModal', () => {
     // The explorer's container does NOT have the 'hidden' class.
     const explorerContainer = container.querySelector('[data-testid="files-explorer-container"]');
     expect(explorerContainer).toBeTruthy();
-    expect(explorerContainer!.className).not.toContain('hidden');
+    expect(explorerContainer!.classList.contains('hidden')).toBe(false);
     // Toggles show "Maximizar" (not "Minimizar").
     expect(screen.getAllByRole('button', { name: 'Maximizar' }).length).toBeGreaterThan(0);
+  });
+
+  // ─── TABS: Listo para enviar | Todos ──────────────────────────────
+
+  it('renders both tabs in the left pane (Listo para enviar + Todos)', () => {
+    mockUseFileTree.mockReturnValue({
+      viewState: readyView('', sampleFiles),
+      selectionState: { kind: 'none' },
+      navigate: vi.fn(),
+      goUp: vi.fn(),
+      selectFile: vi.fn(),
+      closeSelection: vi.fn(),
+    });
+
+    render(
+      <FilesModal
+        ruc="RUC-1"
+        dni="12345678"
+        idAten="AT-001"
+        nombrePaciente="Juan Pérez"
+        empresa="Acme Corp"
+        onClose={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByRole('tab', { name: /Listo para enviar/ })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: /Todos/ })).toBeInTheDocument();
+  });
+
+  it('default tab is "Listo para enviar" — the ready pane is visible on mount, the explorer is NOT', () => {
+    const readyFiles: FileNode[] = [
+      createFileNode({
+        name: '75618561CERT.pdf',
+        sizeBytes: 1024,
+        modifiedAt: '2026-06-01T00:00:00.000Z',
+      }),
+    ];
+    mockUseFileTree.mockReturnValue({
+      viewState: readyView('', sampleFiles),
+      selectionState: { kind: 'none' },
+      navigate: vi.fn(),
+      goUp: vi.fn(),
+      selectFile: vi.fn(),
+      closeSelection: vi.fn(),
+    });
+    mockUseReadyFiles.mockReturnValue({ state: { kind: 'ready', files: readyFiles } });
+
+    render(
+      <FilesModal
+        ruc="RUC-1"
+        dni="12345678"
+        idAten="AT-001"
+        nombrePaciente="Juan Pérez"
+        empresa="Acme Corp"
+        onClose={vi.fn()}
+      />,
+    );
+
+    // Ready pane is visible — its file is rendered.
+    expect(screen.getByText('75618561CERT.pdf')).toBeInTheDocument();
+    // Explorer pane is NOT visible — none of its sample files are rendered.
+    expect(screen.queryByText('informe.pdf')).not.toBeInTheDocument();
+    // The Ready tab is marked as selected.
+    expect(screen.getByRole('tab', { name: /Listo para enviar/ })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    );
+  });
+
+  it('clicking the "Todos" tab hides the ready pane and shows the explorer (and vice versa)', () => {
+    const readyFiles: FileNode[] = [
+      createFileNode({
+        name: '75618561CERT.pdf',
+        sizeBytes: 1024,
+        modifiedAt: '2026-06-01T00:00:00.000Z',
+      }),
+    ];
+    mockUseFileTree.mockReturnValue({
+      viewState: readyView('', sampleFiles),
+      selectionState: { kind: 'none' },
+      navigate: vi.fn(),
+      goUp: vi.fn(),
+      selectFile: vi.fn(),
+      closeSelection: vi.fn(),
+    });
+    mockUseReadyFiles.mockReturnValue({ state: { kind: 'ready', files: readyFiles } });
+
+    render(
+      <FilesModal
+        ruc="RUC-1"
+        dni="12345678"
+        idAten="AT-001"
+        nombrePaciente="Juan Pérez"
+        empresa="Acme Corp"
+        onClose={vi.fn()}
+      />,
+    );
+
+    // Mount: ready pane visible.
+    expect(screen.getByText('75618561CERT.pdf')).toBeInTheDocument();
+
+    // Switch to Todos: explorer files visible, ready file hidden.
+    fireEvent.click(screen.getByRole('tab', { name: /Todos/ }));
+    expect(screen.getByText('informe.pdf')).toBeInTheDocument();
+    expect(screen.queryByText('75618561CERT.pdf')).not.toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: /Todos/ })).toHaveAttribute('aria-selected', 'true');
+
+    // Switch back to Ready: ready pane returns.
+    fireEvent.click(screen.getByRole('tab', { name: /Listo para enviar/ }));
+    expect(screen.getByText('75618561CERT.pdf')).toBeInTheDocument();
+    expect(screen.queryByText('informe.pdf')).not.toBeInTheDocument();
+  });
+
+  it('selecting a file from the ready pane stamps folderPath="LEGAJOS" on selectFile', () => {
+    const readyFiles: FileNode[] = [
+      createFileNode({
+        name: '75618561CERT.pdf',
+        sizeBytes: 1024,
+        modifiedAt: '2026-06-01T00:00:00.000Z',
+      }),
+    ];
+    const selectFile = vi.fn();
+    mockUseFileTree.mockReturnValue({
+      viewState: readyView('', []),
+      selectionState: { kind: 'none' },
+      navigate: vi.fn(),
+      goUp: vi.fn(),
+      selectFile,
+      closeSelection: vi.fn(),
+    });
+    mockUseReadyFiles.mockReturnValue({ state: { kind: 'ready', files: readyFiles } });
+
+    render(
+      <FilesModal
+        ruc="RUC-1"
+        dni="12345678"
+        idAten="AT-001"
+        nombrePaciente="Juan Pérez"
+        empresa="Acme Corp"
+        onClose={vi.fn()}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /Visualizar/ }));
+    expect(selectFile).toHaveBeenCalledTimes(1);
+    expect(selectFile).toHaveBeenCalledWith(readyFiles[0], 'LEGAJOS');
+  });
+
+  it('ready pane empty state surfaces the "Sin archivos listos" message', () => {
+    mockUseFileTree.mockReturnValue({
+      viewState: readyView('', sampleFiles),
+      selectionState: { kind: 'none' },
+      navigate: vi.fn(),
+      goUp: vi.fn(),
+      selectFile: vi.fn(),
+      closeSelection: vi.fn(),
+    });
+    mockUseReadyFiles.mockReturnValue({ state: { kind: 'empty' } });
+
+    render(
+      <FilesModal
+        ruc="RUC-1"
+        dni="12345678"
+        idAten="AT-001"
+        nombrePaciente="Juan Pérez"
+        empresa="Acme Corp"
+        onClose={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText(/Sin archivos listos para enviar/)).toBeInTheDocument();
+  });
+
+  it('selection persists across tab switches (closing the preview is the only way to dismiss it)', () => {
+    const viewer: FileViewer = {
+      supportedExtensions: ['pdf'],
+      canPreview: () => true,
+      buildPreviewUrl: () => '',
+      renderPreview: (args: PreviewArgs): ReactElement => (
+        <div data-testid="mock-viewer" data-folder={args.folderPath} data-name={args.name} />
+      ),
+    };
+    const preselected: FileNode = createFileNode({
+      name: '75618561CERT.pdf',
+      sizeBytes: 1024,
+      modifiedAt: '2026-06-01T00:00:00.000Z',
+    });
+    mockUseFileTree.mockReturnValue({
+      viewState: readyView('', sampleFiles),
+      selectionState: {
+        kind: 'previewing',
+        file: preselected,
+        viewer,
+        folderPath: 'LEGAJOS',
+      },
+      navigate: vi.fn(),
+      goUp: vi.fn(),
+      selectFile: vi.fn(),
+      closeSelection: vi.fn(),
+    });
+
+    const { container } = render(
+      <FilesModal
+        ruc="RUC-1"
+        dni="12345678"
+        idAten="AT-001"
+        nombrePaciente="Juan Pérez"
+        empresa="Acme Corp"
+        onClose={vi.fn()}
+      />,
+    );
+
+    // The mock viewer renders in both tabs because selectionState is mocked.
+    expect(container.querySelector('[data-folder="LEGAJOS"]')).toBeTruthy();
+    fireEvent.click(screen.getByRole('tab', { name: /Todos/ }));
+    expect(container.querySelector('[data-folder="LEGAJOS"]')).toBeTruthy();
+    fireEvent.click(screen.getByRole('tab', { name: /Listo para enviar/ }));
+    expect(container.querySelector('[data-folder="LEGAJOS"]')).toBeTruthy();
   });
 });
 

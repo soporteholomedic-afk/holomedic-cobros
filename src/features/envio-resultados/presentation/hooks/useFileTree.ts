@@ -24,17 +24,28 @@ export type ViewState =
  * The orthogonal `selectionState` — drives the preview pane. It is
  * independent of `viewState`: navigating the tree does NOT clear the
  * selection, and clearing the selection does NOT affect the folder.
+ *
+ * `folderPath` is the folder the file was selected FROM, frozen at
+ * selection time. This is what the preview / download URL targets, so
+ * later folder navigation (or a tab switch) does NOT break a preview
+ * that is already on screen.
  */
 export type SelectionState =
   | { kind: 'none' }
-  | { kind: 'previewing'; file: FileNode; viewer: FileViewer };
+  | { kind: 'previewing'; file: FileNode; viewer: FileViewer; folderPath: string };
 
 export interface UseFileTreeReturn {
   viewState: ViewState;
   selectionState: SelectionState;
   navigate: (folderName: string) => void;
   goUp: () => void;
-  selectFile: (file: FileNode) => void;
+  /**
+   * Mark a file as previewing. If `folderPath` is omitted, the LAST
+   * CONFIRMED tree path is used (the path of the folder currently
+   * shown in the explorer). Callers from out-of-tree views (e.g. the
+   * ready-files pane) MUST pass the folder explicitly.
+   */
+  selectFile: (file: FileNode, folderPath?: string) => void;
   closeSelection: () => void;
 }
 
@@ -196,8 +207,14 @@ export function useFileTree(ruc: string, dni: string, idAten: string): UseFileTr
     fetchFolder(next);
   }, [fetchFolder]);
 
-  const selectFile = useCallback((file: FileNode): void => {
-    setSelectionState({ kind: 'previewing', file, viewer: viewerFor(file.name) });
+  const selectFile = useCallback((file: FileNode, folderPath?: string): void => {
+    const resolvedFolder = folderPath ?? pathRef.current;
+    setSelectionState({
+      kind: 'previewing',
+      file,
+      viewer: viewerFor(file.name),
+      folderPath: resolvedFolder,
+    });
   }, []);
 
   const closeSelection = useCallback((): void => {

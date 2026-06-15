@@ -4,7 +4,17 @@ import { useEffect, useState, type ReactElement } from 'react';
 import { Maximize2, Minimize2, X } from 'lucide-react';
 import { FilesExplorerPane } from '@/features/envio-resultados/presentation/components/FilesExplorerPane';
 import { FilesPreviewPane } from '@/features/envio-resultados/presentation/components/FilesPreviewPane';
+import { FilesReadyPane } from '@/features/envio-resultados/presentation/components/FilesReadyPane';
+import { FilesTabs, type FilesTab } from '@/features/envio-resultados/presentation/components/FilesTabs';
 import { useFileTree } from '@/features/envio-resultados/presentation/hooks/useFileTree';
+import { useReadyFiles } from '@/features/envio-resultados/presentation/hooks/useReadyFiles';
+import type { FileNode } from '@/features/envio-resultados/domain/ports';
+
+/** Folder the "Listo para enviar" tab scans. Mirrors useReadyFiles. */
+const READY_FOLDER = 'LEGAJOS';
+
+/** Default tab when the modal opens — decided 2026-06-15. */
+const DEFAULT_TAB: FilesTab = 'ready';
 
 export interface FilesModalProps {
   ruc: string;
@@ -19,14 +29,16 @@ export interface FilesModalProps {
  * Modal that lists the files in a patient's archive folder on the LAN
  * share, with per-file download links and a one-click bulk zip.
  *
- * PR-B2 — Master-detail layout: the body is a flex row with the
- * explorer pane on the left (`w-2/5` on ≥ md) and the preview pane on
- * the right (`w-3/5`). On smaller viewports the panes stack
- * (`flex-col md:flex-row`, full-width per pane). The `isMaximized`
- * state lives here (a single `useState`); the explorer collapses to
- * `hidden` and the preview becomes full-width when the user toggles
- * `Maximize2`. `closeSelection` from the hook clears the preview
- * without closing the modal; `onClose` closes the modal entirely.
+ * Two tabs split the left pane:
+ *
+ * - `ready` (default) — a flat list of LEGAJOS files that match the
+ *   `^\d+(CERT|EXPED)\.pdf$` pattern. Owned by `useReadyFiles`.
+ * - `all` — the full navigable tree. Owned by `useFileTree`.
+ *
+ * Each pane reuses the same right-side preview pane. Selection
+ * carries its own `folderPath` (frozen at click time) so switching
+ * tabs or navigating folders does NOT break a preview that is already
+ * on screen.
  */
 export function FilesModal({
   ruc,
@@ -36,7 +48,13 @@ export function FilesModal({
   empresa,
   onClose,
 }: FilesModalProps): ReactElement {
-  const { viewState, selectionState, navigate, goUp, selectFile, closeSelection } = useFileTree(ruc, dni, idAten);
+  const { viewState, selectionState, navigate, goUp, selectFile, closeSelection } = useFileTree(
+    ruc,
+    dni,
+    idAten,
+  );
+  const { state: readyState } = useReadyFiles(ruc, dni, idAten);
+  const [activeTab, setActiveTab] = useState<FilesTab>(DEFAULT_TAB);
   const [zipInFlight, setZipInFlight] = useState(false);
   const [isMaximized, setIsMaximized] = useState(false);
 
@@ -50,7 +68,10 @@ export function FilesModal({
   }, [onClose]);
 
   const isAtRoot = !(viewState.kind === 'ready' && viewState.currentPath !== '');
-  const currentPath = viewState.kind === 'ready' ? viewState.currentPath : '';
+  // Folder the preview pane sources from. Comes from selectionState
+  // (frozen at click) so explorer navigation or a tab switch does NOT
+  // change it under the user's feet.
+  const previewFolderPath = selectionState.kind === 'previewing' ? selectionState.folderPath : '';
 
   const headerTitle = `Archivos — ${nombrePaciente || dni}`;
 
@@ -65,6 +86,12 @@ export function FilesModal({
   const hasFiles = viewState.kind === 'ready' && viewState.nodes.some((n) => n.kind === 'file');
 
   const toggleMaximize = (): void => setIsMaximized((m) => !m);
+
+  // Selection from the ready pane: stamp folderPath=LEGAJOS so the
+  // preview / download URL targets that subfolder, NOT the patient root.
+  const handleSelectFromReady = (file: FileNode): void => {
+    selectFile(file, READY_FOLDER);
+  };
 
   return (
     <div
@@ -114,20 +141,33 @@ export function FilesModal({
             className={
               isMaximized
                 ? 'hidden'
-                : 'w-full md:w-2/5 border-b md:border-b-0 md:border-r border-slate-100 dark:border-slate-800 overflow-y-auto'
+                : 'w-full md:w-2/5 border-b md:border-b-0 md:border-r border-slate-100 dark:border-slate-800 flex flex-col overflow-hidden'
             }
             data-testid="files-explorer-container"
           >
-            <FilesExplorerPane
-              viewState={viewState}
-              isAtRoot={isAtRoot}
-              onNavigate={navigate}
-              onGoUp={goUp}
-              onSelect={selectFile}
-              ruc={ruc}
-              dni={dni}
-              idAten={idAten}
-            />
+            <FilesTabs activeTab={activeTab} onTabChange={setActiveTab} />
+            <div className="flex-1 overflow-y-auto">
+              {activeTab === 'ready' ? (
+                <FilesReadyPane
+                  state={readyState}
+                  ruc={ruc}
+                  dni={dni}
+                  idAten={idAten}
+                  onSelect={handleSelectFromReady}
+                />
+              ) : (
+                <FilesExplorerPane
+                  viewState={viewState}
+                  isAtRoot={isAtRoot}
+                  onNavigate={navigate}
+                  onGoUp={goUp}
+                  onSelect={selectFile}
+                  ruc={ruc}
+                  dni={dni}
+                  idAten={idAten}
+                />
+              )}
+            </div>
           </div>
           <div
             className={isMaximized ? 'w-full overflow-auto' : 'w-full md:w-3/5 overflow-auto'}
@@ -141,7 +181,7 @@ export function FilesModal({
               ruc={ruc}
               dni={dni}
               idAten={idAten}
-              currentPath={currentPath}
+              currentPath={previewFolderPath}
             />
           </div>
         </div>
