@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getFileRepository } from '@/features/envio-resultados/infrastructure/files/getFileRepository';
-import { sanitizeDownloadName } from '@/lib/sanitize-filename';
+import { sanitizeDownloadName, sanitizeFolderPath } from '@/lib/sanitize-filename';
 
 /** Minimal content-type lookup by extension. */
 function mimeFromExt(name: string): string {
@@ -23,21 +23,24 @@ function mimeFromExt(name: string): string {
 }
 
 /**
- * GET /api/files/download?ruc&dni&idAten&filename
+ * GET /api/files/download?ruc&dni&idAten&path&filename
  *
  * Streams a single file from the patient's archive folder on the LAN
  * share. The path composition and `fs` calls live inside the
  * `IFileRepository.read` adapter so this route stays a thin shell.
  *
+ * The optional `?path=` parameter (added in PR-B1) targets a
+ * subfolder within the patient's archive; when missing, the file is
+ * fetched from the root (the `idAten` folder).
+ *
  * Path-traversal defense is two-layer:
  *
- * 1. `sanitizeDownloadName` rejects any value containing `..`, `/`,
- *    or `\\` after URL-decoding.
- * 2. The adapter's `read` re-asserts containment under the patient
+ * 1. `sanitizeFolderPath` rejects `..`, leading `/`, or leading `\\`
+ *    in `?path=` after URL-decoding.
+ * 2. `sanitizeDownloadName` rejects any value containing `..`, `/`,
+ *    or `\\` in `?filename=` after URL-decoding.
+ * 3. The adapter's `read` re-asserts containment under the patient
  *    root before issuing the `createReadStream` call.
- *
- * The `?path=` subfolder parameter is added in PR-B1 (the preview
- * data layer).
  *
  * Status codes:
  * - 200: streams the file with `Content-Disposition: attachment`.
@@ -50,6 +53,7 @@ export async function GET(request: Request): Promise<Response> {
   const ruc = searchParams.get('ruc')?.trim() ?? '';
   const dni = searchParams.get('dni')?.trim() ?? '';
   const idAten = searchParams.get('idAten')?.trim() ?? '';
+  const rawPath = searchParams.get('path') ?? '';
   const rawName = searchParams.get('filename') ?? '';
 
   if (!ruc || !dni || !idAten || !rawName) {
@@ -65,6 +69,14 @@ export async function GET(request: Request): Promise<Response> {
     );
   }
 
+  let safePath: string;
+  try {
+    safePath = sanitizeFolderPath(rawPath);
+  } catch (err) {
+    console.warn('[api/files/download] invalid path', { rawPath, err });
+    return NextResponse.json({ error: 'path inválido.' }, { status: 400 });
+  }
+
   let safe: string;
   try {
     safe = sanitizeDownloadName(rawName);
@@ -74,7 +86,7 @@ export async function GET(request: Request): Promise<Response> {
   }
 
   try {
-    const stream = await getFileRepository().read(ruc, dni, idAten, '', safe);
+    const stream = await getFileRepository().read(ruc, dni, idAten, safePath, safe);
     return new Response(stream as unknown as ReadableStream, {
       headers: {
         'Content-Type': mimeFromExt(safe),
@@ -89,7 +101,7 @@ export async function GET(request: Request): Promise<Response> {
         { status: 404 },
       );
     }
-    console.warn('[api/files/download] read error', { ruc, dni, idAten, name: safe, err });
+    console.warn('[api/files/download] read error', { ruc, dni, idAten, path: safePath, name: safe, err });
     return NextResponse.json(
       { error: 'No se pudo acceder al servidor de archivos.' },
       { status: 502 },
