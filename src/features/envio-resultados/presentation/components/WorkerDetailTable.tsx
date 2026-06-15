@@ -2,8 +2,16 @@
 
 import { useState, useCallback } from 'react';
 import { useUnifiedResults } from '../hooks/useUnifiedResults';
+import { useCompanies } from '../hooks/useCompanies';
+import type { Company } from '../../domain/entities';
 import type { UnifiedPerson } from '@/types/sp-result';
+import type { FileNode } from '@/features/envio-resultados/domain/file-system/FileNode';
 import { FilesModal } from './FilesModal';
+import { EmailEditor } from './EmailEditor';
+import {
+  emailViewDataFromFiles,
+  type EmailViewData,
+} from '../helpers/emailViewDataFromFiles';
 
 interface WorkerDetailTableProps {
   companyName: string;
@@ -17,6 +25,15 @@ function cellValue(value: string): string {
   return value || EM_DASH;
 }
 
+/**
+ * Resolve the companyId for the patient's empresa. Spec EI-2: matches
+ * `Company.name === empresa`; falls back to `''` on no match. Pure — no
+ * side effects, trivially testable through the component tests.
+ */
+function resolveCompanyId(companies: readonly Company[], empresa: string): string {
+  return companies.find((c) => c.name === empresa)?.id ?? '';
+}
+
 /** State for the open FilesModal — keyed by `(dni, fichaIndex)`. */
 interface ModalState {
   dni: string;
@@ -25,8 +42,10 @@ interface ModalState {
 
 export function WorkerDetailTable({ companyName, fechaInicio, fechaFin }: WorkerDetailTableProps) {
   const { people, loading, error } = useUnifiedResults(companyName, fechaInicio, fechaFin);
+  const { companies } = useCompanies();
   const [expandedDni, setExpandedDni] = useState<string | null>(null);
   const [modalState, setModalState] = useState<ModalState | null>(null);
+  const [emailViewData, setEmailViewData] = useState<EmailViewData | null>(null);
 
   const toggleExpand = useCallback((dni: string) => {
     setExpandedDni((prev) => (prev === dni ? null : dni));
@@ -38,6 +57,41 @@ export function WorkerDetailTable({ companyName, fechaInicio, fechaFin }: Worker
 
   const closeFilesModal = useCallback(() => {
     setModalState(null);
+  }, []);
+
+  /**
+   * Bridge from `FilesModal.onSend(files)` to the `EmailEditor` payload.
+   * Reconstructs the patient context from the current `modalState`,
+   * resolves `companyId` via `useCompanies` (spec EI-2), and stores
+   * the bridged data so the EmailEditor overlay can mount in place
+   * of the table.
+   *
+   * Refs are synthesized as `::${file.name}` because the modal does
+   * not emit the explorer-pane path (PR #3 deviated from the design's
+   * wider signature). Within a single patient archive, file names
+   * are unique, so this is functionally correct for the common case.
+   */
+  const handleSendFromModal = useCallback(
+    (files: FileNode[]): void => {
+      if (!modalState) return;
+      const person = people.find((p) => p.dni === modalState.dni);
+      if (!person) return;
+      const ficha = person.fichas[modalState.fichaIndex] ?? null;
+      const companyId = resolveCompanyId(companies, person.empresa);
+      const refs = files.map((file) => `::${file.name}`);
+      setEmailViewData(emailViewDataFromFiles(person, ficha, files, refs, companyId));
+      // Close the modal so the overlay can take its place. The
+      // conditional render `modalState && !emailViewData` would also
+      // hide it via the emailViewData flag, but clearing modalState
+      // keeps the post-send return path clean (no risk of the modal
+      // re-appearing when the user clicks "Volver a la tabla").
+      setModalState(null);
+    },
+    [modalState, people, companies],
+  );
+
+  const returnToTable = useCallback((): void => {
+    setEmailViewData(null);
   }, []);
 
   // ---- Loading state ----
@@ -75,43 +129,47 @@ export function WorkerDetailTable({ companyName, fechaInicio, fechaFin }: Worker
   // ---- Data table ----
   return (
     <div>
-      <h2 className="text-xl font-semibold text-slate-800 mb-4">{companyName}</h2>
-      <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
-        <table className="w-full text-left text-sm">
-          <thead className="bg-slate-50 border-b border-slate-200">
-            <tr>
-              <th className="px-4 py-3 font-medium text-slate-600">Ficha</th>
-              <th className="px-4 py-3 font-medium text-slate-600">Nombre</th>
-              <th className="px-4 py-3 font-medium text-slate-600">Empresa</th>
-              <th className="px-4 py-3 font-medium text-slate-600">RUC</th>
-              <th className="px-4 py-3 font-medium text-slate-600">Proyecto</th>
-              <th className="px-4 py-3 font-medium text-slate-600">Razón Social</th>
-              <th className="px-4 py-3 font-medium text-slate-600">DNI</th>
-              <th className="px-4 py-3 font-medium text-slate-600">Tipo de Examen</th>
-              <th className="px-4 py-3 font-medium text-slate-600">Aptitud</th>
-              <th className="px-4 py-3 font-medium text-slate-600">Archivos</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-100">
-            {people.map((person) => {
-              const hasMultipleFichas = person.fichas.length > 1;
-              const isExpanded = expandedDni === person.dni;
+      {!emailViewData && (
+        <>
+          <h2 className="text-xl font-semibold text-slate-800 mb-4">{companyName}</h2>
+          <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
+            <table className="w-full text-left text-sm">
+              <thead className="bg-slate-50 border-b border-slate-200">
+                <tr>
+                  <th className="px-4 py-3 font-medium text-slate-600">Ficha</th>
+                  <th className="px-4 py-3 font-medium text-slate-600">Nombre</th>
+                  <th className="px-4 py-3 font-medium text-slate-600">Empresa</th>
+                  <th className="px-4 py-3 font-medium text-slate-600">RUC</th>
+                  <th className="px-4 py-3 font-medium text-slate-600">Proyecto</th>
+                  <th className="px-4 py-3 font-medium text-slate-600">Razón Social</th>
+                  <th className="px-4 py-3 font-medium text-slate-600">DNI</th>
+                  <th className="px-4 py-3 font-medium text-slate-600">Tipo de Examen</th>
+                  <th className="px-4 py-3 font-medium text-slate-600">Aptitud</th>
+                  <th className="px-4 py-3 font-medium text-slate-600">Archivos</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {people.map((person) => {
+                  const hasMultipleFichas = person.fichas.length > 1;
+                  const isExpanded = expandedDni === person.dni;
 
-              return (
-                <PersonRow
-                  key={person.dni}
-                  person={person}
-                  hasMultipleFichas={hasMultipleFichas}
-                  isExpanded={isExpanded}
-                  onToggleExpand={hasMultipleFichas ? () => toggleExpand(person.dni) : undefined}
-                  onOpenFilesModal={openFilesModal}
-                />
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
-      {modalState &&
+                  return (
+                    <PersonRow
+                      key={person.dni}
+                      person={person}
+                      hasMultipleFichas={hasMultipleFichas}
+                      isExpanded={isExpanded}
+                      onToggleExpand={hasMultipleFichas ? () => toggleExpand(person.dni) : undefined}
+                      onOpenFilesModal={openFilesModal}
+                    />
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </>
+      )}
+      {modalState && !emailViewData &&
         (() => {
           const person = people.find((p) => p.dni === modalState.dni);
           if (!person) return null;
@@ -125,9 +183,35 @@ export function WorkerDetailTable({ companyName, fechaInicio, fechaFin }: Worker
               nombrePaciente={person.nombre}
               empresa={person.empresa}
               onClose={closeFilesModal}
+              onSend={handleSendFromModal}
             />
           );
         })()}
+      {emailViewData && (
+        <section
+          data-testid="email-editor-overlay"
+          className="fixed inset-0 z-50 bg-white dark:bg-slate-900 overflow-auto"
+        >
+          <div className="max-w-7xl mx-auto p-6 space-y-4">
+            <div className="flex items-center justify-between">
+              <h2 className="text-xl font-semibold text-slate-800">Redactar correo</h2>
+              <button
+                type="button"
+                onClick={returnToTable}
+                data-testid="email-editor-back"
+                className="px-4 py-2 rounded-xl border border-slate-200 dark:border-slate-800 hover:bg-slate-100 dark:hover:bg-slate-800 text-sm font-semibold"
+              >
+                Volver a la tabla
+              </button>
+            </div>
+            <EmailEditor
+              companyId={emailViewData.companyId}
+              selectedPatients={emailViewData.selectedPatients}
+              patients={emailViewData.patients}
+            />
+          </div>
+        </section>
+      )}
     </div>
   );
 }
