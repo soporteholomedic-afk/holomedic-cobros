@@ -41,6 +41,7 @@ function joinFile(folder: string, name: string): string {
 export class UncFileRepository implements IFileRepository {
   async list(ruc: string, dni: string, idAten: string): Promise<FileEntry[]> {
     const folder = joinFolder(ruc, dni, idAten);
+    console.log("[UncFileRepository] Reading folder", folder);
     let names: string[];
     try {
       names = await fs.readdir(folder);
