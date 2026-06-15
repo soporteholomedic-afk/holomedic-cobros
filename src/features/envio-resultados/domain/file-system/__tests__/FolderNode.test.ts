@@ -78,7 +78,10 @@ describe('FolderNode (Composite — lazy children)', () => {
   });
 
   it('getChildren throws before loadChildren has resolved (callers must await)', () => {
-    const repo = makeMockRepo();
+    // The repo is unused here — the test only constructs a folder and
+    // asserts that getChildren() throws without ever calling
+    // loadChildren. Keeping `makeMockRepo` in the test file for
+    // consistency with the other tests; this test just does not need it.
     const folder = createFolderNode({ name: 'subfolder' });
 
     expect(() => folder.getChildren()).toThrow(/loadChildren/);

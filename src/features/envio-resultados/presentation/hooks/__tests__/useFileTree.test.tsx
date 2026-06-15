@@ -316,11 +316,13 @@ describe('useFileTree', () => {
     mockFetch.mockResolvedValueOnce(makeJsonResponse(200, { nodes: [] }));
     // Second call (navigate 'a'): never-resolving promise (will be aborted).
     mockFetch.mockImplementationOnce(
-      () => new Promise<Response>((_resolve, reject) => {
-        // Reject with an AbortError when the AbortController fires.
-        // The test wires the actual signal below.
-        // We capture the signal via the options.
-      }),
+      () =>
+        new Promise<Response>(() => {
+          // Intentionally never resolves. The `reject` callback is
+          // unused in this test (the abort-swallows test relies on
+          // the hook's internal AbortController, not on a manual
+          // reject). Keep the promise pending so the test passes.
+        }),
     );
 
     const { useFileTree } = await import('../useFileTree');

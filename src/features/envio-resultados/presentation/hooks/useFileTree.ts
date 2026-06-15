@@ -5,10 +5,7 @@ import {
   createFileNode,
   type FileNode,
 } from '@/features/envio-resultados/domain/file-system/FileNode';
-import {
-  createFolderNode,
-  type FolderNode,
-} from '@/features/envio-resultados/domain/file-system/FolderNode';
+import { createFolderNode } from '@/features/envio-resultados/domain/file-system/FolderNode';
 import type { FileSystemNode } from '@/features/envio-resultados/domain/file-system/FileSystemNode';
 import { viewerFor } from '@/features/envio-resultados/presentation/viewers/viewerFor';
 import type { FileViewer } from '@/features/envio-resultados/presentation/viewers/FileViewer';
@@ -162,7 +159,13 @@ export function useFileTree(ruc: string, dni: string, idAten: string): UseFileTr
 
   // Initial fetch + refetch on identity change.
   useEffect(() => {
+    // setState calls here are intentional — they reset the hook's
+    // local state when the args transition between patients (a new
+    // ruc/dni/idAten). The reset is the documented behavior of the
+    // hook, not a cascading render.
+    /* eslint-disable react-hooks/set-state-in-effect */
     setSelectionState({ kind: 'none' });
+    /* eslint-enable react-hooks/set-state-in-effect */
     pathRef.current = ROOT_PATH;
     fetchFolder(ROOT_PATH);
     return () => {

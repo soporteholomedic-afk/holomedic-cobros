@@ -14,14 +14,19 @@ import type { FileViewer, PreviewArgs } from './FileViewer';
 export class NoPreviewViewer implements FileViewer {
   readonly supportedExtensions: readonly string[] = [];
 
-  canPreview(_name: string): boolean {
+  canPreview(name: string): boolean {
+    // Fallback strategy: always matches. The `name` argument is
+    // intentionally unused; the param exists to satisfy the
+    // FileViewer interface.
+    void name;
     return true;
   }
 
-  buildPreviewUrl(_args: PreviewArgs): string {
+  buildPreviewUrl(args: PreviewArgs): string {
     // No preview URL — the no-preview strategy does not load anything
     // from the server. Returning the empty string keeps the type
     // contract satisfied; renderers MUST NOT use it for an iframe/img.
+    void args;
     return '';
   }
 

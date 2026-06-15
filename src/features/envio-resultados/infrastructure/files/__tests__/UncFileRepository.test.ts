@@ -1,4 +1,3 @@
-import archiver from 'archiver';
 import { Readable } from 'node:stream';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { FileSystemNode } from '@/features/envio-resultados/domain/ports';

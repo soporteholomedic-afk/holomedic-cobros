@@ -56,6 +56,7 @@ describe('IFileRepository port', () => {
     // `list` to the port in a future change.
     type ListKey = 'list';
     // @ts-expect-error — `list` was removed in the patient-file-explorer change
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     type _Removed = IFileRepository[ListKey];
     // The reverse direction: the only own keys of the port are `listFolder`
     // and `read`. If `list` ever sneaks back in, this list will grow and
@@ -69,6 +70,7 @@ describe('IFileRepository port', () => {
   it('does NOT expose the legacy stream method (REQ-FL-4 — port surface tightened)', () => {
     type StreamKey = 'stream';
     // @ts-expect-error — `stream` was removed in the patient-file-explorer change
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     type _Removed = IFileRepository[StreamKey];
     const expectedKeys = ['listFolder', 'read'] as const;
     type OwnKeys = keyof IFileRepository;
