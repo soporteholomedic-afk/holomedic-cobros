@@ -405,4 +405,133 @@ describe('useUnifiedResults', () => {
     expect(person.fichas[1].proyecto).toBe('MINSUR');
     expect(person.fichas[1].tipoExamen).toBe('PREOCUPACIONAL');
   });
+
+  // ---- Scenario 12: Condic propagation ----
+  // Spec REQ-WT-1 / REQ-WT-4: condic is captured from the SP row and propagated
+  // to both UnifiedPerson.condic and UnifiedFicha.condic after normalization.
+  // Use 'APTO' (a non-NULL value) for the failing-first assertion in this RED step.
+
+  it('should propagate Condic "APTO" to UnifiedPerson.condic and UnifiedFicha.condic', async () => {
+    const workerRows: SpResultRow[] = [
+      makeWorkerRow({ NroDId: 'DNI 77777777', Pacien: 'APTO WORKER', Condic: 'APTO', NomCom: 'APTO CO' }),
+    ];
+    const orderRows: OrderRow[] = [
+      makeOrderRow({ IdAten: 'ATE-A1', NroRuc: '20777777777', NomCFa: 'APTO CO', NroDId: '77777777' }),
+    ];
+
+    vi.spyOn(globalThis, 'fetch').mockImplementation((input) => {
+      const url = String(input);
+      if (url.includes('/api/consolidados/results_by_companies')) {
+        return Promise.resolve(mockFetchResponse(orderRows));
+      }
+      return Promise.resolve(mockFetchResponse({ companies: [], rows: workerRows }));
+    });
+
+    const { result } = renderHook(() =>
+      useUnifiedResults('APTO CO', '2026-01-01', '2026-06-30'),
+    );
+
+    await waitFor(() => {
+      expect(result.current.loading).toBe(false);
+    });
+
+    expect(result.current.people).toHaveLength(1);
+    const person = result.current.people[0];
+    expect(person.condic).toBe('APTO');
+    expect(person.fichas).toHaveLength(1);
+    expect(person.fichas[0].condic).toBe('APTO');
+  });
+
+  // ---- Scenario 13: normalizeCondic integration at the hook layer ----
+  // Spec REQ-WT-3 / REQ-WT-4: the hook normalizes 'NULL', 'null', 'Null',
+  // and whitespace-only Condic values to '' so the UI never sees the raw literal.
+  // Sub-ficha condic comes from its own (proyecto+tipoExamen) row, not the primary.
+
+  it('should normalize "NULL" / "null" / "Null" / whitespace Condic values to ""', async () => {
+    const workerRows: SpResultRow[] = [
+      makeWorkerRow({ NroDId: 'DNI 33333333', Pacien: 'NULL CAPS', Condic: 'NULL' }),
+      makeWorkerRow({ NroDId: 'DNI 44444444', Pacien: 'NULL LOWER', Condic: 'null' }),
+      makeWorkerRow({ NroDId: 'DNI 55555555', Pacien: 'NULL MIXED', Condic: 'Null' }),
+      makeWorkerRow({ NroDId: 'DNI 66666666', Pacien: 'WS WORKER', Condic: '   ' }),
+    ];
+    const orderRows: OrderRow[] = [
+      makeOrderRow({ IdAten: 'ATE-N1', NroRuc: '20333333333', NomCFa: 'N CO', NroDId: '33333333' }),
+      makeOrderRow({ IdAten: 'ATE-N2', NroRuc: '20444444444', NomCFa: 'N CO', NroDId: '44444444' }),
+      makeOrderRow({ IdAten: 'ATE-N3', NroRuc: '20555555555', NomCFa: 'N CO', NroDId: '55555555' }),
+      makeOrderRow({ IdAten: 'ATE-N4', NroRuc: '20666666666', NomCFa: 'N CO', NroDId: '66666666' }),
+    ];
+
+    vi.spyOn(globalThis, 'fetch').mockImplementation((input) => {
+      const url = String(input);
+      if (url.includes('/api/consolidados/results_by_companies')) {
+        return Promise.resolve(mockFetchResponse(orderRows));
+      }
+      return Promise.resolve(mockFetchResponse({ companies: [], rows: workerRows }));
+    });
+
+    const { result } = renderHook(() =>
+      useUnifiedResults('N CO', '2026-01-01', '2026-06-30'),
+    );
+
+    await waitFor(() => {
+      expect(result.current.loading).toBe(false);
+    });
+
+    expect(result.current.people).toHaveLength(4);
+    for (const person of result.current.people) {
+      expect(person.condic).toBe('');
+      expect(person.fichas).toHaveLength(1);
+      expect(person.fichas[0].condic).toBe('');
+    }
+  });
+
+  it('should give each sub-ficha its own Condic from the corresponding worker row', async () => {
+    // Same DNI, two distinct (proyecto+tipoExamen) workers, each with its own Condic.
+    // Sub-ficha #2 must show NO APTO even though primary is APTO.
+    const workerRows: SpResultRow[] = [
+      makeWorkerRow({
+        NroDId: 'DNI 12345678',
+        Pacien: 'DUPLICATE WORKER',
+        DesTCh: 'PERIODICO',
+        DesDes: 'UNACEM',
+        NomCom: 'DUPLICATE CO',
+        Condic: 'APTO',
+      }),
+      makeWorkerRow({
+        NroDId: 'DNI 12345678',
+        Pacien: 'DUPLICATE WORKER',
+        DesTCh: 'PREOCUPACIONAL',
+        DesDes: 'MINSUR',
+        NomCom: 'DUPLICATE CO',
+        Condic: 'NO APTO',
+      }),
+    ];
+    const orderRows: OrderRow[] = [
+      makeOrderRow({ IdAten: 'ATE-U1', NroRuc: '20111111111', NomCFa: 'DUPLICATE CO', NroDId: '12345678' }),
+    ];
+
+    vi.spyOn(globalThis, 'fetch').mockImplementation((input) => {
+      const url = String(input);
+      if (url.includes('/api/consolidados/results_by_companies')) {
+        return Promise.resolve(mockFetchResponse(orderRows));
+      }
+      return Promise.resolve(mockFetchResponse({ companies: [], rows: workerRows }));
+    });
+
+    const { result } = renderHook(() =>
+      useUnifiedResults('DUPLICATE CO', '2026-01-01', '2026-06-30'),
+    );
+
+    await waitFor(() => {
+      expect(result.current.loading).toBe(false);
+    });
+
+    const person = result.current.people[0];
+    // Primary row mirrors first worker's condic
+    expect(person.condic).toBe('APTO');
+    expect(person.fichas).toHaveLength(2);
+    // Sub-fichas each carry their own worker row's condic
+    expect(person.fichas[0].condic).toBe('APTO');
+    expect(person.fichas[1].condic).toBe('NO APTO');
+  });
 });

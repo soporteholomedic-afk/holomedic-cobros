@@ -77,6 +77,16 @@ export interface UnifiedFicha {
   proyecto: string;
   /** SpResultRow.DesTCh for worker-sourced fichas; '' for order-sourced fichas. */
   tipoExamen: string;
+  /**
+   * SpResultRow.Condic (medical-fitness verdict) **pre-normalized** at the hook layer.
+   * The value is NEVER the raw SP string: by the time it reaches the UI, the hook
+   * has already applied `normalizeCondic` (see `src/lib/condic.ts`). That means:
+   *   - literal `'NULL'` / `'null'` / `'Null'` are mapped to `''`
+   *   - whitespace-only strings are mapped to `''`
+   *   - otherwise the value is `value.trim()`
+   * Consumers can render `''` as em-dash without re-normalizing.
+   */
+  condic: string;
 }
 
 /**
@@ -96,5 +106,10 @@ export interface UnifiedPerson {
   empresa: string;          // SpResultRow.NomCom  (first occurrence)
   tipoExamen: string;       // SpResultRow.DesTCh  (first occurrence)
   proyecto: string;         // SpResultRow.DesDes  (first occurrence)
+  /**
+   * Pre-normalized medical-fitness verdict for the primary ficha; `''` when none.
+   * Mirrors the normalization contract documented on `UnifiedFicha.condic`.
+   */
+  condic: string;
   fichas: UnifiedFicha[];   // order entries + extra worker rows with distinct DesDes
 }

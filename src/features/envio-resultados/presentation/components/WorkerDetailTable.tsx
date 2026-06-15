@@ -3,6 +3,7 @@
 import { useState, useCallback } from 'react';
 import { useUnifiedResults } from '../hooks/useUnifiedResults';
 import type { UnifiedPerson } from '@/types/sp-result';
+import { FilesModal } from './FilesModal';
 
 interface WorkerDetailTableProps {
   companyName: string;
@@ -16,12 +17,27 @@ function cellValue(value: string): string {
   return value || EM_DASH;
 }
 
+/** State for the open FilesModal — keyed by `(dni, fichaIndex)`. */
+interface ModalState {
+  dni: string;
+  fichaIndex: number;
+}
+
 export function WorkerDetailTable({ companyName, fechaInicio, fechaFin }: WorkerDetailTableProps) {
   const { people, loading, error } = useUnifiedResults(companyName, fechaInicio, fechaFin);
   const [expandedDni, setExpandedDni] = useState<string | null>(null);
+  const [modalState, setModalState] = useState<ModalState | null>(null);
 
   const toggleExpand = useCallback((dni: string) => {
     setExpandedDni((prev) => (prev === dni ? null : dni));
+  }, []);
+
+  const openFilesModal = useCallback((dni: string, fichaIndex: number) => {
+    setModalState({ dni, fichaIndex });
+  }, []);
+
+  const closeFilesModal = useCallback(() => {
+    setModalState(null);
   }, []);
 
   // ---- Loading state ----
@@ -72,6 +88,8 @@ export function WorkerDetailTable({ companyName, fechaInicio, fechaFin }: Worker
               <th className="px-4 py-3 font-medium text-slate-600">Razón Social</th>
               <th className="px-4 py-3 font-medium text-slate-600">DNI</th>
               <th className="px-4 py-3 font-medium text-slate-600">Tipo de Examen</th>
+              <th className="px-4 py-3 font-medium text-slate-600">Aptitud</th>
+              <th className="px-4 py-3 font-medium text-slate-600">Archivos</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
@@ -86,12 +104,30 @@ export function WorkerDetailTable({ companyName, fechaInicio, fechaFin }: Worker
                   hasMultipleFichas={hasMultipleFichas}
                   isExpanded={isExpanded}
                   onToggleExpand={hasMultipleFichas ? () => toggleExpand(person.dni) : undefined}
+                  onOpenFilesModal={openFilesModal}
                 />
               );
             })}
           </tbody>
         </table>
       </div>
+      {modalState &&
+        (() => {
+          const person = people.find((p) => p.dni === modalState.dni);
+          if (!person) return null;
+          const ficha = person.fichas[modalState.fichaIndex] ?? null;
+          return (
+            <FilesModal
+              key={`${modalState.dni}-${modalState.fichaIndex}`}
+              ruc={ficha?.nroRuc ?? ''}
+              dni={person.dni}
+              idAten={ficha?.idAten ?? ''}
+              nombrePaciente={person.nombre}
+              empresa={person.empresa}
+              onClose={closeFilesModal}
+            />
+          );
+        })()}
     </div>
   );
 }
@@ -103,9 +139,16 @@ interface PersonRowProps {
   hasMultipleFichas: boolean;
   isExpanded: boolean;
   onToggleExpand: (() => void) | undefined;
+  onOpenFilesModal: (dni: string, fichaIndex: number) => void;
 }
 
-function PersonRow({ person, hasMultipleFichas, isExpanded, onToggleExpand }: PersonRowProps) {
+function PersonRow({
+  person,
+  hasMultipleFichas,
+  isExpanded,
+  onToggleExpand,
+  onOpenFilesModal,
+}: PersonRowProps) {
   const hasFichas = person.fichas.length > 0;
   const primaryFicha = hasFichas ? person.fichas[0] : null;
 
@@ -143,6 +186,15 @@ function PersonRow({ person, hasMultipleFichas, isExpanded, onToggleExpand }: Pe
         <td className="px-4 py-3 text-slate-600">{primaryFicha ? primaryFicha.nomCFa : EM_DASH}</td>
         <td className="px-4 py-3 text-slate-600">{person.dni}</td>
         <td className="px-4 py-3 text-slate-600">{cellValue(person.tipoExamen)}</td>
+        <td className="px-4 py-3 text-slate-600">{cellValue(person.condic)}</td>
+        <td className="px-4 py-3">
+          <button
+            onClick={() => onOpenFilesModal(person.dni, 0)}
+            className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-sky-50 text-sky-700 hover:bg-sky-100"
+          >
+            Ver Archivos
+          </button>
+        </td>
       </tr>
 
       {/* Expanded sub-rows (fichas beyond the first) — same columns as primary row */}
@@ -157,6 +209,15 @@ function PersonRow({ person, hasMultipleFichas, isExpanded, onToggleExpand }: Pe
             <td className="px-4 py-2 text-slate-400 text-xs">{ficha.nomCFa || EM_DASH}</td>
             <td className="px-4 py-2 text-slate-400 text-xs">{person.dni}</td>
             <td className="px-4 py-2 text-slate-400 text-xs">{ficha.tipoExamen || cellValue(person.tipoExamen)}</td>
+            <td className="px-4 py-2 text-slate-400 text-xs">{ficha.condic || cellValue(person.condic)}</td>
+            <td className="px-4 py-2">
+              <button
+                onClick={() => onOpenFilesModal(person.dni, idx + 1)}
+                className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-sky-50 text-sky-700 hover:bg-sky-100"
+              >
+                Ver Archivos
+              </button>
+            </td>
           </tr>
         ))}
     </>
