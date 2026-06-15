@@ -1,20 +1,10 @@
 'use client';
 
 import { useEffect, useState, type ReactElement } from 'react';
-import {
-  X,
-  FileText,
-  FileImage,
-  FileSpreadsheet,
-  FileArchive,
-  File as FileGeneric,
-  AlertTriangle,
-  RefreshCw,
-} from 'lucide-react';
-import {
-  usePatientFiles,
-  type FileEntry,
-} from '@/features/envio-resultados/presentation/hooks/usePatientFiles';
+import { Maximize2, Minimize2, X } from 'lucide-react';
+import { FilesExplorerPane } from '@/features/envio-resultados/presentation/components/FilesExplorerPane';
+import { FilesPreviewPane } from '@/features/envio-resultados/presentation/components/FilesPreviewPane';
+import { useFileTree } from '@/features/envio-resultados/presentation/hooks/useFileTree';
 
 export interface FilesModalProps {
   ruc: string;
@@ -25,48 +15,18 @@ export interface FilesModalProps {
   onClose: () => void;
 }
 
-type FilesState =
-  | { kind: 'loading' }
-  | { kind: 'empty' }
-  | { kind: 'error'; message: string }
-  | { kind: 'ready'; files: FileEntry[] };
-
-/**
- * Map a file extension to a lucide icon and an optional accent color.
- * Defaults to a generic `File` icon for unknown extensions.
- */
-function iconByExtension(name: string): { Icon: typeof FileGeneric; color: string } {
-  const ext = name.split('.').pop()?.toLowerCase() ?? '';
-  if (ext === 'pdf') return { Icon: FileText, color: 'text-red-500' };
-  if (ext === 'jpg' || ext === 'jpeg' || ext === 'png' || ext === 'gif' || ext === 'webp') {
-    return { Icon: FileImage, color: 'text-sky-500' };
-  }
-  if (ext === 'xls' || ext === 'xlsx' || ext === 'csv') {
-    return { Icon: FileSpreadsheet, color: 'text-emerald-500' };
-  }
-  if (ext === 'doc' || ext === 'docx') {
-    return { Icon: FileText, color: 'text-blue-500' };
-  }
-  if (ext === 'zip' || ext === 'rar' || ext === '7z') {
-    return { Icon: FileArchive, color: 'text-amber-500' };
-  }
-  return { Icon: FileGeneric, color: 'text-slate-500' };
-}
-
-/** Format a byte count into KB/MB for display. */
-function formatSize(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
-  return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
-}
-
 /**
  * Modal that lists the files in a patient's archive folder on the LAN
  * share, with per-file download links and a one-click bulk zip.
  *
- * The modal is a child of the parent component tree (no portal) and
- * mirrors the `CompanyDetailModal` Tailwind conventions: fixed inset-0
- * backdrop, header, scrollable body, footer.
+ * PR-B2 — Master-detail layout: the body is a flex row with the
+ * explorer pane on the left (`w-2/5` on ≥ md) and the preview pane on
+ * the right (`w-3/5`). On smaller viewports the panes stack
+ * (`flex-col md:flex-row`, full-width per pane). The `isMaximized`
+ * state lives here (a single `useState`); the explorer collapses to
+ * `hidden` and the preview becomes full-width when the user toggles
+ * `Maximize2`. `closeSelection` from the hook clears the preview
+ * without closing the modal; `onClose` closes the modal entirely.
  */
 export function FilesModal({
   ruc,
@@ -76,8 +36,9 @@ export function FilesModal({
   empresa,
   onClose,
 }: FilesModalProps): ReactElement {
-  const { files, loading, error, refetch } = usePatientFiles(ruc, dni, idAten);
+  const { viewState, selectionState, navigate, goUp, selectFile, closeSelection } = useFileTree(ruc, dni, idAten);
   const [zipInFlight, setZipInFlight] = useState(false);
+  const [isMaximized, setIsMaximized] = useState(false);
 
   // Escape-key close handler.
   useEffect(() => {
@@ -88,13 +49,8 @@ export function FilesModal({
     return () => window.removeEventListener('keydown', onKey);
   }, [onClose]);
 
-  const state: FilesState = loading
-    ? { kind: 'loading' }
-    : error
-    ? { kind: 'error', message: error.message }
-    : files.length === 0
-    ? { kind: 'empty' }
-    : { kind: 'ready', files };
+  const isAtRoot = !(viewState.kind === 'ready' && viewState.currentPath !== '');
+  const currentPath = viewState.kind === 'ready' ? viewState.currentPath : '';
 
   const headerTitle = `Archivos — ${nombrePaciente || dni}`;
 
@@ -106,6 +62,10 @@ export function FilesModal({
     `nombrePaciente=${encodeURIComponent(nombrePaciente)}&` +
     `empresa=${encodeURIComponent(empresa)}`;
 
+  const hasFiles = viewState.kind === 'ready' && viewState.nodes.some((n) => n.kind === 'file');
+
+  const toggleMaximize = (): void => setIsMaximized((m) => !m);
+
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm"
@@ -113,7 +73,7 @@ export function FilesModal({
       data-testid="files-modal-backdrop"
     >
       <div
-        className="w-full max-w-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl overflow-hidden shadow-2xl flex flex-col max-h-[90vh]"
+        className="w-full max-w-5xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl overflow-hidden shadow-2xl flex flex-col max-h-[90vh]"
         onClick={(e) => e.stopPropagation()}
         role="dialog"
         aria-label={headerTitle}
@@ -128,94 +88,62 @@ export function FilesModal({
               {headerTitle}
             </h2>
           </div>
-          <button
-            onClick={onClose}
-            className="p-2 rounded-xl text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
-            aria-label="Cerrar modal"
-          >
-            <X className="w-5 h-5" />
-          </button>
+          <div className="flex items-center gap-1">
+            <button
+              type="button"
+              onClick={toggleMaximize}
+              aria-label={isMaximized ? 'Minimizar' : 'Maximizar'}
+              className="p-2 rounded-xl text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+            >
+              {isMaximized ? <Minimize2 className="w-5 h-5" /> : <Maximize2 className="w-5 h-5" />}
+            </button>
+            <button
+              type="button"
+              onClick={onClose}
+              className="p-2 rounded-xl text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+              aria-label="Cerrar modal"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
         </div>
 
-        {/* Body */}
-        <div className="p-6 overflow-y-auto flex-1 space-y-3">
-          {state.kind === 'loading' && (
-            <div data-testid="files-skeleton" className="space-y-2">
-              {[0, 1, 2].map((i) => (
-                <div
-                  key={i}
-                  className="h-12 rounded-xl bg-slate-100 dark:bg-slate-800 animate-pulse"
-                />
-              ))}
-            </div>
-          )}
-
-          {state.kind === 'empty' && (
-            <p
-              data-testid="files-empty"
-              className="text-sm text-slate-500 dark:text-slate-400 text-center py-12"
-            >
-              No hay archivos para esta ficha
-            </p>
-          )}
-
-          {state.kind === 'error' && (
-            <div
-              data-testid="files-error"
-              className="p-4 rounded-xl bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-900/50 text-red-700 dark:text-red-400 text-sm space-y-3"
-            >
-              <div className="flex items-center space-x-2">
-                <AlertTriangle className="w-4 h-4 flex-shrink-0" />
-                <span>No se pudieron cargar los archivos</span>
-              </div>
-              <button
-                onClick={refetch}
-                className="inline-flex items-center space-x-2 px-3 py-1.5 rounded-lg bg-red-100 dark:bg-red-900/30 hover:bg-red-200 dark:hover:bg-red-900/50 text-red-700 dark:text-red-300 font-semibold transition-colors"
-              >
-                <RefreshCw className="w-4 h-4" />
-                <span>Reintentar</span>
-              </button>
-            </div>
-          )}
-
-          {state.kind === 'ready' && (
-            <ul data-testid="files-list" className="space-y-2">
-              {state.files.map((f) => {
-                const { Icon, color } = iconByExtension(f.name);
-                const href =
-                  `/api/files/download?` +
-                  `ruc=${encodeURIComponent(ruc)}&` +
-                  `dni=${encodeURIComponent(dni)}&` +
-                  `idAten=${encodeURIComponent(idAten)}&` +
-                  `filename=${encodeURIComponent(f.name)}`;
-                return (
-                  <li
-                    key={f.name}
-                    className="flex items-center justify-between p-3 rounded-xl border border-slate-100 dark:border-slate-800 hover:bg-slate-50/50 dark:hover:bg-slate-950/20"
-                  >
-                    <div className="flex items-center space-x-3 min-w-0">
-                      <Icon className={`w-5 h-5 flex-shrink-0 ${color}`} />
-                      <span className="text-sm font-medium text-slate-800 dark:text-slate-200 truncate">
-                        {f.name}
-                      </span>
-                    </div>
-                    <div className="flex items-center space-x-3 flex-shrink-0">
-                      <span className="text-xs font-mono text-slate-400">
-                        {formatSize(f.sizeBytes)}
-                      </span>
-                      <a
-                        href={href}
-                        className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-sky-50 text-sky-700 hover:bg-sky-100"
-                        download
-                      >
-                        Descargar
-                      </a>
-                    </div>
-                  </li>
-                );
-              })}
-            </ul>
-          )}
+        {/* Body — master-detail: explorer (40%) + preview (60%); stacks on < md */}
+        <div className="flex flex-col md:flex-row flex-1 overflow-hidden">
+          <div
+            className={
+              isMaximized
+                ? 'hidden'
+                : 'w-full md:w-2/5 border-b md:border-b-0 md:border-r border-slate-100 dark:border-slate-800 overflow-y-auto'
+            }
+            data-testid="files-explorer-container"
+          >
+            <FilesExplorerPane
+              viewState={viewState}
+              isAtRoot={isAtRoot}
+              onNavigate={navigate}
+              onGoUp={goUp}
+              onSelect={selectFile}
+              ruc={ruc}
+              dni={dni}
+              idAten={idAten}
+            />
+          </div>
+          <div
+            className={isMaximized ? 'w-full overflow-auto' : 'w-full md:w-3/5 overflow-auto'}
+            data-testid="files-preview-container"
+          >
+            <FilesPreviewPane
+              selectionState={selectionState}
+              isMaximized={isMaximized}
+              onClose={closeSelection}
+              onToggleMaximize={toggleMaximize}
+              ruc={ruc}
+              dni={dni}
+              idAten={idAten}
+              currentPath={currentPath}
+            />
+          </div>
         </div>
 
         {/* Footer */}
@@ -226,7 +154,7 @@ export function FilesModal({
           >
             Cerrar
           </button>
-          {state.kind === 'ready' && state.files.length > 0 ? (
+          {hasFiles ? (
             <a
               href={downloadAllHref}
               onClick={() => setZipInFlight(true)}

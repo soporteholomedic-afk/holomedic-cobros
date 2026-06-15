@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   sanitizeComponent,
   sanitizeDownloadName,
+  sanitizeFolderPath,
   sanitizeZipName,
 } from '@/lib/sanitize-filename';
 
@@ -59,5 +60,43 @@ describe('sanitizeDownloadName', () => {
 
   it('throws on POSIX-style path traversal', () => {
     expect(() => sanitizeDownloadName('foo/bar.pdf')).toThrow(/inválido/i);
+  });
+});
+
+describe('sanitizeFolderPath', () => {
+  it('returns empty string unchanged (patient root)', () => {
+    expect(sanitizeFolderPath('')).toBe('');
+  });
+
+  it('passes through a simple subfolder name', () => {
+    expect(sanitizeFolderPath('subfolder')).toBe('subfolder');
+  });
+
+  it('passes through a nested forward-slash path', () => {
+    expect(sanitizeFolderPath('subfolder/inner')).toBe('subfolder/inner');
+  });
+
+  it('throws on `..` (POSIX-style traversal)', () => {
+    expect(() => sanitizeFolderPath('..')).toThrow(/inválido/i);
+  });
+
+  it('throws on `../etc` (POSIX-style traversal)', () => {
+    expect(() => sanitizeFolderPath('../etc')).toThrow(/inválido/i);
+  });
+
+  it('throws on `subfolder/../etc` (embedded traversal)', () => {
+    expect(() => sanitizeFolderPath('subfolder/../etc')).toThrow(/inválido/i);
+  });
+
+  it('throws on a leading forward slash (absolute POSIX path)', () => {
+    expect(() => sanitizeFolderPath('/etc/passwd')).toThrow(/inválido/i);
+  });
+
+  it('throws on a leading backslash (absolute Windows path)', () => {
+    expect(() => sanitizeFolderPath('..\\..\\..\\Windows')).toThrow(/inválido/i);
+  });
+
+  it('throws on URL-encoded `../etc` (decodes then rejects)', () => {
+    expect(() => sanitizeFolderPath('%2E%2E%2Fetc')).toThrow(/inválido/i);
   });
 });

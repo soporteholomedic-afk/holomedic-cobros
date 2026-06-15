@@ -23,27 +23,28 @@ function mimeFromExt(name: string): string {
 }
 
 /**
- * GET /api/files/download?ruc&dni&idAten&path&filename
+ * GET /api/files/preview?ruc&dni&idAten&path&filename
  *
  * Streams a single file from the patient's archive folder on the LAN
- * share. The path composition and `fs` calls live inside the
- * `IFileRepository.read` adapter so this route stays a thin shell.
+ * share with `Content-Disposition: inline` so that `<iframe>` / `<img>`
+ * can render the file inline in the browser. This route is the data
+ * counterpart to the `FileViewer` strategies — the PDF / image viewers
+ * point their `src` attribute here.
  *
- * The optional `?path=` parameter (added in PR-B1) targets a
- * subfolder within the patient's archive; when missing, the file is
- * fetched from the root (the `idAten` folder).
+ * The download route (`/api/files/download`) is structurally identical
+ * except for the `Content-Disposition` value (it uses `attachment`).
+ * Tests explicitly assert the distinction between the two routes.
  *
  * Path-traversal defense is two-layer:
  *
  * 1. `sanitizeFolderPath` rejects `..`, leading `/`, or leading `\\`
  *    in `?path=` after URL-decoding.
- * 2. `sanitizeDownloadName` rejects any value containing `..`, `/`,
- *    or `\\` in `?filename=` after URL-decoding.
+ * 2. `sanitizeDownloadName` rejects `..`, `/`, or `\\` in `?filename=`.
  * 3. The adapter's `read` re-asserts containment under the patient
  *    root before issuing the `createReadStream` call.
  *
  * Status codes:
- * - 200: streams the file with `Content-Disposition: attachment`.
+ * - 200: streams the file with `Content-Disposition: inline`.
  * - 400: missing args, non-digit `dni`, or path traversal attempt.
  * - 404: file does not exist on the share.
  * - 502: share unreachable / I/O error.
@@ -73,7 +74,7 @@ export async function GET(request: Request): Promise<Response> {
   try {
     safePath = sanitizeFolderPath(rawPath);
   } catch (err) {
-    console.warn('[api/files/download] invalid path', { rawPath, err });
+    console.warn('[api/files/preview] invalid path', { rawPath, err });
     return NextResponse.json({ error: 'path inválido.' }, { status: 400 });
   }
 
@@ -81,7 +82,7 @@ export async function GET(request: Request): Promise<Response> {
   try {
     safe = sanitizeDownloadName(rawName);
   } catch (err) {
-    console.warn('[api/files/download] invalid filename', { rawName, err });
+    console.warn('[api/files/preview] invalid filename', { rawName, err });
     return NextResponse.json({ error: 'filename inválido.' }, { status: 400 });
   }
 
@@ -90,7 +91,7 @@ export async function GET(request: Request): Promise<Response> {
     return new Response(stream as unknown as ReadableStream, {
       headers: {
         'Content-Type': mimeFromExt(safe),
-        'Content-Disposition': `attachment; filename="${safe.replace(/"/g, '')}"`,
+        'Content-Disposition': `inline; filename="${safe.replace(/"/g, '')}"`,
       },
     });
   } catch (err) {
@@ -101,7 +102,7 @@ export async function GET(request: Request): Promise<Response> {
         { status: 404 },
       );
     }
-    console.warn('[api/files/download] read error', { ruc, dni, idAten, path: safePath, name: safe, err });
+    console.warn('[api/files/preview] read error', { ruc, dni, idAten, path: safePath, name: safe, err });
     return NextResponse.json(
       { error: 'No se pudo acceder al servidor de archivos.' },
       { status: 502 },

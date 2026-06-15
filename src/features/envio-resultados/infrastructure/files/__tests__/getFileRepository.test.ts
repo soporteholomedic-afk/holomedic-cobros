@@ -13,8 +13,8 @@ afterEach(() => {
 
 function makeMockRepo(): IFileRepository {
   return {
-    list: vi.fn().mockResolvedValue([]),
-    stream: vi.fn().mockResolvedValue({} as NodeJS.ReadableStream),
+    listFolder: vi.fn().mockResolvedValue([]),
+    read: vi.fn().mockResolvedValue({} as NodeJS.ReadableStream),
   };
 }
 
