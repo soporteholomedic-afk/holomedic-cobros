@@ -1,20 +1,9 @@
 'use client';
 
 import { useEffect, useState, type ReactElement } from 'react';
-import {
-  X,
-  FileText,
-  FileImage,
-  FileSpreadsheet,
-  FileArchive,
-  File as FileGeneric,
-  AlertTriangle,
-  RefreshCw,
-} from 'lucide-react';
-import {
-  usePatientFiles,
-  type FileEntry,
-} from '@/features/envio-resultados/presentation/hooks/usePatientFiles';
+import { X } from 'lucide-react';
+import { FilesExplorerPane } from '@/features/envio-resultados/presentation/components/FilesExplorerPane';
+import { useFileTree } from '@/features/envio-resultados/presentation/hooks/useFileTree';
 
 export interface FilesModalProps {
   ruc: string;
@@ -25,48 +14,15 @@ export interface FilesModalProps {
   onClose: () => void;
 }
 
-type FilesState =
-  | { kind: 'loading' }
-  | { kind: 'empty' }
-  | { kind: 'error'; message: string }
-  | { kind: 'ready'; files: FileEntry[] };
-
-/**
- * Map a file extension to a lucide icon and an optional accent color.
- * Defaults to a generic `File` icon for unknown extensions.
- */
-function iconByExtension(name: string): { Icon: typeof FileGeneric; color: string } {
-  const ext = name.split('.').pop()?.toLowerCase() ?? '';
-  if (ext === 'pdf') return { Icon: FileText, color: 'text-red-500' };
-  if (ext === 'jpg' || ext === 'jpeg' || ext === 'png' || ext === 'gif' || ext === 'webp') {
-    return { Icon: FileImage, color: 'text-sky-500' };
-  }
-  if (ext === 'xls' || ext === 'xlsx' || ext === 'csv') {
-    return { Icon: FileSpreadsheet, color: 'text-emerald-500' };
-  }
-  if (ext === 'doc' || ext === 'docx') {
-    return { Icon: FileText, color: 'text-blue-500' };
-  }
-  if (ext === 'zip' || ext === 'rar' || ext === '7z') {
-    return { Icon: FileArchive, color: 'text-amber-500' };
-  }
-  return { Icon: FileGeneric, color: 'text-slate-500' };
-}
-
-/** Format a byte count into KB/MB for display. */
-function formatSize(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
-  return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
-}
-
 /**
  * Modal that lists the files in a patient's archive folder on the LAN
  * share, with per-file download links and a one-click bulk zip.
  *
- * The modal is a child of the parent component tree (no portal) and
- * mirrors the `CompanyDetailModal` Tailwind conventions: fixed inset-0
- * backdrop, header, scrollable body, footer.
+ * In the patient-file-explorer change, the body is delegated to
+ * `FilesExplorerPane` (a single-column pane for now — the preview
+ * pane lands in PR-B2). The hook that drives the explorer
+ * (`useFileTree`) owns the listing state machine and the
+ * selection/preview state; the modal is a thin shell.
  */
 export function FilesModal({
   ruc,
@@ -76,7 +32,7 @@ export function FilesModal({
   empresa,
   onClose,
 }: FilesModalProps): ReactElement {
-  const { files, loading, error, refetch } = usePatientFiles(ruc, dni, idAten);
+  const { viewState, selectionState, navigate, goUp, selectFile, closeSelection } = useFileTree(ruc, dni, idAten);
   const [zipInFlight, setZipInFlight] = useState(false);
 
   // Escape-key close handler.
@@ -88,15 +44,11 @@ export function FilesModal({
     return () => window.removeEventListener('keydown', onKey);
   }, [onClose]);
 
-  const state: FilesState = loading
-    ? { kind: 'loading' }
-    : error
-    ? { kind: 'error', message: error.message }
-    : files.length === 0
-    ? { kind: 'empty' }
-    : { kind: 'ready', files };
+  const isAtRoot = !(viewState.kind === 'ready' && viewState.currentPath !== '');
 
   const headerTitle = `Archivos — ${nombrePaciente || dni}`;
+  void selectionState; // selectionState is owned by useFileTree; consumed in PR-B2.
+  void closeSelection;
 
   const downloadAllHref =
     `/api/files/download-all?` +
@@ -105,6 +57,8 @@ export function FilesModal({
     `idAten=${encodeURIComponent(idAten)}&` +
     `nombrePaciente=${encodeURIComponent(nombrePaciente)}&` +
     `empresa=${encodeURIComponent(empresa)}`;
+
+  const hasFiles = viewState.kind === 'ready' && viewState.nodes.some((n) => n.kind === 'file');
 
   return (
     <div
@@ -137,85 +91,18 @@ export function FilesModal({
           </button>
         </div>
 
-        {/* Body */}
-        <div className="p-6 overflow-y-auto flex-1 space-y-3">
-          {state.kind === 'loading' && (
-            <div data-testid="files-skeleton" className="space-y-2">
-              {[0, 1, 2].map((i) => (
-                <div
-                  key={i}
-                  className="h-12 rounded-xl bg-slate-100 dark:bg-slate-800 animate-pulse"
-                />
-              ))}
-            </div>
-          )}
-
-          {state.kind === 'empty' && (
-            <p
-              data-testid="files-empty"
-              className="text-sm text-slate-500 dark:text-slate-400 text-center py-12"
-            >
-              No hay archivos para esta ficha
-            </p>
-          )}
-
-          {state.kind === 'error' && (
-            <div
-              data-testid="files-error"
-              className="p-4 rounded-xl bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-900/50 text-red-700 dark:text-red-400 text-sm space-y-3"
-            >
-              <div className="flex items-center space-x-2">
-                <AlertTriangle className="w-4 h-4 flex-shrink-0" />
-                <span>No se pudieron cargar los archivos</span>
-              </div>
-              <button
-                onClick={refetch}
-                className="inline-flex items-center space-x-2 px-3 py-1.5 rounded-lg bg-red-100 dark:bg-red-900/30 hover:bg-red-200 dark:hover:bg-red-900/50 text-red-700 dark:text-red-300 font-semibold transition-colors"
-              >
-                <RefreshCw className="w-4 h-4" />
-                <span>Reintentar</span>
-              </button>
-            </div>
-          )}
-
-          {state.kind === 'ready' && (
-            <ul data-testid="files-list" className="space-y-2">
-              {state.files.map((f) => {
-                const { Icon, color } = iconByExtension(f.name);
-                const href =
-                  `/api/files/download?` +
-                  `ruc=${encodeURIComponent(ruc)}&` +
-                  `dni=${encodeURIComponent(dni)}&` +
-                  `idAten=${encodeURIComponent(idAten)}&` +
-                  `filename=${encodeURIComponent(f.name)}`;
-                return (
-                  <li
-                    key={f.name}
-                    className="flex items-center justify-between p-3 rounded-xl border border-slate-100 dark:border-slate-800 hover:bg-slate-50/50 dark:hover:bg-slate-950/20"
-                  >
-                    <div className="flex items-center space-x-3 min-w-0">
-                      <Icon className={`w-5 h-5 flex-shrink-0 ${color}`} />
-                      <span className="text-sm font-medium text-slate-800 dark:text-slate-200 truncate">
-                        {f.name}
-                      </span>
-                    </div>
-                    <div className="flex items-center space-x-3 flex-shrink-0">
-                      <span className="text-xs font-mono text-slate-400">
-                        {formatSize(f.sizeBytes)}
-                      </span>
-                      <a
-                        href={href}
-                        className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-sky-50 text-sky-700 hover:bg-sky-100"
-                        download
-                      >
-                        Descargar
-                      </a>
-                    </div>
-                  </li>
-                );
-              })}
-            </ul>
-          )}
+        {/* Body — explorer pane (single column for now, master-detail lands in PR-B2) */}
+        <div className="flex-1 overflow-hidden">
+          <FilesExplorerPane
+            viewState={viewState}
+            isAtRoot={isAtRoot}
+            onNavigate={navigate}
+            onGoUp={goUp}
+            onSelect={selectFile}
+            ruc={ruc}
+            dni={dni}
+            idAten={idAten}
+          />
         </div>
 
         {/* Footer */}
@@ -226,7 +113,7 @@ export function FilesModal({
           >
             Cerrar
           </button>
-          {state.kind === 'ready' && state.files.length > 0 ? (
+          {hasFiles ? (
             <a
               href={downloadAllHref}
               onClick={() => setZipInFlight(true)}
