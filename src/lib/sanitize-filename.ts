@@ -52,3 +52,27 @@ export function sanitizeDownloadName(raw: string): string {
   }
   return path.win32.basename(decoded);
 }
+
+/**
+ * Sanitize the `?path=` query parameter for the folder-aware routes
+ * (`/api/files/list-folder`, `/api/files/preview`, `/api/files/download`
+ * once the `?path=` extension lands in PR-B1).
+ *
+ * The folder path MUST allow forward slashes (`subfolder/inner`), so
+ * `path.win32.basename` is NOT appropriate here. The two-layer defense
+ * is what actually blocks traversal:
+ *
+ *   1. URL-decode and reject `..` (after decoding — so `%2E%2E` is
+ *      also caught), leading `/`, or leading `\\`.
+ *   2. The route's containment check (path.win32.resolve + asserts
+ *      resolved path is under the patient root) is the second layer.
+ *
+ * The empty string is a valid value (the patient's root folder).
+ */
+export function sanitizeFolderPath(raw: string): string {
+  if (raw === '') return '';
+  const decoded = decodeURIComponent(raw);
+  if (decoded.includes('..')) throw new Error('path inválido');
+  if (decoded.startsWith('/') || decoded.startsWith('\\')) throw new Error('path inválido');
+  return decoded;
+}
