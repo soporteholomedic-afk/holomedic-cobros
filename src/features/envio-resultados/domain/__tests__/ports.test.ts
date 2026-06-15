@@ -1,8 +1,8 @@
-import { describe, expectTypeOf, it } from 'vitest';
-import type {
-  FileEntry,
-  FileSystemNode,
-  IFileRepository,
+import { describe, expect, expectTypeOf, it } from 'vitest';
+import {
+  type FileEntry,
+  type FileSystemNode,
+  type IFileRepository,
 } from '@/features/envio-resultados/domain/ports';
 
 /**

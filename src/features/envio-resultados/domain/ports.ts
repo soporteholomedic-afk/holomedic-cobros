@@ -1,7 +1,9 @@
 import type { Company, Patient, Spitch, SpitchType, EmailAttachment } from './entities';
+import type { FileSystemNode } from './file-system/FileSystemNode';
 // Re-export the Composite types so consumers can `import { FileSystemNode, IFileRepository }`
 // from a single module surface (the domain port).
-export type { FileNode, FileSystemNode, FileSystemNodeVisitor } from './file-system/FileSystemNode';
+export type { FileNodeKind, FileSystemNode, FileSystemNodeVisitor } from './file-system/FileSystemNode';
+export type { FileNode } from './file-system/FileNode';
 export { createFileNode } from './file-system/FileNode';
 export type { FolderNode } from './file-system/FolderNode';
 export { createFolderNode } from './file-system/FolderNode';

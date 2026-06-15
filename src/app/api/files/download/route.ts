@@ -1,12 +1,6 @@
-import { createReadStream, promises as fs } from 'node:fs';
-import * as path from 'node:path';
 import { NextResponse } from 'next/server';
+import { getFileRepository } from '@/features/envio-resultados/infrastructure/files/getFileRepository';
 import { sanitizeDownloadName } from '@/lib/sanitize-filename';
-
-/** Files larger than this emit a structured `console.warn`. Not surfaced. */
-const SIZE_WARN_BYTES = 50 * 1024 * 1024;
-
-const BASE_PATH = process.env.FILE_SERVER_BASE_PATH ?? '';
 
 /** Minimal content-type lookup by extension. */
 function mimeFromExt(name: string): string {
@@ -32,13 +26,18 @@ function mimeFromExt(name: string): string {
  * GET /api/files/download?ruc&dni&idAten&filename
  *
  * Streams a single file from the patient's archive folder on the LAN
- * share. Two layers of path-traversal defense:
+ * share. The path composition and `fs` calls live inside the
+ * `IFileRepository.read` adapter so this route stays a thin shell.
+ *
+ * Path-traversal defense is two-layer:
  *
  * 1. `sanitizeDownloadName` rejects any value containing `..`, `/`,
  *    or `\\` after URL-decoding.
- * 2. The composed path is `path.resolve`-d and asserted to remain
- *    under the folder — defense in depth in case a future code path
- *    forgets to sanitize.
+ * 2. The adapter's `read` re-asserts containment under the patient
+ *    root before issuing the `createReadStream` call.
+ *
+ * The `?path=` subfolder parameter is added in PR-B1 (the preview
+ * data layer).
  *
  * Status codes:
  * - 200: streams the file with `Content-Disposition: attachment`.
@@ -74,44 +73,26 @@ export async function GET(request: Request): Promise<Response> {
     return NextResponse.json({ error: 'filename inválido.' }, { status: 400 });
   }
 
-  const folder = path.win32.join(BASE_PATH, ruc, dni, idAten);
-  const full = path.win32.resolve(folder, safe);
-  const resolvedFolder = path.win32.resolve(folder);
-  if (
-    full !== resolvedFolder &&
-    !full.startsWith(resolvedFolder + path.win32.sep)
-  ) {
-    console.warn('[api/files/download] path traversal attempt', { rawName, full });
-    return NextResponse.json({ error: 'filename inválido.' }, { status: 400 });
-  }
-
-  let stat;
   try {
-    stat = await fs.stat(full);
+    const stream = await getFileRepository().read(ruc, dni, idAten, '', safe);
+    return new Response(stream as unknown as ReadableStream, {
+      headers: {
+        'Content-Type': mimeFromExt(safe),
+        'Content-Disposition': `attachment; filename="${safe.replace(/"/g, '')}"`,
+      },
+    });
   } catch (err) {
-    if ((err as NodeJS.ErrnoException).code === 'ENOENT') {
+    const code = (err as NodeJS.ErrnoException).code;
+    if (code === 'ENOENT') {
       return NextResponse.json(
         { error: 'Archivo no encontrado.' },
         { status: 404 },
       );
     }
-    console.warn('[api/files/download] stat error', { full, err });
+    console.warn('[api/files/download] read error', { ruc, dni, idAten, name: safe, err });
     return NextResponse.json(
       { error: 'No se pudo acceder al servidor de archivos.' },
       { status: 502 },
     );
   }
-
-  if (stat.size > SIZE_WARN_BYTES) {
-    console.warn('[api/files/download] large file', { name: safe, size: stat.size });
-  }
-
-  const stream = createReadStream(full);
-  return new Response(stream as unknown as ReadableStream, {
-    headers: {
-      'Content-Type': mimeFromExt(safe),
-      'Content-Disposition': `attachment; filename="${safe.replace(/"/g, '')}"`,
-      'Content-Length': String(stat.size),
-    },
-  });
 }

@@ -1,32 +1,18 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-
-// Mock `node:fs` at the module boundary — the route uses `fs.promises.stat`
-// and `fs.createReadStream` directly (the download path does not go through
-// the repository because it needs the per-file stream, not the listing).
-const mockStat = vi.hoisted(() => vi.fn());
-const mockCreateReadStream = vi.hoisted(() => vi.fn());
-
-vi.mock('node:fs', () => {
-  const promises = { stat: mockStat };
-  return {
-    promises,
-    createReadStream: mockCreateReadStream,
-    default: { promises, createReadStream: mockCreateReadStream },
-  };
-});
-
-vi.hoisted(() => {
-  process.env.FILE_SERVER_BASE_PATH = '\\\\172.16.10.12\\sigla';
-});
-
 import { Readable } from 'node:stream';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { __setFileRepositoryForTests } from '@/features/envio-resultados/infrastructure/files/getFileRepository';
 import type { IFileRepository } from '@/features/envio-resultados/domain/ports';
 
-function makeMockRepo(): IFileRepository {
+/**
+ * The download route delegates to `IFileRepository.read`; the test seam
+ * injects a mock that records the call. ENOENT and I/O errors are
+ * surfaced via the rejected promise.
+ */
+function makeMockRepo(overrides: { read?: ReturnType<typeof vi.fn<() => Promise<NodeJS.ReadableStream>>> } = {}): IFileRepository {
+  const readFn = overrides.read ?? vi.fn<() => Promise<NodeJS.ReadableStream>>().mockResolvedValue({} as NodeJS.ReadableStream);
   return {
-    list: vi.fn().mockResolvedValue([]),
-    stream: vi.fn().mockResolvedValue({} as NodeJS.ReadableStream),
+    listFolder: vi.fn().mockResolvedValue([]),
+    read: readFn,
   };
 }
 
@@ -87,9 +73,10 @@ describe('GET /api/files/download', () => {
     expect(res.status).toBe(400);
   });
 
-  it('returns 404 when the file does not exist (ENOENT)', async () => {
+  it('returns 404 when the adapter throws ENOENT', async () => {
     const err = Object.assign(new Error('ENOENT'), { code: 'ENOENT' });
-    mockStat.mockRejectedValueOnce(err);
+    const mockRead = vi.fn<() => Promise<NodeJS.ReadableStream>>().mockRejectedValue(err);
+    __setFileRepositoryForTests(makeMockRepo({ read: mockRead }));
 
     const { GET } = await import('../route');
     const req = new Request(
@@ -102,9 +89,10 @@ describe('GET /api/files/download', () => {
     expect(body.error.toLowerCase()).toContain('no encontrado');
   });
 
-  it('returns 502 on non-ENOENT stat errors', async () => {
+  it('returns 502 on non-ENOENT adapter errors', async () => {
     const err = Object.assign(new Error('EACCES'), { code: 'EACCES' });
-    mockStat.mockRejectedValueOnce(err);
+    const mockRead = vi.fn<() => Promise<NodeJS.ReadableStream>>().mockRejectedValue(err);
+    __setFileRepositoryForTests(makeMockRepo({ read: mockRead }));
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
 
     const { GET } = await import('../route');
@@ -118,14 +106,10 @@ describe('GET /api/files/download', () => {
     warnSpy.mockRestore();
   });
 
-  it('returns 200 with the file stream and Content-Disposition when the file exists', async () => {
-    mockStat.mockResolvedValueOnce({
-      size: 4096,
-      isFile: () => true,
-      mtime: new Date('2026-01-01T00:00:00Z'),
-    });
+  it('returns 200 with the file stream and Content-Disposition: attachment when the file exists', async () => {
     const fakeStream = new Readable({ read() {} });
-    mockCreateReadStream.mockReturnValueOnce(fakeStream);
+    const mockRead = vi.fn<() => Promise<NodeJS.ReadableStream>>().mockResolvedValue(fakeStream);
+    __setFileRepositoryForTests(makeMockRepo({ read: mockRead }));
 
     const { GET } = await import('../route');
     const req = new Request(
@@ -135,30 +119,23 @@ describe('GET /api/files/download', () => {
 
     expect(res.status).toBe(200);
     expect(res.headers.get('Content-Disposition')).toBe('attachment; filename="informe.pdf"');
-    expect(res.headers.get('Content-Length')).toBe('4096');
-    expect(mockCreateReadStream).toHaveBeenCalledWith(
-      '\\\\172.16.10.12\\sigla\\RUC\\12345678\\AT-001\\informe.pdf',
-    );
+    expect(res.headers.get('Content-Type')).toBe('application/pdf');
+    expect(mockRead).toHaveBeenCalledWith('RUC', '12345678', 'AT-001', '', 'informe.pdf');
   });
 
-  it('warn-logs when a file is over 50 MB (cosmetic, no test of UI surface)', async () => {
-    mockStat.mockResolvedValueOnce({
-      size: 60 * 1024 * 1024,
-      isFile: () => true,
-      mtime: new Date('2026-01-01T00:00:00Z'),
-    });
+  it('NEVER returns Content-Disposition: inline (the inline disposition is reserved for /preview)', async () => {
     const fakeStream = new Readable({ read() {} });
-    mockCreateReadStream.mockReturnValueOnce(fakeStream);
-    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const mockRead = vi.fn<() => Promise<NodeJS.ReadableStream>>().mockResolvedValue(fakeStream);
+    __setFileRepositoryForTests(makeMockRepo({ read: mockRead }));
 
     const { GET } = await import('../route');
     const req = new Request(
-      'http://localhost/api/files/download?ruc=RUC&dni=12345678&idAten=AT-001&filename=big.bin',
+      'http://localhost/api/files/download?ruc=RUC&dni=12345678&idAten=AT-001&filename=informe.pdf',
     );
     const res = await GET(req);
 
-    expect(res.status).toBe(200);
-    expect(warnSpy).toHaveBeenCalled();
-    warnSpy.mockRestore();
+    const disposition = res.headers.get('Content-Disposition') ?? '';
+    expect(disposition.startsWith('inline')).toBe(false);
+    expect(disposition.startsWith('attachment')).toBe(true);
   });
 });
