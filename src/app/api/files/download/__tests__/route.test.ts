@@ -138,4 +138,79 @@ describe('GET /api/files/download', () => {
     expect(disposition.startsWith('inline')).toBe(false);
     expect(disposition.startsWith('attachment')).toBe(true);
   });
+
+  describe('?path= subfolder support (PR-B1)', () => {
+    it('passes the ?path= argument to the repository for subfolder downloads', async () => {
+      const fakeStream = new Readable({ read() {} });
+      const mockRead = vi.fn<() => Promise<NodeJS.ReadableStream>>().mockResolvedValue(fakeStream);
+      __setFileRepositoryForTests(makeMockRepo({ read: mockRead }));
+
+      const { GET } = await import('../route');
+      const req = new Request(
+        'http://localhost/api/files/download?ruc=RUC&dni=12345678&idAten=AT-001&path=subfolder%2Finner&filename=informe.pdf',
+      );
+      const res = await GET(req);
+
+      expect(res.status).toBe(200);
+      expect(res.headers.get('Content-Disposition')).toBe('attachment; filename="informe.pdf"');
+      expect(mockRead).toHaveBeenCalledWith('RUC', '12345678', 'AT-001', 'subfolder/inner', 'informe.pdf');
+    });
+
+    it('passes the empty string when ?path= is missing (root folder — existing behavior)', async () => {
+      const fakeStream = new Readable({ read() {} });
+      const mockRead = vi.fn<() => Promise<NodeJS.ReadableStream>>().mockResolvedValue(fakeStream);
+      __setFileRepositoryForTests(makeMockRepo({ read: mockRead }));
+
+      const { GET } = await import('../route');
+      const req = new Request(
+        'http://localhost/api/files/download?ruc=RUC&dni=12345678&idAten=AT-001&filename=informe.pdf',
+      );
+      const res = await GET(req);
+
+      expect(res.status).toBe(200);
+      expect(mockRead).toHaveBeenCalledWith('RUC', '12345678', 'AT-001', '', 'informe.pdf');
+    });
+
+    it('returns 400 on path traversal in ?path=', async () => {
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const { GET } = await import('../route');
+      const req = new Request(
+        'http://localhost/api/files/download?ruc=RUC&dni=12345678&idAten=AT-001&path=..%2F..%2Fetc&filename=informe.pdf',
+      );
+      const res = await GET(req);
+
+      expect(res.status).toBe(400);
+      expect(warnSpy).toHaveBeenCalled();
+      warnSpy.mockRestore();
+    });
+
+    it('returns 400 on Windows-style path traversal in ?path=', async () => {
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const { GET } = await import('../route');
+      const req = new Request(
+        'http://localhost/api/files/download?ruc=RUC&dni=12345678&idAten=AT-001&path=..%5C..%5CWindows&filename=informe.pdf',
+      );
+      const res = await GET(req);
+
+      expect(res.status).toBe(400);
+      expect(warnSpy).toHaveBeenCalled();
+      warnSpy.mockRestore();
+    });
+
+    it('the Content-Disposition is STILL `attachment` when ?path= is used (NEVER inline)', async () => {
+      const fakeStream = new Readable({ read() {} });
+      const mockRead = vi.fn<() => Promise<NodeJS.ReadableStream>>().mockResolvedValue(fakeStream);
+      __setFileRepositoryForTests(makeMockRepo({ read: mockRead }));
+
+      const { GET } = await import('../route');
+      const req = new Request(
+        'http://localhost/api/files/download?ruc=RUC&dni=12345678&idAten=AT-001&path=subfolder&filename=informe.pdf',
+      );
+      const res = await GET(req);
+
+      const disposition = res.headers.get('Content-Disposition') ?? '';
+      expect(disposition.startsWith('attachment')).toBe(true);
+      expect(disposition.startsWith('inline')).toBe(false);
+    });
+  });
 });

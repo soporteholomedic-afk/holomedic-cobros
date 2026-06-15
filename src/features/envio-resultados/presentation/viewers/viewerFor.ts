@@ -1,4 +1,7 @@
 import type { FileViewer } from './FileViewer';
+import { PdfViewer } from './PdfViewer';
+import { TxtViewer } from './TxtViewer';
+import { ImageViewer } from './ImageViewer';
 import { NoPreviewViewer } from './NoPreviewViewer';
 
 /**
@@ -6,12 +9,19 @@ import { NoPreviewViewer } from './NoPreviewViewer';
  * given filename. `NoPreviewViewer` is the last entry — it matches
  * everything, so the factory always returns a viewer.
  *
- * Concrete strategies (`PdfViewer`, `TxtViewer`, `ImageViewer`) are
- * added by PR-B1; until then only the `NoPreviewViewer` exists, so
- * every file renders the fallback. The chain order is preserved so
- * the B1 PRs just prepend their strategies.
+ * The `viewerFor` factory is the only place where concrete viewer
+ * classes are instantiated — the modal never imports them directly.
+ *
+ * Order matters: concrete strategies come first (most specific), the
+ * `NoPreviewViewer` fallback comes last. Adding a new previewable
+ * type means adding one line here.
  */
-const VIEWERS: readonly FileViewer[] = [new NoPreviewViewer()];
+const VIEWERS: readonly FileViewer[] = [
+  new PdfViewer(),
+  new TxtViewer(),
+  new ImageViewer(),
+  new NoPreviewViewer(),
+];
 
 export function viewerFor(name: string): FileViewer {
   return VIEWERS.find((v) => v.canPreview(name)) ?? new NoPreviewViewer();
