@@ -344,4 +344,48 @@ describe('useFileTree', () => {
     // race-protection test above.
     expect(true).toBe(true);
   });
+
+  it('selectFile(file) without folderPath defaults to the LAST CONFIRMED tree path', async () => {
+    // Mount + initial root fetch — confirms pathRef stays at ''.
+    mockFetch.mockResolvedValueOnce(makeJsonResponse(200, { nodes: [] }));
+
+    const { useFileTree } = await import('../useFileTree');
+    const { result } = renderHook(() => useFileTree('RUC', '12345678', 'AT-001'));
+
+    await waitFor(() => {
+      expect(result.current.viewState.kind).not.toBe('loading');
+    });
+
+    const file = createFileNode({ name: 'a.pdf', sizeBytes: 1, modifiedAt: '2026-01-01T00:00:00.000Z' });
+    await act(async () => {
+      result.current.selectFile(file);
+    });
+
+    if (result.current.selectionState.kind !== 'previewing') throw new Error('expected previewing');
+    expect(result.current.selectionState.folderPath).toBe('');
+  });
+
+  it('selectFile(file, "LEGAJOS") records the explicit folderPath on selectionState', async () => {
+    mockFetch.mockResolvedValueOnce(makeJsonResponse(200, { nodes: [] }));
+
+    const { useFileTree } = await import('../useFileTree');
+    const { result } = renderHook(() => useFileTree('RUC', '12345678', 'AT-001'));
+
+    await waitFor(() => {
+      expect(result.current.viewState.kind).not.toBe('loading');
+    });
+
+    const file = createFileNode({
+      name: '75618561CERT.pdf',
+      sizeBytes: 1,
+      modifiedAt: '2026-01-01T00:00:00.000Z',
+    });
+    await act(async () => {
+      result.current.selectFile(file, 'LEGAJOS');
+    });
+
+    if (result.current.selectionState.kind !== 'previewing') throw new Error('expected previewing');
+    expect(result.current.selectionState.folderPath).toBe('LEGAJOS');
+    expect(result.current.selectionState.file.name).toBe('75618561CERT.pdf');
+  });
 });
