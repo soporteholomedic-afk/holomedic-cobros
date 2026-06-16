@@ -983,4 +983,87 @@ describe('WorkerDetailTable — Unified Table', () => {
       expect(patients[0]?.files[0]?.size).toBe(999);
     });
   });
+
+  // ================================================================
+  // PR #3 — Spec REQ-1: WorkerDetailTable forwards `fileRefs` from
+  // `emailViewData.fileRefs` to `<EmailEditor />`. The bridge
+  // (PR #1) builds the array; PR #3 only wires it through.
+  // ================================================================
+
+  it('should forward emailViewData.fileRefs to EmailEditor (PR #3 wiring)', async () => {
+    // The trigger-send stub fires onSend with two refs:
+    //   'LEGAJOS::cert.pdf'  → path: 'LEGAJOS', name: 'cert.pdf'
+    //   '::emo.pdf'          → path: '',          name: 'emo.pdf'
+    // The bridge must surface both folder paths; PR #3 forwards the
+    // resulting `fileRefs` array to EmailEditor as a prop.
+    const person = makeUnifiedPerson();
+    mockUseUnifiedResults.mockReturnValue({
+      people: [person],
+      loading: false,
+      error: null,
+    });
+
+    render(<WorkerDetailTable {...DEFAULT_PROPS} />);
+    fireEvent.click(screen.getByRole('button', { name: /Ver Archivos/ }));
+    fireEvent.click(screen.getByTestId('files-modal-stub-trigger-onsend'));
+
+    const lastProps =
+      mockEmailEditorProps.mock.calls[mockEmailEditorProps.mock.calls.length - 1]?.[0];
+    const fileRefs = lastProps?.['fileRefs'] as Array<{
+      ruc: string;
+      dni: string;
+      idAten: string;
+      path: string;
+      name: string;
+    }>;
+
+    expect(fileRefs).toHaveLength(2);
+    expect(fileRefs[0]).toEqual({
+      ruc: '20123456789', // makeFicha default nroRuc
+      dni: '12345678',    // makeUnifiedPerson default dni
+      idAten: 'ATE-001',  // makeFicha default idAten
+      path: 'LEGAJOS',
+      name: 'cert.pdf',
+    });
+    expect(fileRefs[1]).toEqual({
+      ruc: '20123456789',
+      dni: '12345678',
+      idAten: 'ATE-001',
+      path: '',
+      name: 'emo.pdf',
+    });
+  });
+
+  it('should forward an empty fileRefs array when zero files are selected', async () => {
+    // Triangulation: zero-file path. WorkerDetailTable still mounts
+    // the overlay, and EmailEditor receives `fileRefs: []` (no throw).
+    const person = makeUnifiedPerson();
+    mockUseUnifiedResults.mockReturnValue({
+      people: [person],
+      loading: false,
+      error: null,
+    });
+
+    const captured: { onSend?: (selected: ReadonlyMap<string, FileNode>) => void } = {};
+    const origMock = mockFilesModalProps.getMockImplementation();
+    mockFilesModalProps.mockImplementation((props: Record<string, unknown>) => {
+      captured.onSend = props['onSend'] as (selected: ReadonlyMap<string, FileNode>) => void;
+      return origMock ? origMock(props) : undefined;
+    });
+
+    render(<WorkerDetailTable {...DEFAULT_PROPS} />);
+    fireEvent.click(screen.getByRole('button', { name: /Ver Archivos/ }));
+
+    act(() => {
+      captured.onSend?.(new Map());
+    });
+
+    await waitFor(() => {
+      expect(screen.getByTestId('email-editor-overlay')).toBeInTheDocument();
+    });
+    const lastProps =
+      mockEmailEditorProps.mock.calls[mockEmailEditorProps.mock.calls.length - 1]?.[0];
+    const fileRefs = lastProps?.['fileRefs'] as unknown[];
+    expect(fileRefs).toEqual([]);
+  });
 });

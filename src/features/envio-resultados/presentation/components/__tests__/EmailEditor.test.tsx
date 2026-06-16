@@ -54,6 +54,16 @@ vi.mock('../AttachmentList', () => ({
 const mockFetch = vi.hoisted(() => vi.fn());
 vi.stubGlobal('fetch', mockFetch);
 
+// PR #3 — capture the args useSendResults is called with so we can
+// assert the EmailEditor forwards `fileRefs` correctly. The mock
+// returns a stable object so the rest of the EmailEditor render path
+// (send button disabled state, SendConfirmation result/error display)
+// keeps working without us having to satisfy the real hook contract.
+const mockUseSendResults = vi.hoisted(() => vi.fn());
+vi.mock('../../hooks/useSendResults', () => ({
+  useSendResults: mockUseSendResults,
+}));
+
 // ---- Import under test ----
 import { EmailEditor } from '../EmailEditor';
 import type { Patient, SelectedFileRef } from '../../../domain/entities';
@@ -96,6 +106,14 @@ const defaultProps = {
 beforeEach(() => {
   vi.clearAllMocks();
   mockFetch.mockReset();
+  // Default return — a stable object so the EmailEditor render path
+  // stays green. PR #3 tests override this per-test to assert hook args.
+  mockUseSendResults.mockReturnValue({
+    send: vi.fn(),
+    isSending: false,
+    result: null,
+    error: null,
+  });
 });
 
 describe('EmailEditor', () => {
@@ -269,5 +287,73 @@ describe('EmailEditor', () => {
     expect(() => render(<EmailEditor {...propsWithoutFileRefs} />)).not.toThrow();
     // No envíar available until user fills the recipient — render is enough.
     expect(screen.getByText('Cómo va el resultado')).toBeInTheDocument();
+  });
+
+  // ================================================================
+  // PR #3 — Spec REQ-1: EmailEditor forwards `fileRefs` to the hook.
+  // The hook call is the only place the wire payload originates on
+  // the client, so this assertion is the contract.
+  // ================================================================
+
+  it('should forward the fileRefs prop to useSendResults (same array, verbatim)', () => {
+    mockFetch.mockResolvedValue({ ok: true, json: () => Promise.resolve({ success: true }) });
+
+    const fileRefs: SelectedFileRef[] = [
+      { ruc: '20123456789', dni: '12345678', idAten: 'AT-001', path: 'LEGAJOS', name: 'cert.pdf' },
+      { ruc: '20123456789', dni: '12345678', idAten: 'AT-001', path: '', name: 'emo.pdf' },
+    ];
+
+    render(<EmailEditor {...defaultProps} fileRefs={fileRefs} />);
+
+    expect(mockUseSendResults).toHaveBeenCalled();
+    const lastCall = mockUseSendResults.mock.calls[mockUseSendResults.mock.calls.length - 1]?.[0] as {
+      fileRefs: SelectedFileRef[];
+    };
+    expect(lastCall.fileRefs).toEqual(fileRefs);
+  });
+
+  it('should pass an empty fileRefs array to useSendResults when the prop is omitted', () => {
+    mockFetch.mockResolvedValue({ ok: true, json: () => Promise.resolve({ success: true }) });
+
+    const { fileRefs: _omitted, ...propsWithoutFileRefs } = defaultProps;
+    void _omitted;
+
+    render(<EmailEditor {...propsWithoutFileRefs} />);
+
+    const lastCall = mockUseSendResults.mock.calls[mockUseSendResults.mock.calls.length - 1]?.[0] as {
+      fileRefs: SelectedFileRef[];
+    };
+    expect(lastCall.fileRefs).toEqual([]);
+  });
+
+  it('should NOT pass a `files` array to useSendResults (legacy field removed)', () => {
+    // Regression guard — the prior hook signature accepted
+    // `files: PatientFile[]`. PR #3 removes that argument and the
+    // EmailEditor MUST NOT keep threading it through.
+    mockFetch.mockResolvedValue({ ok: true, json: () => Promise.resolve({ success: true }) });
+
+    render(<EmailEditor {...defaultProps} />);
+
+    const lastCall = mockUseSendResults.mock.calls[mockUseSendResults.mock.calls.length - 1]?.[0] as Record<string, unknown>;
+    expect('files' in lastCall).toBe(false);
+  });
+
+  it('should preserve the explorer-pane folder path in the fileRefs forwarded to the hook', () => {
+    // Triangulation: a fileRef with a non-empty folder path must
+    // survive end-to-end. The bridge (PR #1) preserves it; the
+    // EmailEditor must not strip it.
+    mockFetch.mockResolvedValue({ ok: true, json: () => Promise.resolve({ success: true }) });
+
+    const fileRefs: SelectedFileRef[] = [
+      { ruc: '20123456789', dni: '12345678', idAten: 'AT-001', path: 'EXAMENES/2024', name: 'emo.pdf' },
+    ];
+
+    render(<EmailEditor {...defaultProps} fileRefs={fileRefs} />);
+
+    const lastCall = mockUseSendResults.mock.calls[mockUseSendResults.mock.calls.length - 1]?.[0] as {
+      fileRefs: SelectedFileRef[];
+    };
+    expect(lastCall.fileRefs[0]?.path).toBe('EXAMENES/2024');
+    expect(lastCall.fileRefs[0]?.name).toBe('emo.pdf');
   });
 });

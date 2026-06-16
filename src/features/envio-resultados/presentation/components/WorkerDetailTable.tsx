@@ -213,6 +213,11 @@ export function WorkerDetailTable({ companyName, fechaInicio, fechaFin }: Worker
               companyName={emailViewData.companyName}
               selectedPatients={emailViewData.selectedPatients}
               patients={emailViewData.patients}
+              // PR #3 — forward the bridged `fileRefs` (LAN-share
+              // location triple + relative path + name) so the hook
+              // can serialise them as the wire payload. `PatientFile`
+              // (display) stays in `patients` for the AttachmentList.
+              fileRefs={emailViewData.fileRefs}
             />
           </div>
         </section>
