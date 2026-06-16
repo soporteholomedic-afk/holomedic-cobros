@@ -183,6 +183,30 @@ describe('emailViewDataFromFiles (bridge helper)', () => {
     });
   });
 
+  it('emits fileRefs with LEGAJOS path for a ready-pane ref "LEGAJOS::name"', () => {
+    const person = makePerson();
+    const ficha = makeFicha();
+    const fileA = createFileNode({ name: 'cert.pdf', sizeBytes: 100, modifiedAt: '2026-06-01T00:00:00.000Z' });
+
+    const result = emailViewDataFromFiles(
+      person,
+      ficha,
+      [fileA],
+      ['LEGAJOS::cert.pdf'],
+      'uuid-company-1',
+      'Holomedic S.A.',
+    );
+
+    expect(result.fileRefs).toHaveLength(1);
+    expect(result.fileRefs[0]).toEqual<SelectedFileRef>({
+      ruc: ficha.nroRuc,
+      dni: person.dni,
+      idAten: ficha.idAten,
+      path: 'LEGAJOS',
+      name: 'cert.pdf',
+    });
+  });
+
   it('emits fileRefs with the explorer-pane folder path (not lossy "::name")', () => {
     // This is the regression the design calls out: WorkerDetailTable
     // used to synthesise `::${name}`, dropping the explorer-pane

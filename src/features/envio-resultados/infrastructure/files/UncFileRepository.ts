@@ -118,7 +118,26 @@ export class UncFileRepository implements IFileRepository {
   ): Promise<NodeJS.ReadableStream> {
     const folder = joinFolder(ruc, dni, idAten, relativePath);
     const filePath = joinFile(folder, name);
-    return createReadStream(filePath);
+    console.log('[UncFileRepository.read]', {
+      basePath: BASE_PATH,
+      ruc,
+      dni,
+      idAten,
+      relativePath,
+      name,
+      resolvedFolder: folder,
+      resolvedFilePath: filePath,
+    });
+    try {
+      return createReadStream(filePath);
+    } catch (err) {
+      console.error('[UncFileRepository.read] FAILED', {
+        resolvedFilePath: filePath,
+        code: (err as NodeJS.ErrnoException).code,
+        message: err instanceof Error ? err.message : 'unknown error',
+      });
+      throw err;
+    }
   }
 
   /**

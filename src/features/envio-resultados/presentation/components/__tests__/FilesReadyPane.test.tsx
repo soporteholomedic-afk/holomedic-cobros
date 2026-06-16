@@ -98,7 +98,7 @@ describe('FilesReadyPane', () => {
     }
   });
 
-  it('clicking the checkbox calls onToggle with "::" + name and the FileNode', () => {
+  it('clicking the checkbox calls onToggle with "LEGAJOS::" + name and the FileNode', () => {
     const onToggle = vi.fn();
     render(
       <FilesReadyPane
@@ -111,7 +111,7 @@ describe('FilesReadyPane', () => {
     const checkboxes = screen.getAllByRole('checkbox');
     fireEvent.click(checkboxes[0]!);
     expect(onToggle).toHaveBeenCalledTimes(1);
-    expect(onToggle).toHaveBeenCalledWith('::75618561CERT.pdf', sampleFiles[0]);
+    expect(onToggle).toHaveBeenCalledWith('LEGAJOS::75618561CERT.pdf', sampleFiles[0]);
   });
 
   it('checkbox click does NOT trigger onSelect (no Visualizar side-effect)', () => {
@@ -129,9 +129,9 @@ describe('FilesReadyPane', () => {
     expect(onSelect).not.toHaveBeenCalled();
   });
 
-  it('checked state mirrors selectedRefs.has("::" + name) when selectedRefs is provided', () => {
+  it('checked state mirrors selectedRefs.has("LEGAJOS::" + name) when selectedRefs is provided', () => {
     // Only the second file is in the selection set.
-    const selectedRefs = new Set<string>(['::012109975EXPED.pdf']);
+    const selectedRefs = new Set<string>(['LEGAJOS::012109975EXPED.pdf']);
     render(
       <FilesReadyPane
         {...baseProps}

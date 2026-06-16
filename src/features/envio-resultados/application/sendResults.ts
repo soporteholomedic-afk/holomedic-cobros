@@ -113,12 +113,22 @@ export class SendResultsUseCase {
 
     // ---- 2. Sanitise + read + collect ----
     const attachments: EmailAttachment[] = [];
+    console.log('[SendResultsUseCase.execute] starting file resolution', {
+      count: params.fileRefs.length,
+      refs: params.fileRefs,
+    });
     for (const ref of params.fileRefs) {
       let safePath: string;
       let safeName: string;
       try {
         ({ safePath, safeName } = sanitizeRef(ref));
+        console.log('[SendResultsUseCase.execute] sanitised ref', {
+          original: ref,
+          safePath,
+          safeName,
+        });
       } catch (err) {
+        console.error('[SendResultsUseCase.execute] sanitisation failed', { ref, err });
         return {
           success: false,
           code: 'VALIDATION_ERROR',
@@ -137,6 +147,13 @@ export class SendResultsUseCase {
         );
       } catch (err) {
         const code = (err as NodeJS.ErrnoException).code;
+        console.error('[SendResultsUseCase.execute] read failed', {
+          ref,
+          safePath,
+          safeName,
+          code,
+          error: err instanceof Error ? err.message : 'I/O error',
+        });
         if (code === 'ENOENT') {
           return {
             success: false,

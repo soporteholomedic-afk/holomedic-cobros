@@ -1030,13 +1030,13 @@ describe('FilesModal', () => {
     fireEvent.click(screen.getByTestId('files-modal-send'));
 
     expect(onSend).toHaveBeenCalledTimes(1);
-    // Payload is now a Map keyed by fileRef ("::name" for the ready pane).
+    // Payload is now a Map keyed by fileRef ("LEGAJOS::name" for the ready pane).
     const payload = onSend.mock.calls[0]?.[0] as ReadonlyMap<string, FileNode>;
     expect(payload).toBeInstanceOf(Map);
     expect(payload.size).toBe(2);
     // Insertion order preserved.
-    expect(payload.get('::a.pdf')).toBe(readyFiles[0]);
-    expect(payload.get('::b.pdf')).toBe(readyFiles[1]);
+    expect(payload.get('LEGAJOS::a.pdf')).toBe(readyFiles[0]);
+    expect(payload.get('LEGAJOS::b.pdf')).toBe(readyFiles[1]);
   });
 
   it('does not throw when "Enviar" is clicked without an onSend handler (optional prop)', () => {

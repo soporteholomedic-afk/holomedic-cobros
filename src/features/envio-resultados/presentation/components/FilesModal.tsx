@@ -75,7 +75,7 @@ export function FilesModal({
   const [zipInFlight, setZipInFlight] = useState(false);
   const [isMaximized, setIsMaximized] = useState(false);
   // PR #3 — selection state. Keyed by `${folderPath}::${file.name}`.
-  // For the ready pane, `folderPath` is `''` → ref is `::name`.
+  // For the ready pane, `folderPath` is `LEGAJOS` → ref is `LEGAJOS::name`.
   // For the explorer pane, `folderPath` is `viewState.currentPath`.
   const [selectedFilesMap, setSelectedFilesMap] = useState<Map<string, FileNode>>(
     () => new Map(),
@@ -111,7 +111,7 @@ export function FilesModal({
       let changed = false;
       const next = new Map(prev);
       for (const file of readyState.files) {
-        const ref = `::${file.name}`;
+        const ref = `${READY_FOLDER}::${file.name}`;
         if (!next.has(ref)) {
           next.set(ref, file);
           changed = true;
