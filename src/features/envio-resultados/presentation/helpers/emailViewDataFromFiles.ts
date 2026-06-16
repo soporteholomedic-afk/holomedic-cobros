@@ -10,6 +10,7 @@ const PDF_MIME = 'application/pdf';
  */
 export interface EmailViewData {
   companyId: string;
+  companyName: string;
   selectedPatients: {
     [patientId: string]: { patientName: string; files: string[] };
   };
@@ -30,6 +31,7 @@ export function emailViewDataFromFiles(
   selected: FileNode[],
   refs: readonly string[],
   companyId: string,
+  companyName: string,
 ): EmailViewData {
   if (selected.length !== refs.length) {
     throw new Error('emailViewDataFromFiles: `selected` and `refs` must be parallel arrays of equal length');
@@ -46,6 +48,7 @@ export function emailViewDataFromFiles(
 
   return {
     companyId,
+    companyName,
     selectedPatients: {
       [patientId]: {
         patientName: person.nombre,

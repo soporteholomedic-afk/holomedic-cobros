@@ -5,6 +5,7 @@ import type { PatientFile } from '../../domain/entities';
 
 export interface UseSendResultsArgs {
   to: string[];
+  cc?: string[];
   subject: string;
   html: string;
   files: PatientFile[];
@@ -30,6 +31,9 @@ export function useSendResults(args: UseSendResultsArgs): UseSendResultsReturn {
     try {
       const formData = new FormData();
       formData.append('to', args.to.join(','));
+      if (args.cc && args.cc.length > 0) {
+        formData.append('cc', args.cc.join(','));
+      }
       formData.append('subject', args.subject);
       formData.append('html', args.html);
 
@@ -58,7 +62,7 @@ export function useSendResults(args: UseSendResultsArgs): UseSendResultsReturn {
     } finally {
       setIsSending(false);
     }
-  }, [args.to, args.subject, args.html, args.files]);
+  }, [args.to, args.cc, args.subject, args.html, args.files]);
 
   return {
     send,

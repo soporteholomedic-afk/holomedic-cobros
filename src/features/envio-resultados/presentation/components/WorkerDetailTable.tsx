@@ -79,7 +79,7 @@ export function WorkerDetailTable({ companyName, fechaInicio, fechaFin }: Worker
       const ficha = person.fichas[modalState.fichaIndex] ?? null;
       const companyId = resolveCompanyId(companies, person.empresa);
       const refs = files.map((file) => `::${file.name}`);
-      setEmailViewData(emailViewDataFromFiles(person, ficha, files, refs, companyId));
+      setEmailViewData(emailViewDataFromFiles(person, ficha, files, refs, companyId, companyName));
       // Close the modal so the overlay can take its place. The
       // conditional render `modalState && !emailViewData` would also
       // hide it via the emailViewData flag, but clearing modalState
@@ -87,7 +87,7 @@ export function WorkerDetailTable({ companyName, fechaInicio, fechaFin }: Worker
       // re-appearing when the user clicks "Volver a la tabla").
       setModalState(null);
     },
-    [modalState, people, companies],
+    [modalState, people, companies, companyName],
   );
 
   const returnToTable = useCallback((): void => {
@@ -194,7 +194,7 @@ export function WorkerDetailTable({ companyName, fechaInicio, fechaFin }: Worker
         >
           <div className="max-w-7xl mx-auto p-6 space-y-4">
             <div className="flex items-center justify-between">
-              <h2 className="text-xl font-semibold text-slate-800">Redactar correo</h2>
+              <h2 className="text-xl font-semibold text-slate-800 dark:text-slate-100">Redactar correo</h2>
               <button
                 type="button"
                 onClick={returnToTable}
@@ -206,6 +206,7 @@ export function WorkerDetailTable({ companyName, fechaInicio, fechaFin }: Worker
             </div>
             <EmailEditor
               companyId={emailViewData.companyId}
+              companyName={emailViewData.companyName}
               selectedPatients={emailViewData.selectedPatients}
               patients={emailViewData.patients}
             />

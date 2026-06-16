@@ -57,6 +57,7 @@ describe('emailViewDataFromFiles (bridge helper)', () => {
       [fileA, fileB],
       ['::a.pdf', '::b.pdf'],
       'uuid-company-1',
+      'Holomedic S.A.',
     );
 
     expect(result.patients).toHaveLength(1);
@@ -73,7 +74,7 @@ describe('emailViewDataFromFiles (bridge helper)', () => {
     const fileB = createFileNode({ name: 'b.pdf', sizeBytes: 200, modifiedAt: '2026-06-01T00:00:00.000Z' });
     const refs = ['subdir::a.pdf', 'subdir::b.pdf'];
 
-    const result = emailViewDataFromFiles(person, ficha, [fileA, fileB], refs, 'uuid-company-1');
+    const result = emailViewDataFromFiles(person, ficha, [fileA, fileB], refs, 'uuid-company-1', 'Holomedic S.A.');
 
     expect(result.patients[0]?.files[0]?.id).toBe('subdir::a.pdf');
     expect(result.patients[0]?.files[1]?.id).toBe('subdir::b.pdf');
@@ -89,7 +90,7 @@ describe('emailViewDataFromFiles (bridge helper)', () => {
     const fileA = createFileNode({ name: 'a.pdf', sizeBytes: 100, modifiedAt: '2026-06-01T00:00:00.000Z' });
     const fileB = createFileNode({ name: 'subdir::b.pdf', sizeBytes: 200, modifiedAt: '2026-06-01T00:00:00.000Z' });
 
-    const result = emailViewDataFromFiles(person, ficha, [fileA, fileB], ['::a.pdf', 'subdir::b.pdf'], 'uuid-company-1');
+    const result = emailViewDataFromFiles(person, ficha, [fileA, fileB], ['::a.pdf', 'subdir::b.pdf'], 'uuid-company-1', 'Holomedic S.A.');
 
     expect(result.patients[0]?.files.every((f) => f.type === 'application/pdf')).toBe(true);
     expect(result.patients[0]?.files[0]?.type).toBe('application/pdf');
@@ -102,7 +103,7 @@ describe('emailViewDataFromFiles (bridge helper)', () => {
     const fileA = createFileNode({ name: 'a.pdf', sizeBytes: 1024, modifiedAt: '2026-06-01T00:00:00.000Z' });
     const fileB = createFileNode({ name: 'b.pdf', sizeBytes: 987_654_321, modifiedAt: '2026-06-01T00:00:00.000Z' });
 
-    const result = emailViewDataFromFiles(person, ficha, [fileA, fileB], ['::a.pdf', '::b.pdf'], 'uuid-company-1');
+    const result = emailViewDataFromFiles(person, ficha, [fileA, fileB], ['::a.pdf', '::b.pdf'], 'uuid-company-1', 'Holomedic S.A.');
 
     expect(result.patients[0]?.files[0]?.size).toBe(1024);
     expect(result.patients[0]?.files[1]?.size).toBe(987_654_321);
@@ -113,7 +114,7 @@ describe('emailViewDataFromFiles (bridge helper)', () => {
     const ficha = makeFicha();
     const fileA = createFileNode({ name: 'a.pdf', sizeBytes: 100, modifiedAt: '2026-06-01T00:00:00.000Z' });
 
-    const result = emailViewDataFromFiles(person, ficha, [fileA], ['::a.pdf'], 'uuid-company-1');
+    const result = emailViewDataFromFiles(person, ficha, [fileA], ['::a.pdf'], 'uuid-company-1', 'Holomedic S.A.');
 
     expect(result.companyId).toBe('uuid-company-1');
   });
@@ -125,7 +126,7 @@ describe('emailViewDataFromFiles (bridge helper)', () => {
     const fileB = createFileNode({ name: 'b.pdf', sizeBytes: 200, modifiedAt: '2026-06-01T00:00:00.000Z' });
     const refs = ['LEGAJOS::a.pdf', 'EXAMENES::b.pdf'];
 
-    const result = emailViewDataFromFiles(person, ficha, [fileA, fileB], refs, 'uuid-company-1');
+    const result = emailViewDataFromFiles(person, ficha, [fileA, fileB], refs, 'uuid-company-1', 'Holomedic S.A.');
 
     expect(Object.keys(result.selectedPatients)).toEqual(['87654321']);
     expect(result.selectedPatients['87654321']?.patientName).toBe('María García');
@@ -140,7 +141,7 @@ describe('emailViewDataFromFiles (bridge helper)', () => {
 
     // refs has 1 entry but selected has 2 files → contract violation
     expect(() =>
-      emailViewDataFromFiles(person, ficha, [fileA, fileB], ['::a.pdf'], 'uuid-company-1'),
+      emailViewDataFromFiles(person, ficha, [fileA, fileB], ['::a.pdf'], 'uuid-company-1', 'Holomedic S.A.'),
     ).toThrow(/parallel|length/i);
   });
 
@@ -151,7 +152,7 @@ describe('emailViewDataFromFiles (bridge helper)', () => {
 
     // Empty companyId → degraded path: helper must not throw and must
     // reflect the empty value verbatim in the output.
-    const result = emailViewDataFromFiles(person, ficha, [fileA], ['::a.pdf'], '');
+    const result = emailViewDataFromFiles(person, ficha, [fileA], ['::a.pdf'], '', 'Holomedic S.A.');
 
     expect(result.companyId).toBe('');
     expect(result.patients[0]?.companyId).toBe('');
