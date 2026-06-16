@@ -6,7 +6,7 @@ import { AttachmentList } from './AttachmentList';
 import { SendConfirmation } from './SendConfirmation';
 import { useSendResults } from '../hooks/useSendResults';
 import { interpolateSpitch } from '../helpers/interpolateSpitch';
-import type { Patient, PatientFile, Spitch } from '../../domain/entities';
+import type { Patient, PatientFile, SelectedFileRef, Spitch } from '../../domain/entities';
 
 interface EmailEditorProps {
   companyId: string;
@@ -18,9 +18,20 @@ interface EmailEditorProps {
     };
   };
   patients: Patient[];
+  /**
+   * PR #1 — send-payload side of the email pipeline. Carries the
+   * LAN-share location triple plus the relative path and basename
+   * for each selected file. PR #3 will forward this to
+   * `useSendResults`; for now it is accepted and forwarded without
+   * changing the hook signature. Optional so PR #1 stays a no-op
+   * for call sites that have not yet been migrated (e.g.
+   * `WorkerDetailTable`, which forwards `emailViewData.fileRefs` in
+   * PR #3).
+   */
+  fileRefs?: SelectedFileRef[];
 }
 
-export function EmailEditor({ companyId, companyName, selectedPatients, patients }: EmailEditorProps) {
+export function EmailEditor({ companyId, companyName, selectedPatients, patients, fileRefs = [] }: EmailEditorProps) {
   // Internal state
   const [target, setTarget] = useState<'company' | 'patient'>('company');
   const [selectedSpitch, setSelectedSpitch] = useState<Spitch | null>(null);

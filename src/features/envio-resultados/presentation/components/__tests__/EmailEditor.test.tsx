@@ -56,7 +56,7 @@ vi.stubGlobal('fetch', mockFetch);
 
 // ---- Import under test ----
 import { EmailEditor } from '../EmailEditor';
-import type { Patient } from '../../../domain/entities';
+import type { Patient, SelectedFileRef } from '../../../domain/entities';
 
 const mockPatients: Patient[] = [
   {
@@ -87,6 +87,10 @@ const defaultProps = {
     'pat-001': { patientName: 'María Elena García López', files: ['file-001', 'file-002'] },
   },
   patients: mockPatients,
+  // PR #1 — EmailEditor accepts a fileRefs prop so the bridge can
+  // hand the location triple + path to the email pipeline. PR #3
+  // wires it to useSendResults; PR #1 only carries it.
+  fileRefs: [] as SelectedFileRef[],
 };
 
 beforeEach(() => {
@@ -225,5 +229,45 @@ describe('EmailEditor', () => {
     const ccInput = screen.getByLabelText('CC');
     fireEvent.change(ccInput, { target: { value: 'copia@clinica.com' } });
     expect(ccInput).toHaveValue('copia@clinica.com');
+  });
+
+  // ================================================================
+  // PR #1 — fileRefs prop carried (no behavior change yet)
+  // Spec REQ-1: the prop is accepted and threaded through. PR #3
+  // will forward it to useSendResults; this PR only adds the
+  // signature so the bridge can land in PR #2 without a TypeScript
+  // ripple.
+  // ================================================================
+
+  it('should accept a non-empty fileRefs prop without throwing or breaking the layout', () => {
+    mockFetch.mockResolvedValue({ ok: true, json: () => Promise.resolve({ success: true }) });
+
+    const fileRefs: SelectedFileRef[] = [
+      { ruc: '20123456789', dni: '12345678', idAten: 'AT-001', path: 'LEGAJOS', name: 'cert.pdf' },
+      { ruc: '20123456789', dni: '12345678', idAten: 'AT-001', path: '', name: 'emo.pdf' },
+    ];
+
+    expect(() => render(<EmailEditor {...defaultProps} fileRefs={fileRefs} />)).not.toThrow();
+
+    // Layout still renders the split panels.
+    expect(screen.getByText('Cómo va el resultado')).toBeInTheDocument();
+    expect(screen.getByText('Controles')).toBeInTheDocument();
+    // AttachmentList still receives its prop (proves the bridging
+    // surface is intact).
+    expect(screen.getByTestId('attachment-list')).toBeInTheDocument();
+  });
+
+  it('should default to an empty fileRefs array when the prop is omitted', () => {
+    mockFetch.mockResolvedValue({ ok: true, json: () => Promise.resolve({ success: true }) });
+
+    // Destructure to omit fileRefs — mirrors the WorkerDetailTable
+    // call site in PR #3 (fileRefs is forwarded from
+    // emailViewData.fileRefs).
+    const { fileRefs: _omitted, ...propsWithoutFileRefs } = defaultProps;
+    void _omitted;
+
+    expect(() => render(<EmailEditor {...propsWithoutFileRefs} />)).not.toThrow();
+    // No envíar available until user fills the recipient — render is enough.
+    expect(screen.getByText('Cómo va el resultado')).toBeInTheDocument();
   });
 });
