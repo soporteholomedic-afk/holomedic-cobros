@@ -20,13 +20,29 @@ export interface ISpitchRepository {
   getByType(type: SpitchType): Promise<Spitch[]>;
 }
 
+/**
+ * PR #2 — the `IEmailService` port now accepts an options object so
+ * the use case can forward `cc` to SMTP. The legacy positional-args
+ * shape was too narrow for the consolidated send pipeline.
+ */
+export interface SendWithAttachmentsOptions {
+  to: string[];
+  cc?: string[];
+  subject: string;
+  html: string;
+  attachments: EmailAttachment[];
+}
+
+export interface SendWithAttachmentsResult {
+  success: boolean;
+  messageId?: string;
+  error?: string;
+}
+
 export interface IEmailService {
   sendWithAttachments(
-    to: string[],
-    subject: string,
-    html: string,
-    attachments: EmailAttachment[]
-  ): Promise<{ success: boolean; messageId?: string; error?: string }>;
+    options: SendWithAttachmentsOptions,
+  ): Promise<SendWithAttachmentsResult>;
 }
 
 /**
