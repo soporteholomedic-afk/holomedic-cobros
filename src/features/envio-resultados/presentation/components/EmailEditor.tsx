@@ -19,14 +19,10 @@ interface EmailEditorProps {
   };
   patients: Patient[];
   /**
-   * PR #1 — send-payload side of the email pipeline. Carries the
-   * LAN-share location triple plus the relative path and basename
-   * for each selected file. PR #3 will forward this to
-   * `useSendResults`; for now it is accepted and forwarded without
-   * changing the hook signature. Optional so PR #1 stays a no-op
-   * for call sites that have not yet been migrated (e.g.
-   * `WorkerDetailTable`, which forwards `emailViewData.fileRefs` in
-   * PR #3).
+   * PR #3 — wired to `useSendResults`. Carries the LAN-share
+   * location triple (`ruc`/`dni`/`idAten`) plus the relative `path`
+   * and `name` for each selected file. WorkerDetailTable forwards
+   * `emailViewData.fileRefs`.
    */
   fileRefs?: SelectedFileRef[];
 }
@@ -36,10 +32,9 @@ export function EmailEditor({
   companyName,
   selectedPatients,
   patients,
-  // `fileRefs` is intentionally carried in PR #1 (no behavior change);
-  // useSendResults accepts it in PR #3 once the hook is rewired to
-  // send the JSON `fileRefs` field instead of the fake `Blob` loop.
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  // PR #3 — forwarded to the hook. `PatientFile` (display) is still
+  // derived locally for `AttachmentList` via `selectedFiles`; the
+  // two stay in parallel.
   fileRefs = [],
 }: EmailEditorProps) {
   // Internal state
@@ -80,7 +75,7 @@ export function EmailEditor({
     cc: ccList.length > 0 ? ccList : undefined,
     subject,
     html: htmlBody,
-    files: selectedFiles,
+    fileRefs,
   });
 
   const handleSpitchSelect = useCallback((spitch: Spitch) => {
