@@ -1,5 +1,13 @@
 import { describe, it, expect } from 'vitest';
-import type { Company, Patient, PatientFile, Spitch, EmailAttachment, SpitchType } from '../entities';
+import type {
+  Company,
+  Patient,
+  PatientFile,
+  SelectedFileRef,
+  Spitch,
+  EmailAttachment,
+  SpitchType,
+} from '../entities';
 
 describe('Company entity', () => {
   it('should create a valid Company object', () => {
@@ -109,5 +117,57 @@ describe('SpitchType', () => {
   it('should only allow "company" or "patient"', () => {
     const validTypes: SpitchType[] = ['company', 'patient'];
     expect(validTypes).toHaveLength(2);
+  });
+});
+
+/**
+ * PR #1 — new send-payload entity.
+ * `SelectedFileRef` carries the LAN-share location triple
+ * (`ruc`/`dni`/`idAten`) plus the relative `path` and `name` that
+ * `IFileRepository.read` needs. It is distinct from `PatientFile` (the
+ * display entity) by design.
+ */
+describe('SelectedFileRef entity', () => {
+  it('should create a ref for a subfolder file (explorer pane path)', () => {
+    const ref: SelectedFileRef = {
+      ruc: '20123456789',
+      dni: '12345678',
+      idAten: 'AT-001',
+      path: 'LEGAJOS',
+      name: 'cert.pdf',
+    };
+
+    expect(ref).toEqual({
+      ruc: '20123456789',
+      dni: '12345678',
+      idAten: 'AT-001',
+      path: 'LEGAJOS',
+      name: 'cert.pdf',
+    });
+  });
+
+  it('should allow an empty path (ready-pane root selection)', () => {
+    const ref: SelectedFileRef = {
+      ruc: '20123456789',
+      dni: '12345678',
+      idAten: 'AT-001',
+      path: '',
+      name: 'cert.pdf',
+    };
+
+    expect(ref.path).toBe('');
+  });
+
+  it('should allow a nested path (explorer-pane deep selection)', () => {
+    const ref: SelectedFileRef = {
+      ruc: '20123456789',
+      dni: '12345678',
+      idAten: 'AT-001',
+      path: 'EXAMENES/2024',
+      name: 'emo.pdf',
+    };
+
+    expect(ref.path).toBe('EXAMENES/2024');
+    expect(ref.name).toBe('emo.pdf');
   });
 });
