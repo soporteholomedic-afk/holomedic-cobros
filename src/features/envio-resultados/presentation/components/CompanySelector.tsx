@@ -1,11 +1,14 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
+import { useSearchParams, useRouter, usePathname } from 'next/navigation';
 import type { CompanyGroup } from '@/types/sp-result';
 
 interface CompanySelectorProps {
   onSelect: (companyName: string, fechaInicio: string, fechaFin: string) => void;
 }
+
+const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 
 const getLocalDateString = () => {
   const d = new Date();
@@ -15,45 +18,95 @@ const getLocalDateString = () => {
   return `${year}-${month}-${day}`;
 };
 
+const parseDateParam = (value: string | null, fallback: string): string => {
+  if (value === null) return fallback;
+  return DATE_PATTERN.test(value) ? value : fallback;
+};
+
 export function CompanySelector({ onSelect }: CompanySelectorProps) {
   const today = getLocalDateString();
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  const pathname = usePathname();
+
+  const [fechaInicio, setFechaInicio] = useState(() =>
+    parseDateParam(searchParams.get('fechaInicio'), today),
+  );
+  const [fechaFin, setFechaFin] = useState(() =>
+    parseDateParam(searchParams.get('fechaFin'), today),
+  );
   const [companies, setCompanies] = useState<CompanyGroup[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const [fechaInicio, setFechaInicio] = useState(today);
-  const [fechaFin, setFechaFin] = useState(today);
+  const [previousSearchParams, setPreviousSearchParams] = useState(searchParams);
+  if (searchParams !== previousSearchParams) {
+    setPreviousSearchParams(searchParams);
+    setFechaInicio(parseDateParam(searchParams.get('fechaInicio'), today));
+    setFechaFin(parseDateParam(searchParams.get('fechaFin'), today));
+  }
 
-  const fetchCompanies = useCallback(async (start: string, end: string, signal?: AbortSignal) => {
-    setLoading(true);
-    setError(null);
-    try {
+  const fetchCompanies = useCallback(
+    (start: string, end: string, signal?: AbortSignal) => {
       const queryParams = new URLSearchParams();
       if (start) queryParams.set('fechaInicio', start);
       if (end) queryParams.set('fechaFin', end);
 
-      const res = await fetch(`/api/consolidados/results?${queryParams.toString()}`, { signal });
-      if (!res.ok) {
-        throw new Error(`HTTP ${res.status}`);
-      }
-      const data = await res.json();
-      setCompanies(data.companies);
-    } catch (err) {
-      if (err instanceof DOMException && err.name === 'AbortError') return;
-      setError('Error al cargar las empresas. Intente nuevamente.');
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+      return fetch(`/api/consolidados/results?${queryParams.toString()}`, { signal })
+        .then((res) => {
+          if (!res.ok) throw new Error(`HTTP ${res.status}`);
+          return res.json();
+        })
+        .then((data: { companies: CompanyGroup[] }) => {
+          setCompanies(data.companies);
+        })
+        .catch((err: unknown) => {
+          if (err instanceof DOMException && err.name === 'AbortError') return;
+          setError('Error al cargar las empresas. Intente nuevamente.');
+        })
+        .finally(() => {
+          setLoading(false);
+        });
+    },
+    [],
+  );
+
+  const initialDatesRef = useRef<{ inicio: string; fin: string } | null>(
+    null,
+  );
+  if (initialDatesRef.current === null) {
+    initialDatesRef.current = { inicio: fechaInicio, fin: fechaFin };
+  }
 
   useEffect(() => {
     const controller = new AbortController();
-    fetchCompanies(today, today, controller.signal);
+    Promise.resolve().then(() => {
+      setLoading(true);
+      setError(null);
+    });
+    const { inicio, fin } = initialDatesRef.current as {
+      inicio: string;
+      fin: string;
+    };
+    fetchCompanies(inicio, fin, controller.signal);
     return () => controller.abort();
-  }, [fetchCompanies, today]);
+  }, [fetchCompanies]);
+
+  const isInvalidRange =
+    fechaInicio.length > 0 &&
+    fechaFin.length > 0 &&
+    fechaInicio > fechaFin;
 
   const handleFilter = (e: React.FormEvent) => {
     e.preventDefault();
+    if (isInvalidRange) return;
+    const params = new URLSearchParams();
+    if (fechaInicio) params.set('fechaInicio', fechaInicio);
+    if (fechaFin) params.set('fechaFin', fechaFin);
+    const queryString = params.toString();
+    router.push(queryString ? `${pathname}?${queryString}` : pathname);
+    setError(null);
+    setLoading(true);
     fetchCompanies(fechaInicio, fechaFin);
   };
 
@@ -87,12 +140,21 @@ export function CompanySelector({ onSelect }: CompanySelectorProps) {
         </div>
         <button
           type="submit"
-          disabled={loading}
+          disabled={loading || isInvalidRange}
           className="px-5 py-2 rounded-lg bg-sky-600 hover:bg-sky-700 text-white font-medium text-sm transition-all duration-200 cursor-pointer shadow-sm hover:shadow flex items-center justify-center gap-2 h-[38px] sm:w-auto w-full disabled:opacity-50 disabled:cursor-not-allowed"
         >
           Filtrar
         </button>
       </form>
+
+      {isInvalidRange && (
+        <p
+          role="alert"
+          className="text-xs font-medium text-rose-600 -mt-4"
+        >
+          La fecha de inicio no puede ser mayor a la fecha final.
+        </p>
+      )}
 
       {/* Listado de empresas */}
       {loading ? (
@@ -107,7 +169,11 @@ export function CompanySelector({ onSelect }: CompanySelectorProps) {
           <p className="text-slate-500 text-lg mb-4">{error}</p>
           <button
             type="button"
-            onClick={() => fetchCompanies(fechaInicio, fechaFin)}
+            onClick={() => {
+              setError(null);
+              setLoading(true);
+              fetchCompanies(fechaInicio, fechaFin);
+            }}
             className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-sky-600 text-white text-sm font-medium hover:bg-sky-700 transition-colors"
           >
             Reintentar

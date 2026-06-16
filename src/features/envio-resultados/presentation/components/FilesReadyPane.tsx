@@ -19,6 +19,16 @@ export interface FilesReadyPaneProps {
   dni: string;
   idAten: string;
   onSelect: (file: FileNode) => void;
+  /**
+   * Set of fileRefs currently selected. Each ref is `"::" + file.name`
+   * (the ready pane has no folder prefix). When `undefined` the pane
+   * defaults every row to `checked` — preserves backward compatibility
+   * for callers that haven't been wired up to the selection map yet
+   * (this PR is the primitive; PR #3 will own the actual `Map`).
+   */
+  selectedRefs?: ReadonlySet<string>;
+  /** Fired when the user toggles a row's checkbox. */
+  onToggle?: (ref: string, file: FileNode) => void;
 }
 
 function formatSize(bytes: number): string {
@@ -96,38 +106,52 @@ export function FilesReadyPane(props: FilesReadyPaneProps): ReactElement {
 
         {state.kind === 'ready' && (
           <ul data-testid="files-ready-list" className="space-y-1.5">
-            {state.files.map((file) => (
-              <li
-                key={file.name}
-                className="flex items-center justify-between px-3 py-2 rounded-lg border border-slate-100 dark:border-slate-800 hover:bg-slate-50/50 dark:hover:bg-slate-950/20"
-              >
-                <div className="flex items-center space-x-2 min-w-0 flex-1">
-                  <FileText className="w-4 h-4 flex-shrink-0 text-red-500" />
-                  <span className="text-sm font-medium text-slate-800 dark:text-slate-200 truncate">
-                    {file.name}
-                  </span>
-                  <span className="text-xs font-mono text-slate-400 flex-shrink-0">
-                    {formatSize(file.sizeBytes)}
-                  </span>
-                </div>
-                <div className="flex items-center space-x-1.5 flex-shrink-0">
-                  <button
-                    onClick={() => props.onSelect(file)}
-                    className="px-2 py-1 rounded-md text-xs font-semibold bg-sky-500 text-white hover:bg-sky-600"
-                    aria-label="Visualizar"
-                  >
-                    Visualizar
-                  </button>
-                  <a
-                    href={downloadHref(props, file.name)}
-                    className="px-2 py-1 rounded-md text-xs font-semibold bg-sky-50 text-sky-700 hover:bg-sky-100"
-                    download
-                  >
-                    Descargar
-                  </a>
-                </div>
-              </li>
-            ))}
+            {state.files.map((file) => {
+              const fileRef = `::${file.name}`;
+              const isChecked = props.selectedRefs?.has(fileRef) ?? true;
+              return (
+                <li
+                  key={file.name}
+                  className="flex items-center justify-between px-3 py-2 rounded-lg border border-slate-100 dark:border-slate-800 hover:bg-slate-50/50 dark:hover:bg-slate-950/20"
+                >
+                  <label className="flex items-center space-x-2 min-w-0 flex-1 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={isChecked}
+                      onChange={(e) => {
+                        e.stopPropagation();
+                        props.onToggle?.(fileRef, file);
+                      }}
+                      aria-label={`Seleccionar ${file.name}`}
+                      className="w-4 h-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500 cursor-pointer"
+                    />
+                    <FileText className="w-4 h-4 flex-shrink-0 text-red-500" />
+                    <span className="text-sm font-medium text-slate-800 dark:text-slate-200 truncate">
+                      {file.name}
+                    </span>
+                    <span className="text-xs font-mono text-slate-400 flex-shrink-0">
+                      {formatSize(file.sizeBytes)}
+                    </span>
+                  </label>
+                  <div className="flex items-center space-x-1.5 flex-shrink-0">
+                    <button
+                      onClick={() => props.onSelect(file)}
+                      className="px-2 py-1 rounded-md text-xs font-semibold bg-sky-500 text-white hover:bg-sky-600"
+                      aria-label="Visualizar"
+                    >
+                      Visualizar
+                    </button>
+                    <a
+                      href={downloadHref(props, file.name)}
+                      className="px-2 py-1 rounded-md text-xs font-semibold bg-sky-50 text-sky-700 hover:bg-sky-100"
+                      download
+                    >
+                      Descargar
+                    </a>
+                  </div>
+                </li>
+              );
+            })}
           </ul>
         )}
       </div>

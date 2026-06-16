@@ -68,15 +68,15 @@ describe('MockPatientRepo', () => {
 describe('MockSpitchRepo', () => {
   const repo = new MockSpitchRepo();
 
-  it('should return 2 company spitches', async () => {
+  it('should return 6 company spitches', async () => {
     const spitches = await repo.getByType('company');
-    expect(spitches).toHaveLength(2);
+    expect(spitches).toHaveLength(6);
     spitches.forEach((s) => expect(s.type).toBe('company'));
   });
 
-  it('should return 2 patient spitches', async () => {
+  it('should return 13 patient spitches', async () => {
     const spitches = await repo.getByType('patient');
-    expect(spitches).toHaveLength(2);
+    expect(spitches).toHaveLength(13);
     spitches.forEach((s) => expect(s.type).toBe('patient'));
   });
 

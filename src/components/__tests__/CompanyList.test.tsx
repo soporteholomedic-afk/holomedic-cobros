@@ -1,8 +1,14 @@
 import React from 'react';
 import { render, screen, fireEvent } from '@testing-library/react';
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import CompanyList from '../CompanyList';
 import { CompanyGroup } from '@/utils/valoracionesCore';
+
+const HISTORY_STORAGE_KEY = 'holomedic:search-history:company-list';
+
+function clearSearchHistory() {
+  window.localStorage.removeItem(HISTORY_STORAGE_KEY);
+}
 
 function makeCompanies(count: number): CompanyGroup[] {
   return Array.from({ length: count }, (_, i) => ({
@@ -288,5 +294,240 @@ describe('CompanyList Component', () => {
     // The button wraps text in a <span>; get the parent button via closest role
     const button = screen.getByRole('button', { name: /Descargar todo/ });
     expect(button).toBeDisabled();
+  });
+});
+
+describe('CompanyList - historial de búsqueda', () => {
+  beforeEach(() => {
+    clearSearchHistory();
+  });
+
+  it('no debe mostrar el dropdown de historial si no hay búsquedas previas', () => {
+    render(
+      <CompanyList
+        companies={sampleCompanies}
+        onSelectCompany={vi.fn()}
+        onDownloadAll={vi.fn()}
+      />,
+    );
+
+    const searchInput = screen.getByPlaceholderText(/Buscar empresa/);
+    fireEvent.focus(searchInput);
+
+    expect(
+      screen.queryByRole('listbox', { name: /Búsquedas recientes/ }),
+    ).not.toBeInTheDocument();
+  });
+
+  it('debe guardar el término en el historial al presionar Enter', () => {
+    render(
+      <CompanyList
+        companies={sampleCompanies}
+        onSelectCompany={vi.fn()}
+        onDownloadAll={vi.fn()}
+      />,
+    );
+
+    const searchInput = screen.getByPlaceholderText(
+      /Buscar empresa/,
+    ) as HTMLInputElement;
+
+    fireEvent.change(searchInput, { target: { value: 'CLINICA' } });
+    fireEvent.keyDown(searchInput, { key: 'Enter' });
+
+    const stored = window.localStorage.getItem(HISTORY_STORAGE_KEY);
+    expect(stored).not.toBeNull();
+    expect(JSON.parse(stored as string)).toEqual(['CLINICA']);
+  });
+
+  it('no debe guardar términos vacíos en el historial', () => {
+    render(
+      <CompanyList
+        companies={sampleCompanies}
+        onSelectCompany={vi.fn()}
+        onDownloadAll={vi.fn()}
+      />,
+    );
+
+    const searchInput = screen.getByPlaceholderText(
+      /Buscar empresa/,
+    ) as HTMLInputElement;
+
+    fireEvent.keyDown(searchInput, { key: 'Enter' });
+
+    expect(
+      window.localStorage.getItem(HISTORY_STORAGE_KEY),
+    ).toBeNull();
+  });
+
+  it('debe mostrar el dropdown con el historial al enfocar el input', () => {
+    window.localStorage.setItem(
+      HISTORY_STORAGE_KEY,
+      JSON.stringify(['CLINICA', 'HOSPITAL']),
+    );
+
+    render(
+      <CompanyList
+        companies={sampleCompanies}
+        onSelectCompany={vi.fn()}
+        onDownloadAll={vi.fn()}
+      />,
+    );
+
+    const searchInput = screen.getByPlaceholderText(/Buscar empresa/);
+    fireEvent.focus(searchInput);
+
+    const listbox = screen.getByRole('listbox', {
+      name: /Búsquedas recientes/,
+    });
+    expect(listbox).toBeInTheDocument();
+    expect(screen.getByText('CLINICA')).toBeInTheDocument();
+    expect(screen.getByText('HOSPITAL')).toBeInTheDocument();
+  });
+
+  it('debe reusar un término del historial al hacer clic', () => {
+    window.localStorage.setItem(
+      HISTORY_STORAGE_KEY,
+      JSON.stringify(['LABORATORIO']),
+    );
+
+    render(
+      <CompanyList
+        companies={sampleCompanies}
+        onSelectCompany={vi.fn()}
+        onDownloadAll={vi.fn()}
+      />,
+    );
+
+    const searchInput = screen.getByPlaceholderText(
+      /Buscar empresa/,
+    ) as HTMLInputElement;
+    fireEvent.focus(searchInput);
+
+    const option = screen.getByRole('option', { name: /LABORATORIO/ });
+    fireEvent.mouseDown(option);
+
+    expect(searchInput.value).toBe('LABORATORIO');
+    expect(
+      screen.queryByRole('listbox', { name: /Búsquedas recientes/ }),
+    ).not.toBeInTheDocument();
+  });
+
+  it('debe eliminar un término del historial con el botón X', () => {
+    window.localStorage.setItem(
+      HISTORY_STORAGE_KEY,
+      JSON.stringify(['CLINICA', 'HOSPITAL']),
+    );
+
+    render(
+      <CompanyList
+        companies={sampleCompanies}
+        onSelectCompany={vi.fn()}
+        onDownloadAll={vi.fn()}
+      />,
+    );
+
+    const searchInput = screen.getByPlaceholderText(/Buscar empresa/);
+    fireEvent.focus(searchInput);
+
+    const removeBtn = screen.getByRole('button', {
+      name: /Eliminar "CLINICA" del historial/,
+    });
+    fireEvent.click(removeBtn);
+
+    expect(screen.queryByText('CLINICA')).not.toBeInTheDocument();
+    expect(screen.getByText('HOSPITAL')).toBeInTheDocument();
+
+    const stored = JSON.parse(
+      window.localStorage.getItem(HISTORY_STORAGE_KEY) as string,
+    );
+    expect(stored).toEqual(['HOSPITAL']);
+  });
+
+  it('debe limpiar todo el historial con el botón Limpiar', () => {
+    window.localStorage.setItem(
+      HISTORY_STORAGE_KEY,
+      JSON.stringify(['CLINICA', 'HOSPITAL']),
+    );
+
+    render(
+      <CompanyList
+        companies={sampleCompanies}
+        onSelectCompany={vi.fn()}
+        onDownloadAll={vi.fn()}
+      />,
+    );
+
+    const searchInput = screen.getByPlaceholderText(/Buscar empresa/);
+    fireEvent.focus(searchInput);
+
+    const clearBtn = screen.getByRole('button', { name: /Limpiar/ });
+    fireEvent.click(clearBtn);
+
+    expect(
+      screen.queryByRole('listbox', { name: /Búsquedas recientes/ }),
+    ).not.toBeInTheDocument();
+    expect(
+      window.localStorage.getItem(HISTORY_STORAGE_KEY),
+    ).toEqual(JSON.stringify([]));
+  });
+
+  it('debe cerrar el dropdown al presionar Escape', () => {
+    window.localStorage.setItem(
+      HISTORY_STORAGE_KEY,
+      JSON.stringify(['CLINICA']),
+    );
+
+    render(
+      <CompanyList
+        companies={sampleCompanies}
+        onSelectCompany={vi.fn()}
+        onDownloadAll={vi.fn()}
+      />,
+    );
+
+    const searchInput = screen.getByPlaceholderText(/Buscar empresa/);
+    fireEvent.focus(searchInput);
+    expect(
+      screen.getByRole('listbox', { name: /Búsquedas recientes/ }),
+    ).toBeInTheDocument();
+
+    fireEvent.keyDown(searchInput, { key: 'Escape' });
+    expect(
+      screen.queryByRole('listbox', { name: /Búsquedas recientes/ }),
+    ).not.toBeInTheDocument();
+  });
+
+  it('debe persistir el historial entre montajes del componente', () => {
+    const onSelect = vi.fn();
+    const onDownload = vi.fn();
+
+    const { unmount } = render(
+      <CompanyList
+        companies={sampleCompanies}
+        onSelectCompany={onSelect}
+        onDownloadAll={onDownload}
+      />,
+    );
+
+    const firstInput = screen.getByPlaceholderText(
+      /Buscar empresa/,
+    ) as HTMLInputElement;
+    fireEvent.change(firstInput, { target: { value: 'PERSISTIDA' } });
+    fireEvent.keyDown(firstInput, { key: 'Enter' });
+    unmount();
+
+    render(
+      <CompanyList
+        companies={sampleCompanies}
+        onSelectCompany={onSelect}
+        onDownloadAll={onDownload}
+      />,
+    );
+
+    const secondInput = screen.getByPlaceholderText(/Buscar empresa/);
+    fireEvent.focus(secondInput);
+
+    expect(screen.getByText('PERSISTIDA')).toBeInTheDocument();
   });
 });

@@ -1,32 +1,67 @@
 import React from 'react';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { UnifiedPerson, UnifiedFicha } from '@/types/sp-result';
+import type { FileNode } from '@/features/envio-resultados/domain/file-system/FileNode';
+import { createFileNode } from '@/features/envio-resultados/domain/file-system/FileNode';
 
 // ---- Hoisted mocks ----
 
 const mockUseUnifiedResults = vi.hoisted(() => vi.fn());
+const mockUseCompanies = vi.hoisted(() => vi.fn());
 const mockFilesModalProps = vi.hoisted(() => vi.fn());
+const mockEmailEditorProps = vi.hoisted(() => vi.fn());
 
 // Stub the FilesModal so the WorkerDetailTable test does not have to
 // deal with the modal's internal usePatientFiles fetch lifecycle.
 // The stub records the props it received so the test can assert the
-// modal is opened with the right (ruc, dni, idAten) triple.
+// modal is opened with the right (ruc, dni, idAten) triple. The
+// trigger-send button lets PR #4 tests fire `onSend` with a known
+// `FileNode[]` to drive the bridge → EmailEditor state transition.
 vi.mock('../FilesModal', () => ({
   FilesModal: (props: Record<string, unknown>) => {
     mockFilesModalProps(props);
+    const onSend = props['onSend'] as ((files: FileNode[]) => void) | undefined;
     return (
       <div data-testid="files-modal-stub">
         {String(props['idAten'] ?? '')}
         {String(props['ruc'] ?? '')}
         {String(props['dni'] ?? '')}
+        {typeof onSend === 'function' && (
+          <button
+            data-testid="files-modal-stub-trigger-onsend"
+            onClick={() => {
+              onSend([
+                createFileNode({ name: 'a.pdf', sizeBytes: 100, modifiedAt: '2026-06-01T00:00:00.000Z' }),
+                createFileNode({ name: 'b.pdf', sizeBytes: 200, modifiedAt: '2026-06-01T00:00:00.000Z' }),
+              ]);
+            }}
+          >
+            trigger-send
+          </button>
+        )}
       </div>
     );
   },
 }));
 
+// Stub the EmailEditor so PR #4 tests can observe the bridged
+// `{ companyId, selectedPatients, patients }` payload without having
+// to satisfy its internal hook contracts (useSendResults, SpitchSelector,
+// etc.). Records every prop it received.
+vi.mock('../EmailEditor', () => ({
+  EmailEditor: (props: Record<string, unknown>) => {
+    mockEmailEditorProps(props);
+    return <div data-testid="email-editor-stub" data-company-id={String(props['companyId'] ?? '')} />;
+  },
+}));
+
 vi.mock('../../hooks/useUnifiedResults', () => ({
   useUnifiedResults: mockUseUnifiedResults,
+}));
+
+vi.mock('../../hooks/useCompanies', () => ({
+  useCompanies: mockUseCompanies,
 }));
 
 // ---- Import component under test ----
@@ -72,6 +107,15 @@ beforeEach(() => {
   mockUseUnifiedResults.mockReturnValue({
     people: [],
     loading: true,
+    error: null,
+  });
+  // Default: companies list is empty (no match → companyId = '').
+  // Tests that exercise a match override this in their own mockReturnValue.
+  mockUseCompanies.mockReturnValue({
+    companies: [],
+    selectedCompanyId: null,
+    selectCompany: vi.fn(),
+    isLoading: false,
     error: null,
   });
 });
@@ -658,5 +702,267 @@ describe('WorkerDetailTable — Unified Table', () => {
     expect(lastProps['dni']).toBe('99999999');
     expect(lastProps['idAten']).toBe('');
     expect(lastProps['ruc']).toBe('');
+  });
+
+  // ================================================================
+  // PR #4: FilesModal.onSend → EmailEditor overlay wiring
+  // Spec Domain 3 (EI-1..EI-5) — WorkerDetailTable integration.
+  // ================================================================
+
+  describe('PR #4 — onSend bridge to EmailEditor', () => {
+    it('should pass a defined onSend prop to FilesModal (bridge wired, not undefined)', async () => {
+      const person = makeUnifiedPerson();
+      mockUseUnifiedResults.mockReturnValue({
+        people: [person],
+        loading: false,
+        error: null,
+      });
+
+      render(<WorkerDetailTable {...DEFAULT_PROPS} />);
+      fireEvent.click(screen.getByRole('button', { name: /Ver Archivos/ }));
+
+      const lastProps =
+        mockFilesModalProps.mock.calls[mockFilesModalProps.mock.calls.length - 1]?.[0];
+      expect(typeof lastProps?.['onSend']).toBe('function');
+    });
+
+    it('should keep the table visible until onSend fires (no premature overlay)', async () => {
+      const person = makeUnifiedPerson();
+      mockUseUnifiedResults.mockReturnValue({
+        people: [person],
+        loading: false,
+        error: null,
+      });
+
+      render(<WorkerDetailTable {...DEFAULT_PROPS} />);
+      fireEvent.click(screen.getByRole('button', { name: /Ver Archivos/ }));
+
+      // The table is still visible (header + data row).
+      expect(screen.getByText('Ficha')).toBeInTheDocument();
+      expect(screen.getByText(person.dni)).toBeInTheDocument();
+      // The EmailEditor overlay is NOT yet in the DOM.
+      expect(screen.queryByTestId('email-editor-overlay')).not.toBeInTheDocument();
+    });
+
+    it('should resolve companyId from useCompanies: name match returns the company id', async () => {
+      const person = makeUnifiedPerson({ empresa: 'HOLOMEDIC S.A.' });
+      mockUseUnifiedResults.mockReturnValue({
+        people: [person],
+        loading: false,
+        error: null,
+      });
+      mockUseCompanies.mockReturnValue({
+        companies: [
+          { id: 'uuid-holomedic', name: 'HOLOMEDIC S.A.', ruc: '20111111111', email: 'a@x' },
+          { id: 'uuid-other', name: 'OTHER CO', ruc: '20222222222', email: 'b@x' },
+        ],
+        selectedCompanyId: null,
+        selectCompany: vi.fn(),
+        isLoading: false,
+        error: null,
+      });
+
+      render(<WorkerDetailTable {...DEFAULT_PROPS} />);
+      fireEvent.click(screen.getByRole('button', { name: /Ver Archivos/ }));
+      fireEvent.click(screen.getByTestId('files-modal-stub-trigger-onsend'));
+
+      // EmailEditor received the matched companyId.
+      const lastProps =
+        mockEmailEditorProps.mock.calls[mockEmailEditorProps.mock.calls.length - 1]?.[0];
+      expect(lastProps?.['companyId']).toBe('uuid-holomedic');
+    });
+
+    it('should fall back to empty companyId when no company matches the person.empresa (spec EI-2)', async () => {
+      const person = makeUnifiedPerson({ empresa: 'UNKNOWN CO' });
+      mockUseUnifiedResults.mockReturnValue({
+        people: [person],
+        loading: false,
+        error: null,
+      });
+      mockUseCompanies.mockReturnValue({
+        companies: [
+          { id: 'uuid-holomedic', name: 'HOLOMEDIC S.A.', ruc: '20111111111', email: 'a@x' },
+        ],
+        selectedCompanyId: null,
+        selectCompany: vi.fn(),
+        isLoading: false,
+        error: null,
+      });
+
+      render(<WorkerDetailTable {...DEFAULT_PROPS} />);
+      fireEvent.click(screen.getByRole('button', { name: /Ver Archivos/ }));
+      fireEvent.click(screen.getByTestId('files-modal-stub-trigger-onsend'));
+
+      const lastProps =
+        mockEmailEditorProps.mock.calls[mockEmailEditorProps.mock.calls.length - 1]?.[0];
+      expect(lastProps?.['companyId']).toBe('');
+    });
+
+    it('should mount EmailEditor in place of the table when onSend fires (overlay replaces table)', async () => {
+      const person = makeUnifiedPerson();
+      mockUseUnifiedResults.mockReturnValue({
+        people: [person],
+        loading: false,
+        error: null,
+      });
+
+      render(<WorkerDetailTable {...DEFAULT_PROPS} />);
+      fireEvent.click(screen.getByRole('button', { name: /Ver Archivos/ }));
+      fireEvent.click(screen.getByTestId('files-modal-stub-trigger-onsend'));
+
+      // Overlay is visible.
+      const overlay = screen.getByTestId('email-editor-overlay');
+      expect(overlay).toBeInTheDocument();
+
+      // EmailEditor received the bridged data: a single patient whose
+      // dni matches, with the 2 files we sent and the right keys.
+      const lastProps =
+        mockEmailEditorProps.mock.calls[mockEmailEditorProps.mock.calls.length - 1]?.[0];
+      const patients = lastProps?.['patients'] as Array<{ id: string; dni: string; files: Array<{ id: string; name: string; type: string; size: number }> }>;
+      expect(patients).toHaveLength(1);
+      expect(patients[0]?.dni).toBe(person.dni);
+      expect(patients[0]?.files).toHaveLength(2);
+      expect(patients[0]?.files[0]?.id).toBe('::a.pdf');
+      expect(patients[0]?.files[1]?.id).toBe('::b.pdf');
+      expect(patients[0]?.files[0]?.name).toBe('a.pdf');
+      expect(patients[0]?.files[1]?.name).toBe('b.pdf');
+      expect(patients[0]?.files[0]?.type).toBe('application/pdf');
+      expect(patients[0]?.files[0]?.size).toBe(100);
+      expect(patients[0]?.files[1]?.size).toBe(200);
+
+      // selectedPatients is keyed by person.dni and carries the refs.
+      const selectedPatients = lastProps?.['selectedPatients'] as Record<string, { patientName: string; files: string[] }>;
+      expect(Object.keys(selectedPatients)).toEqual([person.dni]);
+      expect(selectedPatients[person.dni]?.files).toEqual(['::a.pdf', '::b.pdf']);
+
+      // The FilesModal stub is no longer rendered (closed before onSend
+      // resolves — handleSendFromModal does not re-open it).
+      expect(screen.queryByTestId('files-modal-stub')).not.toBeInTheDocument();
+    });
+
+    it('should expose a "Volver a la tabla" button in the EmailEditor overlay that clears the state', async () => {
+      const person = makeUnifiedPerson();
+      mockUseUnifiedResults.mockReturnValue({
+        people: [person],
+        loading: false,
+        error: null,
+      });
+
+      render(<WorkerDetailTable {...DEFAULT_PROPS} />);
+      fireEvent.click(screen.getByRole('button', { name: /Ver Archivos/ }));
+      fireEvent.click(screen.getByTestId('files-modal-stub-trigger-onsend'));
+
+      // Overlay is up.
+      const backButton = screen.getByTestId('email-editor-back');
+      expect(backButton).toBeInTheDocument();
+      expect(backButton).toHaveTextContent('Volver a la tabla');
+
+      // Click → overlay unmounts, table re-renders.
+      fireEvent.click(backButton);
+
+      await waitFor(() => {
+        expect(screen.queryByTestId('email-editor-overlay')).not.toBeInTheDocument();
+      });
+      // The table is visible again — header is back, the data row is back.
+      expect(screen.getByText('Ficha')).toBeInTheDocument();
+      expect(screen.getByText(person.dni)).toBeInTheDocument();
+      // EmailEditor stub is no longer in the DOM.
+      expect(screen.queryByTestId('email-editor-stub')).not.toBeInTheDocument();
+    });
+
+    it('should keep the table hidden while the EmailEditor overlay is up (table is replaced, not stacked)', async () => {
+      const person = makeUnifiedPerson();
+      mockUseUnifiedResults.mockReturnValue({
+        people: [person],
+        loading: false,
+        error: null,
+      });
+
+      render(<WorkerDetailTable {...DEFAULT_PROPS} />);
+      fireEvent.click(screen.getByRole('button', { name: /Ver Archivos/ }));
+      fireEvent.click(screen.getByTestId('files-modal-stub-trigger-onsend'));
+
+      // The "Ver Archivos" buttons from the table are no longer in the
+      // document — the table is hidden while the overlay is up.
+      expect(screen.queryByRole('button', { name: /Ver Archivos/ })).not.toBeInTheDocument();
+      // The overlay IS in the document.
+      expect(screen.getByTestId('email-editor-overlay')).toBeInTheDocument();
+    });
+
+    it('should bridge an empty selection (zero files) without throwing and still mount the overlay', async () => {
+      // Triangulation: zero files. The bridge helper must accept empty
+      // arrays; the overlay must still appear so the user can see the
+      // selection was committed (no files, but the editor is open).
+      const person = makeUnifiedPerson();
+      mockUseUnifiedResults.mockReturnValue({
+        people: [person],
+        loading: false,
+        error: null,
+      });
+
+      // Re-render the stub with an empty payload for THIS test only.
+      // The hoisted trigger sends 2 files; we instead drive the same
+      // path via the onSend prop captured by `mockFilesModalProps`.
+      const captured: { onSend?: (files: FileNode[]) => void } = {};
+      const origMock = mockFilesModalProps.getMockImplementation();
+      mockFilesModalProps.mockImplementation((props: Record<string, unknown>) => {
+        captured.onSend = props['onSend'] as (files: FileNode[]) => void;
+        return origMock ? origMock(props) : undefined;
+      });
+
+      render(<WorkerDetailTable {...DEFAULT_PROPS} />);
+      fireEvent.click(screen.getByRole('button', { name: /Ver Archivos/ }));
+
+      // Drive onSend with an empty FileNode[].
+      expect(() => act(() => { captured.onSend?.([]); })).not.toThrow();
+
+      // Overlay is up, EmailEditor received a single patient with no files.
+      await waitFor(() => {
+        expect(screen.getByTestId('email-editor-overlay')).toBeInTheDocument();
+      });
+      const lastProps =
+        mockEmailEditorProps.mock.calls[mockEmailEditorProps.mock.calls.length - 1]?.[0];
+      const patients = lastProps?.['patients'] as Array<{ id: string; files: Array<unknown> }>;
+      expect(patients).toHaveLength(1);
+      expect(patients[0]?.files).toHaveLength(0);
+    });
+
+    it('should bridge a single-file selection (different code path from 2 files)', async () => {
+      // Triangulation: 1 file vs 2 files — exercises the bridge with
+      // a different array length, proving the parallel ref array
+      // scales correctly and is not hardcoded for 2.
+      const person = makeUnifiedPerson();
+      mockUseUnifiedResults.mockReturnValue({
+        people: [person],
+        loading: false,
+        error: null,
+      });
+
+      const captured: { onSend?: (files: FileNode[]) => void } = {};
+      const origMock = mockFilesModalProps.getMockImplementation();
+      mockFilesModalProps.mockImplementation((props: Record<string, unknown>) => {
+        captured.onSend = props['onSend'] as (files: FileNode[]) => void;
+        return origMock ? origMock(props) : undefined;
+      });
+
+      render(<WorkerDetailTable {...DEFAULT_PROPS} />);
+      fireEvent.click(screen.getByRole('button', { name: /Ver Archivos/ }));
+      act(() => {
+        captured.onSend?.([
+          createFileNode({ name: 'solo.pdf', sizeBytes: 999, modifiedAt: '2026-06-01T00:00:00.000Z' }),
+        ]);
+      });
+
+      await waitFor(() => {
+        expect(screen.getByTestId('email-editor-overlay')).toBeInTheDocument();
+      });
+      const lastProps =
+        mockEmailEditorProps.mock.calls[mockEmailEditorProps.mock.calls.length - 1]?.[0];
+      const patients = lastProps?.['patients'] as Array<{ files: Array<{ id: string; name: string; size: number }> }>;
+      expect(patients[0]?.files).toHaveLength(1);
+      expect(patients[0]?.files[0]?.id).toBe('::solo.pdf');
+      expect(patients[0]?.files[0]?.name).toBe('solo.pdf');
+      expect(patients[0]?.files[0]?.size).toBe(999);
+    });
   });
 });

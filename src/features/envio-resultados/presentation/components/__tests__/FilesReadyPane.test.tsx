@@ -76,4 +76,74 @@ describe('FilesReadyPane', () => {
     expect(onSelect).toHaveBeenCalledTimes(1);
     expect(onSelect).toHaveBeenCalledWith(sampleFiles[0]);
   });
+
+  // -- PR #2: pane checkboxes (selection wiring) ---------------------------
+
+  it('renders a checkbox for each file in the ready list', () => {
+    render(
+      <FilesReadyPane {...baseProps} state={{ kind: 'ready', files: sampleFiles }} />,
+    );
+
+    const checkboxes = screen.getAllByRole('checkbox');
+    expect(checkboxes).toHaveLength(sampleFiles.length);
+  });
+
+  it('checkbox is checked by default when selectedRefs is not provided (backward compat)', () => {
+    render(
+      <FilesReadyPane {...baseProps} state={{ kind: 'ready', files: sampleFiles }} />,
+    );
+
+    for (const cb of screen.getAllByRole('checkbox')) {
+      expect(cb).toBeChecked();
+    }
+  });
+
+  it('clicking the checkbox calls onToggle with "::" + name and the FileNode', () => {
+    const onToggle = vi.fn();
+    render(
+      <FilesReadyPane
+        {...baseProps}
+        state={{ kind: 'ready', files: sampleFiles }}
+        onToggle={onToggle}
+      />,
+    );
+
+    const checkboxes = screen.getAllByRole('checkbox');
+    fireEvent.click(checkboxes[0]!);
+    expect(onToggle).toHaveBeenCalledTimes(1);
+    expect(onToggle).toHaveBeenCalledWith('::75618561CERT.pdf', sampleFiles[0]);
+  });
+
+  it('checkbox click does NOT trigger onSelect (no Visualizar side-effect)', () => {
+    const onSelect = vi.fn();
+    render(
+      <FilesReadyPane
+        {...baseProps}
+        onSelect={onSelect}
+        state={{ kind: 'ready', files: sampleFiles }}
+      />,
+    );
+
+    const checkboxes = screen.getAllByRole('checkbox');
+    fireEvent.click(checkboxes[0]!);
+    expect(onSelect).not.toHaveBeenCalled();
+  });
+
+  it('checked state mirrors selectedRefs.has("::" + name) when selectedRefs is provided', () => {
+    // Only the second file is in the selection set.
+    const selectedRefs = new Set<string>(['::012109975EXPED.pdf']);
+    render(
+      <FilesReadyPane
+        {...baseProps}
+        state={{ kind: 'ready', files: sampleFiles }}
+        selectedRefs={selectedRefs}
+      />,
+    );
+
+    const checkboxes = screen.getAllByRole('checkbox');
+    // First file NOT in selectedRefs → unchecked
+    expect(checkboxes[0]).not.toBeChecked();
+    // Second file IS in selectedRefs → checked
+    expect(checkboxes[1]).toBeChecked();
+  });
 });

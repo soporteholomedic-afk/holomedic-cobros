@@ -87,4 +87,21 @@ describe('useSendResults', () => {
     expect(result.current.result).toBeNull();
     expect(result.current.error).toBe('Network error');
   });
+
+  it('should append CC to FormData when provided', async () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ success: true, messageId: 'msg-cc' }),
+    } as Response);
+
+    const argsWithCc = { ...defaultArgs, cc: ['cc1@example.com', 'cc2@example.com'] };
+    const { result } = renderHook(() => useSendResults(argsWithCc));
+
+    await act(async () => {
+      await result.current.send();
+    });
+
+    const formData = fetchSpy.mock.calls[0][1]?.body as FormData;
+    expect(formData.get('cc')).toBe('cc1@example.com,cc2@example.com');
+  });
 });

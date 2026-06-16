@@ -82,6 +82,7 @@ const mockPatients: Patient[] = [
 
 const defaultProps = {
   companyId: 'comp-001',
+  companyName: 'Holomedic S.A.C.',
   selectedPatients: {
     'pat-001': { patientName: 'María Elena García López', files: ['file-001', 'file-002'] },
   },
@@ -184,5 +185,45 @@ describe('EmailEditor', () => {
 
     // Confirmation modal should be visible
     expect(screen.getByText(/¿Enviar resultados/)).toBeInTheDocument();
+  });
+
+  it('should render Destinatario input pre-filled with patient names', () => {
+    mockFetch.mockResolvedValue({ ok: true, json: () => Promise.resolve({ success: true }) });
+
+    render(<EmailEditor {...defaultProps} />);
+
+    const toInput = screen.getByLabelText('Destinatario');
+    expect(toInput).toBeInTheDocument();
+    expect(toInput).toHaveValue('María Elena García López');
+  });
+
+  it('should render CC input empty by default', () => {
+    mockFetch.mockResolvedValue({ ok: true, json: () => Promise.resolve({ success: true }) });
+
+    render(<EmailEditor {...defaultProps} />);
+
+    const ccInput = screen.getByLabelText('CC');
+    expect(ccInput).toBeInTheDocument();
+    expect(ccInput).toHaveValue('');
+  });
+
+  it('should allow editing Destinatario field', () => {
+    mockFetch.mockResolvedValue({ ok: true, json: () => Promise.resolve({ success: true }) });
+
+    render(<EmailEditor {...defaultProps} />);
+
+    const toInput = screen.getByLabelText('Destinatario');
+    fireEvent.change(toInput, { target: { value: 'doctor@clinica.com, admin@clinica.com' } });
+    expect(toInput).toHaveValue('doctor@clinica.com, admin@clinica.com');
+  });
+
+  it('should allow editing CC field', () => {
+    mockFetch.mockResolvedValue({ ok: true, json: () => Promise.resolve({ success: true }) });
+
+    render(<EmailEditor {...defaultProps} />);
+
+    const ccInput = screen.getByLabelText('CC');
+    fireEvent.change(ccInput, { target: { value: 'copia@clinica.com' } });
+    expect(ccInput).toHaveValue('copia@clinica.com');
   });
 });

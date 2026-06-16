@@ -807,6 +807,351 @@ describe('FilesModal', () => {
     fireEvent.click(screen.getByRole('tab', { name: /Listo para enviar/ }));
     expect(container.querySelector('[data-folder="LEGAJOS"]')).toBeTruthy();
   });
+
+  // ─── PR #3: selection state + Enviar button ─────────────────────────
+
+  it('renders the "Enviar (0)" button in the footer with data-testid="files-modal-send"', () => {
+    mockUseFileTree.mockReturnValue({
+      viewState: readyView('', sampleFiles),
+      selectionState: { kind: 'none' },
+      navigate: vi.fn(),
+      goUp: vi.fn(),
+      selectFile: vi.fn(),
+      closeSelection: vi.fn(),
+    });
+
+    render(
+      <FilesModal
+        ruc="RUC-1"
+        dni="12345678"
+        idAten="AT-001"
+        nombrePaciente="Juan Pérez"
+        empresa="Acme Corp"
+        onClose={vi.fn()}
+      />,
+    );
+
+    const sendButton = screen.getByTestId('files-modal-send');
+    expect(sendButton).toBeInTheDocument();
+    expect(sendButton).toHaveTextContent('Enviar (0)');
+  });
+
+  it('disables the "Enviar" button when no file is selected (count = 0)', () => {
+    mockUseFileTree.mockReturnValue({
+      viewState: readyView('', sampleFiles),
+      selectionState: { kind: 'none' },
+      navigate: vi.fn(),
+      goUp: vi.fn(),
+      selectFile: vi.fn(),
+      closeSelection: vi.fn(),
+    });
+
+    render(
+      <FilesModal
+        ruc="RUC-1"
+        dni="12345678"
+        idAten="AT-001"
+        nombrePaciente="Juan Pérez"
+        empresa="Acme Corp"
+        onClose={vi.fn()}
+      />,
+    );
+
+    const sendButton = screen.getByTestId('files-modal-send');
+    expect(sendButton).toBeDisabled();
+  });
+
+  it('pre-checks all ready-pane files when the modal mounts (Enviar label becomes "Enviar (N)")', () => {
+    const readyFiles: FileNode[] = [
+      createFileNode({
+        name: '75618561CERT.pdf',
+        sizeBytes: 1024,
+        modifiedAt: '2026-06-01T00:00:00.000Z',
+      }),
+      createFileNode({
+        name: '012109975EXPED.pdf',
+        sizeBytes: 2048,
+        modifiedAt: '2026-06-02T00:00:00.000Z',
+      }),
+    ];
+    mockUseFileTree.mockReturnValue({
+      viewState: readyView('', sampleFiles),
+      selectionState: { kind: 'none' },
+      navigate: vi.fn(),
+      goUp: vi.fn(),
+      selectFile: vi.fn(),
+      closeSelection: vi.fn(),
+    });
+    mockUseReadyFiles.mockReturnValue({ state: { kind: 'ready', files: readyFiles } });
+
+    render(
+      <FilesModal
+        ruc="RUC-1"
+        dni="12345678"
+        idAten="AT-001"
+        nombrePaciente="Juan Pérez"
+        empresa="Acme Corp"
+        onClose={vi.fn()}
+      />,
+    );
+
+    // Pre-check effect populates the map → counter shows 2.
+    expect(screen.getByTestId('files-modal-send')).toHaveTextContent('Enviar (2)');
+    // The checkboxes themselves reflect the selection.
+    const checkboxes = screen.getAllByRole('checkbox');
+    expect(checkboxes).toHaveLength(2);
+    for (const cb of checkboxes) {
+      expect(cb).toBeChecked();
+    }
+  });
+
+  it('enables the "Enviar" button when at least one file is selected', () => {
+    const readyFiles: FileNode[] = [
+      createFileNode({
+        name: '75618561CERT.pdf',
+        sizeBytes: 1024,
+        modifiedAt: '2026-06-01T00:00:00.000Z',
+      }),
+    ];
+    mockUseFileTree.mockReturnValue({
+      viewState: readyView('', sampleFiles),
+      selectionState: { kind: 'none' },
+      navigate: vi.fn(),
+      goUp: vi.fn(),
+      selectFile: vi.fn(),
+      closeSelection: vi.fn(),
+    });
+    mockUseReadyFiles.mockReturnValue({ state: { kind: 'ready', files: readyFiles } });
+
+    render(
+      <FilesModal
+        ruc="RUC-1"
+        dni="12345678"
+        idAten="AT-001"
+        nombrePaciente="Juan Pérez"
+        empresa="Acme Corp"
+        onClose={vi.fn()}
+      />,
+    );
+
+    const sendButton = screen.getByTestId('files-modal-send');
+    expect(sendButton).not.toBeDisabled();
+  });
+
+  it('updates the "Enviar" counter live when a ready-pane checkbox is toggled (uncheck + recheck)', () => {
+    const readyFiles: FileNode[] = [
+      createFileNode({
+        name: 'a.pdf',
+        sizeBytes: 1024,
+        modifiedAt: '2026-06-01T00:00:00.000Z',
+      }),
+      createFileNode({
+        name: 'b.pdf',
+        sizeBytes: 2048,
+        modifiedAt: '2026-06-02T00:00:00.000Z',
+      }),
+    ];
+    mockUseFileTree.mockReturnValue({
+      viewState: readyView('', sampleFiles),
+      selectionState: { kind: 'none' },
+      navigate: vi.fn(),
+      goUp: vi.fn(),
+      selectFile: vi.fn(),
+      closeSelection: vi.fn(),
+    });
+    mockUseReadyFiles.mockReturnValue({ state: { kind: 'ready', files: readyFiles } });
+
+    render(
+      <FilesModal
+        ruc="RUC-1"
+        dni="12345678"
+        idAten="AT-001"
+        nombrePaciente="Juan Pérez"
+        empresa="Acme Corp"
+        onClose={vi.fn()}
+      />,
+    );
+
+    const sendButton = screen.getByTestId('files-modal-send');
+    expect(sendButton).toHaveTextContent('Enviar (2)');
+
+    // Uncheck the first file → counter drops to 1.
+    const checkboxes = screen.getAllByRole('checkbox');
+    fireEvent.click(checkboxes[0]!);
+    expect(sendButton).toHaveTextContent('Enviar (1)');
+    expect(checkboxes[0]).not.toBeChecked();
+    expect(checkboxes[1]).toBeChecked();
+
+    // Re-check the first file → counter goes back to 2.
+    fireEvent.click(checkboxes[0]!);
+    expect(sendButton).toHaveTextContent('Enviar (2)');
+    expect(checkboxes[0]).toBeChecked();
+  });
+
+  it('fires onSend with the selected FileNode[] when "Enviar" is clicked', () => {
+    const readyFiles: FileNode[] = [
+      createFileNode({
+        name: 'a.pdf',
+        sizeBytes: 1024,
+        modifiedAt: '2026-06-01T00:00:00.000Z',
+      }),
+      createFileNode({
+        name: 'b.pdf',
+        sizeBytes: 2048,
+        modifiedAt: '2026-06-02T00:00:00.000Z',
+      }),
+    ];
+    mockUseFileTree.mockReturnValue({
+      viewState: readyView('', sampleFiles),
+      selectionState: { kind: 'none' },
+      navigate: vi.fn(),
+      goUp: vi.fn(),
+      selectFile: vi.fn(),
+      closeSelection: vi.fn(),
+    });
+    mockUseReadyFiles.mockReturnValue({ state: { kind: 'ready', files: readyFiles } });
+    const onSend = vi.fn();
+
+    render(
+      <FilesModal
+        ruc="RUC-1"
+        dni="12345678"
+        idAten="AT-001"
+        nombrePaciente="Juan Pérez"
+        empresa="Acme Corp"
+        onClose={vi.fn()}
+        onSend={onSend}
+      />,
+    );
+
+    fireEvent.click(screen.getByTestId('files-modal-send'));
+
+    expect(onSend).toHaveBeenCalledTimes(1);
+    // Payload is the selected FileNode array in insertion order.
+    const payload = onSend.mock.calls[0]?.[0] as FileNode[];
+    expect(payload).toHaveLength(2);
+    expect(payload[0]).toBe(readyFiles[0]);
+    expect(payload[1]).toBe(readyFiles[1]);
+  });
+
+  it('does not throw when "Enviar" is clicked without an onSend handler (optional prop)', () => {
+    const readyFiles: FileNode[] = [
+      createFileNode({
+        name: 'a.pdf',
+        sizeBytes: 1024,
+        modifiedAt: '2026-06-01T00:00:00.000Z',
+      }),
+    ];
+    mockUseFileTree.mockReturnValue({
+      viewState: readyView('', sampleFiles),
+      selectionState: { kind: 'none' },
+      navigate: vi.fn(),
+      goUp: vi.fn(),
+      selectFile: vi.fn(),
+      closeSelection: vi.fn(),
+    });
+    mockUseReadyFiles.mockReturnValue({ state: { kind: 'ready', files: readyFiles } });
+
+    // No `onSend` prop on purpose.
+    render(
+      <FilesModal
+        ruc="RUC-1"
+        dni="12345678"
+        idAten="AT-001"
+        nombrePaciente="Juan Pérez"
+        empresa="Acme Corp"
+        onClose={vi.fn()}
+      />,
+    );
+
+    const sendButton = screen.getByTestId('files-modal-send');
+    expect(sendButton).not.toBeDisabled();
+    expect(() => fireEvent.click(sendButton)).not.toThrow();
+  });
+
+  it('resets the selection when (ruc, dni, idAten) change', () => {
+    const readyFiles: FileNode[] = [
+      createFileNode({
+        name: 'a.pdf',
+        sizeBytes: 1024,
+        modifiedAt: '2026-06-01T00:00:00.000Z',
+      }),
+    ];
+    mockUseFileTree.mockReturnValue({
+      viewState: readyView('', sampleFiles),
+      selectionState: { kind: 'none' },
+      navigate: vi.fn(),
+      goUp: vi.fn(),
+      selectFile: vi.fn(),
+      closeSelection: vi.fn(),
+    });
+    mockUseReadyFiles.mockReturnValue({ state: { kind: 'ready', files: readyFiles } });
+
+    const { rerender } = render(
+      <FilesModal
+        ruc="RUC-OLD"
+        dni="12345678"
+        idAten="AT-001"
+        nombrePaciente="Juan Pérez"
+        empresa="Acme Corp"
+        onClose={vi.fn()}
+      />,
+    );
+
+    const sendButton = screen.getByTestId('files-modal-send');
+    expect(sendButton).toHaveTextContent('Enviar (1)');
+
+    // Switch the ruc → identity-reset effect clears the map. The readyState
+    // mock is unchanged (same reference) so the pre-check effect does NOT
+    // re-fire, leaving the counter at 0.
+    rerender(
+      <FilesModal
+        ruc="RUC-NEW"
+        dni="12345678"
+        idAten="AT-001"
+        nombrePaciente="Juan Pérez"
+        empresa="Acme Corp"
+        onClose={vi.fn()}
+      />,
+    );
+
+    expect(sendButton).toHaveTextContent('Enviar (0)');
+    expect(sendButton).toBeDisabled();
+  });
+
+  it('does not trigger selectFile (Visualizar) when a ready-pane checkbox is clicked', () => {
+    const readyFiles: FileNode[] = [
+      createFileNode({
+        name: 'a.pdf',
+        sizeBytes: 1024,
+        modifiedAt: '2026-06-01T00:00:00.000Z',
+      }),
+    ];
+    const selectFile = vi.fn();
+    mockUseFileTree.mockReturnValue({
+      viewState: readyView('', sampleFiles),
+      selectionState: { kind: 'none' },
+      navigate: vi.fn(),
+      goUp: vi.fn(),
+      selectFile,
+      closeSelection: vi.fn(),
+    });
+    mockUseReadyFiles.mockReturnValue({ state: { kind: 'ready', files: readyFiles } });
+
+    render(
+      <FilesModal
+        ruc="RUC-1"
+        dni="12345678"
+        idAten="AT-001"
+        nombrePaciente="Juan Pérez"
+        empresa="Acme Corp"
+        onClose={vi.fn()}
+      />,
+    );
+
+    fireEvent.click(screen.getAllByRole('checkbox')[0]!);
+    expect(selectFile).not.toHaveBeenCalled();
+  });
 });
 
 import { FilesModal } from '../FilesModal';
