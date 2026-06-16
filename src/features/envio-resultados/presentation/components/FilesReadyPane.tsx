@@ -107,7 +107,7 @@ export function FilesReadyPane(props: FilesReadyPaneProps): ReactElement {
         {state.kind === 'ready' && (
           <ul data-testid="files-ready-list" className="space-y-1.5">
             {state.files.map((file) => {
-              const fileRef = `::${file.name}`;
+              const fileRef = `${READY_FOLDER}::${file.name}`;
               const isChecked = props.selectedRefs?.has(fileRef) ?? true;
               return (
                 <li

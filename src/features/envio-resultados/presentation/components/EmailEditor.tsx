@@ -6,7 +6,7 @@ import { AttachmentList } from './AttachmentList';
 import { SendConfirmation } from './SendConfirmation';
 import { useSendResults } from '../hooks/useSendResults';
 import { interpolateSpitch } from '../helpers/interpolateSpitch';
-import type { Patient, PatientFile, Spitch } from '../../domain/entities';
+import type { Patient, PatientFile, SelectedFileRef, Spitch } from '../../domain/entities';
 
 interface EmailEditorProps {
   companyId: string;
@@ -18,9 +18,25 @@ interface EmailEditorProps {
     };
   };
   patients: Patient[];
+  /**
+   * PR #3 — wired to `useSendResults`. Carries the LAN-share
+   * location triple (`ruc`/`dni`/`idAten`) plus the relative `path`
+   * and `name` for each selected file. WorkerDetailTable forwards
+   * `emailViewData.fileRefs`.
+   */
+  fileRefs?: SelectedFileRef[];
 }
 
-export function EmailEditor({ companyId, companyName, selectedPatients, patients }: EmailEditorProps) {
+export function EmailEditor({
+  companyId,
+  companyName,
+  selectedPatients,
+  patients,
+  // PR #3 — forwarded to the hook. `PatientFile` (display) is still
+  // derived locally for `AttachmentList` via `selectedFiles`; the
+  // two stay in parallel.
+  fileRefs = [],
+}: EmailEditorProps) {
   // Internal state
   const [target, setTarget] = useState<'company' | 'patient'>('company');
   const [selectedSpitch, setSelectedSpitch] = useState<Spitch | null>(null);
@@ -59,7 +75,7 @@ export function EmailEditor({ companyId, companyName, selectedPatients, patients
     cc: ccList.length > 0 ? ccList : undefined,
     subject,
     html: htmlBody,
-    files: selectedFiles,
+    fileRefs,
   });
 
   const handleSpitchSelect = useCallback((spitch: Spitch) => {

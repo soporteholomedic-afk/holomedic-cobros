@@ -1,14 +1,27 @@
 'use client';
 
 import { useState, useCallback } from 'react';
-import type { PatientFile } from '../../domain/entities';
+import type { SelectedFileRef } from '../../domain/entities';
 
 export interface UseSendResultsArgs {
   to: string[];
   cc?: string[];
   subject: string;
   html: string;
-  files: PatientFile[];
+  /**
+   * PR #3 — Spec REQ-1 wire contract.
+   *
+   * The hook sends a single `fileRefs` JSON field on the FormData. The
+   * route (PR #2) resolves each ref via `IFileRepository.read(ruc, dni,
+   * idAten, path, name)` and attaches the real PDF bytes. The legacy
+   * `files` `File`-part is rejected with `VALIDATION_ERROR` (400).
+   *
+   * Replaces the prior `files: PatientFile[]` argument; the hook no
+   * longer constructs any `Blob`. `PatientFile` is still computed
+   * inside `EmailEditor` for the `AttachmentList` display surface
+   * (parallel lists: `selectedFiles` for display, `fileRefs` for send).
+   */
+  fileRefs: SelectedFileRef[];
 }
 
 export interface UseSendResultsReturn {
@@ -36,13 +49,11 @@ export function useSendResults(args: UseSendResultsArgs): UseSendResultsReturn {
       }
       formData.append('subject', args.subject);
       formData.append('html', args.html);
-
-      for (const file of args.files) {
-        const blob = new Blob(['Contenido mock para ' + file.name], {
-          type: file.type || 'application/pdf',
-        });
-        formData.append('files', blob, file.name);
-      }
+      // PR #3 — Spec REQ-1: send the location triple + relative path
+      // + name as JSON. The route resolves each ref against the UNC
+      // share via `IFileRepository.read`. No bytes are constructed on
+      // the client — the prior fake-blob loop is removed.
+      formData.append('fileRefs', JSON.stringify(args.fileRefs));
 
       const response = await fetch('/api/consolidados/send-results', {
         method: 'POST',
@@ -62,7 +73,7 @@ export function useSendResults(args: UseSendResultsArgs): UseSendResultsReturn {
     } finally {
       setIsSending(false);
     }
-  }, [args.to, args.cc, args.subject, args.html, args.files]);
+  }, [args.to, args.cc, args.subject, args.html, args.fileRefs]);
 
   return {
     send,

@@ -60,25 +60,29 @@ export function WorkerDetailTable({ companyName, fechaInicio, fechaFin }: Worker
   }, []);
 
   /**
-   * Bridge from `FilesModal.onSend(files)` to the `EmailEditor` payload.
+   * Bridge from `FilesModal.onSend(selected)` to the `EmailEditor` payload.
    * Reconstructs the patient context from the current `modalState`,
    * resolves `companyId` via `useCompanies` (spec EI-2), and stores
    * the bridged data so the EmailEditor overlay can mount in place
    * of the table.
    *
-   * Refs are synthesized as `::${file.name}` because the modal does
-   * not emit the explorer-pane path (PR #3 deviated from the design's
-   * wider signature). Within a single patient archive, file names
-   * are unique, so this is functionally correct for the common case.
+   * PR #1 — the modal now hands a `ReadonlyMap<fileRef, FileNode>`
+   * (keyed by `"${folderPath}::${name}"`) so the bridge can split
+   * each ref into `{ path, name }` and preserve the explorer-pane
+   * folder path. The prior `::${file.name}` synth dropped the
+   * folder for any selection from a subfolder.
    */
   const handleSendFromModal = useCallback(
-    (files: FileNode[]): void => {
+    (selected: ReadonlyMap<string, FileNode>): void => {
       if (!modalState) return;
       const person = people.find((p) => p.dni === modalState.dni);
       if (!person) return;
       const ficha = person.fichas[modalState.fichaIndex] ?? null;
       const companyId = resolveCompanyId(companies, person.empresa);
-      const refs = files.map((file) => `::${file.name}`);
+      // PR #1 — derive both parallel arrays from the Map. Insertion
+      // order is preserved by the Map contract.
+      const refs = Array.from(selected.keys());
+      const files = Array.from(selected.values());
       setEmailViewData(emailViewDataFromFiles(person, ficha, files, refs, companyId, companyName));
       // Close the modal so the overlay can take its place. The
       // conditional render `modalState && !emailViewData` would also
@@ -209,6 +213,11 @@ export function WorkerDetailTable({ companyName, fechaInicio, fechaFin }: Worker
               companyName={emailViewData.companyName}
               selectedPatients={emailViewData.selectedPatients}
               patients={emailViewData.patients}
+              // PR #3 — forward the bridged `fileRefs` (LAN-share
+              // location triple + relative path + name) so the hook
+              // can serialise them as the wire payload. `PatientFile`
+              // (display) stays in `patients` for the AttachmentList.
+              fileRefs={emailViewData.fileRefs}
             />
           </div>
         </section>

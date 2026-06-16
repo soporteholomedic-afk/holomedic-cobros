@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { createFileNode } from '@/features/envio-resultados/domain/file-system/FileNode';
 import type { UnifiedPerson, UnifiedFicha } from '@/types/sp-result';
 import { emailViewDataFromFiles, type EmailViewData } from '../emailViewDataFromFiles';
+import type { SelectedFileRef } from '@/features/envio-resultados/domain/entities';
 
 /**
  * Unit tests for the `emailViewDataFromFiles` bridge helper.
@@ -156,5 +157,134 @@ describe('emailViewDataFromFiles (bridge helper)', () => {
 
     expect(result.companyId).toBe('');
     expect(result.patients[0]?.companyId).toBe('');
+  });
+
+  // ================================================================
+  // PR #1 — fileRefs (SelectedFileRef[]) carries path + triple
+  // Spec REQ-1, REQ-2: the bridge parses `"${folderPath}::${name}"`
+  // and emits a `fileRefs` field that the route will resolve via
+  // `IFileRepository.read(ruc, dni, idAten, path, name)`.
+  // ================================================================
+
+  it('emits fileRefs with empty path for a ready-pane ref "::name"', () => {
+    const person = makePerson();
+    const ficha = makeFicha();
+    const fileA = createFileNode({ name: 'cert.pdf', sizeBytes: 100, modifiedAt: '2026-06-01T00:00:00.000Z' });
+
+    const result = emailViewDataFromFiles(person, ficha, [fileA], ['::cert.pdf'], 'uuid-company-1', 'Holomedic S.A.');
+
+    expect(result.fileRefs).toHaveLength(1);
+    expect(result.fileRefs[0]).toEqual<SelectedFileRef>({
+      ruc: ficha.nroRuc,
+      dni: person.dni,
+      idAten: ficha.idAten,
+      path: '',
+      name: 'cert.pdf',
+    });
+  });
+
+  it('emits fileRefs with LEGAJOS path for a ready-pane ref "LEGAJOS::name"', () => {
+    const person = makePerson();
+    const ficha = makeFicha();
+    const fileA = createFileNode({ name: 'cert.pdf', sizeBytes: 100, modifiedAt: '2026-06-01T00:00:00.000Z' });
+
+    const result = emailViewDataFromFiles(
+      person,
+      ficha,
+      [fileA],
+      ['LEGAJOS::cert.pdf'],
+      'uuid-company-1',
+      'Holomedic S.A.',
+    );
+
+    expect(result.fileRefs).toHaveLength(1);
+    expect(result.fileRefs[0]).toEqual<SelectedFileRef>({
+      ruc: ficha.nroRuc,
+      dni: person.dni,
+      idAten: ficha.idAten,
+      path: 'LEGAJOS',
+      name: 'cert.pdf',
+    });
+  });
+
+  it('emits fileRefs with the explorer-pane folder path (not lossy "::name")', () => {
+    // This is the regression the design calls out: WorkerDetailTable
+    // used to synthesise `::${name}`, dropping the explorer-pane
+    // folder path. The bridge must surface the real path.
+    const person = makePerson();
+    const ficha = makeFicha();
+    const fileA = createFileNode({ name: 'informe.pdf', sizeBytes: 100, modifiedAt: '2026-06-01T00:00:00.000Z' });
+    const fileB = createFileNode({ name: 'foto.pdf', sizeBytes: 200, modifiedAt: '2026-06-01T00:00:00.000Z' });
+
+    const result = emailViewDataFromFiles(
+      person,
+      ficha,
+      [fileA, fileB],
+      ['EXAMENES::informe.pdf', 'EXAMENES::foto.pdf'],
+      'uuid-company-1',
+      'Holomedic S.A.',
+    );
+
+    expect(result.fileRefs).toHaveLength(2);
+    expect(result.fileRefs[0]?.path).toBe('EXAMENES');
+    expect(result.fileRefs[0]?.name).toBe('informe.pdf');
+    expect(result.fileRefs[1]?.path).toBe('EXAMENES');
+    expect(result.fileRefs[1]?.name).toBe('foto.pdf');
+  });
+
+  it('emits fileRefs with the ruc/dni/idAten triple from ficha + person', () => {
+    const person = makePerson({ dni: '87654321', nombre: 'María' });
+    const ficha = makeFicha({ idAten: 'AT-999', nroRuc: '20999999999' });
+    const fileA = createFileNode({ name: 'a.pdf', sizeBytes: 100, modifiedAt: '2026-06-01T00:00:00.000Z' });
+
+    const result = emailViewDataFromFiles(person, ficha, [fileA], ['::a.pdf'], 'uuid-company-1', 'Holomedic S.A.');
+
+    expect(result.fileRefs[0]?.ruc).toBe('20999999999');
+    expect(result.fileRefs[0]?.dni).toBe('87654321');
+    expect(result.fileRefs[0]?.idAten).toBe('AT-999');
+  });
+
+  it('emits fileRefs with empty triple fields when ficha is null (worker-only person)', () => {
+    // Defensive: a worker-only person has no ficha, so the location
+    // triple is empty. The bridge must not throw and must emit
+    // empty strings for ruc/dni/idAten.
+    const person = makePerson();
+    const fileA = createFileNode({ name: 'a.pdf', sizeBytes: 100, modifiedAt: '2026-06-01T00:00:00.000Z' });
+
+    const result = emailViewDataFromFiles(person, null, [fileA], ['::a.pdf'], 'uuid-company-1', 'Holomedic S.A.');
+
+    expect(result.fileRefs).toHaveLength(1);
+    expect(result.fileRefs[0]?.ruc).toBe('');
+    expect(result.fileRefs[0]?.dni).toBe(person.dni);
+    expect(result.fileRefs[0]?.idAten).toBe('');
+    expect(result.fileRefs[0]?.path).toBe('');
+    expect(result.fileRefs[0]?.name).toBe('a.pdf');
+  });
+
+  it('emits fileRefs with a nested path when the ref includes subfolders', () => {
+    const person = makePerson();
+    const ficha = makeFicha();
+    const fileA = createFileNode({ name: 'emo.pdf', sizeBytes: 100, modifiedAt: '2026-06-01T00:00:00.000Z' });
+
+    const result = emailViewDataFromFiles(
+      person,
+      ficha,
+      [fileA],
+      ['EXAMENES/2024::emo.pdf'],
+      'uuid-company-1',
+      'Holomedic S.A.',
+    );
+
+    expect(result.fileRefs[0]?.path).toBe('EXAMENES/2024');
+    expect(result.fileRefs[0]?.name).toBe('emo.pdf');
+  });
+
+  it('emits an empty fileRefs array when no files are selected', () => {
+    const person = makePerson();
+    const ficha = makeFicha();
+
+    const result = emailViewDataFromFiles(person, ficha, [], [], 'uuid-company-1', 'Holomedic S.A.');
+
+    expect(result.fileRefs).toEqual([]);
   });
 });

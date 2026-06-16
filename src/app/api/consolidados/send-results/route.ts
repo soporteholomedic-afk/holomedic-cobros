@@ -1,11 +1,12 @@
 import { NextResponse } from 'next/server';
-import { sendEmail } from '@/utils/sendEmail';
-import type { EmailAttachment } from '@/utils/sendEmail';
+import { SendResultsUseCase } from '@/features/envio-resultados/application/sendResults';
+import { getFileRepository } from '@/features/envio-resultados/infrastructure/files/getFileRepository';
+import { makeEmailService } from '@/features/envio-resultados/infrastructure/email/emailService';
+import type { SelectedFileRef } from '@/features/envio-resultados/domain/entities';
 
 // ---- Constants ----
 
 const MAX_FILES = 10;
-const MAX_TOTAL_SIZE = 10 * 1024 * 1024; // 10 MB
 
 // ---- Response types ----
 
@@ -24,7 +25,11 @@ type ApiResponse = SuccessResponse | ErrorResponse;
 
 // ---- Helpers ----
 
-function buildError(code: ErrorResponse['code'], error: string, status: number): NextResponse<ErrorResponse> {
+function buildError(
+  code: ErrorResponse['code'],
+  error: string,
+  status: number,
+): NextResponse<ErrorResponse> {
   return NextResponse.json({ success: false, error, code }, { status });
 }
 
@@ -36,8 +41,49 @@ function parseCommaSeparated(value: string | null): string[] | undefined {
     .filter((s) => s.length > 0);
 }
 
+/**
+ * Type guard for a `SelectedFileRef` shape received from the
+ * untrusted FormData JSON. The route's role is to reject
+ * malformed payloads before they reach the use case.
+ */
+function isFileRefShape(v: unknown): v is SelectedFileRef {
+  if (typeof v !== 'object' || v === null) return false;
+  const obj = v as Record<string, unknown>;
+  return (
+    typeof obj.ruc === 'string' &&
+    typeof obj.dni === 'string' &&
+    typeof obj.idAten === 'string' &&
+    typeof obj.path === 'string' &&
+    typeof obj.name === 'string'
+  );
+}
+
 // ---- POST handler ----
 
+/**
+ * POST /api/consolidados/send-results
+ *
+ * PR #2 — the consolidated send pipeline. The route accepts a
+ * `fileRefs` JSON field (an array of `SelectedFileRef` —
+ * `ruc`/`dni`/`idAten`/`path`/`name`) and delegates to
+ * `SendResultsUseCase`, which resolves each ref to a real `Buffer`
+ * via `IFileRepository.read` and hands it to the email service.
+ *
+ * Wire format:
+ * - `to`     — comma-separated list (required)
+ * - `cc`     — comma-separated list (optional)
+ * - `subject` — string (required)
+ * - `html`    — string (required)
+ * - `fileRefs` — JSON string (required, non-empty array, max 10)
+ *
+ * The legacy `files` `File`-part is rejected with `VALIDATION_ERROR`
+ * (clean break — PR #3 will rewire the hook to send `fileRefs`).
+ *
+ * Error code → HTTP status:
+ * - `VALIDATION_ERROR` → 400
+ * - `INTERNAL_ERROR`   → 500
+ * - `SMTP_ERROR`       → 502
+ */
 export async function POST(request: Request): Promise<NextResponse<ApiResponse>> {
   try {
     let formData: FormData;
@@ -47,89 +93,92 @@ export async function POST(request: Request): Promise<NextResponse<ApiResponse>>
       return buildError('VALIDATION_ERROR', 'Invalid form data', 400);
     }
 
-    // ---- Parse text fields ----
+    // ---- 1. Reject any legacy `files` File-part ----
+    // PR #2 — clean break. The old `files` File-part is gone;
+    // clients must send `fileRefs` JSON.
+    const legacyFiles = formData.getAll('files').filter((f) => f instanceof File);
+    if (legacyFiles.length > 0) {
+      return buildError('VALIDATION_ERROR', 'Route consumes fileRefs only', 400);
+    }
 
+    // ---- 2. Parse text fields ----
     const to = parseCommaSeparated(formData.get('to') as string | null);
     const cc = parseCommaSeparated(formData.get('cc') as string | null);
     const subject = formData.get('subject') as string | null;
     const html = formData.get('html') as string | null;
 
-    // ---- Validate required fields ----
-
     if (!to || to.length === 0) {
-      return buildError('VALIDATION_ERROR', 'At least one recipient required in "to" field', 400);
+      return buildError(
+        'VALIDATION_ERROR',
+        'At least one recipient required in "to" field',
+        400,
+      );
     }
-
     if (!subject || !subject.trim()) {
       return buildError('VALIDATION_ERROR', '"subject" is required', 400);
     }
-
     if (!html || !html.trim()) {
       return buildError('VALIDATION_ERROR', '"html" is required', 400);
     }
 
-    // ---- Parse file attachments ----
-
-    const fileEntries = formData.getAll('files') as (File | string)[];
-    const files = fileEntries.filter((f): f is File => f instanceof File);
-
-    if (files.length > MAX_FILES) {
-      return buildError(
-        'VALIDATION_ERROR',
-        `Maximum ${MAX_FILES} files allowed, got ${files.length}`,
-        400,
-      );
+    // ---- 3. Parse + validate `fileRefs` JSON ----
+    const fileRefsRaw = formData.get('fileRefs');
+    if (typeof fileRefsRaw !== 'string') {
+      return buildError('VALIDATION_ERROR', '"fileRefs" is required', 400);
     }
-
-    if (files.length > 0) {
-      const totalSize = files.reduce((sum, f) => sum + f.size, 0);
-      if (totalSize > MAX_TOTAL_SIZE) {
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(fileRefsRaw);
+    } catch {
+      return buildError('VALIDATION_ERROR', '"fileRefs" must be valid JSON', 400);
+    }
+    if (!Array.isArray(parsed)) {
+      return buildError('VALIDATION_ERROR', '"fileRefs" must be an array', 400);
+    }
+    for (const ref of parsed) {
+      if (!isFileRefShape(ref)) {
         return buildError(
           'VALIDATION_ERROR',
-          'Total file size exceeds 10MB limit',
+          'Each fileRef must have ruc, dni, idAten, path, name as strings',
+          400,
+        );
+      }
+      if (!/^\d+$/.test(ref.dni)) {
+        return buildError(
+          'VALIDATION_ERROR',
+          `"dni" must be numeric: ${ref.dni}`,
           400,
         );
       }
     }
+    if (parsed.length > MAX_FILES) {
+      return buildError(
+        'VALIDATION_ERROR',
+        `Maximum ${MAX_FILES} files allowed, got ${parsed.length}`,
+        400,
+      );
+    }
 
-    // ---- Build attachments ----
-
-    const attachments: EmailAttachment[] = files.map((f) => ({
-      filename: f.name,
-      content: Buffer.from(new Uint8Array(0)), // placeholder — will be replaced below
-    }));
-
-    // Read file contents as buffers
-    const readPromises = files.map(async (f, i) => {
-      const buffer = Buffer.from(await f.arrayBuffer());
-      attachments[i] = {
-        filename: f.name,
-        content: buffer,
-        ...(f.type ? { contentType: f.type } : {}),
-      };
-    });
-    await Promise.all(readPromises);
-
-    // ---- Send email ----
-
-    const sendParams: Parameters<typeof sendEmail>[0] = {
+    // ---- 4. Delegate to the use case ----
+    const useCase = new SendResultsUseCase(getFileRepository(), makeEmailService());
+    const result = await useCase.execute({
       to,
       ...(cc ? { cc } : {}),
       subject,
       html,
-      ...(attachments.length > 0 ? { attachments } : {}),
-    };
+      fileRefs: parsed,
+    });
 
-    const result = await sendEmail(sendParams);
-
-    if (!result.success) {
+    if (result.success) {
+      return NextResponse.json({ success: true, messageId: result.messageId });
+    }
+    if (result.code === 'VALIDATION_ERROR') {
+      return buildError('VALIDATION_ERROR', result.error, 400);
+    }
+    if (result.code === 'SMTP_ERROR') {
       return buildError('SMTP_ERROR', result.error, 502);
     }
-
-    return NextResponse.json({
-      success: true,
-      messageId: result.messageId,
-    });
+    return buildError('INTERNAL_ERROR', result.error, 500);
   } catch (error) {
     const message =
       error instanceof Error ? error.message : 'An unexpected error occurred';

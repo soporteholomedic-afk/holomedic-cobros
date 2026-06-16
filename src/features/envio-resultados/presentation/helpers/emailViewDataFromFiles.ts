@@ -1,8 +1,24 @@
-import type { Patient, PatientFile } from '../../domain/entities';
+import type { Patient, PatientFile, SelectedFileRef } from '../../domain/entities';
 import type { FileNode } from '../../domain/file-system/FileNode';
 import type { UnifiedPerson, UnifiedFicha } from '@/types/sp-result';
 
 const PDF_MIME = 'application/pdf';
+
+/**
+ * Split a `fileRef` into its two constituents: the relative folder path
+ * (empty string for root) and the file basename. A single `::` is the
+ * canonical separator; everything before it is the folder and everything
+ * after is the name.
+ *
+ * Defensive: a ref without `::` is treated as a root ref with the
+ * whole string as the name (so the bridge doesn't drop the selection
+ * if a future caller forgets the prefix).
+ */
+function splitFileRef(ref: string): { path: string; name: string } {
+  const idx = ref.indexOf('::');
+  if (idx < 0) return { path: '', name: ref };
+  return { path: ref.slice(0, idx), name: ref.slice(idx + 2) };
+}
 
 /**
  * Shape returned to `EmailEditor`. Mirrors `EmailEditorProps` so the
@@ -15,6 +31,14 @@ export interface EmailViewData {
     [patientId: string]: { patientName: string; files: string[] };
   };
   patients: Patient[];
+  /**
+   * PR #1 — send-payload side of the bridge. Carries the LAN-share
+   * location triple (`ruc`/`dni`/`idAten`) plus the relative `path`
+   * and `name` that `IFileRepository.read` needs. `PatientFile`
+   * (display) is preserved unchanged; `SelectedFileRef` is the
+   * wire-shape the route consumes in PR #2.
+   */
+  fileRefs: SelectedFileRef[];
 }
 
 /**
@@ -27,7 +51,7 @@ export interface EmailViewData {
  */
 export function emailViewDataFromFiles(
   person: UnifiedPerson,
-  _ficha: UnifiedFicha | null,
+  ficha: UnifiedFicha | null,
   selected: FileNode[],
   refs: readonly string[],
   companyId: string,
@@ -45,6 +69,20 @@ export function emailViewDataFromFiles(
     type: PDF_MIME,
     size: node.sizeBytes,
   }));
+
+  // PR #1 — derive `path` from each ref (`""` for root) and stamp the
+  // location triple from `ficha` + `person`. Worker-only persons
+  // (no ficha) carry empty strings for ruc/dni/idAten.
+  const fileRefs: SelectedFileRef[] = refs.map((ref) => {
+    const { path, name } = splitFileRef(ref);
+    return {
+      ruc: ficha?.nroRuc ?? '',
+      dni: person.dni,
+      idAten: ficha?.idAten ?? '',
+      path,
+      name,
+    };
+  });
 
   return {
     companyId,
@@ -64,5 +102,6 @@ export function emailViewDataFromFiles(
         files,
       },
     ],
+    fileRefs,
   };
 }
