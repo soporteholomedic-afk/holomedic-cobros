@@ -988,7 +988,10 @@ describe('FilesModal', () => {
     expect(checkboxes[0]).toBeChecked();
   });
 
-  it('fires onSend with the selected FileNode[] when "Enviar" is clicked', () => {
+  it('fires onSend with a ReadonlyMap<fileRef, FileNode> when "Enviar" is clicked', () => {
+    // PR #1 — signature changed from FileNode[] to
+    // ReadonlyMap<fileRef, FileNode> so the bridge can preserve the
+    // explorer-pane folder path (the `fileRef` key is "folderPath::name").
     const readyFiles: FileNode[] = [
       createFileNode({
         name: 'a.pdf',
@@ -1027,11 +1030,13 @@ describe('FilesModal', () => {
     fireEvent.click(screen.getByTestId('files-modal-send'));
 
     expect(onSend).toHaveBeenCalledTimes(1);
-    // Payload is the selected FileNode array in insertion order.
-    const payload = onSend.mock.calls[0]?.[0] as FileNode[];
-    expect(payload).toHaveLength(2);
-    expect(payload[0]).toBe(readyFiles[0]);
-    expect(payload[1]).toBe(readyFiles[1]);
+    // Payload is now a Map keyed by fileRef ("::name" for the ready pane).
+    const payload = onSend.mock.calls[0]?.[0] as ReadonlyMap<string, FileNode>;
+    expect(payload).toBeInstanceOf(Map);
+    expect(payload.size).toBe(2);
+    // Insertion order preserved.
+    expect(payload.get('::a.pdf')).toBe(readyFiles[0]);
+    expect(payload.get('::b.pdf')).toBe(readyFiles[1]);
   });
 
   it('does not throw when "Enviar" is clicked without an onSend handler (optional prop)', () => {

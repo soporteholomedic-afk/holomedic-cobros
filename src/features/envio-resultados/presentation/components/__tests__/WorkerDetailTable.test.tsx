@@ -17,11 +17,17 @@ const mockEmailEditorProps = vi.hoisted(() => vi.fn());
 // The stub records the props it received so the test can assert the
 // modal is opened with the right (ruc, dni, idAten) triple. The
 // trigger-send button lets PR #4 tests fire `onSend` with a known
-// `FileNode[]` to drive the bridge → EmailEditor state transition.
+// `ReadonlyMap<fileRef, FileNode>` to drive the bridge → EmailEditor
+// state transition.
+//
+// PR #1 — the trigger sends a Map with explorer-pane folder paths
+// baked into the keys ("LEGAJOS::cert.pdf" for the subfolder file,
+// "::emo.pdf" for the root file) so the bridge preserves the actual
+// folder path (the prior `::${name}` synth dropped the folder).
 vi.mock('../FilesModal', () => ({
   FilesModal: (props: Record<string, unknown>) => {
     mockFilesModalProps(props);
-    const onSend = props['onSend'] as ((files: FileNode[]) => void) | undefined;
+    const onSend = props['onSend'] as ((selected: ReadonlyMap<string, FileNode>) => void) | undefined;
     return (
       <div data-testid="files-modal-stub">
         {String(props['idAten'] ?? '')}
@@ -31,10 +37,15 @@ vi.mock('../FilesModal', () => ({
           <button
             data-testid="files-modal-stub-trigger-onsend"
             onClick={() => {
-              onSend([
-                createFileNode({ name: 'a.pdf', sizeBytes: 100, modifiedAt: '2026-06-01T00:00:00.000Z' }),
-                createFileNode({ name: 'b.pdf', sizeBytes: 200, modifiedAt: '2026-06-01T00:00:00.000Z' }),
+              // Two files from different folders — the bridge must
+              // see both folder paths in the resulting fileRefs.
+              const fileA = createFileNode({ name: 'cert.pdf', sizeBytes: 100, modifiedAt: '2026-06-01T00:00:00.000Z' });
+              const fileB = createFileNode({ name: 'emo.pdf', sizeBytes: 200, modifiedAt: '2026-06-01T00:00:00.000Z' });
+              const selected = new Map<string, FileNode>([
+                ['LEGAJOS::cert.pdf', fileA],
+                ['::emo.pdf', fileB],
               ]);
+              onSend(selected);
             }}
           >
             trigger-send
@@ -816,24 +827,29 @@ describe('WorkerDetailTable — Unified Table', () => {
 
       // EmailEditor received the bridged data: a single patient whose
       // dni matches, with the 2 files we sent and the right keys.
+      // PR #1 — the trigger sends 'LEGAJOS::cert.pdf' + '::emo.pdf'
+      // (real folder paths baked into the keys), and the bridge must
+      // preserve them. The prior `::${name}` synth dropped the folder.
       const lastProps =
         mockEmailEditorProps.mock.calls[mockEmailEditorProps.mock.calls.length - 1]?.[0];
       const patients = lastProps?.['patients'] as Array<{ id: string; dni: string; files: Array<{ id: string; name: string; type: string; size: number }> }>;
       expect(patients).toHaveLength(1);
       expect(patients[0]?.dni).toBe(person.dni);
       expect(patients[0]?.files).toHaveLength(2);
-      expect(patients[0]?.files[0]?.id).toBe('::a.pdf');
-      expect(patients[0]?.files[1]?.id).toBe('::b.pdf');
-      expect(patients[0]?.files[0]?.name).toBe('a.pdf');
-      expect(patients[0]?.files[1]?.name).toBe('b.pdf');
+      expect(patients[0]?.files[0]?.id).toBe('LEGAJOS::cert.pdf');
+      expect(patients[0]?.files[1]?.id).toBe('::emo.pdf');
+      expect(patients[0]?.files[0]?.name).toBe('cert.pdf');
+      expect(patients[0]?.files[1]?.name).toBe('emo.pdf');
       expect(patients[0]?.files[0]?.type).toBe('application/pdf');
       expect(patients[0]?.files[0]?.size).toBe(100);
       expect(patients[0]?.files[1]?.size).toBe(200);
 
-      // selectedPatients is keyed by person.dni and carries the refs.
+      // selectedPatients is keyed by person.dni and carries the refs
+      // (still the unmodified fileRef strings — the bridge splits
+      // them for fileRefs but preserves the originals here).
       const selectedPatients = lastProps?.['selectedPatients'] as Record<string, { patientName: string; files: string[] }>;
       expect(Object.keys(selectedPatients)).toEqual([person.dni]);
-      expect(selectedPatients[person.dni]?.files).toEqual(['::a.pdf', '::b.pdf']);
+      expect(selectedPatients[person.dni]?.files).toEqual(['LEGAJOS::cert.pdf', '::emo.pdf']);
 
       // The FilesModal stub is no longer rendered (closed before onSend
       // resolves — handleSendFromModal does not re-open it).
@@ -903,18 +919,18 @@ describe('WorkerDetailTable — Unified Table', () => {
       // Re-render the stub with an empty payload for THIS test only.
       // The hoisted trigger sends 2 files; we instead drive the same
       // path via the onSend prop captured by `mockFilesModalProps`.
-      const captured: { onSend?: (files: FileNode[]) => void } = {};
+      const captured: { onSend?: (selected: ReadonlyMap<string, FileNode>) => void } = {};
       const origMock = mockFilesModalProps.getMockImplementation();
       mockFilesModalProps.mockImplementation((props: Record<string, unknown>) => {
-        captured.onSend = props['onSend'] as (files: FileNode[]) => void;
+        captured.onSend = props['onSend'] as (selected: ReadonlyMap<string, FileNode>) => void;
         return origMock ? origMock(props) : undefined;
       });
 
       render(<WorkerDetailTable {...DEFAULT_PROPS} />);
       fireEvent.click(screen.getByRole('button', { name: /Ver Archivos/ }));
 
-      // Drive onSend with an empty FileNode[].
-      expect(() => act(() => { captured.onSend?.([]); })).not.toThrow();
+      // Drive onSend with an empty Map.
+      expect(() => act(() => { captured.onSend?.(new Map()); })).not.toThrow();
 
       // Overlay is up, EmailEditor received a single patient with no files.
       await waitFor(() => {
@@ -938,19 +954,21 @@ describe('WorkerDetailTable — Unified Table', () => {
         error: null,
       });
 
-      const captured: { onSend?: (files: FileNode[]) => void } = {};
+      const captured: { onSend?: (selected: ReadonlyMap<string, FileNode>) => void } = {};
       const origMock = mockFilesModalProps.getMockImplementation();
       mockFilesModalProps.mockImplementation((props: Record<string, unknown>) => {
-        captured.onSend = props['onSend'] as (files: FileNode[]) => void;
+        captured.onSend = props['onSend'] as (selected: ReadonlyMap<string, FileNode>) => void;
         return origMock ? origMock(props) : undefined;
       });
 
       render(<WorkerDetailTable {...DEFAULT_PROPS} />);
       fireEvent.click(screen.getByRole('button', { name: /Ver Archivos/ }));
       act(() => {
-        captured.onSend?.([
-          createFileNode({ name: 'solo.pdf', sizeBytes: 999, modifiedAt: '2026-06-01T00:00:00.000Z' }),
-        ]);
+        // Use a non-root fileRef to also assert the explorer-pane
+        // folder path is preserved end-to-end.
+        const solo = createFileNode({ name: 'solo.pdf', sizeBytes: 999, modifiedAt: '2026-06-01T00:00:00.000Z' });
+        const selected = new Map<string, FileNode>([['EXAMENES::solo.pdf', solo]]);
+        captured.onSend?.(selected);
       });
 
       await waitFor(() => {
@@ -960,7 +978,7 @@ describe('WorkerDetailTable — Unified Table', () => {
         mockEmailEditorProps.mock.calls[mockEmailEditorProps.mock.calls.length - 1]?.[0];
       const patients = lastProps?.['patients'] as Array<{ files: Array<{ id: string; name: string; size: number }> }>;
       expect(patients[0]?.files).toHaveLength(1);
-      expect(patients[0]?.files[0]?.id).toBe('::solo.pdf');
+      expect(patients[0]?.files[0]?.id).toBe('EXAMENES::solo.pdf');
       expect(patients[0]?.files[0]?.name).toBe('solo.pdf');
       expect(patients[0]?.files[0]?.size).toBe(999);
     });

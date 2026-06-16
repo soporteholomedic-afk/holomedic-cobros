@@ -31,7 +31,17 @@ interface EmailEditorProps {
   fileRefs?: SelectedFileRef[];
 }
 
-export function EmailEditor({ companyId, companyName, selectedPatients, patients, fileRefs = [] }: EmailEditorProps) {
+export function EmailEditor({
+  companyId,
+  companyName,
+  selectedPatients,
+  patients,
+  // `fileRefs` is intentionally carried in PR #1 (no behavior change);
+  // useSendResults accepts it in PR #3 once the hook is rewired to
+  // send the JSON `fileRefs` field instead of the fake `Blob` loop.
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  fileRefs = [],
+}: EmailEditorProps) {
   // Internal state
   const [target, setTarget] = useState<'company' | 'patient'>('company');
   const [selectedSpitch, setSelectedSpitch] = useState<Spitch | null>(null);

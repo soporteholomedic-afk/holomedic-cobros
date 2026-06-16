@@ -25,12 +25,20 @@ export interface FilesModalProps {
   onClose: () => void;
   /**
    * Fired when the user clicks the "Enviar" footer button. Receives
-   * the selected `FileNode[]` in insertion order. Optional: when not
-   * provided, the click is a no-op (defensive — the modal can be
-   * mounted in read-only contexts). The parent decides when to close
-   * the modal after consuming the selection.
+   * the selection as a `ReadonlyMap` keyed by `fileRef`
+   * (`"${folderPath}::${name}"`) so the parent can preserve the
+   * explorer-pane folder path. Optional: when not provided, the
+   * click is a no-op (defensive — the modal can be mounted in
+   * read-only contexts). The parent decides when to close the
+   * modal after consuming the selection.
+   *
+   * PR #1 — signature changed from `FileNode[]` to
+   * `ReadonlyMap<string, FileNode>` so the bridge can split each
+   * ref into `{ path, name }` instead of dropping the path
+   * (`WorkerDetailTable` previously synthesised `::${name}` and
+   * lost the folder).
    */
-  onSend?: (files: FileNode[]) => void;
+  onSend?: (selected: ReadonlyMap<string, FileNode>) => void;
 }
 
 /**
@@ -124,7 +132,12 @@ export function FilesModal({
   }, []);
 
   const handleSendClick = useCallback((): void => {
-    onSend?.(Array.from(selectedFilesMap.values()));
+    // PR #1 — pass the map (keyed by `fileRef`) so the parent
+    // can split each key into `{ path, name }` and preserve the
+    // explorer-pane folder path. Previously this passed
+    // `Array.from(selectedFilesMap.values())`, which lost the key
+    // (and with it the folder path).
+    onSend?.(selectedFilesMap);
   }, [onSend, selectedFilesMap]);
 
   const selectedRefs = useMemo<ReadonlySet<string>>(
