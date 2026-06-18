@@ -3,7 +3,13 @@
 import { Suspense, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { CompanySelector } from '@/features/envio-resultados/presentation/components/CompanySelector';
+import {
+  ConsolidadosViewSwitch,
+  type ConsolidadosView,
+} from '@/features/envio-resultados/presentation/components/ConsolidadosViewSwitch';
+import { PatientsList } from '@/features/envio-resultados/presentation/components/PatientsList';
 import { getLocalDateString, parseDateParam } from '@/lib/dates';
+import type { SpResultRow } from '@/types/sp-result';
 
 function ConsolidadosContent() {
   const router = useRouter();
@@ -16,6 +22,7 @@ function ConsolidadosContent() {
   const [fechaFin, setFechaFin] = useState(() =>
     parseDateParam(searchParams.get('fechaFin'), today),
   );
+  const [view, setView] = useState<ConsolidadosView>('pacientes');
 
   const isInvalidRange =
     fechaInicio.length > 0 &&
@@ -41,9 +48,18 @@ function ConsolidadosContent() {
     router.push(`/consolidados/envio-resultados?${params.toString()}`);
   };
 
+  const handleViewFiles = (row: SpResultRow) => {
+    const params = new URLSearchParams({
+      companyName: row.NomCom,
+      fechaInicio,
+      fechaFin,
+    });
+    router.push(`/consolidados/envio-resultados?${params.toString()}`);
+  };
+
   return (
     <div className="flex flex-col gap-6">
-      {/* Date filter — lifted from CompanySelector */}
+      {/* Date filter — lifted to page so both views share dates */}
       <form
         onSubmit={handleFilter}
         className="flex flex-col sm:flex-row gap-4 items-end p-4 bg-white rounded-xl border border-slate-200 shadow-sm"
@@ -93,11 +109,21 @@ function ConsolidadosContent() {
         </p>
       )}
 
-      <CompanySelector
-        fechaInicio={fechaInicio}
-        fechaFin={fechaFin}
-        onSelect={handleCompanySelect}
-      />
+      <ConsolidadosViewSwitch activeView={view} onViewChange={setView} />
+
+      {view === 'pacientes' ? (
+        <PatientsList
+          fechaInicio={fechaInicio}
+          fechaFin={fechaFin}
+          onViewFiles={handleViewFiles}
+        />
+      ) : (
+        <CompanySelector
+          fechaInicio={fechaInicio}
+          fechaFin={fechaFin}
+          onSelect={handleCompanySelect}
+        />
+      )}
     </div>
   );
 }
@@ -108,7 +134,9 @@ export default function ConsolidadosPage() {
       <div className="max-w-4xl mx-auto">
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-slate-800">Consolidados</h1>
-          <p className="text-slate-500 mt-1">Seleccione una empresa</p>
+          <p className="text-slate-500 mt-1">
+            Lista de pacientes o empresas según el rango de fechas seleccionado
+          </p>
         </div>
         <Suspense
           fallback={
