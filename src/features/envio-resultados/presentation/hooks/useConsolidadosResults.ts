@@ -23,11 +23,16 @@ interface ConsolidadosResultsPayload {
  * `companies` projection (used by the company cards). Aborts in-flight
  * requests on unmount or on date change.
  *
+ * The optional `retryNonce` parameter lets consumers (e.g. an error-state
+ * "Reintentar" button) force a re-fetch without changing the dates. The
+ * base contract (return shape per R-HK-3) is preserved.
+ *
  * Spec: R-HK-1..5.
  */
 export function useConsolidadosResults(
   fechaInicio: string,
   fechaFin: string,
+  retryNonce: number = 0,
 ): UseConsolidadosResultsReturn {
   const [rows, setRows] = useState<SpResultRow[]>([]);
   const [companies, setCompanies] = useState<CompanyGroup[]>([]);
@@ -71,7 +76,7 @@ export function useConsolidadosResults(
       });
 
     return () => controller.abort();
-  }, [fechaInicio, fechaFin]);
+  }, [fechaInicio, fechaFin, retryNonce]);
 
   return { rows, companies, loading, error };
 }

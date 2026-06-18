@@ -175,4 +175,34 @@ describe('useConsolidadosResults', () => {
     expect(result.current.rows).toEqual([]);
     expect(result.current.companies).toEqual([]);
   });
+
+  it('re-fetches when retryNonce changes (with the same dates)', async () => {
+    mockFetch.mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ rows: [], companies: [] }),
+    });
+
+    const { result, rerender } = renderHook(
+      ({ nonce }: { nonce: number }) =>
+        useConsolidadosResults('2026-06-01', '2026-06-30', nonce),
+      { initialProps: { nonce: 0 } },
+    );
+
+    await waitFor(() => {
+      expect(result.current.loading).toBe(false);
+    });
+
+    expect(mockFetch).toHaveBeenCalledTimes(1);
+
+    rerender({ nonce: 1 });
+
+    await waitFor(() => {
+      expect(mockFetch).toHaveBeenCalledTimes(2);
+    });
+
+    // Same URL — only the nonce changed.
+    const [url1] = mockFetch.mock.calls[0];
+    const [url2] = mockFetch.mock.calls[1];
+    expect(url1).toBe(url2);
+  });
 });
