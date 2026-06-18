@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState, type ReactElement } from 'react';
 import { Maximize2, Minimize2, X } from 'lucide-react';
 import { FilesExplorerPane } from '@/features/envio-resultados/presentation/components/FilesExplorerPane';
+import { FilesGeneratePane } from '@/features/envio-resultados/presentation/components/FilesGeneratePane';
 import { FilesPreviewPane } from '@/features/envio-resultados/presentation/components/FilesPreviewPane';
 import { FilesReadyPane } from '@/features/envio-resultados/presentation/components/FilesReadyPane';
 import { FilesTabs, type FilesTab } from '@/features/envio-resultados/presentation/components/FilesTabs';
@@ -22,6 +23,15 @@ export interface FilesModalProps {
   idAten: string;
   nombrePaciente: string;
   empresa: string;
+  /**
+   * Date the patient was attended (date-only, `dd/MM/yyyy`). Sourced
+   * from `UnifiedFicha.fecAte` and forwarded to the lookup SP
+   * (`SP_SEL_INFORMESNOCERRADOS`) so the query scopes to the same
+   * day. Optional: `''` when the row has no order (worker-sourced
+   * ficha). PR-2 (`FilesGeneratePane`) consumes it via
+   * `useInformeOrder(idAten, fecAte)`.
+   */
+  fecAte?: string;
   onClose: () => void;
   /**
    * Fired when the user clicks the "Enviar" footer button. Receives
@@ -45,11 +55,12 @@ export interface FilesModalProps {
  * Modal that lists the files in a patient's archive folder on the LAN
  * share, with per-file download links and a one-click bulk zip.
  *
- * Two tabs split the left pane:
+ * Three tabs split the left pane:
  *
  * - `ready` (default) — a flat list of LEGAJOS files that match the
  *   `^\d+(CERT|EXPED)\.pdf$` pattern. Owned by `useReadyFiles`.
  * - `all` — the full navigable tree. Owned by `useFileTree`.
+ * - `generate` — file-generation workflows. Currently a placeholder.
  *
  * Each pane reuses the same right-side preview pane. Selection
  * carries its own `folderPath` (frozen at click time) so switching
@@ -62,6 +73,10 @@ export function FilesModal({
   idAten,
   nombrePaciente,
   empresa,
+  // `fecAte` is plumbed through to `FilesGeneratePane`, which uses
+  // it as the `fecAte` query param on the lookup SP. PR-2 wires the
+  // consumer; the prop was added in PR-1.
+  fecAte = '',
   onClose,
   onSend,
 }: FilesModalProps): ReactElement {
@@ -70,7 +85,7 @@ export function FilesModal({
     dni,
     idAten,
   );
-  const { state: readyState } = useReadyFiles(ruc, dni, idAten);
+  const { state: readyState, refetch: readyRefetch } = useReadyFiles(ruc, dni, idAten);
   const [activeTab, setActiveTab] = useState<FilesTab>(DEFAULT_TAB);
   const [zipInFlight, setZipInFlight] = useState(false);
   const [isMaximized, setIsMaximized] = useState(false);
@@ -80,6 +95,16 @@ export function FilesModal({
   const [selectedFilesMap, setSelectedFilesMap] = useState<Map<string, FileNode>>(
     () => new Map(),
   );
+
+  // PR-2 (generar-archivos-pdf-informes) — fired by
+  // `FilesGeneratePane` when a generation round resolves to success.
+  // We (a) invalidate the file-explorer hook so the new PDFs appear
+  // in "Listo para enviar" and (b) switch the active tab so the
+  // operator sees the result without manual navigation.
+  const handleGenerationSuccess = useCallback((): void => {
+    readyRefetch();
+    setActiveTab('ready');
+  }, [readyRefetch]);
 
   // Escape-key close handler.
   useEffect(() => {
@@ -97,8 +122,9 @@ export function FilesModal({
   // quiet so consumers (preview pane, etc.) don't see a phantom
   // re-render when the modal opens with an empty selection.
   useEffect(() => {
+    /* eslint-disable-next-line react-hooks/set-state-in-effect --
+       the setState here is the documented identity-reset contract. */
     setSelectedFilesMap((prev) => (prev.size === 0 ? prev : new Map()));
-    /* eslint-disable react-hooks/set-state-in-effect */
   }, [ruc, dni, idAten]);
 
   // Pre-check — when the ready pane's files arrive, populate the map
@@ -107,6 +133,8 @@ export function FilesModal({
   // Bail on the same-reference pattern when no new entries are added.
   useEffect(() => {
     if (readyState.kind !== 'ready') return;
+    /* eslint-disable-next-line react-hooks/set-state-in-effect --
+       the setState here is the documented pre-check contract. */
     setSelectedFilesMap((prev) => {
       let changed = false;
       const next = new Map(prev);
@@ -119,7 +147,6 @@ export function FilesModal({
       }
       return changed ? next : prev;
     });
-    /* eslint-disable react-hooks/set-state-in-effect */
   }, [readyState]);
 
   const handleToggleFile = useCallback((ref: string, file: FileNode): void => {
@@ -235,7 +262,7 @@ export function FilesModal({
                   selectedRefs={selectedRefs}
                   onToggle={handleToggleFile}
                 />
-              ) : (
+              ) : activeTab === 'all' ? (
                 <FilesExplorerPane
                   viewState={viewState}
                   isAtRoot={isAtRoot}
@@ -247,6 +274,14 @@ export function FilesModal({
                   idAten={idAten}
                   selectedRefs={selectedRefs}
                   onToggle={handleToggleFile}
+                />
+              ) : (
+                <FilesGeneratePane
+                  ruc={ruc}
+                  dni={dni}
+                  idAten={idAten}
+                  fecAte={fecAte}
+                  onSuccess={handleGenerationSuccess}
                 />
               )}
             </div>

@@ -5,6 +5,26 @@ import type { SpResultRow, OrderRow, UnifiedPerson, UnifiedFicha } from '@/types
 import { normalizeDni } from '@/lib/normalize-dni';
 import { normalizeCondic } from '@/lib/condic';
 
+/**
+ * Normalizes FecAte from the SP to `dd/MM/yyyy`.
+ *
+ * The SP may return a full ISO datetime string
+ * (e.g. `"2026-06-17T09:04:00.000Z"`) or an already-formatted
+ * date-only string (`"17/06/2026"`). Both are handled.
+ *
+ * Returns `''` when the value is absent or unparseable.
+ */
+function normalizeFecAte(raw: string | undefined): string {
+  if (!raw) return '';
+  if (/^\d{2}\/\d{2}\/\d{4}$/.test(raw)) return raw;
+  const d = new Date(raw);
+  if (isNaN(d.getTime())) return '';
+  const dd = String(d.getUTCDate()).padStart(2, '0');
+  const mm = String(d.getUTCMonth() + 1).padStart(2, '0');
+  const yyyy = d.getUTCFullYear();
+  return `${dd}/${mm}/${yyyy}`;
+}
+
 interface UseUnifiedResultsReturn {
   people: UnifiedPerson[];
   loading: boolean;
@@ -98,7 +118,7 @@ export function useUnifiedResults(
           nombre: string;
           empresa: string;
           workers: { proyecto: string; tipoExamen: string; condic: string }[];
-          orders: { idAten: string; nroRuc: string; nomCFa: string }[];
+          orders: { idAten: string; nroRuc: string; nomCFa: string; fecAte: string }[];
         }
 
         const tempMap = new Map<string, TempPerson>();
@@ -155,6 +175,11 @@ export function useUnifiedResults(
             idAten: row.IdAten,
             nroRuc: row.NroRuc,
             nomCFa: row.NomCFa,
+            // FecAte is date-only (`dd/MM/yyyy`); undefined when the SP
+            // did not return the column (forward-compat). The UI receives
+            // an empty string and the lookup SP guard rejects it with
+            // 400 if the operator tries to fetch without a date.
+            fecAte: normalizeFecAte(row.FecAte),
           });
         }
 
@@ -173,6 +198,10 @@ export function useUnifiedResults(
               proyecto: entry.workers[i]?.proyecto ?? '',
               tipoExamen: entry.workers[i]?.tipoExamen ?? '',
               condic: entry.workers[i]?.condic ?? '',
+              // fecAte is sourced from the matching order row. When the
+              // ficha is worker-sourced (no order), it stays `''` and
+              // the lookup SP guard rejects the request.
+              fecAte: entry.orders[i]?.fecAte ?? '',
             });
           }
 

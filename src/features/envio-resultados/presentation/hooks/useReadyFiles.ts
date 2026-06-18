@@ -23,6 +23,13 @@ export type ReadyFilesState =
 
 export interface UseReadyFilesReturn {
   state: ReadyFilesState;
+  /**
+   * Re-arm the hook — useful when the operator just generated new
+   * PDFs and the LEGAJOS folder should be re-scanned. Increments an
+   * internal counter that the effect depends on, so the next render
+   * re-issues the fetch.
+   */
+  refetch: () => void;
 }
 
 type SerializedFileNode = {
@@ -67,6 +74,11 @@ export function useReadyFiles(ruc: string, dni: string, idAten: string): UseRead
     if (ruc === '' || dni === '' || idAten === '') return { kind: 'empty' };
     return { kind: 'loading' };
   });
+  // PR #2 (generar-archivos-pdf-informes) — bump this to re-run the
+  // fetch without changing the (ruc, dni, idAten) triple. The modal
+  // wires it to `FilesGeneratePane.onSuccess` so the LEGAJOS list is
+  // refreshed after a successful PDF generation.
+  const [refreshCounter, setRefreshCounter] = useState(0);
 
   const requestIdRef = useRef(0);
   const abortRef = useRef<AbortController | null>(null);
@@ -123,7 +135,11 @@ export function useReadyFiles(ruc: string, dni: string, idAten: string): UseRead
     return () => {
       abortRef.current?.abort();
     };
-  }, [ruc, dni, idAten]);
+  }, [ruc, dni, idAten, refreshCounter]);
 
-  return { state };
+  const refetch = (): void => {
+    setRefreshCounter((c) => c + 1);
+  };
+
+  return { state, refetch };
 }

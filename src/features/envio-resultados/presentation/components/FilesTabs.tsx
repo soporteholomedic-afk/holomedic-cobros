@@ -1,9 +1,9 @@
 'use client';
 
-import { Star } from 'lucide-react';
+import { Star, FilePlus2 } from 'lucide-react';
 import type { ReactElement } from 'react';
 
-export type FilesTab = 'ready' | 'all';
+export type FilesTab = 'ready' | 'all' | 'generate';
 
 export interface FilesTabsProps {
   activeTab: FilesTab;
@@ -23,17 +23,26 @@ const TABS: readonly TabDef[] = [
     icon: <Star className="w-3.5 h-3.5 text-amber-400 fill-amber-400" aria-hidden="true" />,
   },
   { id: 'all', label: 'Todos' },
+  {
+    id: 'generate',
+    label: 'Generar archivos',
+    icon: <FilePlus2 className="w-3.5 h-3.5 text-emerald-500" aria-hidden="true" />,
+  },
 ];
 
 /**
- * Tab strip shown in the explorer pane header. Two tabs:
+ * Tab strip shown in the explorer pane header. Three tabs:
  *
  * - `ready` — show only the LEGAJOS files that match the
  *   `^\d+(CERT|EXPED)\.pdf$` pattern (driven by `useReadyFiles`).
  * - `all` — show the full navigable tree (driven by `useFileTree`).
+ * - `generate` — file-generation workflows (driven by
+ *   `FilesGeneratePane` + `useInformeOrder` / `usePlantillas` /
+ *   `useGenerarPdf`).
  *
  * Controlled — the parent owns the active tab state so it can route
- * the matching hook into the matching pane.
+ * the matching hook into the matching pane, and so a successful
+ * generation can switch back to `'ready'` programmatically.
  */
 export function FilesTabs({ activeTab, onTabChange }: FilesTabsProps): ReactElement {
   return (

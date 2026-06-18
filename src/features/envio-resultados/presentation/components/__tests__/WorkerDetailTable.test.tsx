@@ -1066,4 +1066,52 @@ describe('WorkerDetailTable — Unified Table', () => {
     const fileRefs = lastProps?.['fileRefs'] as unknown[];
     expect(fileRefs).toEqual([]);
   });
+
+  // ================================================================
+  // PR-2 (generar-archivos-pdf-informes) — fecAte plumbing
+  // Spec REQ-1: WorkerDetailTable MUST pass fecAte to FilesModal so
+  // the lookup SP can scope the query to the same day.
+  // ================================================================
+
+  it('should pass fecAte (from the unified ficha) to FilesModal — happy path', () => {
+    const person = makeUnifiedPerson({
+      fichas: [makeFicha({ fecAte: '17/06/2026' })],
+    });
+    mockUseUnifiedResults.mockReturnValue({
+      people: [person],
+      loading: false,
+      error: null,
+    });
+
+    render(<WorkerDetailTable {...DEFAULT_PROPS} />);
+    fireEvent.click(screen.getByRole('button', { name: /Ver Archivos/ }));
+
+    // mockFilesModalProps is called with the props the table passed
+    // to FilesModal. The last call is the relevant one (after the
+    // modal is mounted by the click).
+    const lastProps =
+      mockFilesModalProps.mock.calls[mockFilesModalProps.mock.calls.length - 1]?.[0];
+    expect(lastProps?.['fecAte']).toBe('17/06/2026');
+  });
+
+  it('should pass fecAte="" to FilesModal for worker-sourced fichas (no order row)', () => {
+    // Triangulation: a ficha without a corresponding order row has
+    // fecAte === '' (the hook falls back to ''). The FilesModal
+    // receives fecAte='' and the lookup SP rejects the empty date.
+    const person = makeUnifiedPerson({
+      fichas: [makeFicha({ idAten: '', nroRuc: '', nomCFa: '', fecAte: '' })],
+    });
+    mockUseUnifiedResults.mockReturnValue({
+      people: [person],
+      loading: false,
+      error: null,
+    });
+
+    render(<WorkerDetailTable {...DEFAULT_PROPS} />);
+    fireEvent.click(screen.getByRole('button', { name: /Ver Archivos/ }));
+
+    const lastProps =
+      mockFilesModalProps.mock.calls[mockFilesModalProps.mock.calls.length - 1]?.[0];
+    expect(lastProps?.['fecAte']).toBe('');
+  });
 });

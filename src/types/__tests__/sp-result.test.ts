@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import type { SpResultRow, WorkerRow, CompanyGroup, OrderRow } from '../sp-result';
+import type { SpResultRow, WorkerRow, CompanyGroup, OrderRow, UnifiedFicha } from '../sp-result';
 
 describe('SpResultRow', () => {
   it('should have all 21 named columns as string/number properties', () => {
@@ -177,5 +177,54 @@ describe('OrderRow', () => {
     expect(row.NroRuc).toBe('20987654321');
     expect(row.NomCFa).toBe('BETA S.A.');
     expect(row.NroDId).toBe('87654321');
+  });
+
+  // ---- PR-1 (generar-archivos-pdf-informes): FecAte on OrderRow ----
+  // Spec REQ-1: useUnifiedResults MUST map SQL FecAte to UnifiedFicha.fecAte
+  // as `dd/MM/yyyy`. OrderRow.FecAte is the source.
+
+  it('should carry FecAte as an optional date-only string (dd/MM/yyyy)', () => {
+    const row: OrderRow = {
+      IdAten: 'ATE-001',
+      NroRuc: '20123456789',
+      NomCFa: 'ACME CORP S.A.C.',
+      NroDId: '12345678',
+      FecAte: '17/06/2026',
+    };
+    expect(row.FecAte).toBe('17/06/2026');
+  });
+});
+
+// ---- PR-1 (generar-archivos-pdf-informes): fecAte on UnifiedFicha ----
+// Spec REQ-1: fecAte must reach the lookup SP untouched. The hook
+// layer is responsible for the mapping; the type contract here just
+// guarantees every UnifiedFicha carries a fecAte field (empty string
+// for worker-sourced fichas).
+
+describe('UnifiedFicha', () => {
+  it('should require fecAte and accept date-only dd/MM/yyyy', () => {
+    const ficha: UnifiedFicha = {
+      idAten: 'ATE-001',
+      nroRuc: '20123456789',
+      nomCFa: 'ACME CORP S.A.C.',
+      proyecto: 'UNACEM',
+      tipoExamen: 'PERIODICO',
+      condic: 'APTO',
+      fecAte: '17/06/2026',
+    };
+    expect(ficha.fecAte).toBe('17/06/2026');
+  });
+
+  it('should accept fecAte as an empty string for worker-sourced fichas', () => {
+    const ficha: UnifiedFicha = {
+      idAten: '',
+      nroRuc: '',
+      nomCFa: '',
+      proyecto: 'MINSUR',
+      tipoExamen: 'PREOCUPACIONAL',
+      condic: '',
+      fecAte: '',
+    };
+    expect(ficha.fecAte).toBe('');
   });
 });

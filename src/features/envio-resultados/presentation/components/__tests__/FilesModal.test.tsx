@@ -14,6 +14,37 @@ import type {
   PreviewArgs,
 } from '@/features/envio-resultados/presentation/viewers/FileViewer';
 
+// ---- PR-2 stub for FilesGeneratePane ----
+// The pane has its own test file (FilesGeneratePane.test.tsx). For the
+// FilesModal integration we only need to verify the wiring — the stub
+// renders a button that fires `onSuccess` when clicked, and a
+// button that fires the success callback with a fake result.
+const mockFilesGeneratePaneOnSuccess = vi.hoisted(() => vi.fn());
+vi.mock('../FilesGeneratePane', () => ({
+  FilesGeneratePane: (props: Record<string, unknown>) => {
+    const onSuccess = props['onSuccess'] as ((result: unknown) => void) | undefined;
+    return (
+      <div data-testid="files-generate-pane-stub">
+        <span data-testid="files-generate-pane-fecate">{String(props['fecAte'] ?? '')}</span>
+        {typeof onSuccess === 'function' && (
+          <button
+            data-testid="files-generate-pane-trigger-onsuccess"
+            onClick={() => {
+              mockFilesGeneratePaneOnSuccess(props);
+              onSuccess({
+                manifest: [],
+                summary: { generated: 0, failed: 0, skipped: 0, exitCode: 0 },
+              });
+            }}
+          >
+            trigger-onsuccess
+          </button>
+        )}
+      </div>
+    );
+  },
+}));
+
 /**
  * Stub the `useFileTree` and `useReadyFiles` hooks so each test controls
  * their return values without ever issuing a real network request.
@@ -33,8 +64,10 @@ beforeEach(() => {
   mockUseFileTree.mockReset();
   mockUseReadyFiles.mockReset();
   // Default: ready pane is empty so the modal opens cleanly. Each
-  // test that exercises the ready pane overrides this mock.
-  mockUseReadyFiles.mockReturnValue({ state: { kind: 'empty' } });
+  // test that exercises the ready pane overrides this mock. PR #2
+  // (generar-archivos-pdf-informes) — `refetch` is now part of the
+  // hook's return shape, so the mock must include it.
+  mockUseReadyFiles.mockReturnValue({ state: { kind: 'empty' }, refetch: vi.fn() });
 });
 
 afterEach(() => {
@@ -633,7 +666,7 @@ describe('FilesModal', () => {
       selectFile: vi.fn(),
       closeSelection: vi.fn(),
     });
-    mockUseReadyFiles.mockReturnValue({ state: { kind: 'ready', files: readyFiles } });
+    mockUseReadyFiles.mockReturnValue({ state: { kind: 'ready', files: readyFiles }, refetch: vi.fn() });
 
     render(
       <FilesModal
@@ -673,7 +706,7 @@ describe('FilesModal', () => {
       selectFile: vi.fn(),
       closeSelection: vi.fn(),
     });
-    mockUseReadyFiles.mockReturnValue({ state: { kind: 'ready', files: readyFiles } });
+    mockUseReadyFiles.mockReturnValue({ state: { kind: 'ready', files: readyFiles }, refetch: vi.fn() });
 
     render(
       <FilesModal
@@ -718,7 +751,7 @@ describe('FilesModal', () => {
       selectFile,
       closeSelection: vi.fn(),
     });
-    mockUseReadyFiles.mockReturnValue({ state: { kind: 'ready', files: readyFiles } });
+    mockUseReadyFiles.mockReturnValue({ state: { kind: 'ready', files: readyFiles }, refetch: vi.fn() });
 
     render(
       <FilesModal
@@ -745,7 +778,7 @@ describe('FilesModal', () => {
       selectFile: vi.fn(),
       closeSelection: vi.fn(),
     });
-    mockUseReadyFiles.mockReturnValue({ state: { kind: 'empty' } });
+    mockUseReadyFiles.mockReturnValue({ state: { kind: 'empty' }, refetch: vi.fn() });
 
     render(
       <FilesModal
@@ -882,7 +915,7 @@ describe('FilesModal', () => {
       selectFile: vi.fn(),
       closeSelection: vi.fn(),
     });
-    mockUseReadyFiles.mockReturnValue({ state: { kind: 'ready', files: readyFiles } });
+    mockUseReadyFiles.mockReturnValue({ state: { kind: 'ready', files: readyFiles }, refetch: vi.fn() });
 
     render(
       <FilesModal
@@ -921,7 +954,7 @@ describe('FilesModal', () => {
       selectFile: vi.fn(),
       closeSelection: vi.fn(),
     });
-    mockUseReadyFiles.mockReturnValue({ state: { kind: 'ready', files: readyFiles } });
+    mockUseReadyFiles.mockReturnValue({ state: { kind: 'ready', files: readyFiles }, refetch: vi.fn() });
 
     render(
       <FilesModal
@@ -959,7 +992,7 @@ describe('FilesModal', () => {
       selectFile: vi.fn(),
       closeSelection: vi.fn(),
     });
-    mockUseReadyFiles.mockReturnValue({ state: { kind: 'ready', files: readyFiles } });
+    mockUseReadyFiles.mockReturnValue({ state: { kind: 'ready', files: readyFiles }, refetch: vi.fn() });
 
     render(
       <FilesModal
@@ -1012,7 +1045,7 @@ describe('FilesModal', () => {
       selectFile: vi.fn(),
       closeSelection: vi.fn(),
     });
-    mockUseReadyFiles.mockReturnValue({ state: { kind: 'ready', files: readyFiles } });
+    mockUseReadyFiles.mockReturnValue({ state: { kind: 'ready', files: readyFiles }, refetch: vi.fn() });
     const onSend = vi.fn();
 
     render(
@@ -1055,7 +1088,7 @@ describe('FilesModal', () => {
       selectFile: vi.fn(),
       closeSelection: vi.fn(),
     });
-    mockUseReadyFiles.mockReturnValue({ state: { kind: 'ready', files: readyFiles } });
+    mockUseReadyFiles.mockReturnValue({ state: { kind: 'ready', files: readyFiles }, refetch: vi.fn() });
 
     // No `onSend` prop on purpose.
     render(
@@ -1090,7 +1123,7 @@ describe('FilesModal', () => {
       selectFile: vi.fn(),
       closeSelection: vi.fn(),
     });
-    mockUseReadyFiles.mockReturnValue({ state: { kind: 'ready', files: readyFiles } });
+    mockUseReadyFiles.mockReturnValue({ state: { kind: 'ready', files: readyFiles }, refetch: vi.fn() });
 
     const { rerender } = render(
       <FilesModal
@@ -1141,7 +1174,7 @@ describe('FilesModal', () => {
       selectFile,
       closeSelection: vi.fn(),
     });
-    mockUseReadyFiles.mockReturnValue({ state: { kind: 'ready', files: readyFiles } });
+    mockUseReadyFiles.mockReturnValue({ state: { kind: 'ready', files: readyFiles }, refetch: vi.fn() });
 
     render(
       <FilesModal
@@ -1156,6 +1189,110 @@ describe('FilesModal', () => {
 
     fireEvent.click(screen.getAllByRole('checkbox')[0]!);
     expect(selectFile).not.toHaveBeenCalled();
+  });
+
+  // ================================================================
+  // PR-2 (generar-archivos-pdf-informes) — 'Generar archivos' tab
+  // ================================================================
+
+  it('renders the "Generar archivos" tab alongside the existing tabs', () => {
+    mockUseFileTree.mockReturnValue({
+      viewState: { kind: 'empty' },
+      selectionState: { kind: 'none' },
+      navigate: vi.fn(),
+      goUp: vi.fn(),
+      selectFile: vi.fn(),
+      closeSelection: vi.fn(),
+    });
+
+    render(
+      <FilesModal
+        ruc="RUC-1"
+        dni="12345678"
+        idAten="AT-001"
+        nombrePaciente="Juan Pérez"
+        empresa="Acme"
+        onClose={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByRole('tab', { name: /Listo para enviar/ })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: /Todos/ })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: /Generar archivos/ })).toBeInTheDocument();
+  });
+
+  it('clicking the "Generar archivos" tab mounts the FilesGeneratePane with the fecAte prop', () => {
+    mockUseFileTree.mockReturnValue({
+      viewState: { kind: 'empty' },
+      selectionState: { kind: 'none' },
+      navigate: vi.fn(),
+      goUp: vi.fn(),
+      selectFile: vi.fn(),
+      closeSelection: vi.fn(),
+    });
+
+    render(
+      <FilesModal
+        ruc="RUC-1"
+        dni="12345678"
+        idAten="AT-001"
+        nombrePaciente="Juan Pérez"
+        empresa="Acme"
+        fecAte="17/06/2026"
+        onClose={vi.fn()}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('tab', { name: /Generar archivos/ }));
+
+    expect(screen.getByTestId('files-generate-pane-stub')).toBeInTheDocument();
+    expect(screen.getByTestId('files-generate-pane-fecate')).toHaveTextContent('17/06/2026');
+  });
+
+  it('on generation success the modal switches to the "Listo para enviar" tab and refetches ready files', () => {
+    const readyRefetch = vi.fn();
+    mockUseFileTree.mockReturnValue({
+      viewState: { kind: 'empty' },
+      selectionState: { kind: 'none' },
+      navigate: vi.fn(),
+      goUp: vi.fn(),
+      selectFile: vi.fn(),
+      closeSelection: vi.fn(),
+    });
+    mockUseReadyFiles.mockReturnValue({
+      state: { kind: 'ready', files: [] },
+      refetch: readyRefetch,
+    });
+
+    render(
+      <FilesModal
+        ruc="RUC-1"
+        dni="12345678"
+        idAten="AT-001"
+        nombrePaciente="Juan Pérez"
+        empresa="Acme"
+        fecAte="17/06/2026"
+        onClose={vi.fn()}
+      />,
+    );
+
+    // Switch to the generate tab.
+    fireEvent.click(screen.getByRole('tab', { name: /Generar archivos/ }));
+    expect(screen.getByRole('tab', { name: /Generar archivos/ })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    );
+
+    // Fire onSuccess via the stub's trigger button.
+    fireEvent.click(screen.getByTestId('files-generate-pane-trigger-onsuccess'));
+
+    // The modal must have switched to the "Listo para enviar" tab and
+    // called `readyRefetch` to invalidate the explorer hook.
+    expect(screen.getByRole('tab', { name: /Listo para enviar/ })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    );
+    expect(readyRefetch).toHaveBeenCalledTimes(1);
   });
 });
 

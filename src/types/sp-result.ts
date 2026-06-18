@@ -58,6 +58,13 @@ export interface OrderRow {
   NroRuc: string;
   NomCFa: string;
   NroDId: string;
+  /**
+   * Date the patient was attended, as returned by the SP. Date-only,
+   * formatted `dd/MM/yyyy` (e.g. `'17/06/2026'`). Carried through
+   * `useUnifiedResults` into `UnifiedFicha.fecAte` so the lookup SP
+   * (`SP_SEL_INFORMESNOCERRADOS`) can scope the query to the same day.
+   */
+  FecAte?: string;
   [key: string]: unknown;
 }
 
@@ -87,6 +94,16 @@ export interface UnifiedFicha {
    * Consumers can render `''` as em-dash without re-normalizing.
    */
   condic: string;
+  /**
+   * Date the patient was attended (date-only, `dd/MM/yyyy`). Sourced
+   * from `OrderRow.FecAte` by `useUnifiedResults` and forwarded to
+   * `FilesModal` so the lookup SP can filter on the same day. `''`
+   * for worker-sourced fichas (no order row → no FecAte). Optional
+   * in the type for forward-compat with existing test fixtures that
+   * predate the generar-archivos-pdf-informes change; the hook
+   * always emits a non-null value in production.
+   */
+  fecAte?: string;
 }
 
 /**
