@@ -2,6 +2,10 @@
 
 import { useEffect, useRef, useState } from 'react';
 import type { InformeNoCerradoRow, PlantillaRow } from '@/types/informe';
+import {
+  DEFAULT_EMI_AFI,
+  DEFAULT_INC_EXP,
+} from '@/features/envio-resultados/infrastructure/informes/constants';
 
 export type PlantillasState =
   | { kind: 'loading' }
@@ -20,12 +24,11 @@ export interface UsePlantillasReturn {
 
 /**
  * Fixed values for the plantillas SP call. These come from the legacy
- * v1 call sites (`InformesMedicosD.cs:28-29`) and are hard-coded
- * because the UI does not yet expose them. Lift to a config / context
- * if they ever need to vary.
+ * v1 call sites (`InformesMedicosD.cs:28-29`) and live in
+ * `informes/constants.ts` so the SP route, the generar payload, and
+ * this hook all agree. Lift to a config / context if they ever need
+ * to vary.
  */
-const DEFAULT_EMI_AFI = 1;
-const DEFAULT_INC_EXP = 0;
 
 /**
  * Race-protected fetch of `GET /api/informes/[idAten]/plantillas`.

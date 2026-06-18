@@ -56,8 +56,8 @@ describe('usePlantillas', () => {
     const [url] = mockFetch.mock.calls[0]!;
     expect(url).toContain('/api/informes/012110021/plantillas?');
     expect(url).toContain('codCli=3331');
-    expect(url).toContain('emiAfi=1');
-    expect(url).toContain('incExp=0');
+    expect(url).toContain('emiAfi=0');
+    expect(url).toContain('incExp=1');
     expect(url).toContain('codDCo=76');
   });
 

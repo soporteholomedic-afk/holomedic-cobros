@@ -22,6 +22,23 @@ export const CLI_USER = 'soporte';
 export const CLI_PASS = 'soporte';
 
 /**
+ * Default values for the `EmiAfi` / `IncExp` flags sent to
+ * `SP_SEL_PLANTILLAMEDICAXCLIENTE` and forwarded to the PDF CLI.
+ *
+ * These were previously hard-coded inconsistently between the route
+ * (`0` / `1`) and the client hooks (`1` / `0`). The combination
+ * `EmiAfi=0, IncExp=1` is the one that resolves IdePMe 39183
+ * ("CERTIFICADO MEDICO DE APTITUD (GEMO Y ANEXO 16)") in the SP —
+ * see `sdd/certificado-medico-aptitud-39183/apply-progress`.
+ *
+ * Per spec REQ-7: this file is the SINGLE source of truth for these
+ * literals. Other files in the change MUST import them from here
+ * instead of re-declaring them.
+ */
+export const DEFAULT_EMI_AFI = 0;
+export const DEFAULT_INC_EXP = 1;
+
+/**
  * Absolute path to the `SIGLA.PdfCli.exe` binary on the Windows host
  * that runs the Next.js server. The default points to the dev build
  * on the operator's desktop — production hosts MUST set the

@@ -269,6 +269,8 @@ describe('FilesGeneratePane', () => {
       codTCl: 2,
       numOrd: 100200,
       codCli: 3331,
+      emiAfi: 0,
+      incExp: 1,
       ruc: '20123456789',
       dni: '12345678',
       idePmeList: [39053, 39056],
@@ -358,5 +360,38 @@ describe('FilesGeneratePane', () => {
 
     const errorBlock = screen.getByTestId('files-generate-error');
     expect(errorBlock).toHaveTextContent('No se puede acceder a la ruta');
+  });
+
+  it('renders the IdePMe 39183 "CERTIFICADO MEDICO DE APTITUD (GEMO Y ANEXO 16)" row when the SP returns it', () => {
+    mockUsePlantillas.mockReturnValue({
+      state: {
+        kind: 'ready',
+        items: [
+          {
+            codPMe: 391,
+            arcPla: 'CERTIFICADO MEDICO DE APTITUD (GEMO Y ANEXO 16)',
+            ordPri: 4,
+            idePMe: 39183,
+            ideFMe: null,
+          },
+        ],
+      },
+    });
+
+    render(
+      <FilesGeneratePane
+        ruc="20123456789"
+        dni="12345678"
+        idAten="012110057"
+        fecAte="18/06/2026"
+        onSuccess={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByTestId('files-generate-checkbox-39183')).toBeInTheDocument();
+    expect(
+      screen.getByText('CERTIFICADO MEDICO DE APTITUD (GEMO Y ANEXO 16)'),
+    ).toBeInTheDocument();
+    expect(screen.getByText('#39183')).toBeInTheDocument();
   });
 });

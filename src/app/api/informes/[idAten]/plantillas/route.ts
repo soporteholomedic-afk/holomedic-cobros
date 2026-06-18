@@ -99,8 +99,8 @@ export async function GET(
       .request()
       .input('IdAten', mssql.VarChar, spParams.IdAten)
       .input('CodCli', mssql.Int, spParams.CodCli)
-      .input('EmiAfi', mssql.Int, 0)
-      .input('IncExp', mssql.Int, 1)
+      .input('EmiAfi', mssql.Int, spParams.EmiAfi)
+      .input('IncExp', mssql.Int, spParams.IncExp)
       .input('CodDCo', mssql.VarChar, spParams.CodDCo)
       .execute('SP_SEL_PLANTILLAMEDICAXCLIENTE');
 

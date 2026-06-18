@@ -65,6 +65,43 @@ describe('GET /api/informes/[idAten]/plantillas', () => {
     });
   });
 
+  // ---- Regression: EmiAfi / IncExp from the query string are forwarded to the SP ----
+  // Bug fix 2026-06-18: the route used to hard-code `EmiAfi=0 / IncExp=1`
+  // in the mssql call while the client hooks defaulted to `1 / 0`. The
+  // SP only returns IdePMe 39183 for `0 / 1`, so the checklist never
+  // matched what the generar call sent. This test pins the contract:
+  // whatever the client sends MUST reach the SP unmodified.
+
+  it('should forward emiAfi=0, incExp=1 to the SP when the query string says so', async () => {
+    const mockPool = createMockPool();
+    mockRequestExecute.mockResolvedValueOnce({ recordset: [] });
+    mockGetPool.mockResolvedValueOnce(mockPool);
+
+    const { GET } = await import('../route');
+    const req = new Request(
+      'http://localhost/api/informes/012110057/plantillas?codCli=3331&emiAfi=0&incExp=1',
+    );
+    await GET(req, { params: Promise.resolve({ idAten: '012110057' }) });
+
+    expect(mockRequestInput).toHaveBeenCalledWith('EmiAfi', expect.anything(), 0);
+    expect(mockRequestInput).toHaveBeenCalledWith('IncExp', expect.anything(), 1);
+  });
+
+  it('should forward emiAfi=1, incExp=0 to the SP when the query string says so', async () => {
+    const mockPool = createMockPool();
+    mockRequestExecute.mockResolvedValueOnce({ recordset: [] });
+    mockGetPool.mockResolvedValueOnce(mockPool);
+
+    const { GET } = await import('../route');
+    const req = new Request(
+      'http://localhost/api/informes/012110021/plantillas?codCli=3331&emiAfi=1&incExp=0',
+    );
+    await GET(req, { params: Promise.resolve({ idAten: '012110021' }) });
+
+    expect(mockRequestInput).toHaveBeenCalledWith('EmiAfi', expect.anything(), 1);
+    expect(mockRequestInput).toHaveBeenCalledWith('IncExp', expect.anything(), 0);
+  });
+
   // ---- NULL codDCo -> SP receives literal 'NULL' ----
 
   it('should serialise a null codDCo as the literal string "NULL" in the SP call', async () => {

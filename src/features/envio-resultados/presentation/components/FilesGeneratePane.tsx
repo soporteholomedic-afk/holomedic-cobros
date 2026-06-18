@@ -9,6 +9,8 @@ import {
   COD_TCL,
   CLI_USER,
   CLI_PASS,
+  DEFAULT_EMI_AFI,
+  DEFAULT_INC_EXP,
 } from '@/features/envio-resultados/infrastructure/informes/constants';
 import { useInformeOrder } from '@/features/envio-resultados/presentation/hooks/useInformeOrder';
 import { usePlantillas } from '@/features/envio-resultados/presentation/hooks/usePlantillas';
@@ -17,10 +19,10 @@ import { useGenerarPdf } from '@/features/envio-resultados/presentation/hooks/us
 /**
  * Fixed values for the generar request that don't come from the
  * `InformeNoCerradoRow` lookup. These mirror the legacy v1 call
- * sites (`InformesMedicosD.cs:28-29`).
+ * sites (`InformesMedicosD.cs:28-29`) and live in
+ * `informes/constants.ts` so the plantillas route, the generar
+ * payload, and the hook all agree.
  */
-const DEFAULT_EMI_AFI = 1;
-const DEFAULT_INC_EXP = 0;
 
 export interface FilesGeneratePaneProps {
   ruc: string;
