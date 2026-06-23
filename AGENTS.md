@@ -70,3 +70,12 @@
 
 - Write and execute all terminal commands specifically for PowerShell compatibility
 
+## External Workspace Permissions
+
+By explicit user instruction, this agent is permitted to read and write outside the default project root at the following paths:
+
+- `C:\Users\soporte\Desktop\SIGLA`
+- `C:\Users\soporte\Desktop\SIGLA\SIGLA.PdfCli`
+
+All other locations outside the working directory remain off-limits unless explicitly authorized.
+
