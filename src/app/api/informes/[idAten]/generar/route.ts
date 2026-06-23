@@ -323,6 +323,7 @@ export async function POST(
         failed: counts.failed + counts.errored,
         skipped: counts.skipped,
         exitCode,
+        retries: 0,
       },
     };
 

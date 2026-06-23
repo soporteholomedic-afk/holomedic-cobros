@@ -77,6 +77,8 @@ export interface GenerarPdfSummary {
   failed: number;
   skipped: number;
   exitCode: number;
+  /** Number of retry attempts (0 = single invocation, 1 = one retry, 2 = two retries). */
+  retries: number;
 }
 
 export interface GenerarPdfResponse {

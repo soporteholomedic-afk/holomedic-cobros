@@ -308,7 +308,7 @@ describe('FilesGeneratePane', () => {
         { idePMe: 39053, arcPla: 'exa_aud', file: '012110021_39053_exa_aud.pdf', status: 'success' as const },
         { idePMe: 39056, arcPla: 'exa_lab', status: 'skipped' as const, reason: 'ya generado' },
       ],
-      summary: { generated: 1, failed: 0, skipped: 1, exitCode: 0 },
+      summary: { generated: 1, failed: 0, skipped: 1, exitCode: 0, retries: 0 },
     };
     const onSuccess = vi.fn();
     mockUseGenerarPdf.mockReturnValue({

@@ -122,7 +122,7 @@ describe('POST /api/informes/[idAten]/generar', () => {
 
     expect(res.status).toBe(200);
     const body = await res.json();
-    expect(body.summary).toEqual({ generated: 2, failed: 0, skipped: 0, exitCode: 0 });
+    expect(body.summary).toEqual({ generated: 2, failed: 0, skipped: 0, exitCode: 0, retries: 0 });
     expect(body.manifest).toHaveLength(2);
     expect(body.manifest[0]).toMatchObject({ idePMe: 39053, status: 'success' });
   });

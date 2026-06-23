@@ -84,3 +84,41 @@ export const MANIFEST_FILENAME = 'manifest.json';
 export function buildOutputDir(ruc: string, dni: string, idAten: string): string {
   return path.win32.join(FILE_SERVER_BASE_PATH, ruc, dni, idAten, LEGAJOS_FOLDER);
 }
+
+// ---------------------------------------------------------------------------
+// Transient-auth retry policy
+//
+// The .NET CLI sporadically fails with a Windows domain-controller
+// auth error ("El sistema no puede ponerse en contacto con un
+// controlador de dominio ..."). Step-1 verification (#243) proved the
+// failure is intermittent — re-running the CLI on the same args usually
+// succeeds. These constants govern the retry loop in the route.
+// ---------------------------------------------------------------------------
+
+/**
+ * Total number of CLI invocations the route will attempt before
+ * giving up: 1 initial call + 2 retries.
+ */
+export const PDFCLI_RETRY_MAX_ATTEMPTS = 3;
+
+/**
+ * Linear backoff in milliseconds between retry attempts. Indexed by
+ * `attempt - 1` in the route (attempt 1 sleeps `BACKOFF_MS[0]`,
+ * attempt 2 sleeps `BACKOFF_MS[1]`; attempt 3 is the last and does
+ * not sleep). The `as const` is REQUIRED so TypeScript narrows the
+ * tuple to `readonly [2000, 4000]` — without it the type widens to
+ * `number[]` and strict-mode indexing yields `number | undefined`.
+ */
+export const PDFCLI_RETRY_BACKOFF_MS = [2000, 4000] as const;
+
+/**
+ * Read the `PDFCLI_RETRY_TRANSIENT_AUTH` feature flag at request time.
+ * Returns `true` unless the env var is explicitly `'0'` — i.e. the
+ * retry policy is ON by default (the fix is active immediately) with
+ * an escape hatch for operators who need to disable it. This is a
+ * FUNCTION (not a boolean constant) so tests can set the env var
+ * per-test and the route re-reads it on every request (spec REQ-3).
+ */
+export function isPdfcliRetryTransientAuthEnabled(): boolean {
+  return process.env.PDFCLI_RETRY_TRANSIENT_AUTH !== '0';
+}
