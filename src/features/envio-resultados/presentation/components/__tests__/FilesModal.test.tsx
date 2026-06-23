@@ -33,7 +33,7 @@ vi.mock('../FilesGeneratePane', () => ({
               mockFilesGeneratePaneOnSuccess(props);
               onSuccess({
                 manifest: [],
-                summary: { generated: 0, failed: 0, skipped: 0, exitCode: 0 },
+                summary: { generated: 0, failed: 0, skipped: 0, exitCode: 0, retries: 0 },
               });
             }}
           >

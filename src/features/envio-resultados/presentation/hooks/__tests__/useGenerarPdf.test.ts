@@ -48,7 +48,7 @@ function okBody(): GenerarPdfResponse {
       { idePMe: 39053, arcPla: 'exa_lab', file: '...pdf', status: 'success' },
       { idePMe: 39056, arcPla: 'exa_aud', file: '...pdf', status: 'success' },
     ],
-    summary: { generated: 2, failed: 0, skipped: 0, exitCode: 0 },
+    summary: { generated: 2, failed: 0, skipped: 0, exitCode: 0, retries: 0 },
   };
 }
 
