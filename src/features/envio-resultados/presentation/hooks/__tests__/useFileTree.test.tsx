@@ -388,4 +388,49 @@ describe('useFileTree', () => {
     expect(result.current.selectionState.folderPath).toBe('LEGAJOS');
     expect(result.current.selectionState.file.name).toBe('75618561CERT.pdf');
   });
+
+  it('refetch() re-fetches the current folder without resetting selectionState', async () => {
+    mockFetch.mockResolvedValueOnce(makeJsonResponse(200, { nodes: [] }));
+    mockFetch.mockResolvedValueOnce(
+      makeJsonResponse(200, {
+        nodes: [
+          {
+            kind: 'file',
+            name: 'refreshed.pdf',
+            sizeBytes: 1,
+            modifiedAt: '2026-01-01T00:00:00.000Z',
+          },
+        ],
+      }),
+    );
+
+    const { useFileTree } = await import('../useFileTree');
+    const { result } = renderHook(() => useFileTree('RUC', '12345678', 'AT-001'));
+
+    await waitFor(() => {
+      expect(result.current.viewState.kind).not.toBe('loading');
+    });
+
+    const file = createFileNode({
+      name: 'selected.pdf',
+      sizeBytes: 1,
+      modifiedAt: '2026-01-01T00:00:00.000Z',
+    });
+    await act(async () => {
+      result.current.selectFile(file, 'LEGAJOS');
+    });
+    expect(result.current.selectionState.kind).toBe('previewing');
+
+    await act(async () => {
+      result.current.refetch();
+    });
+
+    await waitFor(() => {
+      expect(result.current.viewState.kind).toBe('ready');
+    });
+    if (result.current.viewState.kind !== 'ready') throw new Error('expected ready');
+    expect(result.current.viewState.nodes).toHaveLength(1);
+    expect((result.current.viewState.nodes[0] as { name: string }).name).toBe('refreshed.pdf');
+    expect(result.current.selectionState.kind).toBe('previewing');
+  });
 });

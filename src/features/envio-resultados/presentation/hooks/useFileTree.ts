@@ -47,6 +47,12 @@ export interface UseFileTreeReturn {
    */
   selectFile: (file: FileNode, folderPath?: string) => void;
   closeSelection: () => void;
+  /**
+   * Re-arm the hook so the next render re-fetches the current folder.
+   * Keeps the current selection and folder path unless the patient
+   * identity (ruc/dni/idAten) has changed.
+   */
+  refetch: () => void;
 }
 
 /**
@@ -99,6 +105,7 @@ const ROOT_PATH = '';
 export function useFileTree(ruc: string, dni: string, idAten: string): UseFileTreeReturn {
   const [viewState, setViewState] = useState<ViewState>({ kind: 'loading' });
   const [selectionState, setSelectionState] = useState<SelectionState>({ kind: 'none' });
+  const [refreshCounter, setRefreshCounter] = useState(0);
 
   // Race protection: monotonically-increasing request id. Stored in a
   // ref so incrementing does not cause a re-render.
@@ -168,23 +175,31 @@ export function useFileTree(ruc: string, dni: string, idAten: string): UseFileTr
     [ruc, dni, idAten],
   );
 
-  // Initial fetch + refetch on identity change.
+  // Initial fetch + refetch on identity change or explicit refetch.
+  const identityRef = useRef({ ruc, dni, idAten });
   useEffect(() => {
-    // setState calls here are intentional — they reset the hook's
-    // local state when the args transition between patients (a new
-    // ruc/dni/idAten). The reset is the documented behavior of the
-    // hook, not a cascading render.
-    /* eslint-disable react-hooks/set-state-in-effect */
-    setSelectionState({ kind: 'none' });
-    /* eslint-enable react-hooks/set-state-in-effect */
-    pathRef.current = ROOT_PATH;
-    fetchFolder(ROOT_PATH);
+    const identityChanged =
+      identityRef.current.ruc !== ruc ||
+      identityRef.current.dni !== dni ||
+      identityRef.current.idAten !== idAten;
+    identityRef.current = { ruc, dni, idAten };
+
+    // Only reset the preview selection when the patient identity
+    // changes. A manual refetch (refreshCounter bump) should keep the
+    // current preview so the operator does not lose context.
+    if (identityChanged) {
+      setSelectionState({ kind: 'none' });
+      pathRef.current = ROOT_PATH;
+    }
+
+    fetchFolder(pathRef.current);
+
     return () => {
       abortRef.current?.abort();
     };
     // fetchFolder is stable per (ruc, dni, idAten) identity.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ruc, dni, idAten]);
+  }, [ruc, dni, idAten, refreshCounter]);
 
   const navigate = useCallback(
     (folderName: string): void => {
@@ -221,5 +236,9 @@ export function useFileTree(ruc: string, dni: string, idAten: string): UseFileTr
     setSelectionState({ kind: 'none' });
   }, []);
 
-  return { viewState, selectionState, navigate, goUp, selectFile, closeSelection };
+  const refetch = useCallback((): void => {
+    setRefreshCounter((c) => c + 1);
+  }, []);
+
+  return { viewState, selectionState, navigate, goUp, selectFile, closeSelection, refetch };
 }

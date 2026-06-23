@@ -103,6 +103,7 @@ describe('FilesModal', () => {
       goUp: vi.fn(),
       selectFile: vi.fn(),
       closeSelection: vi.fn(),
+      refetch: vi.fn(),
     });
 
     render(
@@ -131,6 +132,7 @@ describe('FilesModal', () => {
       goUp: vi.fn(),
       selectFile: vi.fn(),
       closeSelection: vi.fn(),
+      refetch: vi.fn(),
     });
 
     render(
@@ -158,6 +160,7 @@ describe('FilesModal', () => {
       goUp: vi.fn(),
       selectFile: vi.fn(),
       closeSelection: vi.fn(),
+      refetch: vi.fn(),
     });
 
     render(
@@ -184,6 +187,7 @@ describe('FilesModal', () => {
       goUp: vi.fn(),
       selectFile: vi.fn(),
       closeSelection: vi.fn(),
+      refetch: vi.fn(),
     });
 
     render(
@@ -223,6 +227,7 @@ describe('FilesModal', () => {
       goUp: vi.fn(),
       selectFile: vi.fn(),
       closeSelection: vi.fn(),
+      refetch: vi.fn(),
     });
 
     render(
@@ -255,6 +260,7 @@ describe('FilesModal', () => {
       goUp,
       selectFile: vi.fn(),
       closeSelection: vi.fn(),
+      refetch: vi.fn(),
     });
 
     render(
@@ -282,6 +288,7 @@ describe('FilesModal', () => {
       goUp: vi.fn(),
       selectFile: vi.fn(),
       closeSelection: vi.fn(),
+      refetch: vi.fn(),
     });
 
     render(
@@ -308,6 +315,7 @@ describe('FilesModal', () => {
       goUp: vi.fn(),
       selectFile: vi.fn(),
       closeSelection: vi.fn(),
+      refetch: vi.fn(),
     });
 
     render(
@@ -334,6 +342,7 @@ describe('FilesModal', () => {
       goUp: vi.fn(),
       selectFile: vi.fn(),
       closeSelection: vi.fn(),
+      refetch: vi.fn(),
     });
 
     render(
@@ -360,6 +369,7 @@ describe('FilesModal', () => {
       goUp: vi.fn(),
       selectFile: vi.fn(),
       closeSelection: vi.fn(),
+      refetch: vi.fn(),
     });
 
     const { container } = render(
@@ -388,6 +398,7 @@ describe('FilesModal', () => {
       goUp: vi.fn(),
       selectFile: vi.fn(),
       closeSelection: vi.fn(),
+      refetch: vi.fn(),
     });
 
     render(
@@ -416,6 +427,7 @@ describe('FilesModal', () => {
       goUp: vi.fn(),
       selectFile: vi.fn(),
       closeSelection: vi.fn(),
+      refetch: vi.fn(),
     });
 
     render(
@@ -448,6 +460,7 @@ describe('FilesModal', () => {
       goUp: vi.fn(),
       selectFile: vi.fn(),
       closeSelection: vi.fn(),
+      refetch: vi.fn(),
     });
 
     const { container } = render(
@@ -484,6 +497,7 @@ describe('FilesModal', () => {
       goUp: vi.fn(),
       selectFile: vi.fn(),
       closeSelection: vi.fn(),
+      refetch: vi.fn(),
     });
 
     const { container } = render(
@@ -527,6 +541,7 @@ describe('FilesModal', () => {
       goUp: vi.fn(),
       selectFile: vi.fn(),
       closeSelection,
+      refetch: vi.fn(),
     });
 
     render(
@@ -570,6 +585,7 @@ describe('FilesModal', () => {
       goUp: vi.fn(),
       selectFile: vi.fn(),
       closeSelection: vi.fn(),
+      refetch: vi.fn(),
     });
 
     const { container } = render(
@@ -602,6 +618,7 @@ describe('FilesModal', () => {
       goUp: vi.fn(),
       selectFile: vi.fn(),
       closeSelection: vi.fn(),
+      refetch: vi.fn(),
     });
 
     const { container } = render(
@@ -633,6 +650,7 @@ describe('FilesModal', () => {
       goUp: vi.fn(),
       selectFile: vi.fn(),
       closeSelection: vi.fn(),
+      refetch: vi.fn(),
     });
 
     render(
@@ -665,6 +683,7 @@ describe('FilesModal', () => {
       goUp: vi.fn(),
       selectFile: vi.fn(),
       closeSelection: vi.fn(),
+      refetch: vi.fn(),
     });
     mockUseReadyFiles.mockReturnValue({ state: { kind: 'ready', files: readyFiles }, refetch: vi.fn() });
 
@@ -705,6 +724,7 @@ describe('FilesModal', () => {
       goUp: vi.fn(),
       selectFile: vi.fn(),
       closeSelection: vi.fn(),
+      refetch: vi.fn(),
     });
     mockUseReadyFiles.mockReturnValue({ state: { kind: 'ready', files: readyFiles }, refetch: vi.fn() });
 
@@ -750,6 +770,7 @@ describe('FilesModal', () => {
       goUp: vi.fn(),
       selectFile,
       closeSelection: vi.fn(),
+      refetch: vi.fn(),
     });
     mockUseReadyFiles.mockReturnValue({ state: { kind: 'ready', files: readyFiles }, refetch: vi.fn() });
 
@@ -777,6 +798,7 @@ describe('FilesModal', () => {
       goUp: vi.fn(),
       selectFile: vi.fn(),
       closeSelection: vi.fn(),
+      refetch: vi.fn(),
     });
     mockUseReadyFiles.mockReturnValue({ state: { kind: 'empty' }, refetch: vi.fn() });
 
@@ -820,6 +842,7 @@ describe('FilesModal', () => {
       goUp: vi.fn(),
       selectFile: vi.fn(),
       closeSelection: vi.fn(),
+      refetch: vi.fn(),
     });
 
     const { container } = render(
@@ -851,6 +874,7 @@ describe('FilesModal', () => {
       goUp: vi.fn(),
       selectFile: vi.fn(),
       closeSelection: vi.fn(),
+      refetch: vi.fn(),
     });
 
     render(
@@ -877,6 +901,7 @@ describe('FilesModal', () => {
       goUp: vi.fn(),
       selectFile: vi.fn(),
       closeSelection: vi.fn(),
+      refetch: vi.fn(),
     });
 
     render(
@@ -914,6 +939,7 @@ describe('FilesModal', () => {
       goUp: vi.fn(),
       selectFile: vi.fn(),
       closeSelection: vi.fn(),
+      refetch: vi.fn(),
     });
     mockUseReadyFiles.mockReturnValue({ state: { kind: 'ready', files: readyFiles }, refetch: vi.fn() });
 
@@ -953,6 +979,7 @@ describe('FilesModal', () => {
       goUp: vi.fn(),
       selectFile: vi.fn(),
       closeSelection: vi.fn(),
+      refetch: vi.fn(),
     });
     mockUseReadyFiles.mockReturnValue({ state: { kind: 'ready', files: readyFiles }, refetch: vi.fn() });
 
@@ -991,6 +1018,7 @@ describe('FilesModal', () => {
       goUp: vi.fn(),
       selectFile: vi.fn(),
       closeSelection: vi.fn(),
+      refetch: vi.fn(),
     });
     mockUseReadyFiles.mockReturnValue({ state: { kind: 'ready', files: readyFiles }, refetch: vi.fn() });
 
@@ -1044,6 +1072,7 @@ describe('FilesModal', () => {
       goUp: vi.fn(),
       selectFile: vi.fn(),
       closeSelection: vi.fn(),
+      refetch: vi.fn(),
     });
     mockUseReadyFiles.mockReturnValue({ state: { kind: 'ready', files: readyFiles }, refetch: vi.fn() });
     const onSend = vi.fn();
@@ -1087,6 +1116,7 @@ describe('FilesModal', () => {
       goUp: vi.fn(),
       selectFile: vi.fn(),
       closeSelection: vi.fn(),
+      refetch: vi.fn(),
     });
     mockUseReadyFiles.mockReturnValue({ state: { kind: 'ready', files: readyFiles }, refetch: vi.fn() });
 
@@ -1122,6 +1152,7 @@ describe('FilesModal', () => {
       goUp: vi.fn(),
       selectFile: vi.fn(),
       closeSelection: vi.fn(),
+      refetch: vi.fn(),
     });
     mockUseReadyFiles.mockReturnValue({ state: { kind: 'ready', files: readyFiles }, refetch: vi.fn() });
 
@@ -1173,6 +1204,7 @@ describe('FilesModal', () => {
       goUp: vi.fn(),
       selectFile,
       closeSelection: vi.fn(),
+      refetch: vi.fn(),
     });
     mockUseReadyFiles.mockReturnValue({ state: { kind: 'ready', files: readyFiles }, refetch: vi.fn() });
 
@@ -1203,6 +1235,7 @@ describe('FilesModal', () => {
       goUp: vi.fn(),
       selectFile: vi.fn(),
       closeSelection: vi.fn(),
+      refetch: vi.fn(),
     });
 
     render(
@@ -1229,6 +1262,7 @@ describe('FilesModal', () => {
       goUp: vi.fn(),
       selectFile: vi.fn(),
       closeSelection: vi.fn(),
+      refetch: vi.fn(),
     });
 
     render(
@@ -1258,6 +1292,7 @@ describe('FilesModal', () => {
       goUp: vi.fn(),
       selectFile: vi.fn(),
       closeSelection: vi.fn(),
+      refetch: vi.fn(),
     });
     mockUseReadyFiles.mockReturnValue({
       state: { kind: 'ready', files: [] },
@@ -1292,6 +1327,36 @@ describe('FilesModal', () => {
       'aria-selected',
       'true',
     );
+    expect(readyRefetch).toHaveBeenCalledTimes(1);
+  });
+
+  it('calls both tree and ready refetch functions when the reload header button is clicked', () => {
+    const treeRefetch = vi.fn();
+    const readyRefetch = vi.fn();
+    mockUseFileTree.mockReturnValue({
+      viewState: readyView('', sampleFiles),
+      selectionState: { kind: 'none' },
+      navigate: vi.fn(),
+      goUp: vi.fn(),
+      selectFile: vi.fn(),
+      closeSelection: vi.fn(),
+      refetch: treeRefetch,
+    });
+    mockUseReadyFiles.mockReturnValue({ state: { kind: 'empty' }, refetch: readyRefetch });
+
+    render(
+      <FilesModal
+        ruc="RUC-1"
+        dni="12345678"
+        idAten="AT-001"
+        nombrePaciente="Juan Pérez"
+        empresa="Acme Corp"
+        onClose={vi.fn()}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /Recargar archivos/ }));
+    expect(treeRefetch).toHaveBeenCalledTimes(1);
     expect(readyRefetch).toHaveBeenCalledTimes(1);
   });
 });

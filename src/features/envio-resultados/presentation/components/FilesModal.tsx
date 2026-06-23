@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState, type ReactElement } from 'react';
-import { Maximize2, Minimize2, X } from 'lucide-react';
+import { Maximize2, Minimize2, RefreshCw, X } from 'lucide-react';
 import { FilesExplorerPane } from '@/features/envio-resultados/presentation/components/FilesExplorerPane';
 import { FilesGeneratePane } from '@/features/envio-resultados/presentation/components/FilesGeneratePane';
 import { FilesPreviewPane } from '@/features/envio-resultados/presentation/components/FilesPreviewPane';
@@ -80,11 +80,15 @@ export function FilesModal({
   onClose,
   onSend,
 }: FilesModalProps): ReactElement {
-  const { viewState, selectionState, navigate, goUp, selectFile, closeSelection } = useFileTree(
-    ruc,
-    dni,
-    idAten,
-  );
+  const {
+    viewState,
+    selectionState,
+    navigate,
+    goUp,
+    selectFile,
+    closeSelection,
+    refetch: treeRefetch,
+  } = useFileTree(ruc, dni, idAten);
   const { state: readyState, refetch: readyRefetch } = useReadyFiles(ruc, dni, idAten);
   const [activeTab, setActiveTab] = useState<FilesTab>(DEFAULT_TAB);
   const [zipInFlight, setZipInFlight] = useState(false);
@@ -105,6 +109,11 @@ export function FilesModal({
     readyRefetch();
     setActiveTab('ready');
   }, [readyRefetch]);
+
+  const handleRefresh = useCallback((): void => {
+    treeRefetch();
+    readyRefetch();
+  }, [treeRefetch, readyRefetch]);
 
   // Escape-key close handler.
   useEffect(() => {
@@ -221,6 +230,15 @@ export function FilesModal({
             </h2>
           </div>
           <div className="flex items-center gap-1">
+            <button
+              type="button"
+              onClick={handleRefresh}
+              disabled={viewState.kind === 'loading' || readyState.kind === 'loading'}
+              aria-label="Recargar archivos"
+              className="p-2 rounded-xl text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            >
+              <RefreshCw className="w-5 h-5" />
+            </button>
             <button
               type="button"
               onClick={toggleMaximize}
