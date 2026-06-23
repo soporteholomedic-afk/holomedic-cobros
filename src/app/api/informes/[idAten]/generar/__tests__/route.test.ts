@@ -4,20 +4,21 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 const mockStat = vi.hoisted(() => vi.fn());
 const mockReadFile = vi.hoisted(() => vi.fn());
+const mockAccess = vi.hoisted(() => vi.fn());
 
 /**
- * Per-test override for the next `execFile` invocation. When set, the
- * mock fires the override against the captured callback. When unset,
- * the mock fires a default success callback with empty stdout.
+ * Queue of pending `execFile` responses. Each entry is a callback
+ * that fires the appropriate (err, result) pair. The mock shifts one
+ * entry per `execFile` invocation; when the queue is empty, the mock
+ * fires a default success (exit 0, empty stdout). Tests push responses
+ * via `queueExecError` / `queueExecSuccess` BEFORE calling `POST`.
  */
 type ExecCallback = (
   err: (Error & { code?: number; stdout?: string }) | null,
   result: { stdout: string; stderr: string },
 ) => void;
 
-const pendingExecResponse = vi.hoisted<{ current: ((cb: ExecCallback) => void) | null }>(() => ({
-  current: null,
-}));
+const pendingExecResponses = vi.hoisted<Array<(cb: ExecCallback) => void>>(() => []);
 
 const mockExecFile = vi.hoisted(() =>
   vi.fn(
@@ -27,9 +28,8 @@ const mockExecFile = vi.hoisted(() =>
       _options: unknown,
       callback: ExecCallback,
     ) => {
-      const respond = pendingExecResponse.current;
+      const respond = pendingExecResponses.shift();
       if (respond) {
-        pendingExecResponse.current = null;
         // Defer the callback to mimic real async behaviour of execFile.
         queueMicrotask(() => respond(callback));
       } else {
@@ -41,17 +41,19 @@ const mockExecFile = vi.hoisted(() =>
 );
 
 function queueExecError(exitCode: number, stdout = ''): void {
-  pendingExecResponse.current = (cb) => {
+  pendingExecResponses.push((cb) => {
     const err = Object.assign(new Error('exit ' + exitCode), { code: exitCode, stdout });
     cb(err, { stdout, stderr: '' });
-  };
+  });
 }
 
 vi.mock('node:fs', () => {
-  const promises = { stat: mockStat, readFile: mockReadFile };
+  const promises = { stat: mockStat, readFile: mockReadFile, access: mockAccess };
+  const constants = { X_OK: 1 };
   return {
     promises,
-    default: { promises },
+    constants,
+    default: { promises, constants },
   };
 });
 
@@ -68,11 +70,13 @@ vi.hoisted(() => {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  pendingExecResponse.current = null;
-  // Default: parent dir is reachable, the manifest is well-formed, and
-  // the CLI exits 0. Tests that exercise the partial-exit path call
-  // `queueExecError(3)` BEFORE `POST` to override the next invocation.
+  pendingExecResponses.length = 0;
+  // Default: parent dir is reachable, CLI exe is accessible, the
+  // manifest is well-formed, and the CLI exits 0. Tests that exercise
+  // the partial-exit path call `queueExecError(3)` BEFORE `POST` to
+  // override the next invocation.
   mockStat.mockResolvedValue({} as never);
+  mockAccess.mockResolvedValue(undefined as never);
   mockReadFile.mockResolvedValue(
     JSON.stringify({
       exitCode: 0,
