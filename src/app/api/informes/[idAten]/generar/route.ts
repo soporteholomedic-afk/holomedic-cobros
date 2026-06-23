@@ -43,8 +43,33 @@ const execFileAsync = promisify(execFile);
  *      502 with a user-safe error (the CLI ran but the share write
  *      is incomplete).
  *   5. Return `{ manifest, summary: { generated, failed, skipped,
- *      exitCode } }`. Partial CLI exit (code 3) still returns 200
- *      so the UI can render the failed rows.
+ *      exitCode, retries } }`. Partial CLI exit (code 3) still
+ *      returns 200 so the UI can render the failed rows.
+ *
+ * Transient-auth retry (spec REQ-2 – REQ-4):
+ *
+ *   The .NET CLI sporadically fails with a Windows domain-controller
+ *   auth error ("El sistema no puede ponerse en contacto con un
+ *   controlador de dominio ..."). Step-1 verification (#243) proved
+ *   the failure is intermittent. When the feature flag
+ *   `PDFCLI_RETRY_TRANSIENT_AUTH` is enabled (default ON — set `'0'`
+ *   to disable), the route wraps steps 3–4 in a retry loop:
+ *
+ *   - Up to 3 total attempts (`PDFCLI_RETRY_MAX_ATTEMPTS`).
+ *   - Linear backoff: 2 s after attempt 1, 4 s after attempt 2
+ *     (`PDFCLI_RETRY_BACKOFF_MS`). The last attempt does NOT sleep.
+ *   - A retry is triggered ONLY when a manifest `failed` row's
+ *     `reason` matches `isTransientAuthError` (substring on the
+ *     stable Spanish clause).
+ *   - Before each retry sleep, a `console.warn` is emitted with the
+ *     first matching row's `{ idePMe, arcPla, reason }` and the
+ *     attempt number.
+ *   - `summary.retries` = number of retries performed (0, 1, or 2).
+ *
+ *   The retry does NOT fire on: `CLI_NOT_FOUND` (spawn ENOENT),
+ *   `MANIFEST_MISSING` (readFile throws), non-transient `failed`
+ *   rows, or HTTP 4xx validation errors — these are deterministic
+ *   failures that return before or exit the loop without continuing.
  *
  * Status codes:
  * - 200: CLI ran (full or partial). `summary.exitCode` carries the truth.
