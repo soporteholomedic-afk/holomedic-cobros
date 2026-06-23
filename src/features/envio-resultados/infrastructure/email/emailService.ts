@@ -24,6 +24,7 @@ export class EmailService implements IEmailService {
         subject: options.subject,
         html: options.html,
         attachments: options.attachments,
+        purpose: 'consolidados',
       });
       if (result.success) {
         return { success: true, messageId: result.messageId };

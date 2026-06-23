@@ -238,6 +238,7 @@ describe('POST /api/send-email', () => {
       to: ['test@domain.com'],
       subject: 'Hello',
       html: '<h1>World</h1>',
+      purpose: 'facturacion',
     });
   });
 
