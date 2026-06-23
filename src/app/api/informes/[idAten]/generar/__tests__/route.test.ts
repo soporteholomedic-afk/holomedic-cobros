@@ -323,6 +323,7 @@ describe('POST /api/informes/[idAten]/generar', () => {
     expect(body.summary.exitCode).toBe(3);
     expect(body.summary.generated).toBe(1);
     expect(body.summary.failed).toBe(1);
+    expect(body.summary.retries).toBe(0);
     expect(body.manifest).toHaveLength(2);
     expect(body.manifest[1].status).toBe('failed');
     expect(body.manifest[1].reason).toBe('Crystal Reports timeout');
