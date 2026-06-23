@@ -8,12 +8,16 @@ export interface EmailAttachment {
   contentType?: string;
 }
 
+export type Purpose = 'consolidados' | 'facturacion';
+
 export interface SendEmailParams {
   to: string[];
   cc?: string[];
   subject: string;
   html: string;
   attachments?: EmailAttachment[];
+  /** WU-1: optional (defaults to 'facturacion'). WU-2 makes it required. */
+  purpose?: Purpose;
 }
 
 export type SendEmailErrorCode =
@@ -25,9 +29,9 @@ export type SendEmailResult =
   | { success: true; messageId: string }
   | { success: false; code: SendEmailErrorCode; error: string };
 
-// ---- Lazy singleton transport ----
+// ---- Per-purpose transport cache ----
 
-let transport: nodemailer.Transporter | null = null;
+const transports = new Map<Purpose, nodemailer.Transporter>();
 
 function getEnvOrThrow(): {
   host: string;
@@ -52,17 +56,18 @@ function getEnvOrThrow(): {
   return { host, port: parseInt(port, 10), user, pass };
 }
 
-function getTransport(): nodemailer.Transporter {
-  if (!transport) {
-    const { host, port, user, pass } = getEnvOrThrow();
-    transport = nodemailer.createTransport({
-      host,
-      port,
-      secure: port === 465,
-      auth: { user, pass },
-      connectionTimeout: 10000,
-    });
-  }
+function getTransport(purpose: Purpose): nodemailer.Transporter {
+  const cached = transports.get(purpose);
+  if (cached) return cached;
+  const { host, port, user, pass } = getEnvOrThrow();
+  const transport = nodemailer.createTransport({
+    host,
+    port,
+    secure: port === 465,
+    auth: { user, pass },
+    connectionTimeout: 10000,
+  });
+  transports.set(purpose, transport);
   return transport;
 }
 
@@ -71,8 +76,9 @@ function getTransport(): nodemailer.Transporter {
 export async function sendEmail(
   params: SendEmailParams
 ): Promise<SendEmailResult> {
+  const purpose: Purpose = params.purpose ?? 'facturacion';
   try {
-    const tr = getTransport();
+    const tr = getTransport(purpose);
     const info = await tr.sendMail({
       from: process.env.SMTP_USER,
       to: params.to,
@@ -133,7 +139,29 @@ export async function sendEmail(
 
 // ---- Testing support ----
 
-/** Reset the lazy transport singleton (for testing only). */
-export function __resetTransport(): void {
-  transport = null;
+/** Reset the per-purpose transport cache (for testing only).
+ *  No argument clears all transports; a purpose clears only that entry. */
+export function __resetTransport(purpose?: Purpose): void {
+  if (purpose === undefined) {
+    transports.clear();
+  } else {
+    transports.delete(purpose);
+  }
+}
+
+// ---- Errors ----
+
+/** Thrown when a purpose's SMTP env vars are missing. The message lists the
+ *  missing variable NAMES only — it never includes resolved values (the
+ *  password is never part of the message). WU-1 declares the class; WU-2
+ *  throws it from the per-purpose resolver. */
+export class MissingSmtpCredsError extends Error {
+  readonly purpose: string;
+  readonly missing: string[];
+  constructor(purpose: string, missing: string[]) {
+    super(`SMTP not configured for ${purpose}: missing ${missing.join(', ')}`);
+    this.name = 'MissingSmtpCredsError';
+    this.purpose = purpose;
+    this.missing = missing;
+  }
 }

@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 // Hoist mock functions so they're available in vi.mock factory (vitest hoists mock calls)
 const mockSendMail = vi.hoisted(() => vi.fn());
@@ -18,11 +18,30 @@ beforeEach(() => {
   __resetTransport();
   mockSendMail.mockReset();
 
-  // Set default env vars before each test
+  // Set default env vars before each test — all 6 SMTP vars (shared + both
+  // purposes) plus the legacy pair so WU-1's resolver stub (which still reads
+  // SMTP_USER / SMTP_PASS) keeps the pre-existing 17 tests green.
   process.env.SMTP_HOST = 'smtp.office365.com';
   process.env.SMTP_PORT = '587';
   process.env.SMTP_USER = 'test@example.com';
   process.env.SMTP_PASS = 'secret';
+  process.env.SMTP_USER_FACTURACION = 'facturacion@example.com';
+  process.env.SMTP_PASS_FACTURACION = 'facturacion-secret';
+  process.env.SMTP_USER_CONSOLIDADOS = 'consolidados@example.com';
+  process.env.SMTP_PASS_CONSOLIDADOS = 'consolidados-secret';
+});
+
+// Env-restore: vi.clearAllMocks() does NOT clear process.env. Deleting the
+// per-purpose vars prevents a stray test from leaking state into the next.
+afterEach(() => {
+  delete process.env.SMTP_USER_FACTURACION;
+  delete process.env.SMTP_PASS_FACTURACION;
+  delete process.env.SMTP_USER_CONSOLIDADOS;
+  delete process.env.SMTP_PASS_CONSOLIDADOS;
+  delete process.env.SMTP_USER;
+  delete process.env.SMTP_PASS;
+  delete process.env.SMTP_HOST;
+  delete process.env.SMTP_PORT;
 });
 
 describe('sendEmail', () => {
@@ -110,7 +129,7 @@ describe('sendEmail', () => {
 
   it('should return SMTP_TIMEOUT on connection timeout', async () => {
     const timeoutError = new Error('Connection timed out');
-    (timeoutError as any).code = 'ETIMEDOUT';
+    (timeoutError as NodeJS.ErrnoException).code = 'ETIMEDOUT';
     mockSendMail.mockRejectedValue(timeoutError);
 
     const result = await sendEmail({
@@ -140,13 +159,13 @@ describe('sendEmail', () => {
     }
   });
 
-  it('should reuse the same transport on subsequent calls (lazy singleton)', async () => {
+  it('should reuse the same transport on subsequent calls within the same purpose', async () => {
     mockSendMail.mockResolvedValue({ messageId: '<first@outlook.com>' });
 
-    await sendEmail({       to: ['a@b.com'], subject: 'First', html: '<p>1</p>' });
-    await sendEmail({       to: ['c@d.com'], subject: 'Second', html: '<p>2</p>' });
+    await sendEmail({ to: ['a@b.com'], subject: 'First', html: '<p>1</p>', purpose: 'facturacion' } as Parameters<typeof sendEmail>[0]);
+    await sendEmail({ to: ['c@d.com'], subject: 'Second', html: '<p>2</p>', purpose: 'facturacion' } as Parameters<typeof sendEmail>[0]);
 
-    // createTransport should have been called only once
+    // createTransport should have been called only once — cache hit within the same purpose
     const nodemailer = await import('nodemailer');
     expect(nodemailer.default.createTransport).toHaveBeenCalledTimes(1);
   });
@@ -319,5 +338,95 @@ describe('sendEmail', () => {
         ],
       })
     );
+  });
+});
+
+// ---- Per-purpose transport cache (WU-1) ----
+
+describe('per-purpose transport cache', () => {
+  it('creates distinct transports for different purposes (S-CONSCRED-012)', async () => {
+    mockSendMail.mockResolvedValue({ messageId: '<a@x.com>' });
+
+    await sendEmail({ to: ['a@b.com'], subject: 'Cobre', html: '<p>1</p>', purpose: 'facturacion' } as Parameters<typeof sendEmail>[0]);
+    await sendEmail({ to: ['c@d.com'], subject: 'Consolidado', html: '<p>2</p>', purpose: 'consolidados' } as Parameters<typeof sendEmail>[0]);
+
+    const nodemailer = await import('nodemailer');
+    expect(nodemailer.default.createTransport).toHaveBeenCalledTimes(2);
+  });
+
+  it('reuses the cached transport for the same purpose (S-CONSCRED-013)', async () => {
+    mockSendMail.mockResolvedValue({ messageId: '<b@x.com>' });
+
+    await sendEmail({ to: ['a@b.com'], subject: 'First', html: '<p>1</p>', purpose: 'consolidados' } as Parameters<typeof sendEmail>[0]);
+    await sendEmail({ to: ['c@d.com'], subject: 'Second', html: '<p>2</p>', purpose: 'consolidados' } as Parameters<typeof sendEmail>[0]);
+
+    const nodemailer = await import('nodemailer');
+    expect(nodemailer.default.createTransport).toHaveBeenCalledTimes(1);
+  });
+
+  it('from field follows the resolved user, not a re-read of process.env (S-CONSCRED-005)', async () => {
+    mockSendMail.mockResolvedValue({ messageId: '<from@x.com>' });
+
+    await sendEmail({ to: ['a@b.com'], subject: 'From', html: '<p>1</p>', purpose: 'facturacion' } as Parameters<typeof sendEmail>[0]);
+
+    expect(mockSendMail.mock.calls[0]?.[0]?.from).toBe('test@example.com');
+  });
+});
+
+// ---- __resetTransport seam (WU-1) ----
+
+describe('__resetTransport(purpose?)', () => {
+  it('clears all transports when called with no argument (S-CONSCRED-015)', async () => {
+    mockSendMail.mockResolvedValue({ messageId: '<r@x.com>' });
+
+    await sendEmail({ to: ['a@b.com'], subject: 'A', html: '<p>1</p>', purpose: 'facturacion' } as Parameters<typeof sendEmail>[0]);
+    await sendEmail({ to: ['c@d.com'], subject: 'B', html: '<p>2</p>', purpose: 'consolidados' } as Parameters<typeof sendEmail>[0]);
+
+    const nodemailer = await import('nodemailer');
+    vi.mocked(nodemailer.default.createTransport).mockClear();
+
+    __resetTransport();
+
+    await sendEmail({ to: ['e@f.com'], subject: 'C', html: '<p>3</p>', purpose: 'facturacion' } as Parameters<typeof sendEmail>[0]);
+    expect(nodemailer.default.createTransport).toHaveBeenCalledTimes(1);
+  });
+
+  it('clears only the given purpose when called with an argument (S-CONSCRED-016)', async () => {
+    mockSendMail.mockResolvedValue({ messageId: '<r2@x.com>' });
+
+    await sendEmail({ to: ['a@b.com'], subject: 'A', html: '<p>1</p>', purpose: 'facturacion' } as Parameters<typeof sendEmail>[0]);
+    await sendEmail({ to: ['c@d.com'], subject: 'B', html: '<p>2</p>', purpose: 'consolidados' } as Parameters<typeof sendEmail>[0]);
+
+    const nodemailer = await import('nodemailer');
+    vi.mocked(nodemailer.default.createTransport).mockClear();
+
+    __resetTransport('consolidados' as Parameters<typeof __resetTransport>[0]);
+
+    // facturacion should reuse the cached transport — no new createTransport
+    await sendEmail({ to: ['e@f.com'], subject: 'C', html: '<p>3</p>', purpose: 'facturacion' } as Parameters<typeof sendEmail>[0]);
+    expect(nodemailer.default.createTransport).not.toHaveBeenCalled();
+
+    // consolidados should create a fresh transport — cache was cleared for that purpose
+    await sendEmail({ to: ['g@h.com'], subject: 'D', html: '<p>4</p>', purpose: 'consolidados' } as Parameters<typeof sendEmail>[0]);
+    expect(nodemailer.default.createTransport).toHaveBeenCalledTimes(1);
+  });
+});
+
+// ---- MissingSmtpCredsError class (WU-1 declares, WU-2 throws) ----
+
+describe('MissingSmtpCredsError', () => {
+  it('is an exported Error subclass with purpose and missing fields', async () => {
+    const mod = await import('../sendEmail');
+    const MissingSmtpCredsError = (mod as Record<string, unknown>).MissingSmtpCredsError as
+      | (new (purpose: string, missing: string[]) => Error)
+      | undefined;
+
+    expect(MissingSmtpCredsError).toBeDefined();
+
+    const err = new MissingSmtpCredsError!('consolidados', ['SMTP_USER_CONSOLIDADOS']);
+    expect(err).toBeInstanceOf(Error);
+    expect(err.message).toBe('SMTP not configured for consolidados: missing SMTP_USER_CONSOLIDADOS');
+    expect((err as { purpose: string }).purpose).toBe('consolidados');
+    expect((err as { missing: string[] }).missing).toEqual(['SMTP_USER_CONSOLIDADOS']);
   });
 });
