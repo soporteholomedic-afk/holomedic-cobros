@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 // ---- Mock setup: node:fs.promises + child_process.execFile ----
 
@@ -88,6 +88,14 @@ beforeEach(() => {
   );
 });
 
+// Restore fake timers and env stubs after each test to avoid bleeding
+// into subsequent tests (gotcha #251: setTimeout must be mocked or tests
+// blow the 30s timeout; gotcha #252: process.env mutations need restore).
+afterEach(() => {
+  vi.useRealTimers();
+  vi.unstubAllEnvs();
+});
+
 function buildRequest(body: unknown): Request {
   return new Request('http://localhost/api/informes/012110021/generar', {
     method: 'POST',
@@ -113,6 +121,62 @@ function validBody(overrides: Record<string, unknown> = {}): Record<string, unkn
     idePmeList: [39053, 39056],
     ...overrides,
   };
+}
+
+// ---- Manifest fixtures for transient-auth retry tests ----
+
+const TRANSIENT_REASON =
+  'El sistema no puede ponerse en contacto con un controlador de dominio para que atienda la solicitud de autenticación. Inténtelo de nuevo más tarde.';
+
+/** A manifest with one failed row whose reason matches the transient-auth clause. */
+function transientManifestJson(): string {
+  return JSON.stringify({
+    exitCode: 0,
+    rows: [
+      {
+        idePMe: 390417,
+        arcPla: 'CERTIFICADO APTITUD - METRO LIMA 2',
+        status: 'failed',
+        reason: TRANSIENT_REASON,
+      },
+    ],
+  });
+}
+
+/** A manifest with TWO failed transient rows (to test "log the first match"). */
+function twoTransientRowsManifestJson(): string {
+  return JSON.stringify({
+    exitCode: 0,
+    rows: [
+      {
+        idePMe: 390417,
+        arcPla: 'CERTIFICADO APTITUD - METRO LIMA 2',
+        status: 'failed',
+        reason: TRANSIENT_REASON,
+      },
+      {
+        idePMe: 390423,
+        arcPla: 'EVAL AUDIOMETRIA CCM2L',
+        status: 'failed',
+        reason: TRANSIENT_REASON,
+      },
+    ],
+  });
+}
+
+/** A clean manifest with one success row and zero failed rows. */
+function cleanManifestJson(): string {
+  return JSON.stringify({
+    exitCode: 0,
+    rows: [
+      {
+        idePMe: 390417,
+        arcPla: 'CERTIFICADO APTITUD - METRO LIMA 2',
+        file: '012110149_390417_CERTIFICADO APTITUD - METRO LIMA 2.pdf',
+        status: 'success',
+      },
+    ],
+  });
 }
 
 describe('POST /api/informes/[idAten]/generar', () => {
@@ -383,5 +447,154 @@ describe('POST /api/informes/[idAten]/generar', () => {
     const body = await res.json();
     expect(body.code).toBe('UNC_UNREACHABLE');
     expect(mockExecFile).not.toHaveBeenCalled();
+  });
+
+  // ---- Transient-auth retry tests (T5–T10) ----
+
+  it('T5: retries once and succeeds when attempt 1 has a transient auth error', async () => {
+    vi.useFakeTimers();
+    mockReadFile
+      .mockResolvedValueOnce(transientManifestJson())
+      .mockResolvedValueOnce(cleanManifestJson());
+
+    const { POST } = await import('../route');
+    const routePromise = POST(buildRequest(validBody()), {
+      params: Promise.resolve({ idAten: '012110021' }),
+    });
+
+    // Skip the 2s backoff sleep between attempt 1 and 2 (gotcha #251).
+    await vi.advanceTimersByTimeAsync(2000);
+
+    const res = await routePromise;
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.summary.retries).toBe(1);
+    expect(body.summary.generated).toBe(1);
+    expect(body.summary.failed).toBe(0);
+    // The final manifest is from attempt 2 (clean).
+    expect(body.manifest).toHaveLength(1);
+    expect(body.manifest[0].status).toBe('success');
+    expect(mockExecFile).toHaveBeenCalledTimes(2);
+  });
+
+  it('T6: retries twice and preserves the last manifest when all 3 attempts have transient auth errors', async () => {
+    vi.useFakeTimers();
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    mockReadFile
+      .mockResolvedValueOnce(transientManifestJson())
+      .mockResolvedValueOnce(transientManifestJson())
+      .mockResolvedValueOnce(transientManifestJson());
+
+    const { POST } = await import('../route');
+    const routePromise = POST(buildRequest(validBody()), {
+      params: Promise.resolve({ idAten: '012110021' }),
+    });
+
+    // Skip the 2s backoff between attempt 1 and 2, then the 4s backoff
+    // between attempt 2 and 3 (gotcha #251).
+    await vi.advanceTimersByTimeAsync(2000);
+    await vi.advanceTimersByTimeAsync(4000);
+
+    const res = await routePromise;
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.summary.retries).toBe(2);
+    // The final manifest is from attempt 3, with the failed row preserved.
+    expect(body.manifest).toHaveLength(1);
+    expect(body.manifest[0].status).toBe('failed');
+    expect(body.manifest[0].reason).toContain('controlador de dominio');
+    expect(mockExecFile).toHaveBeenCalledTimes(3);
+    // Exactly 2 warn calls (before each of the 2 sleeps; no warn on
+    // the last attempt per REQ-4).
+    expect(warnSpy).toHaveBeenCalledTimes(2);
+    warnSpy.mockRestore();
+  });
+
+  it('T7: does not retry on MANIFEST_MISSING and the 502 body has no retries field', async () => {
+    const err = Object.assign(new Error('ENOENT'), { code: 'ENOENT' });
+    mockReadFile.mockRejectedValueOnce(err);
+
+    const { POST } = await import('../route');
+    const res = await POST(buildRequest(validBody()), {
+      params: Promise.resolve({ idAten: '012110021' }),
+    });
+
+    expect(res.status).toBe(502);
+    const body = await res.json();
+    expect(body.code).toBe('MANIFEST_MISSING');
+    // The 502 body is { code, message, exitCode } — NOT { manifest, summary }.
+    expect(body).not.toHaveProperty('retries');
+    expect(body).not.toHaveProperty('summary');
+    expect(mockExecFile).toHaveBeenCalledTimes(1);
+  });
+
+  it('T8: does not retry when PDFCLI_RETRY_TRANSIENT_AUTH=0 even if the manifest has a transient auth error', async () => {
+    vi.stubEnv('PDFCLI_RETRY_TRANSIENT_AUTH', '0');
+    mockReadFile.mockResolvedValueOnce(transientManifestJson());
+
+    const { POST } = await import('../route');
+    const res = await POST(buildRequest(validBody()), {
+      params: Promise.resolve({ idAten: '012110021' }),
+    });
+
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.summary.retries).toBe(0);
+    expect(body.summary.failed).toBe(1);
+    // The manifest with the transient error is preserved (no retry).
+    expect(body.manifest[0].status).toBe('failed');
+    expect(body.manifest[0].reason).toContain('controlador de dominio');
+    expect(mockExecFile).toHaveBeenCalledTimes(1);
+  });
+
+  it('T9: retries when PDFCLI_RETRY_TRANSIENT_AUTH=1 (explicit enable)', async () => {
+    vi.stubEnv('PDFCLI_RETRY_TRANSIENT_AUTH', '1');
+    vi.useFakeTimers();
+    mockReadFile
+      .mockResolvedValueOnce(transientManifestJson())
+      .mockResolvedValueOnce(cleanManifestJson());
+
+    const { POST } = await import('../route');
+    const routePromise = POST(buildRequest(validBody()), {
+      params: Promise.resolve({ idAten: '012110021' }),
+    });
+
+    await vi.advanceTimersByTimeAsync(2000);
+
+    const res = await routePromise;
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.summary.retries).toBe(1);
+    expect(mockExecFile).toHaveBeenCalledTimes(2);
+  });
+
+  it('T10: logs the first transient row with idePMe/arcPla/reason before each retry sleep', async () => {
+    vi.useFakeTimers();
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+
+    // Manifest with TWO transient rows — the log must use the FIRST one.
+    mockReadFile
+      .mockResolvedValueOnce(twoTransientRowsManifestJson())
+      .mockResolvedValueOnce(cleanManifestJson());
+
+    const { POST } = await import('../route');
+    const routePromise = POST(buildRequest(validBody()), {
+      params: Promise.resolve({ idAten: '012110021' }),
+    });
+
+    await vi.advanceTimersByTimeAsync(2000);
+    await routePromise;
+
+    expect(warnSpy).toHaveBeenCalledTimes(1);
+    const [label, payload] = warnSpy.mock.calls[0] as [
+      string,
+      { attempt: number; exitCode: number; transientErrorRow: { idePMe: number; arcPla: string; reason: string } },
+    ];
+    expect(label).toBe('[api/informes/generar] retry transient auth');
+    expect(payload.attempt).toBe(1);
+    expect(payload.transientErrorRow.idePMe).toBe(390417);
+    expect(payload.transientErrorRow.arcPla).toBe('CERTIFICADO APTITUD - METRO LIMA 2');
+    expect(payload.transientErrorRow.reason).toContain('controlador de dominio');
+    warnSpy.mockRestore();
   });
 });
