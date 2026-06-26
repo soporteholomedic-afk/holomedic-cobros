@@ -86,6 +86,10 @@ describe('buildEmailHtml', () => {
 
   it('should render correct number of table rows for multiple documents', () => {
     const client = createClient({
+      saldosPorMoneda: {
+        'S/': { debe: 1650, haber: 400, saldo: 1250 },
+        USD: { debe: 100, haber: 0, saldo: 100 },
+      },
       documentos: [
         {
           tipoDoc: 'FE', serie: 'F001', numero: '101',
@@ -95,15 +99,15 @@ describe('buildEmailHtml', () => {
         },
         {
           tipoDoc: 'FA', serie: 'F002', numero: '888',
-          fechaDoc: '10/05/2026', fechaVen: '10/06/2026',
+          fechaDoc: '10/05/2026', fechaVen: '01/05/2026',
           cuenta: '121202', moneda: 'S/',
-          debe: 450, haber: 450, saldo: 0,
+          debe: 450, haber: 200, saldo: 250,
         },
         {
           tipoDoc: 'BO', serie: 'B001', numero: '50',
-          fechaDoc: '15/05/2026', fechaVen: '25/05/2026',
+          fechaDoc: '15/05/2026', fechaVen: '01/05/2026',
           cuenta: '121301', moneda: 'USD',
-          debe: 100, haber: 300, saldo: -200,
+          debe: 100, haber: 0, saldo: 100,
         },
       ],
     });
@@ -229,12 +233,14 @@ describe('buildEmailHtml', () => {
     const client = createClient({
       documentos: [
         {
+          // doc must survive the overdue+positive-balance filter (see T-EMAIL-3)
+          // while still exercising safeFormat() on null/undefined debe and haber.
           tipoDoc: 'FE', serie: 'F001', numero: '101',
           fechaDoc: '01/05/2026', fechaVen: '20/05/2026',
           cuenta: '121201', moneda: 'S/',
           debe: null as unknown as number,
           haber: undefined as unknown as number,
-          saldo: null as unknown as number,
+          saldo: 1000,
         },
       ],
     });

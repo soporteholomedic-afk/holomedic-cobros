@@ -92,14 +92,19 @@ function safeFormat(value: number | null | undefined): string {
 // ============================================================
 // Helper: build document table HTML
 // Task 1.2 — table generation with all columns
+// T-EMAIL-4 — extended to 9 columns (Días Vencido + Estado) with
+// inline-styled chips and a per-currency Total a pagar row.
 // ============================================================
 function buildTable(documentos: Documento[]): string {
+  // Note: caller passes overdueDocs. `documentos` here is the filtered set.
   const headerRow = `
     <tr>
       <th style="${STYLES.thLeft}">Tipo Doc</th>
       <th style="${STYLES.thLeft}">Serie-Número</th>
       <th style="${STYLES.thCenter}">Fec. Emisión</th>
       <th style="${STYLES.thCenter}">Fec. Vencimiento</th>
+      <th style="${STYLES.thRight}">Días Vencido</th>
+      <th style="${STYLES.thCenter}">Estado</th>
       <th style="${STYLES.thRight}">Debe</th>
       <th style="${STYLES.thRight}">Haber</th>
       <th style="${STYLES.thRight}">Saldo</th>
@@ -107,12 +112,28 @@ function buildTable(documentos: Documento[]): string {
 
   const dataRows = documentos
     .map((doc) => {
+      const days = computeOverdueDays(doc.fechaVen);
+      const daysCell = days === null ? 'S/V' : String(days);
+      const estado: 'Vencido' | 'CREDITO' | '-' =
+        doc.saldo <= 0.01
+          ? '-'
+          : isPastDue(doc.fechaVen)
+            ? 'Vencido'
+            : 'CREDITO';
+      const estadoCell =
+        estado === 'Vencido'
+          ? `<span style="${STYLES.estadoChipVencido}">Vencido</span>`
+          : estado === 'CREDITO'
+            ? `<span style="${STYLES.estadoChipCredito}">CREDITO</span>`
+            : '-';
       return `
     <tr>
       <td style="${STYLES.td}">${escapeHtml(doc.tipoDoc)}</td>
       <td style="${STYLES.td}">${escapeHtml(doc.serie)}-${escapeHtml(doc.numero)}</td>
       <td style="${STYLES.tdCenter}">${escapeHtml(doc.fechaDoc)}</td>
       <td style="${STYLES.tdCenter}">${escapeHtml(doc.fechaVen)}</td>
+      <td style="${STYLES.tdRight}">${daysCell}</td>
+      <td style="${STYLES.tdCenter}">${estadoCell}</td>
       <td style="${STYLES.tdRight}">${doc.moneda} ${safeFormat(doc.debe)}</td>
       <td style="${STYLES.tdRight}">${doc.moneda} ${safeFormat(doc.haber)}</td>
       <td style="${STYLES.tdRightBold}">${doc.moneda} ${safeFormat(doc.saldo)}</td>
@@ -120,10 +141,27 @@ function buildTable(documentos: Documento[]): string {
     })
     .join('');
 
+  // Per-currency Total a pagar rows. Operates on the same `documentos`
+  // (which is the filtered set) so totals can never diverge from the
+  // table contents.
+  const totals = documentos.reduce<Record<string, number>>((acc, d) => {
+    acc[d.moneda] = (acc[d.moneda] ?? 0) + d.saldo;
+    return acc;
+  }, {});
+  const totalRows = Object.entries(totals)
+    .map(
+      ([mon, sum]) => `
+    <tr style="${STYLES.totalRow}">
+      <td colspan="8" style="${STYLES.tdRightBold}">Total a pagar (${escapeHtml(mon)}):</td>
+      <td style="${STYLES.tdRightBold}">${escapeHtml(mon)} ${safeFormat(sum)}</td>
+    </tr>`,
+    )
+    .join('');
+
   return `
     <table cellpadding="0" cellspacing="0" style="${STYLES.table}">
       <thead>${headerRow}</thead>
-      <tbody>${dataRows}
+      <tbody>${dataRows}${totalRows}
       </tbody>
     </table>`;
 }
@@ -175,6 +213,12 @@ function buildPaymentInfo(): string {
 export function buildEmailHtml(client: ClienteGroup): string {
   const { razonSocial, documentos } = client;
 
+  // Filter to overdue docs with positive balance — what the email
+  // is now scoped to deliver.
+  const overdueDocs = documentos.filter(
+    (d) => d.saldo > 0.01 && isPastDue(d.fechaVen),
+  );
+
   // Task 1.3: Salutation — handle missing razonSocial (Task 1.4)
   const salutation = razonSocial
     ? `Estimados señores ${escapeHtml(razonSocial)}`
@@ -185,7 +229,7 @@ export function buildEmailHtml(client: ClienteGroup): string {
     documentos.length > 0
       ? `
     <p style="${STYLES.sectionHeading}">Detalles de documentos:</p>
-    ${buildTable(documentos)}`
+    ${buildTable(overdueDocs)}`
       : `
     ${buildNoDocs()}`;
 
