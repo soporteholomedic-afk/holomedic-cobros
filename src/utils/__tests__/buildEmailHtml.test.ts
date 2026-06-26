@@ -265,4 +265,128 @@ describe('buildEmailHtml', () => {
     expect(html).toContain('mantiene un saldo pendiente de pago');
     expect(html).toContain('Saludos cordiales.');
   });
+
+  // ============================================================
+  // T-EMAIL-7 — Overdue filter, per-currency totals, empty state, body copy
+  // ============================================================
+
+  it('should filter out non-overdue and zero-balance docs', () => {
+    const client = createClient({
+      documentos: [
+        {
+          tipoDoc: 'FE', serie: 'F001', numero: '101',
+          fechaDoc: '01/05/2026', fechaVen: '20/05/2026',
+          moneda: 'S/', debe: 1200, haber: 200, saldo: 1000,
+        },
+        {
+          tipoDoc: 'FE', serie: 'F001', numero: '200',
+          fechaDoc: '01/06/2026', fechaVen: '10/07/2026',
+          moneda: 'S/', debe: 500, haber: 0, saldo: 500,
+        },
+        {
+          tipoDoc: 'BO', serie: 'B001', numero: '50',
+          fechaDoc: '15/05/2026', fechaVen: '25/05/2026',
+          moneda: 'S/', debe: 100, haber: 100, saldo: 0,
+        },
+      ],
+    });
+
+    const html = buildEmailHtml(client);
+
+    // Overdue + positive → kept
+    expect(html).toContain('F001-101');
+    // Future-due + positive → filtered out
+    expect(html).not.toContain('F001-200');
+    // Overdue + zero balance → filtered out
+    expect(html).not.toContain('B001-50');
+  });
+
+  it('should render Total a pagar row with one tr per currency in single-currency case', () => {
+    const client = createClient({
+      documentos: [
+        {
+          tipoDoc: 'FE', serie: 'F001', numero: '101',
+          fechaDoc: '01/05/2026', fechaVen: '20/05/2026',
+          moneda: 'S/', debe: 1200, haber: 200, saldo: 1000,
+        },
+        {
+          tipoDoc: 'FA', serie: 'F002', numero: '102',
+          fechaDoc: '05/05/2026', fechaVen: '25/05/2026',
+          moneda: 'S/', debe: 500, haber: 0, saldo: 500,
+        },
+      ],
+    });
+
+    const html = buildEmailHtml(client);
+
+    expect(html).toContain('Total a pagar (S/):');
+    expect(html).toContain('S/ 1,500.00');
+    expect(html).toContain('<tr style="background-color: #f5f5f5; font-weight: bold;">');
+  });
+
+  it('should render Total a pagar row with two trs in multi-currency case', () => {
+    const client = createClient({
+      documentos: [
+        {
+          tipoDoc: 'FE', serie: 'F001', numero: '101',
+          fechaDoc: '01/05/2026', fechaVen: '20/05/2026',
+          moneda: 'S/', debe: 1200, haber: 200, saldo: 1000,
+        },
+        {
+          tipoDoc: 'BO', serie: 'B001', numero: '50',
+          fechaDoc: '15/05/2026', fechaVen: '25/05/2026',
+          moneda: 'USD', debe: 500, haber: 0, saldo: 500,
+        },
+      ],
+    });
+
+    const html = buildEmailHtml(client);
+
+    expect(html).toContain('Total a pagar (S/):');
+    expect(html).toContain('Total a pagar (USD):');
+    expect(html).toContain('S/ 1,000.00');
+    expect(html).toContain('USD 500.00');
+    // One total row per currency → the total-row literal appears twice
+    const totalRowLiteral = '<tr style="background-color: #f5f5f5; font-weight: bold;">';
+    expect(html.split(totalRowLiteral).length - 1).toBe(2);
+  });
+
+  it('should render empty-state colspan message and Total a pagar: 0.00 when no docs are overdue', () => {
+    const client = createClient({
+      documentos: [
+        {
+          // Future-due + positive → filtered to zero overdue docs
+          tipoDoc: 'FE', serie: 'F001', numero: '300',
+          fechaDoc: '01/06/2026', fechaVen: '10/07/2026',
+          moneda: 'S/', debe: 500, haber: 0, saldo: 500,
+        },
+      ],
+    });
+
+    const html = buildEmailHtml(client);
+
+    expect(html).toContain('<td colspan="9"');
+    expect(html).toContain('No hay deudas vencidas');
+    expect(html).toContain('Total a pagar:');
+    expect(html).toContain('0.00');
+    expect(html).toContain('<table');
+    expect(html).toContain('</table>');
+  });
+
+  it('should reflect new body copy referencing overdue docs', () => {
+    const client = createClient({
+      documentos: [
+        {
+          tipoDoc: 'FE', serie: 'F001', numero: '101',
+          fechaDoc: '01/05/2026', fechaVen: '20/05/2026',
+          moneda: 'S/', debe: 1200, haber: 200, saldo: 1000,
+        },
+      ],
+    });
+
+    const html = buildEmailHtml(client);
+
+    expect(html).toContain('adjuntamos el detalle de los documentos vencidos');
+    expect(html).not.toContain('adjuntamos el estado de cuenta actualizado');
+  });
 });
