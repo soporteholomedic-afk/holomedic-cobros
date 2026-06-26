@@ -49,6 +49,7 @@ describe('EmailService (PR #2 — IEmailService port + adapter)', () => {
       subject: 'Resultados',
       html: '<p>Adjuntos</p>',
       attachments: [],
+      purpose: 'consolidados',
     });
   });
 
@@ -65,7 +66,7 @@ describe('EmailService (PR #2 — IEmailService port + adapter)', () => {
     });
 
     expect(mockSendEmail).toHaveBeenCalledWith(
-      expect.objectContaining({ cc: ['c@example.com', 'd@example.com'] }),
+      expect.objectContaining({ cc: ['c@example.com', 'd@example.com'], purpose: 'consolidados' }),
     );
   });
 
@@ -96,7 +97,7 @@ describe('EmailService (PR #2 — IEmailService port + adapter)', () => {
       attachments: [att],
     });
 
-    expect(mockSendEmail).toHaveBeenCalledWith(expect.objectContaining({ attachments: [att] }));
+    expect(mockSendEmail).toHaveBeenCalledWith(expect.objectContaining({ attachments: [att], purpose: 'consolidados' }));
   });
 
   it('returns error when sendEmail resolves with success: false', async () => {
@@ -146,5 +147,20 @@ describe('EmailService (PR #2 — IEmailService port + adapter)', () => {
     expect(typeof svc.sendWithAttachments).toBe('function');
     // Structural conformance: must satisfy the port.
     expect(svc).toBeInstanceOf(EmailService);
+  });
+
+  it('always forwards purpose: "consolidados" regardless of input shape (S-CONSCRED-017 scalability)', async () => {
+    mockSendEmail.mockResolvedValue({ success: true, messageId: '<scale@mail.com>' });
+
+    const svc = new EmailService();
+    await svc.sendWithAttachments({
+      to: ['x@example.com'],
+      cc: ['y@example.com'],
+      subject: 'any shape',
+      html: '<p>any</p>',
+      attachments: [{ filename: 'a.pdf', content: Buffer.from('a'), contentType: 'application/pdf' }],
+    });
+
+    expect(mockSendEmail).toHaveBeenCalledWith(expect.objectContaining({ purpose: 'consolidados' }));
   });
 });

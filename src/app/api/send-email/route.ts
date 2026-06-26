@@ -156,6 +156,7 @@ export async function POST(request: Request): Promise<NextResponse<ApiResponse>>
       ...(cc ? { cc } : {}),
       subject: body.subject as string,
       html: body.html as string,
+      purpose: 'facturacion',
     });
 
     if (!result.success) {
