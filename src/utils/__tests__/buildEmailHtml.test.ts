@@ -193,7 +193,7 @@ describe('buildEmailHtml', () => {
     const html = buildEmailHtml(client);
 
     expect(html).toContain('mantiene un saldo pendiente de pago');
-    expect(html).toContain('adjuntamos el estado de cuenta actualizado');
+    expect(html).toContain('adjuntamos el detalle de los documentos vencidos');
     expect(html).toContain('Una vez efectuado el pago');
     expect(html).toContain('remitirnos el comprobante');
     expect(html).toContain('En caso el pago haya sido realizado recientemente');

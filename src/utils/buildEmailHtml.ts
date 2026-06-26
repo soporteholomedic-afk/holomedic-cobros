@@ -273,7 +273,7 @@ export function buildEmailHtml(client: ClienteGroup): string {
   // Task 1.3: Full template body
   const bodyHtml = `
     <p style="${STYLES.paragraph}">Mediante el presente, le recordamos que mantiene un saldo pendiente de pago con nuestra empresa. Agradeceremos pueda realizar la regularización correspondiente.</p>
-    <p style="${STYLES.paragraph}">Para su referencia, adjuntamos el estado de cuenta actualizado a la fecha, donde podrá visualizar el detalle de los documentos pendientes.</p>
+    <p style="${STYLES.paragraph}">Para su referencia, adjuntamos el detalle de los documentos vencidos a la fecha, donde podrá visualizar el detalle de los documentos pendientes.</p>
     ${docsSection}
     <p style="${STYLES.paragraph}">Una vez efectuado el pago, le agradeceremos remitirnos el comprobante de la transferencia a fin de proceder con la validación correspondiente.</p>
     ${buildPaymentInfo()}
