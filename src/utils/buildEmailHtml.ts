@@ -224,14 +224,51 @@ export function buildEmailHtml(client: ClienteGroup): string {
     ? `Estimados señores ${escapeHtml(razonSocial)}`
     : 'Estimados señores';
 
-  // Task 1.4: Decide table or empty message
-  const docsSection =
-    documentos.length > 0
-      ? `
-    <p style="${STYLES.sectionHeading}">Detalles de documentos:</p>
-    ${buildTable(overdueDocs)}`
-      : `
+  // Task 1.4: Decide table or empty message — 3 branches:
+  //   (a) documentos.length === 0          → pre-existing "No docs" message (no table)
+  //   (b) overdueDocs.length === 0         → table headers + colspan message + 0.00 total
+  //   (c) overdueDocs.length > 0           → normal table with per-currency totals
+  let docsSection: string;
+  if (documentos.length === 0) {
+    // (a) Pre-existing behavior: no docs at all → no table, italic message.
+    docsSection = `
     ${buildNoDocs()}`;
+  } else if (overdueDocs.length === 0) {
+    // (b) Filter was applied but nothing is overdue: still show the table
+    // structure (headers) so the email renders consistently, with a
+    // colspan message + a zero total row.
+    docsSection = `
+    <p style="${STYLES.sectionHeading}">Detalles de documentos:</p>
+    <table cellpadding="0" cellspacing="0" style="${STYLES.table}">
+      <thead>
+        <tr>
+          <th style="${STYLES.thLeft}">Tipo Doc</th>
+          <th style="${STYLES.thLeft}">Serie-Número</th>
+          <th style="${STYLES.thCenter}">Fec. Emisión</th>
+          <th style="${STYLES.thCenter}">Fec. Vencimiento</th>
+          <th style="${STYLES.thRight}">Días Vencido</th>
+          <th style="${STYLES.thCenter}">Estado</th>
+          <th style="${STYLES.thRight}">Debe</th>
+          <th style="${STYLES.thRight}">Haber</th>
+          <th style="${STYLES.thRight}">Saldo</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td colspan="9" style="${STYLES.noDocs}">No hay deudas vencidas</td>
+        </tr>
+        <tr style="${STYLES.totalRow}">
+          <td colspan="8" style="${STYLES.tdRightBold}">Total a pagar:</td>
+          <td style="${STYLES.tdRightBold}">0.00</td>
+        </tr>
+      </tbody>
+    </table>`;
+  } else {
+    // (c) Happy path.
+    docsSection = `
+    <p style="${STYLES.sectionHeading}">Detalles de documentos:</p>
+    ${buildTable(overdueDocs)}`;
+  }
 
   // Task 1.3: Full template body
   const bodyHtml = `
