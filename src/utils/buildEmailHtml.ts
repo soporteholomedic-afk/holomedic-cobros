@@ -2,6 +2,38 @@ import { ClienteGroup, Documento } from '../types';
 import { formatNumber } from './excelParser';
 
 // ============================================================
+// File-local date utilities — mirror ClientDetailModal's
+// parseDate/isPastDue so both renderers agree on "past due".
+// Not exported.
+// ============================================================
+function parseDate(dateStr: string): Date | null {
+  if (!dateStr) return null;
+  const parts = dateStr.split('/');
+  if (parts.length !== 3) return null;
+  const day = parseInt(parts[0], 10);
+  const month = parseInt(parts[1], 10) - 1;
+  const year = parseInt(parts[2], 10);
+  return new Date(year, month, day);
+}
+
+function isPastDue(dateStr: string): boolean {
+  const date = parseDate(dateStr);
+  if (!date) return false;
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  return date < today;
+}
+
+// Direct computation: positive = days past due, null = invalid.
+function computeOverdueDays(dateStr: string): number | null {
+  const date = parseDate(dateStr);
+  if (!date) return null;
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  return Math.round((today.getTime() - date.getTime()) / 86_400_000);
+}
+
+// ============================================================
 // Inline Style Dictionary
 // Task 1.1 — centralized styles for email-client compatibility
 // ============================================================
@@ -44,6 +76,9 @@ const STYLES = {
     'font-size: 14px; font-weight: bold; color: #003366; margin-bottom: 8px;',
   paymentLine: 'margin: 2px 0;',
   paymentBullet: 'margin: 2px 0; padding-left: 10px;',
+  totalRow: 'background-color: #f5f5f5; font-weight: bold;',
+  estadoChipVencido: 'background-color: #fee2e2; color: #b91c1c; padding: 2px 6px; border-radius: 4px; font-size: 11px; font-weight: 600;',
+  estadoChipCredito: 'background-color: #fef3c7; color: #92400e; padding: 2px 6px; border-radius: 4px; font-size: 11px; font-weight: 600;',
 };
 
 // ============================================================
@@ -57,14 +92,19 @@ function safeFormat(value: number | null | undefined): string {
 // ============================================================
 // Helper: build document table HTML
 // Task 1.2 — table generation with all columns
+// T-EMAIL-4 — extended to 9 columns (Días Vencido + Estado) with
+// inline-styled chips and a per-currency Total a pagar row.
 // ============================================================
 function buildTable(documentos: Documento[]): string {
+  // Note: caller passes overdueDocs. `documentos` here is the filtered set.
   const headerRow = `
     <tr>
       <th style="${STYLES.thLeft}">Tipo Doc</th>
       <th style="${STYLES.thLeft}">Serie-Número</th>
       <th style="${STYLES.thCenter}">Fec. Emisión</th>
       <th style="${STYLES.thCenter}">Fec. Vencimiento</th>
+      <th style="${STYLES.thRight}">Días Vencido</th>
+      <th style="${STYLES.thCenter}">Estado</th>
       <th style="${STYLES.thRight}">Debe</th>
       <th style="${STYLES.thRight}">Haber</th>
       <th style="${STYLES.thRight}">Saldo</th>
@@ -72,12 +112,28 @@ function buildTable(documentos: Documento[]): string {
 
   const dataRows = documentos
     .map((doc) => {
+      const days = computeOverdueDays(doc.fechaVen);
+      const daysCell = days === null ? 'S/V' : String(days);
+      const estado: 'Vencido' | 'CREDITO' | '-' =
+        doc.saldo <= 0.01
+          ? '-'
+          : isPastDue(doc.fechaVen)
+            ? 'Vencido'
+            : 'CREDITO';
+      const estadoCell =
+        estado === 'Vencido'
+          ? `<span style="${STYLES.estadoChipVencido}">Vencido</span>`
+          : estado === 'CREDITO'
+            ? `<span style="${STYLES.estadoChipCredito}">CREDITO</span>`
+            : '-';
       return `
     <tr>
       <td style="${STYLES.td}">${escapeHtml(doc.tipoDoc)}</td>
       <td style="${STYLES.td}">${escapeHtml(doc.serie)}-${escapeHtml(doc.numero)}</td>
       <td style="${STYLES.tdCenter}">${escapeHtml(doc.fechaDoc)}</td>
       <td style="${STYLES.tdCenter}">${escapeHtml(doc.fechaVen)}</td>
+      <td style="${STYLES.tdRight}">${daysCell}</td>
+      <td style="${STYLES.tdCenter}">${estadoCell}</td>
       <td style="${STYLES.tdRight}">${doc.moneda} ${safeFormat(doc.debe)}</td>
       <td style="${STYLES.tdRight}">${doc.moneda} ${safeFormat(doc.haber)}</td>
       <td style="${STYLES.tdRightBold}">${doc.moneda} ${safeFormat(doc.saldo)}</td>
@@ -85,10 +141,27 @@ function buildTable(documentos: Documento[]): string {
     })
     .join('');
 
+  // Per-currency Total a pagar rows. Operates on the same `documentos`
+  // (which is the filtered set) so totals can never diverge from the
+  // table contents.
+  const totals = documentos.reduce<Record<string, number>>((acc, d) => {
+    acc[d.moneda] = (acc[d.moneda] ?? 0) + d.saldo;
+    return acc;
+  }, {});
+  const totalRows = Object.entries(totals)
+    .map(
+      ([mon, sum]) => `
+    <tr style="${STYLES.totalRow}">
+      <td colspan="8" style="${STYLES.tdRightBold}">Total a pagar (${escapeHtml(mon)}):</td>
+      <td style="${STYLES.tdRightBold}">${escapeHtml(mon)} ${safeFormat(sum)}</td>
+    </tr>`,
+    )
+    .join('');
+
   return `
     <table cellpadding="0" cellspacing="0" style="${STYLES.table}">
       <thead>${headerRow}</thead>
-      <tbody>${dataRows}
+      <tbody>${dataRows}${totalRows}
       </tbody>
     </table>`;
 }
@@ -140,24 +213,67 @@ function buildPaymentInfo(): string {
 export function buildEmailHtml(client: ClienteGroup): string {
   const { razonSocial, documentos } = client;
 
+  // Filter to overdue docs with positive balance — what the email
+  // is now scoped to deliver.
+  const overdueDocs = documentos.filter(
+    (d) => d.saldo > 0.01 && isPastDue(d.fechaVen),
+  );
+
   // Task 1.3: Salutation — handle missing razonSocial (Task 1.4)
   const salutation = razonSocial
     ? `Estimados señores ${escapeHtml(razonSocial)}`
     : 'Estimados señores';
 
-  // Task 1.4: Decide table or empty message
-  const docsSection =
-    documentos.length > 0
-      ? `
-    <p style="${STYLES.sectionHeading}">Detalles de documentos:</p>
-    ${buildTable(documentos)}`
-      : `
+  // Task 1.4: Decide table or empty message — 3 branches:
+  //   (a) documentos.length === 0          → pre-existing "No docs" message (no table)
+  //   (b) overdueDocs.length === 0         → table headers + colspan message + 0.00 total
+  //   (c) overdueDocs.length > 0           → normal table with per-currency totals
+  let docsSection: string;
+  if (documentos.length === 0) {
+    // (a) Pre-existing behavior: no docs at all → no table, italic message.
+    docsSection = `
     ${buildNoDocs()}`;
+  } else if (overdueDocs.length === 0) {
+    // (b) Filter was applied but nothing is overdue: still show the table
+    // structure (headers) so the email renders consistently, with a
+    // colspan message + a zero total row.
+    docsSection = `
+    <p style="${STYLES.sectionHeading}">Detalles de documentos:</p>
+    <table cellpadding="0" cellspacing="0" style="${STYLES.table}">
+      <thead>
+        <tr>
+          <th style="${STYLES.thLeft}">Tipo Doc</th>
+          <th style="${STYLES.thLeft}">Serie-Número</th>
+          <th style="${STYLES.thCenter}">Fec. Emisión</th>
+          <th style="${STYLES.thCenter}">Fec. Vencimiento</th>
+          <th style="${STYLES.thRight}">Días Vencido</th>
+          <th style="${STYLES.thCenter}">Estado</th>
+          <th style="${STYLES.thRight}">Debe</th>
+          <th style="${STYLES.thRight}">Haber</th>
+          <th style="${STYLES.thRight}">Saldo</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td colspan="9" style="${STYLES.noDocs}">No hay deudas vencidas</td>
+        </tr>
+        <tr style="${STYLES.totalRow}">
+          <td colspan="8" style="${STYLES.tdRightBold}">Total a pagar:</td>
+          <td style="${STYLES.tdRightBold}">0.00</td>
+        </tr>
+      </tbody>
+    </table>`;
+  } else {
+    // (c) Happy path.
+    docsSection = `
+    <p style="${STYLES.sectionHeading}">Detalles de documentos:</p>
+    ${buildTable(overdueDocs)}`;
+  }
 
   // Task 1.3: Full template body
   const bodyHtml = `
     <p style="${STYLES.paragraph}">Mediante el presente, le recordamos que mantiene un saldo pendiente de pago con nuestra empresa. Agradeceremos pueda realizar la regularización correspondiente.</p>
-    <p style="${STYLES.paragraph}">Para su referencia, adjuntamos el estado de cuenta actualizado a la fecha, donde podrá visualizar el detalle de los documentos pendientes.</p>
+    <p style="${STYLES.paragraph}">Para su referencia, adjuntamos el detalle de los documentos vencidos a la fecha, donde podrá visualizar el detalle de los documentos pendientes.</p>
     ${docsSection}
     <p style="${STYLES.paragraph}">Una vez efectuado el pago, le agradeceremos remitirnos el comprobante de la transferencia a fin de proceder con la validación correspondiente.</p>
     ${buildPaymentInfo()}
