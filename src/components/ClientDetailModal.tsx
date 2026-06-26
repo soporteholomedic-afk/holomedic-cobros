@@ -71,6 +71,15 @@ function getOverdueDays(docs: Documento[]): number | null {
   return max;
 }
 
+// Get overdue days for a single document.
+// Wraps daysDiff() with sign inversion: positive = days past due,
+// negative = days remaining, 0 = today, null = invalid/missing date.
+function getDocumentOverdueDays(dateStr: string): number | null {
+  const diff = daysDiff(dateStr);
+  if (diff === null) return null;
+  return -diff;
+}
+
 export default function ClientDetailModal({ client, onClose, onOpenEmailComposer }: ClientDetailModalProps) {
   const creditDaysRemaining = getCreditDaysRemaining(client.documentos);
   const overdueDays = getOverdueDays(client.documentos);
@@ -206,6 +215,11 @@ export default function ClientDetailModal({ client, onClose, onOpenEmailComposer
                     {client.documentos.some(d => d.cuenta) && <th className="px-4 py-3">Cuenta</th>}
                     <th className="px-4 py-3">Fec. Emisión</th>
                     <th className="px-4 py-3">Fec. Vencimiento</th>
+                    {/* New status columns: Días Vencido + Estado. Positioned after the
+                        Fec. Vencimiento column and before the monetary columns so the
+                        eye scans status → money left-to-right. */}
+                    <th className="px-4 py-3 text-right">Días Vencido</th>
+                    <th className="px-4 py-3">Estado</th>
                     <th className="px-4 py-3 text-right">Cargo (Debe)</th>
                     <th className="px-4 py-3 text-right">Abono (Haber)</th>
                     <th className="px-4 py-3 text-right">Saldo</th>
