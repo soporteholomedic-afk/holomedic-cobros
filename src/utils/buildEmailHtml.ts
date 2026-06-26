@@ -2,6 +2,38 @@ import { ClienteGroup, Documento } from '../types';
 import { formatNumber } from './excelParser';
 
 // ============================================================
+// File-local date utilities — mirror ClientDetailModal's
+// parseDate/isPastDue so both renderers agree on "past due".
+// Not exported.
+// ============================================================
+function parseDate(dateStr: string): Date | null {
+  if (!dateStr) return null;
+  const parts = dateStr.split('/');
+  if (parts.length !== 3) return null;
+  const day = parseInt(parts[0], 10);
+  const month = parseInt(parts[1], 10) - 1;
+  const year = parseInt(parts[2], 10);
+  return new Date(year, month, day);
+}
+
+function isPastDue(dateStr: string): boolean {
+  const date = parseDate(dateStr);
+  if (!date) return false;
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  return date < today;
+}
+
+// Direct computation: positive = days past due, null = invalid.
+function computeOverdueDays(dateStr: string): number | null {
+  const date = parseDate(dateStr);
+  if (!date) return null;
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  return Math.round((today.getTime() - date.getTime()) / 86_400_000);
+}
+
+// ============================================================
 // Inline Style Dictionary
 // Task 1.1 — centralized styles for email-client compatibility
 // ============================================================
@@ -44,6 +76,9 @@ const STYLES = {
     'font-size: 14px; font-weight: bold; color: #003366; margin-bottom: 8px;',
   paymentLine: 'margin: 2px 0;',
   paymentBullet: 'margin: 2px 0; padding-left: 10px;',
+  totalRow: 'background-color: #f5f5f5; font-weight: bold;',
+  estadoChipVencido: 'background-color: #fee2e2; color: #b91c1c; padding: 2px 6px; border-radius: 4px; font-size: 11px; font-weight: 600;',
+  estadoChipCredito: 'background-color: #fef3c7; color: #92400e; padding: 2px 6px; border-radius: 4px; font-size: 11px; font-weight: 600;',
 };
 
 // ============================================================
