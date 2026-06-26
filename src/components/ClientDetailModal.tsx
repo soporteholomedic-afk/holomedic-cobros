@@ -71,6 +71,15 @@ function getOverdueDays(docs: Documento[]): number | null {
   return max;
 }
 
+// Get overdue days for a single document.
+// Wraps daysDiff() with sign inversion: positive = days past due,
+// negative = days remaining, 0 = today, null = invalid/missing date.
+function getDocumentOverdueDays(dateStr: string): number | null {
+  const diff = daysDiff(dateStr);
+  if (diff === null) return null;
+  return -diff;
+}
+
 export default function ClientDetailModal({ client, onClose, onOpenEmailComposer }: ClientDetailModalProps) {
   const creditDaysRemaining = getCreditDaysRemaining(client.documentos);
   const overdueDays = getOverdueDays(client.documentos);
@@ -206,6 +215,11 @@ export default function ClientDetailModal({ client, onClose, onOpenEmailComposer
                     {client.documentos.some(d => d.cuenta) && <th className="px-4 py-3">Cuenta</th>}
                     <th className="px-4 py-3">Fec. Emisión</th>
                     <th className="px-4 py-3">Fec. Vencimiento</th>
+                    {/* New status columns: Días Vencido + Estado. Positioned after the
+                        Fec. Vencimiento column and before the monetary columns so the
+                        eye scans status → money left-to-right. */}
+                    <th className="px-4 py-3 text-right">Días Vencido</th>
+                    <th className="px-4 py-3">Estado</th>
                     <th className="px-4 py-3 text-right">Cargo (Debe)</th>
                     <th className="px-4 py-3 text-right">Abono (Haber)</th>
                     <th className="px-4 py-3 text-right">Saldo</th>
@@ -214,6 +228,13 @@ export default function ClientDetailModal({ client, onClose, onOpenEmailComposer
                 <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60 text-slate-700 dark:text-slate-300">
                   {client.documentos.map((doc, idx) => {
                     const expired = isPastDue(doc.fechaVen) && doc.saldo > 0.01;
+                    const overdueDays = getDocumentOverdueDays(doc.fechaVen);
+                    const estado: 'Vencido' | 'CREDITO' | '-' =
+                      doc.saldo <= 0.01
+                        ? '-'
+                        : expired
+                          ? 'Vencido'
+                          : 'CREDITO';
                     return (
                       <tr 
                         key={idx}
@@ -249,6 +270,30 @@ export default function ClientDetailModal({ client, onClose, onOpenEmailComposer
                               </span>
                             )}
                           </div>
+                        </td>
+                        <td className="px-4 py-3.5 text-right font-mono">
+                          {doc.fechaVen === ''
+                            ? <span className="text-slate-500">S/V</span>
+                            : doc.saldo <= 0.01
+                              ? <span className="text-slate-400">-</span>
+                              : <span className={overdueDays !== null && overdueDays > 0
+                                  ? 'text-rose-600 dark:text-rose-400 font-semibold'
+                                  : 'text-slate-500 dark:text-slate-400'}>
+                                  {overdueDays}
+                                </span>}
+                        </td>
+                        <td className="px-4 py-3.5">
+                          {estado === '-' ? (
+                            <span className="text-slate-400">-</span>
+                          ) : estado === 'Vencido' ? (
+                            <span className="text-[10px] font-bold bg-rose-100 dark:bg-rose-950 text-rose-700 dark:text-rose-400 border border-rose-200 dark:border-rose-900 px-1.5 py-0.5 rounded">
+                              Vencido
+                            </span>
+                          ) : (
+                            <span className="text-[10px] font-bold bg-amber-100 dark:bg-amber-950 text-amber-700 dark:text-amber-400 border border-amber-200 dark:border-amber-900 px-1.5 py-0.5 rounded">
+                              CREDITO
+                            </span>
+                          )}
                         </td>
                         <td className="px-4 py-3.5 text-right font-mono">
                           {doc.moneda} {formatNumber(doc.debe)}
