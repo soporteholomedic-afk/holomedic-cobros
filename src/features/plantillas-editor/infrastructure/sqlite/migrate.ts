@@ -1,6 +1,16 @@
 import type Database from 'better-sqlite3';
 
 /**
+ * Structural target accepted by `migrate()`. Both `better-sqlite3`
+ * (`exec(source: string): this`) and `sql.js` (`exec(sql: string, params?):
+ * QueryExecResult[]`) satisfy this shape, so a single `migrate()` runs the
+ * schema against either backend without casts or `any`.
+ */
+export interface SqliteExecTarget {
+  exec(sql: string): unknown;
+}
+
+/**
  * SQLite schema for the email template store.
  *
  * Mirrors the design exactly. `templates` holds the CURRENT snapshot
@@ -58,10 +68,19 @@ CREATE INDEX IF NOT EXISTS idx_versions_template_edited
 `;
 
 /**
- * Run the schema migration against a `better-sqlite3` database. Idempotent
+ * Run the schema migration against a SQLite database. Idempotent
  * (`CREATE TABLE/INDEX IF NOT EXISTS`); safe to call on every connection.
  * Does NOT seed data.
+ *
+ * Accepts the structural `SqliteExecTarget` so it works against both the
+ * `better-sqlite3` and `sql.js` backends. The `Database.Database` alias
+ * below keeps the existing `migrate(db: Database.Database)` call sites in
+ * the better-sqlite3 adapter/tests valid (it satisfies the structural
+ * type) — call sites can pass either backend.
  */
-export function migrate(db: Database.Database): void {
+export function migrate(db: SqliteExecTarget): void {
   db.exec(SCHEMA_SQL);
 }
+
+/** Backwards-compatible alias: a better-sqlite3 Database IS a SqliteExecTarget. */
+export type BetterSqliteDb = Database.Database;
