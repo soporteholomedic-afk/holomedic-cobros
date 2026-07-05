@@ -300,7 +300,6 @@ describe('BetterSqliteTemplateRepository', () => {
     it('the partial unique index rejects a second default for the same area+type', async () => {
       // Direct DB-level proof that the index enforces uniqueness — this is
       // the safety net behind setDefault's transaction.
-      const repo = makeRepo();
       const db = createTestDb();
       db.prepare(
         `INSERT INTO templates (id, area, type, name, subject, bodyHtml, isDefault, currentVersionId, deletedAt, createdAt, updatedAt)
