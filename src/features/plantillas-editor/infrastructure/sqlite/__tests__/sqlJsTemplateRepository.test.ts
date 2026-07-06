@@ -108,6 +108,20 @@ describe('SqlJsTemplateRepository', () => {
       const result = await repo.listByAreaAndType('consolidados', 'company');
       expect(result.map((t) => t.id)).toEqual([active.id]);
     });
+
+    it('listDeletedByArea returns only soft-deleted templates (trash view)', async () => {
+      const { repo } = makeRepo();
+      const active = await saveSample(repo, { name: 'A' });
+      const trashed = await saveSample(repo, { name: 'B' });
+      await repo.softDelete(trashed.id);
+
+      const trash = await repo.listDeletedByArea('consolidados');
+      expect(trash.map((t) => t.id)).toEqual([trashed.id]);
+      expect(trash.find((t) => t.id === active.id)).toBeUndefined();
+      for (const t of trash) {
+        expect(t.deletedAt).not.toBeNull();
+      }
+    });
   });
 
   describe('soft delete + restore', () => {
@@ -260,6 +274,7 @@ describe('SqlJsTemplateRepository', () => {
       const methods: (keyof ITemplateRepository)[] = [
         'listByArea',
         'listByAreaAndType',
+        'listDeletedByArea',
         'getById',
         'save',
         'softDelete',

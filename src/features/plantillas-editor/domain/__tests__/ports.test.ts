@@ -35,12 +35,13 @@ describe('ITemplateRepository port', () => {
     };
   }
 
-  it('declares exactly the ten template persistence operations', () => {
+  it('declares exactly the eleven template persistence operations', () => {
     expect([...TEMPLATE_REPOSITORY_METHODS].sort()).toEqual([
       'clone',
       'getById',
       'listByArea',
       'listByAreaAndType',
+      'listDeletedByArea',
       'listVersions',
       'restore',
       'rollback',
@@ -54,6 +55,7 @@ describe('ITemplateRepository port', () => {
     const repo: ITemplateRepository = {
       listByArea: async () => [],
       listByAreaAndType: async () => [],
+      listDeletedByArea: async () => [],
       getById: async () => null,
       save: async () => makeTemplate(),
       softDelete: async () => undefined,
@@ -73,6 +75,7 @@ describe('ITemplateRepository port', () => {
     const repo: ITemplateRepository = {
       listByArea: async () => [],
       listByAreaAndType: async () => [makeTemplate({ type: 'patient' })],
+      listDeletedByArea: async () => [],
       getById: async () => null,
       save: async () => makeTemplate(),
       softDelete: async () => undefined,
@@ -88,10 +91,33 @@ describe('ITemplateRepository port', () => {
     expect(result[0]?.type).toBe('patient');
   });
 
+  it('listDeletedByArea returns only soft-deleted templates for an area (trash view)', async () => {
+    const repo: ITemplateRepository = {
+      listByArea: async () => [],
+      listByAreaAndType: async () => [],
+      listDeletedByArea: async () => [
+        makeTemplate({ id: 'del-1', deletedAt: '2026-01-01T00:00:00.000Z' }),
+      ],
+      getById: async () => null,
+      save: async () => makeTemplate(),
+      softDelete: async () => undefined,
+      restore: async () => undefined,
+      clone: async () => makeTemplate(),
+      setDefault: async () => undefined,
+      listVersions: async () => [],
+      rollback: async () => makeTemplate(),
+    };
+
+    const trash = await repo.listDeletedByArea('consolidados');
+    expect(trash).toHaveLength(1);
+    expect(trash[0]?.deletedAt).not.toBeNull();
+  });
+
   it('getById resolves to null when the template is missing', async () => {
     const repo: ITemplateRepository = {
       listByArea: async () => [],
       listByAreaAndType: async () => [],
+      listDeletedByArea: async () => [],
       getById: async () => null,
       save: async () => makeTemplate(),
       softDelete: async () => undefined,

@@ -165,6 +165,18 @@ export class SqlJsTemplateRepository implements ITemplateRepository {
       .map(rowToTemplate);
   }
 
+  async listDeletedByArea(area: string): Promise<Template[]> {
+    // Trash view — inverse of `listByArea`: only rows with a non-null
+    // `deletedAt`. Active templates are excluded so the trash route
+    // cannot leak them into the recovery list.
+    return this
+      .queryAll(
+        'SELECT * FROM templates WHERE area = ? AND deletedAt IS NOT NULL ORDER BY updatedAt DESC',
+        [area],
+      )
+      .map(rowToTemplate);
+  }
+
   async getById(id: string): Promise<Template | null> {
     const row = this.getRow(id);
     return row ? rowToTemplate(row) : null;

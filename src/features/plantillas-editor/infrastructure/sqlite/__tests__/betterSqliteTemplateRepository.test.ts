@@ -160,6 +160,47 @@ describe('BetterSqliteTemplateRepository', () => {
       const result = await repo.listByAreaAndType('consolidados', 'company');
       expect(result.map((t) => t.id)).toEqual([company.id]);
     });
+
+    it('listDeletedByArea returns only soft-deleted templates for the area (trash view)', async () => {
+      const repo = makeRepo();
+      const active = await saveSample(repo, { name: 'A', type: 'company' });
+      const deleted1 = await saveSample(repo, { name: 'B', type: 'company' });
+      const deleted2 = await saveSample(repo, { name: 'C', type: 'patient' });
+      await repo.softDelete(deleted1.id);
+      await repo.softDelete(deleted2.id);
+
+      const trash = await repo.listDeletedByArea('consolidados');
+
+      const ids = trash.map((t) => t.id).sort();
+      expect(ids).toEqual([deleted1.id, deleted2.id].sort());
+      // Active templates MUST NOT appear in the trash view.
+      expect(trash.find((t) => t.id === active.id)).toBeUndefined();
+      // Every returned row MUST be soft-deleted.
+      for (const t of trash) {
+        expect(t.deletedAt).not.toBeNull();
+      }
+    });
+
+    it('listDeletedByArea returns an empty array when no templates are soft-deleted', async () => {
+      const repo = makeRepo();
+      await saveSample(repo, { name: 'A' });
+
+      const trash = await repo.listDeletedByArea('consolidados');
+      expect(trash).toEqual([]);
+    });
+
+    it('listDeletedByArea filters by area (excludes other areas)', async () => {
+      const repo = makeRepo();
+      await saveSample(repo, { name: 'A', area: 'consolidados' });
+      const other = await saveSample(repo, {
+        name: 'B',
+        area: 'other-area',
+      });
+      await repo.softDelete(other.id);
+
+      const trash = await repo.listDeletedByArea('consolidados');
+      expect(trash).toEqual([]);
+    });
   });
 
   describe('soft delete + default clearing', () => {
@@ -409,6 +450,7 @@ describe('BetterSqliteTemplateRepository', () => {
       const methods: (keyof ITemplateRepository)[] = [
         'listByArea',
         'listByAreaAndType',
+        'listDeletedByArea',
         'getById',
         'save',
         'softDelete',

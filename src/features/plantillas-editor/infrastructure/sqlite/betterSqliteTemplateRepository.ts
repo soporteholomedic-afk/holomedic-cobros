@@ -150,6 +150,18 @@ export class BetterSqliteTemplateRepository implements ITemplateRepository {
     return rows.map(rowToTemplate);
   }
 
+  async listDeletedByArea(area: string): Promise<Template[]> {
+    // Trash view: the inverse of `listByArea` — only rows with a
+    // non-null `deletedAt`. Active templates MUST be excluded so the
+    // trash route cannot leak active templates into the recovery list.
+    const rows = this.db
+      .prepare(
+        'SELECT * FROM templates WHERE area = ? AND deletedAt IS NOT NULL ORDER BY updatedAt DESC',
+      )
+      .all(area) as TemplateRow[];
+    return rows.map(rowToTemplate);
+  }
+
   async getById(id: string): Promise<Template | null> {
     const row = this.getRow(id);
     return row ? rowToTemplate(row) : null;

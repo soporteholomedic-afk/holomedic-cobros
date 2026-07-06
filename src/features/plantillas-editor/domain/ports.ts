@@ -37,6 +37,12 @@ export interface ITemplateRepository {
   listByArea(area: string): Promise<Template[]>;
   /** Active templates for an area+type, excluding soft-deleted. */
   listByAreaAndType(area: string, type: SpitchType): Promise<Template[]>;
+  /**
+   * Soft-deleted templates for an area (trash view). Active templates
+   * (`deletedAt IS NULL`) MUST be excluded. Backs the
+   * `GET /api/plantillas/trash?area=` route.
+   */
+  listDeletedByArea(area: string): Promise<Template[]>;
   /** A single template by id (active OR soft-deleted), or null if missing. */
   getById(id: string): Promise<Template | null>;
   /** Insert OR update + append a new version row. Returns the saved template. */
@@ -63,6 +69,7 @@ export interface ITemplateRepository {
 export const TEMPLATE_REPOSITORY_METHODS = [
   'listByArea',
   'listByAreaAndType',
+  'listDeletedByArea',
   'getById',
   'save',
   'softDelete',
