@@ -70,18 +70,15 @@ describe('SoftDeleteTemplateUseCase', () => {
       isDefault: false,
       deletedAt: '2026-01-01T00:00:00.000Z',
     });
-    const useCase = new SoftDeleteTemplateUseCase(
-      makeMockRepo(softDelete) /* not used for getById */,
-    );
-    // Re-inject a repo that also has getById so the post-condition is
-    // observable through the same seam.
+    // Inject a repo that has both softDelete and getById so the
+    // post-condition is observable through the same seam.
     const repo: ITemplateRepository = {
       ...makeMockRepo(softDelete),
       getById,
     };
-    const useCaseWithRead = new SoftDeleteTemplateUseCase(repo);
+    const useCase = new SoftDeleteTemplateUseCase(repo);
 
-    await useCaseWithRead.execute('tpl-default');
+    await useCase.execute('tpl-default');
     const fetched = await repo.getById('tpl-default');
 
     expect(softDelete).toHaveBeenCalledWith('tpl-default');
