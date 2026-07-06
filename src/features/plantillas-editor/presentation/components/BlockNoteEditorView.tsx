@@ -13,7 +13,8 @@ import {
   defaultInlineContentSpecs,
 } from '@blocknote/core';
 import {
-  BlockNoteView,
+  BlockNoteViewRaw,
+  BlockNoteDefaultUI,
   createReactInlineContentSpec,
   useCreateBlockNote,
 } from '@blocknote/react';
@@ -196,7 +197,9 @@ export const BlockNoteEditorView = forwardRef<
 
   return (
     <div data-testid="blocknote-editor" className="bn-container">
-      <BlockNoteView editor={editor} onChange={onChange} theme="light" />
+      <BlockNoteViewRaw editor={editor} onChange={onChange} theme="light">
+        <BlockNoteDefaultUI />
+      </BlockNoteViewRaw>
     </div>
   );
 });

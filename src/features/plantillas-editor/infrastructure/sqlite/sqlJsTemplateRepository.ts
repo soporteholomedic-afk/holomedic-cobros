@@ -232,12 +232,13 @@ export class SqlJsTemplateRepository implements ITemplateRepository {
     const existing = this.getRow(input.id);
     if (!existing) throw new TemplateNotFoundError(input.id);
     const versionId = randomUUID();
+    const id = input.id;
     const isDefault = input.isDefault ?? existing.isDefault === 1;
     this.tx(() => {
       this.run(
         `INSERT INTO template_versions (versionId, templateId, subject, bodyHtml, editedAt, editedBy)
          VALUES (?, ?, ?, ?, ?, NULL)`,
-        [versionId, input.id, input.subject, input.bodyHtml, now],
+        [versionId, id, input.subject, input.bodyHtml, now],
       );
       // area/type immutable; name updatable; isDefault persisted only when
       // the caller passes it so default changes route through setDefault.
@@ -250,7 +251,7 @@ export class SqlJsTemplateRepository implements ITemplateRepository {
           versionId,
           isDefault ? 1 : 0,
           now,
-          input.id,
+          id,
         ],
       );
     });
