@@ -1,0 +1,215 @@
+import React from 'react';
+import { render, screen } from '@testing-library/react';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+
+import {
+  BlockNoteEditorView,
+  type BlockNoteEditorViewHandle,
+} from '../BlockNoteEditorView';
+import { AREA_CONFIGS } from '../../../infrastructure/areaConfigRegistry';
+import type { TokenAttrs } from '../../../domain/entities';
+
+/**
+ * Unit tests for `BlockNoteEditorView` — the BlockNote integration layer.
+ *
+ * This component ISOLATES `@blocknote/react` + `@blocknote/core` (the custom
+ * `token` inline-content schema, the editor instance, the view) behind an
+ * imperative handle so `TemplateEditor` can orchestrate save/load/insert
+ * without importing BlockNote itself. `TemplateEditor` dynamically imports
+ * this component with `ssr:false` to keep BlockNote out of the server bundle
+ * (design Decision c / SSR boundary).
+ *
+ * BlockNote is mocked at the module boundary here (AGENTS.md: do NOT load
+ * real BlockNote in unit tests — it is heavy and needs a real DOM). The mock
+ * editor exposes the methods the imperative handle calls; the tests assert
+ * the WIRING (which BlockNote method is invoked with what args), not
+ * BlockNote's internal behavior (that is sdd-verify's job).
+ */
+
+// --- Mock @blocknote/core + @blocknote/react at the module boundary ---
+const mockBlocksToHTMLLossy = vi.hoisted(() => vi.fn());
+const mockTryParseHTMLToBlocks = vi.hoisted(() => vi.fn());
+const mockInsertInlineContent = vi.hoisted(() => vi.fn());
+const mockReplaceBlocks = vi.hoisted(() => vi.fn());
+const mockUpdateBlock = vi.hoisted(() => vi.fn());
+const mockFocus = vi.hoisted(() => vi.fn());
+
+const mockEditor = {
+  document: [] as unknown[],
+  blocksToHTMLLossy: mockBlocksToHTMLLossy,
+  tryParseHTMLToBlocks: mockTryParseHTMLToBlocks,
+  insertInlineContent: mockInsertInlineContent,
+  replaceBlocks: mockReplaceBlocks,
+  updateBlock: mockUpdateBlock,
+  focus: mockFocus,
+};
+
+vi.mock('@blocknote/react', () => ({
+  useCreateBlockNote: () => mockEditor,
+  createReactInlineContentSpec: vi.fn(() => ({ config: {}, implementation: {} })),
+  BlockNoteView: () => <div data-testid="blocknote-view-mock" />,
+}));
+
+vi.mock('@blocknote/core', () => ({
+  BlockNoteSchema: { create: () => ({}) },
+  defaultInlineContentSpecs: { text: { config: 'text', implementation: undefined }, link: { config: 'link', implementation: undefined } },
+}));
+
+import type { AreaConfig } from '../../../infrastructure/areaConfigRegistry';
+
+const consolidados: AreaConfig = AREA_CONFIGS.get('consolidados')!;
+
+function renderView(props: {
+  areaConfig?: AreaConfig;
+  onChange?: () => void;
+  onTokenClick?: (attrs: TokenAttrs) => void;
+} = {}) {
+  const ref = React.createRef<BlockNoteEditorViewHandle>();
+  render(
+    <BlockNoteEditorView
+      ref={ref}
+      areaConfig={props.areaConfig ?? consolidados}
+      onChange={props.onChange ?? vi.fn()}
+      onTokenClick={props.onTokenClick ?? vi.fn()}
+    />,
+  );
+  return { ref };
+}
+
+describe('BlockNoteEditorView', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockEditor.document = [{ id: 'b1', type: 'paragraph', content: [] }];
+  });
+
+  describe('imperative handle: getHtml (save serialization)', () => {
+    it('calls editor.blocksToHTMLLossy with the current document and returns the HTML', () => {
+      mockBlocksToHTMLLossy.mockReturnValue('<p>Hello {{empresa}}</p>');
+      const { ref } = renderView();
+
+      const html = ref.current?.getHtml();
+
+      expect(mockBlocksToHTMLLossy).toHaveBeenCalledTimes(1);
+      // Blocks to HTML lossy receives the current document blocks.
+      expect(mockBlocksToHTMLLossy).toHaveBeenCalledWith(mockEditor.document);
+      expect(html).toBe('<p>Hello {{empresa}}</p>');
+    });
+  });
+
+  describe('imperative handle: loadHtml (parse + post-process + replace)', () => {
+    it('parses HTML to blocks, post-processes token placeholders, and replaces the document', () => {
+      // tryParseHTMLToBlocks returns blocks with {{token}} as plain text;
+      // postProcessTokenBlocks (real, not mocked) splits them into token nodes.
+      mockTryParseHTMLToBlocks.mockReturnValue([
+        { id: 'b-new', type: 'paragraph', content: [{ type: 'text', text: 'Hola {{empresa}}' }] },
+      ]);
+      mockReplaceBlocks.mockReturnValue({ insertedBlocks: [], removedBlocks: [] });
+      const { ref } = renderView();
+
+      ref.current?.loadHtml('<p>Hola {{empresa}}</p>');
+
+      expect(mockTryParseHTMLToBlocks).toHaveBeenCalledWith('<p>Hola {{empresa}}</p>');
+      expect(mockReplaceBlocks).toHaveBeenCalledTimes(1);
+      // replaceBlocks is called with (idsToRemove, blocksToInsert). The
+      // inserted blocks are the post-processed blocks (with a token node).
+      const [idsToRemove, blocksToInsert] = mockReplaceBlocks.mock.calls[0] as [
+        unknown[],
+        unknown[],
+      ];
+      expect(idsToRemove).toEqual(['b1']); // the existing block id
+      // The post-processed block content includes a token node for {{empresa}}.
+      const inserted = blocksToInsert as Array<{ content: Array<{ type: string }> }>;
+      expect(inserted).toHaveLength(1);
+      const types = inserted[0]!.content.map((c) => c.type);
+      expect(types).toContain('token');
+      expect(types).toContain('text');
+    });
+  });
+
+  describe('imperative handle: insertToken (palette drop / column picker insert)', () => {
+    it('inserts a simple token inline content at the cursor and focuses', () => {
+      const { ref } = renderView();
+
+      ref.current?.insertToken({ key: 'empresa' });
+
+      expect(mockInsertInlineContent).toHaveBeenCalledTimes(1);
+      const arg = mockInsertInlineContent.mock.calls[0]![0] as {
+        type: string;
+        props: { key: string; table: string; cols: string };
+      };
+      expect(arg.type).toBe('token');
+      expect(arg.props).toEqual({ key: 'empresa', table: '', cols: '' });
+      expect(mockFocus).toHaveBeenCalled();
+    });
+
+    it('inserts a table token with cols joined as a string', () => {
+      const { ref } = renderView();
+
+      ref.current?.insertToken({
+        key: 'tabla',
+        table: 'documentosVencidos',
+        cols: ['fecha', 'monto'],
+      });
+
+      const arg = mockInsertInlineContent.mock.calls[0]![0] as {
+        props: { key: string; table: string; cols: string };
+      };
+      expect(arg.props).toEqual({
+        key: 'tabla',
+        table: 'documentosVencidos',
+        cols: 'fecha,monto',
+      });
+    });
+  });
+
+  describe('imperative handle: updateTableToken (edit existing chip in place)', () => {
+    it('walks the document, finds the first matching table token, and updateBlock with new attrs', () => {
+      // Document with two blocks; the first contains a table token chip.
+      mockEditor.document = [
+        {
+          id: 'b-1',
+          type: 'paragraph',
+          content: [
+            { type: 'token', props: { key: 'tabla', table: 'docs', cols: 'fecha' } },
+          ],
+        },
+        { id: 'b-2', type: 'paragraph', content: [{ type: 'text', text: 'tail' }] },
+      ];
+      mockUpdateBlock.mockReturnValue({});
+      const { ref } = renderView();
+
+      ref.current?.updateTableToken(
+        { table: 'docs' },
+        { key: 'tabla', table: 'docs', cols: ['fecha', 'monto'] },
+      );
+
+      expect(mockUpdateBlock).toHaveBeenCalledTimes(1);
+      const [blockId, update] = mockUpdateBlock.mock.calls[0] as [string, { content: unknown[] }];
+      expect(blockId).toBe('b-1');
+      const newContent = update.content as Array<{ type: string; props: { cols: string } }>;
+      expect(newContent[0]!.type).toBe('token');
+      expect(newContent[0]!.props.cols).toBe('fecha,monto');
+    });
+
+    it('does NOT call updateBlock when no matching token is found', () => {
+      mockEditor.document = [
+        { id: 'b-1', type: 'paragraph', content: [{ type: 'text', text: 'no tokens' }] },
+      ];
+      const { ref } = renderView();
+
+      ref.current?.updateTableToken(
+        { table: 'docs' },
+        { key: 'tabla', table: 'docs', cols: ['fecha'] },
+      );
+
+      expect(mockUpdateBlock).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('rendering', () => {
+    it('renders the BlockNote view', () => {
+      renderView();
+      expect(screen.getByTestId('blocknote-view-mock')).toBeInTheDocument();
+    });
+  });
+});
