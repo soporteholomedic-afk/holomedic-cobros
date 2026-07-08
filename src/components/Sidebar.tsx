@@ -3,13 +3,19 @@
 import { useState, useCallback } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Activity, FileSpreadsheet, Home, DollarSign, FileText, Menu, X } from 'lucide-react';
+import { Activity, FileSpreadsheet, Home, DollarSign, FileText, Mail, Menu, X } from 'lucide-react';
 
 const navItems = [
   { href: '/', label: 'Inicio', icon: Home },
   { href: '/cobranza', label: 'Cobranza', icon: DollarSign },
   { href: '/consolidados', label: 'Consolidados', icon: FileText },
   { href: '/valoraciones', label: 'Valoraciones', icon: FileSpreadsheet },
+  // PR 4 — direct link to the plantillas editor for the consolidados
+  // area. Spec task 4.7: "Add nav entry 'Plantillas' →
+  // /admin/plantillas/consolidados". Other areas are reserved
+  // (decision #5) but not yet registered; the dynamic page returns
+  // 404 for unknown areas.
+  { href: '/admin/plantillas/consolidados', label: 'Plantillas', icon: Mail },
 ];
 
 export default function Sidebar() {
