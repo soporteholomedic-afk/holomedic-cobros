@@ -1,6 +1,5 @@
 import archiver from 'archiver';
 import { createReadStream, promises as fs } from 'node:fs';
-import * as path from 'node:path';
 import { createFileNode, type FileNode } from '@/features/envio-resultados/domain/file-system/FileNode';
 import {
   createFolderNode,
@@ -8,15 +7,16 @@ import {
 } from '@/features/envio-resultados/domain/file-system/FolderNode';
 import type { FileSystemNode } from '@/features/envio-resultados/domain/ports';
 import type { IFileRepository } from '@/features/envio-resultados/domain/ports';
+import { pathOs, FILE_SERVER_BASE_PATH } from '@/lib/platform';
 
 /**
- * Resolved at module load. Production runtime is Windows, where the
- * UNC base path is read directly by Node `fs`. On non-Windows dev
- * machines (Linux CI) the base path is still a syntactically valid
- * Windows path string, so unit tests MUST mock `node:fs` at the
- * module boundary — see `__tests__/UncFileRepository.test.ts`.
+ * Resolved at module load from the single source of truth (`@/lib/platform`).
+ * On Windows the path is a UNC share (`\\172.16.10.12\sigla`); on Linux it
+ * is the CIFS mount point (`/mnt/sigla`). The path module (`pathOs`) is
+ * selected by the format of the base path — backslash → win32, otherwise
+ * posix — so path composition always uses the correct separator.
  */
-const BASE_PATH = process.env.FILE_SERVER_BASE_PATH ?? '';
+const BASE_PATH = FILE_SERVER_BASE_PATH;
 
 /** Files larger than this emit a structured `console.warn`. Not surfaced. */
 const SIZE_WARN_BYTES = 50 * 1024 * 1024;
@@ -28,18 +28,18 @@ const SIZE_WARN_BYTES = 50 * 1024 * 1024;
  * protects future direct callers from accidental escape.
  */
 function joinFolder(ruc: string, dni: string, idAten: string, relativePath: string): string {
-  const root = path.win32.join(BASE_PATH, ruc, dni, idAten);
+  const root = pathOs.join(BASE_PATH, ruc, dni, idAten);
   if (relativePath === '') return root;
-  const full = path.win32.resolve(root, relativePath);
-  const resolvedRoot = path.win32.resolve(root);
-  if (full !== resolvedRoot && !full.startsWith(resolvedRoot + path.win32.sep)) {
+  const full = pathOs.resolve(root, relativePath);
+  const resolvedRoot = pathOs.resolve(root);
+  if (full !== resolvedRoot && !full.startsWith(resolvedRoot + pathOs.sep)) {
     throw new Error('path inválido');
   }
   return full;
 }
 
 function joinFile(folder: string, name: string): string {
-  return path.win32.join(folder, name);
+  return pathOs.join(folder, name);
 }
 
 /** Case-insensitive alphabetical comparator. */

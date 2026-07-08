@@ -28,6 +28,8 @@ const mock: MockPreviewData = {
   firma: '<p>Dr. Pérez — Clínica Demo S.A.</p>',
   area: 'consolidados',
   today: '2026-01-15',
+  pacienteDni: '12345678',
+  pacienteNombre: 'Juan Pérez',
 };
 
 const emptyFirmaMock: MockPreviewData = { ...mock, firma: '' };

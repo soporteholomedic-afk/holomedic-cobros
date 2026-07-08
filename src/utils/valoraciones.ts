@@ -14,7 +14,7 @@ export {
 // ---- I/O wrapper that reads from disk ----
 
 const DEFAULT_CSV_PATH = path.join(
-  process.cwd(),
+  /* turbopackIgnore: true */ process.cwd(),
   'src/features/valorizaciones/archivos-crudos.csv',
 );
 

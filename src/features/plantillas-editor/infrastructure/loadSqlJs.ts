@@ -1,31 +1,21 @@
-import { readFileSync } from 'node:fs';
-import { createRequire } from 'node:module';
-
-import initSqlJs from 'sql.js';
-
 /**
  * Lazily initialise the sql.js WASM runtime and cache the `SqlJsStatic`.
  *
- * The wasm bytes are read from the installed `sql.js` package on the FIRST
- * call only (never at module load) — so the primary `better-sqlite3` path
- * never pays the wasm-read cost. The cache holds the resolved `SqlJsStatic`
- * so subsequent calls are free.
+ * The wasm bytes are loaded internally by sql.js itself (`sql-wasm.js` uses
+ * `__dirname` + `sql-wasm.wasm` to resolve the binary at runtime), so we
+ * don't pre-read the WASM file here. This also avoids Turbopack tracing a
+ * `.wasm` file path (which triggers a virtual loader with Vite placeholders
+ * that Turbopack can't resolve).
  *
- * `createRequire` is used (instead of `import.meta.resolve`) for broad
- * Node/Next ESM-CJS interop: it resolves `sql.js/dist/sql-wasm.wasm`
- * against the real on-disk package layout (pnpm's `.pnpm` store included).
+ * The cache holds the resolved `SqlJsStatic` so subsequent calls are free.
  */
-const require = createRequire(import.meta.url);
+import type { SqlJsStatic } from 'sql.js';
 
-let cachedPromise: Promise<Awaited<ReturnType<typeof initSqlJs>>> | null = null;
+let cachedPromise: Promise<SqlJsStatic> | null = null;
 
-export function loadSqlJs(): Promise<Awaited<ReturnType<typeof initSqlJs>>> {
+export async function loadSqlJs(): Promise<SqlJsStatic> {
   if (cachedPromise) return cachedPromise;
-  const wasmBinary = readFileSync(
-    require.resolve('sql.js/dist/sql-wasm.wasm'),
-  );
-  cachedPromise = initSqlJs({
-    wasmBinary,
-  } as Parameters<typeof initSqlJs>[0]);
+  const { default: initSqlJs } = await import('sql.js');
+  cachedPromise = initSqlJs();
   return cachedPromise;
 }

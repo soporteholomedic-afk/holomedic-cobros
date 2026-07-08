@@ -1,6 +1,15 @@
 'use client';
 
-import { useDroppable, DndContext, type DragEndEvent } from '@dnd-kit/core';
+import {
+  useDroppable,
+  DndContext,
+  DragOverlay,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+  type DragStartEvent,
+} from '@dnd-kit/core';
 import { lazy, useRef, useState, useSyncExternalStore, Suspense } from 'react';
 
 import type { AreaConfig, PredefinedTable, TokenDef } from '../../infrastructure/areaConfigRegistry';
@@ -10,12 +19,15 @@ import {
   type BlockNoteEditorViewHandle,
 } from './BlockNoteEditorView';
 import { TokenPalette } from './TokenPalette';
+import { ClientOnly } from './ClientOnly';
 import {
   SubjectTokenInput,
   type SubjectTokenInputHandle,
 } from './SubjectTokenInput';
+import { TokenChip } from './TokenChip';
 import { ColumnPicker } from './ColumnPicker';
 import { buildPreviewHtml } from '../helpers/buildPreviewHtml';
+import { buildTableCellColorCSS } from './tableCellColors';
 import { saveTemplateApi } from '../helpers/saveTemplateApi';
 import {
   handlePaletteDragEnd,
@@ -111,6 +123,10 @@ export function TemplateEditor({ areaConfig, templates }: TemplateEditorProps) {
   // --- column picker state ---
   const [picker, setPicker] = useState<PickerState | null>(null);
 
+  // --- drag-and-drop state ---
+  const [activeDragAttrs, setActiveDragAttrs] = useState<TokenAttrs | null>(null);
+  const [activeDragLabel, setActiveDragLabel] = useState<string | null>(null);
+
   // --- imperative refs ---
   const editorViewRef = useRef<BlockNoteEditorViewHandle>(null);
   const subjectInputRef = useRef<SubjectTokenInputHandle>(null);
@@ -123,11 +139,26 @@ export function TemplateEditor({ areaConfig, templates }: TemplateEditorProps) {
   // client.
   const isClient = useIsClient();
 
-  // --- dnd-kit drop zones ---
-  const { setNodeRef: setBodyDropRef } = useDroppable({ id: BODY_DROP_ID });
-  const { setNodeRef: setSubjectDropRef } = useDroppable({ id: SUBJECT_DROP_ID });
+  // --- dnd-kit sensors ---
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: { distance: 8 },
+    }),
+  );
+
+  function handleDragStart(event: DragStartEvent) {
+    const payload = event.active.data.current as
+      | { type?: string; attrs?: TokenAttrs; label?: string }
+      | undefined;
+    if (payload?.type === 'token' && payload.attrs) {
+      setActiveDragAttrs(payload.attrs);
+      setActiveDragLabel(payload.label ?? null);
+    }
+  }
 
   function handleDragEnd(event: DragEndEvent) {
+    setActiveDragAttrs(null);
+    setActiveDragLabel(null);
     handlePaletteDragEnd(
       event as unknown as Parameters<typeof handlePaletteDragEnd>[0],
       subjectInputRef.current,
@@ -208,15 +239,24 @@ export function TemplateEditor({ areaConfig, templates }: TemplateEditorProps) {
     }
     // Compute the preview HTML on demand (event handler — safe to read refs).
     const bodyHtml = editorViewRef.current?.getHtml() ?? '';
-    setPreviewHtml(buildPreviewHtml(bodyHtml, areaConfig.mockPreviewData));
+    const bodyPreview = buildPreviewHtml(bodyHtml, areaConfig.mockPreviewData);
+    setPreviewHtml(
+      `<!DOCTYPE html><html><head><style>
+        table { border-collapse: collapse; width: 100%; }
+        th, td { border: 1px solid #ccc; padding: 8px; text-align: left; }
+        th { background-color: #f8f9fa; font-weight: 600; }
+        ${buildTableCellColorCSS()}
+      </style></head><body>${bodyPreview}</body></html>`,
+    );
     setShowPreview(true);
   }
 
   return (
-    <DndContext onDragEnd={handleDragEnd}>
-      <div className="grid grid-cols-1 lg:grid-cols-[16rem_1fr] gap-6 p-6">
-        {/* ===== LEFT: Token palette ===== */}
-        <TokenPalette areaConfig={areaConfig} onPickTable={handlePickTable} />
+    <ClientOnly>
+      <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
+        <div className="grid grid-cols-1 lg:grid-cols-[16rem_1fr] gap-6 p-6">
+          {/* ===== LEFT: Token palette ===== */}
+          <TokenPalette areaConfig={areaConfig} onPickTable={handlePickTable} />
 
         {/* ===== RIGHT: Editor form ===== */}
         <div className="space-y-4">
@@ -283,17 +323,17 @@ export function TemplateEditor({ areaConfig, templates }: TemplateEditorProps) {
           </div>
 
           {/* Subject (dnd drop target) */}
-          <div ref={setSubjectDropRef}>
+          <SubjectDropZone>
             <SubjectTokenInput
               ref={subjectInputRef}
               value={subject}
               onChange={setSubject}
               areaConfig={areaConfig}
             />
-          </div>
+          </SubjectDropZone>
 
           {/* Body editor (dnd drop target) */}
-          <div ref={setBodyDropRef} className="rounded-lg border border-slate-200 dark:border-slate-700 p-2 min-h-[20rem]">
+          <BodyDropZone className="rounded-lg border border-slate-200 dark:border-slate-700 p-2 min-h-[20rem]">
             {isClient ? (
               <Suspense
                 fallback={
@@ -324,7 +364,7 @@ export function TemplateEditor({ areaConfig, templates }: TemplateEditorProps) {
                 Cargando editor…
               </div>
             )}
-          </div>
+          </BodyDropZone>
 
           {/* Save + Preview buttons */}
           <div className="flex items-center gap-3">
@@ -383,6 +423,40 @@ export function TemplateEditor({ areaConfig, templates }: TemplateEditorProps) {
           </div>
         </div>
       )}
-    </DndContext>
+      <DragOverlay dropAnimation={null}>
+        {activeDragAttrs && activeDragLabel ? (
+          <TokenChip label={activeDragLabel} attrs={activeDragAttrs} />
+        ) : null}
+      </DragOverlay>
+      </DndContext>
+    </ClientOnly>
+  );
+}
+
+/**
+ * Wraps the body editor area in a `useDroppable` so dnd-kit can detect drops
+ * on the body. Must be rendered INSIDE the `<DndContext>` — extracted from
+ * `TemplateEditor` because `useDroppable` reads the DndContext via React
+ * context (calling it in the parent component would be outside the provider).
+ */
+function BodyDropZone({ children, className }: { children: React.ReactNode; className?: string }) {
+  const { setNodeRef } = useDroppable({ id: BODY_DROP_ID });
+  return (
+    <div ref={setNodeRef} className={className}>
+      {children}
+    </div>
+  );
+}
+
+/**
+ * Wraps the subject input in a `useDroppable` so dnd-kit can detect drops
+ * on the subject line. Must be rendered INSIDE the `<DndContext>`.
+ */
+function SubjectDropZone({ children }: { children: React.ReactNode }) {
+  const { setNodeRef } = useDroppable({ id: SUBJECT_DROP_ID });
+  return (
+    <div ref={setNodeRef}>
+      {children}
+    </div>
   );
 }

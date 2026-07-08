@@ -91,7 +91,7 @@ function DraggableSimpleChip({ token }: { token: TokenDef }) {
   const attrs: TokenAttrs = { key: token.key };
   const { setNodeRef, listeners, attributes, isDragging } = useDraggable({
     id: `palette-${token.key}-${token.label}`,
-    data: { type: 'token', attrs },
+    data: { type: 'token', attrs, label: token.label },
   });
   return (
     <div
