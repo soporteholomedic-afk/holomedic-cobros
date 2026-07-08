@@ -1,4 +1,4 @@
-import type { Company, Patient, Spitch, SpitchType, EmailAttachment } from './entities';
+import type { Company, Patient, EmailAttachment } from './entities';
 import type { FileSystemNode } from './file-system/FileSystemNode';
 // Re-export the Composite types so consumers can `import { FileSystemNode, IFileRepository }`
 // from a single module surface (the domain port).
@@ -14,10 +14,6 @@ export interface ICompanyRepository {
 
 export interface IPatientRepository {
   getByCompanyId(companyId: string): Promise<Patient[]>;
-}
-
-export interface ISpitchRepository {
-  getByType(type: SpitchType): Promise<Spitch[]>;
 }
 
 /**

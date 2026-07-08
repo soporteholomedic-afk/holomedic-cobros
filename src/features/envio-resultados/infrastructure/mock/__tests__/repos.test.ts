@@ -1,7 +1,12 @@
 import { describe, it, expect } from 'vitest';
 import { MockCompanyRepo } from '../companyRepo';
 import { MockPatientRepo } from '../patientRepo';
-import { MockSpitchRepo } from '../spitchRepo';
+
+// PR 4 — `MockSpitchRepo` was removed. The send flow now obtains
+// spitches from `/api/plantillas` (the SQLite-backed plantillas-editor
+// store). Per spec scenario REMOVED "MockSpitchRepo hardcoded templates",
+// the 19 hardcoded spitches are NOT migrated — the store starts empty
+// and the user creates templates via the editor.
 
 describe('MockCompanyRepo', () => {
   const repo = new MockCompanyRepo();
@@ -61,38 +66,6 @@ describe('MockPatientRepo', () => {
         expect(f.type).toBe('application/pdf');
         expect(f.size).toBeGreaterThan(0);
       }
-    }
-  });
-});
-
-describe('MockSpitchRepo', () => {
-  const repo = new MockSpitchRepo();
-
-  it('should return 6 company spitches', async () => {
-    const spitches = await repo.getByType('company');
-    expect(spitches).toHaveLength(6);
-    spitches.forEach((s) => expect(s.type).toBe('company'));
-  });
-
-  it('should return 13 patient spitches', async () => {
-    const spitches = await repo.getByType('patient');
-    expect(spitches).toHaveLength(13);
-    spitches.forEach((s) => expect(s.type).toBe('patient'));
-  });
-
-  it('should return empty array for unknown type', async () => {
-    const spitches = await repo.getByType('unknown' as any);
-    expect(spitches).toHaveLength(0);
-  });
-
-  it('each spitch should have valid HTML body', async () => {
-    const spitches = await repo.getByType('company');
-    for (const s of spitches) {
-      expect(s.id).toBeTruthy();
-      expect(s.name).toBeTruthy();
-      expect(s.subject).toBeTruthy();
-      expect(s.bodyHtml).toContain('<!DOCTYPE html>');
-      expect(s.bodyHtml).toContain('</html>');
     }
   });
 });
