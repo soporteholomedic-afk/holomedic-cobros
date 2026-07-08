@@ -233,6 +233,7 @@ export function EmailEditor({
             target={target}
             onSelect={handleSpitchSelect}
             selectedId={selectedSpitch?.id}
+            area="consolidados"
           />
         </div>
 

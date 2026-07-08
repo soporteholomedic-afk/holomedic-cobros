@@ -7,26 +7,28 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 // Mock SpitchSelector
 vi.mock('../SpitchSelector', () => ({
   SpitchSelector: vi.fn().mockImplementation(
-    ({ target, onSelect, selectedId }: { target: string; onSelect: (s: any) => void; selectedId?: string }) => {
+    ({ target, onSelect, selectedId, area }: { target: string; onSelect: (s: any) => void; selectedId?: string; area: string }) => {
       const React_1 = require('react');
       const [loaded] = React_1.useState(true);
       React_1.useEffect(() => {
         if (loaded) {
           onSelect({
             id: selectedId || 'spitch-001',
+            area: area,
             type: target,
             name: 'Test Spitch',
             subject: 'Asunto de prueba',
             bodyHtml: '<p>Contenido de prueba</p>',
           });
         }
-      }, [loaded]);
+      }, [loaded, area, target, selectedId]);
       return React_1.createElement('select', {
         'data-testid': 'spitch-selector',
         'data-target': target,
         value: selectedId || 'spitch-001',
         onChange: () => onSelect({
           id: 'spitch-001',
+          area: area,
           type: target,
           name: 'Test Spitch',
           subject: 'Asunto de prueba',

@@ -46,6 +46,14 @@ export interface SelectedFileRef {
 
 export interface Spitch {
   id: string;
+  /**
+   * The area this spitch belongs to (e.g. `'consolidados'`). PR 4 of
+   * the email-template-editor change adds the field so the empty-state
+   * UX can derive the right editor link from the area. Populated by
+   * the `Template → SpitchDTO` boundary projection at
+   * `/api/plantillas`. Decision b (design).
+   */
+  area: string;
   type: SpitchType;
   name: string;
   subject: string;

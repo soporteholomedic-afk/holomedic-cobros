@@ -68,6 +68,7 @@ describe('Spitch entity', () => {
   it('should create a company-type spitch', () => {
     const spitch: Spitch = {
       id: 'spitch-001',
+      area: 'consolidados',
       type: 'company',
       name: 'Resumen general',
       subject: 'Informe consolidado',
@@ -81,6 +82,7 @@ describe('Spitch entity', () => {
   it('should create a patient-type spitch', () => {
     const spitch: Spitch = {
       id: 'spitch-002',
+      area: 'consolidados',
       type: 'patient',
       name: 'Notificación personal',
       subject: 'Resultados de {{paciente}}',
@@ -88,6 +90,43 @@ describe('Spitch entity', () => {
     };
 
     expect(spitch.type).toBe('patient');
+  });
+
+  // PR 4 / task 4.1 — spec scenario "Spitch carries area"
+  it('carries the area field set by the boundary projection (consolidados)', () => {
+    const spitch: Spitch = {
+      id: 'spitch-001',
+      area: 'consolidados',
+      type: 'company',
+      name: 'Resumen general',
+      subject: 'Informe consolidado',
+      bodyHtml: '<p>Test</p>',
+    };
+    expect(spitch.area).toBe('consolidados');
+  });
+
+  it('exposes the documented runtime shape: id, area, type, name, subject, bodyHtml (no authoring fields)', () => {
+    const spitch: Spitch = {
+      id: 'spitch-001',
+      area: 'consolidados',
+      type: 'company',
+      name: 'Resumen general',
+      subject: 'Informe consolidado',
+      bodyHtml: '<p>Test</p>',
+    };
+    expect(Object.keys(spitch).sort()).toEqual([
+      'area',
+      'bodyHtml',
+      'id',
+      'name',
+      'subject',
+      'type',
+    ]);
+    // Authoring-only fields (e.g. isDefault, currentVersionId, deletedAt)
+    // must NOT appear in the send-flow entity.
+    expect('isDefault' in spitch).toBe(false);
+    expect('currentVersionId' in spitch).toBe(false);
+    expect('deletedAt' in spitch).toBe(false);
   });
 });
 
