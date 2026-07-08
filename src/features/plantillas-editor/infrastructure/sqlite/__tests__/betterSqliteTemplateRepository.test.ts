@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
-import type { Template } from '../../domain/entities';
-import type { ITemplateRepository } from '../../domain/ports';
+import type { Template } from '../../../domain/entities';
+import type { ITemplateRepository } from '../../../domain/ports';
 
 import { createTestDb } from './createTestDb';
 import { BetterSqliteTemplateRepository, TemplateNotFoundError } from '../betterSqliteTemplateRepository';

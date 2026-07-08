@@ -35,8 +35,10 @@ describe('RollbackTemplateUseCase', () => {
     };
   }
 
-  function makeMockRepo(rollbackFn?: ReturnType<typeof vi.fn>): ITemplateRepository {
-    const defaultRollback = vi.fn().mockResolvedValue(makeTemplate());
+  function makeMockRepo(
+    rollbackFn?: ReturnType<typeof vi.fn<(templateId: string, versionId: string) => Promise<Template>>>,
+  ): ITemplateRepository {
+    const defaultRollback = vi.fn<(templateId: string, versionId: string) => Promise<Template>>().mockResolvedValue(makeTemplate());
     return {
       listByArea: vi.fn(),
       listByAreaAndType: vi.fn(),
@@ -60,7 +62,7 @@ describe('RollbackTemplateUseCase', () => {
       subject: 'v1 subject',
       bodyHtml: '<p>v1</p>',
     });
-    const rollback = vi.fn().mockResolvedValue(rolledBack);
+    const rollback = vi.fn<(templateId: string, versionId: string) => Promise<Template>>().mockResolvedValue(rolledBack);
     const useCase = new RollbackTemplateUseCase(makeMockRepo(rollback));
 
     const result = await useCase.execute('tpl-1', 'v-1');
@@ -72,7 +74,7 @@ describe('RollbackTemplateUseCase', () => {
   });
 
   it('forwards both templateId and versionId verbatim (no swapping)', async () => {
-    const rollback = vi.fn().mockResolvedValue(makeTemplate());
+    const rollback = vi.fn<(templateId: string, versionId: string) => Promise<Template>>().mockResolvedValue(makeTemplate());
     const useCase = new RollbackTemplateUseCase(makeMockRepo(rollback));
 
     await useCase.execute('tpl-42', 'v-7');
@@ -84,7 +86,7 @@ describe('RollbackTemplateUseCase', () => {
     const { TemplateNotFoundError } = await import(
       '../../infrastructure/sqlite/betterSqliteTemplateRepository'
     );
-    const rollback = vi.fn().mockRejectedValue(new TemplateNotFoundError('tpl-missing'));
+    const rollback = vi.fn<(templateId: string, versionId: string) => Promise<Template>>().mockRejectedValue(new TemplateNotFoundError('tpl-missing'));
     const useCase = new RollbackTemplateUseCase(makeMockRepo(rollback));
 
     await expect(useCase.execute('tpl-missing', 'v-1')).rejects.toThrow(
@@ -96,7 +98,7 @@ describe('RollbackTemplateUseCase', () => {
     const { TemplateNotFoundError } = await import(
       '../../infrastructure/sqlite/betterSqliteTemplateRepository'
     );
-    const rollback = vi.fn().mockRejectedValue(new TemplateNotFoundError('v-missing'));
+    const rollback = vi.fn<(templateId: string, versionId: string) => Promise<Template>>().mockRejectedValue(new TemplateNotFoundError('v-missing'));
     const useCase = new RollbackTemplateUseCase(makeMockRepo(rollback));
 
     await expect(useCase.execute('tpl-1', 'v-missing')).rejects.toThrow(

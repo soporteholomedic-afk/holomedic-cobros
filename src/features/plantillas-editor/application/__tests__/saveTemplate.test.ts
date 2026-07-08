@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 
-import type { Template } from '../../domain/entities';
+import type { SaveTemplateInput, Template } from '../../domain/entities';
 import type { ITemplateRepository } from '../../domain/ports';
 import { SaveTemplateUseCase } from '../saveTemplate';
 
@@ -34,8 +34,10 @@ describe('SaveTemplateUseCase', () => {
     };
   }
 
-  function makeMockRepo(saveFn?: ReturnType<typeof vi.fn>): ITemplateRepository {
-    const defaultSave = vi.fn().mockResolvedValue(makeTemplate());
+  function makeMockRepo(
+    saveFn?: ReturnType<typeof vi.fn<(input: SaveTemplateInput) => Promise<Template>>>,
+  ): ITemplateRepository {
+    const defaultSave = vi.fn<(input: SaveTemplateInput) => Promise<Template>>().mockResolvedValue(makeTemplate());
     return {
       listByArea: vi.fn(),
       listByAreaAndType: vi.fn(),
@@ -53,7 +55,7 @@ describe('SaveTemplateUseCase', () => {
 
   it('saves a NEW template by delegating to repo.save and returns the created template', async () => {
     const created = makeTemplate({ id: 'new-1', currentVersionId: 'v-1' });
-    const save = vi.fn().mockResolvedValue(created);
+    const save = vi.fn<(input: SaveTemplateInput) => Promise<Template>>().mockResolvedValue(created);
     const useCase = new SaveTemplateUseCase(makeMockRepo(save));
 
     const result = await useCase.execute({
@@ -87,7 +89,7 @@ describe('SaveTemplateUseCase', () => {
       currentVersionId: 'v-2',
       subject: 'v2 subject',
     });
-    const save = vi.fn().mockResolvedValue(updated);
+    const save = vi.fn<(input: SaveTemplateInput) => Promise<Template>>().mockResolvedValue(updated);
     const useCase = new SaveTemplateUseCase(makeMockRepo(save));
 
     const result = await useCase.execute({
@@ -112,7 +114,7 @@ describe('SaveTemplateUseCase', () => {
   });
 
   it('forwards isDefault when provided (default handling delegated to the adapter)', async () => {
-    const save = vi.fn().mockResolvedValue(makeTemplate({ isDefault: true }));
+    const save = vi.fn<(input: SaveTemplateInput) => Promise<Template>>().mockResolvedValue(makeTemplate({ isDefault: true }));
     const useCase = new SaveTemplateUseCase(makeMockRepo(save));
 
     await useCase.execute({
@@ -134,7 +136,7 @@ describe('SaveTemplateUseCase', () => {
     // uniqueness invariant is enforced in one place. The use case must
     // not pre-default the field — that would prevent the adapter from
     // distinguishing "caller wants default" from "caller doesn't care".
-    const save = vi.fn().mockResolvedValue(makeTemplate());
+    const save = vi.fn<(input: SaveTemplateInput) => Promise<Template>>().mockResolvedValue(makeTemplate());
     const useCase = new SaveTemplateUseCase(makeMockRepo(save));
 
     await useCase.execute({
@@ -152,7 +154,7 @@ describe('SaveTemplateUseCase', () => {
   it('propagates repository errors (does not swallow)', async () => {
     // The route's try/catch maps thrown errors to HTTP 500 (or 404 for
     // TemplateNotFoundError). The use case must let them bubble.
-    const save = vi.fn().mockRejectedValue(new Error('unique constraint'));
+    const save = vi.fn<(input: SaveTemplateInput) => Promise<Template>>().mockRejectedValue(new Error('unique constraint'));
     const useCase = new SaveTemplateUseCase(makeMockRepo(save));
 
     await expect(

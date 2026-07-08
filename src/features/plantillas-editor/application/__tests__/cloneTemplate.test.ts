@@ -35,8 +35,10 @@ describe('CloneTemplateUseCase', () => {
     };
   }
 
-  function makeMockRepo(cloneFn?: ReturnType<typeof vi.fn>): ITemplateRepository {
-    const defaultClone = vi.fn().mockResolvedValue(
+  function makeMockRepo(
+    cloneFn?: ReturnType<typeof vi.fn<(id: string) => Promise<Template>>>,
+  ): ITemplateRepository {
+    const defaultClone = vi.fn<(id: string) => Promise<Template>>().mockResolvedValue(
       makeTemplate({ id: 'clone-1', isDefault: false, deletedAt: null }),
     );
     return {
@@ -62,7 +64,7 @@ describe('CloneTemplateUseCase', () => {
       subject: 's',
       bodyHtml: 'b',
     });
-    const cloneFn = vi.fn().mockResolvedValue(clone);
+    const cloneFn = vi.fn<(id: string) => Promise<Template>>().mockResolvedValue(clone);
     const useCase = new CloneTemplateUseCase(makeMockRepo(cloneFn));
 
     const result = await useCase.execute('src-1');
@@ -78,7 +80,7 @@ describe('CloneTemplateUseCase', () => {
     // Adapter guarantees: isDefault=false, deletedAt=null, new id.
     // The use case surfaces these so the route returns 201 with the
     // active copy. We assert the contract holds through the use case.
-    const cloneFn = vi.fn().mockResolvedValue(
+    const cloneFn = vi.fn<(id: string) => Promise<Template>>().mockResolvedValue(
       makeTemplate({ id: 'fresh-id', isDefault: false, deletedAt: null }),
     );
     const useCase = new CloneTemplateUseCase(makeMockRepo(cloneFn));
@@ -93,7 +95,7 @@ describe('CloneTemplateUseCase', () => {
   it('clones a SOFT-DELETED template (clone works on trash sources)', async () => {
     // Spec: "Clone a soft-deleted template" — the adapter reads even
     // soft-deleted rows (getById contract) and produces an active copy.
-    const cloneFn = vi.fn().mockResolvedValue(
+    const cloneFn = vi.fn<(id: string) => Promise<Template>>().mockResolvedValue(
       makeTemplate({ id: 'clone-from-trash', deletedAt: null, isDefault: false }),
     );
     const useCase = new CloneTemplateUseCase(makeMockRepo(cloneFn));
@@ -109,7 +111,7 @@ describe('CloneTemplateUseCase', () => {
     const { TemplateNotFoundError } = await import(
       '../../infrastructure/sqlite/betterSqliteTemplateRepository'
     );
-    const cloneFn = vi.fn().mockRejectedValue(new TemplateNotFoundError('src-missing'));
+    const cloneFn = vi.fn<(id: string) => Promise<Template>>().mockRejectedValue(new TemplateNotFoundError('src-missing'));
     const useCase = new CloneTemplateUseCase(makeMockRepo(cloneFn));
 
     await expect(useCase.execute('src-missing')).rejects.toThrow(TemplateNotFoundError);

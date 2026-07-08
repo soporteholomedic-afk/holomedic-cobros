@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 
+import type { Template } from '../../domain/entities';
 import type { ITemplateRepository } from '../../domain/ports';
 import { SetDefaultTemplateUseCase } from '../setDefaultTemplate';
 
@@ -18,8 +19,10 @@ import { SetDefaultTemplateUseCase } from '../setDefaultTemplate';
  * in PR 1.
  */
 describe('SetDefaultTemplateUseCase', () => {
-  function makeMockRepo(setDefaultFn?: ReturnType<typeof vi.fn>): ITemplateRepository {
-    const defaultSetDefault = vi.fn().mockResolvedValue(undefined);
+  function makeMockRepo(
+    setDefaultFn?: ReturnType<typeof vi.fn<(id: string) => Promise<void>>>,
+  ): ITemplateRepository {
+    const defaultSetDefault = vi.fn<(id: string) => Promise<void>>().mockResolvedValue(undefined);
     return {
       listByArea: vi.fn(),
       listByAreaAndType: vi.fn(),
@@ -36,7 +39,7 @@ describe('SetDefaultTemplateUseCase', () => {
   }
 
   it('sets a new default by delegating to repo.setDefault (returns void on success)', async () => {
-    const setDefault = vi.fn().mockResolvedValue(undefined);
+    const setDefault = vi.fn<(id: string) => Promise<void>>().mockResolvedValue(undefined);
     const useCase = new SetDefaultTemplateUseCase(makeMockRepo(setDefault));
 
     await useCase.execute('tpl-1');
@@ -46,7 +49,7 @@ describe('SetDefaultTemplateUseCase', () => {
   });
 
   it('forwards the id verbatim (no transformation)', async () => {
-    const setDefault = vi.fn().mockResolvedValue(undefined);
+    const setDefault = vi.fn<(id: string) => Promise<void>>().mockResolvedValue(undefined);
     const useCase = new SetDefaultTemplateUseCase(makeMockRepo(setDefault));
 
     await useCase.execute('tpl-42');
@@ -61,13 +64,13 @@ describe('SetDefaultTemplateUseCase', () => {
     // Verified at the SQL level in PR 1. Here we assert the use case surfaces
     // that contract: after setDefault resolves, the target is the only default
     // for its area+type.
-    const setDefault = vi.fn().mockImplementation(async (id: string) => {
+    const setDefault = vi.fn<(id: string) => Promise<void>>().mockImplementation(async (id: string) => {
       // Simulate the adapter's atomic clear-then-set.
       void id;
     });
-    const listByAreaAndType = vi.fn().mockResolvedValue([
-      { id: 'tpl-new', isDefault: true },
-      { id: 'tpl-old', isDefault: false },
+    const listByAreaAndType = vi.fn<(area: string, type: 'company' | 'patient') => Promise<Template[]>>().mockResolvedValue([
+      { id: 'tpl-new', isDefault: true } as unknown as Template,
+      { id: 'tpl-old', isDefault: false } as unknown as Template,
     ]);
     const repo: ITemplateRepository = {
       ...makeMockRepo(setDefault),
@@ -88,7 +91,7 @@ describe('SetDefaultTemplateUseCase', () => {
     const { TemplateNotFoundError } = await import(
       '../../infrastructure/sqlite/betterSqliteTemplateRepository'
     );
-    const setDefault = vi.fn().mockRejectedValue(new TemplateNotFoundError('tpl-missing'));
+    const setDefault = vi.fn<(id: string) => Promise<void>>().mockRejectedValue(new TemplateNotFoundError('tpl-missing'));
     const useCase = new SetDefaultTemplateUseCase(makeMockRepo(setDefault));
 
     await expect(useCase.execute('tpl-missing')).rejects.toThrow(TemplateNotFoundError);

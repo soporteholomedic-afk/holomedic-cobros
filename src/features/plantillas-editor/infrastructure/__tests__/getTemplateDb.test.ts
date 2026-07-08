@@ -63,6 +63,7 @@ describe('getTemplateDb', () => {
     return {
       listByArea: vi.fn().mockResolvedValue([]),
       listByAreaAndType: vi.fn().mockResolvedValue([]),
+      listDeletedByArea: vi.fn().mockResolvedValue([]),
       getById: vi.fn().mockResolvedValue(null),
       save: vi.fn().mockResolvedValue({} as never),
       softDelete: vi.fn().mockResolvedValue(undefined),

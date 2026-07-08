@@ -91,6 +91,8 @@ const consolidadosConfig: AreaConfig = {
     firma: '',
     area: 'consolidados',
     today: '2026-01-01',
+    pacienteDni: '12345678',
+    pacienteNombre: 'Test Paciente',
   },
 };
 
@@ -110,6 +112,8 @@ const minimalConfig: AreaConfig = {
     firma: '',
     area: 'custom',
     today: '2026-01-01',
+    pacienteDni: '',
+    pacienteNombre: '',
   },
 };
 

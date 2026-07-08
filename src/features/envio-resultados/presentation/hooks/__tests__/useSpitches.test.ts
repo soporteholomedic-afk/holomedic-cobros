@@ -13,7 +13,7 @@ import { act, renderHook, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { useSpitches } from '../useSpitches';
-import type { SpitchDTO } from '../../../domain/entities';
+import type { SpitchDTO } from '@/features/plantillas-editor/domain/entities';
 
 const SAMPLE_SPITCHES: SpitchDTO[] = [
   {
@@ -157,7 +157,7 @@ describe('useSpitches', () => {
     const { rerender } = renderHook(
       ({ area, type }: { area: string; type: 'company' | 'patient' }) =>
         useSpitches(area, type),
-      { initialProps: { area: 'consolidados', type: 'company' as const } },
+      { initialProps: { area: 'consolidados', type: 'company' } },
     );
 
     await waitFor(() => {

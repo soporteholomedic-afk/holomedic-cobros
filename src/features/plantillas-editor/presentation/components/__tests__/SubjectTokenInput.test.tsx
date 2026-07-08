@@ -31,8 +31,8 @@ const consolidados = AREA_CONFIGS.get('consolidados')!;
 
 function renderInput(
   value: string,
-  onChange: ReturnType<typeof vi.fn> = vi.fn(),
-): { onChange: ReturnType<typeof vi.fn>; ref: React.RefObject<SubjectTokenInputHandle | null> } {
+  onChange: ReturnType<typeof vi.fn<(next: string) => void>> = vi.fn<(next: string) => void>(),
+): { onChange: ReturnType<typeof vi.fn<(next: string) => void>>; ref: React.RefObject<SubjectTokenInputHandle | null> } {
   const ref = React.createRef<SubjectTokenInputHandle>();
   render(
     <SubjectTokenInput
@@ -153,7 +153,7 @@ describe('SubjectTokenInput', () => {
     it('a full edit cycle preserves the round-trip invariant', () => {
       // Start empty, append two tokens, type text, then backspace the chip.
       const changes: string[] = [];
-      const onChange = vi.fn((next: string) => changes.push(next));
+      const onChange = vi.fn<(next: string) => void>((next: string) => changes.push(next));
       const { ref } = renderInput('', onChange);
 
       ref.current?.appendToken({ key: 'empresa' }); // -> {{empresa}}

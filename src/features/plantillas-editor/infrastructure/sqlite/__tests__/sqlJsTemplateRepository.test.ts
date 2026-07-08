@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs';
 import initSqlJs from 'sql.js';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type { ITemplateRepository } from '../../domain/ports';
+import type { ITemplateRepository } from '../../../domain/ports';
 import { migrate } from '../migrate';
 
 import { SqlJsTemplateRepository, TemplateNotFoundError } from '../sqlJsTemplateRepository';
@@ -29,7 +29,7 @@ beforeEach(async () => {
     // Pass the wasm bytes directly — robust under Node/vitest, no fetch or
     // locateFile path-resolution fragility.
     wasmBinary: readFileSync(WASM_PATH),
-  } as Parameters<typeof initSqlJs>[0]);
+  } as unknown as Parameters<typeof initSqlJs>[0]);
 });
 
 describe('SqlJsTemplateRepository', () => {

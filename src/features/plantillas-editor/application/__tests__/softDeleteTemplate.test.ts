@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 
+import type { Template } from '../../domain/entities';
 import type { ITemplateRepository } from '../../domain/ports';
 import { SoftDeleteTemplateUseCase } from '../softDeleteTemplate';
 
@@ -19,8 +20,10 @@ import { SoftDeleteTemplateUseCase } from '../softDeleteTemplate';
  * through the use case.
  */
 describe('SoftDeleteTemplateUseCase', () => {
-  function makeMockRepo(softDeleteFn?: ReturnType<typeof vi.fn>): ITemplateRepository {
-    const defaultSoftDelete = vi.fn().mockResolvedValue(undefined);
+  function makeMockRepo(
+    softDeleteFn?: ReturnType<typeof vi.fn<(id: string) => Promise<void>>>,
+  ): ITemplateRepository {
+    const defaultSoftDelete = vi.fn<(id: string) => Promise<void>>().mockResolvedValue(undefined);
     return {
       listByArea: vi.fn(),
       listByAreaAndType: vi.fn(),
@@ -37,7 +40,7 @@ describe('SoftDeleteTemplateUseCase', () => {
   }
 
   it('soft-deletes by delegating to repo.softDelete (returns void on success)', async () => {
-    const softDelete = vi.fn().mockResolvedValue(undefined);
+    const softDelete = vi.fn<(id: string) => Promise<void>>().mockResolvedValue(undefined);
     const useCase = new SoftDeleteTemplateUseCase(makeMockRepo(softDelete));
 
     await useCase.execute('tpl-1');
@@ -47,7 +50,7 @@ describe('SoftDeleteTemplateUseCase', () => {
   });
 
   it('forwards the id verbatim (no transformation)', async () => {
-    const softDelete = vi.fn().mockResolvedValue(undefined);
+    const softDelete = vi.fn<(id: string) => Promise<void>>().mockResolvedValue(undefined);
     const useCase = new SoftDeleteTemplateUseCase(makeMockRepo(softDelete));
 
     await useCase.execute('tpl-42');
@@ -60,16 +63,16 @@ describe('SoftDeleteTemplateUseCase', () => {
     // sets deletedAt — verified at the SQL level in PR 1. Here we verify
     // the use case surfaces that contract: after softDelete resolves, the
     // template is no longer default (read back via getById).
-    const softDelete = vi.fn().mockImplementation(async (id: string) => {
+    const softDelete = vi.fn<(id: string) => Promise<void>>().mockImplementation(async (id: string) => {
       // Simulate the adapter behaviour: set deletedAt, clear isDefault.
       // (The real adapter does this in a single UPDATE.)
       void id;
     });
-    const getById = vi.fn().mockResolvedValue({
+    const getById = vi.fn<(id: string) => Promise<Template | null>>().mockResolvedValue({
       id: 'tpl-default',
       isDefault: false,
       deletedAt: '2026-01-01T00:00:00.000Z',
-    });
+    } as unknown as Template);
     // Inject a repo that has both softDelete and getById so the
     // post-condition is observable through the same seam.
     const repo: ITemplateRepository = {
@@ -90,7 +93,7 @@ describe('SoftDeleteTemplateUseCase', () => {
     const { TemplateNotFoundError } = await import(
       '../../infrastructure/sqlite/betterSqliteTemplateRepository'
     );
-    const softDelete = vi.fn().mockRejectedValue(new TemplateNotFoundError('tpl-missing'));
+    const softDelete = vi.fn<(id: string) => Promise<void>>().mockRejectedValue(new TemplateNotFoundError('tpl-missing'));
     const useCase = new SoftDeleteTemplateUseCase(makeMockRepo(softDelete));
 
     await expect(useCase.execute('tpl-missing')).rejects.toThrow(TemplateNotFoundError);

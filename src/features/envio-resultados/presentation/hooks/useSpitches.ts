@@ -26,7 +26,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 
-import type { SpitchDTO, SpitchType } from '../../domain/entities';
+import type { SpitchDTO, SpitchType } from '@/features/plantillas-editor/domain/entities';
 
 export type UseSpitchesStatus = 'loading' | 'empty' | 'error' | 'populated';
 

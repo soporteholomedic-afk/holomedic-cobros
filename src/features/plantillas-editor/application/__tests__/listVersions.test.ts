@@ -28,8 +28,10 @@ describe('ListVersionsUseCase', () => {
     };
   }
 
-  function makeMockRepo(listVersionsFn?: ReturnType<typeof vi.fn>): ITemplateRepository {
-    const defaultListVersions = vi.fn().mockResolvedValue([] as TemplateVersion[]);
+  function makeMockRepo(
+    listVersionsFn?: ReturnType<typeof vi.fn<(templateId: string) => Promise<TemplateVersion[]>>>,
+  ): ITemplateRepository {
+    const defaultListVersions = vi.fn<(templateId: string) => Promise<TemplateVersion[]>>().mockResolvedValue([] as TemplateVersion[]);
     return {
       listByArea: vi.fn(),
       listByAreaAndType: vi.fn(),
@@ -51,7 +53,7 @@ describe('ListVersionsUseCase', () => {
       makeVersion({ versionId: 'v-2', editedAt: '2026-02-01T00:00:00.000Z' }),
       makeVersion({ versionId: 'v-1', editedAt: '2026-01-01T00:00:00.000Z' }),
     ];
-    const listVersions = vi.fn().mockResolvedValue(versions);
+    const listVersions = vi.fn<(templateId: string) => Promise<TemplateVersion[]>>().mockResolvedValue(versions);
     const useCase = new ListVersionsUseCase(makeMockRepo(listVersions));
 
     const result = await useCase.execute('tpl-1');
@@ -69,7 +71,7 @@ describe('ListVersionsUseCase', () => {
       makeVersion({ versionId: 'v-2', editedAt: '2026-02-01T00:00:00.000Z' }),
       makeVersion({ versionId: 'v-1', editedAt: '2026-01-01T00:00:00.000Z' }),
     ];
-    const listVersions = vi.fn().mockResolvedValue(versions);
+    const listVersions = vi.fn<(templateId: string) => Promise<TemplateVersion[]>>().mockResolvedValue(versions);
     const useCase = new ListVersionsUseCase(makeMockRepo(listVersions));
 
     const result = await useCase.execute('tpl-1');
@@ -88,7 +90,7 @@ describe('ListVersionsUseCase', () => {
   });
 
   it('forwards the templateId verbatim (no transformation)', async () => {
-    const listVersions = vi.fn().mockResolvedValue([]);
+    const listVersions = vi.fn<(templateId: string) => Promise<TemplateVersion[]>>().mockResolvedValue([]);
     const useCase = new ListVersionsUseCase(makeMockRepo(listVersions));
 
     await useCase.execute('tpl-42');

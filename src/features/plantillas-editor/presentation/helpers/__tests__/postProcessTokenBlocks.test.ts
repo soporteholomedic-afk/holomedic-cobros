@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 
 import { postProcessTokenBlocks } from '../postProcessTokenBlocks';
 import type {
+  BlockLike,
   TextInlineContent,
   TokenInlineContent,
 } from '../postProcessTokenBlocks';
@@ -27,7 +28,7 @@ function textInline(text: string, styles?: Record<string, unknown>): TextInlineC
 function tokenInline(key: string, table = '', cols = ''): TokenInlineContent {
   return { type: 'token', props: { key, table, cols } };
 }
-function block(content: AnyInline[], children: unknown[] = []) {
+function block(content: AnyInline[], children: BlockLike[] = []): BlockLike {
   return { id: 'b1', type: 'paragraph', content, children };
 }
 

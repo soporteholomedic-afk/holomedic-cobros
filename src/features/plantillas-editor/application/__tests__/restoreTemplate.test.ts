@@ -34,8 +34,10 @@ describe('RestoreTemplateUseCase', () => {
     };
   }
 
-  function makeMockRepo(restoreFn?: ReturnType<typeof vi.fn>): ITemplateRepository {
-    const defaultRestore = vi.fn().mockResolvedValue(undefined);
+  function makeMockRepo(
+    restoreFn?: ReturnType<typeof vi.fn<(id: string) => Promise<void>>>,
+  ): ITemplateRepository {
+    const defaultRestore = vi.fn<(id: string) => Promise<void>>().mockResolvedValue(undefined);
     return {
       listByArea: vi.fn(),
       listByAreaAndType: vi.fn(),
@@ -52,7 +54,7 @@ describe('RestoreTemplateUseCase', () => {
   }
 
   it('restores a soft-deleted template by delegating to repo.restore (returns void)', async () => {
-    const restore = vi.fn().mockResolvedValue(undefined);
+    const restore = vi.fn<(id: string) => Promise<void>>().mockResolvedValue(undefined);
     const useCase = new RestoreTemplateUseCase(makeMockRepo(restore));
 
     await useCase.execute('tpl-1');
@@ -65,10 +67,10 @@ describe('RestoreTemplateUseCase', () => {
     // Adapter contract: restore sets deletedAt=NULL, leaves isDefault=false
     // (softDelete cleared it). Verified at the SQL level in PR 1; here we
     // confirm the post-condition is observable through the same seam.
-    const restore = vi.fn().mockImplementation(async (id: string) => {
+    const restore = vi.fn<(id: string) => Promise<void>>().mockImplementation(async (id: string) => {
       void id;
     });
-    const getById = vi.fn().mockResolvedValue(
+    const getById = vi.fn<(id: string) => Promise<Template | null>>().mockResolvedValue(
       makeTemplate({ id: 'tpl-1', deletedAt: null, isDefault: false }),
     );
     const repo: ITemplateRepository = {
@@ -87,7 +89,7 @@ describe('RestoreTemplateUseCase', () => {
   });
 
   it('forwards the id verbatim (no transformation)', async () => {
-    const restore = vi.fn().mockResolvedValue(undefined);
+    const restore = vi.fn<(id: string) => Promise<void>>().mockResolvedValue(undefined);
     const useCase = new RestoreTemplateUseCase(makeMockRepo(restore));
 
     await useCase.execute('tpl-42');
@@ -99,7 +101,7 @@ describe('RestoreTemplateUseCase', () => {
     const { TemplateNotFoundError } = await import(
       '../../infrastructure/sqlite/betterSqliteTemplateRepository'
     );
-    const restore = vi.fn().mockRejectedValue(new TemplateNotFoundError('tpl-missing'));
+    const restore = vi.fn<(id: string) => Promise<void>>().mockRejectedValue(new TemplateNotFoundError('tpl-missing'));
     const useCase = new RestoreTemplateUseCase(makeMockRepo(restore));
 
     await expect(useCase.execute('tpl-missing')).rejects.toThrow(TemplateNotFoundError);

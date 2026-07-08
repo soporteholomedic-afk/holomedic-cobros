@@ -3,6 +3,7 @@
 import {
   forwardRef,
   useImperativeHandle,
+  useLayoutEffect,
   useMemo,
   useRef,
   type FC,
@@ -101,13 +102,22 @@ export const BlockNoteEditorView = forwardRef<
   BlockNoteEditorViewHandle,
   BlockNoteEditorViewProps
 >(function BlockNoteEditorView({ areaConfig, onChange, onTokenClick }, ref) {
-  // Keep the latest areaConfig + onTokenClick in refs so the token spec
-  // (created ONCE via useMemo) always sees the current values without
-  // forcing an editor re-create.
-  const areaConfigRef = useRef(areaConfig);
-  areaConfigRef.current = areaConfig;
+  // Keep the latest onTokenClick in a ref so the (memoized-once) token spec
+  // always invokes the latest handler without forcing an editor re-create.
+  // The ref is updated in a layout effect so we never assign to `.current`
+  // during render (`react-hooks/refs`).
+  //
+  // We do NOT keep `areaConfig` in a ref: the schema's `render` callback
+  // needs the LATEST `areaConfig` to resolve the `TokenChip` label, and
+  // reading a ref during render is the same anti-pattern the lint rule
+  // forbids. Instead, the schema's `useMemo` depends on `areaConfig` — the
+  // editor is re-created when the area changes, which is acceptable (the
+  // area is stable for the editor's lifetime; the route only renders one
+  // area at a time).
   const onTokenClickRef = useRef(onTokenClick);
-  onTokenClickRef.current = onTokenClick;
+  useLayoutEffect(() => {
+    onTokenClickRef.current = onTokenClick;
+  });
 
   const schema = useMemo(() => {
     const tokenSpec = createReactInlineContentSpec(
@@ -135,7 +145,7 @@ export const BlockNoteEditorView = forwardRef<
                 onTokenClickRef.current?.(attrs);
               }}
             >
-              <TokenChip label={resolveTokenLabel(attrs, areaConfigRef.current)} attrs={attrs} />
+              <TokenChip label={resolveTokenLabel(attrs, areaConfig)} attrs={attrs} />
             </span>
           ) as unknown as JSX.Element;
         },
@@ -158,7 +168,7 @@ export const BlockNoteEditorView = forwardRef<
         token: tokenSpec,
       },
     });
-  }, []);
+  }, [areaConfig]);
 
   const editor = useCreateBlockNote({ schema });
 
