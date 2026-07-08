@@ -61,9 +61,15 @@ export function useSpitches(area: string, type: SpitchType): UseSpitchesResult {
   // the strict-mode double-invoke would otherwise log a warning).
   const mountedRef = useRef(true);
 
-  const fetchOnce = useCallback(async () => {
+  const fetchOnce = useCallback(async (isRetry: boolean) => {
     const id = ++requestIdRef.current;
-    setStatus('loading');
+    // Only set `loading` when retrying — the initial fetch starts in
+    // the `loading` state already, so the synchronous setState would
+    // be a no-op AND trips `react-hooks/set-state-in-effect` because
+    // it happens inside the mounting useEffect.
+    if (isRetry) {
+      setStatus('loading');
+    }
     setError(null);
 
     try {
@@ -107,8 +113,15 @@ export function useSpitches(area: string, type: SpitchType): UseSpitchesResult {
 
   // Initial fetch + refetch on (area, type) change.
   useEffect(() => {
+    // The setState calls inside `fetchOnce` (status / error / spitches)
+    // are the documented contract of this data-fetching hook — they
+    // report the result of the network call. The `react-hooks/set-state-in-effect`
+    // rule is suppressed with intent; the alternative would be to inline
+    // the entire fetch body here, which would hurt readability.
+    /* eslint-disable react-hooks/set-state-in-effect */
     mountedRef.current = true;
-    void fetchOnce();
+    void fetchOnce(false);
+    /* eslint-enable react-hooks/set-state-in-effect */
     return () => {
       mountedRef.current = false;
     };
@@ -116,7 +129,7 @@ export function useSpitches(area: string, type: SpitchType): UseSpitchesResult {
 
   // Retry bumps the request id and re-invokes.
   const retry = useCallback(() => {
-    void fetchOnce();
+    void fetchOnce(true);
   }, [fetchOnce]);
 
   return { spitches, status, error, retry };

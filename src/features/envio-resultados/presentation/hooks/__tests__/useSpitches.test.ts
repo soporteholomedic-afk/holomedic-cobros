@@ -34,17 +34,6 @@ const SAMPLE_SPITCHES: SpitchDTO[] = [
   },
 ];
 
-function mockFetchResponse(
-  status: number,
-  body: unknown,
-): ReturnType<typeof vi.fn> {
-  return vi.fn().mockResolvedValue({
-    ok: status >= 200 && status < 300,
-    status,
-    json: () => Promise.resolve(body),
-  } as unknown as Response);
-}
-
 describe('useSpitches', () => {
   let fetchMock: ReturnType<typeof vi.fn>;
 

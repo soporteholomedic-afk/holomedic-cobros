@@ -27,7 +27,7 @@
  */
 
 import Link from 'next/link';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef } from 'react';
 
 import type { Spitch, SpitchType } from '../../domain/entities';
 import { useSpitches } from '../hooks/useSpitches';
@@ -63,29 +63,27 @@ export function SpitchSelector({
 }: SpitchSelectorProps) {
   const { spitches, status, error, retry } = useSpitches(area, target);
   const hasAutoSelectedRef = useRef(false);
-  // When the (area, target) pair changes, reset the auto-select latch
-  // so the new list's first item is auto-selected.
-  const [lastAreaTarget, setLastAreaTarget] = useState(`${area}|${target}`);
-  useEffect(() => {
-    const key = `${area}|${target}`;
-    if (key !== lastAreaTarget) {
-      hasAutoSelectedRef.current = false;
-      setLastAreaTarget(key);
-    }
-  }, [area, target, lastAreaTarget]);
+  // Track the last (area, target) pair we auto-selected for, so a
+  // prop change resets the latch and the new list's first item is
+  // auto-selected. Ref-only — no setState, no useEffect-driven cascade.
+  const lastAutoSelectedKeyRef = useRef<string | null>(null);
 
   // Initial auto-select when the populated list first arrives.
   useEffect(() => {
+    const key = `${area}|${target}`;
     if (status !== 'populated' || spitches.length === 0) return;
-    if (hasAutoSelectedRef.current) return;
+    if (hasAutoSelectedRef.current && lastAutoSelectedKeyRef.current === key) {
+      return;
+    }
     const match = selectedId
       ? spitches.find((s) => s.id === selectedId)
       : spitches[0];
     if (match) {
       hasAutoSelectedRef.current = true;
+      lastAutoSelectedKeyRef.current = key;
       onSelect(match);
     }
-  }, [status, spitches, selectedId, onSelect]);
+  }, [status, spitches, selectedId, onSelect, area, target]);
 
   if (status === 'loading') {
     return <p className="text-sm text-slate-500">Cargando...</p>;

@@ -1,5 +1,5 @@
-import React from 'react';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import React, { useEffect, useState } from 'react';
+import { render, screen, fireEvent } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 // ---- Mock dependencies ----
@@ -7,10 +7,16 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 // Mock SpitchSelector
 vi.mock('../SpitchSelector', () => ({
   SpitchSelector: vi.fn().mockImplementation(
-    ({ target, onSelect, selectedId, area }: { target: string; onSelect: (s: any) => void; selectedId?: string; area: string }) => {
-      const React_1 = require('react');
-      const [loaded] = React_1.useState(true);
-      React_1.useEffect(() => {
+    ({ target, onSelect, selectedId, area }: { target: string; onSelect: (s: SpitchLike) => void; selectedId?: string; area: string }) => {
+      const [loaded] = useState(true);
+      // The mock intentionally omits `onSelect` from the deps because
+      // the real component owns the callback identity; this mock
+      // stabilises on the first call. The real component rebuilds the
+      // callback via useCallback upstream. Disable the
+      // exhaustive-deps rule for the entire effect block (it's the
+      // documented mock seam).
+      /* eslint-disable react-hooks/exhaustive-deps */
+      useEffect(() => {
         if (loaded) {
           onSelect({
             id: selectedId || 'spitch-001',
@@ -22,7 +28,8 @@ vi.mock('../SpitchSelector', () => ({
           });
         }
       }, [loaded, area, target, selectedId]);
-      return React_1.createElement('select', {
+      /* eslint-enable react-hooks/exhaustive-deps */
+      return React.createElement('select', {
         'data-testid': 'spitch-selector',
         'data-target': target,
         value: selectedId || 'spitch-001',
@@ -34,7 +41,7 @@ vi.mock('../SpitchSelector', () => ({
           subject: 'Asunto de prueba',
           bodyHtml: '<p>Contenido de prueba</p>',
         }),
-      }, React_1.createElement('option', { value: 'spitch-001' }, 'Test Spitch'));
+      }, React.createElement('option', { value: 'spitch-001' }, 'Test Spitch'));
     },
   ),
 }));
@@ -42,15 +49,24 @@ vi.mock('../SpitchSelector', () => ({
 // Mock AttachmentList
 vi.mock('../AttachmentList', () => ({
   AttachmentList: vi.fn().mockImplementation(
-    ({ selectedPatients }: { selectedPatients: any }) => {
-      const React_1 = require('react');
+    ({ selectedPatients }: { selectedPatients: Record<string, unknown> }) => {
       const patientIds = Object.keys(selectedPatients || {});
-      return React_1.createElement('div', {
+      return React.createElement('div', {
         'data-testid': 'attachment-list',
       }, `${patientIds.length} pacientes seleccionados`);
     },
   ),
 }));
+
+// Minimal structural type for the mock's `onSelect` callback.
+interface SpitchLike {
+  id: string;
+  area: string;
+  type: string;
+  name: string;
+  subject: string;
+  bodyHtml: string;
+}
 
 // Mock fetch for useSendResults
 const mockFetch = vi.hoisted(() => vi.fn());

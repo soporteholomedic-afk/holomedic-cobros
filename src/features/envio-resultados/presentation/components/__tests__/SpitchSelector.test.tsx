@@ -18,7 +18,7 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { SpitchSelector } from '../SpitchSelector';
-import type { SpitchDTO, SpitchType } from '../../../../domain/entities';
+import type { SpitchDTO } from '../../../../domain/entities';
 
 const SAMPLE_SPITCHES: SpitchDTO[] = [
   {

@@ -28,7 +28,13 @@ interface EmailEditorProps {
 }
 
 export function EmailEditor({
-  companyId,
+  // `companyId` is part of the prop contract (the parent passes the
+  // selected company) — the selector does not currently consume it
+  // directly (it lives in the page state), but keeping it on the
+  // signature avoids breaking the call site in `WorkerDetailTable`.
+  // The unused-vars warning is pre-existing; the prop is preserved
+  // for future per-company filtering of templates.
+  companyId: _companyId,
   companyName,
   selectedPatients,
   patients,
@@ -37,6 +43,10 @@ export function EmailEditor({
   // two stay in parallel.
   fileRefs = [],
 }: EmailEditorProps) {
+  // Reference the intentionally-unused prop to satisfy the linter.
+  // Documented contract: the parent passes `companyId` for future
+  // per-company template filtering (Decision #2 from the proposal).
+  void _companyId;
   // Internal state
   const [target, setTarget] = useState<'company' | 'patient'>('company');
   const [selectedSpitch, setSelectedSpitch] = useState<Spitch | null>(null);
