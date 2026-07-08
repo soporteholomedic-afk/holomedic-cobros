@@ -13,11 +13,37 @@ import {
   defaultInlineContentSpecs,
 } from '@blocknote/core';
 import {
-  BlockNoteViewRaw,
-  BlockNoteDefaultUI,
   createReactInlineContentSpec,
   useCreateBlockNote,
+  FormattingToolbarController,
+  getFormattingToolbarItems,
+  useComponentsContext,
+  type FormattingToolbarProps,
 } from '@blocknote/react';
+import { BlockNoteView } from '@blocknote/mantine';
+import '@blocknote/mantine/style.css';
+import '@blocknote/core/fonts/inter.css';
+
+import { CellBackgroundColorButton } from './CellBackgroundColorButton';
+import { buildTableCellColorCSS } from './tableCellColors';
+
+/**
+ * Custom formatting toolbar that extends the default items with the cell
+ * background color button. Rendered INSIDE `BlockNoteView` (where the
+ * Mantine `ComponentsContext` is available), so `useComponentsContext`
+ * is safe here.
+ */
+function FormattingToolbarWithCellColor(props: FormattingToolbarProps) {
+  const Components = useComponentsContext()!;
+  return (
+    <Components.FormattingToolbar.Root
+      className="bn-toolbar bn-formatting-toolbar"
+    >
+      {getFormattingToolbarItems(props.blockTypeSelectItems)}
+      <CellBackgroundColorButton />
+    </Components.FormattingToolbar.Root>
+  );
+}
 
 import type { AreaConfig } from '../../infrastructure/areaConfigRegistry';
 import type { TokenAttrs } from '../../domain/entities';
@@ -149,14 +175,14 @@ export const BlockNoteEditorView = forwardRef<
         editor.replaceBlocks(currentIds, processed as unknown as Parameters<typeof editor.replaceBlocks>[1]);
       },
       insertToken(attrs: TokenAttrs) {
-        editor.insertInlineContent({
+        editor.insertInlineContent([{
           type: 'token',
           props: {
             key: attrs.key,
             table: attrs.table ?? '',
             cols: (attrs.cols ?? []).join(','),
           },
-        } as unknown as Parameters<typeof editor.insertInlineContent>[0]);
+        }] as unknown as Parameters<typeof editor.insertInlineContent>[0]);
         editor.focus();
       },
       updateTableToken(target: { table: string }, newAttrs: TokenAttrs) {
@@ -197,9 +223,17 @@ export const BlockNoteEditorView = forwardRef<
 
   return (
     <div data-testid="blocknote-editor" className="bn-container">
-      <BlockNoteViewRaw editor={editor} onChange={onChange} theme="light">
-        <BlockNoteDefaultUI />
-      </BlockNoteViewRaw>
+      <style>{buildTableCellColorCSS()}</style>
+      <BlockNoteView
+        editor={editor}
+        onChange={onChange}
+        theme="light"
+        formattingToolbar={false}
+      >
+        <FormattingToolbarController
+          formattingToolbar={FormattingToolbarWithCellColor}
+        />
+      </BlockNoteView>
     </div>
   );
 });

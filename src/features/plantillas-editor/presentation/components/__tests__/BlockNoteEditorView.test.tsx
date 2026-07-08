@@ -42,12 +42,65 @@ const mockEditor = {
   replaceBlocks: mockReplaceBlocks,
   updateBlock: mockUpdateBlock,
   focus: mockFocus,
+  isEditable: true,
+  getSelection: () => undefined,
+  getTextCursorPosition: () => ({ block: { type: 'paragraph' } }),
+  _tiptapEditor: {
+    state: {
+      selection: {
+        $from: { depth: 0 },
+      },
+    },
+  },
 };
 
 vi.mock('@blocknote/react', () => ({
   useCreateBlockNote: () => mockEditor,
   createReactInlineContentSpec: vi.fn(() => ({ config: {}, implementation: {} })),
-  BlockNoteView: () => <div data-testid="blocknote-view-mock" />,
+  useBlockNoteEditor: () => mockEditor,
+  useEditorState: ({ selector }: { selector: (state: { editor: unknown }) => unknown }) => selector({ editor: mockEditor }),
+  useComponentsContext: () => ({
+    FormattingToolbar: {
+      Root: ({ children, className }: { children?: React.ReactNode; className?: string }) => (
+        <div data-testid="formatting-toolbar-root" className={className}>{children}</div>
+      ),
+      Button: ({ children, onClick, icon, label, mainTooltip, className }: {
+        children?: React.ReactNode; onClick?: () => void; icon?: React.ReactNode;
+        label?: string; mainTooltip?: string; className?: string;
+      }) => (
+        <button data-testid={`fmt-btn-${label}`} onClick={onClick} className={className} title={mainTooltip}>
+          {icon}{children}
+        </button>
+      ),
+    },
+    Generic: {
+      Menu: {
+        Root: ({ children }: { children?: React.ReactNode }) => <div data-testid="menu-root">{children}</div>,
+        Trigger: ({ children }: { children?: React.ReactNode }) => <div data-testid="menu-trigger">{children}</div>,
+        Dropdown: ({ children, className }: { children?: React.ReactNode; className?: string }) => (
+          <div data-testid="menu-dropdown" className={className}>{children}</div>
+        ),
+        Item: ({ children, onClick, className }: {
+          children?: React.ReactNode; onClick?: () => void; className?: string;
+        }) => (
+          <button data-testid="menu-item" onClick={onClick} className={className}>{children}</button>
+        ),
+      },
+    },
+  }),
+  FormattingToolbarController: ({ formattingToolbar }: {
+    formattingToolbar?: React.FC<{ blockTypeSelectItems?: unknown[] }>;
+  }) => {
+    const Comp = formattingToolbar;
+    return Comp ? <Comp blockTypeSelectItems={[]} /> : <div data-testid="fmt-controller-mock" />;
+  },
+  getFormattingToolbarItems: vi.fn(() => []),
+}));
+
+vi.mock('@blocknote/mantine', () => ({
+  BlockNoteView: ({ children }: { children?: React.ReactNode }) => (
+    <div data-testid="blocknote-view-mock">{children}</div>
+  ),
 }));
 
 vi.mock('@blocknote/core', () => ({
@@ -133,12 +186,13 @@ describe('BlockNoteEditorView', () => {
       ref.current?.insertToken({ key: 'empresa' });
 
       expect(mockInsertInlineContent).toHaveBeenCalledTimes(1);
-      const arg = mockInsertInlineContent.mock.calls[0]![0] as {
+      const arg = mockInsertInlineContent.mock.calls[0]![0] as Array<{
         type: string;
         props: { key: string; table: string; cols: string };
-      };
-      expect(arg.type).toBe('token');
-      expect(arg.props).toEqual({ key: 'empresa', table: '', cols: '' });
+      }>;
+      expect(arg).toHaveLength(1);
+      expect(arg[0]!.type).toBe('token');
+      expect(arg[0]!.props).toEqual({ key: 'empresa', table: '', cols: '' });
       expect(mockFocus).toHaveBeenCalled();
     });
 
@@ -151,10 +205,11 @@ describe('BlockNoteEditorView', () => {
         cols: ['fecha', 'monto'],
       });
 
-      const arg = mockInsertInlineContent.mock.calls[0]![0] as {
+      const arg = mockInsertInlineContent.mock.calls[0]![0] as Array<{
         props: { key: string; table: string; cols: string };
-      };
-      expect(arg.props).toEqual({
+      }>;
+      expect(arg).toHaveLength(1);
+      expect(arg[0]!.props).toEqual({
         key: 'tabla',
         table: 'documentosVencidos',
         cols: 'fecha,monto',

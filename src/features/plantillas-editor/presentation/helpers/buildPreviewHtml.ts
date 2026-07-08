@@ -95,6 +95,10 @@ function lookupMockValue(key: string, mock: MockPreviewData): string | undefined
       return mock.today;
     case 'firma':
       return mock.firma;
+    case 'dni':
+      return mock.pacienteDni;
+    case 'nombrePaciente':
+      return mock.pacienteNombre;
     default:
       return undefined;
   }

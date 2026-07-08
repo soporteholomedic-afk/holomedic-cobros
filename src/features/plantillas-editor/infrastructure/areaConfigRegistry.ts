@@ -54,6 +54,8 @@ export interface MockPreviewData {
   firma: string;
   area: string;
   today: string;
+  pacienteDni: string;
+  pacienteNombre: string;
 }
 
 /** The full configuration for one area. */
@@ -80,6 +82,13 @@ const CONSOLIDADOS_CONFIG: AreaConfig = {
       tokens: [
         { key: 'empresa', label: 'Empresa' },
         { key: 'fecha', label: 'Fecha' },
+      ],
+    },
+    {
+      category: 'Paciente',
+      tokens: [
+        { key: 'dni', label: 'DNI' },
+        { key: 'nombrePaciente', label: 'Nombre Paciente' },
       ],
     },
     {
@@ -131,6 +140,8 @@ const CONSOLIDADOS_CONFIG: AreaConfig = {
     firma: '<p>Dr. Pérez — Clínica Demo S.A.</p>',
     area: 'consolidados',
     today: '2026-01-15',
+    pacienteDni: '12345678',
+    pacienteNombre: 'Juan Pérez',
   },
 };
 
