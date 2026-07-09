@@ -1,6 +1,6 @@
 'use client';
 
-import { Suspense, useState } from 'react';
+import { Suspense, useState, useCallback } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { CompanySelector } from '@/features/envio-resultados/presentation/components/CompanySelector';
 import {
@@ -9,11 +9,18 @@ import {
 } from '@/features/envio-resultados/presentation/components/ConsolidadosViewSwitch';
 import { PatientsList } from '@/features/envio-resultados/presentation/components/PatientsList';
 import { getLocalDateString, parseDateParam } from '@/lib/dates';
-import type { SpResultRow } from '@/types/sp-result';
+import type { SpResultRow, OrderRow, UnifiedPerson, UnifiedFicha } from '@/types/sp-result';
 
 import { FilesModal } from '@/features/envio-resultados/presentation/components/FilesModal';
 import { normalizeDni } from '@/lib/normalize-dni';
-import type { OrderRow } from '@/types/sp-result';
+
+import { useCompanies } from '@/features/envio-resultados/presentation/hooks/useCompanies';
+import { EmailEditor } from '@/features/envio-resultados/presentation/components/EmailEditor';
+import {
+  emailViewDataFromFiles,
+  type EmailViewData,
+} from '@/features/envio-resultados/presentation/helpers/emailViewDataFromFiles';
+import type { FileNode } from '@/features/envio-resultados/domain/ports';
 
 function normalizeFecAte(raw: string | undefined): string {
   if (!raw) return '';
@@ -50,6 +57,9 @@ function ConsolidadosContent() {
   } | null>(null);
   const [loadingPatientId, setLoadingPatientId] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  const { companies } = useCompanies();
+  const [emailViewData, setEmailViewData] = useState<EmailViewData | null>(null);
 
   const isInvalidRange =
     fechaInicio.length > 0 &&
@@ -129,6 +139,53 @@ function ConsolidadosContent() {
   const closeFilesModal = () => {
     setModalState(null);
   };
+
+  const handleSendFromModal = useCallback(
+    (selected: ReadonlyMap<string, FileNode>): void => {
+      if (!modalState) return;
+
+      const person: UnifiedPerson = {
+        dni: modalState.dni,
+        nombre: modalState.nombrePaciente,
+        empresa: modalState.empresa,
+        tipoExamen: '',
+        proyecto: '',
+        condic: '',
+        fichas: [],
+      };
+
+      const ficha: UnifiedFicha = {
+        idAten: modalState.idAten,
+        nroRuc: modalState.ruc,
+        nomCFa: '',
+        proyecto: '',
+        tipoExamen: '',
+        condic: '',
+        fecAte: modalState.fecAte ?? '',
+      };
+
+      const companyId = companies.find((c) => c.name === modalState.empresa)?.id ?? '';
+      const refs = Array.from(selected.keys());
+      const files = Array.from(selected.values());
+
+      setEmailViewData(
+        emailViewDataFromFiles(
+          person,
+          ficha,
+          files,
+          refs,
+          companyId,
+          modalState.empresa,
+        ),
+      );
+      setModalState(null);
+    },
+    [modalState, companies],
+  );
+
+  const returnToTable = useCallback((): void => {
+    setEmailViewData(null);
+  }, []);
 
 
   return (
@@ -232,7 +289,38 @@ function ConsolidadosContent() {
           empresa={modalState.empresa}
           fecAte={modalState.fecAte}
           onClose={closeFilesModal}
+          onSend={handleSendFromModal}
         />
+      )}
+
+      {emailViewData && (
+        <section
+          data-testid="email-editor-overlay"
+          className="fixed inset-0 z-50 bg-white dark:bg-slate-900 overflow-auto"
+        >
+          <div className="max-w-7xl mx-auto p-6 space-y-4">
+            <div className="flex items-center justify-between">
+              <h2 className="text-xl font-semibold text-slate-800 dark:text-slate-100">
+                Redactar correo
+              </h2>
+              <button
+                type="button"
+                onClick={returnToTable}
+                data-testid="email-editor-back"
+                className="px-4 py-2 rounded-xl border border-slate-200 dark:border-slate-800 hover:bg-slate-100 dark:hover:bg-slate-800 text-sm font-semibold cursor-pointer"
+              >
+                Volver a la tabla
+              </button>
+            </div>
+            <EmailEditor
+              companyId={emailViewData.companyId}
+              companyName={emailViewData.companyName}
+              selectedPatients={emailViewData.selectedPatients}
+              patients={emailViewData.patients}
+              fileRefs={emailViewData.fileRefs}
+            />
+          </div>
+        </section>
       )}
     </div>
   );
