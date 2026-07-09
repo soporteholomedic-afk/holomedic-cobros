@@ -12,6 +12,7 @@ const mockUseCompanies = vi.hoisted(() => vi.fn());
 const mockFilesModalProps = vi.hoisted(() => vi.fn());
 const mockEmailEditorProps = vi.hoisted(() => vi.fn());
 const mockUseLegajosStatus = vi.hoisted(() => vi.fn());
+const mockDocumentVerificationModalProps = vi.hoisted(() => vi.fn());
 
 // Stub the FilesModal so the WorkerDetailTable test does not have to
 // deal with the modal's internal usePatientFiles fetch lifecycle.
@@ -78,6 +79,38 @@ vi.mock('../../hooks/useCompanies', () => ({
 
 vi.mock('../../hooks/useLegajosStatus', () => ({
   useLegajosStatus: mockUseLegajosStatus,
+}));
+
+// PR 2 — Stub the DocumentVerificationModal so the table-integration
+// test does not have to satisfy the modal's own contracts (the modal
+// has its own dedicated test file). The stub records every prop it
+// received so the test can assert:
+//   - the modal is mounted with the right (statuses, people) payload
+//   - the modal closes when its onClose prop is called
+//   - the modal is NOT mounted when checkAll rejects
+//
+// The stub renders a small "trigger-close" button that fires the
+// onClose prop, mirroring the existing FilesModal stub pattern.
+vi.mock('../DocumentVerificationModal', () => ({
+  DocumentVerificationModal: (props: Record<string, unknown>) => {
+    mockDocumentVerificationModalProps(props);
+    const onClose = props['onClose'] as (() => void) | undefined;
+    return (
+      <div data-testid="document-verification-modal-stub">
+        <span data-testid="dvm-people-count">
+          {String((props['people'] as ReadonlyArray<unknown>)?.length ?? 0)}
+        </span>
+        <span data-testid="dvm-statuses-count">
+          {String(Object.keys((props['statuses'] as Record<string, unknown>) ?? {}).length)}
+        </span>
+        {typeof onClose === 'function' && (
+          <button data-testid="dvm-stub-trigger-close" onClick={() => onClose()}>
+            trigger-close
+          </button>
+        )}
+      </div>
+    );
+  },
 }));
 
 // ---- Import component under test ----
@@ -1185,8 +1218,12 @@ describe('WorkerDetailTable — Unified Table', () => {
       expect(emoBadge).toHaveClass('text-violet-800');
     });
 
-    it('should click "Verificar documentos" button and trigger checkAll with all rows details', () => {
-      const checkAllMock = vi.fn();
+    it('should click "Verificar documentos" button and trigger checkAll with all rows details', async () => {
+      // PR 2 — `checkAll` returns `Promise<void>` (the table now awaits
+      // it before opening the verification modal). Returning a resolved
+      // Promise from the mock keeps the test deterministic and avoids
+      // the act warning from a fire-and-forget state update.
+      const checkAllMock = vi.fn().mockResolvedValue(undefined);
       mockUseUnifiedResults.mockReturnValue({
         people: [
           makeUnifiedPerson({
@@ -1212,7 +1249,12 @@ describe('WorkerDetailTable — Unified Table', () => {
       render(<WorkerDetailTable {...DEFAULT_PROPS} />);
 
       const verifyBtn = screen.getByRole('button', { name: /Verificar documentos/ });
-      fireEvent.click(verifyBtn);
+      // Drain the async state update from the awaited checkAll so the
+      // test does not leave a pending microtask behind (act warning).
+      await act(async () => {
+        fireEvent.click(verifyBtn);
+        await Promise.resolve();
+      });
 
       expect(checkAllMock).toHaveBeenCalledWith([
         { ruc: '20123456789', dni: '12345678', idAten: 'ATE-001' },
@@ -1296,6 +1338,206 @@ describe('WorkerDetailTable — Unified Table', () => {
       render(<WorkerDetailTable {...DEFAULT_PROPS} />);
 
       expect(screen.getByText('Global network timeout')).toBeInTheDocument();
+    });
+  });
+
+  // ================================================================
+  // PR 2 — Document Verification Modal integration
+  // Spec REQ-1 ("Modal Opens After Verification"):
+  //   - The modal MUST open only after `checkAll()` resolves.
+  //   - The modal MUST NOT open if `checkAll()` fails or is still pending.
+  //   - Existing per-row CAMO/EMO badges MUST remain unchanged.
+  // ================================================================
+
+  describe('Document Verification Modal integration (PR 2)', () => {
+    it('should mount the DocumentVerificationModal after `checkAll` resolves', async () => {
+      const checkAllMock = vi.fn().mockResolvedValue(undefined);
+      mockUseUnifiedResults.mockReturnValue({
+        people: [
+          makeUnifiedPerson({
+            dni: '12345678',
+            fichas: [makeFicha({ idAten: 'ATE-001', nroRuc: '20123456789' })],
+          }),
+          makeUnifiedPerson({
+            dni: '87654321',
+            fichas: [makeFicha({ idAten: 'ATE-002', nroRuc: '20987654321' })],
+          }),
+        ],
+        loading: false,
+        error: null,
+      });
+      mockUseLegajosStatus.mockReturnValue({
+        statuses: {
+          'ATE-001': { hasCamo: true, hasEmo: true, loading: false },
+          'ATE-002': { hasCamo: false, hasEmo: true, loading: false },
+        },
+        checkAll: checkAllMock,
+        checkRow: vi.fn(),
+        isChecking: false,
+        error: null,
+      });
+
+      render(<WorkerDetailTable {...DEFAULT_PROPS} />);
+
+      // Modal must NOT be in the DOM before the user clicks.
+      expect(screen.queryByTestId('document-verification-modal-stub')).not.toBeInTheDocument();
+
+      // Click "Verificar documentos" → handleCheckAll → await checkAll.
+      fireEvent.click(screen.getByRole('button', { name: /Verificar documentos/ }));
+
+      // After the awaited checkAll resolves, the modal MUST mount.
+      await waitFor(() => {
+        expect(screen.getByTestId('document-verification-modal-stub')).toBeInTheDocument();
+      });
+
+      // The modal received the people and statuses arrays.
+      expect(screen.getByTestId('dvm-people-count')).toHaveTextContent('2');
+      expect(screen.getByTestId('dvm-statuses-count')).toHaveTextContent('2');
+
+      // checkAll was called with the right item list.
+      expect(checkAllMock).toHaveBeenCalledWith([
+        { ruc: '20123456789', dni: '12345678', idAten: 'ATE-001' },
+        { ruc: '20987654321', dni: '87654321', idAten: 'ATE-002' },
+      ]);
+    });
+
+    it('should NOT mount the modal when `checkAll` rejects', async () => {
+      // Triangulation: rejection path. The hook's checkAll currently
+      // catches all errors internally, so this is defensive — but the
+      // spec mandates the modal MUST NOT open on rejection, so the
+      // wiring must respect that even if the hook contract changes.
+      const checkAllMock = vi.fn().mockRejectedValue(new Error('network down'));
+      mockUseUnifiedResults.mockReturnValue({
+        people: [makeUnifiedPerson()],
+        loading: false,
+        error: null,
+      });
+      mockUseLegajosStatus.mockReturnValue({
+        statuses: {},
+        checkAll: checkAllMock,
+        checkRow: vi.fn(),
+        isChecking: false,
+        error: null,
+      });
+
+      render(<WorkerDetailTable {...DEFAULT_PROPS} />);
+
+      fireEvent.click(screen.getByRole('button', { name: /Verificar documentos/ }));
+
+      // Give the (rejected) promise time to settle.
+      await waitFor(() => {
+        expect(checkAllMock).toHaveBeenCalled();
+      });
+      // Flush microtasks a bit more — but the modal must never appear.
+      await new Promise((r) => setTimeout(r, 50));
+
+      expect(screen.queryByTestId('document-verification-modal-stub')).not.toBeInTheDocument();
+    });
+
+    it('should unmount the modal when its onClose prop fires (returned to table)', async () => {
+      const checkAllMock = vi.fn().mockResolvedValue(undefined);
+      mockUseUnifiedResults.mockReturnValue({
+        people: [makeUnifiedPerson()],
+        loading: false,
+        error: null,
+      });
+      mockUseLegajosStatus.mockReturnValue({
+        statuses: { 'ATE-001': { hasCamo: true, hasEmo: true, loading: false } },
+        checkAll: checkAllMock,
+        checkRow: vi.fn(),
+        isChecking: false,
+        error: null,
+      });
+
+      render(<WorkerDetailTable {...DEFAULT_PROPS} />);
+      fireEvent.click(screen.getByRole('button', { name: /Verificar documentos/ }));
+
+      await waitFor(() => {
+        expect(screen.getByTestId('document-verification-modal-stub')).toBeInTheDocument();
+      });
+
+      // Trigger the modal's onClose (simulating the operator clicking
+      // Cerrar / backdrop / Escape). The table parent must clear its
+      // `showVerificationModal` state.
+      fireEvent.click(screen.getByTestId('dvm-stub-trigger-close'));
+
+      await waitFor(() => {
+        expect(screen.queryByTestId('document-verification-modal-stub')).not.toBeInTheDocument();
+      });
+
+      // The table is back in the DOM.
+      expect(screen.getByText('Ficha')).toBeInTheDocument();
+    });
+
+    it('should keep the existing per-row CAMO/EMO badges unchanged (spec REQ-7)', async () => {
+      // Triangulation: the new modal must not change the per-row badge
+      // behaviour. Render with verified statuses, open the modal, and
+      // confirm the CAMO/EMO badges in the table still render.
+      mockUseUnifiedResults.mockReturnValue({
+        people: [makeUnifiedPerson({ dni: '12345678' })],
+        loading: false,
+        error: null,
+      });
+      mockUseLegajosStatus.mockReturnValue({
+        statuses: {
+          'ATE-001': { hasCamo: true, hasEmo: true, loading: false },
+        },
+        checkAll: vi.fn().mockResolvedValue(undefined),
+        checkRow: vi.fn(),
+        isChecking: false,
+        error: null,
+      });
+
+      render(<WorkerDetailTable {...DEFAULT_PROPS} />);
+
+      // Per-row badges are present BEFORE the modal opens.
+      const camoBadge = screen.getByTestId('badge-camo');
+      const emoBadge = screen.getByTestId('badge-emo');
+      expect(camoBadge).toHaveClass('bg-green-100');
+      expect(emoBadge).toHaveClass('bg-violet-100');
+
+      // Open the modal.
+      fireEvent.click(screen.getByRole('button', { name: /Verificar documentos/ }));
+
+      await waitFor(() => {
+        expect(screen.getByTestId('document-verification-modal-stub')).toBeInTheDocument();
+      });
+
+      // Per-row badges are STILL present and STILL styled the same.
+      // (Modal renders alongside the table — it does not replace it.)
+      const camoBadgeAfter = screen.getByTestId('badge-camo');
+      const emoBadgeAfter = screen.getByTestId('badge-emo');
+      expect(camoBadgeAfter).toHaveClass('bg-green-100');
+      expect(emoBadgeAfter).toHaveClass('bg-violet-100');
+    });
+
+    it('should NOT open the modal while `checkAll` is still pending (button is disabled)', () => {
+      // Triangulation: while isChecking is true, the button is disabled,
+      // so the user cannot fire checkAll. The modal must never appear
+      // mid-run. We verify the disabled state and that the modal is not
+      // in the DOM.
+      mockUseUnifiedResults.mockReturnValue({
+        people: [makeUnifiedPerson()],
+        loading: false,
+        error: null,
+      });
+      mockUseLegajosStatus.mockReturnValue({
+        statuses: { 'ATE-001': { hasCamo: false, hasEmo: false, loading: true } },
+        checkAll: vi.fn(),
+        checkRow: vi.fn(),
+        isChecking: true,
+        error: null,
+      });
+
+      render(<WorkerDetailTable {...DEFAULT_PROPS} />);
+
+      // Button text is "Verificando..." while isChecking is true;
+      // the accessible name still includes the verb root, so the
+      // role + name query with a permissive regex finds it.
+      const verifyBtn = screen.getByRole('button', { name: /Verific/ });
+      expect(verifyBtn).toBeDisabled();
+      // Modal not in the DOM at all.
+      expect(screen.queryByTestId('document-verification-modal-stub')).not.toBeInTheDocument();
     });
   });
 });
