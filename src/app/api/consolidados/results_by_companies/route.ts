@@ -22,7 +22,7 @@ function buildWhere(
 ): string {
   // Escape single quotes, strip semicolons to prevent SQL injection
   const safe = companyName.replace(/'/g, "''").replace(/;/g, '');
-  let where = `NomCFa LIKE '%${safe}%'`;
+  let where = `(NomCFa LIKE '%${safe}%' OR NomCom LIKE '%${safe}%')`;
   if (fechaInicio) where += ` AND FecAte >= '${fechaInicio}'`;
   if (fechaFin) where += ` AND FecAte <= '${fechaFin}'`;
   return where;

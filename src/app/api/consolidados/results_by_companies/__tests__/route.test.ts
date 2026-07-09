@@ -102,6 +102,7 @@ describe('GET /api/consolidados/results_by_companies', () => {
     if (!whereCall) throw new Error('WHERE input not found');
     const whereValue = whereCall[2] as string;
     expect(whereValue).toContain("NomCFa LIKE '%ACME%'");
+    expect(whereValue).toContain("NomCom LIKE '%ACME%'");
     expect(whereValue).toContain("AND FecAte >= '2026-01-01 00:00:00'");
     expect(whereValue).toContain("AND FecAte <= '2026-06-09 23:59:59'");
   });
@@ -129,7 +130,7 @@ describe('GET /api/consolidados/results_by_companies', () => {
     expect(whereCall).toBeDefined();
     if (!whereCall) throw new Error('WHERE input not found');
     const whereValue = whereCall[2] as string;
-    expect(whereValue).toBe("NomCFa LIKE '%ACME%'");
+    expect(whereValue).toBe("(NomCFa LIKE '%ACME%' OR NomCom LIKE '%ACME%')");
     expect(whereValue).not.toContain('FecAte');
   });
 
