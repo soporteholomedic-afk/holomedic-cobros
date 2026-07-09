@@ -1,6 +1,6 @@
 import React from 'react';
-import { render, screen, fireEvent } from '@testing-library/react';
-import { describe, it, expect, vi } from 'vitest';
+import { fireEvent, render, screen } from '@testing-library/react';
+import { describe, expect, it, vi } from 'vitest';
 
 vi.mock('next/navigation', () => ({
   usePathname: () => '/',
@@ -21,12 +21,13 @@ describe('Sidebar Component', () => {
     expect(screen.getByText('Facturación')).toBeInTheDocument();
   });
 
-  it('debe mostrar los ítems de navegación: Inicio, Cobranza, Consolidados, Valoraciones', () => {
+  it('debe mostrar los ítems de navegación: Inicio, Cobranza, Consolidados, Valoraciones, Plantillas', () => {
     render(<Sidebar />);
     expect(screen.getByText('Inicio')).toBeInTheDocument();
     expect(screen.getByText('Cobranza')).toBeInTheDocument();
     expect(screen.getByText('Consolidados')).toBeInTheDocument();
     expect(screen.getByText('Valoraciones')).toBeInTheDocument();
+    expect(screen.getByText('Plantillas')).toBeInTheDocument();
   });
 
   it('debe enlazar Inicio a "/"', () => {
@@ -51,6 +52,13 @@ describe('Sidebar Component', () => {
     render(<Sidebar />);
     const link = screen.getByText('Consolidados').closest('a');
     expect(link).toHaveAttribute('href', '/consolidados');
+  });
+
+  // PR 4 — Task 4.7: "Add nav entry 'Plantillas' → /admin/plantillas/consolidados"
+  it('debe enlazar Plantillas a "/admin/plantillas/consolidados"', () => {
+    render(<Sidebar />);
+    const link = screen.getByText('Plantillas').closest('a');
+    expect(link).toHaveAttribute('href', '/admin/plantillas/consolidados');
   });
 
   it('debe mostrar Consolidados entre Cobranza y Valoraciones en el orden de navegación', () => {

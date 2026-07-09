@@ -1,54 +1,88 @@
-import React from 'react';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import React, { useEffect, useState } from 'react';
+import { render, screen, fireEvent } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 // ---- Mock dependencies ----
 
+// Bug-fix wiring: the mock factory reads its bodyHtml / subject from a
+// hoisted store so individual tests can override the emitted spitch
+// without re-mocking the module (re-mocking during render trips a
+// React 19 internal warning). Tests mutate `mockSpitchOverride` in
+// their setup block and the mock picks it up on its next render.
+const mockSpitchOverride = vi.hoisted(() => ({
+  bodyHtml: '<p>Contenido de prueba</p>',
+  subject: 'Asunto de prueba',
+  name: 'Test Spitch',
+}));
+
 // Mock SpitchSelector
 vi.mock('../SpitchSelector', () => ({
   SpitchSelector: vi.fn().mockImplementation(
-    ({ target, onSelect, selectedId }: { target: string; onSelect: (s: any) => void; selectedId?: string }) => {
-      const React_1 = require('react');
-      const [loaded] = React_1.useState(true);
-      React_1.useEffect(() => {
+    ({ target, onSelect, selectedId, area }: { target: string; onSelect: (s: SpitchLike) => void; selectedId?: string; area: string }) => {
+      const [loaded] = useState(true);
+      // The mock intentionally omits `onSelect` from the deps because
+      // the real component owns the callback identity; this mock
+      // stabilises on the first call. The real component rebuilds the
+      // callback via useCallback upstream. Disable the
+      // exhaustive-deps rule for the entire effect block (it's the
+      // documented mock seam).
+      /* eslint-disable react-hooks/exhaustive-deps */
+      useEffect(() => {
         if (loaded) {
           onSelect({
             id: selectedId || 'spitch-001',
+            area: area,
             type: target,
-            name: 'Test Spitch',
-            subject: 'Asunto de prueba',
-            bodyHtml: '<p>Contenido de prueba</p>',
+            name: mockSpitchOverride.name,
+            subject: mockSpitchOverride.subject,
+            bodyHtml: mockSpitchOverride.bodyHtml,
           });
         }
-      }, [loaded]);
-      return React_1.createElement('select', {
+      }, [loaded, area, target, selectedId]);
+      /* eslint-enable react-hooks/exhaustive-deps */
+      return React.createElement('select', {
         'data-testid': 'spitch-selector',
         'data-target': target,
         value: selectedId || 'spitch-001',
         onChange: () => onSelect({
           id: 'spitch-001',
+          area: area,
           type: target,
-          name: 'Test Spitch',
-          subject: 'Asunto de prueba',
-          bodyHtml: '<p>Contenido de prueba</p>',
+          name: mockSpitchOverride.name,
+          subject: mockSpitchOverride.subject,
+          bodyHtml: mockSpitchOverride.bodyHtml,
         }),
-      }, React_1.createElement('option', { value: 'spitch-001' }, 'Test Spitch'));
+      }, React.createElement('option', { value: 'spitch-001' }, 'Test Spitch'));
     },
   ),
 }));
 
+// Bug-fix wiring: the SpitchSelector mock above is the default. The
+// token-resolution test overrides the bodyHtml via `vi.mocked`
+// (see the test body) and waits for the deferred onSelect to land.
+
+
 // Mock AttachmentList
 vi.mock('../AttachmentList', () => ({
   AttachmentList: vi.fn().mockImplementation(
-    ({ selectedPatients }: { selectedPatients: any }) => {
-      const React_1 = require('react');
+    ({ selectedPatients }: { selectedPatients: Record<string, unknown> }) => {
       const patientIds = Object.keys(selectedPatients || {});
-      return React_1.createElement('div', {
+      return React.createElement('div', {
         'data-testid': 'attachment-list',
       }, `${patientIds.length} pacientes seleccionados`);
     },
   ),
 }));
+
+// Minimal structural type for the mock's `onSelect` callback.
+interface SpitchLike {
+  id: string;
+  area: string;
+  type: string;
+  name: string;
+  subject: string;
+  bodyHtml: string;
+}
 
 // Mock fetch for useSendResults
 const mockFetch = vi.hoisted(() => vi.fn());
@@ -355,5 +389,38 @@ describe('EmailEditor', () => {
     };
     expect(lastCall.fileRefs[0]?.path).toBe('EXAMENES/2024');
     expect(lastCall.fileRefs[0]?.name).toBe('emo.pdf');
+  });
+
+  // ================================================================
+  // Bug-fix wiring — {{dni}}, {{nombrePaciente}} and {{firma}} must
+  // resolve in the live preview from the `patients` prop forwarded
+  // to interpolateSpitch (EmailEditor.tsx:91-104).
+  // ================================================================
+
+  it('should resolve {{dni}} and {{nombrePaciente}} in the live preview from the patients prop', async () => {
+    mockFetch.mockResolvedValue({ ok: true, json: () => Promise.resolve({ success: true }) });
+
+    // Override the spitch the mock emits by mutating the hoisted store
+    // BEFORE render. The mock reads `mockSpitchOverride` on each
+    // render so the change is picked up on the very first effect run.
+    // We restore the defaults in the finally block so subsequent tests
+    // keep the original mock body.
+    const previous = { ...mockSpitchOverride };
+    mockSpitchOverride.bodyHtml =
+      '<p>DNI: {{dni}}</p><p>Paciente: {{nombrePaciente}}</p><div>{{firma}}</div>';
+    mockSpitchOverride.subject = 'Resultados de {{nombrePaciente}}';
+    mockSpitchOverride.name = 'Plantilla con tokens';
+
+    try {
+      render(<EmailEditor {...defaultProps} />);
+      const preview = await screen.findByTestId('email-preview');
+      // defaultProps.patients[0] = María Elena García López / dni=12345678
+      expect(preview.textContent).toContain('12345678');
+      expect(preview.textContent).toContain('María Elena García López');
+      // default signature is resolved by default
+      expect(preview.textContent).toContain('Antonia del Pilar Pozo Niño');
+    } finally {
+      Object.assign(mockSpitchOverride, previous);
+    }
   });
 });
