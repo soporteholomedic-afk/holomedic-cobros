@@ -8,6 +8,7 @@ import type { UnifiedPerson } from '@/types/sp-result';
 import type { FileNode } from '@/features/envio-resultados/domain/file-system/FileNode';
 import { FilesModal } from './FilesModal';
 import { EmailEditor } from './EmailEditor';
+import { DocumentVerificationModal } from './DocumentVerificationModal';
 import {
   emailViewDataFromFiles,
   type EmailViewData,
@@ -47,6 +48,11 @@ export function WorkerDetailTable({ companyName, fechaInicio, fechaFin }: Worker
   const [expandedDni, setExpandedDni] = useState<string | null>(null);
   const [modalState, setModalState] = useState<ModalState | null>(null);
   const [emailViewData, setEmailViewData] = useState<EmailViewData | null>(null);
+  // PR 2 — visibility flag for the aggregated DocumentVerificationModal.
+  // Mounted only AFTER `checkAll()` resolves (spec REQ-1: "the modal MUST
+  // open only after `checkAll()` resolves; never on rejection or while
+  // pending"). Reset by the modal's `onClose` callback.
+  const [showVerificationModal, setShowVerificationModal] = useState(false);
   const {
     statuses,
     checkAll,
@@ -68,8 +74,28 @@ export function WorkerDetailTable({ companyName, fechaInicio, fechaFin }: Worker
         }
       }
     }
-    checkAll(items);
+    // PR 2 — `checkAll` returns `Promise<void>` and currently always
+    // resolves (the hook catches its own errors). We still wrap the
+    // open in a try/catch so the modal can NEVER mount on a rejected
+    // promise, even if a future hook revision starts to reject.
+    // The modal is only opened in the resolved branch — never on
+    // rejection or while pending. `isChecking` also disables the
+    // button, so the user cannot fire this while a run is in flight.
+    const run = async (): Promise<void> => {
+      try {
+        await checkAll(items);
+        setShowVerificationModal(true);
+      } catch {
+        // Spec: modal MUST NOT open on rejection. Silent by design —
+        // the hook already surfaces its own error in `checkingError`.
+      }
+    };
+    void run();
   }, [people, checkAll]);
+
+  const closeVerificationModal = useCallback((): void => {
+    setShowVerificationModal(false);
+  }, []);
 
   const toggleExpand = useCallback((dni: string) => {
     setExpandedDni((prev) => (prev === dni ? null : dni));
@@ -239,6 +265,19 @@ export function WorkerDetailTable({ companyName, fechaInicio, fechaFin }: Worker
             />
           );
         })()}
+      {/* PR 2 — DocumentVerificationModal mounts only after `checkAll()`
+          resolves (see `handleCheckAll`). It overlays the table but does
+          NOT replace it (unlike the EmailEditor overlay, which unmounts
+          the table). The existing per-row CAMO/EMO badges remain
+          visible underneath, per spec REQ-7 ("Existing Per-Row Badges
+          Unchanged"). */}
+      {showVerificationModal && (
+        <DocumentVerificationModal
+          statuses={statuses}
+          people={people}
+          onClose={closeVerificationModal}
+        />
+      )}
       {emailViewData && (
         <section
           data-testid="email-editor-overlay"
