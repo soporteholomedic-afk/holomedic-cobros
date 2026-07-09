@@ -11,6 +11,21 @@ import { PatientsList } from '@/features/envio-resultados/presentation/component
 import { getLocalDateString, parseDateParam } from '@/lib/dates';
 import type { SpResultRow } from '@/types/sp-result';
 
+import { FilesModal } from '@/features/envio-resultados/presentation/components/FilesModal';
+import { normalizeDni } from '@/lib/normalize-dni';
+import type { OrderRow } from '@/types/sp-result';
+
+function normalizeFecAte(raw: string | undefined): string {
+  if (!raw) return '';
+  if (/^\d{2}\/\d{2}\/\d{4}$/.test(raw)) return raw;
+  const d = new Date(raw);
+  if (isNaN(d.getTime())) return '';
+  const dd = String(d.getUTCDate()).padStart(2, '0');
+  const mm = String(d.getUTCMonth() + 1).padStart(2, '0');
+  const yyyy = d.getUTCFullYear();
+  return `${dd}/${mm}/${yyyy}`;
+}
+
 function ConsolidadosContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -23,6 +38,18 @@ function ConsolidadosContent() {
     parseDateParam(searchParams.get('fechaFin'), today),
   );
   const [view, setView] = useState<ConsolidadosView>('pacientes');
+
+  // Modal and loading states
+  const [modalState, setModalState] = useState<{
+    ruc: string;
+    dni: string;
+    idAten: string;
+    nombrePaciente: string;
+    empresa: string;
+    fecAte?: string;
+  } | null>(null);
+  const [loadingPatientId, setLoadingPatientId] = useState<string | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const isInvalidRange =
     fechaInicio.length > 0 &&
@@ -48,17 +75,76 @@ function ConsolidadosContent() {
     router.push(`/consolidados/envio-resultados?${params.toString()}`);
   };
 
-  const handleViewFiles = (row: SpResultRow) => {
-    const params = new URLSearchParams({
-      companyName: row.NomCom,
-      fechaInicio,
-      fechaFin,
-    });
-    router.push(`/consolidados/envio-resultados?${params.toString()}`);
+  const handleViewFiles = async (row: SpResultRow) => {
+    setErrorMessage(null);
+    setLoadingPatientId(row.NroDId);
+
+    try {
+      const resultsParams = new URLSearchParams();
+      resultsParams.set('companyName', row.NomCom);
+      if (fechaInicio) resultsParams.set('fechaInicio', fechaInicio);
+      if (fechaFin) resultsParams.set('fechaFin', fechaFin);
+
+      const res = await fetch(`/api/consolidados/results_by_companies?${resultsParams.toString()}`);
+      if (!res.ok) {
+        throw new Error(`HTTP error! status: ${res.status}`);
+      }
+
+      const orders = (await res.json()) as OrderRow[];
+      const normalizedRowDni = normalizeDni(row.NroDId);
+      const normalizedRowFec = normalizeFecAte(row.FecAte);
+
+      // Find order matching DNI and FecAte (date)
+      let matchingOrder = orders.find(
+        (o) => normalizeDni(o.NroDId) === normalizedRowDni && normalizeFecAte(o.FecAte) === normalizedRowFec
+      );
+
+      // Fallback: match DNI only
+      if (!matchingOrder) {
+        matchingOrder = orders.find((o) => normalizeDni(o.NroDId) === normalizedRowDni);
+      }
+
+      if (matchingOrder) {
+        setModalState({
+          ruc: matchingOrder.NroRuc,
+          dni: normalizedRowDni,
+          idAten: matchingOrder.IdAten,
+          nombrePaciente: row.Pacien,
+          empresa: row.NomCom,
+          fecAte: normalizeFecAte(matchingOrder.FecAte),
+        });
+      } else {
+        setErrorMessage(
+          `No se encontró una orden de atención para el paciente ${row.Pacien} (DNI ${row.NroDId}) en la empresa ${row.NomCom}.`
+        );
+      }
+    } catch (error) {
+      console.error('Error fetching patient order details:', error);
+      setErrorMessage('Ocurrió un error al buscar los archivos del paciente. Intente nuevamente.');
+    } finally {
+      setLoadingPatientId(null);
+    }
   };
+
+  const closeFilesModal = () => {
+    setModalState(null);
+  };
+
 
   return (
     <div className="flex flex-col gap-6">
+      {errorMessage && (
+        <div className="p-4 bg-rose-50 border border-rose-200 rounded-xl flex items-center justify-between shadow-sm">
+          <p className="text-sm font-medium text-rose-800">{errorMessage}</p>
+          <button
+            onClick={() => setErrorMessage(null)}
+            className="text-xs font-semibold text-rose-500 hover:text-rose-700 bg-rose-100 hover:bg-rose-200 px-2 py-1 rounded-lg transition-colors cursor-pointer"
+          >
+            Cerrar
+          </button>
+        </div>
+      )}
+
       {/* Date filter — lifted to page so both views share dates */}
       <form
         onSubmit={handleFilter}
@@ -122,6 +208,30 @@ function ConsolidadosContent() {
           fechaInicio={fechaInicio}
           fechaFin={fechaFin}
           onSelect={handleCompanySelect}
+        />
+      )}
+
+      {loadingPatientId && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-xs">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 px-6 py-5 rounded-2xl shadow-xl flex flex-col items-center gap-3">
+            <div className="w-8 h-8 border-4 border-sky-600 border-t-transparent rounded-full animate-spin" />
+            <p className="text-sm font-semibold text-slate-700 dark:text-slate-200">
+              Buscando datos del paciente...
+            </p>
+          </div>
+        </div>
+      )}
+
+      {modalState && (
+        <FilesModal
+          key={`${modalState.dni}-${modalState.idAten}`}
+          ruc={modalState.ruc}
+          dni={modalState.dni}
+          idAten={modalState.idAten}
+          nombrePaciente={modalState.nombrePaciente}
+          empresa={modalState.empresa}
+          fecAte={modalState.fecAte}
+          onClose={closeFilesModal}
         />
       )}
     </div>
