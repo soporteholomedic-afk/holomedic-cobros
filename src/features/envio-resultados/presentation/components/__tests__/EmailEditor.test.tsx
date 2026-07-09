@@ -417,8 +417,8 @@ describe('EmailEditor', () => {
       // defaultProps.patients[0] = María Elena García López / dni=12345678
       expect(preview.textContent).toContain('12345678');
       expect(preview.textContent).toContain('María Elena García López');
-      // firma not provided → visible placeholder, not removed
-      expect(preview.textContent).toContain('[Falta configurar firma]');
+      // default signature is resolved by default
+      expect(preview.textContent).toContain('Antonia del Pilar Pozo Niño');
     } finally {
       Object.assign(mockSpitchOverride, previous);
     }

@@ -8,6 +8,43 @@ import { useSendResults } from '../hooks/useSendResults';
 import { interpolateSpitch } from '../helpers/interpolateSpitch';
 import type { Patient, PatientFile, SelectedFileRef, Spitch } from '../../domain/entities';
 
+const DEFAULT_SIGNATURE_HTML = `<table cellpadding="0" cellspacing="0" style="border-collapse: collapse; font-family: Arial, sans-serif; font-size: 12px; color: rgb(51, 51, 51); line-height: 1.5; margin-top: 15px;">
+  <tr>
+    <td valign="middle" style="padding-right: 20px; text-align: center; width: 160px;">
+      <img src="https://holomedic.com.pe/w2/wp-content/uploads/2023/06/logo.png" alt="Holomedic" style="display: block; width: 140px; height: auto; margin: 0 auto 8px auto;" />
+      <a href="https://www.holomedic.com.pe" target="_blank" style="color: rgb(0, 86, 179); text-decoration: underline; font-weight: bold; font-size: 11px; font-family: Arial, sans-serif; display: inline-block;">www.holomedic.com.pe</a>
+    </td>
+    <td valign="top" style="border-left: 2px solid rgb(0, 86, 179); padding-left: 20px; padding-top: 2px; padding-bottom: 2px;">
+      <div style="font-size: 14px; font-weight: bold; color: rgb(0, 0, 0); margin-bottom: 4px; font-family: Arial, sans-serif;">
+        Blanca Chirinos <span style="color: rgb(0, 86, 179); font-weight: bold; margin: 0 4px;">|</span> Área Consolidados
+      </div>
+      <div style="margin-bottom: 4px; font-family: Arial, sans-serif;">
+        <a href="mailto:consolidados@holomedic.com.pe" style="color: rgb(0, 86, 179); text-decoration: underline;">consolidados@holomedic.com.pe</a>
+      </div>
+      <div style="color: rgb(51, 51, 51); margin-bottom: 2px; font-family: Arial, sans-serif;">
+        Móvil: (051) 989211757
+      </div>
+      <div style="color: rgb(51, 51, 51); margin-bottom: 2px; font-family: Arial, sans-serif;">
+        Telef. 480-0217 Anexo: 303
+      </div>
+      <div style="color: rgb(51, 51, 51); margin-bottom: 8px; font-family: Arial, sans-serif;">
+        Pasaje La India 169, Urb. Los Sauces – Surquillo (Altura de 9 y 10 de la Av. Villarán)
+      </div>
+      <div style="display: flex; gap: 8px; align-items: center;">
+        <a href="https://www.facebook.com" target="_blank" style="display: inline-block; text-decoration: none;">
+          <img src="https://img.icons8.com/color/30/facebook-new.png" alt="Facebook" style="display: block; width: 24px; height: 24px; border: 0;" />
+        </a>
+        <a href="https://www.instagram.com" target="_blank" style="display: inline-block; text-decoration: none;">
+          <img src="https://img.icons8.com/color/30/instagram-new.png" alt="Instagram" style="display: block; width: 24px; height: 24px; border: 0;" />
+        </a>
+        <a href="https://wa.me/51989211757" target="_blank" style="display: inline-block; text-decoration: none;">
+          <img src="https://img.icons8.com/color/30/whatsapp.png" alt="WhatsApp" style="display: block; width: 24px; height: 24px; border: 0;" />
+        </a>
+      </div>
+    </td>
+  </tr>
+</table>`;
+
 interface EmailEditorProps {
   companyId: string;
   companyName: string;
@@ -99,9 +136,9 @@ export function EmailEditor({
       fileNames: selectedFiles.map((f) => f.name),
       // Bug-fix wiring: forward the full patient + file data so the
       // registry can resolve {{dni}} and {{nombrePaciente}} (read
-      // from `ctx.patients[0]`). `firma` is intentionally NOT passed:
-      // the registry returns a visible `[Falta configurar firma]`
-      // placeholder when ctx.firma is empty (option B).
+      // from `ctx.patients[0]`). Pass the default signature HTML
+      // as `firma` to resolve the placeholder for all areas.
+      firma: DEFAULT_SIGNATURE_HTML,
       patients,
       files: selectedFiles,
     });
@@ -199,14 +236,12 @@ export function EmailEditor({
             role="switch"
             aria-checked={target === 'patient'}
             onClick={handleToggle}
-            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors cursor-pointer ${
-              target === 'patient' ? 'bg-sky-600' : 'bg-slate-300 dark:bg-slate-600'
-            }`}
+            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors cursor-pointer ${target === 'patient' ? 'bg-sky-600' : 'bg-slate-300 dark:bg-slate-600'
+              }`}
           >
             <span
-              className={`inline-block h-4 w-4 transform rounded-full bg-white dark:bg-slate-100 transition-transform ${
-                target === 'patient' ? 'translate-x-6' : 'translate-x-1'
-              }`}
+              className={`inline-block h-4 w-4 transform rounded-full bg-white dark:bg-slate-100 transition-transform ${target === 'patient' ? 'translate-x-6' : 'translate-x-1'
+                }`}
             />
           </button>
         </div>
