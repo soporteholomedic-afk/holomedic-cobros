@@ -12,6 +12,7 @@ import {
   emailViewDataFromFiles,
   type EmailViewData,
 } from '../helpers/emailViewDataFromFiles';
+import { useLegajosStatus, type LegajosRowStatus, type CheckLegajosItem } from '../hooks/useLegajosStatus';
 
 interface WorkerDetailTableProps {
   companyName: string;
@@ -46,6 +47,29 @@ export function WorkerDetailTable({ companyName, fechaInicio, fechaFin }: Worker
   const [expandedDni, setExpandedDni] = useState<string | null>(null);
   const [modalState, setModalState] = useState<ModalState | null>(null);
   const [emailViewData, setEmailViewData] = useState<EmailViewData | null>(null);
+  const {
+    statuses,
+    checkAll,
+    checkRow,
+    isChecking,
+    error: checkingError,
+  } = useLegajosStatus();
+
+  const handleCheckAll = useCallback(() => {
+    const items: CheckLegajosItem[] = [];
+    for (const person of people) {
+      for (const ficha of person.fichas) {
+        if (ficha.idAten && ficha.nroRuc) {
+          items.push({
+            ruc: ficha.nroRuc,
+            dni: person.dni,
+            idAten: ficha.idAten,
+          });
+        }
+      }
+    }
+    checkAll(items);
+  }, [people, checkAll]);
 
   const toggleExpand = useCallback((dni: string) => {
     setExpandedDni((prev) => (prev === dni ? null : dni));
@@ -135,7 +159,24 @@ export function WorkerDetailTable({ companyName, fechaInicio, fechaFin }: Worker
     <div>
       {!emailViewData && (
         <>
-          <h2 className="text-xl font-semibold text-slate-800 mb-4">{companyName}</h2>
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-4">
+              <h2 className="text-xl font-semibold text-slate-800">{companyName}</h2>
+              {checkingError && (
+                <span className="text-xs font-medium text-red-600 bg-red-50 px-2 py-1 rounded">
+                  {checkingError}
+                </span>
+              )}
+            </div>
+            <button
+              type="button"
+              disabled={isChecking || people.length === 0}
+              onClick={handleCheckAll}
+              className="px-4 py-2 rounded-xl text-sm font-semibold bg-sky-600 hover:bg-sky-700 disabled:bg-sky-400 text-white transition-colors"
+            >
+              {isChecking ? 'Verificando...' : 'Verificar documentos'}
+            </button>
+          </div>
           <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
             <table className="w-full text-left text-sm">
               <thead className="bg-slate-50 border-b border-slate-200">
@@ -149,6 +190,7 @@ export function WorkerDetailTable({ companyName, fechaInicio, fechaFin }: Worker
                   <th className="px-4 py-3 font-medium text-slate-600">DNI</th>
                   <th className="px-4 py-3 font-medium text-slate-600">Tipo de Examen</th>
                   <th className="px-4 py-3 font-medium text-slate-600">Aptitud</th>
+                  <th className="px-4 py-3 font-medium text-slate-600">Documentos</th>
                   <th className="px-4 py-3 font-medium text-slate-600">Archivos</th>
                 </tr>
               </thead>
@@ -165,6 +207,8 @@ export function WorkerDetailTable({ companyName, fechaInicio, fechaFin }: Worker
                       isExpanded={isExpanded}
                       onToggleExpand={hasMultipleFichas ? () => toggleExpand(person.dni) : undefined}
                       onOpenFilesModal={openFilesModal}
+                      statuses={statuses}
+                      onRetry={checkRow}
                     />
                   );
                 })}
@@ -232,12 +276,91 @@ export function WorkerDetailTable({ companyName, fechaInicio, fechaFin }: Worker
 
 // ---- Internal: single person row + optional expanded sub-rows ----
 
+function LegajosStatusCell({
+  status,
+  onRetry,
+}: {
+  status: LegajosRowStatus | undefined;
+  onRetry?: () => void;
+}) {
+  if (status?.loading) {
+    return (
+      <div className="flex items-center gap-1.5 animate-pulse" data-testid="legajos-loading">
+        <div className="w-4 h-4 border-2 border-sky-600 border-t-transparent rounded-full animate-spin" />
+        <span className="text-slate-400 text-xs">Verificando...</span>
+      </div>
+    );
+  }
+
+  if (status?.error) {
+    return (
+      <div className="flex items-center gap-1.5" data-testid="legajos-error">
+        <span className="text-red-500 text-xs font-semibold" title={status.error}>
+          Error
+        </span>
+        {onRetry && (
+          <button
+            onClick={onRetry}
+            className="p-1 rounded hover:bg-slate-100 text-sky-600 hover:text-sky-800 transition-colors"
+            title="Reintentar verificación"
+            aria-label="Reintentar"
+          >
+            <svg
+              className="w-3.5 h-3.5"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+              strokeWidth={2}
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M4 4v5h.582m15.356 2A8.001 8.001 0 1121.21 7.89M9 11l3-3 3 3m-3-3v12"
+              />
+            </svg>
+          </button>
+        )}
+      </div>
+    );
+  }
+
+  const hasCamo = status?.hasCamo ?? false;
+  const hasEmo = status?.hasEmo ?? false;
+
+  return (
+    <div className="flex items-center gap-1.5" data-testid="legajos-badges">
+      <span
+        data-testid="badge-camo"
+        className={`px-2 py-0.5 rounded text-xs font-semibold ${
+          hasCamo
+            ? 'bg-green-100 text-green-800'
+            : 'bg-slate-100 text-slate-400'
+        }`}
+      >
+        CAMO
+      </span>
+      <span
+        data-testid="badge-emo"
+        className={`px-2 py-0.5 rounded text-xs font-semibold ${
+          hasEmo
+            ? 'bg-violet-100 text-violet-800'
+            : 'bg-slate-100 text-slate-400'
+        }`}
+      >
+        EMO
+      </span>
+    </div>
+  );
+}
+
 interface PersonRowProps {
   person: UnifiedPerson;
   hasMultipleFichas: boolean;
   isExpanded: boolean;
   onToggleExpand: (() => void) | undefined;
   onOpenFilesModal: (dni: string, fichaIndex: number) => void;
+  statuses: Record<string, LegajosRowStatus>;
+  onRetry: (item: CheckLegajosItem) => void;
 }
 
 function PersonRow({
@@ -246,6 +369,8 @@ function PersonRow({
   isExpanded,
   onToggleExpand,
   onOpenFilesModal,
+  statuses,
+  onRetry,
 }: PersonRowProps) {
   const hasFichas = person.fichas.length > 0;
   const primaryFicha = hasFichas ? person.fichas[0] : null;
@@ -286,6 +411,24 @@ function PersonRow({
         <td className="px-4 py-3 text-slate-600">{cellValue(person.tipoExamen)}</td>
         <td className="px-4 py-3 text-slate-600">{cellValue(person.condic)}</td>
         <td className="px-4 py-3">
+          {primaryFicha && primaryFicha.idAten ? (
+            <LegajosStatusCell
+              status={statuses[primaryFicha.idAten]}
+              onRetry={() => {
+                if (primaryFicha.nroRuc && primaryFicha.idAten) {
+                  onRetry({
+                    ruc: primaryFicha.nroRuc,
+                    dni: person.dni,
+                    idAten: primaryFicha.idAten,
+                  });
+                }
+              }}
+            />
+          ) : (
+            <span className="text-slate-400">—</span>
+          )}
+        </td>
+        <td className="px-4 py-3">
           <button
             onClick={() => onOpenFilesModal(person.dni, 0)}
             className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-sky-50 text-sky-700 hover:bg-sky-100"
@@ -308,6 +451,24 @@ function PersonRow({
             <td className="px-4 py-2 text-slate-400 text-xs">{person.dni}</td>
             <td className="px-4 py-2 text-slate-400 text-xs">{ficha.tipoExamen || cellValue(person.tipoExamen)}</td>
             <td className="px-4 py-2 text-slate-400 text-xs">{ficha.condic || cellValue(person.condic)}</td>
+            <td className="px-4 py-2">
+              {ficha.idAten ? (
+                <LegajosStatusCell
+                  status={statuses[ficha.idAten]}
+                  onRetry={() => {
+                    if (ficha.nroRuc && ficha.idAten) {
+                      onRetry({
+                        ruc: ficha.nroRuc,
+                        dni: person.dni,
+                        idAten: ficha.idAten,
+                      });
+                    }
+                  }}
+                />
+              ) : (
+                <span className="text-slate-400">—</span>
+              )}
+            </td>
             <td className="px-4 py-2">
               <button
                 onClick={() => onOpenFilesModal(person.dni, idx + 1)}

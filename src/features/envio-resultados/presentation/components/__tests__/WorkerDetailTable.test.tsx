@@ -11,6 +11,7 @@ const mockUseUnifiedResults = vi.hoisted(() => vi.fn());
 const mockUseCompanies = vi.hoisted(() => vi.fn());
 const mockFilesModalProps = vi.hoisted(() => vi.fn());
 const mockEmailEditorProps = vi.hoisted(() => vi.fn());
+const mockUseLegajosStatus = vi.hoisted(() => vi.fn());
 
 // Stub the FilesModal so the WorkerDetailTable test does not have to
 // deal with the modal's internal usePatientFiles fetch lifecycle.
@@ -75,6 +76,10 @@ vi.mock('../../hooks/useCompanies', () => ({
   useCompanies: mockUseCompanies,
 }));
 
+vi.mock('../../hooks/useLegajosStatus', () => ({
+  useLegajosStatus: mockUseLegajosStatus,
+}));
+
 // ---- Import component under test ----
 
 import { WorkerDetailTable } from '../WorkerDetailTable';
@@ -129,6 +134,14 @@ beforeEach(() => {
     isLoading: false,
     error: null,
   });
+  // Default: legajos status is empty
+  mockUseLegajosStatus.mockReturnValue({
+    statuses: {},
+    checkAll: vi.fn(),
+    checkRow: vi.fn(),
+    isChecking: false,
+    error: null,
+  });
 });
 
 describe('WorkerDetailTable — Unified Table', () => {
@@ -136,7 +149,7 @@ describe('WorkerDetailTable — Unified Table', () => {
   // Task 5.1: Column rendering
   // ================================================================
 
-  it('should render all 10 column headers in correct order', async () => {
+  it('should render all 11 column headers in correct order', async () => {
     mockUseUnifiedResults.mockReturnValue({
       people: [makeUnifiedPerson()],
       loading: false,
@@ -145,16 +158,16 @@ describe('WorkerDetailTable — Unified Table', () => {
 
     render(<WorkerDetailTable {...DEFAULT_PROPS} />);
 
-    // Column headers must appear exactly once each (now 10 — Archivos added)
-    const headers = ['Ficha', 'Nombre', 'Empresa', 'RUC', 'Proyecto', 'Razón Social', 'DNI', 'Tipo de Examen', 'Aptitud', 'Archivos'];
+    // Column headers must appear exactly once each (now 11 — Documentos & Archivos added)
+    const headers = ['Ficha', 'Nombre', 'Empresa', 'RUC', 'Proyecto', 'Razón Social', 'DNI', 'Tipo de Examen', 'Aptitud', 'Documentos', 'Archivos'];
     for (const header of headers) {
       const elements = screen.getAllByText(header);
       // Header text can appear in <th> only — should be exactly one
       expect(elements.length).toBeGreaterThanOrEqual(1);
     }
-    // The thead row should contain exactly 10 <th> elements
+    // The thead row should contain exactly 11 <th> elements
     const ths = document.querySelectorAll('thead th');
-    expect(ths).toHaveLength(10);
+    expect(ths).toHaveLength(11);
   });
 
   it('should render data in correct columns for a merged person', async () => {
@@ -1113,5 +1126,176 @@ describe('WorkerDetailTable — Unified Table', () => {
     const lastProps =
       mockFilesModalProps.mock.calls[mockFilesModalProps.mock.calls.length - 1]?.[0];
     expect(lastProps?.['fecAte']).toBe('');
+  });
+
+  // ================================================================
+  // CAMO/EMO Status Indicator Tests
+  // ================================================================
+
+  describe('CAMO/EMO status indicators and batch verification button', () => {
+    it('should render neutral gray badges for CAMO and EMO initially (unchecked/absent)', () => {
+      mockUseUnifiedResults.mockReturnValue({
+        people: [makeUnifiedPerson()],
+        loading: false,
+        error: null,
+      });
+      mockUseLegajosStatus.mockReturnValue({
+        statuses: {}, // unchecked
+        checkAll: vi.fn(),
+        checkRow: vi.fn(),
+        isChecking: false,
+        error: null,
+      });
+
+      render(<WorkerDetailTable {...DEFAULT_PROPS} />);
+
+      const camoBadge = screen.getByTestId('badge-camo');
+      const emoBadge = screen.getByTestId('badge-emo');
+
+      expect(camoBadge).toHaveClass('bg-slate-100');
+      expect(camoBadge).toHaveClass('text-slate-400');
+      expect(emoBadge).toHaveClass('bg-slate-100');
+      expect(emoBadge).toHaveClass('text-slate-400');
+    });
+
+    it('should render green badge for CAMO and violet badge for EMO when they are verified', () => {
+      mockUseUnifiedResults.mockReturnValue({
+        people: [makeUnifiedPerson({ dni: '12345678' })],
+        loading: false,
+        error: null,
+      });
+      mockUseLegajosStatus.mockReturnValue({
+        statuses: {
+          'ATE-001': { hasCamo: true, hasEmo: true, loading: false },
+        },
+        checkAll: vi.fn(),
+        checkRow: vi.fn(),
+        isChecking: false,
+        error: null,
+      });
+
+      render(<WorkerDetailTable {...DEFAULT_PROPS} />);
+
+      const camoBadge = screen.getByTestId('badge-camo');
+      const emoBadge = screen.getByTestId('badge-emo');
+
+      expect(camoBadge).toHaveClass('bg-green-100');
+      expect(camoBadge).toHaveClass('text-green-800');
+      expect(emoBadge).toHaveClass('bg-violet-100');
+      expect(emoBadge).toHaveClass('text-violet-800');
+    });
+
+    it('should click "Verificar documentos" button and trigger checkAll with all rows details', () => {
+      const checkAllMock = vi.fn();
+      mockUseUnifiedResults.mockReturnValue({
+        people: [
+          makeUnifiedPerson({
+            dni: '12345678',
+            fichas: [makeFicha({ idAten: 'ATE-001', nroRuc: '20123456789' })],
+          }),
+          makeUnifiedPerson({
+            dni: '87654321',
+            fichas: [makeFicha({ idAten: 'ATE-002', nroRuc: '20987654321' })],
+          }),
+        ],
+        loading: false,
+        error: null,
+      });
+      mockUseLegajosStatus.mockReturnValue({
+        statuses: {},
+        checkAll: checkAllMock,
+        checkRow: vi.fn(),
+        isChecking: false,
+        error: null,
+      });
+
+      render(<WorkerDetailTable {...DEFAULT_PROPS} />);
+
+      const verifyBtn = screen.getByRole('button', { name: /Verificar documentos/ });
+      fireEvent.click(verifyBtn);
+
+      expect(checkAllMock).toHaveBeenCalledWith([
+        { ruc: '20123456789', dni: '12345678', idAten: 'ATE-001' },
+        { ruc: '20987654321', dni: '87654321', idAten: 'ATE-002' },
+      ]);
+    });
+
+    it('should render loading state when checking is in progress for a row', () => {
+      mockUseUnifiedResults.mockReturnValue({
+        people: [makeUnifiedPerson()],
+        loading: false,
+        error: null,
+      });
+      mockUseLegajosStatus.mockReturnValue({
+        statuses: {
+          'ATE-001': { hasCamo: false, hasEmo: false, loading: true },
+        },
+        checkAll: vi.fn(),
+        checkRow: vi.fn(),
+        isChecking: true,
+        error: null,
+      });
+
+      render(<WorkerDetailTable {...DEFAULT_PROPS} />);
+
+      expect(screen.getByTestId('legajos-loading')).toBeInTheDocument();
+      expect(screen.getByTestId('legajos-loading')).toHaveTextContent('Verificando...');
+    });
+
+    it('should render error status and retry button when check fails for a row', () => {
+      const checkRowMock = vi.fn();
+      mockUseUnifiedResults.mockReturnValue({
+        people: [
+          makeUnifiedPerson({
+            dni: '12345678',
+            fichas: [makeFicha({ idAten: 'ATE-001', nroRuc: '20123456789' })],
+          }),
+        ],
+        loading: false,
+        error: null,
+      });
+      mockUseLegajosStatus.mockReturnValue({
+        statuses: {
+          'ATE-001': { hasCamo: false, hasEmo: false, error: 'Connection failed', loading: false },
+        },
+        checkAll: vi.fn(),
+        checkRow: checkRowMock,
+        isChecking: false,
+        error: null,
+      });
+
+      render(<WorkerDetailTable {...DEFAULT_PROPS} />);
+
+      expect(screen.getByTestId('legajos-error')).toBeInTheDocument();
+      expect(screen.getByText('Error')).toBeInTheDocument();
+
+      const retryBtn = screen.getByRole('button', { name: 'Reintentar' });
+      fireEvent.click(retryBtn);
+
+      expect(checkRowMock).toHaveBeenCalledWith({
+        ruc: '20123456789',
+        dni: '12345678',
+        idAten: 'ATE-001',
+      });
+    });
+
+    it('should render hook-level error next to the header title', () => {
+      mockUseUnifiedResults.mockReturnValue({
+        people: [makeUnifiedPerson()],
+        loading: false,
+        error: null,
+      });
+      mockUseLegajosStatus.mockReturnValue({
+        statuses: {},
+        checkAll: vi.fn(),
+        checkRow: vi.fn(),
+        isChecking: false,
+        error: 'Global network timeout',
+      });
+
+      render(<WorkerDetailTable {...DEFAULT_PROPS} />);
+
+      expect(screen.getByText('Global network timeout')).toBeInTheDocument();
+    });
   });
 });
