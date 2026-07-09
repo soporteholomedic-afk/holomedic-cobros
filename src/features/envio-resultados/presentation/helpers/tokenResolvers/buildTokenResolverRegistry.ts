@@ -8,8 +8,9 @@
  *
  * v1 areas:
  *   - `consolidados` — full set (empresa, fecha, fechaExamen, paciente,
- *                       totalPacientes, totalExamenes, listaPacientes,
- *                       listaArchivos, firma + the two table sub-resolvers).
+ *                       nombrePaciente, dni, totalPacientes, totalExamenes,
+ *                       listaPacientes, listaArchivos, firma + the two table
+ *                       sub-resolvers).
  *
  * Unknown areas return a registry whose `resolveToken` always returns
  * `''` and `resolveTable` always returns `''`. The orchestrator then
@@ -39,6 +40,8 @@ function buildTokenMap(area: string): Map<string, (ctx: InterpolationContext) =>
   map.set('fecha', (ctx) => ctx.today);
   map.set('fechaExamen', (ctx) => ctx.today);
   map.set('paciente', (ctx) => escapeHtml(ctx.patientNames[0] ?? ''));
+  map.set('nombrePaciente', (ctx) => escapeHtml(ctx.patients[0]?.name ?? ''));
+  map.set('dni', (ctx) => ctx.patients[0]?.dni ?? '');
   map.set('totalPacientes', (ctx) => String(ctx.patientNames.length));
   map.set('totalExamenes', (ctx) => String(ctx.fileNames.length));
   map.set('listaPacientes', (ctx) =>
@@ -47,7 +50,9 @@ function buildTokenMap(area: string): Map<string, (ctx: InterpolationContext) =>
   map.set('listaArchivos', (ctx) =>
     ctx.fileNames.map((name) => `    <li>${escapeHtml(name)}</li>`).join('\n'),
   );
-  map.set('firma', (ctx) => ctx.firma);
+  map.set('firma', (ctx) =>
+    ctx.firma !== '' ? ctx.firma : '<em>[Falta configurar firma]</em>',
+  );
   return map;
 }
 

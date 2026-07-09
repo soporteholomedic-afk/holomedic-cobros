@@ -97,11 +97,18 @@ export function EmailEditor({
       companyName,
       patientNames: recipientNames,
       fileNames: selectedFiles.map((f) => f.name),
+      // Bug-fix wiring: forward the full patient + file data so the
+      // registry can resolve {{dni}} and {{nombrePaciente}} (read
+      // from `ctx.patients[0]`). `firma` is intentionally NOT passed:
+      // the registry returns a visible `[Falta configurar firma]`
+      // placeholder when ctx.firma is empty (option B).
+      patients,
+      files: selectedFiles,
     });
 
     setSubject(interpolated.subject);
     setHtmlBody(interpolated.html);
-  }, [companyName, recipientNames, selectedFiles]);
+  }, [companyName, recipientNames, selectedFiles, patients]);
 
   const handleToggle = useCallback(() => {
     setTarget((prev) => (prev === 'company' ? 'patient' : 'company'));

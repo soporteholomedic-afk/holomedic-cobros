@@ -14,6 +14,11 @@
  * The import below references production code that does not exist yet
  * → real RED. The next commit (GREEN) implements the registry + refactored
  * `interpolateSpitch`; these tests then pass.
+ *
+ * Note on `firma` empty-block tests: the bug-fix plan (option B) makes
+ * `firma` resolve to a visible placeholder instead of `''`, so empty-block
+ * removal tests use a different unknown key ({{doesNotExist}}) to keep
+ * the spec scenarios pinned.
  */
 import { describe, it, expect } from 'vitest';
 
@@ -21,6 +26,65 @@ import { interpolateSpitch } from '../interpolateSpitch';
 import { interpolate } from '../interpolate';
 import { GOLDEN_CTX, GOLDEN_CTX_TODAY_2, GOLDEN_HTML_SPITCH_001, GOLDEN_SUBJECT_SPITCH_001 } from './goldenFixtures';
 import { buildTokenResolverRegistry } from '../tokenResolvers/buildTokenResolverRegistry';
+
+describe('interpolateSpitch — forwards `patients` and `files` from params to ctx (bug-fix wiring)', () => {
+  it('forwards `patients` so {{dni}} and {{nombrePaciente}} resolve to the first patient fields', () => {
+    const out = interpolateSpitch({
+      html: '<p>DNI: {{dni}} — Paciente: {{nombrePaciente}}</p>',
+      subject: 's',
+      companyName: 'C',
+      patientNames: ['Juan Pérez'],
+      fileNames: [],
+      patients: [
+        { id: 'p1', companyId: 'c1', name: 'Juan Pérez', dni: '12345678', files: [] },
+      ],
+    });
+    expect(out.html).toContain('DNI: 12345678');
+    expect(out.html).toContain('Paciente: Juan Pérez');
+    expect(out.html).not.toContain('{{dni}}');
+    expect(out.html).not.toContain('{{nombrePaciente}}');
+  });
+
+  it('HTML-escapes patient names with special chars in {{nombrePaciente}}', () => {
+    const out = interpolateSpitch({
+      html: '<p>{{nombrePaciente}}</p>',
+      subject: 's',
+      companyName: 'C',
+      patientNames: ['<script>'],
+      fileNames: [],
+      patients: [
+        { id: 'p1', companyId: 'c1', name: '<script>', dni: '1', files: [] },
+      ],
+    });
+    expect(out.html).toContain('&lt;script&gt;');
+    expect(out.html).not.toContain('<script>');
+  });
+
+  it('omitting `patients` keeps the legacy behaviour: {{dni}} and {{nombrePaciente}} resolve to empty', () => {
+    const out = interpolateSpitch({
+      html: '<p>{{dni}} / {{nombrePaciente}}</p>',
+      subject: 's',
+      companyName: 'C',
+      patientNames: [],
+      fileNames: [],
+    });
+    expect(out.html).not.toContain('{{dni}}');
+    expect(out.html).not.toContain('{{nombrePaciente}}');
+  });
+
+  it('replaces {{firma}} with the visible [Falta configurar firma] placeholder when firma is omitted', () => {
+    const out = interpolateSpitch({
+      html: '<div>{{firma}}</div>',
+      subject: 's',
+      companyName: 'C',
+      patientNames: [],
+      fileNames: [],
+    });
+    expect(out.html).toContain('[Falta configurar firma]');
+    expect(out.html).toContain('<div>');
+    // The containing block is preserved (option B — no removal).
+  });
+});
 
 describe('interpolateSpitch (legacy thin wrapper) — behaviour-preserving for EmailEditor', () => {
   it('replaces the same tokens as before in html + subject (GOLDEN — spitch-001)', () => {
@@ -99,53 +163,49 @@ describe('interpolate(html, subject, ctx, registry) — new orchestrator (PR 4 c
 
   it('removes a <p> block when its ONLY content resolves to empty (spec: Empty token removes containing block)', () => {
     const registry = buildTokenResolverRegistry('consolidados');
-    const emptyCtx = { ...GOLDEN_CTX, firma: '' };
-    const out = interpolate('<p>{{firma}}</p>', 's', emptyCtx, registry);
+    const out = interpolate('<p>{{doesNotExist}}</p>', 's', GOLDEN_CTX, registry);
     // The <p> block is removed entirely — no empty paragraph remains.
     expect(out.html).not.toContain('<p>');
-    expect(out.html).not.toContain('{{firma}}');
+    expect(out.html).not.toContain('{{doesNotExist}}');
   });
 
   it('keeps a <td> when its token resolves to empty (spec: Empty token in td keeps cell)', () => {
     const registry = buildTokenResolverRegistry('consolidados');
-    const emptyCtx = { ...GOLDEN_CTX, firma: '' };
     const out = interpolate(
-      '<table><tr><td>{{firma}}</td><td>X</td></tr></table>',
+      '<table><tr><td>{{doesNotExist}}</td><td>X</td></tr></table>',
       's',
-      emptyCtx,
+      GOLDEN_CTX,
       registry,
     );
     // The <td> is kept (empty cell), the token is removed.
     expect(out.html).toContain('<td></td>');
     expect(out.html).toContain('<td>X</td>');
-    expect(out.html).not.toContain('{{firma}}');
+    expect(out.html).not.toContain('{{doesNotExist}}');
   });
 
   it('keeps a <p> that has other text alongside an empty-resolving token', () => {
     const registry = buildTokenResolverRegistry('consolidados');
-    const emptyCtx = { ...GOLDEN_CTX, firma: '' };
     const out = interpolate(
-      '<p>Prefix {{firma}} suffix</p>',
+      '<p>Prefix {{doesNotExist}} suffix</p>',
       's',
-      emptyCtx,
+      GOLDEN_CTX,
       registry,
     );
     expect(out.html).toContain('Prefix');
     expect(out.html).toContain('suffix');
-    expect(out.html).not.toContain('{{firma}}');
+    expect(out.html).not.toContain('{{doesNotExist}}');
     expect(out.html).toContain('<p>');
   });
 
   it('removes an empty <li> but keeps non-empty siblings', () => {
     const registry = buildTokenResolverRegistry('consolidados');
-    const emptyCtx = { ...GOLDEN_CTX, firma: '' };
     const out = interpolate(
-      '<ul><li>{{firma}}</li><li>Item {{empresa}}</li></ul>',
+      '<ul><li>{{doesNotExist}}</li><li>Item {{empresa}}</li></ul>',
       's',
-      emptyCtx,
+      GOLDEN_CTX,
       registry,
     );
-    expect(out.html).not.toContain('{{firma}}');
+    expect(out.html).not.toContain('{{doesNotExist}}');
     expect(out.html).toContain('Item Clínica Demo S.A.');
     const liCount = (out.html.match(/<li[\s>]/g) ?? []).length;
     expect(liCount).toBe(1);

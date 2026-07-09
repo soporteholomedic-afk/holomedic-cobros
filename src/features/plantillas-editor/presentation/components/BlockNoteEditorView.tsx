@@ -51,6 +51,7 @@ import type { TokenAttrs } from '../../domain/entities';
 import { encodeToken } from '../helpers/tokenSerializer';
 import { resolveTokenLabel } from '../helpers/tokenLabel';
 import { postProcessTokenBlocks } from '../helpers/postProcessTokenBlocks';
+import { documentWithTokensAsText } from '../helpers/documentWithTokensAsText';
 import { TokenChip } from './TokenChip';
 
 /**
@@ -91,9 +92,20 @@ export interface BlockNoteEditorViewProps {
  *    accepts boolean/number/string). `cols` is comma-joined; the renderer and
  *    serializer split it back into an array at the boundary.
  *  - `render`: a `TokenChip` with the label resolved from `areaConfig`.
- *  - `toExternalHTML`: a fragment rendering `encodeToken(attrs)` as bare text,
- *    so `editor.blocksToHTMLLossy(document)` produces HTML with `{{token}}`
- *    inline (no wrapper span) — the storage format `interpolateSpitch` consumes.
+ *  - `toExternalHTML`: a fragment rendering `encodeToken(attrs)` as bare text.
+ *
+ * `getHtml` pre-converts every `token` inline content node to a plain text
+ * node containing the `{{token}}` placeholder BEFORE handing the document
+ * to `editor.blocksToHTMLLossy`. The reason is that BlockNote's
+ * `toExternalHTML` path for custom inline content goes through a React
+ * portal that silently renders an empty `<span></span>` in our setup
+ * ("ReactInlineContentSpec: renderHTML() failed" in the browser console);
+ * the saved HTML would then lack the `{{token}}` text and the interpolate
+ * pipeline would have nothing to resolve. By substituting the token node
+ * with a text node ahead of export, the standard text serializer is used
+ * (which is stable and matches the behaviour of typing `{{token}}` by
+ * hand). Tables, lists, headings and every other block type continue to
+ * go through BlockNote's own serializers untouched.
  *
  * Storage format (`{{token}}`) is independent of BlockNote internals: if
  * BlockNote is replaced, only this component's schema + serialization change.
@@ -176,7 +188,11 @@ export const BlockNoteEditorView = forwardRef<
     ref,
     () => ({
       getHtml() {
-        return editor.blocksToHTMLLossy(editor.document);
+        return editor.blocksToHTMLLossy(
+          documentWithTokensAsText(
+            editor.document as unknown as Parameters<typeof documentWithTokensAsText>[0],
+          ) as unknown as Parameters<typeof editor.blocksToHTMLLossy>[0],
+        );
       },
       loadHtml(html: string) {
         const parsed = editor.tryParseHTMLToBlocks(html);
@@ -198,7 +214,12 @@ export const BlockNoteEditorView = forwardRef<
       updateTableToken(target: { table: string }, newAttrs: TokenAttrs) {
         for (const block of editor.document) {
           const content = (block as { content?: Array<{ type: string; props?: { key?: string; table?: string; cols?: string } }> }).content;
-          if (!content) continue;
+          // BlockNote v0.51 blocks with `content: "table"` tag (e.g. the
+          // default `table` block) hold a `TableContent` OBJECT in
+          // `block.content`, not an array. Calling `findIndex` on that
+          // object would throw. We only look for tokens in blocks whose
+          // `content` is an array of inline content.
+          if (!Array.isArray(content)) continue;
           const idx = content.findIndex(
             (c) =>
               c.type === 'token' &&

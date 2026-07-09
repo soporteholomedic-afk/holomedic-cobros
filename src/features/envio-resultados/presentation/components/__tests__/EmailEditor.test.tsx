@@ -4,6 +4,17 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 // ---- Mock dependencies ----
 
+// Bug-fix wiring: the mock factory reads its bodyHtml / subject from a
+// hoisted store so individual tests can override the emitted spitch
+// without re-mocking the module (re-mocking during render trips a
+// React 19 internal warning). Tests mutate `mockSpitchOverride` in
+// their setup block and the mock picks it up on its next render.
+const mockSpitchOverride = vi.hoisted(() => ({
+  bodyHtml: '<p>Contenido de prueba</p>',
+  subject: 'Asunto de prueba',
+  name: 'Test Spitch',
+}));
+
 // Mock SpitchSelector
 vi.mock('../SpitchSelector', () => ({
   SpitchSelector: vi.fn().mockImplementation(
@@ -22,9 +33,9 @@ vi.mock('../SpitchSelector', () => ({
             id: selectedId || 'spitch-001',
             area: area,
             type: target,
-            name: 'Test Spitch',
-            subject: 'Asunto de prueba',
-            bodyHtml: '<p>Contenido de prueba</p>',
+            name: mockSpitchOverride.name,
+            subject: mockSpitchOverride.subject,
+            bodyHtml: mockSpitchOverride.bodyHtml,
           });
         }
       }, [loaded, area, target, selectedId]);
@@ -37,14 +48,19 @@ vi.mock('../SpitchSelector', () => ({
           id: 'spitch-001',
           area: area,
           type: target,
-          name: 'Test Spitch',
-          subject: 'Asunto de prueba',
-          bodyHtml: '<p>Contenido de prueba</p>',
+          name: mockSpitchOverride.name,
+          subject: mockSpitchOverride.subject,
+          bodyHtml: mockSpitchOverride.bodyHtml,
         }),
       }, React.createElement('option', { value: 'spitch-001' }, 'Test Spitch'));
     },
   ),
 }));
+
+// Bug-fix wiring: the SpitchSelector mock above is the default. The
+// token-resolution test overrides the bodyHtml via `vi.mocked`
+// (see the test body) and waits for the deferred onSelect to land.
+
 
 // Mock AttachmentList
 vi.mock('../AttachmentList', () => ({
@@ -373,5 +389,38 @@ describe('EmailEditor', () => {
     };
     expect(lastCall.fileRefs[0]?.path).toBe('EXAMENES/2024');
     expect(lastCall.fileRefs[0]?.name).toBe('emo.pdf');
+  });
+
+  // ================================================================
+  // Bug-fix wiring — {{dni}}, {{nombrePaciente}} and {{firma}} must
+  // resolve in the live preview from the `patients` prop forwarded
+  // to interpolateSpitch (EmailEditor.tsx:91-104).
+  // ================================================================
+
+  it('should resolve {{dni}} and {{nombrePaciente}} in the live preview from the patients prop', async () => {
+    mockFetch.mockResolvedValue({ ok: true, json: () => Promise.resolve({ success: true }) });
+
+    // Override the spitch the mock emits by mutating the hoisted store
+    // BEFORE render. The mock reads `mockSpitchOverride` on each
+    // render so the change is picked up on the very first effect run.
+    // We restore the defaults in the finally block so subsequent tests
+    // keep the original mock body.
+    const previous = { ...mockSpitchOverride };
+    mockSpitchOverride.bodyHtml =
+      '<p>DNI: {{dni}}</p><p>Paciente: {{nombrePaciente}}</p><div>{{firma}}</div>';
+    mockSpitchOverride.subject = 'Resultados de {{nombrePaciente}}';
+    mockSpitchOverride.name = 'Plantilla con tokens';
+
+    try {
+      render(<EmailEditor {...defaultProps} />);
+      const preview = await screen.findByTestId('email-preview');
+      // defaultProps.patients[0] = María Elena García López / dni=12345678
+      expect(preview.textContent).toContain('12345678');
+      expect(preview.textContent).toContain('María Elena García López');
+      // firma not provided → visible placeholder, not removed
+      expect(preview.textContent).toContain('[Falta configurar firma]');
+    } finally {
+      Object.assign(mockSpitchOverride, previous);
+    }
   });
 });

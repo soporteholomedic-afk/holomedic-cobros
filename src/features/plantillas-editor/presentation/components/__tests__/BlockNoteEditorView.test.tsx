@@ -136,16 +136,90 @@ describe('BlockNoteEditorView', () => {
   });
 
   describe('imperative handle: getHtml (save serialization)', () => {
-    it('calls editor.blocksToHTMLLossy with the current document and returns the HTML', () => {
+    it('pre-converts token nodes to text and hands the result to blocksToHTMLLossy', () => {
+      // Document with a token inline content node — the pre-conversion
+      // helper turns it into a text node carrying `{{empresa}}` BEFORE
+      // serialization, so the broken `toExternalHTML` portal is bypassed.
+      mockEditor.document = [
+        {
+          id: 'b-1',
+          type: 'paragraph',
+          content: [
+            { type: 'text', text: 'Hello ' },
+            { type: 'token', props: { key: 'empresa', table: '', cols: '' } },
+          ],
+        },
+      ];
       mockBlocksToHTMLLossy.mockReturnValue('<p>Hello {{empresa}}</p>');
       const { ref } = renderView();
 
       const html = ref.current?.getHtml();
 
       expect(mockBlocksToHTMLLossy).toHaveBeenCalledTimes(1);
-      // Blocks to HTML lossy receives the current document blocks.
-      expect(mockBlocksToHTMLLossy).toHaveBeenCalledWith(mockEditor.document);
+      // The argument to blocksToHTMLLossy is NOT the original document —
+      // it's the pre-converted version with the token node replaced by a
+      // text node containing the placeholder.
+      const callArg = mockBlocksToHTMLLossy.mock.calls[0]![0] as Array<{
+        content: Array<Record<string, unknown>>;
+      }>;
+      const blockContent = callArg[0]!.content;
+      // First node stays as text, second node is now text (was token).
+      expect(blockContent).toHaveLength(2);
+      expect(blockContent[0]!.type).toBe('text');
+      expect((blockContent[0]! as { text: string }).text).toBe('Hello ');
+      expect(blockContent[1]!.type).toBe('text');
+      expect((blockContent[1]! as { text: string }).text).toBe('{{empresa}}');
       expect(html).toBe('<p>Hello {{empresa}}</p>');
+    });
+
+    it('leaves blocks with no inline content array untouched', () => {
+      // Table blocks carry a `tableContent` OBJECT in `content`, not an
+      // array. The helper must not try to walk it as an array.
+      mockEditor.document = [
+        {
+          id: 'b-1',
+          type: 'table',
+          content: {
+            type: 'tableContent',
+            rows: [{ cells: [[{ type: 'text', text: 'cell' }]] }],
+          },
+        },
+      ];
+      mockBlocksToHTMLLossy.mockReturnValue('<table><tr><td>cell</td></tr></table>');
+      const { ref } = renderView();
+
+      const html = ref.current?.getHtml();
+
+      // The pre-conversion passes the table block through unchanged; the
+      // table serializer inside BlockNote handles it normally.
+      const callArg = mockBlocksToHTMLLossy.mock.calls[0]![0] as unknown[];
+      expect(callArg[0]).toBe(mockEditor.document[0]);
+      expect(html).toBe('<table><tr><td>cell</td></tr></table>');
+    });
+
+    it('handles a table token inside a paragraph (converts to text with cols)', () => {
+      mockEditor.document = [
+        {
+          id: 'b-1',
+          type: 'paragraph',
+          content: [
+            {
+              type: 'token',
+              props: { key: 'tabla', table: 'examenes', cols: 'fecha,resultado' },
+            },
+          ],
+        },
+      ];
+      mockBlocksToHTMLLossy.mockReturnValue('<p>{{tabla:examenes:fecha,resultado}}</p>');
+      const { ref } = renderView();
+
+      ref.current?.getHtml();
+
+      const callArg = mockBlocksToHTMLLossy.mock.calls[0]![0] as Array<{
+        content: Array<{ type: string; text?: string }>;
+      }>;
+      expect(callArg[0]!.content[0]!.type).toBe('text');
+      expect(callArg[0]!.content[0]!.text).toBe('{{tabla:examenes:fecha,resultado}}');
     });
   });
 

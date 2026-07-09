@@ -3,6 +3,8 @@ import { describe, it, expect } from 'vitest';
 import { postProcessTokenBlocks } from '../postProcessTokenBlocks';
 import type {
   BlockLike,
+  TableCellLike,
+  TableContentLike,
   TextInlineContent,
   TokenInlineContent,
 } from '../postProcessTokenBlocks';
@@ -89,10 +91,11 @@ describe('postProcessTokenBlocks', () => {
       const styles = { textColor: 'red' };
       const blocks = [block([textInline('Hi {{empresa}}', styles)])];
       const out = postProcessTokenBlocks(blocks);
-      const textSeg = out[0]!.content![0] as TextInlineContent;
+      const content = out[0]!.content as AnyInline[];
+      const textSeg = content[0] as TextInlineContent;
       expect(textSeg.styles).toEqual(styles);
       // The token segment has no styles (it is not styled text).
-      const tokenSeg = out[0]!.content![1] as TokenInlineContent;
+      const tokenSeg = content[1] as TokenInlineContent;
       expect('styles' in tokenSeg).toBe(false);
     });
   });
@@ -126,8 +129,9 @@ describe('postProcessTokenBlocks', () => {
       const out = postProcessTokenBlocks(blocks);
       // The text before the link is plain (no placeholder) → unchanged.
       // The link passes through unchanged.
-      expect(out[0]!.content![0]).toEqual(textInline('See '));
-      expect(out[0]!.content![1]).toEqual(link);
+      const content = out[0]!.content as AnyInline[];
+      expect(content[0]).toEqual(textInline('See '));
+      expect(content[1]).toEqual(link);
     });
   });
 
@@ -155,6 +159,128 @@ describe('postProcessTokenBlocks', () => {
         tokenInline('empresa'),
         textInline(' — '),
         tokenInline('tabla', 'examenes', 'fecha,monto'),
+      ]);
+    });
+  });
+
+  describe('table blocks (BlockNote content: "table" tag)', () => {
+    // BlockNote v0.51's default `table` block carries its body in
+    // `content: { type: "tableContent", columnWidths, rows: [{ cells: ... }] }`
+    // — a single object, NOT an array of inline content. The previous
+    // truthiness-only guard (`block.content ? ...`) crashed with
+    // `content is not iterable` the moment a template's body HTML contained
+    // a literal <table>.
+
+    it('does not throw on a table block whose content is a TableContent object', () => {
+      const blocks: BlockLike[] = [{
+        id: 't1',
+        type: 'table',
+        content: {
+          type: 'tableContent',
+          columnWidths: [100],
+          rows: [{ cells: [[textInline('a')]] }],
+        },
+        children: [],
+      }];
+      expect(() => postProcessTokenBlocks(blocks)).not.toThrow();
+    });
+
+    it('preserves a table with no tokens (columnWidths, headerRows, rows intact)', () => {
+      const tc: TableContentLike = {
+        type: 'tableContent',
+        columnWidths: [100, 200],
+        headerRows: 1,
+        rows: [{ cells: [[textInline('A')], [textInline('B')]] }],
+      };
+      const blocks: BlockLike[] = [{
+        id: 't1',
+        type: 'table',
+        content: tc,
+        children: [],
+      }];
+      const out = postProcessTokenBlocks(blocks);
+      const outTc = out[0]!.content as TableContentLike;
+      expect(outTc.type).toBe('tableContent');
+      expect(outTc.columnWidths).toEqual([100, 200]);
+      expect(outTc.headerRows).toBe(1);
+      const cells = outTc.rows[0]!.cells as AnyInline[][];
+      expect(cells[0]).toEqual([textInline('A')]);
+      expect(cells[1]).toEqual([textInline('B')]);
+    });
+
+    it('splits {{token}} inside a bare-array table cell (InlineContent[] form)', () => {
+      const blocks: BlockLike[] = [{
+        id: 't1',
+        type: 'table',
+        content: {
+          type: 'tableContent',
+          columnWidths: [100],
+          rows: [{ cells: [[textInline('Hola {{empresa}}')]] }],
+        },
+        children: [],
+      }];
+      const out = postProcessTokenBlocks(blocks);
+      const outTc = out[0]!.content as TableContentLike;
+      const cell = outTc.rows[0]!.cells[0] as AnyInline[];
+      expect(cell).toEqual([textInline('Hola '), tokenInline('empresa')]);
+    });
+
+    it('splits {{token}} inside a TableCell-shaped cell (preserves props)', () => {
+      const blocks: BlockLike[] = [{
+        id: 't1',
+        type: 'table',
+        content: {
+          type: 'tableContent',
+          columnWidths: [120],
+          rows: [{
+            cells: [{
+              type: 'tableCell',
+              props: { backgroundColor: 'default', textColor: 'default', textAlignment: 'left' },
+              content: [textInline('{{fecha}}')],
+            }],
+          }],
+        },
+        children: [],
+      }];
+      const out = postProcessTokenBlocks(blocks);
+      const outTc = out[0]!.content as TableContentLike;
+      const cell = outTc.rows[0]!.cells[0] as TableCellLike;
+      expect(cell.type).toBe('tableCell');
+      expect(cell.props).toEqual({
+        backgroundColor: 'default',
+        textColor: 'default',
+        textAlignment: 'left',
+      });
+      expect(cell.content).toEqual([tokenInline('fecha')]);
+    });
+
+    it('processes a mixed doc: paragraph token + table-cell token in one walk', () => {
+      const blocks: BlockLike[] = [
+        block([textInline('Estimado {{empresa}}:')]),
+        {
+          id: 't1',
+          type: 'table',
+          content: {
+            type: 'tableContent',
+            columnWidths: [200],
+            rows: [{ cells: [[textInline('Fecha: {{fecha}}')]] }],
+          },
+          children: [],
+        },
+      ];
+      const out = postProcessTokenBlocks(blocks);
+      // Paragraph token
+      expect((out[0]!.content as AnyInline[])).toEqual([
+        textInline('Estimado '),
+        tokenInline('empresa'),
+        textInline(':'),
+      ]);
+      // Table-cell token
+      const outTc = out[1]!.content as TableContentLike;
+      const cell = outTc.rows[0]!.cells[0] as AnyInline[];
+      expect(cell).toEqual([
+        textInline('Fecha: '),
+        tokenInline('fecha'),
       ]);
     });
   });

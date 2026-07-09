@@ -38,6 +38,7 @@
 import { interpolate as interpolateCore } from './interpolate';
 import { buildTokenResolverRegistry } from './tokenResolvers/buildTokenResolverRegistry';
 import type { InterpolationContext } from './tokenResolvers/types';
+import type { Patient, PatientFile } from '../../domain/entities';
 
 export interface InterpolateSpitchParams {
   html: string;
@@ -61,10 +62,23 @@ export interface InterpolateSpitchParams {
   area?: string;
   /**
    * Optional signature HTML. Mirrors the new `InterpolationContext.firma`
-   * field. When omitted, defaults to the empty string (which causes
-   * `{{firma}}` blocks to be removed by the empty-block path).
+   * field. When omitted, defaults to the empty string — the registry
+   * replaces it with a visible `[Falta configurar firma]` placeholder so
+   * the containing block is preserved (option B in the bug-fix plan).
    */
   firma?: string;
+  /**
+   * Full patient data. The `{{dni}}` and `{{nombrePaciente}}` resolvers
+   * read from `ctx.patients[0]`. When omitted, defaults to `[]` (legacy
+   * behaviour: those tokens resolve to `''` and their blocks are
+   * removed). Tests that don't care about patient fields can omit it.
+   */
+  patients?: Patient[];
+  /**
+   * Full file data. Reserved for table resolvers and any future
+   * per-file tokens. When omitted, defaults to `[]`.
+   */
+  files?: PatientFile[];
 }
 
 export interface InterpolateSpitchResult {
@@ -98,6 +112,8 @@ export function interpolateSpitch(params: InterpolateSpitchParams): InterpolateS
     today,
     area = AREA_DEFAULT,
     firma = '',
+    patients,
+    files,
   } = params;
 
   const registry = buildTokenResolverRegistry(area);
@@ -106,8 +122,8 @@ export function interpolateSpitch(params: InterpolateSpitchParams): InterpolateS
     patientNames,
     fileNames,
     firma,
-    patients: [],
-    files: [],
+    patients: patients ?? [],
+    files: files ?? [],
     area,
     today: today ?? defaultToday(),
   };

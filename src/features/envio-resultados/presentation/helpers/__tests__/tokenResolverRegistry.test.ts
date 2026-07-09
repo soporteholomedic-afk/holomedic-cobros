@@ -28,11 +28,33 @@ describe('TokenResolverRegistry — buildTokenResolverRegistry(area)', () => {
     expect(registry.resolveToken('empresa', GOLDEN_CTX)).toBe('Clínica Demo S.A.');
     expect(registry.resolveToken('fecha', GOLDEN_CTX)).toBe('15 de enero de 2026');
     expect(registry.resolveToken('paciente', GOLDEN_CTX)).toBe('Juan Pérez');
+    expect(registry.resolveToken('nombrePaciente', GOLDEN_CTX)).toBe('Juan Pérez');
+    expect(registry.resolveToken('dni', GOLDEN_CTX)).toBe('12345678');
     expect(registry.resolveToken('totalPacientes', GOLDEN_CTX)).toBe('2');
     expect(registry.resolveToken('totalExamenes', GOLDEN_CTX)).toBe('2');
     expect(registry.resolveToken('firma', GOLDEN_CTX)).toBe(
       '<p>Dr. Pérez — Clínica Demo S.A.</p>',
     );
+  });
+
+  it('HTML-escapes patient names with special chars in {{nombrePaciente}}', () => {
+    const registry = buildTokenResolverRegistry('consolidados');
+    const evil = {
+      ...GOLDEN_CTX,
+      patients: [
+        { ...GOLDEN_CTX.patients[0]!, name: '<script>alert(1)</script>' },
+      ],
+    };
+    const out = registry.resolveToken('nombrePaciente', evil);
+    expect(out).toContain('&lt;script&gt;');
+    expect(out).not.toContain('<script>');
+  });
+
+  it('resolves {{dni}} to empty string when there are no patients (no crash, signals removal)', () => {
+    const registry = buildTokenResolverRegistry('consolidados');
+    const empty = { ...GOLDEN_CTX, patients: [] };
+    expect(registry.resolveToken('dni', empty)).toBe('');
+    expect(registry.resolveToken('nombrePaciente', empty)).toBe('');
   });
 
   it('resolves {{listaPacientes}} as an HTML <li> list (one per patient)', () => {
@@ -72,6 +94,21 @@ describe('TokenResolverRegistry — buildTokenResolverRegistry(area)', () => {
   it('returns "" for an unknown simple key (signals empty → block removal)', () => {
     const registry = buildTokenResolverRegistry('consolidados');
     expect(registry.resolveToken('doesNotExist', GOLDEN_CTX)).toBe('');
+  });
+
+  it('resolves {{firma}} to a visible placeholder when ctx.firma is empty (option B — no removal)', () => {
+    const registry = buildTokenResolverRegistry('consolidados');
+    const emptyCtx = { ...GOLDEN_CTX, firma: '' };
+    const out = registry.resolveToken('firma', emptyCtx);
+    expect(out).toContain('[Falta configurar firma]');
+    expect(out).not.toBe('');
+  });
+
+  it('resolves {{firma}} to ctx.firma verbatim when it is non-empty (no placeholder)', () => {
+    const registry = buildTokenResolverRegistry('consolidados');
+    const out = registry.resolveToken('firma', GOLDEN_CTX);
+    expect(out).toBe('<p>Dr. Pérez — Clínica Demo S.A.</p>');
+    expect(out).not.toContain('[Falta configurar firma]');
   });
 
   it('uses the registry factory pattern: same area → same behaviour, different area → no cross-talk', () => {

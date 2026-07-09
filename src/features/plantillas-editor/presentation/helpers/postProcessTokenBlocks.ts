@@ -35,21 +35,59 @@ export type OtherInlineContent = {
 export type AnyInlineContent = TextInlineContent | TokenInlineContent | OtherInlineContent;
 
 /**
+ * A `tableContent` shape (BlockNote v0.51 blocks with `content: "table"` tag
+ * — e.g. the default `table` block). `content` is NOT an array of inline
+ * content; it is this single object holding rows of cells, and each cell is
+ * either a bare `InlineContent[]` (the historical form) or a `TableCell`
+ * wrapper (with `props` and `content`). We mirror both forms here so the
+ * helper stays pure (no `@blocknote/core` import).
+ */
+export interface TableCellLike {
+  type: 'tableCell';
+  props?: Record<string, unknown>;
+  content: AnyInlineContent[];
+}
+
+export interface TableContentLike {
+  type: 'tableContent';
+  columnWidths: (number | undefined)[];
+  headerRows?: number;
+  headerCols?: number;
+  rows: Array<{ cells: Array<AnyInlineContent[] | TableCellLike> }>;
+}
+
+/**
  * A structural BlockNote block shape — the minimum `postProcessTokenBlocks`
  * needs to introspect. Real BlockNote blocks carry more fields (props, id,
  * etc.); they pass through untouched because this walk only rewrites
  * `content` and recurses into `children`.
+ *
+ * `content` is a UNION on purpose: BlockNote blocks use three different
+ * shapes depending on the `content` tag of their spec:
+ *   - `"inline"` → `InlineContent[]` (paragraphs, headings, list items…)
+ *   - `"table"`  → `TableContentLike` (the default `table` block)
+ *   - `"none"`   → `undefined` (image, video, audio, file…)
+ * The first shape is the one we split `{{token}}` placeholders out of; the
+ * second we recurse into cell-by-cell; the third we pass through.
  */
 export interface BlockLike {
   id?: string;
   type?: string;
-  content?: AnyInlineContent[];
+  content?: AnyInlineContent[] | TableContentLike;
   children?: BlockLike[];
   [k: string]: unknown;
 }
 
 function isTextInline(c: AnyInlineContent): c is TextInlineContent {
   return c !== null && typeof c === 'object' && (c as { type?: unknown }).type === 'text';
+}
+
+function isTableContent(c: unknown): c is TableContentLike {
+  return c !== null && typeof c === 'object' && (c as { type?: unknown }).type === 'tableContent';
+}
+
+function isTableCellLike(c: unknown): c is TableCellLike {
+  return c !== null && typeof c === 'object' && (c as { type?: unknown }).type === 'tableCell';
 }
 
 /**
@@ -82,12 +120,56 @@ export function postProcessTokenBlocks(blocks: BlockLike[]): BlockLike[] {
 }
 
 function processBlock(block: BlockLike): BlockLike {
-  const nextContent = block.content ? processContent(block.content) : block.content;
+  const nextContent = processBlockContent(block.content);
   const nextChildren = block.children ? block.children.map(processBlock) : block.children;
   if (nextContent === block.content && nextChildren === block.children) {
     return block;
   }
   return { ...block, content: nextContent, children: nextChildren };
+}
+
+/**
+ * Dispatcher for `block.content`. Centralises the type-narrowing: we only
+ * walk into an array of inline content (the `"inline"` block case) or a
+ * `tableContent` object (the `"table"` block case). Anything else
+ * (`undefined` for `"none"` blocks, or a future BlockNote shape we don't
+ * recognise) passes through verbatim — never iterated, never thrown on.
+ *
+ * This is the chokepoint that prevents the `content is not iterable` crash
+ * reported when a template's body HTML contains a literal `<table>`
+ * (BlockNote parses it into a `table` block whose `content` is a
+ * `TableContent` object, not an array).
+ */
+function processBlockContent(content: BlockLike['content']): BlockLike['content'] {
+  if (Array.isArray(content)) {
+    return processContent(content);
+  }
+  if (isTableContent(content)) {
+    return processTableContent(content);
+  }
+  return content;
+}
+
+function processTableContent(tc: TableContentLike): TableContentLike {
+  return {
+    ...tc,
+    rows: tc.rows.map((row) => ({
+      ...row,
+      cells: row.cells.map(processTableCell),
+    })),
+  };
+}
+
+function processTableCell(
+  cell: AnyInlineContent[] | TableCellLike,
+): AnyInlineContent[] | TableCellLike {
+  if (Array.isArray(cell)) {
+    return processContent(cell);
+  }
+  if (isTableCellLike(cell)) {
+    return { ...cell, content: processContent(cell.content) };
+  }
+  return cell;
 }
 
 function processContent(content: AnyInlineContent[]): AnyInlineContent[] {
