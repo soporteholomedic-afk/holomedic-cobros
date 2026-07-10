@@ -15,6 +15,13 @@ const mockSpitchOverride = vi.hoisted(() => ({
   name: 'Test Spitch',
 }));
 
+const mockEditorHandle = vi.hoisted(() => ({
+  loadHtml: vi.fn(),
+  getHtml: vi.fn(() => '<p>mock html</p>'),
+  focus: vi.fn(),
+  onChange: null as ((html: string) => void) | null,
+}));
+
 // Mock SpitchSelector
 vi.mock('../SpitchSelector', () => ({
   SpitchSelector: vi.fn().mockImplementation(
@@ -85,6 +92,25 @@ vi.mock('../AttachmentList', () => ({
     },
   ),
 }));
+
+// Mock EmailBodyEditor (forwardRef — same pattern as BlockNoteEditorView in
+// TemplateEditor.test.tsx: export the forwardRef component directly, NOT
+// wrapped in vi.fn() + mockImplementation).
+vi.mock('../EmailBodyEditor', () => {
+  const MockEmailBodyEditor = React.forwardRef(
+    ({ onChange }: { onChange?: (html: string) => void }, ref) => {
+      React.useImperativeHandle(ref, () => mockEditorHandle);
+      React.useEffect(() => {
+        mockEditorHandle.onChange = onChange ?? null;
+      });
+      return React.createElement('div', {
+        'data-testid': 'email-body-editor',
+      });
+    },
+  );
+  MockEmailBodyEditor.displayName = 'MockEmailBodyEditor';
+  return { EmailBodyEditor: MockEmailBodyEditor };
+});
 
 // Minimal structural type for the mock's `onSelect` callback.
 interface SpitchLike {
@@ -203,13 +229,17 @@ describe('EmailEditor', () => {
     expect(screen.getByText('Enviar a empresa')).toBeInTheDocument();
   });
 
-  it('should render subject input and body textarea', () => {
+  it('should render subject input and body preview with editar button', async () => {
     mockFetch.mockResolvedValue({ ok: true, json: () => Promise.resolve({ success: true }) });
 
     render(<EmailEditor {...defaultProps} />);
 
     expect(screen.getByLabelText('Asunto')).toBeInTheDocument();
-    expect(screen.getByLabelText('Contenido del correo')).toBeInTheDocument();
+    // Right panel shows body preview + "Editar" button (spitch auto-selected)
+    expect(screen.getByText('Editar')).toBeInTheDocument();
+    // Click "Editar" to open the BlockNote editor (lazy-loaded, needs await)
+    fireEvent.click(screen.getByText('Editar'));
+    expect(await screen.findByTestId('email-body-editor')).toBeInTheDocument();
   });
 
   it('should show live preview of the email body', () => {
@@ -220,6 +250,48 @@ describe('EmailEditor', () => {
     // The preview div should contain the rendered HTML
     const previewArea = screen.getByTestId('email-preview');
     expect(previewArea).toHaveTextContent('Contenido de prueba');
+  });
+
+  it('should call loadHtml on the editor when a spitch is selected while editing', () => {
+    mockFetch.mockResolvedValue({ ok: true, json: () => Promise.resolve({ success: true }) });
+
+    render(<EmailEditor {...defaultProps} />);
+
+    // Editor is not mounted on mount (preview mode), so loadHtml was NOT called
+    expect(mockEditorHandle.loadHtml).not.toHaveBeenCalled();
+
+    // Open the editor
+    fireEvent.click(screen.getByText('Editar'));
+
+    // The editor mounts via initialHtml prop (not loadHtml), so still not called
+    expect(mockEditorHandle.loadHtml).not.toHaveBeenCalled();
+
+    // Now change the spitch — triggers handleSpitchSelect → loadHtml
+    const spitchSelect = screen.getByTestId('spitch-selector');
+    fireEvent.change(spitchSelect, { target: { value: 'spitch-002' } });
+
+    expect(mockEditorHandle.loadHtml).toHaveBeenCalledTimes(1);
+    const htmlArg = mockEditorHandle.loadHtml.mock.calls[0]?.[0];
+    expect(htmlArg).toContain('Contenido de prueba');
+    expect(htmlArg).not.toContain('{{');
+  });
+
+  it('should update the preview when the editor emits onChange', async () => {
+    mockFetch.mockResolvedValue({ ok: true, json: () => Promise.resolve({ success: true }) });
+
+    render(<EmailEditor {...defaultProps} />);
+
+    // Initial preview from spitch selection
+    expect(screen.getByTestId('email-preview')).toHaveTextContent('Contenido de prueba');
+
+    // Open the editor first
+    fireEvent.click(screen.getByText('Editar'));
+
+    // Simulate user editing in BlockNote — onChange is stored in the mock
+    mockEditorHandle.onChange?.('<p>Texto editado por el operador</p>');
+
+    // findByText waits for the state update to flush and the preview to re-render
+    expect(await screen.findByText('Texto editado por el operador')).toBeInTheDocument();
   });
 
   it('should render the AttachmentList in the left panel', () => {

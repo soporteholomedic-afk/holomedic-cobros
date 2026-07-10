@@ -1,50 +1,31 @@
 'use client';
 
-import { useState, useCallback, useMemo } from 'react';
+import { lazy, Suspense, useCallback, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { SpitchSelector } from './SpitchSelector';
 import { AttachmentList } from './AttachmentList';
 import { LocalFileDropZone } from './LocalFileDropZone';
 import { SendConfirmation } from './SendConfirmation';
 import { useSendResults } from '../hooks/useSendResults';
 import { interpolateSpitch } from '../helpers/interpolateSpitch';
+import { buildSignatureHtml, DEFAULT_SIGNATURE_DATA } from '../helpers/signatureData';
+import type { SignatureData } from '../helpers/signatureData';
 import type { Patient, PatientFile, SelectedFileRef, Spitch } from '../../domain/entities';
+import type { EmailBodyEditorHandle } from './EmailBodyEditor';
 
-const DEFAULT_SIGNATURE_HTML = `<table cellpadding="0" cellspacing="0" style="border-collapse: collapse; font-family: Arial, sans-serif; font-size: 12px; color: rgb(51, 51, 51); line-height: 1.5; margin-top: 15px;">
-  <tr>
-    <td valign="middle" style="padding-right: 20px; text-align: center; width: 160px;">
-      <img src="https://holomedic.com.pe/w2/wp-content/uploads/2023/06/logo.png" alt="Holomedic" style="display: block; width: 140px; height: auto; margin: 0 auto 8px auto;" />
-      <a href="https://www.holomedic.com.pe" target="_blank" style="color: rgb(0, 86, 179); text-decoration: underline; font-weight: bold; font-size: 11px; font-family: Arial, sans-serif; display: inline-block;">www.holomedic.com.pe</a>
-    </td>
-    <td valign="top" style="border-left: 2px solid rgb(0, 86, 179); padding-left: 20px; padding-top: 2px; padding-bottom: 2px;">
-      <div style="font-size: 14px; font-weight: bold; color: rgb(0, 0, 0); margin-bottom: 4px; font-family: Arial, sans-serif;">
-        Blanca Chirinos <span style="color: rgb(0, 86, 179); font-weight: bold; margin: 0 4px;">|</span> Área Consolidados
-      </div>
-      <div style="margin-bottom: 4px; font-family: Arial, sans-serif;">
-        <a href="mailto:consolidados@holomedic.com.pe" style="color: rgb(0, 86, 179); text-decoration: underline;">consolidados@holomedic.com.pe</a>
-      </div>
-      <div style="color: rgb(51, 51, 51); margin-bottom: 2px; font-family: Arial, sans-serif;">
-        Móvil: (051) 989211757
-      </div>
-      <div style="color: rgb(51, 51, 51); margin-bottom: 2px; font-family: Arial, sans-serif;">
-        Telef. 480-0217 Anexo: 303
-      </div>
-      <div style="color: rgb(51, 51, 51); margin-bottom: 8px; font-family: Arial, sans-serif;">
-        Pasaje La India 169, Urb. Los Sauces – Surquillo (Altura de 9 y 10 de la Av. Villarán)
-      </div>
-      <div style="display: flex; gap: 8px; align-items: center;">
-        <a href="https://www.facebook.com" target="_blank" style="display: inline-block; text-decoration: none;">
-          <img src="https://img.icons8.com/color/30/facebook-new.png" alt="Facebook" style="display: block; width: 24px; height: 24px; border: 0;" />
-        </a>
-        <a href="https://www.instagram.com" target="_blank" style="display: inline-block; text-decoration: none;">
-          <img src="https://img.icons8.com/color/30/instagram-new.png" alt="Instagram" style="display: block; width: 24px; height: 24px; border: 0;" />
-        </a>
-        <a href="https://wa.me/51989211757" target="_blank" style="display: inline-block; text-decoration: none;">
-          <img src="https://img.icons8.com/color/30/whatsapp.png" alt="WhatsApp" style="display: block; width: 24px; height: 24px; border: 0;" />
-        </a>
-      </div>
-    </td>
-  </tr>
-</table>`;
+const EmailBodyEditorLazy = lazy(() =>
+  import('./EmailBodyEditor').then((m) => ({ default: m.EmailBodyEditor })),
+);
+
+// Signature fields — kept out of BlockNote to avoid lossy round-trip on the
+// complex table structure. Edited via simple inputs; rebuilt on "Hecho".
+const signatureFields: { key: keyof SignatureData; label: string }[] = [
+  { key: 'name', label: 'Nombre' },
+  { key: 'role', label: 'Cargo' },
+  { key: 'email', label: 'Email' },
+  { key: 'phone', label: 'Teléfono' },
+  { key: 'phoneAlt', label: 'Teléfono 2' },
+  { key: 'address', label: 'Dirección' },
+];
 
 interface EmailEditorProps {
   companyId: string;
@@ -95,10 +76,25 @@ export function EmailEditor({
   const [target, setTarget] = useState<'company' | 'patient'>('company');
   const [selectedSpitch, setSelectedSpitch] = useState<Spitch | null>(null);
   const [subject, setSubject] = useState('');
-  const [htmlBody, setHtmlBody] = useState('');
+  const [bodyHtml, setBodyHtml] = useState('');
+  const [signatureData, setSignatureData] = useState<SignatureData>(DEFAULT_SIGNATURE_DATA);
+
+  const htmlBody = useMemo(
+    () => (bodyHtml ? bodyHtml + buildSignatureHtml(signatureData) : ''),
+    [bodyHtml, signatureData],
+  );
+
   const [showConfirmation, setShowConfirmation] = useState(false);
   const [showNoFilesWarning, setShowNoFilesWarning] = useState(false);
   const [localFiles, setLocalFiles] = useState<File[]>([]);
+  const [isEditingBody, setIsEditingBody] = useState(false);
+  const editorRef = useRef<EmailBodyEditorHandle>(null);
+
+  const isClient = useSyncExternalStore(
+    () => () => {},
+    () => true,
+    () => false,
+  );
 
   // Determine recipients based on selected patients
   const recipientNames = Object.values(selectedPatients).map((s) => s.patientName);
@@ -139,23 +135,25 @@ export function EmailEditor({
   const handleSpitchSelect = useCallback((spitch: Spitch) => {
     setSelectedSpitch(spitch);
 
+    // Strip {{firma}} from the spitch body — signature is stored separately
+    // as structured data and rebuilt via buildSignatureHtml.
+    const bodyWithoutFirma = spitch.bodyHtml.replace(/\{\{firma\}\}/g, '');
+
     const interpolated = interpolateSpitch({
-      html: spitch.bodyHtml,
+      html: bodyWithoutFirma,
       subject: spitch.subject,
       companyName,
       patientNames: recipientNames,
       fileNames: selectedFiles.map((f) => f.name),
-      // Bug-fix wiring: forward the full patient + file data so the
-      // registry can resolve {{dni}} and {{nombrePaciente}} (read
-      // from `ctx.patients[0]`). Pass the default signature HTML
-      // as `firma` to resolve the placeholder for all areas.
-      firma: DEFAULT_SIGNATURE_HTML,
+      firma: '',
       patients,
       files: selectedFiles,
     });
 
     setSubject(interpolated.subject);
-    setHtmlBody(interpolated.html);
+    setBodyHtml(interpolated.html);
+    setSignatureData(DEFAULT_SIGNATURE_DATA);
+    editorRef.current?.loadHtml(interpolated.html);
   }, [companyName, recipientNames, selectedFiles, patients]);
 
   const handleToggle = useCallback(() => {
@@ -165,6 +163,10 @@ export function EmailEditor({
 
   const handleLocalAdd = useCallback((files: File[]) => {
     setLocalFiles((prev) => [...prev, ...files]);
+  }, []);
+
+  const handleSignatureChange = useCallback((field: keyof SignatureData, value: string) => {
+    setSignatureData((prev) => ({ ...prev, [field]: value }));
   }, []);
 
   const handleLocalRemove = useCallback((index: number) => {
@@ -332,33 +334,89 @@ export function EmailEditor({
           />
         </div>
 
-        {/* Body editor — collapsed by default, expanded on click */}
-        <details className="rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-900/30 group">
-          <summary className="cursor-pointer text-sm font-medium text-slate-700 dark:text-slate-200 px-3 py-2 flex items-center justify-between list-none select-none">
-            <span className="flex items-center gap-2">
-              <svg className="w-4 h-4 text-slate-400 dark:text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" />
-              </svg>
-              Editar HTML del cuerpo
-            </span>
-            <svg className="w-4 h-4 text-slate-400 group-open:rotate-180 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
-            </svg>
-          </summary>
-          <div className="px-3 pb-3 space-y-1.5">
-            <label htmlFor="email-body" className="text-xs font-medium text-slate-500 dark:text-slate-400 block">
-              Contenido del correo (HTML)
-            </label>
-            <textarea
-              id="email-body"
-              aria-label="Contenido del correo"
-              value={htmlBody}
-              onChange={(e) => setHtmlBody(e.target.value)}
-              className="w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-950 px-3 py-2 text-xs text-slate-700 dark:text-slate-300 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:border-sky-500 focus:ring-2 focus:ring-sky-200 dark:focus:ring-sky-900 outline-none transition-colors min-h-[160px] font-mono leading-relaxed"
-              placeholder="<p>Contenido del correo...</p>"
-            />
-          </div>
-        </details>
+        {/* Body preview / editor — toggle between read-only preview and BlockNote */}
+
+        <div className="space-y-1.5">
+          <label className="text-sm font-medium text-slate-700 dark:text-slate-200">
+            Cuerpo del correo
+          </label>
+
+          {isEditingBody ? (
+            <div className="space-y-3">
+              {/* BlockNote body editor */}
+              {isClient && (
+                <Suspense fallback={
+                  <div className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-4 text-sm text-slate-400">
+                    Cargando editor...
+                  </div>
+                }>
+                  <EmailBodyEditorLazy
+                    key="editing-body"
+                    initialHtml={bodyHtml}
+                    ref={editorRef}
+                    onChange={(html) => setBodyHtml(html)}
+                  />
+                </Suspense>
+              )}
+
+              {/* Signature editor — structured fields, rebuilt on "Hecho" */}
+              <div className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-4 space-y-3">
+                <h4 className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                  Firma
+                </h4>
+                {signatureFields.map(({ key, label }) => (
+                  <div key={key} className="space-y-0.5">
+                    <label className="text-[11px] font-medium text-slate-500 dark:text-slate-400">
+                      {label}
+                    </label>
+                    <input
+                      type="text"
+                      value={signatureData[key]}
+                      onChange={(e) => handleSignatureChange(key, e.target.value)}
+                      className="w-full rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-950 px-2.5 py-1.5 text-xs text-slate-800 dark:text-slate-200 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:border-sky-500 focus:ring-2 focus:ring-sky-200 dark:focus:ring-sky-900 outline-none transition-colors"
+                    />
+                  </div>
+                ))}
+              </div>
+
+              <button
+                onClick={() => setIsEditingBody(false)}
+                className="text-sm font-medium text-sky-600 hover:text-sky-700 cursor-pointer transition-colors"
+              >
+                Hecho
+              </button>
+            </div>
+          ) : (
+            <div className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 overflow-hidden">
+              {bodyHtml ? (
+                <>
+                  <div
+                    className="p-4 text-sm text-slate-700 dark:text-slate-200 prose prose-sm dark:prose-invert max-w-none"
+                    data-testid="body-preview"
+                    dangerouslySetInnerHTML={{ __html: bodyHtml }}
+                  />
+                  <div className="border-t border-slate-200 dark:border-slate-700 px-4 py-2 bg-slate-50 dark:bg-slate-900/50 flex justify-end">
+                    <button
+                      onClick={() => {
+                        setIsEditingBody(true);
+                      }}
+                      className="text-xs font-medium text-sky-600 hover:text-sky-700 cursor-pointer flex items-center gap-1 transition-colors"
+                    >
+                      <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                      </svg>
+                      Editar
+                    </button>
+                  </div>
+                </>
+              ) : (
+                <p className="p-4 text-sm text-slate-400 dark:text-slate-500 italic">
+                  Seleccione un spitch para previsualizar
+                </p>
+              )}
+            </div>
+          )}
+        </div>
 
         {/* Send button */}
         <button
