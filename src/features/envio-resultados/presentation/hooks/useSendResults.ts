@@ -22,6 +22,10 @@ export interface UseSendResultsArgs {
    * (parallel lists: `selectedFiles` for display, `fileRefs` for send).
    */
   fileRefs: SelectedFileRef[];
+  /** Full patient name for ready-file rename in email attachment. */
+  nombreCompleto: string;
+  /** Destino (DesDes / proyecto) for ready-file rename in email attachment. */
+  destino: string;
 }
 
 export interface UseSendResultsReturn {
@@ -54,6 +58,8 @@ export function useSendResults(args: UseSendResultsArgs): UseSendResultsReturn {
       // share via `IFileRepository.read`. No bytes are constructed on
       // the client — the prior fake-blob loop is removed.
       formData.append('fileRefs', JSON.stringify(args.fileRefs));
+      formData.append('nombreCompleto', args.nombreCompleto);
+      formData.append('destino', args.destino);
 
       const response = await fetch('/api/consolidados/send-results', {
         method: 'POST',

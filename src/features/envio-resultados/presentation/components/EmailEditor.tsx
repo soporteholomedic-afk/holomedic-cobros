@@ -62,6 +62,10 @@ interface EmailEditorProps {
    * `emailViewData.fileRefs`.
    */
   fileRefs?: SelectedFileRef[];
+  /** Full patient name for ready-file rename in delivery. */
+  nombreCompleto?: string;
+  /** Destino (DesDes / proyecto) for ready-file rename in delivery. */
+  destino?: string;
 }
 
 export function EmailEditor({
@@ -79,6 +83,8 @@ export function EmailEditor({
   // derived locally for `AttachmentList` via `selectedFiles`; the
   // two stay in parallel.
   fileRefs = [],
+  nombreCompleto = '',
+  destino = '',
 }: EmailEditorProps) {
   // Reference the intentionally-unused prop to satisfy the linter.
   // Documented contract: the parent passes `companyId` for future
@@ -123,6 +129,8 @@ export function EmailEditor({
     subject,
     html: htmlBody,
     fileRefs,
+    nombreCompleto,
+    destino,
   });
 
   const handleSpitchSelect = useCallback((spitch: Spitch) => {

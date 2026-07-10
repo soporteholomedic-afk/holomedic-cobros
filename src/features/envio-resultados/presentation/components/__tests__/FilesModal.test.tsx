@@ -113,6 +113,7 @@ describe('FilesModal', () => {
         idAten="AT-001"
         nombrePaciente="Juan Pérez"
         empresa="Acme"
+        destino=""
         onClose={vi.fn()}
       />,
     );
@@ -142,14 +143,16 @@ describe('FilesModal', () => {
         idAten="AT-001"
         nombrePaciente="Juan Pérez"
         empresa="Acme"
+        destino=""
         onClose={vi.fn()}
       />,
     );
 
     selectAllTab();
     expect(screen.getByText(/No hay archivos para esta ficha/)).toBeInTheDocument();
-    const downloadAll = screen.getByRole('link', { name: /Descargar todos/ });
-    expect(downloadAll).toHaveAttribute('aria-disabled', 'true');
+    const downloadBtn = screen.getByTestId('files-modal-download-selected');
+    expect(downloadBtn).toBeDisabled();
+    expect(downloadBtn).toHaveTextContent('Descargar seleccionados (0)');
   });
 
   it('renders the error state with a Reintentar button', () => {
@@ -170,6 +173,7 @@ describe('FilesModal', () => {
         idAten="AT-001"
         nombrePaciente="Juan Pérez"
         empresa="Acme"
+        destino=""
         onClose={vi.fn()}
       />,
     );
@@ -197,6 +201,7 @@ describe('FilesModal', () => {
         idAten="AT-001"
         nombrePaciente="Juan Pérez"
         empresa="Acme Corp"
+        destino=""
         onClose={vi.fn()}
       />,
     );
@@ -219,7 +224,7 @@ describe('FilesModal', () => {
     );
   });
 
-  it('renders the bulk-download link with the sanitized zip filename query string', () => {
+  it('renders the download-selected button with the correct label and is enabled when files are selected', () => {
     mockUseFileTree.mockReturnValue({
       viewState: readyView('', sampleFiles),
       selectionState: { kind: 'none' },
@@ -227,6 +232,14 @@ describe('FilesModal', () => {
       goUp: vi.fn(),
       selectFile: vi.fn(),
       closeSelection: vi.fn(),
+      refetch: vi.fn(),
+    });
+    // Ready pane with files so the pre-check populates selectedFilesMap
+    mockUseReadyFiles.mockReturnValue({
+      state: {
+        kind: 'ready',
+        files: sampleFiles,
+      },
       refetch: vi.fn(),
     });
 
@@ -237,18 +250,15 @@ describe('FilesModal', () => {
         idAten="AT-001"
         nombrePaciente="Juan Pérez"
         empresa="Acme Corp"
+        destino=""
         onClose={vi.fn()}
       />,
     );
 
-    const downloadAll = screen.getByRole('link', { name: /Descargar todos/ });
-    const href = downloadAll.getAttribute('href') ?? '';
-    expect(href.startsWith('/api/files/download-all?')).toBe(true);
-    expect(href).toContain('ruc=RUC-1');
-    expect(href).toContain('dni=12345678');
-    expect(href).toContain('idAten=AT-001');
-    expect(href).toContain('nombrePaciente=Juan');
-    expect(href).toContain('empresa=Acme');
+    const downloadBtn = screen.getByTestId('files-modal-download-selected');
+    expect(downloadBtn).toBeInTheDocument();
+    expect(downloadBtn).toHaveTextContent('Descargar seleccionados (2)');
+    expect(downloadBtn).not.toBeDisabled();
   });
 
   it('shows the back arrow in a subfolder and calls onGoUp when clicked', () => {
@@ -270,6 +280,7 @@ describe('FilesModal', () => {
         idAten="AT-001"
         nombrePaciente="Juan Pérez"
         empresa="Acme Corp"
+        destino=""
         onClose={vi.fn()}
       />,
     );
@@ -298,6 +309,7 @@ describe('FilesModal', () => {
         idAten="AT-001"
         nombrePaciente="Juan Pérez"
         empresa="Acme Corp"
+        destino=""
         onClose={vi.fn()}
       />,
     );
@@ -325,6 +337,7 @@ describe('FilesModal', () => {
         idAten="AT-001"
         nombrePaciente="Juan Pérez"
         empresa="Acme Corp"
+        destino=""
         onClose={onClose}
       />,
     );
@@ -352,6 +365,7 @@ describe('FilesModal', () => {
         idAten="AT-001"
         nombrePaciente="Juan Pérez"
         empresa="Acme Corp"
+        destino=""
         onClose={onClose}
       />,
     );
@@ -379,6 +393,7 @@ describe('FilesModal', () => {
         idAten="AT-001"
         nombrePaciente="Juan Pérez"
         empresa="Acme Corp"
+        destino=""
         onClose={onClose}
       />,
     );
@@ -408,6 +423,7 @@ describe('FilesModal', () => {
         idAten="AT-001"
         nombrePaciente="Juan Pérez"
         empresa="Acme"
+        destino=""
         onClose={vi.fn()}
       />,
     );
@@ -437,6 +453,7 @@ describe('FilesModal', () => {
         idAten="AT-001"
         nombrePaciente="Juan Pérez"
         empresa="Acme Corp"
+        destino=""
         onClose={vi.fn()}
       />,
     );
@@ -470,6 +487,7 @@ describe('FilesModal', () => {
         idAten="AT-001"
         nombrePaciente="Juan Pérez"
         empresa="Acme Corp"
+        destino=""
         onClose={vi.fn()}
       />,
     );
@@ -507,6 +525,7 @@ describe('FilesModal', () => {
         idAten="AT-001"
         nombrePaciente="Juan Pérez"
         empresa="Acme Corp"
+        destino=""
         onClose={vi.fn()}
       />,
     );
@@ -551,6 +570,7 @@ describe('FilesModal', () => {
         idAten="AT-001"
         nombrePaciente="Juan Pérez"
         empresa="Acme Corp"
+        destino=""
         onClose={onClose}
       />,
     );
@@ -595,6 +615,7 @@ describe('FilesModal', () => {
         idAten="AT-001"
         nombrePaciente="Juan Pérez"
         empresa="Acme Corp"
+        destino=""
         onClose={vi.fn()}
       />,
     );
@@ -628,6 +649,7 @@ describe('FilesModal', () => {
         idAten="AT-001"
         nombrePaciente="Juan Pérez"
         empresa="Acme Corp"
+        destino=""
         onClose={vi.fn()}
       />,
     );
@@ -660,6 +682,7 @@ describe('FilesModal', () => {
         idAten="AT-001"
         nombrePaciente="Juan Pérez"
         empresa="Acme Corp"
+        destino=""
         onClose={vi.fn()}
       />,
     );
@@ -694,6 +717,7 @@ describe('FilesModal', () => {
         idAten="AT-001"
         nombrePaciente="Juan Pérez"
         empresa="Acme Corp"
+        destino=""
         onClose={vi.fn()}
       />,
     );
@@ -735,6 +759,7 @@ describe('FilesModal', () => {
         idAten="AT-001"
         nombrePaciente="Juan Pérez"
         empresa="Acme Corp"
+        destino=""
         onClose={vi.fn()}
       />,
     );
@@ -781,6 +806,7 @@ describe('FilesModal', () => {
         idAten="AT-001"
         nombrePaciente="Juan Pérez"
         empresa="Acme Corp"
+        destino=""
         onClose={vi.fn()}
       />,
     );
@@ -809,6 +835,7 @@ describe('FilesModal', () => {
         idAten="AT-001"
         nombrePaciente="Juan Pérez"
         empresa="Acme Corp"
+        destino=""
         onClose={vi.fn()}
       />,
     );
@@ -852,6 +879,7 @@ describe('FilesModal', () => {
         idAten="AT-001"
         nombrePaciente="Juan Pérez"
         empresa="Acme Corp"
+        destino=""
         onClose={vi.fn()}
       />,
     );
@@ -884,6 +912,7 @@ describe('FilesModal', () => {
         idAten="AT-001"
         nombrePaciente="Juan Pérez"
         empresa="Acme Corp"
+        destino=""
         onClose={vi.fn()}
       />,
     );
@@ -911,6 +940,7 @@ describe('FilesModal', () => {
         idAten="AT-001"
         nombrePaciente="Juan Pérez"
         empresa="Acme Corp"
+        destino=""
         onClose={vi.fn()}
       />,
     );
@@ -950,6 +980,7 @@ describe('FilesModal', () => {
         idAten="AT-001"
         nombrePaciente="Juan Pérez"
         empresa="Acme Corp"
+        destino=""
         onClose={vi.fn()}
       />,
     );
@@ -990,6 +1021,7 @@ describe('FilesModal', () => {
         idAten="AT-001"
         nombrePaciente="Juan Pérez"
         empresa="Acme Corp"
+        destino=""
         onClose={vi.fn()}
       />,
     );
@@ -1029,6 +1061,7 @@ describe('FilesModal', () => {
         idAten="AT-001"
         nombrePaciente="Juan Pérez"
         empresa="Acme Corp"
+        destino=""
         onClose={vi.fn()}
       />,
     );
@@ -1084,6 +1117,7 @@ describe('FilesModal', () => {
         idAten="AT-001"
         nombrePaciente="Juan Pérez"
         empresa="Acme Corp"
+        destino=""
         onClose={vi.fn()}
         onSend={onSend}
       />,
@@ -1128,6 +1162,7 @@ describe('FilesModal', () => {
         idAten="AT-001"
         nombrePaciente="Juan Pérez"
         empresa="Acme Corp"
+        destino=""
         onClose={vi.fn()}
       />,
     );
@@ -1163,6 +1198,7 @@ describe('FilesModal', () => {
         idAten="AT-001"
         nombrePaciente="Juan Pérez"
         empresa="Acme Corp"
+        destino=""
         onClose={vi.fn()}
       />,
     );
@@ -1180,6 +1216,7 @@ describe('FilesModal', () => {
         idAten="AT-001"
         nombrePaciente="Juan Pérez"
         empresa="Acme Corp"
+        destino=""
         onClose={vi.fn()}
       />,
     );
@@ -1215,6 +1252,7 @@ describe('FilesModal', () => {
         idAten="AT-001"
         nombrePaciente="Juan Pérez"
         empresa="Acme Corp"
+        destino=""
         onClose={vi.fn()}
       />,
     );
@@ -1245,6 +1283,7 @@ describe('FilesModal', () => {
         idAten="AT-001"
         nombrePaciente="Juan Pérez"
         empresa="Acme"
+        destino=""
         onClose={vi.fn()}
       />,
     );
@@ -1272,6 +1311,7 @@ describe('FilesModal', () => {
         idAten="AT-001"
         nombrePaciente="Juan Pérez"
         empresa="Acme"
+        destino=""
         fecAte="17/06/2026"
         onClose={vi.fn()}
       />,
@@ -1306,6 +1346,7 @@ describe('FilesModal', () => {
         idAten="AT-001"
         nombrePaciente="Juan Pérez"
         empresa="Acme"
+        destino=""
         fecAte="17/06/2026"
         onClose={vi.fn()}
       />,
@@ -1351,6 +1392,7 @@ describe('FilesModal', () => {
         idAten="AT-001"
         nombrePaciente="Juan Pérez"
         empresa="Acme Corp"
+        destino=""
         onClose={vi.fn()}
       />,
     );

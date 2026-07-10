@@ -40,13 +40,18 @@ export const DEFAULT_INC_EXP = 1;
 
 /**
  * Absolute path to the `SIGLA.PdfCli.exe` binary on the Windows host
- * that runs the Next.js server. Falls back to `SIGLA.PdfCli.exe`
- * alongside the project root (resolved via `process.cwd()`).
+ * that runs the Next.js server.
+ *
+ * Default: the `sigla-cli/` subdirectory (see AGENTS.md "SIGLA.Cli Sync").
+ * The EXE requires `Negocio.dll`, `Entidad.dll`, `Datos.dll` and the
+ * `rpt/` folder at the same level — they are copied together by the
+ * deploy process, not as a single orphaned EXE.
+ *
  * Set `PDFCLI_EXE_PATH` to override.
  */
 export const CLI_EXE_PATH =
   process.env.PDFCLI_EXE_PATH ??
-  path.resolve(process.cwd(), 'SIGLA.PdfCli.exe');
+  path.resolve(process.cwd(), 'sigla-cli', 'SIGLA.PdfCli.exe');
 
 /**
  * Timeout for a single CLI invocation, in milliseconds. Crystal

@@ -10,6 +10,7 @@ import { FilesTabs, type FilesTab } from '@/features/envio-resultados/presentati
 import { useFileTree } from '@/features/envio-resultados/presentation/hooks/useFileTree';
 import { useReadyFiles } from '@/features/envio-resultados/presentation/hooks/useReadyFiles';
 import type { FileNode } from '@/features/envio-resultados/domain/ports';
+import type { SelectedFileRef } from '@/features/envio-resultados/domain/entities';
 
 /** Folder the "Listo para enviar" tab scans. Mirrors useReadyFiles. */
 const READY_FOLDER = 'LEGAJOS';
@@ -23,6 +24,7 @@ export interface FilesModalProps {
   idAten: string;
   nombrePaciente: string;
   empresa: string;
+  destino: string;
   /**
    * Date the patient was attended (date-only, `dd/MM/yyyy`). Sourced
    * from `UnifiedFicha.fecAte` and forwarded to the lookup SP
@@ -73,6 +75,7 @@ export function FilesModal({
   idAten,
   nombrePaciente,
   empresa,
+  destino,
   // `fecAte` is plumbed through to `FilesGeneratePane`, which uses
   // it as the `fecAte` query param on the lookup SP. PR-2 wires the
   // consumer; the prop was added in PR-1.
@@ -189,17 +192,49 @@ export function FilesModal({
 
   const headerTitle = `Archivos — ${nombrePaciente || dni}`;
 
-  const downloadAllHref =
-    `/api/files/download-all?` +
-    `ruc=${encodeURIComponent(ruc)}&` +
-    `dni=${encodeURIComponent(dni)}&` +
-    `idAten=${encodeURIComponent(idAten)}&` +
-    `nombrePaciente=${encodeURIComponent(nombrePaciente)}&` +
-    `empresa=${encodeURIComponent(empresa)}`;
-
-  const hasFiles = viewState.kind === 'ready' && viewState.nodes.some((n) => n.kind === 'file');
-
   const toggleMaximize = (): void => setIsMaximized((m) => !m);
+
+  const handleDownloadSelected = useCallback(async (): Promise<void> => {
+    if (selectedFilesMap.size === 0) return;
+    setZipInFlight(true);
+    try {
+      const formData = new FormData();
+      formData.append('ruc', ruc);
+      formData.append('dni', dni);
+      formData.append('idAten', idAten);
+      formData.append('nombrePaciente', nombrePaciente);
+      formData.append('empresa', empresa);
+      formData.append('destino', destino);
+      const fileRefs: SelectedFileRef[] = Array.from(selectedFilesMap.entries()).map(([key]) => {
+        const idx = key.indexOf('::');
+        const path = idx < 0 ? '' : key.slice(0, idx);
+        const name = idx < 0 ? key : key.slice(idx + 2);
+        return { ruc, dni, idAten, path, name };
+      });
+      formData.append('fileRefs', JSON.stringify(fileRefs));
+
+      const response = await fetch('/api/files/download-all', { method: 'POST', body: formData });
+      if (!response.ok) {
+        console.error('[FilesModal] download-selected error', { status: response.status });
+        return;
+      }
+      const disposition = response.headers.get('Content-Disposition') ?? '';
+      const filename = disposition.match(/filename="(.+?)"/)?.[1] ?? 'descarga.zip';
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error('[FilesModal] download-selected error', err);
+    } finally {
+      setZipInFlight(false);
+    }
+  }, [selectedFilesMap, ruc, dni, idAten, nombrePaciente, empresa, destino]);
 
   // Selection from the ready pane: stamp folderPath=LEGAJOS so the
   // preview / download URL targets that subfolder, NOT the patient root.
@@ -340,29 +375,20 @@ export function FilesModal({
             >
               Enviar ({selectedFilesMap.size})
             </button>
-            {hasFiles ? (
-              <a
-                href={downloadAllHref}
-                onClick={() => setZipInFlight(true)}
-                className={`px-6 py-2.5 rounded-xl text-sm font-bold text-white shadow-lg transition-all duration-300 ${
-                  zipInFlight
-                    ? 'bg-slate-400 cursor-wait'
-                    : 'bg-gradient-to-r from-sky-500 to-sky-600 hover:from-sky-600 hover:to-sky-700 shadow-sky-500/20 hover:scale-[1.03]'
-                }`}
-                aria-disabled={zipInFlight ? 'true' : 'false'}
-              >
-                {zipInFlight ? 'Generando zip...' : 'Descargar todos'}
-              </a>
-            ) : (
-              <a
-                href={downloadAllHref}
-                onClick={(e) => e.preventDefault()}
-                className="px-6 py-2.5 rounded-xl text-sm font-bold text-white bg-slate-300 dark:bg-slate-700 cursor-not-allowed"
-                aria-disabled="true"
-              >
-                Descargar todos
-              </a>
-            )}
+            <button
+              type="button"
+              onClick={handleDownloadSelected}
+              disabled={selectedFilesMap.size === 0 || zipInFlight}
+              aria-disabled={selectedFilesMap.size === 0 || zipInFlight ? 'true' : 'false'}
+              data-testid="files-modal-download-selected"
+              className={`px-6 py-2.5 rounded-xl text-sm font-bold text-white shadow-lg transition-all duration-300 ${
+                zipInFlight
+                  ? 'bg-slate-400 cursor-wait'
+                  : 'bg-gradient-to-r from-sky-500 to-sky-600 hover:from-sky-600 hover:to-sky-700 shadow-sky-500/20 hover:scale-[1.03]'
+              } disabled:bg-slate-300 disabled:cursor-not-allowed disabled:shadow-none`}
+            >
+              {zipInFlight ? `Generando zip...` : `Descargar seleccionados (${selectedFilesMap.size})`}
+            </button>
           </div>
         </div>
       </div>

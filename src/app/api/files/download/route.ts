@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getFileRepository } from '@/features/envio-resultados/infrastructure/files/getFileRepository';
 import { sanitizeDownloadName, sanitizeFolderPath } from '@/lib/sanitize-filename';
+import { renameReadyFile } from '@/features/envio-resultados/domain/ready-files/renameReadyFile';
 
 /** Minimal content-type lookup by extension. */
 function mimeFromExt(name: string): string {
@@ -55,6 +56,8 @@ export async function GET(request: Request): Promise<Response> {
   const idAten = searchParams.get('idAten')?.trim() ?? '';
   const rawPath = searchParams.get('path') ?? '';
   const rawName = searchParams.get('filename') ?? '';
+  const nombreCompleto = searchParams.get('nombreCompleto') ?? '';
+  const destino = searchParams.get('destino') ?? '';
 
   if (!ruc || !dni || !idAten || !rawName) {
     return NextResponse.json(
@@ -85,12 +88,14 @@ export async function GET(request: Request): Promise<Response> {
     return NextResponse.json({ error: 'filename inválido.' }, { status: 400 });
   }
 
+  const deliveryName = renameReadyFile({ rawName: safe, nombreCompleto, destino });
+
   try {
     const stream = await getFileRepository().read(ruc, dni, idAten, safePath, safe);
     return new Response(stream as unknown as ReadableStream, {
       headers: {
-        'Content-Type': mimeFromExt(safe),
-        'Content-Disposition': `attachment; filename="${safe.replace(/"/g, '')}"`,
+        'Content-Type': mimeFromExt(deliveryName),
+        'Content-Disposition': `attachment; filename="${deliveryName.replace(/"/g, '')}"`,
       },
     });
   } catch (err) {

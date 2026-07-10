@@ -50,6 +50,8 @@ const DEFAULT_PARAMS = {
   subject: 'Resultados',
   html: '<p>Adjuntos</p>',
   fileRefs: REFS_OK,
+  nombreCompleto: '',
+  destino: '',
 };
 
 beforeEach(() => {
@@ -160,6 +162,8 @@ describe('SendResultsUseCase (PR #2 — file resolver + byte-equal)', () => {
       subject: 'Subject here',
       html: '<p>body</p>',
       fileRefs: [REFS_OK[0]!],
+      nombreCompleto: '',
+      destino: '',
     });
 
     const call = (mockEmail.sendWithAttachments as unknown as ReturnType<typeof vi.fn>).mock

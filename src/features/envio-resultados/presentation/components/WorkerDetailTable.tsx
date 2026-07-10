@@ -256,6 +256,7 @@ export function WorkerDetailTable({ companyName, fechaInicio, fechaFin }: Worker
               idAten={ficha?.idAten ?? ''}
               nombrePaciente={person.nombre}
               empresa={person.empresa}
+              destino={ficha?.proyecto ?? ''}
               // PR-1 — forward fecAte from the unified ficha so the
               // future lookup SP can scope the query to the same day.
               // `''` for worker-sourced fichas (no order row).

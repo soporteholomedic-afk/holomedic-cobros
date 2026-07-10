@@ -39,6 +39,10 @@ export interface EmailViewData {
    * wire-shape the route consumes in PR #2.
    */
   fileRefs: SelectedFileRef[];
+  /** Full patient name for ready-file rename in delivery. */
+  nombreCompleto: string;
+  /** Destino (DesDes / proyecto) for ready-file rename in delivery. */
+  destino: string;
 }
 
 /**
@@ -84,6 +88,8 @@ export function emailViewDataFromFiles(
     };
   });
 
+  const destino = ficha?.proyecto ?? person.proyecto ?? '';
+
   return {
     companyId,
     companyName,
@@ -103,5 +109,7 @@ export function emailViewDataFromFiles(
       },
     ],
     fileRefs,
+    nombreCompleto: person.nombre,
+    destino,
   };
 }

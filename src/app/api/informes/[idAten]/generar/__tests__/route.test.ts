@@ -164,6 +164,20 @@ function twoTransientRowsManifestJson(): string {
   });
 }
 
+/** A manifest whose failed row has the transient error in the `error` field (like the real CLI emits). */
+function transientManifestJsonErrorField(): string {
+  return JSON.stringify({
+    exitCode: 0,
+    rows: [{
+      idePMe: 390417,
+      arcPla: 'CERTIFICADO APTITUD - METRO LIMA 2',
+      status: 'failed',
+      reason: null,
+      error: TRANSIENT_REASON,
+    }],
+  });
+}
+
 /** A clean manifest with one success row and zero failed rows. */
 function cleanManifestJson(): string {
   return JSON.stringify({
@@ -449,7 +463,7 @@ describe('POST /api/informes/[idAten]/generar', () => {
     expect(mockExecFile).not.toHaveBeenCalled();
   });
 
-  // ---- Transient-auth retry tests (T5–T10) ----
+  // ---- Transient-auth retry tests (T5–T11) ----
 
   it('T5: retries once and succeeds when attempt 1 has a transient auth error', async () => {
     vi.useFakeTimers();
@@ -565,6 +579,29 @@ describe('POST /api/informes/[idAten]/generar', () => {
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body.summary.retries).toBe(1);
+    expect(mockExecFile).toHaveBeenCalledTimes(2);
+  });
+
+  it('T11: retries when the transient error is in the `error` field (CLI manifest spec mismatch)', async () => {
+    vi.useFakeTimers();
+    mockReadFile
+      .mockResolvedValueOnce(transientManifestJsonErrorField())
+      .mockResolvedValueOnce(cleanManifestJson());
+
+    const { POST } = await import('../route');
+    const routePromise = POST(buildRequest(validBody()), {
+      params: Promise.resolve({ idAten: '012110021' }),
+    });
+
+    await vi.advanceTimersByTimeAsync(2000);
+
+    const res = await routePromise;
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.summary.retries).toBe(1);
+    expect(body.summary.generated).toBe(1);
+    expect(body.summary.failed).toBe(0);
+    expect(body.manifest[0].status).toBe('success');
     expect(mockExecFile).toHaveBeenCalledTimes(2);
   });
 

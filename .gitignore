@@ -34,6 +34,10 @@ yarn-error.log*
 .env*
 !.env*.example
 
+# SIGLA.PdfCli binaries (compiled .NET, deployed via robocopy)
+/sigla-cli
+/SIGLA.PdfCli.exe
+
 # vercel
 .vercel
 

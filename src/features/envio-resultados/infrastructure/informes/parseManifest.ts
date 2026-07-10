@@ -12,6 +12,7 @@ interface RawManifestRow {
   file?: unknown;
   status?: unknown;
   reason?: unknown;
+  error?: unknown;
 }
 
 const VALID_STATUSES: ReadonlySet<ManifestRowStatus> = new Set([
@@ -65,7 +66,7 @@ function parseRow(raw: unknown): ManifestRow | null {
     arcPla: toStringOrUndefined(r.arcPla),
     file: toStringOrUndefined(r.file),
     status: toStatusOrError(r.status),
-    reason: toStringOrUndefined(r.reason),
+    reason: toStringOrUndefined(r.reason) ?? toStringOrUndefined(r.error),
   };
 }
 

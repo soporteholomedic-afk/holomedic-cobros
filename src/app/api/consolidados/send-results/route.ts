@@ -106,6 +106,8 @@ export async function POST(request: Request): Promise<NextResponse<ApiResponse>>
     const cc = parseCommaSeparated(formData.get('cc') as string | null);
     const subject = formData.get('subject') as string | null;
     const html = formData.get('html') as string | null;
+    const nombreCompleto = (formData.get('nombreCompleto') as string | null) ?? '';
+    const destino = (formData.get('destino') as string | null) ?? '';
 
     if (!to || to.length === 0) {
       return buildError(
@@ -167,6 +169,8 @@ export async function POST(request: Request): Promise<NextResponse<ApiResponse>>
       subject,
       html,
       fileRefs: parsed,
+      nombreCompleto,
+      destino,
     });
 
     if (result.success) {

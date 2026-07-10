@@ -53,6 +53,7 @@ function ConsolidadosContent() {
     idAten: string;
     nombrePaciente: string;
     empresa: string;
+    proyecto: string;
     fecAte?: string;
   } | null>(null);
   const [loadingPatientId, setLoadingPatientId] = useState<string | null>(null);
@@ -121,6 +122,7 @@ function ConsolidadosContent() {
           idAten: matchingOrder.IdAten,
           nombrePaciente: row.Pacien,
           empresa: row.NomCom,
+          proyecto: row.DesDes,
           fecAte: normalizeFecAte(matchingOrder.FecAte),
         });
       } else {
@@ -149,7 +151,7 @@ function ConsolidadosContent() {
         nombre: modalState.nombrePaciente,
         empresa: modalState.empresa,
         tipoExamen: '',
-        proyecto: '',
+        proyecto: modalState.proyecto,
         condic: '',
         fichas: [],
       };
@@ -158,7 +160,7 @@ function ConsolidadosContent() {
         idAten: modalState.idAten,
         nroRuc: modalState.ruc,
         nomCFa: '',
-        proyecto: '',
+        proyecto: modalState.proyecto,
         tipoExamen: '',
         condic: '',
         fecAte: modalState.fecAte ?? '',
@@ -287,6 +289,7 @@ function ConsolidadosContent() {
           idAten={modalState.idAten}
           nombrePaciente={modalState.nombrePaciente}
           empresa={modalState.empresa}
+          destino={modalState.proyecto}
           fecAte={modalState.fecAte}
           onClose={closeFilesModal}
           onSend={handleSendFromModal}

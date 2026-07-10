@@ -1,6 +1,7 @@
 import type { IEmailService, IFileRepository } from '../domain/ports';
 import type { EmailAttachment, SelectedFileRef } from '../domain/entities';
 import { sanitizeDownloadName, sanitizeFolderPath } from '@/lib/sanitize-filename';
+import { renameReadyFile } from '../domain/ready-files/renameReadyFile';
 
 // ---- Limits (must match the route's contract) ----
 
@@ -32,6 +33,8 @@ export interface SendResultsParams {
   subject: string;
   html: string;
   fileRefs: SelectedFileRef[];
+  nombreCompleto: string;
+  destino: string;
 }
 
 // ---- streamToBuffer (exported for testability) ----
@@ -170,7 +173,12 @@ export class SendResultsUseCase {
 
       try {
         const buffer = await streamToBuffer(stream, MAX_FILE_BYTES);
-        attachments.push({ filename: safeName, content: buffer });
+        const deliveryName = renameReadyFile({
+          rawName: safeName,
+          nombreCompleto: params.nombreCompleto,
+          destino: params.destino,
+        });
+        attachments.push({ filename: deliveryName, content: buffer });
       } catch (err) {
         return {
           success: false,

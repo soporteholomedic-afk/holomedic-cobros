@@ -74,6 +74,36 @@ describe('parseManifest', () => {
     expect(result.manifest[0].status).toBe('error');
   });
 
+  it('falls back to the error field when reason is absent (CLI manifest spec mismatch)', () => {
+    const stdout = JSON.stringify({
+      rows: [{
+        idePMe: 390417,
+        arcPla: 'CERTIFICADO APTITUD - METRO LIMA 2',
+        status: 'failed',
+        reason: null,
+        error: 'El sistema no puede ponerse en contacto con un controlador de dominio',
+      }],
+    });
+    const result = parseManifest(stdout, 0);
+    expect(result.manifest).toHaveLength(1);
+    expect(result.manifest[0].reason).toBe(
+      'El sistema no puede ponerse en contacto con un controlador de dominio',
+    );
+  });
+
+  it('prefers reason over error when both are present', () => {
+    const stdout = JSON.stringify({
+      rows: [{
+        idePMe: 390417,
+        status: 'failed',
+        reason: 'explicit reason',
+        error: 'ignored error text',
+      }],
+    });
+    const result = parseManifest(stdout, 0);
+    expect(result.manifest[0].reason).toBe('explicit reason');
+  });
+
   it('drops non-object rows without throwing', () => {
     const stdout = JSON.stringify({
       rows: [null, 42, 'string', { idePMe: 1, status: 'success' }],

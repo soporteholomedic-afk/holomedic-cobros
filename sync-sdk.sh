@@ -24,6 +24,7 @@ tar --exclude='node_modules' \
     --exclude='.pr-*.md' \
     --exclude='tsconfig.tsbuildinfo' \
     --exclude='*.xlsx' \
+    --exclude='sigla-cli' \
     -cf - . | tar -xf - -C "$SDK_DIR"
 
 echo "[OK] SDK synced to $SDK_DIR"

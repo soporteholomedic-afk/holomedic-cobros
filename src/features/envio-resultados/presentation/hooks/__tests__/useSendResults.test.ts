@@ -23,6 +23,8 @@ const defaultArgs = {
   subject: 'Test Subject',
   html: '<p>Test</p>',
   fileRefs: defaultFileRefs,
+  nombreCompleto: '',
+  destino: '',
 };
 
 beforeEach(() => {
