@@ -7,10 +7,11 @@ import os from 'os';
 import { randomUUID } from 'crypto';
 import archiver from 'archiver';
 import { GeneratePdfsRequest } from '@/types/generate-pdfs';
+import { CLI_EXE_PATH } from '@/features/envio-resultados/infrastructure/informes/constants';
 
 const execFileAsync = promisify(execFile);
 
-const EXE_PATH = 'C:\\Users\\soporte\\Desktop\\SIGLA\\SIGLA.PdfCli\\bin\\Debug\\SIGLA.PdfCli.exe';
+const EXE_PATH = CLI_EXE_PATH;
 const DEFAULT_TIMEOUT_MS = 120_000;
 
 function sanitizeIdAten(value: unknown): string {

@@ -40,14 +40,13 @@ export const DEFAULT_INC_EXP = 1;
 
 /**
  * Absolute path to the `SIGLA.PdfCli.exe` binary on the Windows host
- * that runs the Next.js server. The default points to the dev build
- * on the operator's desktop — production hosts MUST set the
- * `PDFCLI_EXE_PATH` env var to the deployed install location
- * (legacy: `C:\Program Files\SIGLA\PdfCli\SIGLA.PdfCli.exe`).
+ * that runs the Next.js server. Falls back to `SIGLA.PdfCli.exe`
+ * alongside the project root (resolved via `process.cwd()`).
+ * Set `PDFCLI_EXE_PATH` to override.
  */
 export const CLI_EXE_PATH =
   process.env.PDFCLI_EXE_PATH ??
-  'C:\\Users\\soporte\\Desktop\\SIGLA\\SIGLA.PdfCli\\bin\\Debug\\SIGLA.PdfCli.exe';
+  path.resolve(process.cwd(), 'SIGLA.PdfCli.exe');
 
 /**
  * Timeout for a single CLI invocation, in milliseconds. Crystal

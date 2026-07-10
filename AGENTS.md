@@ -70,6 +70,18 @@
 
 - Write and execute all terminal commands specifically for PowerShell compatibility
 
+## SDK Sync
+
+After every code change (especially to API routes or constants), sync the project to the Windows SDK:
+
+```bash
+./sync-sdk.sh
+```
+
+This copies the source (excluding `node_modules`, `.next`, `.git`, etc.) to `//172.16.10.12/instaladores/HOLOMEDICSDK/` mounted at `/mnt/instaladores/HOLOMEDICSDK/`.
+
+The sync is **always required** before running the app from the SDK on Windows.
+
 ## External Workspace Permissions
 
 By explicit user instruction, this agent is permitted to read and write outside the default project root at the following paths:
