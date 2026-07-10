@@ -121,3 +121,21 @@ export const PDFCLI_RETRY_BACKOFF_MS = [2000, 4000] as const;
 export function isPdfcliRetryTransientAuthEnabled(): boolean {
   return process.env.PDFCLI_RETRY_TRANSIENT_AUTH !== '0';
 }
+
+// ---------------------------------------------------------------------------
+// CLI rendering capability — only these IdePMe values are supported by the
+// `SIGLA.PdfCli.exe` binary. Any exam not in this set will be shown
+// disabled in the UI with a "No soportado" badge (see FilesGeneratePane
+// Checklist). Sourced from the CLI team 2026-07-10.
+// ---------------------------------------------------------------------------
+
+export const SUPPORTED_IDEPME: ReadonlySet<number> = new Set<number>([
+  39053,   // EVALUACION OFTALMOLOGICA
+  39056,   // EVALUACION CARDIOVASCULAR
+  39183,   // CERTIFICADO MEDICO DE APTITUD (GEMO Y ANEXO 16)
+  39198,   // ESPIROMETRIA
+  39278,   // CUESTIONARIO ESPIROMETRIA
+  390036,  // ODONTOGRAMA VER. 2019
+  390417,  // CERTIFICADO APTITUD - METRO LIMA 2 (CIME)
+  390423,  // EVALUACION AUDIOMETRIA - METRO 2 LIMA (CCM2L)
+]);

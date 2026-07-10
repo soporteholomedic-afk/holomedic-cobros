@@ -11,6 +11,7 @@ import {
   CLI_PASS,
   DEFAULT_EMI_AFI,
   DEFAULT_INC_EXP,
+  SUPPORTED_IDEPME,
 } from '@/features/envio-resultados/infrastructure/informes/constants';
 import { useInformeOrder } from '@/features/envio-resultados/presentation/hooks/useInformeOrder';
 import { usePlantillas } from '@/features/envio-resultados/presentation/hooks/usePlantillas';
@@ -223,6 +224,7 @@ export function FilesGeneratePane({
                 selected={selected}
                 onToggle={toggleIdePMe}
                 disabled={status === 'loading'}
+                supportedIdePMe={SUPPORTED_IDEPME}
               />
             )}
           </>
@@ -343,27 +345,37 @@ interface ChecklistProps {
   selected: ReadonlySet<number>;
   onToggle: (idePMe: number) => void;
   disabled: boolean;
+  supportedIdePMe: ReadonlySet<number>;
 }
-function Checklist({ items, selected, onToggle, disabled }: ChecklistProps): ReactElement {
+function Checklist({ items, selected, onToggle, disabled, supportedIdePMe }: ChecklistProps): ReactElement {
   return (
     <ul data-testid="files-generate-checklist" className="space-y-1.5">
       {items.map((item) => {
         const isSelected = selected.has(item.idePMe);
+        const isSupported = supportedIdePMe.has(item.idePMe);
+        const isDisabled = disabled || !isSupported;
         return (
           <li
             key={item.idePMe}
+            data-supported={isSupported ? 'true' : 'false'}
             className={
-              'flex items-center px-3 py-2 rounded-lg border ' +
+              'flex items-center px-3 py-2 rounded-lg border transition-opacity ' +
               (isSelected
                 ? 'border-emerald-200 dark:border-emerald-900/50 bg-emerald-50/40 dark:bg-emerald-950/20'
-                : 'border-slate-100 dark:border-slate-800')
+                : 'border-slate-100 dark:border-slate-800') +
+              (isDisabled ? ' opacity-50' : '')
             }
           >
-            <label className="flex items-center space-x-2 min-w-0 flex-1 cursor-pointer">
+            <label
+              className={
+                'flex items-center space-x-2 min-w-0 flex-1 ' +
+                (isDisabled ? 'cursor-not-allowed' : 'cursor-pointer')
+              }
+            >
               <input
                 type="checkbox"
                 checked={isSelected}
-                disabled={disabled}
+                disabled={isDisabled}
                 onChange={() => onToggle(item.idePMe)}
                 aria-label={`Seleccionar ${item.arcPla}`}
                 data-testid={`files-generate-checkbox-${item.idePMe}`}
@@ -378,7 +390,14 @@ function Checklist({ items, selected, onToggle, disabled }: ChecklistProps): Rea
               <span className="text-sm font-medium text-slate-800 dark:text-slate-200 truncate">
                 {item.arcPla}
               </span>
-              <span className="text-xs font-mono text-slate-400 flex-shrink-0">#{item.idePMe}</span>
+              <span className="text-xs font-mono text-slate-400 flex-shrink-0">
+                #{item.idePMe}
+              </span>
+              {!isSupported && (
+                <span className="text-[10px] font-semibold uppercase tracking-wider text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/30 px-1.5 py-0.5 rounded flex-shrink-0">
+                  No soportado
+                </span>
+              )}
             </label>
           </li>
         );
