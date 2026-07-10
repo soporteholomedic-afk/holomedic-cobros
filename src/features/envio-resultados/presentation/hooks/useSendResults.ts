@@ -22,6 +22,8 @@ export interface UseSendResultsArgs {
    * (parallel lists: `selectedFiles` for display, `fileRefs` for send).
    */
   fileRefs: SelectedFileRef[];
+  /** Local files dropped from the OS — appended as multipart File parts. */
+  localFiles?: File[];
   /** Full patient name for ready-file rename in email attachment. */
   nombreCompleto: string;
   /** Destino (DesDes / proyecto) for ready-file rename in email attachment. */
@@ -60,6 +62,11 @@ export function useSendResults(args: UseSendResultsArgs): UseSendResultsReturn {
       formData.append('fileRefs', JSON.stringify(args.fileRefs));
       formData.append('nombreCompleto', args.nombreCompleto);
       formData.append('destino', args.destino);
+      if (args.localFiles) {
+        for (const file of args.localFiles) {
+          formData.append('localFiles', file);
+        }
+      }
 
       const response = await fetch('/api/consolidados/send-results', {
         method: 'POST',
@@ -79,7 +86,7 @@ export function useSendResults(args: UseSendResultsArgs): UseSendResultsReturn {
     } finally {
       setIsSending(false);
     }
-  }, [args.to, args.cc, args.subject, args.html, args.fileRefs]);
+  }, [args.to, args.cc, args.subject, args.html, args.fileRefs, args.localFiles]);
 
   return {
     send,

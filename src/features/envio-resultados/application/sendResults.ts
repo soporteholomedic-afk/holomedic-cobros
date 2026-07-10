@@ -1,5 +1,5 @@
 import type { IEmailService, IFileRepository } from '../domain/ports';
-import type { EmailAttachment, SelectedFileRef } from '../domain/entities';
+import type { EmailAttachment, LocalAttachmentInput, SelectedFileRef } from '../domain/entities';
 import { sanitizeDownloadName, sanitizeFolderPath } from '@/lib/sanitize-filename';
 import { renameReadyFile } from '../domain/ready-files/renameReadyFile';
 
@@ -33,6 +33,9 @@ export interface SendResultsParams {
   subject: string;
   html: string;
   fileRefs: SelectedFileRef[];
+  /** Local files dropped from the OS. Merged into the same
+   *  `EmailAttachment[]` as the LAN `fileRefs` for dispatch. */
+  localAttachments?: LocalAttachmentInput[];
   nombreCompleto: string;
   destino: string;
 }
@@ -98,12 +101,14 @@ export class SendResultsUseCase {
   ) {}
 
   async execute(params: SendResultsParams): Promise<SendResultsResult> {
-    // ---- 1. Refs: empty + limit ----
-    if (params.fileRefs.length === 0) {
+    const hasLocalFiles = (params.localAttachments?.length ?? 0) > 0;
+
+    // ---- 1. Refs: at least one source ----
+    if (params.fileRefs.length === 0 && !hasLocalFiles) {
       return {
         success: false,
         code: 'VALIDATION_ERROR',
-        error: 'At least one fileRef is required',
+        error: 'At least one fileRef or local attachment is required',
       };
     }
     if (params.fileRefs.length > MAX_FILES) {
@@ -188,7 +193,26 @@ export class SendResultsUseCase {
       }
     }
 
-    // ---- 3. Dispatch ----
+    // ---- 3. Local attachments (already validated by route — no size/count cap) ----
+    for (const local of params.localAttachments ?? []) {
+      let safeName: string;
+      try {
+        safeName = sanitizeDownloadName(local.filename);
+      } catch (err) {
+        return {
+          success: false,
+          code: 'VALIDATION_ERROR',
+          error: `Invalid local filename: ${err instanceof Error ? err.message : 'unknown'}`,
+        };
+      }
+      attachments.push({
+        filename: safeName,
+        content: local.content,
+        contentType: local.contentType,
+      });
+    }
+
+    // ---- 4. Dispatch ----
     const result = await this.emailService.sendWithAttachments({
       to: params.to,
       ...(params.cc && params.cc.length > 0 ? { cc: params.cc } : {}),

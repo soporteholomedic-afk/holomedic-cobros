@@ -2,11 +2,15 @@ import { NextResponse } from 'next/server';
 import { SendResultsUseCase } from '@/features/envio-resultados/application/sendResults';
 import { getFileRepository } from '@/features/envio-resultados/infrastructure/files/getFileRepository';
 import { makeEmailService } from '@/features/envio-resultados/infrastructure/email/emailService';
-import type { SelectedFileRef } from '@/features/envio-resultados/domain/entities';
+import type { LocalAttachmentInput, SelectedFileRef } from '@/features/envio-resultados/domain/entities';
+import { sanitizeDownloadName } from '@/lib/sanitize-filename';
 
 // ---- Constants ----
 
 const MAX_FILES = 10;
+
+/** Total cumulative size cap for all local file attachments. */
+const MAX_LOCAL_BYTES_TOTAL = 50 * 1024 * 1024;
 
 // ---- Response types ----
 
@@ -123,52 +127,91 @@ export async function POST(request: Request): Promise<NextResponse<ApiResponse>>
       return buildError('VALIDATION_ERROR', '"html" is required', 400);
     }
 
-    // ---- 3. Parse + validate `fileRefs` JSON ----
+    // ---- 3. Parse + validate `fileRefs` JSON (optional when localFiles present) ----
     const fileRefsRaw = formData.get('fileRefs');
-    if (typeof fileRefsRaw !== 'string') {
-      return buildError('VALIDATION_ERROR', '"fileRefs" is required', 400);
-    }
-    let parsed: unknown;
-    try {
-      parsed = JSON.parse(fileRefsRaw);
-    } catch {
-      return buildError('VALIDATION_ERROR', '"fileRefs" must be valid JSON', 400);
-    }
-    if (!Array.isArray(parsed)) {
-      return buildError('VALIDATION_ERROR', '"fileRefs" must be an array', 400);
-    }
-    for (const ref of parsed) {
-      if (!isFileRefShape(ref)) {
-        return buildError(
-          'VALIDATION_ERROR',
-          'Each fileRef must have ruc, dni, idAten, path, name as strings',
-          400,
-        );
+    const localFilesRaw = formData.getAll('localFiles').filter((f): f is File => f instanceof File);
+    const hasLocalFiles = localFilesRaw.length > 0;
+
+    let fileRefsParsed: SelectedFileRef[] = [];
+
+    if (typeof fileRefsRaw === 'string') {
+      try {
+        const parsed: unknown = JSON.parse(fileRefsRaw);
+        if (!Array.isArray(parsed)) {
+          return buildError('VALIDATION_ERROR', '"fileRefs" must be an array', 400);
+        }
+        for (const ref of parsed) {
+          if (!isFileRefShape(ref)) {
+            return buildError(
+              'VALIDATION_ERROR',
+              'Each fileRef must have ruc, dni, idAten, path, name as strings',
+              400,
+            );
+          }
+          if (!/^\d+$/.test(ref.dni)) {
+            return buildError(
+              'VALIDATION_ERROR',
+              `"dni" must be numeric: ${ref.dni}`,
+              400,
+            );
+          }
+        }
+        if (parsed.length > MAX_FILES) {
+          return buildError(
+            'VALIDATION_ERROR',
+            `Maximum ${MAX_FILES} files allowed, got ${parsed.length}`,
+            400,
+          );
+        }
+        fileRefsParsed = parsed;
+      } catch {
+        return buildError('VALIDATION_ERROR', '"fileRefs" must be valid JSON', 400);
       }
-      if (!/^\d+$/.test(ref.dni)) {
-        return buildError(
-          'VALIDATION_ERROR',
-          `"dni" must be numeric: ${ref.dni}`,
-          400,
-        );
-      }
-    }
-    if (parsed.length > MAX_FILES) {
-      return buildError(
-        'VALIDATION_ERROR',
-        `Maximum ${MAX_FILES} files allowed, got ${parsed.length}`,
-        400,
-      );
+    } else if (!hasLocalFiles) {
+      // Neither fileRefs nor localFiles present
+      return buildError('VALIDATION_ERROR', '"fileRefs" or "localFiles" is required', 400);
     }
 
-    // ---- 4. Delegate to the use case ----
+    // ---- 4. Validate local file attachments ----
+    const localAttachments: LocalAttachmentInput[] = [];
+    if (hasLocalFiles) {
+      let totalBytes = 0;
+      for (const file of localFilesRaw) {
+        totalBytes += file.size;
+        if (totalBytes > MAX_LOCAL_BYTES_TOTAL) {
+          return buildError(
+            'VALIDATION_ERROR',
+            `Total local attachments exceed ${MAX_LOCAL_BYTES_TOTAL / (1024 * 1024)} MB`,
+            400,
+          );
+        }
+        try {
+          sanitizeDownloadName(file.name);
+        } catch {
+          return buildError(
+            'VALIDATION_ERROR',
+            `Invalid filename in local file: ${file.name}`,
+            400,
+          );
+        }
+        const buffer = Buffer.from(await file.arrayBuffer());
+        localAttachments.push({
+          filename: file.name,
+          contentType: file.type || 'application/octet-stream',
+          content: buffer,
+        });
+      }
+    }
+
+    // ---- 5. Delegate to the use case ----
     const useCase = new SendResultsUseCase(getFileRepository(), makeEmailService());
     const result = await useCase.execute({
       to,
       ...(cc ? { cc } : {}),
       subject,
       html,
-      fileRefs: parsed,
+      fileRefs: fileRefsParsed,
+      localAttachments,
       nombreCompleto,
       destino,
     });

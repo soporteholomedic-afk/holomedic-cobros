@@ -62,6 +62,18 @@ vi.mock('../SpitchSelector', () => ({
 // (see the test body) and waits for the deferred onSelect to land.
 
 
+// Mock LocalFileDropZone
+vi.mock('../LocalFileDropZone', () => ({
+  LocalFileDropZone: vi.fn().mockImplementation(
+    ({ files, onAdd, onRemove }: { files: File[]; onAdd: (f: File[]) => void; onRemove: (i: number) => void }) => {
+      return React.createElement('div', {
+        'data-testid': 'local-file-drop-zone',
+        'data-file-count': files.length,
+      }, `${files.length} archivos locales`);
+    },
+  ),
+}));
+
 // Mock AttachmentList
 vi.mock('../AttachmentList', () => ({
   AttachmentList: vi.fn().mockImplementation(
@@ -392,6 +404,48 @@ describe('EmailEditor', () => {
   });
 
   // ================================================================
+  // Local files (drag-and-drop from OS)
+  // ================================================================
+
+  it('renders the LocalFileDropZone in the left panel', () => {
+    mockFetch.mockResolvedValue({ ok: true, json: () => Promise.resolve({ success: true }) });
+
+    render(<EmailEditor {...defaultProps} />);
+
+    expect(screen.getByTestId('local-file-drop-zone')).toBeInTheDocument();
+  });
+
+  it('forwards empty localFiles to useSendResults when no files are dropped', () => {
+    mockFetch.mockResolvedValue({ ok: true, json: () => Promise.resolve({ success: true }) });
+
+    render(<EmailEditor {...defaultProps} />);
+
+    expect(mockUseSendResults).toHaveBeenCalled();
+    const lastCall = mockUseSendResults.mock.calls[mockUseSendResults.mock.calls.length - 1]?.[0] as {
+      localFiles: File[];
+    };
+    expect(lastCall.localFiles).toEqual([]);
+  });
+
+  it('shows the no-files warning when both LAN and local files are absent', async () => {
+    mockFetch.mockResolvedValue({ ok: true, json: () => Promise.resolve({ success: true }) });
+
+    // selectedPatients has an entry but with no files — button enabled, no fileRefs
+    render(<EmailEditor
+      {...defaultProps}
+      selectedPatients={{
+        'pat-001': { patientName: 'Test', files: [] },
+      }}
+    />);
+
+    const sendButton = screen.getByText('Enviar');
+    expect(sendButton).not.toBeDisabled();
+    fireEvent.click(sendButton);
+
+    expect(screen.getByText('No hay archivos adjuntos')).toBeInTheDocument();
+  });
+
+  // ================================================================
   // Bug-fix wiring — {{dni}}, {{nombrePaciente}} and {{firma}} must
   // resolve in the live preview from the `patients` prop forwarded
   // to interpolateSpitch (EmailEditor.tsx:91-104).
@@ -418,7 +472,7 @@ describe('EmailEditor', () => {
       expect(preview.textContent).toContain('12345678');
       expect(preview.textContent).toContain('María Elena García López');
       // default signature is resolved by default
-      expect(preview.textContent).toContain('Antonia del Pilar Pozo Niño');
+      expect(preview.textContent).toContain('Blanca Chirinos');
     } finally {
       Object.assign(mockSpitchOverride, previous);
     }

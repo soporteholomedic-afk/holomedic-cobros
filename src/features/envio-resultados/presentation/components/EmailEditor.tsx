@@ -3,6 +3,7 @@
 import { useState, useCallback, useMemo } from 'react';
 import { SpitchSelector } from './SpitchSelector';
 import { AttachmentList } from './AttachmentList';
+import { LocalFileDropZone } from './LocalFileDropZone';
 import { SendConfirmation } from './SendConfirmation';
 import { useSendResults } from '../hooks/useSendResults';
 import { interpolateSpitch } from '../helpers/interpolateSpitch';
@@ -97,6 +98,7 @@ export function EmailEditor({
   const [htmlBody, setHtmlBody] = useState('');
   const [showConfirmation, setShowConfirmation] = useState(false);
   const [showNoFilesWarning, setShowNoFilesWarning] = useState(false);
+  const [localFiles, setLocalFiles] = useState<File[]>([]);
 
   // Determine recipients based on selected patients
   const recipientNames = Object.values(selectedPatients).map((s) => s.patientName);
@@ -129,6 +131,7 @@ export function EmailEditor({
     subject,
     html: htmlBody,
     fileRefs,
+    localFiles,
     nombreCompleto,
     destino,
   });
@@ -160,15 +163,24 @@ export function EmailEditor({
     // Reset spitch selection when target changes — SpitchSelector handles reload
   }, []);
 
+  const handleLocalAdd = useCallback((files: File[]) => {
+    setLocalFiles((prev) => [...prev, ...files]);
+  }, []);
+
+  const handleLocalRemove = useCallback((index: number) => {
+    setLocalFiles((prev) => prev.filter((_, i) => i !== index));
+  }, []);
+
   const handleRequestSend = useCallback(() => {
-    // Check if any files are selected
-    const hasFiles = Object.values(selectedFiles).length > 0;
-    if (!hasFiles) {
+    // Check if any files are selected (LAN or local)
+    const hasLanFiles = Object.values(selectedFiles).length > 0;
+    const hasLocalFiles = localFiles.length > 0;
+    if (!hasLanFiles && !hasLocalFiles) {
       setShowNoFilesWarning(true);
       return;
     }
     setShowConfirmation(true);
-  }, [selectedFiles]);
+  }, [selectedFiles, localFiles]);
 
   const handleConfirmNoFiles = useCallback(() => {
     setShowNoFilesWarning(false);
@@ -229,6 +241,13 @@ export function EmailEditor({
 
         {/* Attachments preview */}
         <AttachmentList selectedPatients={selectedPatients} patients={patients} />
+
+        {/* Local file drop zone */}
+        <LocalFileDropZone
+          files={localFiles}
+          onAdd={handleLocalAdd}
+          onRemove={handleLocalRemove}
+        />
       </div>
 
       {/* ===== RIGHT PANEL: Controls ===== */}

@@ -65,3 +65,14 @@ export interface EmailAttachment {
   content: Buffer | string;
   contentType?: string;
 }
+
+/**
+ * Input shape for a local file dropped from the OS and attached to an
+ * email alongside `SelectedFileRef` entries from the LAN share. Carries
+ * the file bytes directly (no ruc/dni/idAten coordinates).
+ */
+export interface LocalAttachmentInput {
+  filename: string;
+  contentType: string;
+  content: Buffer;
+}

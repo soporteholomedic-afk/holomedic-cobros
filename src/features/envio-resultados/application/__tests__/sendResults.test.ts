@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { Readable } from 'node:stream';
 import { SendResultsUseCase } from '../sendResults';
 import type { IFileRepository, IEmailService } from '../../domain/ports';
-import type { SelectedFileRef } from '../../domain/entities';
+import type { LocalAttachmentInput, SelectedFileRef } from '../../domain/entities';
 
 // ---- Test doubles ----
 
@@ -342,6 +342,139 @@ describe('SendResultsUseCase (PR #2 — file resolver + byte-equal)', () => {
   });
 
   // ---- Email service failure ----
+
+  // ================================================================
+  // Local attachments (drag-and-drop from OS)
+  // ================================================================
+
+  it('accepts localAttachments when no fileRefs are present', async () => {
+    const mockEmail = makeMockEmail();
+    const useCase = new SendResultsUseCase(makeMockRepo(), mockEmail);
+
+    const local: LocalAttachmentInput = {
+      filename: 'foto.png',
+      contentType: 'image/png',
+      content: Buffer.from('PNG...'),
+    };
+
+    const result = await useCase.execute({
+      ...DEFAULT_PARAMS,
+      fileRefs: [],
+      localAttachments: [local],
+    });
+
+    expect(result.success).toBe(true);
+    const call = (mockEmail.sendWithAttachments as unknown as ReturnType<typeof vi.fn>).mock
+      .calls[0]?.[0] as { attachments: { filename: string; content: Buffer }[] };
+    expect(call.attachments).toHaveLength(1);
+    expect(call.attachments[0]!.filename).toBe('foto.png');
+    expect(Buffer.compare(call.attachments[0]!.content, Buffer.from('PNG...'))).toBe(0);
+  });
+
+  it('merges localAttachments with fileRefs into a single attachments array', async () => {
+    const mockRead = vi.fn<ReadFn>().mockResolvedValue(streamFromBuffer(PDF_BYTES));
+    const mockEmail = makeMockEmail();
+    const useCase = new SendResultsUseCase(makeMockRepo({ read: mockRead }), mockEmail);
+
+    const local: LocalAttachmentInput = {
+      filename: 'extra.docx',
+      contentType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      content: Buffer.from('DOCX content'),
+    };
+
+    const result = await useCase.execute({
+      ...DEFAULT_PARAMS,
+      fileRefs: [REFS_OK[0]!],
+      localAttachments: [local],
+    });
+
+    expect(result.success).toBe(true);
+    const call = (mockEmail.sendWithAttachments as unknown as ReturnType<typeof vi.fn>).mock
+      .calls[0]?.[0] as { attachments: { filename: string }[] };
+    expect(call.attachments).toHaveLength(2);
+    expect(call.attachments[0]!.filename).toBe('cert.pdf');
+    expect(call.attachments[1]!.filename).toBe('extra.docx');
+  });
+
+  it('rejects VALIDATION_ERROR when both fileRefs and localAttachments are empty', async () => {
+    const mockRead = vi.fn<ReadFn>();
+    const mockEmail = makeMockEmail();
+    const useCase = new SendResultsUseCase(makeMockRepo({ read: mockRead }), mockEmail);
+
+    const result = await useCase.execute({
+      ...DEFAULT_PARAMS,
+      fileRefs: [],
+      localAttachments: [],
+    });
+
+    expect(result).toMatchObject({ success: false, code: 'VALIDATION_ERROR' });
+    expect(mockEmail.sendWithAttachments).not.toHaveBeenCalled();
+  });
+
+  it('sanitizes local attachment filenames before dispatch', async () => {
+    const mockEmail = makeMockEmail();
+    const useCase = new SendResultsUseCase(makeMockRepo(), mockEmail);
+
+    const local: LocalAttachmentInput = {
+      filename: '..\\malicious.pdf',
+      contentType: 'application/pdf',
+      content: Buffer.from('evil'),
+    };
+
+    const result = await useCase.execute({
+      ...DEFAULT_PARAMS,
+      fileRefs: [],
+      localAttachments: [local],
+    });
+
+    expect(result).toMatchObject({ success: false, code: 'VALIDATION_ERROR' });
+    expect(mockEmail.sendWithAttachments).not.toHaveBeenCalled();
+  });
+
+  it('forwards contentType from localAttachments to the email service', async () => {
+    const mockEmail = makeMockEmail();
+    const useCase = new SendResultsUseCase(makeMockRepo(), mockEmail);
+
+    const local: LocalAttachmentInput = {
+      filename: 'report.pdf',
+      contentType: 'application/pdf',
+      content: Buffer.from('%PDF'),
+    };
+
+    await useCase.execute({
+      ...DEFAULT_PARAMS,
+      fileRefs: [],
+      localAttachments: [local],
+    });
+
+    const call = (mockEmail.sendWithAttachments as unknown as ReturnType<typeof vi.fn>).mock
+      .calls[0]?.[0] as { attachments: { contentType: string }[] };
+    expect(call.attachments[0]?.contentType).toBe('application/pdf');
+  });
+
+  it('does not apply renameReadyFile to local attachments (keeps original filename)', async () => {
+    const mockEmail = makeMockEmail();
+    const useCase = new SendResultsUseCase(makeMockRepo(), mockEmail);
+
+    const local: LocalAttachmentInput = {
+      filename: 'my-local-file.pdf',
+      contentType: 'application/pdf',
+      content: Buffer.from('bytes'),
+    };
+
+    await useCase.execute({
+      ...DEFAULT_PARAMS,
+      fileRefs: [],
+      localAttachments: [local],
+      nombreCompleto: 'Juan Pérez',
+      destino: 'Proyecto X',
+    });
+
+    const call = (mockEmail.sendWithAttachments as unknown as ReturnType<typeof vi.fn>).mock
+      .calls[0]?.[0] as { attachments: { filename: string }[] };
+    // renameReadyFile is NOT applied — local files keep their dropped name
+    expect(call.attachments[0]?.filename).toBe('my-local-file.pdf');
+  });
 
   it('returns SMTP_ERROR when the email service resolves with success: false', async () => {
     const mockRead = vi.fn<ReadFn>().mockResolvedValue(streamFromBuffer(PDF_BYTES));

@@ -262,6 +262,93 @@ describe('useSendResults', () => {
     expect(parsed[0]?.name).toBe('emo.pdf');
   });
 
+  // ================================================================
+  // Local files (drag-and-drop from OS)
+  // ================================================================
+
+  it('should append localFiles as multipart File parts to FormData', async () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ success: true }),
+    } as Response);
+
+    const localFiles = [
+      new File(['PNG data'], 'foto.png', { type: 'image/png' }),
+      new File(['DOCX content'], 'report.docx', { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' }),
+    ];
+
+    const { result } = renderHook(() =>
+      useSendResults({ ...defaultArgs, localFiles }),
+    );
+
+    await act(async () => {
+      await result.current.send();
+    });
+
+    const formData = fetchSpy.mock.calls[0][1]?.body as FormData;
+    const parts = formData.getAll('localFiles');
+    expect(parts).toHaveLength(2);
+    expect((parts[0] as File).name).toBe('foto.png');
+    expect((parts[1] as File).name).toBe('report.docx');
+  });
+
+  it('should NOT append localFiles when the array is empty', async () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ success: true }),
+    } as Response);
+
+    const { result } = renderHook(() =>
+      useSendResults({ ...defaultArgs, localFiles: [] }),
+    );
+
+    await act(async () => {
+      await result.current.send();
+    });
+
+    const formData = fetchSpy.mock.calls[0][1]?.body as FormData;
+    expect(formData.getAll('localFiles')).toEqual([]);
+  });
+
+  it('should NOT append localFiles when the prop is undefined', async () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ success: true }),
+    } as Response);
+
+    const { result } = renderHook(() => useSendResults(defaultArgs));
+
+    await act(async () => {
+      await result.current.send();
+    });
+
+    const formData = fetchSpy.mock.calls[0][1]?.body as FormData;
+    expect(formData.getAll('localFiles')).toEqual([]);
+    // Existing fileRefs still present
+    expect(formData.get('fileRefs')).toBeTruthy();
+  });
+
+  it('should send localFiles AND fileRefs together in the same request', async () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ success: true }),
+    } as Response);
+
+    const localFiles = [new File(['extra'], 'extra.pdf', { type: 'application/pdf' })];
+    const { result } = renderHook(() =>
+      useSendResults({ ...defaultArgs, localFiles }),
+    );
+
+    await act(async () => {
+      await result.current.send();
+    });
+
+    const formData = fetchSpy.mock.calls[0][1]?.body as FormData;
+    expect(formData.get('fileRefs')).toBeTruthy();
+    const localParts = formData.getAll('localFiles');
+    expect(localParts).toHaveLength(1);
+  });
+
   it('should send the request as a POST to the send-results endpoint', async () => {
     // Triangulation: the wire URL and method are unchanged. PR #3
     // only swaps the payload shape — the call site is the same.
