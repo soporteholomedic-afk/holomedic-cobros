@@ -74,11 +74,13 @@
 
 After every code change (especially to API routes or constants), sync the project to the Windows SDK:
 
-```bash
-./sync-sdk.sh
+```powershell
+.\sync-sdk.ps1
 ```
 
-This copies the source (excluding `node_modules`, `.next`, `.git`, etc.) to `//172.16.10.12/instaladores/HOLOMEDICSDK/` mounted at `/mnt/instaladores/HOLOMEDICSDK/`.
+This copies the source (excluding `node_modules`, `.next`, `.git`, etc.) directly to `\\172.16.10.12\INSTALADORES\HOLOMEDICSDK` using `robocopy` (native Windows — no WSL needed).
+
+(The old `sync-sdk.sh` was written for WSL/Linux; use `sync-sdk.ps1` from PowerShell instead.)
 
 The sync is **always required** before running the app from the SDK on Windows.
 
