@@ -62,6 +62,13 @@ export function WorkerDetailTable({ companyName, fechaInicio, fechaFin }: Worker
   // remount the wizard with the previous picks intact (WU-3.5b).
   const [wizardSnapshot, setWizardSnapshot] = useState<WizardState | null>(null);
   const [showWizard, setShowWizard] = useState(false);
+  // PR 3 (WU-3.5b) — back-context for the EmailEditor overlay.
+  // `'wizard'` when the overlay was opened from the wizard's
+  // Step 4 "Continuar al envío" (the back button reads
+  // "Volver al paso 4"). `'table'` for the legacy per-row
+  // "Ver Archivos" path (the back button reads "Volver a la
+  // tabla").
+  const [emailBackContext, setEmailBackContext] = useState<'table' | 'wizard'>('table');
   const {
     statuses,
     checkAll,
@@ -153,10 +160,6 @@ export function WorkerDetailTable({ companyName, fechaInicio, fechaFin }: Worker
     [modalState, people, companies, companyName],
   );
 
-  const returnToTable = useCallback((): void => {
-    setEmailViewData(null);
-  }, []);
-
   // PR 3 (WU-3.5a) — wizard open/close + state snapshot. The
   // `onContinueToEmail` callback is a no-op in this PR; the
   // round-trip handoff to the EmailEditor overlay lands in
@@ -168,6 +171,7 @@ export function WorkerDetailTable({ companyName, fechaInicio, fechaFin }: Worker
   const closeWizard = useCallback((): void => {
     setShowWizard(false);
     setWizardSnapshot(null);
+    setEmailBackContext('table');
   }, []);
 
   const handleWizardStateChange = useCallback((s: WizardState): void => {
@@ -175,23 +179,44 @@ export function WorkerDetailTable({ companyName, fechaInicio, fechaFin }: Worker
   }, []);
 
   /**
-   * PR 3 (WU-3.5a) — placeholder for the wizard → email handoff.
-   * The wizard's "Continuar al envío" button fires this with the
-   * `{ selectedPatients, fileRefs }` payload from
-   * `buildEmailViewDataFromWizard`. WU-3.5b enriches this to the
-   * full `EmailViewData` and stores it in `emailViewData` (which
-   * mounts the existing `EmailEditor` overlay).
-   *
-   * The parameter is typed loosely here so the WU-3.5a tests do
-   * not require `onContinueToEmail` to be wired yet.
+   * PR 3 (WU-3.5b) — wizard → EmailEditor handoff. The wizard
+   * shell composes the FULL `EmailViewData` (resolving
+   * `companyId` from the page-level `companies`, taking the
+   * first selected patient's `nombre`/`destino`); this table
+   * stores it in `emailViewData` (which mounts the existing
+   * `EmailEditor` overlay) and flips `emailBackContext` to
+   * `'wizard'` so the overlay's back button reads
+   * "Volver al paso 4" and the round-trip onBack reopens the
+   * wizard. The wizard is unmounted (`showWizard=false`) — the
+   * round-trip restoration is driven by the `wizardSnapshot`
+   * stored via `onStateChange`.
    */
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const handleWizardContinueToEmail = useCallback((_data: unknown): void => {
-    // WU-3.5a: no-op. WU-3.5b will compose the full EmailViewData
-    // (companyId/companyName/nombreCompleto/destino + the partial
-    // payload) and call `setEmailViewData(...)` to mount the
-    // EmailEditor overlay.
+  const handleWizardContinueToEmail = useCallback((data: EmailViewData): void => {
+    setShowWizard(false);
+    setEmailBackContext('wizard');
+    setEmailViewData(data);
   }, []);
+
+  /**
+   * PR 3 (WU-3.5b) — EmailEditor overlay's back button handler.
+   * The behavior depends on `emailBackContext`:
+   *   - `'wizard'`: reopen the wizard with the stored
+   *     `wizardSnapshot` (the round-trip restoration). The
+   *     overlay unmounts; the wizard remounts.
+   *   - `'table'`: clear `emailViewData` (the table is back).
+   *     The `wizardSnapshot` is preserved for the next
+   *     round-trip in case the user reopens the wizard via
+   *     "Enviar", but in practice a fresh wizard starts at
+   *     step 1.
+   */
+  const handleEmailEditorBack = useCallback((): void => {
+    if (emailBackContext === 'wizard') {
+      setEmailViewData(null);
+      setShowWizard(true);
+    } else {
+      setEmailViewData(null);
+    }
+  }, [emailBackContext]);
 
   // ---- Loading state ----
   if (loading) {
@@ -343,17 +368,12 @@ export function WorkerDetailTable({ companyName, fechaInicio, fechaFin }: Worker
           className="fixed inset-0 z-50 bg-white dark:bg-slate-900 overflow-auto"
         >
           <div className="max-w-7xl mx-auto p-6 space-y-4">
-            <div className="flex items-center justify-between">
-              <h2 className="text-xl font-semibold text-slate-800 dark:text-slate-100">Redactar correo</h2>
-              <button
-                type="button"
-                onClick={returnToTable}
-                data-testid="email-editor-back"
-                className="px-4 py-2 rounded-xl border border-slate-200 dark:border-slate-800 hover:bg-slate-100 dark:hover:bg-slate-800 text-sm font-semibold"
-              >
-                Volver a la tabla
-              </button>
-            </div>
+            {/* PR 3 (WU-3.5b) — the wrapper back button moved into
+                `EmailEditor` (the button renders conditionally on
+                `onBack` being provided). `backContext` selects the
+                label:
+                  - `'wizard'` → "Volver al paso 4" (round-trip)
+                  - `'table'`  → "Volver a la tabla" (legacy path) */}
             <EmailEditor
               companyId={emailViewData.companyId}
               companyName={emailViewData.companyName}
@@ -364,6 +384,8 @@ export function WorkerDetailTable({ companyName, fechaInicio, fechaFin }: Worker
               // can serialise them as the wire payload. `PatientFile`
               // (display) stays in `patients` for the AttachmentList.
               fileRefs={emailViewData.fileRefs}
+              backContext={emailBackContext}
+              onBack={handleEmailEditorBack}
             />
           </div>
         </section>
