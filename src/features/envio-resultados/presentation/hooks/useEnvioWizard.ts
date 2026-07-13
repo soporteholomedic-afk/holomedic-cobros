@@ -78,12 +78,11 @@ export interface UseEnvioWizardResult {
 
 // ---- Initial state ----
 
-/** Build the initial wizard state. `people` is kept on the options
- *  shape for symmetry with the hook; the initial state itself does
- *  not depend on it. */
-export function initialWizardState(
-  _people: ReadonlyArray<{ dni: string }> = [],
-): WizardState {
+/** Build the initial wizard state. The hook receives `people` for
+ *  future use (e.g. validating that a restored `selectedDnIs` is
+ *  still valid after a refetch); the initial state itself does not
+ *  depend on it. */
+export function initialWizardState(): WizardState {
   return {
     currentStep: 1,
     maxVisitedStep: 1,
@@ -208,10 +207,12 @@ export function envioWizardReducer(state: WizardState, action: WizardAction): Wi
  * Thin React wrapper around `useReducer(envioWizardReducer, …)`.
  * Exposes imperative action handlers and a memoized `canAdvance`.
  */
-export function useEnvioWizard({ people, initialState }: UseEnvioWizardOptions): UseEnvioWizardResult {
+export function useEnvioWizard(
+  { initialState }: UseEnvioWizardOptions,
+): UseEnvioWizardResult {
   const [state, dispatch] = useReducer(
     envioWizardReducer,
-    initialState ?? initialWizardState(people),
+    initialState ?? initialWizardState(),
   );
   return {
     state,
