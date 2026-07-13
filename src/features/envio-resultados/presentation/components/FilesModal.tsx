@@ -8,7 +8,7 @@ import { FilesPreviewPane } from '@/features/envio-resultados/presentation/compo
 import { FilesReadyPane } from '@/features/envio-resultados/presentation/components/FilesReadyPane';
 import { FilesTabs, type FilesTab } from '@/features/envio-resultados/presentation/components/FilesTabs';
 import { useFileTree } from '@/features/envio-resultados/presentation/hooks/useFileTree';
-import { useReadyFiles } from '@/features/envio-resultados/presentation/hooks/useReadyFiles';
+import { useReadyFiles, type ReadyFilesState } from '@/features/envio-resultados/presentation/hooks/useReadyFiles';
 import type { FileNode } from '@/features/envio-resultados/domain/ports';
 import type { SelectedFileRef } from '@/features/envio-resultados/domain/entities';
 
@@ -17,6 +17,17 @@ const READY_FOLDER = 'LEGAJOS';
 
 /** Default tab when the modal opens — decided 2026-06-15. */
 const DEFAULT_TAB: FilesTab = 'ready';
+
+/**
+ * Picker regex per `pickType`. The ready pane already filters by the
+ * broader `^\d+(CERT|EXPED)\.pdf$/i` pattern in `useReadyFiles`; we
+ * narrow further here so the wizard's CAMO step only sees CERT
+ * candidates and the EMO step only sees EXPED candidates.
+ */
+const PICK_REGEX: Record<'CAMO' | 'EMO', RegExp> = {
+  CAMO: /^\d+CERT\.pdf$/i,
+  EMO: /^\d+EXPED\.pdf$/i,
+};
 
 export interface FilesModalProps {
   ruc: string;
@@ -34,6 +45,33 @@ export interface FilesModalProps {
    * `useInformeOrder(idAten, fecAte)`.
    */
   fecAte?: string;
+  /**
+   * Modal behavior. Defaults to `'default'` — the multi-select file
+   * explorer used by the legacy per-row "Ver Archivos" flow and the
+   * `FilesModal` overlay pattern.
+   *
+   * `'pick-single'` (PR envio-resultados CAMO/EMO wizard) repurposes
+   * the modal as a single-pane picker for the wizard's Step 2 / Step
+   * 3: the ready pane is filtered by `pickType` regex, selection is
+   * radio-style (single file), and the footer carries a confirm /
+   * skip pair. Explorer + generate tabs are hidden. The legacy
+   * `onSend` flow is unused in this mode.
+   */
+  mode?: 'default' | 'pick-single';
+  /**
+   * Filter applied to the ready pane when `mode='pick-single'`.
+   * `'CAMO'` keeps only `^\d+CERT\.pdf$/i`; `'EMO'` keeps only
+   * `^\d+EXPED\.pdf$/i`. Ignored in `'default'` mode.
+   */
+  pickType?: 'CAMO' | 'EMO';
+  /**
+   * Fired when the user confirms or skips a pick in
+   * `mode='pick-single'`. Receives the selected `FileNode` or `null`
+   * when the user clicked "Saltar". The parent is expected to
+   * consume the pick and close the modal. Ignored in `'default'`
+   * mode.
+   */
+  onPickSingle?: (file: FileNode | null) => void;
   onClose: () => void;
   /**
    * Fired when the user clicks the "Enviar" footer button. Receives
@@ -80,9 +118,13 @@ export function FilesModal({
   // it as the `fecAte` query param on the lookup SP. PR-2 wires the
   // consumer; the prop was added in PR-1.
   fecAte = '',
+  mode = 'default',
+  pickType,
+  onPickSingle,
   onClose,
   onSend,
 }: FilesModalProps): ReactElement {
+  const isPickSingle = mode === 'pick-single';
   const {
     viewState,
     selectionState,
@@ -102,6 +144,11 @@ export function FilesModal({
   const [selectedFilesMap, setSelectedFilesMap] = useState<Map<string, FileNode>>(
     () => new Map(),
   );
+  // PR envio-resultados CAMO/EMO wizard — pick-single mode state. The
+  // radio-style selection holds a single `FileNode` (or `null`). Lives
+  // alongside the multi-select map because the two flows share the
+  // modal chrome but the selection model is different.
+  const [singleSelection, setSingleSelection] = useState<FileNode | null>(null);
 
   // PR-2 (generar-archivos-pdf-informes) — fired by
   // `FilesGeneratePane` when a generation round resolves to success.
@@ -137,13 +184,17 @@ export function FilesModal({
     /* eslint-disable-next-line react-hooks/set-state-in-effect --
        the setState here is the documented identity-reset contract. */
     setSelectedFilesMap((prev) => (prev.size === 0 ? prev : new Map()));
+    setSingleSelection((prev) => (prev === null ? prev : null));
   }, [ruc, dni, idAten]);
 
   // Pre-check — when the ready pane's files arrive, populate the map
   // with entries that are NOT already present (the `if (!next.has(ref))`
   // guard preserves any explorer selections the user already made).
   // Bail on the same-reference pattern when no new entries are added.
+  // In `mode='pick-single'` we keep `singleSelection` (radio) and
+  // leave the map empty — pre-checking would defeat single-select.
   useEffect(() => {
+    if (isPickSingle) return;
     if (readyState.kind !== 'ready') return;
     /* eslint-disable-next-line react-hooks/set-state-in-effect --
        the setState here is the documented pre-check contract. */
@@ -159,7 +210,7 @@ export function FilesModal({
       }
       return changed ? next : prev;
     });
-  }, [readyState]);
+  }, [readyState, isPickSingle]);
 
   const handleToggleFile = useCallback((ref: string, file: FileNode): void => {
     setSelectedFilesMap((prev) => {
@@ -169,6 +220,40 @@ export function FilesModal({
       return next;
     });
   }, []);
+
+  // PR envio-resultados CAMO/EMO wizard — pick-single toggle. Replaces
+  // the previous selection instead of accumulating (radio behavior).
+  const handlePickSingleToggle = useCallback((file: FileNode): void => {
+    setSingleSelection((prev) => (prev?.name === file.name ? null : file));
+  }, []);
+
+  // PR envio-resultados CAMO/EMO wizard — pick-single confirm / skip.
+  // Both callbacks call the parent with the pick, then close. The
+  // parent decides when to unmount the modal.
+  const handlePickSingleSelect = useCallback((): void => {
+    if (singleSelection === null) return;
+    onPickSingle?.(singleSelection);
+    onClose();
+  }, [onPickSingle, onClose, singleSelection]);
+
+  const handlePickSingleSkip = useCallback((): void => {
+    onPickSingle?.(null);
+    onClose();
+  }, [onPickSingle, onClose]);
+
+  // PR envio-resultados CAMO/EMO wizard — ready pane listing in
+  // pick-single mode is filtered by the regex tied to `pickType`.
+  // The empty-state branch surfaces the same "Sin archivos listos
+  // para enviar" message as the unfiltered pane so the wizard's
+  // per-patient picker doesn't need a separate copy path.
+  const pickSingleFilteredState = useMemo<ReadyFilesState>(() => {
+    if (!isPickSingle) return { kind: 'loading' };
+    if (readyState.kind !== 'ready') return readyState;
+    const regex = pickType ? PICK_REGEX[pickType] : null;
+    if (regex === null) return readyState;
+    const filtered = readyState.files.filter((f) => regex.test(f.name));
+    return filtered.length === 0 ? { kind: 'empty' } : { kind: 'ready', files: filtered };
+  }, [isPickSingle, pickType, readyState]);
 
   const handleSendClick = useCallback((): void => {
     // PR #1 — pass the map (keyed by `fileRef`) so the parent
@@ -303,17 +388,29 @@ export function FilesModal({
             }
             data-testid="files-explorer-container"
           >
-            <FilesTabs activeTab={activeTab} onTabChange={setActiveTab} />
+            {!isPickSingle && (
+              <FilesTabs activeTab={activeTab} onTabChange={setActiveTab} />
+            )}
             <div className="flex-1 overflow-y-auto">
               {activeTab === 'ready' ? (
                 <FilesReadyPane
-                  state={readyState}
+                  state={isPickSingle ? pickSingleFilteredState : readyState}
                   ruc={ruc}
                   dni={dni}
                   idAten={idAten}
                   onSelect={handleSelectFromReady}
-                  selectedRefs={selectedRefs}
-                  onToggle={handleToggleFile}
+                  selectedRefs={
+                    isPickSingle
+                      ? singleSelection === null
+                        ? new Set<string>()
+                        : new Set<string>([`${READY_FOLDER}::${singleSelection.name}`])
+                      : selectedRefs
+                  }
+                  onToggle={
+                    isPickSingle
+                      ? (_ref, file) => handlePickSingleToggle(file)
+                      : handleToggleFile
+                  }
                 />
               ) : activeTab === 'all' ? (
                 <FilesExplorerPane
@@ -364,32 +461,54 @@ export function FilesModal({
           >
             Cerrar
           </button>
-          <div className="flex items-center gap-3">
-            <button
-              type="button"
-              onClick={handleSendClick}
-              disabled={selectedFilesMap.size === 0}
-              aria-label="Enviar archivos seleccionados"
-              data-testid="files-modal-send"
-              className="px-6 py-2.5 rounded-xl text-sm font-bold text-white shadow-lg transition-all duration-300 bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-300 disabled:cursor-not-allowed disabled:shadow-none"
-            >
-              Enviar ({selectedFilesMap.size})
-            </button>
-            <button
-              type="button"
-              onClick={handleDownloadSelected}
-              disabled={selectedFilesMap.size === 0 || zipInFlight}
-              aria-disabled={selectedFilesMap.size === 0 || zipInFlight ? 'true' : 'false'}
-              data-testid="files-modal-download-selected"
-              className={`px-6 py-2.5 rounded-xl text-sm font-bold text-white shadow-lg transition-all duration-300 ${
-                zipInFlight
-                  ? 'bg-slate-400 cursor-wait'
-                  : 'bg-gradient-to-r from-sky-500 to-sky-600 hover:from-sky-600 hover:to-sky-700 shadow-sky-500/20 hover:scale-[1.03]'
-              } disabled:bg-slate-300 disabled:cursor-not-allowed disabled:shadow-none`}
-            >
-              {zipInFlight ? `Generando zip...` : `Descargar seleccionados (${selectedFilesMap.size})`}
-            </button>
-          </div>
+          {isPickSingle ? (
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                onClick={handlePickSingleSkip}
+                data-testid="files-modal-pick-skip"
+                className="px-5 py-2.5 rounded-xl text-sm font-semibold text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-800 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+              >
+                Saltar
+              </button>
+              <button
+                type="button"
+                onClick={handlePickSingleSelect}
+                disabled={singleSelection === null}
+                data-testid="files-modal-pick-select"
+                className="px-6 py-2.5 rounded-xl text-sm font-bold text-white shadow-lg transition-all duration-300 bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-300 disabled:cursor-not-allowed disabled:shadow-none"
+              >
+                Seleccionar
+              </button>
+            </div>
+          ) : (
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                onClick={handleSendClick}
+                disabled={selectedFilesMap.size === 0}
+                aria-label="Enviar archivos seleccionados"
+                data-testid="files-modal-send"
+                className="px-6 py-2.5 rounded-xl text-sm font-bold text-white shadow-lg transition-all duration-300 bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-300 disabled:cursor-not-allowed disabled:shadow-none"
+              >
+                Enviar ({selectedFilesMap.size})
+              </button>
+              <button
+                type="button"
+                onClick={handleDownloadSelected}
+                disabled={selectedFilesMap.size === 0 || zipInFlight}
+                aria-disabled={selectedFilesMap.size === 0 || zipInFlight ? 'true' : 'false'}
+                data-testid="files-modal-download-selected"
+                className={`px-6 py-2.5 rounded-xl text-sm font-bold text-white shadow-lg transition-all duration-300 ${
+                  zipInFlight
+                    ? 'bg-slate-400 cursor-wait'
+                    : 'bg-gradient-to-r from-sky-500 to-sky-600 hover:from-sky-600 hover:to-sky-700 shadow-sky-500/20 hover:scale-[1.03]'
+                } disabled:bg-slate-300 disabled:cursor-not-allowed disabled:shadow-none`}
+              >
+                {zipInFlight ? `Generando zip...` : `Descargar seleccionados (${selectedFilesMap.size})`}
+              </button>
+            </div>
+          )}
         </div>
       </div>
     </div>
