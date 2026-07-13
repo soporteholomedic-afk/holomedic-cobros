@@ -476,6 +476,101 @@ describe('SendResultsUseCase (PR #2 — file resolver + byte-equal)', () => {
     expect(call.attachments[0]?.filename).toBe('my-local-file.pdf');
   });
 
+  // ================================================================
+  // PR #3 (WU-3.3) — Spec REQ-010b: the send-pipeline rename MUST
+  // produce `{tipo}-{nombreCompleto}-{destino}.pdf` where
+  // `tipo = ref.tipoExamen ?? parseReadyFile(name)?.tipo`.
+  //
+  // The use case is the seam: it must forward `ref.tipoExamen` to
+  // `renameReadyFile` so the wizard's CAMO/EMO picks drive the
+  // attachment filename (instead of relying on the `parseReadyFile`
+  // regex fallback). The diff in `sendResults.ts:181` is exactly
+  // one line: `tipoExamen: ref.tipoExamen` added to the
+  // `renameReadyFile` call's options.
+  // ================================================================
+
+  it('passes ref.tipoExamen to renameReadyFile — the resulting attachment starts with the tipoExamen prefix', async () => {
+    // Two refs from the SAME `name` (`75618561CERT.pdf` → parseReadyFile
+    // maps to 'CAMO') but with DIFFERENT `tipoExamen` overrides:
+    //   ref A: tipoExamen='CAMO' → "CAMO-..."
+    //   ref B: tipoExamen='EMO'  → "EMO-..."
+    // The use case MUST pass `tipoExamen` through; otherwise ref B
+    // would fall back to parseReadyFile and the EMO override would
+    // be silently dropped.
+    const mockRead = vi.fn<ReadFn>().mockResolvedValue(streamFromBuffer(PDF_BYTES));
+    const mockEmail = makeMockEmail();
+    const useCase = new SendResultsUseCase(makeMockRepo({ read: mockRead }), mockEmail);
+
+    const refs: SelectedFileRef[] = [
+      {
+        ruc: '20123456789',
+        dni: '12345678',
+        idAten: 'AT-001',
+        path: '',
+        name: '75618561CERT.pdf',
+        tipoExamen: 'CAMO',
+      },
+      {
+        ruc: '20123456789',
+        dni: '12345678',
+        idAten: 'AT-001',
+        path: '',
+        name: '75618561CERT.pdf', // same name, different tipoExamen
+        tipoExamen: 'EMO',
+      },
+    ];
+
+    await useCase.execute({
+      ...DEFAULT_PARAMS,
+      fileRefs: refs,
+      nombreCompleto: 'JUAN PEREZ',
+      destino: 'METRO LIMA',
+    });
+
+    const call = (mockEmail.sendWithAttachments as unknown as ReturnType<typeof vi.fn>).mock
+      .calls[0]?.[0] as { attachments: { filename: string }[] };
+    expect(call.attachments).toHaveLength(2);
+    // The FIRST ref's attachment must use the CAMO override
+    expect(call.attachments[0]?.filename).toBe('CAMO-JUAN PEREZ-METRO LIMA.pdf');
+    // The SECOND ref's attachment must use the EMO override (not
+    // the parseReadyFile fallback to CAMO).
+    expect(call.attachments[1]?.filename).toBe('EMO-JUAN PEREZ-METRO LIMA.pdf');
+  });
+
+  it('falls back to parseReadyFile when tipoExamen is absent (regression — the legacy path still works)', async () => {
+    // Triangulation: legacy call sites (e.g. download routes) omit
+    // `tipoExamen`. The use case must NOT pass `undefined` to
+    // renameReadyFile in a way that would force the wrong override
+    // (e.g. a hardcoded 'CAMO'). The fallback is parseReadyFile,
+    // which maps `*CERT.pdf` → 'CAMO'.
+    const mockRead = vi.fn<ReadFn>().mockResolvedValue(streamFromBuffer(PDF_BYTES));
+    const mockEmail = makeMockEmail();
+    const useCase = new SendResultsUseCase(makeMockRepo({ read: mockRead }), mockEmail);
+
+    const refs: SelectedFileRef[] = [
+      {
+        ruc: '20123456789',
+        dni: '12345678',
+        idAten: 'AT-001',
+        path: '',
+        name: '75618561CERT.pdf',
+        // tipoExamen intentionally omitted
+      },
+    ];
+
+    await useCase.execute({
+      ...DEFAULT_PARAMS,
+      fileRefs: refs,
+      nombreCompleto: 'X',
+      destino: 'Y',
+    });
+
+    const call = (mockEmail.sendWithAttachments as unknown as ReturnType<typeof vi.fn>).mock
+      .calls[0]?.[0] as { attachments: { filename: string }[] };
+    // parseReadyFile fallback: `75618561CERT.pdf` → 'CAMO'
+    expect(call.attachments[0]?.filename).toBe('CAMO-X-Y.pdf');
+  });
+
   it('returns SMTP_ERROR when the email service resolves with success: false', async () => {
     const mockRead = vi.fn<ReadFn>().mockResolvedValue(streamFromBuffer(PDF_BYTES));
     const mockEmail = makeMockEmail({
