@@ -1,18 +1,19 @@
 /**
- * PR envio-resultados CAMO/EMO wizard — WU-2a.4.
+ * PR envio-resultados CAMO/EMO wizard — WU-2a.4 + WU-2b.2.
  *
  * `EnvioResultadosWizard` is the modal shell that owns the
  * `useEnvioWizard` reducer and routes the current step to its
  * sub-component. This test exercises the shell in isolation: the
- * step sub-components (`Step1Pacientes`, `Step2Camo`) and the
- * stepper (`WizardStepper`) are imported for real, but step 3 / 4
- * are explicit placeholders built into the shell, so they can be
- * asserted on directly.
+ * step sub-components (`Step1Pacientes`, `Step2Camo`, `Step3Emo`)
+ * and the stepper (`WizardStepper`) are imported for real. Step 4
+ * is still a placeholder in this PR (real `Step4Resumen` comes in
+ * PR 3) and is asserted on directly.
  *
  * Spec coverage (from `sdd/envio-resultados-camo-emo/spec`):
  *  - REQ-002 — wizard shell + stepper, Escape closes.
  *  - REQ-003 — useEnvioWizard state machine (observed via shell).
- *  - Scenarios S-001, S-021.
+ *  - REQ-006 — Step 3 EMO routing (PR 2b).
+ *  - Scenarios S-001, S-009, S-010, S-021.
  */
 import { describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, within } from '@testing-library/react';
@@ -196,9 +197,9 @@ describe('EnvioResultadosWizard', () => {
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 
-  it('renders a Step 3 placeholder when currentStep=3 ("Próximamente: Paso 3 — EMO")', () => {
-    // Drive the wizard to step 3 via initialState — Step 3 is a
-    // placeholder in this PR (real Step3Emo comes in PR2b).
+  it('renders Step3Emo at currentStep=3 (not the step 3 placeholder)', () => {
+    // Drive the wizard to step 3 via initialState — Step 3 is the
+    // real `Step3Emo` component (PR 2b).
     const initialState: WizardState = {
       currentStep: 3,
       maxVisitedStep: 3,
@@ -207,10 +208,80 @@ describe('EnvioResultadosWizard', () => {
       emoByDni: {},
     };
     renderWizard({ initialState });
-    const placeholder = screen.getByTestId('wizard-step-3-placeholder');
-    expect(placeholder).toBeInTheDocument();
-    expect(within(placeholder).getByText(/Paso 3 — EMO/)).toBeInTheDocument();
+    expect(screen.getByTestId('step3-emo')).toBeInTheDocument();
+    // The old placeholder is gone.
+    expect(screen.queryByTestId('wizard-step-3-placeholder')).not.toBeInTheDocument();
     expect(screen.queryByTestId('step2-camo')).not.toBeInTheDocument();
+  });
+
+  it('marks stepper chip 3 as the current step at currentStep=3', () => {
+    const initialState: WizardState = {
+      currentStep: 3,
+      maxVisitedStep: 3,
+      selectedDnIs: new Set(['11111111']),
+      camoByDni: {},
+      emoByDni: {},
+    };
+    renderWizard({ initialState });
+    expect(screen.getByTestId('wizard-stepper-chip-3')).toHaveAttribute('aria-current', 'step');
+    expect(screen.getByTestId('wizard-stepper-chip-1')).not.toHaveAttribute('aria-current', 'step');
+    expect(screen.getByTestId('wizard-stepper-chip-2')).not.toHaveAttribute('aria-current', 'step');
+  });
+
+  it('"Volver" on Step 3 returns to Step 2 with the Step 2 picks preserved', () => {
+    // Seed a fake CAMO pick for patient 11111111, then drive the
+    // wizard to step 3. After "Volver", the wizard should be on
+    // step 2 and the camoByDni should still hold the pick.
+    const initialState: WizardState = {
+      currentStep: 3,
+      maxVisitedStep: 3,
+      selectedDnIs: new Set(['11111111']),
+      camoByDni: {
+        '11111111': {
+          ref: {
+            ruc: '20123456789',
+            dni: '11111111',
+            idAten: 'AT-001',
+            path: 'LEGAJOS',
+            name: '75618561CERT.pdf',
+            tipoExamen: 'CAMO',
+          },
+          displayName: '75618561CERT.pdf',
+        },
+      },
+      emoByDni: {},
+    };
+    renderWizard({ initialState });
+    // Confirm we are on step 3.
+    expect(screen.getByTestId('step3-emo')).toBeInTheDocument();
+
+    // Volver → step 2.
+    fireEvent.click(screen.getByTestId('step3-volver'));
+    expect(screen.getByTestId('step2-camo')).toBeInTheDocument();
+    expect(screen.queryByTestId('step3-emo')).not.toBeInTheDocument();
+
+    // The step 2 card shows the previously-picked CAMO filename.
+    const card = screen.getByTestId('step2-card-11111111');
+    expect(within(card).getByText(/75618561CERT\.pdf/)).toBeInTheDocument();
+  });
+
+  it('"Continuar" on Step 3 advances to Step 4 (still a placeholder)', () => {
+    const initialState: WizardState = {
+      currentStep: 3,
+      maxVisitedStep: 3,
+      selectedDnIs: new Set(['11111111']),
+      camoByDni: {},
+      emoByDni: {},
+    };
+    renderWizard({ initialState });
+    expect(screen.getByTestId('step3-emo')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByTestId('step3-continuar'));
+    // Step 3 is gone — Step 4 placeholder is on screen.
+    expect(screen.queryByTestId('step3-emo')).not.toBeInTheDocument();
+    const placeholder = screen.getByTestId('wizard-step-4-placeholder');
+    expect(placeholder).toBeInTheDocument();
+    expect(within(placeholder).getByText(/Paso 4 — Resumen/)).toBeInTheDocument();
   });
 
   it('renders a Step 4 placeholder when currentStep=4 ("Próximamente: Paso 4 — Resumen")', () => {
