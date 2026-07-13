@@ -209,4 +209,49 @@ describe('SelectedFileRef entity', () => {
     expect(ref.path).toBe('EXAMENES/2024');
     expect(ref.name).toBe('emo.pdf');
   });
+
+  // PR envio-resultados CAMO/EMO wizard — WU-1.1
+  // The wizard picks a CAMO or EMO file per patient and propagates
+  // that choice downstream via `SelectedFileRef.tipoExamen` so the
+  // send-pipeline rename can use it without re-parsing the file name.
+  it('should accept an optional tipoExamen="CAMO" (wizard pick)', () => {
+    const ref: SelectedFileRef = {
+      ruc: '20123456789',
+      dni: '12345678',
+      idAten: 'AT-001',
+      path: 'LEGAJOS',
+      name: '75618561CERT.pdf',
+      tipoExamen: 'CAMO',
+    };
+
+    expect(ref.tipoExamen).toBe('CAMO');
+  });
+
+  it('should accept an optional tipoExamen="EMO" (wizard pick)', () => {
+    const ref: SelectedFileRef = {
+      ruc: '20123456789',
+      dni: '12345678',
+      idAten: 'AT-001',
+      path: 'LEGAJOS',
+      name: '012109975EXPED.pdf',
+      tipoExamen: 'EMO',
+    };
+
+    expect(ref.tipoExamen).toBe('EMO');
+  });
+
+  it('should stay valid when tipoExamen is omitted (legacy call sites)', () => {
+    // The legacy `emailViewDataFromFiles.ts` and per-row Ver Archivos
+    // path build refs without `tipoExamen`. They MUST keep compiling
+    // and behaving the same — `tipoExamen` is additive optional.
+    const ref: SelectedFileRef = {
+      ruc: '20123456789',
+      dni: '12345678',
+      idAten: 'AT-001',
+      path: 'LEGAJOS',
+      name: 'cert.pdf',
+    };
+
+    expect(ref.tipoExamen).toBeUndefined();
+  });
 });

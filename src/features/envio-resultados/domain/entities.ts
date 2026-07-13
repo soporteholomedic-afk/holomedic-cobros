@@ -42,6 +42,15 @@ export interface SelectedFileRef {
   idAten: string;
   path: string;
   name: string;
+  /**
+   * Optional exam type. Set by the envio wizard when the user picks a
+   * specific CAMO or EMO file per patient; the send-pipeline rename
+   * (`renameReadyFile`) prefers this value over the type inferred from
+   * `name` via `parseReadyFile`. Legacy call sites (e.g. per-row
+   * `Ver Archivos` flow) omit it — the pipeline falls back to
+   * `parseReadyFile(ref.name)`.
+   */
+  tipoExamen?: 'CAMO' | 'EMO';
 }
 
 export interface Spitch {
