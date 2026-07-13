@@ -59,19 +59,22 @@ function renderWizard(
 ) {
   const onClose = vi.fn();
   const onStateChange = vi.fn();
+  const onContinueToEmail = vi.fn();
   const stateChangeLog: WizardState[] = [];
   onStateChange.mockImplementation((s: WizardState) => {
     stateChangeLog.push(s);
   });
   const props: React.ComponentProps<typeof EnvioResultadosWizard> = {
     people,
+    companies: [{ id: 'uuid-acme', name: 'Acme Corp', ruc: '20123456789', email: 'a@x' }],
     companyName: 'Acme Corp',
     onClose,
     onStateChange,
+    onContinueToEmail,
     ...overrides,
   };
   const utils = render(<EnvioResultadosWizard {...props} />);
-  return { ...utils, onClose, onStateChange, stateChangeLog };
+  return { ...utils, onClose, onStateChange, onContinueToEmail, stateChangeLog };
 }
 
 // ---- Step component stubs ----
@@ -265,7 +268,10 @@ describe('EnvioResultadosWizard', () => {
     expect(within(card).getByText(/75618561CERT\.pdf/)).toBeInTheDocument();
   });
 
-  it('"Continuar" on Step 3 advances to Step 4 (still a placeholder)', () => {
+  it('"Continuar" on Step 3 advances to Step 4 (the real Step4Resumen — not the placeholder)', () => {
+    // PR 3 (WU-3.1) — the placeholder was replaced with the real
+    // `Step4Resumen` component. This test confirms the
+    // `currentStep === 4` branch mounts the real component.
     const initialState: WizardState = {
       currentStep: 3,
       maxVisitedStep: 3,
@@ -277,14 +283,14 @@ describe('EnvioResultadosWizard', () => {
     expect(screen.getByTestId('step3-emo')).toBeInTheDocument();
 
     fireEvent.click(screen.getByTestId('step3-continuar'));
-    // Step 3 is gone — Step 4 placeholder is on screen.
+    // Step 3 is gone — Step 4 resumen is on screen.
     expect(screen.queryByTestId('step3-emo')).not.toBeInTheDocument();
-    const placeholder = screen.getByTestId('wizard-step-4-placeholder');
-    expect(placeholder).toBeInTheDocument();
-    expect(within(placeholder).getByText(/Paso 4 — Resumen/)).toBeInTheDocument();
+    expect(screen.getByTestId('step4-resumen')).toBeInTheDocument();
+    // The old placeholder testid is GONE.
+    expect(screen.queryByTestId('wizard-step-4-placeholder')).not.toBeInTheDocument();
   });
 
-  it('renders a Step 4 placeholder when currentStep=4 ("Próximamente: Paso 4 — Resumen")', () => {
+  it('renders the real Step4Resumen (not the placeholder) when currentStep=4', () => {
     const initialState: WizardState = {
       currentStep: 4,
       maxVisitedStep: 4,
@@ -293,8 +299,78 @@ describe('EnvioResultadosWizard', () => {
       emoByDni: {},
     };
     renderWizard({ initialState });
-    const placeholder = screen.getByTestId('wizard-step-4-placeholder');
-    expect(placeholder).toBeInTheDocument();
-    expect(within(placeholder).getByText(/Paso 4 — Resumen/)).toBeInTheDocument();
+    expect(screen.getByTestId('step4-resumen')).toBeInTheDocument();
+    expect(screen.queryByTestId('wizard-step-4-placeholder')).not.toBeInTheDocument();
+  });
+
+  it('"Continuar al envío" in Step 4 composes the full EmailViewData and calls onContinueToEmail', () => {
+    // PR 3 (WU-3.5b) — the shell enriches the partial payload
+    // from `buildEmailViewDataFromWizard` (the helper lives inside
+    // `Step4Resumen`) with `companyId`/`companyName`/
+    // `nombreCompleto`/`destino` and forwards the full
+    // `EmailViewData` to the parent's `onContinueToEmail`.
+    const initialState: WizardState = {
+      currentStep: 4,
+      maxVisitedStep: 4,
+      selectedDnIs: new Set(['11111111']),
+      camoByDni: {
+        '11111111': {
+          ref: {
+            ruc: '20123456789',
+            dni: '11111111',
+            idAten: 'AT-001',
+            path: 'LEGAJOS',
+            name: 'CERT.pdf',
+            tipoExamen: 'CAMO',
+          },
+          displayName: 'CERT.pdf',
+        },
+      },
+      emoByDni: {
+        '11111111': {
+          ref: {
+            ruc: '20123456789',
+            dni: '11111111',
+            idAten: 'AT-001',
+            path: 'LEGAJOS',
+            name: 'EXPED.pdf',
+            tipoExamen: 'EMO',
+          },
+          displayName: 'EXPED.pdf',
+        },
+      },
+    };
+    const { onContinueToEmail } = renderWizard({ initialState });
+
+    fireEvent.click(screen.getByTestId('step4-continuar'));
+
+    expect(onContinueToEmail).toHaveBeenCalledTimes(1);
+    const data = onContinueToEmail.mock.calls[0]?.[0] as {
+      companyId: string;
+      companyName: string;
+      selectedPatients: Record<string, { patientName: string; files: string[] }>;
+      patients: unknown[];
+      fileRefs: Array<{ dni: string; name: string; tipoExamen?: 'CAMO' | 'EMO' }>;
+      nombreCompleto: string;
+      destino: string;
+    };
+    // companyId resolved from `companies` via the spec EI-2 contract.
+    // The people fixture's first selected patient is 11111111 with
+    // empresa 'Acme Corp' → companyId is 'uuid-acme'.
+    expect(data.companyId).toBe('uuid-acme');
+    expect(data.companyName).toBe('Acme Corp');
+    // nombreCompleto / destino come from the first selected patient.
+    expect(data.nombreCompleto).toBe('Ana López');
+    expect(data.destino).toBe('METRO LIMA');
+    // selectedPatients + fileRefs flow through from the helper.
+    expect(data.selectedPatients['11111111']?.patientName).toBe('Ana López');
+    expect(data.selectedPatients['11111111']?.files).toEqual(['CERT.pdf', 'EXPED.pdf']);
+    // Each fileRef carries the correct tipoExamen (REQ-009).
+    expect(data.fileRefs).toHaveLength(2);
+    expect(data.fileRefs.find((r) => r.name === 'CERT.pdf')?.tipoExamen).toBe('CAMO');
+    expect(data.fileRefs.find((r) => r.name === 'EXPED.pdf')?.tipoExamen).toBe('EMO');
+    // Wizard path does not produce PatientFile[] (known limitation;
+    // the AttachmentList is not exercised in the wizard path).
+    expect(data.patients).toEqual([]);
   });
 });

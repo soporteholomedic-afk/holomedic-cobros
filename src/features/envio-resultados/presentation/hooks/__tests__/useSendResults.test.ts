@@ -369,4 +369,132 @@ describe('useSendResults', () => {
     expect(init?.method).toBe('POST');
     expect(init?.body).toBeInstanceOf(FormData);
   });
+
+  // ================================================================
+  // PR #3 (WU-3.4) — Spec REQ-010a: `useSendResults` SHALL serialize
+  // `tipoExamen` within each `SelectedFileRef` in the `fileRefs`
+  // JSON (verbatim — no new FormData field).
+  //
+  // The hook uses `JSON.stringify(args.fileRefs)` to build the
+  // `fileRefs` FormData field. Once `SelectedFileRef` gains the
+  // optional `tipoExamen` field (PR1), the JSON output includes it
+  // automatically. This test pins the contract end-to-end.
+  // ================================================================
+
+  it('should serialize tipoExamen verbatim in the fileRefs JSON when present', async () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ success: true }),
+    } as Response);
+
+    const refsWithTipo: SelectedFileRef[] = [
+      {
+        ruc: '20123456789',
+        dni: '12345678',
+        idAten: 'AT-001',
+        path: 'LEGAJOS',
+        name: '75618561CERT.pdf',
+        tipoExamen: 'CAMO',
+      },
+    ];
+
+    const { result } = renderHook(() =>
+      useSendResults({ ...defaultArgs, fileRefs: refsWithTipo }),
+    );
+
+    await act(async () => {
+      await result.current.send();
+    });
+
+    const formData = fetchSpy.mock.calls[0][1]?.body as FormData;
+    const parsed = JSON.parse(formData.get('fileRefs') as string) as SelectedFileRef[];
+    expect(parsed).toHaveLength(1);
+    expect(parsed[0]?.tipoExamen).toBe('CAMO');
+    // Sanity: the rest of the ref is preserved (the hook must not
+    // accidentally strip the new field at the cost of the others).
+    expect(parsed[0]).toEqual({
+      ruc: '20123456789',
+      dni: '12345678',
+      idAten: 'AT-001',
+      path: 'LEGAJOS',
+      name: '75618561CERT.pdf',
+      tipoExamen: 'CAMO',
+    });
+  });
+
+  it('should omit tipoExamen from the fileRefs JSON when absent (backward compat)', async () => {
+    // Triangulation: legacy callers that pre-date PR1 (download
+    // routes, the per-row `Ver Archivos` path) do not stamp
+    // `tipoExamen`. The JSON output MUST stay the same shape — the
+    // route's `isFileRefShape` guard would reject unknown fields
+    // only if the `isFileRefShape` is tightened in the future, so
+    // omitting the field entirely is the safe contract.
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ success: true }),
+    } as Response);
+
+    const refsNoTipo: SelectedFileRef[] = [
+      {
+        ruc: '20123456789',
+        dni: '12345678',
+        idAten: 'AT-001',
+        path: 'LEGAJOS',
+        name: '75618561CERT.pdf',
+        // tipoExamen intentionally absent
+      },
+    ];
+
+    const { result } = renderHook(() =>
+      useSendResults({ ...defaultArgs, fileRefs: refsNoTipo }),
+    );
+
+    await act(async () => {
+      await result.current.send();
+    });
+
+    const formData = fetchSpy.mock.calls[0][1]?.body as FormData;
+    const raw = formData.get('fileRefs') as string;
+    const parsed = JSON.parse(raw) as SelectedFileRef[];
+    // JSON.stringify drops `undefined` properties — the field is
+    // not present on the parsed object.
+    expect(parsed[0]?.tipoExamen).toBeUndefined();
+    // The literal JSON MUST NOT contain `"tipoExamen"` for a ref
+    // that did not set it.
+    expect(raw).not.toContain('"tipoExamen"');
+  });
+
+  it('should serialize tipoExamen="EMO" verbatim in the fileRefs JSON when present', async () => {
+    // Triangulation: the EMO mirror. PR1 added the optional
+    // `'CAMO' | 'EMO'` literal; the JSON round-trip must preserve
+    // both values (the route forwards them to the use case, which
+    // passes them to `renameReadyFile` — see WU-3.3).
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ success: true }),
+    } as Response);
+
+    const refsEmo: SelectedFileRef[] = [
+      {
+        ruc: '20123456789',
+        dni: '12345678',
+        idAten: 'AT-001',
+        path: 'LEGAJOS',
+        name: '75618561EXPED.pdf',
+        tipoExamen: 'EMO',
+      },
+    ];
+
+    const { result } = renderHook(() =>
+      useSendResults({ ...defaultArgs, fileRefs: refsEmo }),
+    );
+
+    await act(async () => {
+      await result.current.send();
+    });
+
+    const formData = fetchSpy.mock.calls[0][1]?.body as FormData;
+    const parsed = JSON.parse(formData.get('fileRefs') as string) as SelectedFileRef[];
+    expect(parsed[0]?.tipoExamen).toBe('EMO');
+  });
 });

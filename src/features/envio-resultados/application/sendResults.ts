@@ -182,6 +182,7 @@ export class SendResultsUseCase {
           rawName: safeName,
           nombreCompleto: params.nombreCompleto,
           destino: params.destino,
+          tipoExamen: ref.tipoExamen,
         });
         attachments.push({ filename: deliveryName, content: buffer });
       } catch (err) {
