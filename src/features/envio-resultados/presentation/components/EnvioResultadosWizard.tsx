@@ -1,5 +1,5 @@
 /**
- * PR envio-resultados CAMO/EMO wizard — WU-2a.4.
+ * PR envio-resultados CAMO/EMO wizard — WU-2a.4 + WU-2b.2.
  *
  * `EnvioResultadosWizard` is the modal shell that owns the
  * `useEnvioWizard` reducer and routes the current step to its
@@ -9,9 +9,9 @@
  *     key handler, `role="dialog" aria-modal="true"`.
  *  2. Stepper — renders the 4-chip `WizardStepper` (PR 1).
  *  3. Step routing — switches on `state.currentStep` to render
- *     `Step1Pacientes` (1), `Step2Camo` (2), or a placeholder for
- *     step 3 / 4. Step 3 and 4 are explicitly placeholders in this
- *     PR; they become `Step3Emo` and `Step4Resumen` in PR 2b / PR 3.
+ *     `Step1Pacientes` (1), `Step2Camo` (2), `Step3Emo` (3), or a
+ *     placeholder for step 4. Step 4 is still an explicit placeholder
+ *     in this PR; it becomes `Step4Resumen` in PR 3.
  *  4. Reducer wiring — `togglePatient`, `next`, `prev`, `setCamo`,
  *     `setEmo`, `goToStep` flow from the step sub-components to
  *     `useEnvioWizard`.
@@ -22,7 +22,8 @@
  * Spec coverage (from `sdd/envio-resultados-camo-emo/spec`):
  *  - REQ-002 — wizard shell + stepper, Escape closes.
  *  - REQ-003 — useEnvioWizard state machine (observed via shell).
- *  - Scenarios S-001, S-021.
+ *  - REQ-006 — Step 3 EMO routing.
+ *  - Scenarios S-001, S-009, S-010, S-021.
  */
 'use client';
 
@@ -32,6 +33,7 @@ import { X } from 'lucide-react';
 import { useEnvioWizard, type WizardState } from '@/features/envio-resultados/presentation/hooks/useEnvioWizard';
 import { Step1Pacientes } from '@/features/envio-resultados/presentation/components/wizard/Step1Pacientes';
 import { Step2Camo } from '@/features/envio-resultados/presentation/components/wizard/Step2Camo';
+import { Step3Emo } from '@/features/envio-resultados/presentation/components/wizard/Step3Emo';
 import { WizardStepper } from '@/features/envio-resultados/presentation/components/wizard/WizardStepper';
 import type { UnifiedPerson } from '@/types/sp-result';
 
@@ -76,6 +78,7 @@ export function EnvioResultadosWizard({
     canAdvance,
     togglePatient,
     setCamo,
+    setEmo,
     next,
     prev,
     goToStep,
@@ -152,9 +155,9 @@ export function EnvioResultadosWizard({
         </div>
 
         {/* Body — step routing. Each step is given the same people
-            list + the relevant slice of the wizard state. Step 3 and
-            4 are explicit placeholders in PR 2a — they become real
-            components in PR 2b / PR 3. */}
+            list + the relevant slice of the wizard state. Step 4 is
+            an explicit placeholder in PR 2b — it becomes the real
+            `Step4Resumen` component in PR 3. */}
         <div className="flex-1 overflow-y-auto p-6" data-testid="wizard-body">
           {state.currentStep === 1 ? (
             <Step1Pacientes
@@ -174,20 +177,14 @@ export function EnvioResultadosWizard({
               onNext={next}
             />
           ) : state.currentStep === 3 ? (
-            <div
-              data-testid="wizard-step-3-placeholder"
-              className="px-4 py-8 text-center text-sm text-slate-500 rounded-2xl border border-dashed border-slate-200"
-            >
-              <span className="text-xs font-bold text-sky-500 uppercase tracking-widest">
-                Próximamente
-              </span>
-              <h3 className="text-lg font-semibold text-slate-700 mt-1">
-                Paso 3 — EMO
-              </h3>
-              <p className="mt-2">
-                El selector EMO llega en el próximo PR.
-              </p>
-            </div>
+            <Step3Emo
+              people={people}
+              selectedDnIs={state.selectedDnIs}
+              emoByDni={state.emoByDni}
+              onPickFile={setEmo}
+              onBack={prev}
+              onContinue={next}
+            />
           ) : (
             <div
               data-testid="wizard-step-4-placeholder"
