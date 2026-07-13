@@ -13,6 +13,7 @@ const mockFilesModalProps = vi.hoisted(() => vi.fn());
 const mockEmailEditorProps = vi.hoisted(() => vi.fn());
 const mockUseLegajosStatus = vi.hoisted(() => vi.fn());
 const mockDocumentVerificationModalProps = vi.hoisted(() => vi.fn());
+const mockEnvioResultadosWizardProps = vi.hoisted(() => vi.fn());
 
 // Stub the FilesModal so the WorkerDetailTable test does not have to
 // deal with the modal's internal usePatientFiles fetch lifecycle.
@@ -62,10 +63,35 @@ vi.mock('../FilesModal', () => ({
 // `{ companyId, selectedPatients, patients }` payload without having
 // to satisfy its internal hook contracts (useSendResults, SpitchSelector,
 // etc.). Records every prop it received.
+//
+// PR 3 (WU-3.5b) — the back button moved from the WorkerDetailTable
+// overlay wrapper into EmailEditor. The stub now exposes a
+// `trigger-back` button that calls `props.onBack` (mirroring the
+// real component's contract: the real EmailEditor renders a back
+// button when `onBack` is provided). The test clicks `trigger-back`
+// to simulate the user clicking the back button. The label
+// assertion (`Volver a la tabla` vs `Volver al paso 4`) lives in
+// `EmailEditor.test.tsx` (WU-3.2).
 vi.mock('../EmailEditor', () => ({
   EmailEditor: (props: Record<string, unknown>) => {
     mockEmailEditorProps(props);
-    return <div data-testid="email-editor-stub" data-company-id={String(props['companyId'] ?? '')} />;
+    const onBack = props['onBack'] as (() => void) | undefined;
+    return (
+      <div
+        data-testid="email-editor-stub"
+        data-company-id={String(props['companyId'] ?? '')}
+        data-back-context={String(props['backContext'] ?? '')}
+      >
+        {typeof onBack === 'function' && (
+          <button
+            data-testid="email-editor-stub-trigger-back"
+            onClick={() => onBack()}
+          >
+            trigger-back
+          </button>
+        )}
+      </div>
+    );
   },
 }));
 
@@ -79,6 +105,101 @@ vi.mock('../../hooks/useCompanies', () => ({
 
 vi.mock('../../hooks/useLegajosStatus', () => ({
   useLegajosStatus: mockUseLegajosStatus,
+}));
+
+// PR 3 (WU-3.5a) — Stub the EnvioResultadosWizard so the test can
+// observe the table → wizard state transition without having to
+// satisfy the wizard's own contracts (it owns useEnvioWizard, the
+// step sub-components, the FilesModal overlay, etc.). The stub
+// records every prop it received so the test can assert:
+//   - the wizard is mounted with the right (people, companyName, …)
+//   - the wizard is NOT mounted before the user clicks "Enviar"
+//   - the wizard receives a `onContinueToEmail` callback (the
+//     round-trip wiring lands in WU-3.5b — the test only asserts
+//     the prop is present here)
+//   - the wizard receives a `onStateChange` callback (the snapshot
+//     sync — the test only asserts the prop is present here)
+//   - the wizard receives a `onClose` callback
+//
+// PR 3 (WU-3.5b) — the stub now exposes a `trigger-continue`
+// button that calls `props.onContinueToEmail` with a fake
+// `WizardEmailViewData` payload (the partial shape from
+// `buildEmailViewDataFromWizard`). It also renders the
+// `initialState`'s `currentStep` as a `data-current-step` attribute
+// so the test can verify the round-trip restores the wizard at the
+// expected step. The full payload assertion lives in
+// `EnvioResultadosWizard.test.tsx` + `Step4Resumen.test.tsx`.
+vi.mock('../EnvioResultadosWizard', () => ({
+  EnvioResultadosWizard: (props: Record<string, unknown>) => {
+    mockEnvioResultadosWizardProps(props);
+    const companyName = String(props['companyName'] ?? '');
+    const onContinueToEmail = props['onContinueToEmail'] as
+      | ((data: {
+          selectedPatients: Record<string, { patientName: string; files: string[] }>;
+          fileRefs: Array<{ dni: string; name: string; tipoExamen?: 'CAMO' | 'EMO' }>;
+        }) => void)
+      | undefined;
+    const onStateChange = props['onStateChange'] as
+      | ((s: { currentStep: number; maxVisitedStep: number; selectedDnIs: Set<string> }) => void)
+      | undefined;
+    const initialState = props['initialState'] as
+      | { currentStep?: number }
+      | undefined;
+    return (
+      <div
+        data-testid="wizard-stub"
+        data-company-name={companyName}
+        data-current-step={String(initialState?.currentStep ?? '')}
+      >
+        {typeof onContinueToEmail === 'function' && (
+          <button
+            data-testid="wizard-stub-trigger-continue"
+            onClick={() => {
+              // Mirror the real wizard's pre-handoff state sync:
+              // the wizard fires `onStateChange` with the latest
+              // state right before the user clicks "Continuar al
+              // envío". The real wizard reaches currentStep=4 by
+              // dispatching NEXT three times from step 1. For the
+              // test we just emit the final state once.
+              onStateChange?.({
+                currentStep: 4,
+                maxVisitedStep: 4,
+                selectedDnIs: new Set(['12345678']),
+              });
+              onContinueToEmail({
+                selectedPatients: {
+                  '12345678': {
+                    patientName: 'JUAN PEREZ',
+                    files: ['CERT.pdf', 'EXPED.pdf'],
+                  },
+                },
+                fileRefs: [
+                  {
+                    ruc: '20123456789',
+                    dni: '12345678',
+                    idAten: 'AT-001',
+                    path: 'LEGAJOS',
+                    name: 'CERT.pdf',
+                    tipoExamen: 'CAMO',
+                  },
+                  {
+                    ruc: '20123456789',
+                    dni: '12345678',
+                    idAten: 'AT-001',
+                    path: 'LEGAJOS',
+                    name: 'EXPED.pdf',
+                    tipoExamen: 'EMO',
+                  },
+                ],
+              });
+            }}
+          >
+            trigger-continue
+          </button>
+        )}
+      </div>
+    );
+  },
 }));
 
 // PR 2 — Stub the DocumentVerificationModal so the table-integration
@@ -902,7 +1023,16 @@ describe('WorkerDetailTable — Unified Table', () => {
       expect(screen.queryByTestId('files-modal-stub')).not.toBeInTheDocument();
     });
 
-    it('should expose a "Volver a la tabla" button in the EmailEditor overlay that clears the state', async () => {
+    it('should expose a back button (now INSIDE EmailEditor) that clears the table-path overlay (backContext="table")', async () => {
+      // PR 3 (WU-3.5b) — the back button moved from the
+      // WorkerDetailTable overlay wrapper (lines 290-297) into
+      // EmailEditor itself. The wrapper button is GONE — the
+      // assertion below verifies the absence of the wrapper
+      // `data-testid="email-editor-back"` and the presence of the
+      // stub's `trigger-back` button instead. The label
+      // ("Volver a la tabla" vs "Volver al paso 4") is asserted in
+      // `EmailEditor.test.tsx` (WU-3.2) because the label lives in
+      // EmailEditor now.
       const person = makeUnifiedPerson();
       mockUseUnifiedResults.mockReturnValue({
         people: [person],
@@ -914,12 +1044,21 @@ describe('WorkerDetailTable — Unified Table', () => {
       fireEvent.click(screen.getByRole('button', { name: /Ver Archivos/ }));
       fireEvent.click(screen.getByTestId('files-modal-stub-trigger-onsend'));
 
-      // Overlay is up.
-      const backButton = screen.getByTestId('email-editor-back');
+      // Overlay is up. The wrapper `email-editor-back` button is
+      // GONE (moved into EmailEditor). The stub exposes
+      // `email-editor-stub-trigger-back` instead.
+      expect(screen.queryByTestId('email-editor-back')).not.toBeInTheDocument();
+      const backButton = screen.getByTestId('email-editor-stub-trigger-back');
       expect(backButton).toBeInTheDocument();
-      expect(backButton).toHaveTextContent('Volver a la tabla');
 
-      // Click → overlay unmounts, table re-renders.
+      // The EmailEditor receives `backContext='table'` for the
+      // legacy per-row path.
+      const lastProps =
+        mockEmailEditorProps.mock.calls[mockEmailEditorProps.mock.calls.length - 1]?.[0];
+      expect(lastProps?.['backContext']).toBe('table');
+      expect(typeof lastProps?.['onBack']).toBe('function');
+
+      // Click the back button → overlay unmounts, table re-renders.
       fireEvent.click(backButton);
 
       await waitFor(() => {
@@ -1538,6 +1677,285 @@ describe('WorkerDetailTable — Unified Table', () => {
       expect(verifyBtn).toBeDisabled();
       // Modal not in the DOM at all.
       expect(screen.queryByTestId('document-verification-modal-stub')).not.toBeInTheDocument();
+    });
+  });
+
+  // ================================================================
+  // PR 3 (WU-3.5a) — Spec REQ-001: WorkerDetailTable header SHALL
+  // show a single "Enviar" button next to "Verificar documentos".
+  // Click → opens the `EnvioResultadosWizard` (stubbed here for
+  // focus). The wizard state (wizardSnapshot, showWizard,
+  // emailBackContext) lives in WorkerDetailTable. The handoff
+  // wiring (`onContinueToEmail` to the EmailEditor overlay) lands
+  // in WU-3.5b; this batch only adds the button + the state +
+  // the conditional mount.
+  // ================================================================
+
+  describe('Enviar button (PR 3, WU-3.5a)', () => {
+    it('renders an "Enviar" button in the header next to "Verificar documentos"', () => {
+      mockUseUnifiedResults.mockReturnValue({
+        people: [makeUnifiedPerson()],
+        loading: false,
+        error: null,
+      });
+
+      render(<WorkerDetailTable {...DEFAULT_PROPS} />);
+
+      const enviarBtn = screen.getByTestId('enviar-wizard-btn');
+      expect(enviarBtn).toBeInTheDocument();
+      expect(enviarBtn).toHaveTextContent('Enviar');
+      // The button is in the same header as "Verificar documentos".
+      expect(screen.getByRole('button', { name: /Verificar documentos/ })).toBeInTheDocument();
+    });
+
+    it('does NOT mount the EnvioResultadosWizard before the user clicks "Enviar"', () => {
+      mockUseUnifiedResults.mockReturnValue({
+        people: [makeUnifiedPerson()],
+        loading: false,
+        error: null,
+      });
+
+      render(<WorkerDetailTable {...DEFAULT_PROPS} />);
+
+      // Wizard is not on screen yet.
+      expect(screen.queryByTestId('wizard-stub')).not.toBeInTheDocument();
+    });
+
+    it('clicking "Enviar" mounts the EnvioResultadosWizard with the table payload', () => {
+      mockUseUnifiedResults.mockReturnValue({
+        people: [makeUnifiedPerson()],
+        loading: false,
+        error: null,
+      });
+      mockUseCompanies.mockReturnValue({
+        companies: [{ id: 'uuid-x', name: 'EMPRESA TEST', ruc: '20123456789', email: 'a@x' }],
+        selectedCompanyId: null,
+        selectCompany: vi.fn(),
+        isLoading: false,
+        error: null,
+      });
+
+      render(<WorkerDetailTable {...DEFAULT_PROPS} />);
+
+      // Wizard not yet on screen.
+      expect(screen.queryByTestId('wizard-stub')).not.toBeInTheDocument();
+
+      // Click "Enviar".
+      fireEvent.click(screen.getByTestId('enviar-wizard-btn'));
+
+      // Wizard is now mounted with the table's payload.
+      const wizard = screen.getByTestId('wizard-stub');
+      expect(wizard).toBeInTheDocument();
+      // companyName is forwarded to the wizard.
+      expect(wizard.getAttribute('data-company-name')).toBe(DEFAULT_PROPS.companyName);
+
+      // The wizard received the table people list (asserted via the
+      // hoisted mock).
+      const lastProps =
+        mockEnvioResultadosWizardProps.mock.calls[mockEnvioResultadosWizardProps.mock.calls.length - 1]?.[0];
+      expect((lastProps?.['people'] as ReadonlyArray<{ dni: string }> | undefined)?.[0]?.dni).toBe('12345678');
+    });
+
+    it('forwards onClose, onStateChange, and onContinueToEmail callbacks to the wizard', () => {
+      // The wizard needs three callbacks. WU-3.5a only wires their
+      // existence; the round-trip handoff (onContinueToEmail →
+      // EmailEditor) lands in WU-3.5b. The callback identities MUST
+      // be functions (the wizard shell calls them on Escape, after
+      // every reducer transition, and on Step 4 "Continuar al
+      // envío" respectively).
+      mockUseUnifiedResults.mockReturnValue({
+        people: [makeUnifiedPerson()],
+        loading: false,
+        error: null,
+      });
+
+      render(<WorkerDetailTable {...DEFAULT_PROPS} />);
+      fireEvent.click(screen.getByTestId('enviar-wizard-btn'));
+
+      const lastProps =
+        mockEnvioResultadosWizardProps.mock.calls[mockEnvioResultadosWizardProps.mock.calls.length - 1]?.[0];
+      expect(typeof lastProps?.['onClose']).toBe('function');
+      expect(typeof lastProps?.['onStateChange']).toBe('function');
+      expect(typeof lastProps?.['onContinueToEmail']).toBe('function');
+    });
+
+    it('forwards companies + companyName to the wizard', () => {
+      mockUseUnifiedResults.mockReturnValue({
+        people: [makeUnifiedPerson()],
+        loading: false,
+        error: null,
+      });
+      const companies = [
+        { id: 'uuid-1', name: 'CO A', ruc: '20111111111', email: 'a@x' },
+        { id: 'uuid-2', name: 'CO B', ruc: '20222222222', email: 'b@x' },
+      ];
+      mockUseCompanies.mockReturnValue({
+        companies,
+        selectedCompanyId: null,
+        selectCompany: vi.fn(),
+        isLoading: false,
+        error: null,
+      });
+
+      render(<WorkerDetailTable {...DEFAULT_PROPS} />);
+      fireEvent.click(screen.getByTestId('enviar-wizard-btn'));
+
+      const lastProps =
+        mockEnvioResultadosWizardProps.mock.calls[mockEnvioResultadosWizardProps.mock.calls.length - 1]?.[0];
+      expect(lastProps?.['companies']).toEqual(companies);
+      expect(lastProps?.['companyName']).toBe(DEFAULT_PROPS.companyName);
+    });
+  });
+
+  // ================================================================
+  // PR 3 (WU-3.5b) — Spec REQ-007 / REQ-008 / REQ-012:
+  //   - The wizard's "Continuar al envío" hands off to the
+  //     EmailEditor overlay with `backContext='wizard'` (REQ-008).
+  //   - The EmailEditor renders its back button with the label
+  //     "Volver al paso 4" (REQ-008; the label assertion lives in
+  //     `EmailEditor.test.tsx`).
+  //   - Clicking the back button round-trips back to the wizard
+  //     with the previous state restored (REQ-007 / R7).
+  //   - The legacy per-row path still works with
+  //     `backContext='table'` (REQ-012 — adjusted test above).
+  //   - The wrapper back button at WorkerDetailTable lines
+  //     290-297 is REMOVED (R6 mitigation; the test above asserts
+  //     `email-editor-back` is no longer in the wrapper).
+  // ================================================================
+
+  describe('Wizard ↔ EmailEditor round-trip (PR 3, WU-3.5b)', () => {
+    /**
+     * Helper — drive the table to the state where the wizard is
+     * mounted and a "wizard" EmailEditor overlay is up. The test
+     * then exercises the back button.
+     */
+    function driveToWizardOverlay(): void {
+      const person = makeUnifiedPerson();
+      mockUseUnifiedResults.mockReturnValue({
+        people: [person],
+        loading: false,
+        error: null,
+      });
+      mockUseCompanies.mockReturnValue({
+        companies: [{ id: 'uuid-x', name: 'EMPRESA TEST', ruc: '20123456789', email: 'a@x' }],
+        selectedCompanyId: null,
+        selectCompany: vi.fn(),
+        isLoading: false,
+        error: null,
+      });
+      render(<WorkerDetailTable {...DEFAULT_PROPS} />);
+      // Open the wizard.
+      fireEvent.click(screen.getByTestId('enviar-wizard-btn'));
+      // Click the wizard's "Continuar al envío" stub button → the
+      // table composes the full EmailViewData and mounts the
+      // EmailEditor overlay with backContext='wizard'.
+      fireEvent.click(screen.getByTestId('wizard-stub-trigger-continue'));
+    }
+
+    it('"Continuar al envío" inside the wizard opens the EmailEditor overlay with backContext="wizard"', () => {
+      driveToWizardOverlay();
+
+      // EmailEditor overlay is on screen.
+      const overlay = screen.getByTestId('email-editor-overlay');
+      expect(overlay).toBeInTheDocument();
+      // backContext='wizard' is forwarded to the EmailEditor stub.
+      const stub = screen.getByTestId('email-editor-stub');
+      expect(stub.getAttribute('data-back-context')).toBe('wizard');
+      // The stub exposes a back button (the real component renders
+      // the label; the label assertion lives in EmailEditor.test.tsx).
+      expect(screen.getByTestId('email-editor-stub-trigger-back')).toBeInTheDocument();
+    });
+
+    it('"Continuar al envío" composes the full EmailViewData from the wizard payload (selectedPatients + fileRefs reach the EmailEditor)', () => {
+      driveToWizardOverlay();
+
+      // The EmailEditor received the bridged `selectedPatients` +
+      // `fileRefs` (with `tipoExamen`) from the wizard's
+      // `buildEmailViewDataFromWizard` output. The stub fires a
+      // fake payload; the table composes the full
+      // `EmailViewData` (companyId/companyName/nombreCompleto/destino)
+      // and forwards it.
+      const lastProps =
+        mockEmailEditorProps.mock.calls[mockEmailEditorProps.mock.calls.length - 1]?.[0];
+
+      // selectedPatients keyed by dni
+      const selectedPatients = lastProps?.['selectedPatients'] as Record<string, { patientName: string; files: string[] }>;
+      expect(selectedPatients['12345678']?.patientName).toBe('JUAN PEREZ');
+      expect(selectedPatients['12345678']?.files).toEqual(['CERT.pdf', 'EXPED.pdf']);
+
+      // fileRefs each carry tipoExamen (REQ-009 + REQ-010a)
+      const fileRefs = lastProps?.['fileRefs'] as Array<{ dni: string; name: string; tipoExamen?: 'CAMO' | 'EMO' }>;
+      expect(fileRefs).toHaveLength(2);
+      expect(fileRefs.find((r) => r.name === 'CERT.pdf')?.tipoExamen).toBe('CAMO');
+      expect(fileRefs.find((r) => r.name === 'EXPED.pdf')?.tipoExamen).toBe('EMO');
+    });
+
+    it('clicking the back button on the wizard-context overlay reopens the wizard with the previous state preserved', async () => {
+      driveToWizardOverlay();
+
+      // Sanity: the wizard is no longer mounted; the EmailEditor
+      // overlay is up.
+      expect(screen.queryByTestId('wizard-stub')).not.toBeInTheDocument();
+      expect(screen.getByTestId('email-editor-overlay')).toBeInTheDocument();
+
+      // Click the back button on the EmailEditor overlay
+      // (backContext='wizard' → reopen wizard).
+      fireEvent.click(screen.getByTestId('email-editor-stub-trigger-back'));
+
+      // The overlay unmounts and the wizard reopens with
+      // `initialState` set to the snapshot. The stub's
+      // `data-current-step` attribute reflects the
+      // `initialState.currentStep`. The wizard's
+      // `onStateChange` callback fires on every transition; the
+      // last snapshot the table stored was step 4 (the
+      // "Continuar al envío" target).
+      await waitFor(() => {
+        const wizard = screen.getByTestId('wizard-stub');
+        expect(wizard).toBeInTheDocument();
+        expect(wizard.getAttribute('data-current-step')).toBe('4');
+      });
+      // The EmailEditor overlay is gone.
+      expect(screen.queryByTestId('email-editor-overlay')).not.toBeInTheDocument();
+    });
+
+    it('does NOT render the legacy wrapper back button (the button moved into EmailEditor)', () => {
+      // The wrapper at lines 290-297 of WorkerDetailTable is
+      // REMOVED in WU-3.5b. The back button is now in EmailEditor
+      // (data-testid="email-editor-back", conditional on
+      // `onBack`). The wrapper testid MUST NOT be in the document.
+      driveToWizardOverlay();
+
+      expect(screen.queryByTestId('email-editor-back')).not.toBeInTheDocument();
+    });
+
+    it('the legacy per-row path uses backContext="table" — table-path back button unmounts the overlay (no wizard)', async () => {
+      // Regression: the per-row "Ver Archivos" path still works.
+      // The EmailEditor receives backContext='table'. Clicking the
+      // back button on the overlay unmounts the overlay; the
+      // wizard is NOT involved (the user never opened the wizard).
+      const person = makeUnifiedPerson();
+      mockUseUnifiedResults.mockReturnValue({
+        people: [person],
+        loading: false,
+        error: null,
+      });
+
+      render(<WorkerDetailTable {...DEFAULT_PROPS} />);
+      fireEvent.click(screen.getByRole('button', { name: /Ver Archivos/ }));
+      fireEvent.click(screen.getByTestId('files-modal-stub-trigger-onsend'));
+
+      // Overlay up; backContext='table'.
+      const stub = screen.getByTestId('email-editor-stub');
+      expect(stub.getAttribute('data-back-context')).toBe('table');
+      // Click back → overlay unmounts.
+      fireEvent.click(screen.getByTestId('email-editor-stub-trigger-back'));
+      await waitFor(() => {
+        expect(screen.queryByTestId('email-editor-overlay')).not.toBeInTheDocument();
+      });
+      // Wizard was never opened.
+      expect(screen.queryByTestId('wizard-stub')).not.toBeInTheDocument();
+      // The table is back.
+      expect(screen.getByText('Ficha')).toBeInTheDocument();
     });
   });
 });

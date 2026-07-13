@@ -9,6 +9,8 @@ import type { FileNode } from '@/features/envio-resultados/domain/file-system/Fi
 import { FilesModal } from './FilesModal';
 import { EmailEditor } from './EmailEditor';
 import { DocumentVerificationModal } from './DocumentVerificationModal';
+import { EnvioResultadosWizard } from './EnvioResultadosWizard';
+import type { WizardState } from '../hooks/useEnvioWizard';
 import {
   emailViewDataFromFiles,
   type EmailViewData,
@@ -53,6 +55,20 @@ export function WorkerDetailTable({ companyName, fechaInicio, fechaFin }: Worker
   // open only after `checkAll()` resolves; never on rejection or while
   // pending"). Reset by the modal's `onClose` callback.
   const [showVerificationModal, setShowVerificationModal] = useState(false);
+  // PR 3 (WU-3.5a) — wizard state. The `EnvioResultadosWizard` is a
+  // parallel send path that the "Enviar" button opens. The wizard
+  // owns the per-patient CAMO/EMO picks; this table stores the
+  // latest wizard state so the "Volver al paso 4" round-trip can
+  // remount the wizard with the previous picks intact (WU-3.5b).
+  const [wizardSnapshot, setWizardSnapshot] = useState<WizardState | null>(null);
+  const [showWizard, setShowWizard] = useState(false);
+  // PR 3 (WU-3.5b) — back-context for the EmailEditor overlay.
+  // `'wizard'` when the overlay was opened from the wizard's
+  // Step 4 "Continuar al envío" (the back button reads
+  // "Volver al paso 4"). `'table'` for the legacy per-row
+  // "Ver Archivos" path (the back button reads "Volver a la
+  // tabla").
+  const [emailBackContext, setEmailBackContext] = useState<'table' | 'wizard'>('table');
   const {
     statuses,
     checkAll,
@@ -144,9 +160,63 @@ export function WorkerDetailTable({ companyName, fechaInicio, fechaFin }: Worker
     [modalState, people, companies, companyName],
   );
 
-  const returnToTable = useCallback((): void => {
-    setEmailViewData(null);
+  // PR 3 (WU-3.5a) — wizard open/close + state snapshot. The
+  // `onContinueToEmail` callback is a no-op in this PR; the
+  // round-trip handoff to the EmailEditor overlay lands in
+  // WU-3.5b (the same batch removes the wrapper back button).
+  const openWizard = useCallback((): void => {
+    setShowWizard(true);
   }, []);
+
+  const closeWizard = useCallback((): void => {
+    setShowWizard(false);
+    setWizardSnapshot(null);
+    setEmailBackContext('table');
+  }, []);
+
+  const handleWizardStateChange = useCallback((s: WizardState): void => {
+    setWizardSnapshot(s);
+  }, []);
+
+  /**
+   * PR 3 (WU-3.5b) — wizard → EmailEditor handoff. The wizard
+   * shell composes the FULL `EmailViewData` (resolving
+   * `companyId` from the page-level `companies`, taking the
+   * first selected patient's `nombre`/`destino`); this table
+   * stores it in `emailViewData` (which mounts the existing
+   * `EmailEditor` overlay) and flips `emailBackContext` to
+   * `'wizard'` so the overlay's back button reads
+   * "Volver al paso 4" and the round-trip onBack reopens the
+   * wizard. The wizard is unmounted (`showWizard=false`) — the
+   * round-trip restoration is driven by the `wizardSnapshot`
+   * stored via `onStateChange`.
+   */
+  const handleWizardContinueToEmail = useCallback((data: EmailViewData): void => {
+    setShowWizard(false);
+    setEmailBackContext('wizard');
+    setEmailViewData(data);
+  }, []);
+
+  /**
+   * PR 3 (WU-3.5b) — EmailEditor overlay's back button handler.
+   * The behavior depends on `emailBackContext`:
+   *   - `'wizard'`: reopen the wizard with the stored
+   *     `wizardSnapshot` (the round-trip restoration). The
+   *     overlay unmounts; the wizard remounts.
+   *   - `'table'`: clear `emailViewData` (the table is back).
+   *     The `wizardSnapshot` is preserved for the next
+   *     round-trip in case the user reopens the wizard via
+   *     "Enviar", but in practice a fresh wizard starts at
+   *     step 1.
+   */
+  const handleEmailEditorBack = useCallback((): void => {
+    if (emailBackContext === 'wizard') {
+      setEmailViewData(null);
+      setShowWizard(true);
+    } else {
+      setEmailViewData(null);
+    }
+  }, [emailBackContext]);
 
   // ---- Loading state ----
   if (loading) {
@@ -194,14 +264,27 @@ export function WorkerDetailTable({ companyName, fechaInicio, fechaFin }: Worker
                 </span>
               )}
             </div>
-            <button
-              type="button"
-              disabled={isChecking || people.length === 0}
-              onClick={handleCheckAll}
-              className="px-4 py-2 rounded-xl text-sm font-semibold bg-sky-600 hover:bg-sky-700 disabled:bg-sky-400 text-white transition-colors"
-            >
-              {isChecking ? 'Verificando...' : 'Verificar documentos'}
-            </button>
+            <div className="flex items-center gap-3">
+              {/* PR 3 (WU-3.5a) — `Enviar` opens the
+                  `EnvioResultadosWizard` overlay. Sits next to
+                  "Verificar documentos" per spec REQ-001. */}
+              <button
+                type="button"
+                data-testid="enviar-wizard-btn"
+                onClick={openWizard}
+                className="px-4 py-2 rounded-xl text-sm font-semibold bg-emerald-600 hover:bg-emerald-700 text-white transition-colors"
+              >
+                Enviar
+              </button>
+              <button
+                type="button"
+                disabled={isChecking || people.length === 0}
+                onClick={handleCheckAll}
+                className="px-4 py-2 rounded-xl text-sm font-semibold bg-sky-600 hover:bg-sky-700 disabled:bg-sky-400 text-white transition-colors"
+              >
+                {isChecking ? 'Verificando...' : 'Verificar documentos'}
+              </button>
+            </div>
           </div>
           <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
             <table className="w-full text-left text-sm">
@@ -285,17 +368,12 @@ export function WorkerDetailTable({ companyName, fechaInicio, fechaFin }: Worker
           className="fixed inset-0 z-50 bg-white dark:bg-slate-900 overflow-auto"
         >
           <div className="max-w-7xl mx-auto p-6 space-y-4">
-            <div className="flex items-center justify-between">
-              <h2 className="text-xl font-semibold text-slate-800 dark:text-slate-100">Redactar correo</h2>
-              <button
-                type="button"
-                onClick={returnToTable}
-                data-testid="email-editor-back"
-                className="px-4 py-2 rounded-xl border border-slate-200 dark:border-slate-800 hover:bg-slate-100 dark:hover:bg-slate-800 text-sm font-semibold"
-              >
-                Volver a la tabla
-              </button>
-            </div>
+            {/* PR 3 (WU-3.5b) — the wrapper back button moved into
+                `EmailEditor` (the button renders conditionally on
+                `onBack` being provided). `backContext` selects the
+                label:
+                  - `'wizard'` → "Volver al paso 4" (round-trip)
+                  - `'table'`  → "Volver a la tabla" (legacy path) */}
             <EmailEditor
               companyId={emailViewData.companyId}
               companyName={emailViewData.companyName}
@@ -306,9 +384,26 @@ export function WorkerDetailTable({ companyName, fechaInicio, fechaFin }: Worker
               // can serialise them as the wire payload. `PatientFile`
               // (display) stays in `patients` for the AttachmentList.
               fileRefs={emailViewData.fileRefs}
+              backContext={emailBackContext}
+              onBack={handleEmailEditorBack}
             />
           </div>
         </section>
+      )}
+      {/* PR 3 (WU-3.5a) — `EnvioResultadosWizard` mounts when the
+          "Enviar" header button fires. The handoff to the
+          `EmailEditor` overlay (Step 4 "Continuar al envío") is
+          wired in WU-3.5b. */}
+      {showWizard && (
+        <EnvioResultadosWizard
+          people={people}
+          companies={companies}
+          companyName={companyName}
+          initialState={wizardSnapshot ?? undefined}
+          onClose={closeWizard}
+          onStateChange={handleWizardStateChange}
+          onContinueToEmail={handleWizardContinueToEmail}
+        />
       )}
     </div>
   );
