@@ -9,6 +9,8 @@ import type { FileNode } from '@/features/envio-resultados/domain/file-system/Fi
 import { FilesModal } from './FilesModal';
 import { EmailEditor } from './EmailEditor';
 import { DocumentVerificationModal } from './DocumentVerificationModal';
+import { EnvioResultadosWizard } from './EnvioResultadosWizard';
+import type { WizardState } from '../hooks/useEnvioWizard';
 import {
   emailViewDataFromFiles,
   type EmailViewData,
@@ -53,6 +55,13 @@ export function WorkerDetailTable({ companyName, fechaInicio, fechaFin }: Worker
   // open only after `checkAll()` resolves; never on rejection or while
   // pending"). Reset by the modal's `onClose` callback.
   const [showVerificationModal, setShowVerificationModal] = useState(false);
+  // PR 3 (WU-3.5a) — wizard state. The `EnvioResultadosWizard` is a
+  // parallel send path that the "Enviar" button opens. The wizard
+  // owns the per-patient CAMO/EMO picks; this table stores the
+  // latest wizard state so the "Volver al paso 4" round-trip can
+  // remount the wizard with the previous picks intact (WU-3.5b).
+  const [wizardSnapshot, setWizardSnapshot] = useState<WizardState | null>(null);
+  const [showWizard, setShowWizard] = useState(false);
   const {
     statuses,
     checkAll,
@@ -148,6 +157,42 @@ export function WorkerDetailTable({ companyName, fechaInicio, fechaFin }: Worker
     setEmailViewData(null);
   }, []);
 
+  // PR 3 (WU-3.5a) — wizard open/close + state snapshot. The
+  // `onContinueToEmail` callback is a no-op in this PR; the
+  // round-trip handoff to the EmailEditor overlay lands in
+  // WU-3.5b (the same batch removes the wrapper back button).
+  const openWizard = useCallback((): void => {
+    setShowWizard(true);
+  }, []);
+
+  const closeWizard = useCallback((): void => {
+    setShowWizard(false);
+    setWizardSnapshot(null);
+  }, []);
+
+  const handleWizardStateChange = useCallback((s: WizardState): void => {
+    setWizardSnapshot(s);
+  }, []);
+
+  /**
+   * PR 3 (WU-3.5a) — placeholder for the wizard → email handoff.
+   * The wizard's "Continuar al envío" button fires this with the
+   * `{ selectedPatients, fileRefs }` payload from
+   * `buildEmailViewDataFromWizard`. WU-3.5b enriches this to the
+   * full `EmailViewData` and stores it in `emailViewData` (which
+   * mounts the existing `EmailEditor` overlay).
+   *
+   * The parameter is typed loosely here so the WU-3.5a tests do
+   * not require `onContinueToEmail` to be wired yet.
+   */
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const handleWizardContinueToEmail = useCallback((_data: unknown): void => {
+    // WU-3.5a: no-op. WU-3.5b will compose the full EmailViewData
+    // (companyId/companyName/nombreCompleto/destino + the partial
+    // payload) and call `setEmailViewData(...)` to mount the
+    // EmailEditor overlay.
+  }, []);
+
   // ---- Loading state ----
   if (loading) {
     return (
@@ -194,14 +239,27 @@ export function WorkerDetailTable({ companyName, fechaInicio, fechaFin }: Worker
                 </span>
               )}
             </div>
-            <button
-              type="button"
-              disabled={isChecking || people.length === 0}
-              onClick={handleCheckAll}
-              className="px-4 py-2 rounded-xl text-sm font-semibold bg-sky-600 hover:bg-sky-700 disabled:bg-sky-400 text-white transition-colors"
-            >
-              {isChecking ? 'Verificando...' : 'Verificar documentos'}
-            </button>
+            <div className="flex items-center gap-3">
+              {/* PR 3 (WU-3.5a) — `Enviar` opens the
+                  `EnvioResultadosWizard` overlay. Sits next to
+                  "Verificar documentos" per spec REQ-001. */}
+              <button
+                type="button"
+                data-testid="enviar-wizard-btn"
+                onClick={openWizard}
+                className="px-4 py-2 rounded-xl text-sm font-semibold bg-emerald-600 hover:bg-emerald-700 text-white transition-colors"
+              >
+                Enviar
+              </button>
+              <button
+                type="button"
+                disabled={isChecking || people.length === 0}
+                onClick={handleCheckAll}
+                className="px-4 py-2 rounded-xl text-sm font-semibold bg-sky-600 hover:bg-sky-700 disabled:bg-sky-400 text-white transition-colors"
+              >
+                {isChecking ? 'Verificando...' : 'Verificar documentos'}
+              </button>
+            </div>
           </div>
           <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
             <table className="w-full text-left text-sm">
@@ -309,6 +367,21 @@ export function WorkerDetailTable({ companyName, fechaInicio, fechaFin }: Worker
             />
           </div>
         </section>
+      )}
+      {/* PR 3 (WU-3.5a) — `EnvioResultadosWizard` mounts when the
+          "Enviar" header button fires. The handoff to the
+          `EmailEditor` overlay (Step 4 "Continuar al envío") is
+          wired in WU-3.5b. */}
+      {showWizard && (
+        <EnvioResultadosWizard
+          people={people}
+          companies={companies}
+          companyName={companyName}
+          initialState={wizardSnapshot ?? undefined}
+          onClose={closeWizard}
+          onStateChange={handleWizardStateChange}
+          onContinueToEmail={handleWizardContinueToEmail}
+        />
       )}
     </div>
   );

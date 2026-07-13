@@ -13,6 +13,7 @@ const mockFilesModalProps = vi.hoisted(() => vi.fn());
 const mockEmailEditorProps = vi.hoisted(() => vi.fn());
 const mockUseLegajosStatus = vi.hoisted(() => vi.fn());
 const mockDocumentVerificationModalProps = vi.hoisted(() => vi.fn());
+const mockEnvioResultadosWizardProps = vi.hoisted(() => vi.fn());
 
 // Stub the FilesModal so the WorkerDetailTable test does not have to
 // deal with the modal's internal usePatientFiles fetch lifecycle.
@@ -79,6 +80,32 @@ vi.mock('../../hooks/useCompanies', () => ({
 
 vi.mock('../../hooks/useLegajosStatus', () => ({
   useLegajosStatus: mockUseLegajosStatus,
+}));
+
+// PR 3 (WU-3.5a) — Stub the EnvioResultadosWizard so the test can
+// observe the table → wizard state transition without having to
+// satisfy the wizard's own contracts (it owns useEnvioWizard, the
+// step sub-components, the FilesModal overlay, etc.). The stub
+// records every prop it received so the test can assert:
+//   - the wizard is mounted with the right (people, companyName, …)
+//   - the wizard is NOT mounted before the user clicks "Enviar"
+//   - the wizard receives a `onContinueToEmail` callback (the
+//     round-trip wiring lands in WU-3.5b — the test only asserts
+//     the prop is present here)
+//   - the wizard receives a `onStateChange` callback (the snapshot
+//     sync — the test only asserts the prop is present here)
+//   - the wizard receives a `onClose` callback
+//
+// The stub exposes no trigger button yet (the round-trip tests
+// land in WU-3.5b).
+vi.mock('../EnvioResultadosWizard', () => ({
+  EnvioResultadosWizard: (props: Record<string, unknown>) => {
+    mockEnvioResultadosWizardProps(props);
+    const companyName = String(props['companyName'] ?? '');
+    return (
+      <div data-testid="wizard-stub" data-company-name={companyName} />
+    );
+  },
 }));
 
 // PR 2 — Stub the DocumentVerificationModal so the table-integration
@@ -1538,6 +1565,133 @@ describe('WorkerDetailTable — Unified Table', () => {
       expect(verifyBtn).toBeDisabled();
       // Modal not in the DOM at all.
       expect(screen.queryByTestId('document-verification-modal-stub')).not.toBeInTheDocument();
+    });
+  });
+
+  // ================================================================
+  // PR 3 (WU-3.5a) — Spec REQ-001: WorkerDetailTable header SHALL
+  // show a single "Enviar" button next to "Verificar documentos".
+  // Click → opens the `EnvioResultadosWizard` (stubbed here for
+  // focus). The wizard state (wizardSnapshot, showWizard,
+  // emailBackContext) lives in WorkerDetailTable. The handoff
+  // wiring (`onContinueToEmail` to the EmailEditor overlay) lands
+  // in WU-3.5b; this batch only adds the button + the state +
+  // the conditional mount.
+  // ================================================================
+
+  describe('Enviar button (PR 3, WU-3.5a)', () => {
+    it('renders an "Enviar" button in the header next to "Verificar documentos"', () => {
+      mockUseUnifiedResults.mockReturnValue({
+        people: [makeUnifiedPerson()],
+        loading: false,
+        error: null,
+      });
+
+      render(<WorkerDetailTable {...DEFAULT_PROPS} />);
+
+      const enviarBtn = screen.getByTestId('enviar-wizard-btn');
+      expect(enviarBtn).toBeInTheDocument();
+      expect(enviarBtn).toHaveTextContent('Enviar');
+      // The button is in the same header as "Verificar documentos".
+      expect(screen.getByRole('button', { name: /Verificar documentos/ })).toBeInTheDocument();
+    });
+
+    it('does NOT mount the EnvioResultadosWizard before the user clicks "Enviar"', () => {
+      mockUseUnifiedResults.mockReturnValue({
+        people: [makeUnifiedPerson()],
+        loading: false,
+        error: null,
+      });
+
+      render(<WorkerDetailTable {...DEFAULT_PROPS} />);
+
+      // Wizard is not on screen yet.
+      expect(screen.queryByTestId('wizard-stub')).not.toBeInTheDocument();
+    });
+
+    it('clicking "Enviar" mounts the EnvioResultadosWizard with the table payload', () => {
+      mockUseUnifiedResults.mockReturnValue({
+        people: [makeUnifiedPerson()],
+        loading: false,
+        error: null,
+      });
+      mockUseCompanies.mockReturnValue({
+        companies: [{ id: 'uuid-x', name: 'EMPRESA TEST', ruc: '20123456789', email: 'a@x' }],
+        selectedCompanyId: null,
+        selectCompany: vi.fn(),
+        isLoading: false,
+        error: null,
+      });
+
+      render(<WorkerDetailTable {...DEFAULT_PROPS} />);
+
+      // Wizard not yet on screen.
+      expect(screen.queryByTestId('wizard-stub')).not.toBeInTheDocument();
+
+      // Click "Enviar".
+      fireEvent.click(screen.getByTestId('enviar-wizard-btn'));
+
+      // Wizard is now mounted with the table's payload.
+      const wizard = screen.getByTestId('wizard-stub');
+      expect(wizard).toBeInTheDocument();
+      // companyName is forwarded to the wizard.
+      expect(wizard.getAttribute('data-company-name')).toBe(DEFAULT_PROPS.companyName);
+
+      // The wizard received the table people list (asserted via the
+      // hoisted mock).
+      const lastProps =
+        mockEnvioResultadosWizardProps.mock.calls[mockEnvioResultadosWizardProps.mock.calls.length - 1]?.[0];
+      expect((lastProps?.['people'] as ReadonlyArray<{ dni: string }> | undefined)?.[0]?.dni).toBe('12345678');
+    });
+
+    it('forwards onClose, onStateChange, and onContinueToEmail callbacks to the wizard', () => {
+      // The wizard needs three callbacks. WU-3.5a only wires their
+      // existence; the round-trip handoff (onContinueToEmail →
+      // EmailEditor) lands in WU-3.5b. The callback identities MUST
+      // be functions (the wizard shell calls them on Escape, after
+      // every reducer transition, and on Step 4 "Continuar al
+      // envío" respectively).
+      mockUseUnifiedResults.mockReturnValue({
+        people: [makeUnifiedPerson()],
+        loading: false,
+        error: null,
+      });
+
+      render(<WorkerDetailTable {...DEFAULT_PROPS} />);
+      fireEvent.click(screen.getByTestId('enviar-wizard-btn'));
+
+      const lastProps =
+        mockEnvioResultadosWizardProps.mock.calls[mockEnvioResultadosWizardProps.mock.calls.length - 1]?.[0];
+      expect(typeof lastProps?.['onClose']).toBe('function');
+      expect(typeof lastProps?.['onStateChange']).toBe('function');
+      expect(typeof lastProps?.['onContinueToEmail']).toBe('function');
+    });
+
+    it('forwards companies + companyName to the wizard', () => {
+      mockUseUnifiedResults.mockReturnValue({
+        people: [makeUnifiedPerson()],
+        loading: false,
+        error: null,
+      });
+      const companies = [
+        { id: 'uuid-1', name: 'CO A', ruc: '20111111111', email: 'a@x' },
+        { id: 'uuid-2', name: 'CO B', ruc: '20222222222', email: 'b@x' },
+      ];
+      mockUseCompanies.mockReturnValue({
+        companies,
+        selectedCompanyId: null,
+        selectCompany: vi.fn(),
+        isLoading: false,
+        error: null,
+      });
+
+      render(<WorkerDetailTable {...DEFAULT_PROPS} />);
+      fireEvent.click(screen.getByTestId('enviar-wizard-btn'));
+
+      const lastProps =
+        mockEnvioResultadosWizardProps.mock.calls[mockEnvioResultadosWizardProps.mock.calls.length - 1]?.[0];
+      expect(lastProps?.['companies']).toEqual(companies);
+      expect(lastProps?.['companyName']).toBe(DEFAULT_PROPS.companyName);
     });
   });
 });
