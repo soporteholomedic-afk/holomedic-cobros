@@ -549,4 +549,79 @@ describe('EmailEditor', () => {
       Object.assign(mockSpitchOverride, previous);
     }
   });
+
+  // ================================================================
+  // PR #3 — Spec REQ-008: `EmailEditor.backContext` + `onBack`.
+  // The back button renders inside `EmailEditor` (it moved out of
+  // the `WorkerDetailTable` overlay wrapper in PR3 — see WU-3.5b).
+  // The button is conditional on `onBack` being provided:
+  //   - `onBack` provided + `backContext='wizard'`  → "Volver al paso 4"
+  //   - `onBack` provided + `backContext='table'`   → "Volver a la tabla"
+  //   - `onBack` omitted (default `page.tsx` caller) → no button
+  // ================================================================
+
+  it('renders the back button with label "Volver a la tabla" when backContext="table" and onBack is provided', () => {
+    mockFetch.mockResolvedValue({ ok: true, json: () => Promise.resolve({ success: true }) });
+
+    const onBack = vi.fn();
+    render(<EmailEditor {...defaultProps} backContext="table" onBack={onBack} />);
+
+    const back = screen.getByTestId('email-editor-back');
+    expect(back).toBeInTheDocument();
+    expect(back).toHaveTextContent('Volver a la tabla');
+  });
+
+  it('renders the back button with label "Volver al paso 4" when backContext="wizard" and onBack is provided', () => {
+    mockFetch.mockResolvedValue({ ok: true, json: () => Promise.resolve({ success: true }) });
+
+    const onBack = vi.fn();
+    render(<EmailEditor {...defaultProps} backContext="wizard" onBack={onBack} />);
+
+    const back = screen.getByTestId('email-editor-back');
+    expect(back).toBeInTheDocument();
+    expect(back).toHaveTextContent('Volver al paso 4');
+  });
+
+  it('clicking the back button calls onBack', () => {
+    mockFetch.mockResolvedValue({ ok: true, json: () => Promise.resolve({ success: true }) });
+
+    const onBack = vi.fn();
+    render(<EmailEditor {...defaultProps} backContext="wizard" onBack={onBack} />);
+
+    fireEvent.click(screen.getByTestId('email-editor-back'));
+    expect(onBack).toHaveBeenCalledTimes(1);
+  });
+
+  it('does NOT render the back button when onBack is undefined (R5 mitigation for page.tsx)', () => {
+    mockFetch.mockResolvedValue({ ok: true, json: () => Promise.resolve({ success: true }) });
+
+    // backContext default is 'table', but the absence of onBack must
+    // suppress the button entirely — `page.tsx` does not pass onBack
+    // and it has its own wrapper back button.
+    render(<EmailEditor {...defaultProps} />);
+
+    expect(screen.queryByTestId('email-editor-back')).not.toBeInTheDocument();
+  });
+
+  it('does NOT render the back button when backContext="wizard" but onBack is undefined', () => {
+    // Triangulation: backContext alone is not enough — the absence of
+    // onBack must suppress the button even when backContext is set.
+    // Defensive: a caller setting backContext without onBack would
+    // otherwise render a dead button.
+    mockFetch.mockResolvedValue({ ok: true, json: () => Promise.resolve({ success: true }) });
+
+    render(<EmailEditor {...defaultProps} backContext="wizard" />);
+
+    expect(screen.queryByTestId('email-editor-back')).not.toBeInTheDocument();
+  });
+
+  it('backContext defaults to "table" — passing only onBack yields the table label', () => {
+    mockFetch.mockResolvedValue({ ok: true, json: () => Promise.resolve({ success: true }) });
+
+    const onBack = vi.fn();
+    render(<EmailEditor {...defaultProps} onBack={onBack} />);
+
+    // Default `backContext` is 'table' — the label is "Volver a la tabla".
+    expect(screen.getByTestId('email-editor-back')).toHaveTextContent('Volver a la tabla');
+  });
 });

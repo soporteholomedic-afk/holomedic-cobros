@@ -48,6 +48,18 @@ interface EmailEditorProps {
   nombreCompleto?: string;
   /** Destino (DesDes / proyecto) for ready-file rename in delivery. */
   destino?: string;
+  /**
+   * PR #3 (WU-3.2) — Optional back button. Renders a back button
+   * inside the editor when `onBack` is provided. `backContext`
+   * picks the label:
+   *   - `'table'`  → "Volver a la tabla" (legacy per-row path)
+   *   - `'wizard'` → "Volver al paso 4" (wizard → email round-trip)
+   * The button is conditional on `onBack` being a function so the
+   * standalone `page.tsx` caller (which renders its own wrapper
+   * back button) does not get a duplicate (R5 mitigation).
+   */
+  backContext?: 'table' | 'wizard';
+  onBack?: () => void;
 }
 
 export function EmailEditor({
@@ -67,6 +79,12 @@ export function EmailEditor({
   fileRefs = [],
   nombreCompleto = '',
   destino = '',
+  // PR #3 (WU-3.2) — back button. Defaults to the table label.
+  // The button is rendered only when `onBack` is provided (the
+  // `page.tsx` standalone caller omits it and renders its own
+  // wrapper button).
+  backContext = 'table',
+  onBack,
 }: EmailEditorProps) {
   // Reference the intentionally-unused prop to satisfy the linter.
   // Documented contract: the parent passes `companyId` for future
@@ -254,7 +272,23 @@ export function EmailEditor({
 
       {/* ===== RIGHT PANEL: Controls ===== */}
       <div className="space-y-6">
-        <h2 className="text-lg font-semibold text-slate-800 dark:text-slate-100 mb-3">Controles</h2>
+        <div className="flex items-center justify-between">
+          <h2 className="text-lg font-semibold text-slate-800 dark:text-slate-100">Controles</h2>
+          {/* PR #3 (WU-3.2) — back button moved from the WorkerDetailTable
+              overlay wrapper into EmailEditor. Rendered conditionally on
+              `onBack` so the standalone `page.tsx` caller (which has its
+              own wrapper button) does not get a duplicate (R5). */}
+          {onBack && (
+            <button
+              type="button"
+              onClick={onBack}
+              data-testid="email-editor-back"
+              className="px-4 py-2 rounded-xl border border-slate-200 dark:border-slate-800 hover:bg-slate-100 dark:hover:bg-slate-800 text-sm font-semibold"
+            >
+              {backContext === 'wizard' ? 'Volver al paso 4' : 'Volver a la tabla'}
+            </button>
+          )}
+        </div>
 
         {/* Toggle: company / patient */}
         <div className="flex items-center gap-3">
