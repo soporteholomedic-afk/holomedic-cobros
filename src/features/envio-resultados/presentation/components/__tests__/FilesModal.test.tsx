@@ -7,6 +7,7 @@ import {
   type FileNode,
   type FileSystemNode,
 } from '@/features/envio-resultados/domain/ports';
+import { FilesModal } from '../FilesModal';
 import type { UseFileTreeReturn, ViewState } from '@/features/envio-resultados/presentation/hooks/useFileTree';
 import type { UseReadyFilesReturn } from '@/features/envio-resultados/presentation/hooks/useReadyFiles';
 import type {
@@ -1404,23 +1405,15 @@ describe('FilesModal', () => {
 });
 
 // ================================================================
-// PR envio-resultados CAMO/EMO wizard — WU-2a.1
+// CAMO/EMO manual browse — `onPickSingle` mode
 //
-// `mode='pick-single'` repurposes the modal as a single-pane picker
-// for the wizard's Step 2 (CAMO) and Step 3 (EMO). The ready-pane
-// listing is filtered by a regex tied to `pickType`, selection is
-// radio-style (single file), and the footer carries a confirm/skip
-// pair instead of the default multi-select "Enviar" button.
-//
-// All these cases are NEW behavior; the existing default-mode
-// regression coverage stays in the outer `describe('FilesModal', …)`
-// block and continues to drive the file-tree + tabs + multi-select
-// path unchanged.
+// When `onPickSingle` is provided, the modal runs in single-select
+// mode: default tab is 'all', clicking a file replaces the previous
+// selection, the footer shows "Seleccionar" instead of "Enviar",
+// and all 3 tabs remain visible.
 // ================================================================
 
-describe('FilesModal - pick-single mode', () => {
-  // Common fixture: a mix of CERT, EXPED, and an unrelated file so the
-  // regex filter is the only thing differentiating what's visible.
+describe('FilesModal - onPickSingle mode', () => {
   const readyFiles: FileNode[] = [
     createFileNode({
       name: '75618561CERT.pdf',
@@ -1455,7 +1448,42 @@ describe('FilesModal - pick-single mode', () => {
     });
   }
 
-  it('filters the ready pane to /^\\d+CERT\\.pdf$/i when mode="pick-single" pickType="CAMO"', () => {
+  it('defaults to the "Todos" tab when onPickSingle is provided', () => {
+    mockUseFileTree.mockReturnValue({
+      viewState: readyView('', [
+        createFileNode({
+          name: 'informe.pdf',
+          sizeBytes: 4096,
+          modifiedAt: '2026-06-01T00:00:00.000Z',
+        }),
+      ]),
+      selectionState: { kind: 'none' },
+      navigate: vi.fn(),
+      goUp: vi.fn(),
+      selectFile: vi.fn(),
+      closeSelection: vi.fn(),
+      refetch: vi.fn(),
+    });
+    mockUseReadyFiles.mockReturnValue({ state: { kind: 'empty' }, refetch: vi.fn() });
+
+    render(
+      <FilesModal
+        ruc="RUC-1"
+        dni="12345678"
+        idAten="AT-001"
+        nombrePaciente="Juan Pérez"
+        empresa="Acme Corp"
+        destino=""
+        onPickSingle={vi.fn()}
+        onClose={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByRole('tab', { name: /Todos/ })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByText('informe.pdf')).toBeInTheDocument();
+  });
+
+  it('all 3 tabs are still visible in pick mode', () => {
     mockPanes();
     render(
       <FilesModal
@@ -1465,64 +1493,18 @@ describe('FilesModal - pick-single mode', () => {
         nombrePaciente="Juan Pérez"
         empresa="Acme Corp"
         destino=""
-        mode="pick-single"
-        pickType="CAMO"
         onPickSingle={vi.fn()}
         onClose={vi.fn()}
       />,
     );
-    expect(screen.getByText('75618561CERT.pdf')).toBeInTheDocument();
-    expect(screen.queryByText('012109975EXPED.pdf')).not.toBeInTheDocument();
-    expect(screen.queryByText('informe.pdf')).not.toBeInTheDocument();
+
+    expect(screen.getByRole('tab', { name: /Listo para enviar/ })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: /Todos/ })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: /Generar archivos/ })).toBeInTheDocument();
   });
 
-  it('filters the ready pane to /^\\d+EXPED\\.pdf$/i when mode="pick-single" pickType="EMO"', () => {
-    mockPanes();
-    render(
-      <FilesModal
-        ruc="RUC-1"
-        dni="12345678"
-        idAten="AT-001"
-        nombrePaciente="Juan Pérez"
-        empresa="Acme Corp"
-        destino=""
-        mode="pick-single"
-        pickType="EMO"
-        onPickSingle={vi.fn()}
-        onClose={vi.fn()}
-      />,
-    );
-    expect(screen.getByText('012109975EXPED.pdf')).toBeInTheDocument();
-    expect(screen.queryByText('75618561CERT.pdf')).not.toBeInTheDocument();
-    expect(screen.queryByText('informe.pdf')).not.toBeInTheDocument();
-  });
-
-  it('hides the explorer and generate tabs in pick-single mode (only the ready pane is visible)', () => {
-    mockPanes();
-    render(
-      <FilesModal
-        ruc="RUC-1"
-        dni="12345678"
-        idAten="AT-001"
-        nombrePaciente="Juan Pérez"
-        empresa="Acme Corp"
-        destino=""
-        mode="pick-single"
-        pickType="CAMO"
-        onPickSingle={vi.fn()}
-        onClose={vi.fn()}
-      />,
-    );
-    // The three default-mode tabs are not rendered in pick-single mode.
-    expect(screen.queryByRole('tab', { name: /Listo para enviar/ })).not.toBeInTheDocument();
-    expect(screen.queryByRole('tab', { name: /Todos/ })).not.toBeInTheDocument();
-    expect(screen.queryByRole('tab', { name: /Generar archivos/ })).not.toBeInTheDocument();
-  });
-
-  it('enforces single-select (radio behavior) — selecting a different file replaces the previous pick', () => {
-    // To exercise single-select we need at least two CERT files. We
-    // swap the fixture for this case.
-    const twoCerts: FileNode[] = [
+  it('enforces single-select — clicking a different file replaces the previous pick', () => {
+    const twoFiles: FileNode[] = [
       createFileNode({
         name: '75618561CERT.pdf',
         sizeBytes: 1024,
@@ -1544,7 +1526,7 @@ describe('FilesModal - pick-single mode', () => {
       refetch: vi.fn(),
     });
     mockUseReadyFiles.mockReturnValue({
-      state: { kind: 'ready', files: twoCerts },
+      state: { kind: 'ready', files: twoFiles },
       refetch: vi.fn(),
     });
 
@@ -1556,33 +1538,29 @@ describe('FilesModal - pick-single mode', () => {
         nombrePaciente="Juan Pérez"
         empresa="Acme Corp"
         destino=""
-        mode="pick-single"
-        pickType="CAMO"
         onPickSingle={vi.fn()}
         onClose={vi.fn()}
       />,
     );
 
+    fireEvent.click(screen.getByRole('tab', { name: /Listo para enviar/ }));
+
     const checkboxes = screen.getAllByRole('checkbox');
     expect(checkboxes).toHaveLength(2);
 
-    // Initially neither is checked.
     expect(checkboxes[0]).not.toBeChecked();
     expect(checkboxes[1]).not.toBeChecked();
 
-    // Click the first → first is checked, second is not.
     fireEvent.click(checkboxes[0]!);
     expect(checkboxes[0]).toBeChecked();
     expect(checkboxes[1]).not.toBeChecked();
 
-    // Click the second → the previous selection is REPLACED. Only the
-    // second is checked now.
     fireEvent.click(checkboxes[1]!);
     expect(checkboxes[0]).not.toBeChecked();
     expect(checkboxes[1]).toBeChecked();
   });
 
-  it('renders a "Seleccionar" (disabled when 0 selected) and a "Saltar" (always enabled) footer in pick-single mode', () => {
+  it('renders "Seleccionar" disabled when 0 files selected, no "Enviar" nor "Descargar"', () => {
     mockPanes();
     render(
       <FilesModal
@@ -1592,26 +1570,21 @@ describe('FilesModal - pick-single mode', () => {
         nombrePaciente="Juan Pérez"
         empresa="Acme Corp"
         destino=""
-        mode="pick-single"
-        pickType="CAMO"
         onPickSingle={vi.fn()}
         onClose={vi.fn()}
       />,
     );
 
     const seleccionar = screen.getByTestId('files-modal-pick-select');
-    const saltar = screen.getByTestId('files-modal-pick-skip');
     expect(seleccionar).toBeInTheDocument();
     expect(seleccionar).toBeDisabled();
-    expect(saltar).toBeInTheDocument();
-    expect(saltar).toBeEnabled();
+    expect(seleccionar).toHaveTextContent('Seleccionar');
 
-    // The default-mode "Enviar" footer button is NOT rendered in pick-single.
     expect(screen.queryByTestId('files-modal-send')).not.toBeInTheDocument();
     expect(screen.queryByTestId('files-modal-download-selected')).not.toBeInTheDocument();
   });
 
-  it('enables "Seleccionar" once exactly one file is checked', () => {
+  it('enables "Seleccionar" once a file is selected', () => {
     mockPanes();
     render(
       <FilesModal
@@ -1621,8 +1594,59 @@ describe('FilesModal - pick-single mode', () => {
         nombrePaciente="Juan Pérez"
         empresa="Acme Corp"
         destino=""
-        mode="pick-single"
-        pickType="CAMO"
+        onPickSingle={vi.fn()}
+        onClose={vi.fn()}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('tab', { name: /Listo para enviar/ }));
+
+    const seleccionar = screen.getByTestId('files-modal-pick-select');
+    expect(seleccionar).toBeDisabled();
+
+    fireEvent.click(screen.getAllByRole('checkbox')[0]!);
+    expect(seleccionar).toBeEnabled();
+  });
+
+  it('clicking "Seleccionar" calls onPickSingle(file, folderPath) AND onClose', () => {
+    mockPanes();
+    const onPickSingle = vi.fn();
+    const onClose = vi.fn();
+    render(
+      <FilesModal
+        ruc="RUC-1"
+        dni="12345678"
+        idAten="AT-001"
+        nombrePaciente="Juan Pérez"
+        empresa="Acme Corp"
+        destino=""
+        onPickSingle={onPickSingle}
+        onClose={onClose}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('tab', { name: /Listo para enviar/ }));
+
+    fireEvent.click(screen.getAllByRole('checkbox')[0]!);
+    fireEvent.click(screen.getByTestId('files-modal-pick-select'));
+
+    expect(onPickSingle).toHaveBeenCalledTimes(1);
+    const [picked, folderPath] = onPickSingle.mock.calls[0] as [FileNode, string];
+    expect(picked.name).toBe('75618561CERT.pdf');
+    expect(folderPath).toBe('LEGAJOS');
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not pre-check ready-pane files in pick mode (user must manually select)', () => {
+    mockPanes();
+    render(
+      <FilesModal
+        ruc="RUC-1"
+        dni="12345678"
+        idAten="AT-001"
+        nombrePaciente="Juan Pérez"
+        empresa="Acme Corp"
+        destino=""
         onPickSingle={vi.fn()}
         onClose={vi.fn()}
       />,
@@ -1630,67 +1654,5 @@ describe('FilesModal - pick-single mode', () => {
 
     const seleccionar = screen.getByTestId('files-modal-pick-select');
     expect(seleccionar).toBeDisabled();
-
-    // Pick the only CERT file → Seleccionar enables.
-    fireEvent.click(screen.getAllByRole('checkbox')[0]!);
-    expect(seleccionar).toBeEnabled();
-  });
-
-  it('clicking "Seleccionar" calls onPickSingle with the selected file AND onClose', () => {
-    mockPanes();
-    const onPickSingle = vi.fn();
-    const onClose = vi.fn();
-    render(
-      <FilesModal
-        ruc="RUC-1"
-        dni="12345678"
-        idAten="AT-001"
-        nombrePaciente="Juan Pérez"
-        empresa="Acme Corp"
-        destino=""
-        mode="pick-single"
-        pickType="CAMO"
-        onPickSingle={onPickSingle}
-        onClose={onClose}
-      />,
-    );
-
-    // Pick the CERT file, then confirm.
-    fireEvent.click(screen.getAllByRole('checkbox')[0]!);
-    fireEvent.click(screen.getByTestId('files-modal-pick-select'));
-
-    expect(onPickSingle).toHaveBeenCalledTimes(1);
-    const picked = onPickSingle.mock.calls[0]?.[0] as FileNode;
-    expect(picked).toBeDefined();
-    expect(picked.name).toBe('75618561CERT.pdf');
-    expect(onClose).toHaveBeenCalledTimes(1);
-  });
-
-  it('clicking "Saltar" calls onPickSingle(null) AND onClose', () => {
-    mockPanes();
-    const onPickSingle = vi.fn();
-    const onClose = vi.fn();
-    render(
-      <FilesModal
-        ruc="RUC-1"
-        dni="12345678"
-        idAten="AT-001"
-        nombrePaciente="Juan Pérez"
-        empresa="Acme Corp"
-        destino=""
-        mode="pick-single"
-        pickType="CAMO"
-        onPickSingle={onPickSingle}
-        onClose={onClose}
-      />,
-    );
-
-    fireEvent.click(screen.getByTestId('files-modal-pick-skip'));
-
-    expect(onPickSingle).toHaveBeenCalledTimes(1);
-    expect(onPickSingle).toHaveBeenCalledWith(null);
-    expect(onClose).toHaveBeenCalledTimes(1);
   });
 });
-
-import { FilesModal } from '../FilesModal';

@@ -1,48 +1,39 @@
 /**
- * PR envio-resultados CAMO/EMO wizard — WU-2a.3.
- *
  * `Step2Camo` renders one picker card per patient selected at Step 1.
  * The operator picks (or skips) a CAMO file per patient via a
- * `FilesModal mode='pick-single' pickType='CAMO'` overlay.
+ * `FilesModal` overlay with `onPickSingle` callback.
  *
  * The actual `FilesModal` is stubbed here to keep the test focused
  * on `Step2Camo`'s wiring (the modal itself is covered by
- * `FilesModal.test.tsx`, including its pick-single behavior). The
- * stub exposes two trigger buttons:
- *  - `step2-pick-modal-trigger-pick-{dni}` — fires `onPickSingle(file)`
- *  - `step2-pick-modal-trigger-skip-{dni}` — fires `onPickSingle(null)`
+ * `FilesModal.test.tsx`). The stub exposes one trigger button:
+ *  - `step2-pick-modal-trigger-pick-{dni}` — fires `onPickSingle(file, folderPath)`
  *
- * Spec coverage (from `sdd/envio-resultados-camo-emo/spec`):
+ * Spec coverage:
  *  - REQ-005 — Step 2 CAMO.
  *  - Scenarios S-006, S-007, S-008, S-009.
  */
 import { describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, within } from '@testing-library/react';
 
-import type { FileNode } from '@/features/envio-resultados/domain/ports';
 import { createFileNode } from '@/features/envio-resultados/domain/ports';
 import type { WizardFilePick } from '@/features/envio-resultados/presentation/hooks/useEnvioWizard';
 import { Step2Camo } from '../../wizard/Step2Camo';
 import type { UnifiedPerson } from '@/types/sp-result';
 
 // ---- FilesModal stub ----
-// Exposes two trigger buttons per open modal: one that simulates a
-// file pick (calls onPickSingle with a FileNode) and one that
-// simulates a skip (calls onPickSingle(null)).
+// Exposes one trigger button per open modal: simulates a file pick
+// (calls onPickSingle with a FileNode and a folder path).
 const mockFilesModalProps = vi.hoisted(() => vi.fn());
 vi.mock('../../FilesModal', () => ({
   FilesModal: (props: Record<string, unknown>) => {
     mockFilesModalProps(props);
-    const onPickSingle = props['onPickSingle'] as ((f: FileNode | null) => void) | undefined;
+    const onPickSingle = props['onPickSingle'] as ((f: unknown, path: string) => void) | undefined;
     const onClose = props['onClose'] as (() => void) | undefined;
     const dni = String(props['dni'] ?? '');
     return (
       <div data-testid={`step2-pick-modal-${dni}`}>
-        <span data-testid={`step2-pick-modal-mode-${dni}`}>
-          {String(props['mode'] ?? '')}
-        </span>
-        <span data-testid={`step2-pick-modal-picktype-${dni}`}>
-          {String(props['pickType'] ?? '')}
+        <span data-testid={`step2-pick-modal-onsingle-${dni}`}>
+          {String(typeof props['onPickSingle'])}
         </span>
         <button
           data-testid={`step2-pick-modal-trigger-pick-${dni}`}
@@ -52,16 +43,10 @@ vi.mock('../../FilesModal', () => ({
               sizeBytes: 1024,
               modifiedAt: '2026-06-01T00:00:00.000Z',
             });
-            onPickSingle?.(file);
+            onPickSingle?.(file, 'LEGAJOS');
           }}
         >
           pick
-        </button>
-        <button
-          data-testid={`step2-pick-modal-trigger-skip-${dni}`}
-          onClick={() => onPickSingle?.(null)}
-        >
-          skip
         </button>
         <button
           data-testid={`step2-pick-modal-trigger-close-${dni}`}
@@ -186,17 +171,15 @@ describe('Step2Camo', () => {
     expect(within(card).getByText(/11111111/)).toBeInTheDocument();
   });
 
-  it('clicking "Elegir CAMO" opens the FilesModal in pick-single CAMO mode', () => {
+  it('clicking "Elegir CAMO" opens the FilesModal with onPickSingle callback', () => {
     renderStep2();
-    // No modal mounted yet.
     expect(screen.queryByTestId('step2-pick-modal-11111111')).not.toBeInTheDocument();
 
     fireEvent.click(within(screen.getByTestId('step2-card-11111111')).getByTestId('step2-elegir-camo'));
 
     const modal = screen.getByTestId('step2-pick-modal-11111111');
     expect(modal).toBeInTheDocument();
-    expect(within(modal).getByTestId('step2-pick-modal-mode-11111111')).toHaveTextContent('pick-single');
-    expect(within(modal).getByTestId('step2-pick-modal-picktype-11111111')).toHaveTextContent('CAMO');
+    expect(within(modal).getByTestId('step2-pick-modal-onsingle-11111111')).toHaveTextContent('function');
   });
 
   it('picking a file via the modal calls onPickFile with a WizardFilePick { ref, displayName } for that dni', () => {
@@ -223,16 +206,6 @@ describe('Step2Camo', () => {
     expect(within(card).getByText(/75618561CERT\.pdf/)).toBeInTheDocument();
   });
 
-  it('skipping a file via the modal calls onPickFile with null and closes the modal', () => {
-    const { onPickFile } = renderStep2();
-    fireEvent.click(within(screen.getByTestId('step2-card-11111111')).getByTestId('step2-elegir-camo'));
-    fireEvent.click(screen.getByTestId('step2-pick-modal-trigger-skip-11111111'));
-
-    expect(onPickFile).toHaveBeenCalledTimes(1);
-    expect(onPickFile).toHaveBeenCalledWith('11111111', null);
-    expect(screen.queryByTestId('step2-pick-modal-11111111')).not.toBeInTheDocument();
-  });
-
   it('clicking "Saltar CAMO" on a card calls onPickFile(dni, null) without opening the modal', () => {
     const { onPickFile } = renderStep2();
     fireEvent.click(within(screen.getByTestId('step2-card-22222222')).getByTestId('step2-saltar-camo'));
@@ -241,14 +214,12 @@ describe('Step2Camo', () => {
     expect(screen.queryByTestId('step2-pick-modal-22222222')).not.toBeInTheDocument();
   });
 
-  it('closing the modal without picking or skipping preserves the underlying pick state (null → "Saltado")', () => {
+  it('closing the modal without picking preserves the underlying pick state', () => {
     renderStep2({ camoByDni: { '11111111': null } });
-    // The card shows "Saltado" for the pre-set null pick.
     expect(
       within(screen.getByTestId('step2-card-11111111')).getByText(/Saltado/),
     ).toBeInTheDocument();
 
-    // Open + close the modal — the card still shows "Saltado".
     fireEvent.click(within(screen.getByTestId('step2-card-11111111')).getByTestId('step2-elegir-camo'));
     fireEvent.click(screen.getByTestId('step2-pick-modal-trigger-close-11111111'));
     expect(

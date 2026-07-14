@@ -1,12 +1,8 @@
 /**
- * PR envio-resultados CAMO/EMO wizard — WU-2b.1.
- *
  * `Step3Emo` is the per-patient EMO picker. It is the mechanical
- * mirror of `Step2Camo` with `pickType='EMO'` (regex `\d+EXPED\.pdf$`)
- * instead of `pickType='CAMO'`. The component renders one card per
- * `dni` in `selectedDnIs` and, on demand, opens a
- * `FilesModal mode='pick-single' pickType='EMO'` overlay so the
- * operator can pick (or skip) the EMO file for that patient.
+ * mirror of `Step2Camo` with `tipoExamen: 'EMO'` instead of `'CAMO'`.
+ * The component renders one card per `dni` in `selectedDnIs` and,
+ * on demand, opens a `FilesModal` overlay with `onPickSingle` callback.
  *
  * The "Siguiente" button is renamed to "Continuar" because step 3 is
  * the last step before the final summary (step 4). The callback
@@ -15,41 +11,35 @@
  *
  * The actual `FilesModal` is stubbed here to keep the test focused
  * on `Step3Emo`'s wiring (the modal itself is covered by
- * `FilesModal.test.tsx`, including its pick-single behavior). The
- * stub mirrors the `Step2Camo` stub: two trigger buttons
- * (`step3-pick-modal-trigger-pick-{dni}`, `step3-pick-modal-trigger-skip-{dni}`)
- * plus a `trigger-close-{dni}`.
+ * `FilesModal.test.tsx`). The stub exposes one trigger button:
+ *  - `step3-pick-modal-trigger-pick-{dni}` — fires `onPickSingle(file, folderPath)`
  *
- * Spec coverage (from `sdd/envio-resultados-camo-emo/spec`):
+ * Spec coverage:
  *  - REQ-006 — Step 3 EMO.
  *  - Scenarios S-010.
  */
 import { describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, within } from '@testing-library/react';
 
-import type { FileNode } from '@/features/envio-resultados/domain/ports';
 import { createFileNode } from '@/features/envio-resultados/domain/ports';
 import type { WizardFilePick } from '@/features/envio-resultados/presentation/hooks/useEnvioWizard';
 import { Step3Emo } from '../../wizard/Step3Emo';
 import type { UnifiedPerson } from '@/types/sp-result';
 
 // ---- FilesModal stub ----
-// Exposes three trigger buttons per open modal: pick (file), skip (null),
-// and close (preserves underlying pick state).
+// Exposes one trigger button per open modal: simulates a file pick
+// (calls onPickSingle with a FileNode and a folder path).
 const mockFilesModalProps = vi.hoisted(() => vi.fn());
 vi.mock('../../FilesModal', () => ({
   FilesModal: (props: Record<string, unknown>) => {
     mockFilesModalProps(props);
-    const onPickSingle = props['onPickSingle'] as ((f: FileNode | null) => void) | undefined;
+    const onPickSingle = props['onPickSingle'] as ((f: unknown, path: string) => void) | undefined;
     const onClose = props['onClose'] as (() => void) | undefined;
     const dni = String(props['dni'] ?? '');
     return (
       <div data-testid={`step3-pick-modal-${dni}`}>
-        <span data-testid={`step3-pick-modal-mode-${dni}`}>
-          {String(props['mode'] ?? '')}
-        </span>
-        <span data-testid={`step3-pick-modal-picktype-${dni}`}>
-          {String(props['pickType'] ?? '')}
+        <span data-testid={`step3-pick-modal-onsingle-${dni}`}>
+          {String(typeof props['onPickSingle'])}
         </span>
         <button
           data-testid={`step3-pick-modal-trigger-pick-${dni}`}
@@ -59,16 +49,10 @@ vi.mock('../../FilesModal', () => ({
               sizeBytes: 1024,
               modifiedAt: '2026-06-01T00:00:00.000Z',
             });
-            onPickSingle?.(file);
+            onPickSingle?.(file, 'LEGAJOS');
           }}
         >
           pick
-        </button>
-        <button
-          data-testid={`step3-pick-modal-trigger-skip-${dni}`}
-          onClick={() => onPickSingle?.(null)}
-        >
-          skip
         </button>
         <button
           data-testid={`step3-pick-modal-trigger-close-${dni}`}
@@ -193,17 +177,15 @@ describe('Step3Emo', () => {
     expect(within(card).getByText(/11111111/)).toBeInTheDocument();
   });
 
-  it('clicking "Elegir EMO" opens the FilesModal in pick-single EMO mode', () => {
+  it('clicking "Elegir EMO" opens the FilesModal with onPickSingle callback', () => {
     renderStep3();
-    // No modal mounted yet.
     expect(screen.queryByTestId('step3-pick-modal-11111111')).not.toBeInTheDocument();
 
     fireEvent.click(within(screen.getByTestId('step3-card-11111111')).getByTestId('step3-elegir-emo'));
 
     const modal = screen.getByTestId('step3-pick-modal-11111111');
     expect(modal).toBeInTheDocument();
-    expect(within(modal).getByTestId('step3-pick-modal-mode-11111111')).toHaveTextContent('pick-single');
-    expect(within(modal).getByTestId('step3-pick-modal-picktype-11111111')).toHaveTextContent('EMO');
+    expect(within(modal).getByTestId('step3-pick-modal-onsingle-11111111')).toHaveTextContent('function');
   });
 
   it('picking a file via the modal calls onPickFile with a WizardFilePick { ref, displayName } for that dni', () => {
@@ -230,16 +212,6 @@ describe('Step3Emo', () => {
     expect(within(card).getByText(/75618561EXPED\.pdf/)).toBeInTheDocument();
   });
 
-  it('skipping a file via the modal calls onPickFile with null and closes the modal', () => {
-    const { onPickFile } = renderStep3();
-    fireEvent.click(within(screen.getByTestId('step3-card-11111111')).getByTestId('step3-elegir-emo'));
-    fireEvent.click(screen.getByTestId('step3-pick-modal-trigger-skip-11111111'));
-
-    expect(onPickFile).toHaveBeenCalledTimes(1);
-    expect(onPickFile).toHaveBeenCalledWith('11111111', null);
-    expect(screen.queryByTestId('step3-pick-modal-11111111')).not.toBeInTheDocument();
-  });
-
   it('clicking "Saltar EMO" on a card calls onPickFile(dni, null) without opening the modal', () => {
     const { onPickFile } = renderStep3();
     fireEvent.click(within(screen.getByTestId('step3-card-22222222')).getByTestId('step3-saltar-emo'));
@@ -248,14 +220,12 @@ describe('Step3Emo', () => {
     expect(screen.queryByTestId('step3-pick-modal-22222222')).not.toBeInTheDocument();
   });
 
-  it('closing the modal without picking or skipping preserves the underlying pick state (null → "Saltado")', () => {
+  it('closing the modal without picking preserves the underlying pick state', () => {
     renderStep3({ emoByDni: { '11111111': null } });
-    // The card shows "Saltado" for the pre-set null pick.
     expect(
       within(screen.getByTestId('step3-card-11111111')).getByText(/Saltado/),
     ).toBeInTheDocument();
 
-    // Open + close the modal — the card still shows "Saltado".
     fireEvent.click(within(screen.getByTestId('step3-card-11111111')).getByTestId('step3-elegir-emo'));
     fireEvent.click(screen.getByTestId('step3-pick-modal-trigger-close-11111111'));
     expect(

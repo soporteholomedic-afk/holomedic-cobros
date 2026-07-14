@@ -183,10 +183,6 @@ export function Step3Emo({
         </button>
       </footer>
 
-      {/* FilesModal overlay — only one at a time. Mounted with the
-          active patient's identity so the modal can pre-fetch the
-          LEGAJOS listing. The pick-single contract closes the modal
-          and fires `onPickFile` (or `null` for skip). */}
       {activePerson && activePerson.fichas[0] ? (
         <FilesModal
           ruc={activePerson.fichas[0].nroRuc}
@@ -195,24 +191,18 @@ export function Step3Emo({
           nombrePaciente={activePerson.nombre}
           empresa={activePerson.empresa}
           destino=""
-          mode="pick-single"
-          pickType="EMO"
-          onPickSingle={(file) => {
-            if (file === null) {
-              onPickFile(activePerson.dni, null);
-            } else {
-              onPickFile(activePerson.dni, {
-                ref: {
-                  ruc: activePerson.fichas[0]?.nroRuc ?? '',
-                  dni: activePerson.dni,
-                  idAten: activePerson.fichas[0]?.idAten ?? '',
-                  path: 'LEGAJOS',
-                  name: file.name,
-                  tipoExamen: 'EMO',
-                },
-                displayName: file.name,
-              });
-            }
+          onPickSingle={(file, folderPath) => {
+            onPickFile(activePerson.dni, {
+              ref: {
+                ruc: activePerson.fichas[0]?.nroRuc ?? '',
+                dni: activePerson.dni,
+                idAten: activePerson.fichas[0]?.idAten ?? '',
+                path: folderPath,
+                name: file.name,
+                tipoExamen: 'EMO',
+              },
+              displayName: file.name,
+            });
             setActivePickDni(null);
           }}
           onClose={() => setActivePickDni(null)}

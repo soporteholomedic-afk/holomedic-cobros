@@ -321,6 +321,8 @@ function ConsolidadosContent() {
               selectedPatients={emailViewData.selectedPatients}
               patients={emailViewData.patients}
               fileRefs={emailViewData.fileRefs}
+              nombreCompleto={emailViewData.nombreCompleto}
+              destino={emailViewData.destino}
             />
           </div>
         </section>

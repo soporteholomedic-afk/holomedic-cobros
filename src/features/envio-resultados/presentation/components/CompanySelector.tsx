@@ -1,8 +1,17 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
+import { Search } from 'lucide-react';
 import type { CompanyGroup } from '@/types/sp-result';
 import { useConsolidadosResults } from '../hooks/useConsolidadosResults';
+
+function normalizeText(text: string | null | undefined): string {
+  if (!text) return '';
+  return text
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '');
+}
 
 export interface CompanySelectorProps {
   fechaInicio: string;
@@ -29,11 +38,18 @@ export interface CompanySelectorProps {
  */
 export function CompanySelector({ fechaInicio, fechaFin, onSelect }: CompanySelectorProps) {
   const [retryNonce, setRetryNonce] = useState(0);
+  const [searchTerm, setSearchTerm] = useState('');
   const { companies, loading, error } = useConsolidadosResults(
     fechaInicio,
     fechaFin,
     retryNonce,
   );
+
+  const filteredCompanies = useMemo(() => {
+    if (!searchTerm.trim()) return companies;
+    const term = normalizeText(searchTerm.trim());
+    return companies.filter((c) => normalizeText(c.companyName).includes(term));
+  }, [companies, searchTerm]);
 
   // ---- Loading state ----
   if (loading) {
@@ -76,19 +92,39 @@ export function CompanySelector({ fechaInicio, fechaFin, onSelect }: CompanySele
 
   // ---- Cards grid ----
   return (
-    <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-      {companies.map((company) => (
-        <button
-          key={company.companyName}
-          onClick={() => onSelect(company.companyName)}
-          className="text-left p-6 rounded-xl border border-slate-200 bg-white hover:border-sky-300 hover:shadow-md hover:shadow-sky-100/50 transition-all duration-200 cursor-pointer"
-        >
-          <h3 className="text-lg font-semibold text-slate-800 mb-2">{company.companyName}</h3>
-          <p className="text-sm text-sky-600">
-            {company.workerCount} trabajador{company.workerCount !== 1 ? 'es' : ''}
+    <div className="space-y-4">
+      <div className="relative">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+        <input
+          type="text"
+          placeholder="Buscar empresa..."
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+          className="w-full pl-10 pr-4 py-2 rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-transparent text-sm text-slate-700"
+        />
+      </div>
+      {filteredCompanies.length === 0 ? (
+        <div className="text-center py-16 bg-white border border-slate-200 rounded-xl">
+          <p className="text-slate-500 text-base">
+            No se encontraron empresas que coincidan con&nbsp;&ldquo;{searchTerm}&rdquo;
           </p>
-        </button>
-      ))}
+        </div>
+      ) : (
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+          {filteredCompanies.map((company) => (
+            <button
+              key={company.companyName}
+              onClick={() => onSelect(company.companyName)}
+              className="text-left p-6 rounded-xl border border-slate-200 bg-white hover:border-sky-300 hover:shadow-md hover:shadow-sky-100/50 transition-all duration-200 cursor-pointer"
+            >
+              <h3 className="text-lg font-semibold text-slate-800 mb-2">{company.companyName}</h3>
+              <p className="text-sm text-sky-600">
+                {company.workerCount} trabajador{company.workerCount !== 1 ? 'es' : ''}
+              </p>
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

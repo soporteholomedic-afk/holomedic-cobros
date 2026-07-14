@@ -8,26 +8,12 @@ import { FilesPreviewPane } from '@/features/envio-resultados/presentation/compo
 import { FilesReadyPane } from '@/features/envio-resultados/presentation/components/FilesReadyPane';
 import { FilesTabs, type FilesTab } from '@/features/envio-resultados/presentation/components/FilesTabs';
 import { useFileTree } from '@/features/envio-resultados/presentation/hooks/useFileTree';
-import { useReadyFiles, type ReadyFilesState } from '@/features/envio-resultados/presentation/hooks/useReadyFiles';
+import { useReadyFiles } from '@/features/envio-resultados/presentation/hooks/useReadyFiles';
 import type { FileNode } from '@/features/envio-resultados/domain/ports';
 import type { SelectedFileRef } from '@/features/envio-resultados/domain/entities';
 
 /** Folder the "Listo para enviar" tab scans. Mirrors useReadyFiles. */
 const READY_FOLDER = 'LEGAJOS';
-
-/** Default tab when the modal opens — decided 2026-06-15. */
-const DEFAULT_TAB: FilesTab = 'ready';
-
-/**
- * Picker regex per `pickType`. The ready pane already filters by the
- * broader `^\d+(CERT|EXPED)\.pdf$/i` pattern in `useReadyFiles`; we
- * narrow further here so the wizard's CAMO step only sees CERT
- * candidates and the EMO step only sees EXPED candidates.
- */
-const PICK_REGEX: Record<'CAMO' | 'EMO', RegExp> = {
-  CAMO: /^\d+CERT\.pdf$/i,
-  EMO: /^\d+EXPED\.pdf$/i,
-};
 
 export interface FilesModalProps {
   ruc: string;
@@ -36,42 +22,17 @@ export interface FilesModalProps {
   nombrePaciente: string;
   empresa: string;
   destino: string;
-  /**
-   * Date the patient was attended (date-only, `dd/MM/yyyy`). Sourced
-   * from `UnifiedFicha.fecAte` and forwarded to the lookup SP
-   * (`SP_SEL_INFORMESNOCERRADOS`) so the query scopes to the same
-   * day. Optional: `''` when the row has no order (worker-sourced
-   * ficha). PR-2 (`FilesGeneratePane`) consumes it via
-   * `useInformeOrder(idAten, fecAte)`.
-   */
   fecAte?: string;
   /**
-   * Modal behavior. Defaults to `'default'` — the multi-select file
-   * explorer used by the legacy per-row "Ver Archivos" flow and the
-   * `FilesModal` overlay pattern.
-   *
-   * `'pick-single'` (PR envio-resultados CAMO/EMO wizard) repurposes
-   * the modal as a single-pane picker for the wizard's Step 2 / Step
-   * 3: the ready pane is filtered by `pickType` regex, selection is
-   * radio-style (single file), and the footer carries a confirm /
-   * skip pair. Explorer + generate tabs are hidden. The legacy
-   * `onSend` flow is unused in this mode.
+   * When provided, the modal runs in single-select mode:
+   * - Default tab is `'all'`
+   * - Clicking a file replaces the previous selection
+   * - The footer action button is labeled "Seleccionar"
+   * - Clicking "Seleccionar" calls onPickSingle(file, folderPath) then onClose
+   * - The parent handles "skip" via the card-level "Saltar" button
+   * All 3 tabs remain visible.
    */
-  mode?: 'default' | 'pick-single';
-  /**
-   * Filter applied to the ready pane when `mode='pick-single'`.
-   * `'CAMO'` keeps only `^\d+CERT\.pdf$/i`; `'EMO'` keeps only
-   * `^\d+EXPED\.pdf$/i`. Ignored in `'default'` mode.
-   */
-  pickType?: 'CAMO' | 'EMO';
-  /**
-   * Fired when the user confirms or skips a pick in
-   * `mode='pick-single'`. Receives the selected `FileNode` or `null`
-   * when the user clicked "Saltar". The parent is expected to
-   * consume the pick and close the modal. Ignored in `'default'`
-   * mode.
-   */
-  onPickSingle?: (file: FileNode | null) => void;
+  onPickSingle?: (file: FileNode, folderPath: string) => void;
   onClose: () => void;
   /**
    * Fired when the user clicks the "Enviar" footer button. Receives
@@ -81,12 +42,6 @@ export interface FilesModalProps {
    * click is a no-op (defensive — the modal can be mounted in
    * read-only contexts). The parent decides when to close the
    * modal after consuming the selection.
-   *
-   * PR #1 — signature changed from `FileNode[]` to
-   * `ReadonlyMap<string, FileNode>` so the bridge can split each
-   * ref into `{ path, name }` instead of dropping the path
-   * (`WorkerDetailTable` previously synthesised `::${name}` and
-   * lost the folder).
    */
   onSend?: (selected: ReadonlyMap<string, FileNode>) => void;
 }
@@ -95,12 +50,25 @@ export interface FilesModalProps {
  * Modal that lists the files in a patient's archive folder on the LAN
  * share, with per-file download links and a one-click bulk zip.
  *
+ * Behaves in one of two modes determined by the presence of
+ * `onPickSingle`:
+ *
+ * **Multi-select mode** (no `onPickSingle`): the legacy file-explorer
+ * overlay used by the per-row "Ver Archivos" flow. Default tab is
+ * `'ready'`. Footer has "Enviar" + "Descargar" buttons.
+ *
+ * **Single-select mode** (`onPickSingle` provided): used by the
+ * CAMO/EMO wizard Steps 2/3. Default tab is `'all'`. Clicking a file
+ * replaces the previous selection. Footer has "Seleccionar". Parent
+ * handles skip via the card-level "Saltar" button.
+ *
  * Three tabs split the left pane:
  *
- * - `ready` (default) — a flat list of LEGAJOS files that match the
+ * - `ready` — a flat list of LEGAJOS files that match the
  *   `^\d+(CERT|EXPED)\.pdf$` pattern. Owned by `useReadyFiles`.
- * - `all` — the full navigable tree. Owned by `useFileTree`.
- * - `generate` — file-generation workflows. Currently a placeholder.
+ * - `all` (default in pick mode) — the full navigable tree. Owned by
+ *   `useFileTree`.
+ * - `generate` — file-generation workflows.
  *
  * Each pane reuses the same right-side preview pane. Selection
  * carries its own `folderPath` (frozen at click time) so switching
@@ -114,17 +82,12 @@ export function FilesModal({
   nombrePaciente,
   empresa,
   destino,
-  // `fecAte` is plumbed through to `FilesGeneratePane`, which uses
-  // it as the `fecAte` query param on the lookup SP. PR-2 wires the
-  // consumer; the prop was added in PR-1.
   fecAte = '',
-  mode = 'default',
-  pickType,
   onPickSingle,
   onClose,
   onSend,
 }: FilesModalProps): ReactElement {
-  const isPickSingle = mode === 'pick-single';
+  const isPickMode = onPickSingle !== undefined;
   const {
     viewState,
     selectionState,
@@ -135,26 +98,13 @@ export function FilesModal({
     refetch: treeRefetch,
   } = useFileTree(ruc, dni, idAten);
   const { state: readyState, refetch: readyRefetch } = useReadyFiles(ruc, dni, idAten);
-  const [activeTab, setActiveTab] = useState<FilesTab>(DEFAULT_TAB);
+  const [activeTab, setActiveTab] = useState<FilesTab>(isPickMode ? 'all' : 'ready');
   const [zipInFlight, setZipInFlight] = useState(false);
   const [isMaximized, setIsMaximized] = useState(false);
-  // PR #3 — selection state. Keyed by `${folderPath}::${file.name}`.
-  // For the ready pane, `folderPath` is `LEGAJOS` → ref is `LEGAJOS::name`.
-  // For the explorer pane, `folderPath` is `viewState.currentPath`.
   const [selectedFilesMap, setSelectedFilesMap] = useState<Map<string, FileNode>>(
     () => new Map(),
   );
-  // PR envio-resultados CAMO/EMO wizard — pick-single mode state. The
-  // radio-style selection holds a single `FileNode` (or `null`). Lives
-  // alongside the multi-select map because the two flows share the
-  // modal chrome but the selection model is different.
-  const [singleSelection, setSingleSelection] = useState<FileNode | null>(null);
 
-  // PR-2 (generar-archivos-pdf-informes) — fired by
-  // `FilesGeneratePane` when a generation round resolves to success.
-  // We (a) invalidate the file-explorer hook so the new PDFs appear
-  // in "Listo para enviar" and (b) switch the active tab so the
-  // operator sees the result without manual navigation.
   const handleGenerationSuccess = useCallback((): void => {
     readyRefetch();
     setActiveTab('ready');
@@ -165,7 +115,6 @@ export function FilesModal({
     readyRefetch();
   }, [treeRefetch, readyRefetch]);
 
-  // Escape-key close handler.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onClose();
@@ -174,30 +123,13 @@ export function FilesModal({
     return () => window.removeEventListener('keydown', onKey);
   }, [onClose]);
 
-  // Identity reset — when the patient changes, drop the previous
-  // selection. Mirrors the reset semantics of `useFileTree` and
-  // `useReadyFiles` (both re-fetch on identity change). The functional
-  // update with the same-reference bailout keeps the first mount
-  // quiet so consumers (preview pane, etc.) don't see a phantom
-  // re-render when the modal opens with an empty selection.
   useEffect(() => {
-    /* eslint-disable-next-line react-hooks/set-state-in-effect --
-       the setState here is the documented identity-reset contract. */
     setSelectedFilesMap((prev) => (prev.size === 0 ? prev : new Map()));
-    setSingleSelection((prev) => (prev === null ? prev : null));
   }, [ruc, dni, idAten]);
 
-  // Pre-check — when the ready pane's files arrive, populate the map
-  // with entries that are NOT already present (the `if (!next.has(ref))`
-  // guard preserves any explorer selections the user already made).
-  // Bail on the same-reference pattern when no new entries are added.
-  // In `mode='pick-single'` we keep `singleSelection` (radio) and
-  // leave the map empty — pre-checking would defeat single-select.
   useEffect(() => {
-    if (isPickSingle) return;
+    if (isPickMode) return;
     if (readyState.kind !== 'ready') return;
-    /* eslint-disable-next-line react-hooks/set-state-in-effect --
-       the setState here is the documented pre-check contract. */
     setSelectedFilesMap((prev) => {
       let changed = false;
       const next = new Map(prev);
@@ -210,57 +142,33 @@ export function FilesModal({
       }
       return changed ? next : prev;
     });
-  }, [readyState, isPickSingle]);
+  }, [readyState, isPickMode]);
 
   const handleToggleFile = useCallback((ref: string, file: FileNode): void => {
-    setSelectedFilesMap((prev) => {
-      const next = new Map(prev);
-      if (next.has(ref)) next.delete(ref);
-      else next.set(ref, file);
-      return next;
-    });
-  }, []);
+    if (onPickSingle) {
+      setSelectedFilesMap(new Map([[ref, file]]));
+    } else {
+      setSelectedFilesMap((prev) => {
+        const next = new Map(prev);
+        if (next.has(ref)) next.delete(ref);
+        else next.set(ref, file);
+        return next;
+      });
+    }
+  }, [onPickSingle]);
 
-  // PR envio-resultados CAMO/EMO wizard — pick-single toggle. Replaces
-  // the previous selection instead of accumulating (radio behavior).
-  const handlePickSingleToggle = useCallback((file: FileNode): void => {
-    setSingleSelection((prev) => (prev?.name === file.name ? null : file));
-  }, []);
-
-  // PR envio-resultados CAMO/EMO wizard — pick-single confirm / skip.
-  // Both callbacks call the parent with the pick, then close. The
-  // parent decides when to unmount the modal.
-  const handlePickSingleSelect = useCallback((): void => {
-    if (singleSelection === null) return;
-    onPickSingle?.(singleSelection);
+  const handlePickSelect = useCallback((): void => {
+    if (selectedFilesMap.size === 0) return;
+    const entry = Array.from(selectedFilesMap.entries())[0];
+    if (!entry) return;
+    const [key, file] = entry;
+    const idx = key.indexOf('::');
+    const folderPath = idx < 0 ? '' : key.slice(0, idx);
+    onPickSingle?.(file, folderPath);
     onClose();
-  }, [onPickSingle, onClose, singleSelection]);
-
-  const handlePickSingleSkip = useCallback((): void => {
-    onPickSingle?.(null);
-    onClose();
-  }, [onPickSingle, onClose]);
-
-  // PR envio-resultados CAMO/EMO wizard — ready pane listing in
-  // pick-single mode is filtered by the regex tied to `pickType`.
-  // The empty-state branch surfaces the same "Sin archivos listos
-  // para enviar" message as the unfiltered pane so the wizard's
-  // per-patient picker doesn't need a separate copy path.
-  const pickSingleFilteredState = useMemo<ReadyFilesState>(() => {
-    if (!isPickSingle) return { kind: 'loading' };
-    if (readyState.kind !== 'ready') return readyState;
-    const regex = pickType ? PICK_REGEX[pickType] : null;
-    if (regex === null) return readyState;
-    const filtered = readyState.files.filter((f) => regex.test(f.name));
-    return filtered.length === 0 ? { kind: 'empty' } : { kind: 'ready', files: filtered };
-  }, [isPickSingle, pickType, readyState]);
+  }, [onPickSingle, onClose, selectedFilesMap]);
 
   const handleSendClick = useCallback((): void => {
-    // PR #1 — pass the map (keyed by `fileRef`) so the parent
-    // can split each key into `{ path, name }` and preserve the
-    // explorer-pane folder path. Previously this passed
-    // `Array.from(selectedFilesMap.values())`, which lost the key
-    // (and with it the folder path).
     onSend?.(selectedFilesMap);
   }, [onSend, selectedFilesMap]);
 
@@ -270,9 +178,6 @@ export function FilesModal({
   );
 
   const isAtRoot = !(viewState.kind === 'ready' && viewState.currentPath !== '');
-  // Folder the preview pane sources from. Comes from selectionState
-  // (frozen at click) so explorer navigation or a tab switch does NOT
-  // change it under the user's feet.
   const previewFolderPath = selectionState.kind === 'previewing' ? selectionState.folderPath : '';
 
   const headerTitle = `Archivos — ${nombrePaciente || dni}`;
@@ -321,8 +226,6 @@ export function FilesModal({
     }
   }, [selectedFilesMap, ruc, dni, idAten, nombrePaciente, empresa, destino]);
 
-  // Selection from the ready pane: stamp folderPath=LEGAJOS so the
-  // preview / download URL targets that subfolder, NOT the patient root.
   const handleSelectFromReady = (file: FileNode): void => {
     selectFile(file, READY_FOLDER);
   };
@@ -339,7 +242,6 @@ export function FilesModal({
         role="dialog"
         aria-label={headerTitle}
       >
-        {/* Header */}
         <div className="p-6 border-b border-slate-100 dark:border-slate-800 flex items-start justify-between bg-slate-50/50 dark:bg-slate-950/20">
           <div className="space-y-1">
             <span className="text-xs font-bold text-sky-500 uppercase tracking-widest">
@@ -378,7 +280,6 @@ export function FilesModal({
           </div>
         </div>
 
-        {/* Body — master-detail: explorer (40%) + preview (60%); stacks on < md */}
         <div className="flex flex-col md:flex-row flex-1 overflow-hidden">
           <div
             className={
@@ -388,29 +289,17 @@ export function FilesModal({
             }
             data-testid="files-explorer-container"
           >
-            {!isPickSingle && (
-              <FilesTabs activeTab={activeTab} onTabChange={setActiveTab} />
-            )}
+            <FilesTabs activeTab={activeTab} onTabChange={setActiveTab} />
             <div className="flex-1 overflow-y-auto">
               {activeTab === 'ready' ? (
                 <FilesReadyPane
-                  state={isPickSingle ? pickSingleFilteredState : readyState}
+                  state={readyState}
                   ruc={ruc}
                   dni={dni}
                   idAten={idAten}
                   onSelect={handleSelectFromReady}
-                  selectedRefs={
-                    isPickSingle
-                      ? singleSelection === null
-                        ? new Set<string>()
-                        : new Set<string>([`${READY_FOLDER}::${singleSelection.name}`])
-                      : selectedRefs
-                  }
-                  onToggle={
-                    isPickSingle
-                      ? (_ref, file) => handlePickSingleToggle(file)
-                      : handleToggleFile
-                  }
+                  selectedRefs={selectedRefs}
+                  onToggle={handleToggleFile}
                 />
               ) : activeTab === 'all' ? (
                 <FilesExplorerPane
@@ -453,7 +342,6 @@ export function FilesModal({
           </div>
         </div>
 
-        {/* Footer */}
         <div className="p-6 border-t border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/20 flex items-center justify-between">
           <button
             onClick={onClose}
@@ -461,20 +349,12 @@ export function FilesModal({
           >
             Cerrar
           </button>
-          {isPickSingle ? (
+          {isPickMode ? (
             <div className="flex items-center gap-3">
               <button
                 type="button"
-                onClick={handlePickSingleSkip}
-                data-testid="files-modal-pick-skip"
-                className="px-5 py-2.5 rounded-xl text-sm font-semibold text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-800 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
-              >
-                Saltar
-              </button>
-              <button
-                type="button"
-                onClick={handlePickSingleSelect}
-                disabled={singleSelection === null}
+                onClick={handlePickSelect}
+                disabled={selectedFilesMap.size === 0}
                 data-testid="files-modal-pick-select"
                 className="px-6 py-2.5 rounded-xl text-sm font-bold text-white shadow-lg transition-all duration-300 bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-300 disabled:cursor-not-allowed disabled:shadow-none"
               >

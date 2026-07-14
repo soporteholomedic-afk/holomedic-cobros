@@ -264,4 +264,116 @@ describe('PatientsList', () => {
       'Acción',
     ]);
   });
+
+  it('renders a search input when data is loaded', async () => {
+    mockFetch.mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ rows: [makeRow()], companies: [] }),
+    });
+
+    render(
+      <PatientsList
+        fechaInicio="2026-06-01"
+        fechaFin="2026-06-30"
+        onViewFiles={vi.fn()}
+      />,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByRole('table')).toBeInTheDocument();
+    });
+
+    expect(
+      screen.getByPlaceholderText(/Buscar por DNI/i),
+    ).toBeInTheDocument();
+  });
+
+  it('filters rows by Pacien (name) when typing in the search input', async () => {
+    const rows: SpResultRow[] = [
+      makeRow({ NroDId: '1', Pacien: 'ALARCON PEREZ ANA' }),
+      makeRow({ NroDId: '2', Pacien: 'MENDOZA GOMEZ CARLOS' }),
+      makeRow({ NroDId: '3', Pacien: 'ZAPATA RIOS LUIS' }),
+    ];
+    mockFetch.mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ rows, companies: [] }),
+    });
+
+    render(
+      <PatientsList
+        fechaInicio="2026-06-01"
+        fechaFin="2026-06-30"
+        onViewFiles={vi.fn()}
+      />,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByRole('table')).toBeInTheDocument();
+    });
+
+    expect(screen.getAllByRole('row').length).toBe(4);
+
+    const input = screen.getByPlaceholderText(/Buscar por DNI/i);
+    fireEvent.change(input, { target: { value: 'MENDOZA' } });
+
+    expect(screen.getAllByRole('row').length).toBe(2);
+  });
+
+  it('filters rows by NroDId (DNI) when typing in the search input', async () => {
+    const rows: SpResultRow[] = [
+      makeRow({ NroDId: '12345678', Pacien: 'GARCIA LOPEZ JUAN' }),
+      makeRow({ NroDId: '87654321', Pacien: 'PEREZ DIAZ MARIA' }),
+    ];
+    mockFetch.mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ rows, companies: [] }),
+    });
+
+    render(
+      <PatientsList
+        fechaInicio="2026-06-01"
+        fechaFin="2026-06-30"
+        onViewFiles={vi.fn()}
+      />,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByRole('table')).toBeInTheDocument();
+    });
+
+    const input = screen.getByPlaceholderText(/Buscar por DNI/i);
+    fireEvent.change(input, { target: { value: '8765' } });
+
+    expect(screen.getAllByRole('row').length).toBe(2);
+  });
+
+  it('shows no-match message when search does not match any row', async () => {
+    const rows: SpResultRow[] = [
+      makeRow({ NroDId: '1', Pacien: 'ALARCON PEREZ ANA' }),
+    ];
+    mockFetch.mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ rows, companies: [] }),
+    });
+
+    render(
+      <PatientsList
+        fechaInicio="2026-06-01"
+        fechaFin="2026-06-30"
+        onViewFiles={vi.fn()}
+      />,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByRole('table')).toBeInTheDocument();
+    });
+
+    const input = screen.getByPlaceholderText(/Buscar por DNI/i);
+    fireEvent.change(input, { target: { value: 'NOEXISTE' } });
+
+    expect(screen.queryByRole('table')).not.toBeInTheDocument();
+    expect(
+      screen.getByText(/No se encontraron pacientes que coincidan/i),
+    ).toBeInTheDocument();
+  });
 });

@@ -384,6 +384,8 @@ export function WorkerDetailTable({ companyName, fechaInicio, fechaFin }: Worker
               // can serialise them as the wire payload. `PatientFile`
               // (display) stays in `patients` for the AttachmentList.
               fileRefs={emailViewData.fileRefs}
+              nombreCompleto={emailViewData.nombreCompleto}
+              destino={emailViewData.destino}
               backContext={emailBackContext}
               onBack={handleEmailEditorBack}
             />

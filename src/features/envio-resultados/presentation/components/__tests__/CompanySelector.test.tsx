@@ -210,4 +210,65 @@ describe('CompanySelector', () => {
       expect.any(Object),
     );
   });
+
+  it('renders a search input when data is loaded', async () => {
+    mockFetch.mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ companies: mockCompanies, rows: [] }),
+    });
+
+    render(<CompanySelector {...defaultProps} onSelect={() => {}} />);
+
+    await waitFor(() => {
+      expect(screen.getByText('CIME INGENIEROS S R L')).toBeInTheDocument();
+    });
+
+    expect(
+      screen.getByPlaceholderText(/Buscar empresa/i),
+    ).toBeInTheDocument();
+  });
+
+  it('filters companies by name when typing in the search input', async () => {
+    mockFetch.mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ companies: mockCompanies, rows: [] }),
+    });
+
+    render(<CompanySelector {...defaultProps} onSelect={() => {}} />);
+
+    await waitFor(() => {
+      expect(screen.getByText('CIME INGENIEROS S R L')).toBeInTheDocument();
+    });
+
+    expect(screen.getByText('CHOICE SERVICE S.A.C.')).toBeInTheDocument();
+    expect(screen.getByText('INTELLISOFT S.A.')).toBeInTheDocument();
+
+    const input = screen.getByPlaceholderText(/Buscar empresa/i);
+    fireEvent.change(input, { target: { value: 'CIME' } });
+
+    expect(screen.getByText('CIME INGENIEROS S R L')).toBeInTheDocument();
+    expect(screen.queryByText('CHOICE SERVICE S.A.C.')).not.toBeInTheDocument();
+    expect(screen.queryByText('INTELLISOFT S.A.')).not.toBeInTheDocument();
+  });
+
+  it('shows no-match message when search does not match any company', async () => {
+    mockFetch.mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ companies: mockCompanies, rows: [] }),
+    });
+
+    render(<CompanySelector {...defaultProps} onSelect={() => {}} />);
+
+    await waitFor(() => {
+      expect(screen.getByText('CIME INGENIEROS S R L')).toBeInTheDocument();
+    });
+
+    const input = screen.getByPlaceholderText(/Buscar empresa/i);
+    fireEvent.change(input, { target: { value: 'NOEXISTE' } });
+
+    expect(screen.queryByText('CIME INGENIEROS S R L')).not.toBeInTheDocument();
+    expect(
+      screen.getByText(/No se encontraron empresas que coincidan/i),
+    ).toBeInTheDocument();
+  });
 });
