@@ -1,5 +1,13 @@
 import type { MockPreviewData } from '../../infrastructure/areaConfigRegistry';
 
+function escapeHtml(text: string): string {
+  return text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
 /**
  * Regex matching a `{{tabla:name:cols}}` placeholder (table form). The
  * inner captures are the table name and the comma-joined columns. Used by
@@ -99,6 +107,10 @@ function lookupMockValue(key: string, mock: MockPreviewData): string | undefined
       return mock.pacienteDni;
     case 'nombrePaciente':
       return mock.pacienteNombre;
+    case 'listaPacientes':
+      return mock.patientNames.length > 0
+        ? `<ol>${mock.patientNames.map((name) => `<li>${escapeHtml(name)}</li>`).join('')}</ol>`
+        : '<em>[Lista vacía]</em>';
     default:
       return undefined;
   }

@@ -33,6 +33,7 @@ const mock: MockPreviewData = {
 };
 
 const emptyFirmaMock: MockPreviewData = { ...mock, firma: '' };
+const emptyListaMock: MockPreviewData = { ...mock, patientNames: [] };
 
 describe('buildPreviewHtml', () => {
   describe('replaces simple tokens with mock data (spec: Preview renders tokens)', () => {
@@ -61,6 +62,14 @@ describe('buildPreviewHtml', () => {
         mock,
       );
       expect(out).toContain('Clínica Demo S.A. — 2026-01-15');
+    });
+
+    it('replaces {{listaPacientes}} with an auto-numbered <ol> list using mock patientNames', () => {
+      const out = buildPreviewHtml('<p>{{listaPacientes}}</p>', mock);
+      expect(out).toMatch(/<ol>/);
+      expect(out).toMatch(/<\/ol>/);
+      expect(out).toContain('<li>Juan Pérez</li>');
+      expect(out).not.toContain('{{listaPacientes}}');
     });
   });
 
@@ -144,6 +153,26 @@ describe('buildPreviewHtml', () => {
       // Unknown tokens are not in the mock data — left visible so the user
       // sees the placeholder in the preview.
       expect(out).toContain('{{unknownToken}}');
+    });
+  });
+
+  describe('{{listaPacientes}} renders as ol with names or placeholder when empty', () => {
+    it('shows <em>[Lista vacía]</em> and does NOT remove the block when patientNames is empty', () => {
+      const out = buildPreviewHtml('<p>{{listaPacientes}}</p>', emptyListaMock);
+      expect(out).toContain('<em>[Lista vacía]</em>');
+      expect(out).toContain('<p>');
+      expect(out).not.toContain('{{listaPacientes}}');
+    });
+
+    it('removes table token literal when empty patientNames is used alongside table', () => {
+      // listaPacientes with empty data → placeholder; the table token
+      // (unrelated) gets its own mock replacement. No cascading failure.
+      const out = buildPreviewHtml(
+        '<p>{{listaPacientes}}</p><p>{{tabla:documentosVencidos:fecha}}</p>',
+        emptyListaMock,
+      );
+      expect(out).toContain('<em>[Lista vacía]</em>');
+      expect(out).toContain('documentosVencidos');
     });
   });
 });

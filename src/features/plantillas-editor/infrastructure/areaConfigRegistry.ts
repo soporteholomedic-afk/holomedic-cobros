@@ -89,6 +89,7 @@ const CONSOLIDADOS_CONFIG: AreaConfig = {
       tokens: [
         { key: 'dni', label: 'DNI' },
         { key: 'nombrePaciente', label: 'Nombre Paciente' },
+        { key: 'listaPacientes', label: 'Lista de Pacientes' },
       ],
     },
     {

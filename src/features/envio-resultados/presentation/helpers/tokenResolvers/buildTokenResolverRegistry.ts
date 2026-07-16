@@ -45,7 +45,9 @@ function buildTokenMap(area: string): Map<string, (ctx: InterpolationContext) =>
   map.set('totalPacientes', (ctx) => String(ctx.patientNames.length));
   map.set('totalExamenes', (ctx) => String(ctx.fileNames.length));
   map.set('listaPacientes', (ctx) =>
-    ctx.patientNames.map((name) => `    <li>${escapeHtml(name)}</li>`).join('\n'),
+    ctx.patientNames.length === 0
+      ? '<em>[Lista vacía]</em>'
+      : `<ol>${ctx.patientNames.map((name) => `<li>${escapeHtml(name)}</li>`).join('')}</ol>`,
   );
   map.set('listaArchivos', (ctx) =>
     ctx.fileNames.map((name) => `    <li>${escapeHtml(name)}</li>`).join('\n'),

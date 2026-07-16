@@ -50,6 +50,14 @@ const consolidadosConfig: AreaConfig = {
         { key: 'fecha', label: 'Fecha' },
       ],
     },
+    {
+      category: 'Paciente',
+      tokens: [
+        { key: 'dni', label: 'DNI' },
+        { key: 'nombrePaciente', label: 'Nombre Paciente' },
+        { key: 'listaPacientes', label: 'Lista de Pacientes' },
+      ],
+    },
     { category: 'Firma', tokens: [{ key: 'firma', label: 'Firma' }] },
     {
       category: 'Tablas',
@@ -125,6 +133,7 @@ describe('TokenPalette', () => {
       // heading "Empresa" is role="heading" so the two never collide.
       expect(screen.getByRole('img', { name: 'Empresa' })).toBeInTheDocument();
       expect(screen.getByRole('img', { name: 'Fecha' })).toBeInTheDocument();
+      expect(screen.getByRole('img', { name: 'Lista de Pacientes' })).toBeInTheDocument();
       expect(screen.getByRole('img', { name: 'Firma' })).toBeInTheDocument();
       expect(
         screen.getByRole('img', { name: 'Documentos vencidos' }),

@@ -57,11 +57,19 @@ describe('TokenResolverRegistry — buildTokenResolverRegistry(area)', () => {
     expect(registry.resolveToken('nombrePaciente', empty)).toBe('');
   });
 
-  it('resolves {{listaPacientes}} as an HTML <li> list (one per patient)', () => {
+  it('resolves {{listaPacientes}} as an auto-numbered <ol> list (one per patient)', () => {
     const registry = buildTokenResolverRegistry('consolidados');
     const out = registry.resolveToken('listaPacientes', GOLDEN_CTX);
+    expect(out).toMatch(/^<ol>/);
+    expect(out).toMatch(/<\/ol>$/);
     expect(out).toContain('<li>Juan Pérez</li>');
     expect(out).toContain('<li>María Gómez</li>');
+  });
+
+  it('resolves {{listaPacientes}} to a visible placeholder when ctx.patientNames is empty', () => {
+    const registry = buildTokenResolverRegistry('consolidados');
+    const empty = { ...GOLDEN_CTX, patientNames: [] };
+    expect(registry.resolveToken('listaPacientes', empty)).toBe('<em>[Lista vacía]</em>');
   });
 
   it('resolves {{listaArchivos}} as an HTML <li> list (one per file)', () => {
