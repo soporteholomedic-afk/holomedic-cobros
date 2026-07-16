@@ -127,6 +127,23 @@ describe('TemplateEditor', () => {
     });
   });
 
+  describe('selecting a template updates the Tipo select (spec: TIPO round-trip)', () => {
+    it('updates the Tipo select to "patient" when a patient template is selected', async () => {
+      const tpl = makeTemplate({
+        id: 'tpl-patient',
+        type: 'patient',
+        name: 'Para paciente',
+      });
+      await renderEditor({ templates: [tpl] });
+
+      fireEvent.change(screen.getByRole('combobox', { name: /plantilla/i }), {
+        target: { value: 'tpl-patient' },
+      });
+
+      expect(screen.getByRole('combobox', { name: /tipo/i })).toHaveValue('patient');
+    });
+  });
+
   describe('save (spec: Save serializes chips)', () => {
     it('serializes the body via getHtml, fills name+type+subject, and POSTs to /api/plantillas', async () => {
       const fetchMock = vi.fn().mockResolvedValue({
