@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 
 import { getTemplateDb } from '@/features/plantillas-editor/infrastructure/getTemplateDb';
-import { TemplateNotFoundError } from '@/features/plantillas-editor/infrastructure/sqlite/betterSqliteTemplateRepository';
+import { TemplateNotFoundError } from '@/features/plantillas-editor/infrastructure/sqlserver';
 import { SoftDeleteTemplateUseCase } from '@/features/plantillas-editor/application/softDeleteTemplate';
 import type { Template } from '@/features/plantillas-editor/domain/entities';
 

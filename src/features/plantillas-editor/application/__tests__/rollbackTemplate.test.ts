@@ -82,9 +82,9 @@ describe('RollbackTemplateUseCase', () => {
     expect(rollback).toHaveBeenCalledWith('tpl-42', 'v-7');
   });
 
-  it('propagates TemplateNotFoundError when the template is missing (route maps to 404)', async () => {
+    it('propagates TemplateNotFoundError when the template is missing (route maps to 404)', async () => {
     const { TemplateNotFoundError } = await import(
-      '../../infrastructure/sqlite/betterSqliteTemplateRepository'
+      '../../infrastructure/sqlserver'
     );
     const rollback = vi.fn<(templateId: string, versionId: string) => Promise<Template>>().mockRejectedValue(new TemplateNotFoundError('tpl-missing'));
     const useCase = new RollbackTemplateUseCase(makeMockRepo(rollback));
@@ -94,9 +94,9 @@ describe('RollbackTemplateUseCase', () => {
     );
   });
 
-  it('propagates TemplateNotFoundError when the version is missing (route maps to 404)', async () => {
+    it('propagates TemplateNotFoundError when the version is missing (route maps to 404)', async () => {
     const { TemplateNotFoundError } = await import(
-      '../../infrastructure/sqlite/betterSqliteTemplateRepository'
+      '../../infrastructure/sqlserver'
     );
     const rollback = vi.fn<(templateId: string, versionId: string) => Promise<Template>>().mockRejectedValue(new TemplateNotFoundError('v-missing'));
     const useCase = new RollbackTemplateUseCase(makeMockRepo(rollback));

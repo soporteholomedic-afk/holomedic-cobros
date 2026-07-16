@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { __setTemplateDbForTests } from '@/features/plantillas-editor/infrastructure/getTemplateDb';
 import type { ITemplateRepository } from '@/features/plantillas-editor/domain/ports';
 import type { Template } from '@/features/plantillas-editor/domain/entities';
-import { TemplateNotFoundError } from '@/features/plantillas-editor/infrastructure/sqlite/betterSqliteTemplateRepository';
+import { TemplateNotFoundError } from '@/features/plantillas-editor/infrastructure/sqlserver';
 
 // ---- Import under test (after mocks) ----
 

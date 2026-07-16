@@ -63,37 +63,3 @@ export const FILE_SERVER_BASE_PATH =
 export const pathOs: path.PlatformPath = FILE_SERVER_BASE_PATH.includes('\\')
   ? path.win32
   : path.posix;
-
-/**
- * Location of the SQLite database that backs the email template editor
- * (`templates` + `template_versions` tables). The env var
- * `SQLITE_DB_PATH` always wins over the platform default so ops can
- * point at a persistent volume in production.
- *
- * - Windows default: `%APPDATA%/holomedic/templates.db`
- * - Linux default: `./data/holomedic-templates.db` (relative to the
- *   process cwd; the factory ensures the `data/` dir exists)
- *
- * Mirrors the `FILE_SERVER_BASE_PATH` env-overridable pattern so there is
- * a single source of truth for the SQLite file location.
- */
-const DEFAULT_SQLITE_DB_PATH = isWindows
-  ? path.join(process.env.APPDATA ?? '.', 'holomedic', 'templates.db')
-  : './data/holomedic-templates.db';
-
-export const SQLITE_DB_PATH =
-  process.env.SQLITE_DB_PATH ?? DEFAULT_SQLITE_DB_PATH;
-
-/**
- * Which `ITemplateRepository` adapter the factory (`getTemplateDb`)
- * should build. `'better-sqlite3'` is the primary (sync native, best for
- * a read-heavy config table); `'sql.js'` is the WASM fallback used when
- * the native addon cannot be built for the host Node version. Swap is
- * config, not code — both adapters implement the same port. Defaults to
- * `'better-sqlite3'` when the env var is unset.
- */
-export type TemplateDbDriver = 'better-sqlite3' | 'sql.js';
-
-export const TEMPLATE_DB_DRIVER: TemplateDbDriver =
-  (process.env.TEMPLATE_DB_DRIVER as TemplateDbDriver | undefined) ??
-  'better-sqlite3';

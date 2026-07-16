@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 
 import { getTemplateDb } from '@/features/plantillas-editor/infrastructure/getTemplateDb';
-import { TemplateNotFoundError } from '@/features/plantillas-editor/infrastructure/sqlite/betterSqliteTemplateRepository';
+import { TemplateNotFoundError } from '@/features/plantillas-editor/infrastructure/sqlserver';
 import { RestoreTemplateUseCase } from '@/features/plantillas-editor/application/restoreTemplate';
 
 // ---- Response types ----

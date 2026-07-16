@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 
 import { getTemplateDb } from '@/features/plantillas-editor/infrastructure/getTemplateDb';
-import { TemplateNotFoundError } from '@/features/plantillas-editor/infrastructure/sqlite/betterSqliteTemplateRepository';
+import { TemplateNotFoundError } from '@/features/plantillas-editor/infrastructure/sqlserver';
 import { ListVersionsUseCase } from '@/features/plantillas-editor/application/listVersions';
 import type { TemplateVersion } from '@/features/plantillas-editor/domain/entities';
 

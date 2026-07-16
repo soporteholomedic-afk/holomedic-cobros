@@ -9,15 +9,16 @@ import type {
  * Hexagonal port for template persistence.
  *
  * Implementations:
- *  - `BetterSqliteTemplateRepository` — primary adapter (native sync API,
- *    wrapped in Promises for the async interface).
- *  - `SqlJsTemplateRepository` — WASM fallback when the native addon cannot
- *    be built for the host Node version.
+ *  - `SqlServerTemplateRepository` — primary adapter, backed by the
+ *    `HOLOMEDIC` database on SQL Server.
  *
- * The factory (`getTemplateDb`, task 1.10) selects the adapter at startup
- * via `TEMPLATE_DB_DRIVER`; swap is config, not code.
+ * The factory (`getTemplateDb`) opens the HOLOMEDIC pool via
+ * `getHolomedicPool()`, runs the idempotent migrate, and returns the
+ * adapter. Swap storage is no longer a config knob — the legacy
+ * SQLite / sql.js backends have been removed and the spec
+ * `email-template-store` is now SQL-Server-only.
  *
- * Semantics enforced by the adapters (see spec `email-template-store`):
+ * Semantics enforced by the adapter (see spec `email-template-store`):
  *  - Active lists (`listByArea`/`listByAreaAndType`) exclude soft-deleted
  *    templates (`deletedAt IS NULL`).
  *  - `save` is append-only: it ALWAYS inserts a new `template_versions`
@@ -26,7 +27,7 @@ import type {
  *  - `rollback` copies the target version's content into a NEW version row;
  *    it MUST NOT mutate or delete existing version rows.
  *  - `setDefault` clears the previous default for `area+type` and sets the
- *    new one in a single transaction (the partial unique index
+ *    new one in a single transaction (the filtered unique index
  *    `idx_templates_default_area_type` backs this at the DB level).
  *  - `softDelete` of a default clears `isDefault`; no auto-promotion.
  *  - `clone` works on active OR soft-deleted sources, always producing a

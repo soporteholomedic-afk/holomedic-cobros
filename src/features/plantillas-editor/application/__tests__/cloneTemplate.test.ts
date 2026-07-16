@@ -109,7 +109,7 @@ describe('CloneTemplateUseCase', () => {
 
   it('propagates TemplateNotFoundError when the source is missing (route maps to 404)', async () => {
     const { TemplateNotFoundError } = await import(
-      '../../infrastructure/sqlite/betterSqliteTemplateRepository'
+      '../../infrastructure/sqlserver'
     );
     const cloneFn = vi.fn<(id: string) => Promise<Template>>().mockRejectedValue(new TemplateNotFoundError('src-missing'));
     const useCase = new CloneTemplateUseCase(makeMockRepo(cloneFn));

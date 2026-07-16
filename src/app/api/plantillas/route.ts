@@ -3,7 +3,7 @@ import { NextResponse } from 'next/server';
 import { SPITCH_TYPES, type SpitchType, type SaveTemplateInput } from '@/features/plantillas-editor/domain/entities';
 import { getAreaConfig } from '@/features/plantillas-editor/infrastructure/areaConfigRegistry';
 import { getTemplateDb } from '@/features/plantillas-editor/infrastructure/getTemplateDb';
-import { TemplateNotFoundError } from '@/features/plantillas-editor/infrastructure/sqlite/betterSqliteTemplateRepository';
+import { TemplateNotFoundError } from '@/features/plantillas-editor/infrastructure/sqlserver';
 import { ListTemplatesUseCase } from '@/features/plantillas-editor/application/listTemplates';
 import { SaveTemplateUseCase } from '@/features/plantillas-editor/application/saveTemplate';
 import { projectToSpitchDTO } from '@/features/plantillas-editor/application/projectToSpitchDTO';

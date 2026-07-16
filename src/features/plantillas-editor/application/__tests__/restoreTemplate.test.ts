@@ -99,7 +99,7 @@ describe('RestoreTemplateUseCase', () => {
 
   it('propagates TemplateNotFoundError when the template is missing (route maps to 404)', async () => {
     const { TemplateNotFoundError } = await import(
-      '../../infrastructure/sqlite/betterSqliteTemplateRepository'
+      '../../infrastructure/sqlserver'
     );
     const restore = vi.fn<(id: string) => Promise<void>>().mockRejectedValue(new TemplateNotFoundError('tpl-missing'));
     const useCase = new RestoreTemplateUseCase(makeMockRepo(restore));

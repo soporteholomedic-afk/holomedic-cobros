@@ -1,61 +1,71 @@
-import { existsSync, mkdirSync, rmSync } from 'node:fs';
-import * as os from 'node:os';
-import * as path from 'node:path';
-
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { ITemplateRepository } from '../../domain/ports';
 
 /**
- * Factory tests for `getTemplateDb`. Covers:
- *  - `resolveTemplateDbDriver()` pure selection logic (spec
- *    `email-template-store`: "Primary adapter selected by default" +
- *    "Fallback adapter via env").
- *  - Singleton caching + `__setTemplateDbForTests` seam (mirrors
- *    `getFileRepository.test.ts`).
- *  - Real build selection: default driver produces a WORKING better-sqlite3
- *    adapter; `TEMPLATE_DB_DRIVER=sql.js` produces a WORKING sql.js adapter
- *    (behavioural proof, not instanceof — survives module re-imports).
+ * Factory tests for `getTemplateDb`. The new factory:
+ *  - Lazy-singleton: first call opens the HOLOMEDIC SQL Server pool,
+ *    runs the idempotent `migrate()`, and constructs the
+ *    `SqlServerTemplateRepository`. Every subsequent call returns the
+ *    same cached promise.
+ *  - `__setTemplateDbForTests` seam: replaces the cached repo with a
+ *    mock (or clears it so the next call rebuilds from the real pool).
+ *  - HOLOMEDIC pool failure surfaces (the factory propagates).
  *
- * `SQLITE_DB_PATH` and `TEMPLATE_DB_DRIVER` are read from `platform.ts` at
- * module-load time, so the build tests reset the module registry and set
- * the env BEFORE re-importing the factory — same pattern as
- * `platform.test.ts`.
+ * `migrate()` and `getHolomedicPool()` are mocked at the module
+ * boundary so the suite runs without a real SQL Server connection.
  */
 describe('getTemplateDb', () => {
-  const origSqlitePath = process.env.SQLITE_DB_PATH;
-  const origDriver = process.env.TEMPLATE_DB_DRIVER;
-  let tmpFiles: string[] = [];
+  const mockPool = { connect: vi.fn().mockResolvedValue(undefined) } as unknown;
+  const mockRepo: ITemplateRepository = {
+    listByArea: vi.fn(),
+    listByAreaAndType: vi.fn(),
+    listDeletedByArea: vi.fn(),
+    getById: vi.fn(),
+    save: vi.fn(),
+    softDelete: vi.fn(),
+    restore: vi.fn(),
+    clone: vi.fn(),
+    setDefault: vi.fn(),
+    listVersions: vi.fn(),
+    rollback: vi.fn(),
+  };
+  const migrate = vi.fn().mockResolvedValue(undefined);
+  const getHolomedicPool = vi.fn().mockResolvedValue(mockPool);
 
   beforeEach(() => {
     vi.resetModules();
-    tmpFiles = [];
+    vi.clearAllMocks();
+    vi.doMock('@/lib/db', () => ({
+      getHolomedicPool,
+    }));
+    // Use a real class for `SqlServerTemplateRepository` so the
+    // adapter's `new SqlServerTemplateRepository(pool)` works without
+    // vi.fn / arrow-function / `new` quirks.
+    class MockAdapter {
+      constructor() {
+        return mockRepo;
+      }
+    }
+    vi.doMock('../sqlserver', () => ({
+      SqlServerTemplateRepository: MockAdapter,
+      migrate,
+    }));
   });
 
   afterEach(() => {
-    for (const f of tmpFiles) {
-      try {
-        rmSync(f, { force: true });
-      } catch {
-        // ignore
-      }
-    }
-    if (origSqlitePath === undefined) delete process.env.SQLITE_DB_PATH;
-    else process.env.SQLITE_DB_PATH = origSqlitePath;
-    if (origDriver === undefined) delete process.env.TEMPLATE_DB_DRIVER;
-    else process.env.TEMPLATE_DB_DRIVER = origDriver;
+    vi.doUnmock('@/lib/db');
+    vi.doUnmock('../sqlserver');
     vi.resetModules();
   });
 
   async function loadFactory(): Promise<{
     getTemplateDb: () => Promise<ITemplateRepository>;
     __setTemplateDbForTests: (repo: ITemplateRepository | null) => void;
-    resolveTemplateDbDriver: (env?: string | undefined) => 'better-sqlite3' | 'sql.js';
   }> {
     return (await import('../getTemplateDb')) as unknown as {
       getTemplateDb: () => Promise<ITemplateRepository>;
       __setTemplateDbForTests: (repo: ITemplateRepository | null) => void;
-      resolveTemplateDbDriver: (env?: string | undefined) => 'better-sqlite3' | 'sql.js';
     };
   }
 
@@ -75,27 +85,8 @@ describe('getTemplateDb', () => {
     };
   }
 
-  describe('resolveTemplateDbDriver (pure selection logic)', () => {
-    it("defaults to 'better-sqlite3' when the env var is unset", async () => {
-      const { resolveTemplateDbDriver } = await loadFactory();
-      expect(resolveTemplateDbDriver(undefined)).toBe('better-sqlite3');
-    });
-
-    it("returns 'sql.js' when the env var is 'sql.js'", async () => {
-      const { resolveTemplateDbDriver } = await loadFactory();
-      expect(resolveTemplateDbDriver('sql.js')).toBe('sql.js');
-    });
-
-    it("returns 'better-sqlite3' for an unknown value (safe default)", async () => {
-      const { resolveTemplateDbDriver } = await loadFactory();
-      expect(resolveTemplateDbDriver('garbage')).toBe('better-sqlite3');
-    });
-  });
-
   describe('singleton caching + __setTemplateDbForTests seam', () => {
     it('returns the same instance on subsequent calls (caching)', async () => {
-      process.env.SQLITE_DB_PATH = ':memory:';
-      delete process.env.TEMPLATE_DB_DRIVER;
       const { getTemplateDb } = await loadFactory();
       const a = await getTemplateDb();
       const b = await getTemplateDb();
@@ -120,7 +111,6 @@ describe('getTemplateDb', () => {
     });
 
     it('after clearing the seam, the factory produces a fresh instance', async () => {
-      process.env.SQLITE_DB_PATH = ':memory:';
       const { getTemplateDb, __setTemplateDbForTests } = await loadFactory();
       const mock = makeMockRepo();
       __setTemplateDbForTests(mock);
@@ -131,53 +121,43 @@ describe('getTemplateDb', () => {
     });
   });
 
-  describe('real build selection (behavioural proof)', () => {
-    it('builds a working better-sqlite3 adapter by default (spec: primary adapter selected by default)', async () => {
-      process.env.SQLITE_DB_PATH = ':memory:';
-      delete process.env.TEMPLATE_DB_DRIVER;
+  describe('real build path (HOLOMEDIC pool + migrate + adapter)', () => {
+    it('opens the HOLOMEDIC pool, runs migrate, and constructs the adapter', async () => {
       const { getTemplateDb, __setTemplateDbForTests } = await loadFactory();
       __setTemplateDbForTests(null);
       const repo = await getTemplateDb();
 
-      // Behavioural proof: a real, working repository over :memory:.
-      const saved = await repo.save({
-        area: 'consolidados',
-        type: 'company',
-        name: 'T',
-        subject: 's',
-        bodyHtml: '<p>b</p>',
-      });
-      expect(saved.id).toBeTruthy();
-      const fetched = await repo.getById(saved.id);
-      expect(fetched?.subject).toBe('s');
+      expect(getHolomedicPool).toHaveBeenCalledTimes(1);
+      expect(migrate).toHaveBeenCalledTimes(1);
+      expect(migrate).toHaveBeenCalledWith(mockPool);
+      expect(repo).toBe(mockRepo);
     });
 
-    it('builds a working sql.js adapter when TEMPLATE_DB_DRIVER=sql.js (spec: fallback adapter via env)', async () => {
-      process.env.TEMPLATE_DB_DRIVER = 'sql.js';
-      const tmp = path.join(os.tmpdir(), `holomedic-template-test-${Date.now()}.db`);
-      tmpFiles.push(tmp);
-      process.env.SQLITE_DB_PATH = tmp;
-      // Pre-create the parent dir (tmpdir usually exists, but be safe).
-      mkdirSync(path.dirname(tmp), { recursive: true });
-
+    it('runs migrate exactly once across multiple calls (singleton)', async () => {
       const { getTemplateDb, __setTemplateDbForTests } = await loadFactory();
       __setTemplateDbForTests(null);
-      const repo = await getTemplateDb();
+      await getTemplateDb();
+      await getTemplateDb();
+      await getTemplateDb();
 
-      const saved = await repo.save({
-        area: 'consolidados',
-        type: 'company',
-        name: 'T',
-        subject: 'sql.js subject',
-        bodyHtml: '<p>b</p>',
-      });
-      expect(saved.id).toBeTruthy();
-      const fetched = await repo.getById(saved.id);
-      expect(fetched?.subject).toBe('sql.js subject');
+      expect(getHolomedicPool).toHaveBeenCalledTimes(1);
+      expect(migrate).toHaveBeenCalledTimes(1);
+    });
 
-      // The sql.js adapter calls persist() after every mutation, so the temp
-      // file MUST now exist (proof the fallback flushes to disk).
-      expect(existsSync(tmp)).toBe(true);
+    it('propagates pool errors so the route can map them to HTTP 500', async () => {
+      getHolomedicPool.mockRejectedValueOnce(new Error('ECONNREFUSED'));
+      const { getTemplateDb, __setTemplateDbForTests } = await loadFactory();
+      __setTemplateDbForTests(null);
+
+      await expect(getTemplateDb()).rejects.toThrow('ECONNREFUSED');
+    });
+
+    it('propagates migrate errors so the route can map them to HTTP 500', async () => {
+      migrate.mockRejectedValueOnce(new Error('permission denied'));
+      const { getTemplateDb, __setTemplateDbForTests } = await loadFactory();
+      __setTemplateDbForTests(null);
+
+      await expect(getTemplateDb()).rejects.toThrow('permission denied');
     });
   });
 });

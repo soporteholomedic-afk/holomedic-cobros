@@ -24,10 +24,10 @@ import { resolveAreaAndTemplates } from './resolveAreaAndTemplates';
  * The data-loading logic is extracted into `resolveAreaAndTemplates` so it
  * is testable independently (Server Components don't render in
  * `@testing-library/react` — the page is a thin wrapper). The factory is
- * async (PR 1 deviation — sql.js init is async), so the page must
- * `await getTemplateDb()`. SQLite access is server-side only
- * (serverExternalPackages: ['better-sqlite3']); the client receives
- * plain serializable `Template[]` props, not the repo.
+ * async (it opens the HOLOMEDIC SQL Server pool and runs the
+ * idempotent migrate), so the page must `await getTemplateDb()`. SQL
+ * Server access is server-side only; the client receives plain
+ * serializable `Template[]` props, not the repo.
  *
  * Default export: Next.js App Router convention for page files.
  */

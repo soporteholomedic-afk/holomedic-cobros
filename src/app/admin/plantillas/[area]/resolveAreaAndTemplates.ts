@@ -17,10 +17,10 @@ import type { Template } from '@/features/plantillas-editor/domain/entities';
  *  - `{ notFound: false, areaConfig, templates }` — the area is registered
  *    and the templates are loaded.
  *
- * The factory is async (PR 1 deviation — sql.js init is async). SQLite
- * access is server-side only; the returned `templates` are plain
- * serializable `Template[]` safe to cross the server→client boundary as
- * props to `TemplateEditor`.
+ * The factory is async (it opens the HOLOMEDIC SQL Server pool and runs
+ * the idempotent migrate). Database access is server-side only; the
+ * returned `templates` are plain serializable `Template[]` safe to
+ * cross the server→client boundary as props to `TemplateEditor`.
  *
  * Spec `area-template-config` / "Dynamic route resolution":
  *  - "Known area renders editor" — `areaConfig` is defined, `templates` is the
