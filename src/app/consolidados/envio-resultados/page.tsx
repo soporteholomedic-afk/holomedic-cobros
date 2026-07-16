@@ -15,7 +15,7 @@ function EnvioResultadosContent() {
 
   return (
     <main className="min-h-screen bg-slate-50 py-12 px-4">
-      <div className="max-w-4xl mx-auto">
+      <div className="w-full mx-auto px-2.5">
         {/* Breadcrumb */}
         <div className="mb-6">
           <Link
@@ -54,7 +54,7 @@ export default function EnvioResultadosPage() {
     <Suspense
       fallback={
         <main className="min-h-screen bg-slate-50 py-12 px-4">
-          <div className="max-w-4xl mx-auto flex items-center justify-center py-16">
+          <div className="w-full mx-auto px-2.5 flex items-center justify-center py-16">
             <div className="w-8 h-8 border-4 border-sky-600 border-t-transparent rounded-full animate-spin" />
           </div>
         </main>
