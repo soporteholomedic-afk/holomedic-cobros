@@ -118,12 +118,12 @@ export function EmailEditor({
   const recipientNames = Object.values(selectedPatients).map((s) => s.patientName);
 
   // Editable email fields — pre-filled with patient names as a starting hint
-  const [toEmail, setToEmail] = useState(() => recipientNames.join(', '));
+  const [toEmail, setToEmail] = useState('');
   const [ccEmail, setCcEmail] = useState('');
 
   const toList = toEmail.split(',').map((s) => s.trim()).filter(Boolean);
   const ccList = ccEmail.split(',').map((s) => s.trim()).filter(Boolean);
-  const recipients = toList.length > 0 ? toList : recipientNames;
+  const recipients = toList;
 
   // Build selected PatientFile[] objects from selection state
   const selectedFiles: PatientFile[] = useMemo(() => {
