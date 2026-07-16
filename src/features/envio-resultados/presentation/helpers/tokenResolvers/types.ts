@@ -41,14 +41,31 @@ export interface InterpolationContext {
 }
 
 /**
- * A resolver for a single non-table token. Returns the string to insert
- * at the placeholder location. Return `''` to signal "empty" — the
- * orchestrator removes the containing block.
+ * The result of resolving a token — split into HTML-safe and plain-text
+ * values so the orchestrator can apply different values to the body
+ * (HTML context) vs the subject (plain-text context).
+ *
+ * - `html` is HTML-escaped (safe for `dangerouslySetInnerHTML`).
+ * - `subject` is raw (never appears inside HTML; React escapes it when
+ *   rendering `{subject}` in JSX text nodes or `<input value={subject}>`).
+ *
+ * Both fields default to `''` to signal "empty" — the orchestrator
+ * removes the containing block from the body when `html === ''`.
+ */
+export interface ResolveResult {
+  html: string;
+  subject: string;
+}
+
+/**
+ * A resolver for a single non-table token. Returns a `ResolveResult`
+ * to provide differentiated HTML-safe and plain-text values.
+ * Return `{ html: '', subject: '' }` to signal "empty".
  */
 export interface TokenResolver {
   /** The placeholder key WITHOUT the `{{}}` braces. E.g. `'empresa'`. */
   key: string;
-  resolve(ctx: InterpolationContext): string;
+  resolve(ctx: InterpolationContext): ResolveResult;
 }
 
 /**
@@ -72,8 +89,8 @@ export interface TableResolver {
  * one consistent path.
  */
 export interface TokenResolverRegistry {
-  /** Resolve a simple `{{key}}` token. Returns `''` if unknown or empty. */
-  resolveToken(key: string, ctx: InterpolationContext): string;
-  /** Resolve a `{{tabla:name:cols}}` token. Returns `''` if unknown or empty. */
-  resolveTable(name: string, cols: string[], ctx: InterpolationContext): string;
+  /** Resolve a simple `{{key}}` token. Returns `{ html: '', subject: '' }` if unknown or empty. */
+  resolveToken(key: string, ctx: InterpolationContext): ResolveResult;
+  /** Resolve a `{{tabla:name:cols}}` token. Returns `{ html: '', subject: '' }` if unknown or empty. */
+  resolveTable(name: string, cols: string[], ctx: InterpolationContext): ResolveResult;
 }

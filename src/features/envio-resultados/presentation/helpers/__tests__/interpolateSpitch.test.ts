@@ -139,6 +139,54 @@ describe('interpolateSpitch (legacy thin wrapper) — behaviour-preserving for E
     expect(out.html).toContain('&lt;A &amp; B&gt;');
     expect(out.html).not.toContain('<A & B>');
   });
+
+  it('does NOT HTML-escape company name with & in the subject', () => {
+    const out = interpolateSpitch({
+      html: '<p>{{empresa}}</p>',
+      subject: 'Subject: {{empresa}}',
+      companyName: 'A & B S.A.C.',
+      patientNames: [],
+      fileNames: [],
+    });
+    expect(out.html).toContain('A &amp; B S.A.C.');
+    expect(out.subject).toBe('Subject: A & B S.A.C.');
+    expect(out.subject).not.toContain('&amp;');
+  });
+
+  it('does NOT HTML-escape patient name with < and & in the subject', () => {
+    const out = interpolateSpitch({
+      html: '<p>{{nombrePaciente}}</p>',
+      subject: 'Subject: {{nombrePaciente}}',
+      companyName: 'C',
+      patientNames: [],
+      fileNames: [],
+      patients: [
+        { id: 'p1', companyId: 'c1', name: '<Juan & Pedro>', dni: '1', files: [] },
+      ],
+    });
+    expect(out.html).toContain('&lt;Juan &amp; Pedro&gt;');
+    expect(out.subject).toBe('Subject: <Juan & Pedro>');
+    expect(out.subject).not.toContain('&amp;');
+    expect(out.subject).not.toContain('&lt;');
+  });
+
+  it('removes HTML-only tokens (listaPacientes, firma) from the subject', () => {
+    const out = interpolateSpitch({
+      html: '<p>{{listaPacientes}}</p><p>{{firma}}</p>',
+      subject: 'Subj: {{listaPacientes}} / {{firma}}',
+      companyName: 'C',
+      patientNames: ['Ana', 'Luis'],
+      fileNames: [],
+      firma: '<p>Dr. Perez</p>',
+    });
+    // HTML values are preserved
+    expect(out.html).toContain('<ol>');
+    expect(out.html).toContain('Dr. Perez');
+    // Subject placeholders are cleanly removed
+    expect(out.subject).toBe('Subj:  / ');
+    expect(out.subject).not.toContain('{{')    
+    expect(out.subject).not.toContain('</p>');
+  });
 });
 
 describe('interpolate(html, subject, ctx, registry) — new orchestrator (PR 4 core)', () => {
@@ -230,6 +278,25 @@ describe('interpolate(html, subject, ctx, registry) — new orchestrator (PR 4 c
     expect(out.html).toBe('Hola Clínica Demo S.A.');
   });
 
+  it('does NOT HTML-escape empresa value in the subject (bug-fix: subject is plain-text)', () => {
+    const registry = buildTokenResolverRegistry('consolidados');
+    const ctx = { ...GOLDEN_CTX, companyName: 'A & G S.A.C.' };
+    const out = interpolate('<p>{{empresa}}</p>', 'Subject: {{empresa}}', ctx, registry);
+    expect(out.html).toContain('A &amp; G S.A.C.');
+    expect(out.subject).toBe('Subject: A & G S.A.C.');
+    expect(out.subject).not.toContain('&amp;');
+  });
+
+  it('removes table-token placeholder from subject (subject is empty for HTML-only content)', () => {
+    const registry = buildTokenResolverRegistry('consolidados');
+    const ctx = { ...GOLDEN_CTX, companyName: 'C' };
+    const out = interpolate('<p>{{tabla:documentosVencidos:fecha}}</p>', 'Subj: {{tabla:documentosVencidos:fecha}}', ctx, registry);
+    // HTML has the table (with attributes)
+    expect(out.html).toMatch(/<table[\s>]/);
+    // Subject has the placeholder removed
+    expect(out.subject).toBe('Subj: ');
+  });
+
   it('unknown simple tokens are removed cleanly (treated as empty) — no leftover {{ }}', () => {
     const registry = buildTokenResolverRegistry('consolidados');
     const out = interpolate(
@@ -240,6 +307,18 @@ describe('interpolate(html, subject, ctx, registry) — new orchestrator (PR 4 c
     );
     expect(out.html).not.toContain('{{');
     expect(out.html).not.toContain('}}');
+  });
+
+  it('unknown simple tokens are also removed from the subject (no leftover {{ }} in subject)', () => {
+    const registry = buildTokenResolverRegistry('consolidados');
+    const out = interpolate(
+      '<p>{{empresa}}</p>',
+      'Subject: {{unknownKey}}',
+      GOLDEN_CTX,
+      registry,
+    );
+    expect(out.subject).toBe('Subject: ');
+    expect(out.subject).not.toContain('{{');
   });
 
   it('firma token resolves to the signature HTML (spec: firma resolves to signature HTML)', () => {

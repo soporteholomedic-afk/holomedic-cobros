@@ -23,38 +23,67 @@
  */
 import { documentosVencidosResolver } from './documentosVencidosResolver';
 import { examenesResolver } from './examenesResolver';
-import type { InterpolationContext, TokenResolverRegistry } from './types';
+import type { InterpolationContext, ResolveResult, TokenResolverRegistry } from './types';
 import { escapeHtml } from './escapeHtml';
 
 /**
  * Build the token sub-resolver map for the given area. Returns a
  * `Map<key, resolve(ctx)>` for fast dispatch. Keys mirror the prior
  * `interpolateSpitch` placeholder set plus the new `firma` token.
+ *
+ * Each resolver returns a `ResolveResult` with differentiated values:
+ * - `html` — HTML-escaped, safe for `dangerouslySetInnerHTML`.
+ * - `subject` — raw text (never appears inside HTML markup).
+ *
+ * Tokens that produce HTML (listas, firma) return `subject: ''` so
+ * the placeholder is cleanly removed from the subject line.
  */
-function buildTokenMap(area: string): Map<string, (ctx: InterpolationContext) => string> {
-  const map = new Map<string, (ctx: InterpolationContext) => string>();
+function buildTokenMap(area: string): Map<string, (ctx: InterpolationContext) => ResolveResult> {
+  const map = new Map<string, (ctx: InterpolationContext) => ResolveResult>();
   if (area !== 'consolidados') {
     return map; // Unknown area → every token resolves to ''.
   }
-  map.set('empresa', (ctx) => escapeHtml(ctx.companyName));
-  map.set('fecha', (ctx) => ctx.today);
-  map.set('fechaExamen', (ctx) => ctx.today);
-  map.set('paciente', (ctx) => escapeHtml(ctx.patientNames[0] ?? ''));
-  map.set('nombrePaciente', (ctx) => escapeHtml(ctx.patients[0]?.name ?? ''));
-  map.set('dni', (ctx) => ctx.patients[0]?.dni ?? '');
-  map.set('totalPacientes', (ctx) => String(ctx.patientNames.length));
-  map.set('totalExamenes', (ctx) => String(ctx.fileNames.length));
-  map.set('listaPacientes', (ctx) =>
-    ctx.patientNames.length === 0
-      ? '<em>[Lista vacía]</em>'
-      : `<ol>${ctx.patientNames.map((name) => `<li>${escapeHtml(name)}</li>`).join('')}</ol>`,
-  );
-  map.set('listaArchivos', (ctx) =>
-    ctx.fileNames.map((name) => `    <li>${escapeHtml(name)}</li>`).join('\n'),
-  );
-  map.set('firma', (ctx) =>
-    ctx.firma !== '' ? ctx.firma : '<em>[Falta configurar firma]</em>',
-  );
+  map.set('empresa', (ctx) => ({
+    html: escapeHtml(ctx.companyName),
+    subject: ctx.companyName,
+  }));
+  map.set('fecha', (ctx) => ({ html: ctx.today, subject: ctx.today }));
+  map.set('fechaExamen', (ctx) => ({ html: ctx.today, subject: ctx.today }));
+  map.set('paciente', (ctx) => ({
+    html: escapeHtml(ctx.patientNames[0] ?? ''),
+    subject: ctx.patientNames[0] ?? '',
+  }));
+  map.set('nombrePaciente', (ctx) => ({
+    html: escapeHtml(ctx.patients[0]?.name ?? ''),
+    subject: ctx.patients[0]?.name ?? '',
+  }));
+  map.set('dni', (ctx) => ({
+    html: ctx.patients[0]?.dni ?? '',
+    subject: ctx.patients[0]?.dni ?? '',
+  }));
+  map.set('totalPacientes', (ctx) => ({
+    html: String(ctx.patientNames.length),
+    subject: String(ctx.patientNames.length),
+  }));
+  map.set('totalExamenes', (ctx) => ({
+    html: String(ctx.fileNames.length),
+    subject: String(ctx.fileNames.length),
+  }));
+  map.set('listaPacientes', (ctx) => ({
+    html:
+      ctx.patientNames.length === 0
+        ? '<em>[Lista vacía]</em>'
+        : `<ol>${ctx.patientNames.map((name) => `<li>${escapeHtml(name)}</li>`).join('')}</ol>`,
+    subject: '',
+  }));
+  map.set('listaArchivos', (ctx) => ({
+    html: ctx.fileNames.map((name) => `    <li>${escapeHtml(name)}</li>`).join('\n'),
+    subject: '',
+  }));
+  map.set('firma', (ctx) => ({
+    html: ctx.firma !== '' ? ctx.firma : '<em>[Falta configurar firma]</em>',
+    subject: '',
+  }));
   return map;
 }
 
@@ -80,11 +109,13 @@ export function buildTokenResolverRegistry(area: string): TokenResolverRegistry 
   return {
     resolveToken(key, ctx) {
       const fn = tokens.get(key);
-      return fn ? fn(ctx) : '';
+      return fn ? fn(ctx) : { html: '', subject: '' };
     },
     resolveTable(name, cols, ctx) {
       const fn = tables.get(name);
-      return fn ? fn(cols, ctx) : '';
+      return fn
+        ? { html: fn(cols, ctx), subject: '' }
+        : { html: '', subject: '' };
     },
   };
 }

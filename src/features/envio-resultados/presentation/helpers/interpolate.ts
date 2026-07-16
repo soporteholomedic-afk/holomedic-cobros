@@ -26,7 +26,7 @@
  * calls the thin wrapper `interpolateSpitch(params)`, which builds the
  * registry + context and calls this orchestrator.
  */
-import type { InterpolationContext, TokenResolverRegistry } from './tokenResolvers/types';
+import type { InterpolationContext, ResolveResult, TokenResolverRegistry } from './tokenResolvers/types';
 
 const TABLE_TOKEN_RE = /\{\{tabla:([^:}]+):([^}]*)\}\}/g;
 const SIMPLE_TOKEN_RE = /\{\{([^{} :}]+)\}\}/g;
@@ -70,7 +70,10 @@ export function interpolate(
   // 1. Compute the replacement map by running the regexes in order
   //    (table first so the simple regex doesn't partially consume
   //    `tabla:...` form).
-  const tableReplacements = new Map<string, string>();
+  //
+  //    Each entry stores a `ResolveResult` so the orchestrator can apply
+  //    different values to the body (HTML context) vs the subject (plain-text).
+  const tableReplacements = new Map<string, ResolveResult>();
   const tableSeen = new Set<string>();
   for (const m of html.matchAll(TABLE_TOKEN_RE)) {
     const full = m[0];
@@ -79,8 +82,7 @@ export function interpolate(
     if (tableSeen.has(full)) continue;
     tableSeen.add(full);
     const cols = colsRaw ? colsRaw.split(',').map((c) => c.trim()).filter(Boolean) : [];
-    const value = registry.resolveTable(name, cols, ctx);
-    tableReplacements.set(full, value);
+    tableReplacements.set(full, registry.resolveTable(name, cols, ctx));
   }
   // Also scan the subject for table tokens (subject rarely uses them,
   // but the behaviour is symmetric).
@@ -94,7 +96,7 @@ export function interpolate(
     tableReplacements.set(full, registry.resolveTable(name, cols, ctx));
   }
 
-  const simpleReplacements = new Map<string, string>();
+  const simpleReplacements = new Map<string, ResolveResult>();
   const simpleSeen = new Set<string>();
   for (const m of html.matchAll(SIMPLE_TOKEN_RE)) {
     const full = m[0];
@@ -111,29 +113,32 @@ export function interpolate(
     simpleReplacements.set(full, registry.resolveToken(m[1] ?? '', ctx));
   }
 
-  // 2. Apply non-empty replacements via string replaceAll (fast, behaviour-preserving).
+  // 2. Apply replacements — differentiated between HTML (body) and plain-text
+  //    (subject). Non-empty html is replaced in the body; empty html triggers
+  //    block removal (step 3). Subject replacement always runs (even with `''`
+  //    which cleanly removes the placeholder from the subject).
   let resultHtml = html;
   let resultSubject = subject;
-  for (const [placeholder, value] of tableReplacements) {
-    if (value !== '') {
-      resultHtml = resultHtml.split(placeholder).join(value);
-      resultSubject = resultSubject.split(placeholder).join(value);
+  for (const [placeholder, v] of tableReplacements) {
+    if (v.html !== '') {
+      resultHtml = resultHtml.split(placeholder).join(v.html);
     }
+    resultSubject = resultSubject.split(placeholder).join(v.subject);
   }
-  for (const [placeholder, value] of simpleReplacements) {
-    if (value !== '') {
-      resultHtml = resultHtml.split(placeholder).join(value);
-      resultSubject = resultSubject.split(placeholder).join(value);
+  for (const [placeholder, v] of simpleReplacements) {
+    if (v.html !== '') {
+      resultHtml = resultHtml.split(placeholder).join(v.html);
     }
+    resultSubject = resultSubject.split(placeholder).join(v.subject);
   }
 
-  // 3. For each empty replacement, remove the containing block via DOMParser.
+  // 3. For each empty HTML replacement, remove the containing block via DOMParser.
   const emptyTokens: string[] = [];
-  for (const [placeholder, value] of tableReplacements) {
-    if (value === '') emptyTokens.push(placeholder);
+  for (const [placeholder, v] of tableReplacements) {
+    if (v.html === '') emptyTokens.push(placeholder);
   }
-  for (const [placeholder, value] of simpleReplacements) {
-    if (value === '') emptyTokens.push(placeholder);
+  for (const [placeholder, v] of simpleReplacements) {
+    if (v.html === '') emptyTokens.push(placeholder);
   }
   if (emptyTokens.length > 0) {
     resultHtml = removeEmptyBlocks(resultHtml, emptyTokens);
