@@ -1,13 +1,13 @@
 'use client';
 
-import { lazy, Suspense, useCallback, useMemo, useRef, useState, useSyncExternalStore } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { SpitchSelector } from './SpitchSelector';
 import { AttachmentList } from './AttachmentList';
 import { LocalFileDropZone } from './LocalFileDropZone';
-import { SendConfirmation } from './SendConfirmation';
 import { useSendResults } from '../hooks/useSendResults';
 import { interpolateSpitch } from '../helpers/interpolateSpitch';
 import { buildSignatureHtml, DEFAULT_SIGNATURE_DATA } from '../helpers/signatureData';
+import { showSendLoading, showSendSuccess, showSendError } from '../helpers/sendToasts';
 import type { SignatureData } from '../helpers/signatureData';
 import type { Patient, PatientFile, SelectedFileRef, Spitch } from '../../domain/entities';
 import type { EmailBodyEditorHandle } from './EmailBodyEditor';
@@ -102,11 +102,11 @@ export function EmailEditor({
     [bodyHtml, signatureData],
   );
 
-  const [showConfirmation, setShowConfirmation] = useState(false);
   const [showNoFilesWarning, setShowNoFilesWarning] = useState(false);
   const [localFiles, setLocalFiles] = useState<File[]>([]);
   const [isEditingBody, setIsEditingBody] = useState(false);
   const editorRef = useRef<EmailBodyEditorHandle>(null);
+  const hasSent = useRef(false);
 
   const isClient = useSyncExternalStore(
     () => () => {},
@@ -194,29 +194,32 @@ export function EmailEditor({
   }, []);
 
   const handleRequestSend = useCallback(() => {
-    // Check if any files are selected (LAN or local)
     const hasLanFiles = Object.values(selectedFiles).length > 0;
     const hasLocalFiles = localFiles.length > 0;
     if (!hasLanFiles && !hasLocalFiles) {
       setShowNoFilesWarning(true);
       return;
     }
-    setShowConfirmation(true);
-  }, [selectedFiles, localFiles]);
+    hasSent.current = true;
+    send();
+  }, [selectedFiles, localFiles, send]);
 
   const handleConfirmNoFiles = useCallback(() => {
     setShowNoFilesWarning(false);
-    setShowConfirmation(true);
-  }, []);
-
-  const handleConfirmSend = useCallback(async () => {
-    await send();
-    // Don't close modal — the SendConfirmation will show success/error state
+    hasSent.current = true;
+    send();
   }, [send]);
 
-  const hideConfirmation = useCallback(() => {
-    setShowConfirmation(false);
-  }, []);
+  useEffect(() => {
+    if (!hasSent.current) return;
+    if (isSending) {
+      showSendLoading();
+    } else if (result?.success === true) {
+      showSendSuccess(recipients.length);
+    } else if (error || result?.success === false) {
+      showSendError(error || 'Error al enviar el correo');
+    }
+  }, [isSending, result, error, recipients.length]);
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -499,16 +502,6 @@ export function EmailEditor({
         </div>
       )}
 
-      {/* ===== Send Confirmation Modal ===== */}
-      <SendConfirmation
-        isOpen={showConfirmation}
-        onClose={hideConfirmation}
-        onConfirm={handleConfirmSend}
-        recipients={recipients}
-        isSending={isSending}
-        result={result}
-        error={error}
-      />
     </div>
   );
 }

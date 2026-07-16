@@ -2,6 +2,18 @@ import React, { useEffect, useState } from 'react';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
+// Mock sonner toasts
+const mockToast = vi.hoisted(() => ({
+  loading: vi.fn(),
+  success: vi.fn(),
+  error: vi.fn(),
+  dismiss: vi.fn(),
+}));
+vi.mock('sonner', () => ({
+  toast: mockToast,
+  Toaster: vi.fn().mockReturnValue(null),
+}));
+
 // ---- Mock dependencies ----
 
 // Bug-fix wiring: the mock factory reads its bodyHtml / subject from a
@@ -130,7 +142,7 @@ vi.stubGlobal('fetch', mockFetch);
 // PR #3 — capture the args useSendResults is called with so we can
 // assert the EmailEditor forwards `fileRefs` correctly. The mock
 // returns a stable object so the rest of the EmailEditor render path
-// (send button disabled state, SendConfirmation result/error display)
+// (send button disabled state, toast result/error display)
 // keeps working without us having to satisfy the real hook contract.
 const mockUseSendResults = vi.hoisted(() => vi.fn());
 vi.mock('../../hooks/useSendResults', () => ({
@@ -339,21 +351,26 @@ describe('EmailEditor', () => {
     expect(screen.getByTestId('spitch-selector')).toBeInTheDocument();
   });
 
-  it('should open confirmation modal when Enviar is clicked', async () => {
+  it('should call send directly when Enviar is clicked (no confirmation modal)', async () => {
+    const mockSend = vi.fn();
+    mockUseSendResults.mockReturnValue({
+      send: mockSend,
+      isSending: false,
+      result: null,
+      error: null,
+    });
     mockFetch.mockResolvedValue({ ok: true, json: () => Promise.resolve({ success: true }) });
 
     render(<EmailEditor {...defaultProps} />);
-
-    // Confirmation modal should not be visible initially
-    expect(screen.queryByText(/¿Enviar resultados/)).not.toBeInTheDocument();
 
     const sendButton = screen.getByText('Enviar');
     expect(sendButton).toBeInTheDocument();
 
     fireEvent.click(sendButton);
 
-    // Confirmation modal should be visible
-    expect(screen.getByText(/¿Enviar resultados/)).toBeInTheDocument();
+    await waitFor(() => {
+      expect(mockSend).toHaveBeenCalledTimes(1);
+    });
   });
 
   it('should render Destinatario input pre-filled with patient names', () => {
