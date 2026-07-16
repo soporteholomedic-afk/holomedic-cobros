@@ -176,7 +176,9 @@ export function EmailEditor({
 
   const handleToggle = useCallback(() => {
     setTarget((prev) => (prev === 'company' ? 'patient' : 'company'));
-    // Reset spitch selection when target changes — SpitchSelector handles reload
+    setSelectedSpitch(null);
+    setSubject('');
+    setBodyHtml('');
   }, []);
 
   const handleLocalAdd = useCallback((files: File[]) => {
@@ -345,6 +347,7 @@ export function EmailEditor({
         <div className="space-y-1.5">
           <label className="text-sm font-medium text-slate-700 dark:text-slate-200">Spitch</label>
           <SpitchSelector
+            key={target}
             target={target}
             onSelect={handleSpitchSelect}
             selectedId={selectedSpitch?.id}

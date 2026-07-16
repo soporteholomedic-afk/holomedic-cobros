@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 // ---- Mock dependencies ----
@@ -50,6 +50,7 @@ vi.mock('../SpitchSelector', () => ({
       return React.createElement('select', {
         'data-testid': 'spitch-selector',
         'data-target': target,
+        'data-selectedid': selectedId ?? '',
         value: selectedId || 'spitch-001',
         onChange: () => onSelect({
           id: 'spitch-001',
@@ -227,6 +228,34 @@ describe('EmailEditor', () => {
     fireEvent.click(toggle);
     expect(toggle).toHaveAttribute('aria-checked', 'false');
     expect(screen.getByText('Enviar a empresa')).toBeInTheDocument();
+  });
+
+  it('remounts SpitchSelector on toggle (key={target}) so stale data is dropped', async () => {
+    mockFetch.mockResolvedValue({ ok: true, json: () => Promise.resolve({ success: true }) });
+
+    render(<EmailEditor {...defaultProps} />);
+
+    const toggle = screen.getByRole('switch');
+
+    // Initial: company
+    expect(screen.getByTestId('spitch-selector')).toHaveAttribute('data-target', 'company');
+    expect(screen.getByTestId('email-preview')).toBeInTheDocument();
+
+    // Toggle to patient — SpitchSelector remounts (new key=patient)
+    fireEvent.click(toggle);
+    expect(screen.getByTestId('spitch-selector')).toHaveAttribute('data-target', 'patient');
+    await waitFor(() => {
+      expect(screen.getByTestId('email-preview')).toBeInTheDocument();
+    });
+    expect(toggle).toHaveAttribute('aria-checked', 'true');
+
+    // Toggle back to company — remounts again
+    fireEvent.click(toggle);
+    expect(screen.getByTestId('spitch-selector')).toHaveAttribute('data-target', 'company');
+    await waitFor(() => {
+      expect(screen.getByTestId('email-preview')).toBeInTheDocument();
+    });
+    expect(toggle).toHaveAttribute('aria-checked', 'false');
   });
 
   it('should render subject input and body preview with editar button', async () => {
