@@ -68,7 +68,7 @@ export async function GET(request: Request): Promise<NextResponse> {
       .input('FecIni', mssql.VarChar, fechaInicio)
       .input('FecFin', mssql.VarChar, fechaFin)
       .query(`
-        SELECT DISTINCT
+        SELECT
           CASE WHEN O.CodSed <= 9 THEN '0' ELSE '' END
             + CONVERT(VARCHAR, O.CodSed)
             + CONVERT(VARCHAR, O.CodTCl)
@@ -82,25 +82,28 @@ export async function GET(request: Request): Promise<NextResponse> {
           CONVERT(VARCHAR, O.FecNac, 103) AS fechaNac,
           O.EdaPac AS edad,
           CONVERT(VARCHAR, O.FecAte, 103) AS fechaAtencion,
-          S.NomSer AS servicio,
-          E.NomEsp AS especialidad,
           C.NomCom AS empresa,
           TC.DesTCh AS tipoExamen,
           O.DesPue AS puesto
         FROM Orden O
         INNER JOIN Cliente C ON C.CodCli = O.CodCli
         INNER JOIN Persona P ON P.CodPer = O.CodPac
-        INNER JOIN OrdenxServicio OS
-          ON OS.CodEmp = O.CodEmp AND OS.CodSed = O.CodSed
-         AND OS.CodTCl = O.CodTCl AND OS.NumOrd = O.NumOrd
-        INNER JOIN Servicio S ON S.CodSer = OS.CodSer
-        INNER JOIN Especialidad E ON E.CodEsp = S.CodEsp
         LEFT JOIN TipoChequeo TC ON TC.CodTCh = O.CodTCh
         WHERE O.IndReg = 1
           AND C.CodCli = @CodCli
           AND O.FecAte >= @FecIni
           AND O.FecAte <= @FecFin
-          AND S.CodEsp = 20
+          AND EXISTS (
+            SELECT 1
+            FROM OrdenxServicio OS2
+            INNER JOIN Servicio S2 ON S2.CodSer = OS2.CodSer
+            INNER JOIN Especialidad E2 ON E2.CodEsp = S2.CodEsp
+            WHERE OS2.CodEmp = O.CodEmp
+              AND OS2.CodSed = O.CodSed
+              AND OS2.CodTCl = O.CodTCl
+              AND OS2.NumOrd = O.NumOrd
+              AND E2.NomEsp = 'MEDICINA GENERAL'
+          )
         ORDER BY paciente
       `);
 

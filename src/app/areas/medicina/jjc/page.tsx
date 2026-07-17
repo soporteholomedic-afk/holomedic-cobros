@@ -1,7 +1,8 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Search, Stethoscope } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import { ArrowRight, Search, Stethoscope } from 'lucide-react';
 import { getLocalDateString } from '@/lib/dates';
 import type { PacientePorEmpresaRow } from '@/types/sp-result';
 
@@ -79,6 +80,7 @@ export default function MedicinaJjcPage() {
   const [appliedInicio, setAppliedInicio] = useState(today);
   const [appliedFin, setAppliedFin] = useState(today);
   const [searchTerm, setSearchTerm] = useState('');
+  const router = useRouter();
 
   const isInvalidRange = fechaInicio > fechaFin;
 
@@ -222,19 +224,17 @@ export default function MedicinaJjcPage() {
                 <tr>
                   <th className="px-4 py-3 font-medium text-slate-600">Id Atención</th>
                   <th className="px-4 py-3 font-medium text-slate-600">DNI</th>
-                  <th className="px-4 py-3 font-medium text-slate-600">Paciente</th>
-                  <th className="px-4 py-3 font-medium text-slate-600">Servicio</th>
-                  <th className="px-4 py-3 font-medium text-slate-600">Especialidad</th>
-                  <th className="px-4 py-3 font-medium text-slate-600">Empresa</th>
+                  <th className="px-4 py-3 font-medium text-slate-600">Nombre</th>
                   <th className="px-4 py-3 font-medium text-slate-600">Tipo Examen</th>
                   <th className="px-4 py-3 font-medium text-slate-600">Fecha</th>
                   <th className="px-4 py-3 font-medium text-slate-600">Puesto</th>
+                  <th className="px-4 py-3 font-medium text-slate-600"><span className="sr-only">Acción</span></th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {filteredRows.map((row, idx) => (
                   <tr
-                    key={`${row.idAtencion}-${row.servicio}-${idx}`}
+                    key={row.idAtencion}
                     className="hover:bg-slate-50"
                   >
                     <td className="px-4 py-3 font-mono text-xs text-slate-500">
@@ -247,15 +247,6 @@ export default function MedicinaJjcPage() {
                       {cellValue(row.paciente)}
                     </td>
                     <td className="px-4 py-3 text-slate-600">
-                      {cellValue(row.servicio)}
-                    </td>
-                    <td className="px-4 py-3 text-slate-600">
-                      {cellValue(row.especialidad)}
-                    </td>
-                    <td className="px-4 py-3 text-slate-600">
-                      {cellValue(row.empresa)}
-                    </td>
-                    <td className="px-4 py-3 text-slate-600">
                       {cellValue(row.tipoExamen)}
                     </td>
                     <td className="px-4 py-3 text-slate-600">
@@ -263,6 +254,20 @@ export default function MedicinaJjcPage() {
                     </td>
                     <td className="px-4 py-3 text-slate-600">
                       {cellValue(row.puesto)}
+                    </td>
+                    <td className="px-4 py-3">
+                      {row.idAtencion ? (
+                        <button
+                          type="button"
+                          onClick={() => router.push(`/areas/medicina/jjc/${row.idAtencion}`)}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-sky-50 text-sky-700 hover:bg-sky-100 text-xs font-medium transition-colors cursor-pointer"
+                        >
+                          Seleccionar
+                          <ArrowRight className="w-3.5 h-3.5" />
+                        </button>
+                      ) : (
+                        <span className="text-slate-300 text-xs">{EM_DASH}</span>
+                      )}
                     </td>
                   </tr>
                 ))}
