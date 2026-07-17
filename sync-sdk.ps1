@@ -3,7 +3,7 @@ $ErrorActionPreference = "Stop"
 $src = "C:\dev\holomedic_cobros"
 $dst = "\\172.16.10.12\INSTALADORES\HOLOMEDICSDK"
 
-$excludeDirs = @("node_modules", ".next", ".git", ".env", "sdd", "docs", ".gga", "sigla-cli")
+$excludeDirs = @("node_modules", ".next", ".git", ".env", "sdd", "docs", ".gga")
 $excludeFiles = @("*.zip", "tsconfig.tsbuildinfo", "*.xlsx")
 
 if (-not (Test-Path -LiteralPath $dst)) {

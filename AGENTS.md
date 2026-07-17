@@ -84,6 +84,15 @@ This copies the source (excluding `node_modules`, `.next`, `.git`, etc.) directl
 
 The sync is **always required** before running the app from the SDK on Windows.
 
+## SIGLA.Cli Sync
+
+The `sigla-cli/` folder holds the compiled .NET runtime the Next.js server spawns to render PDFs (`SIGLA.PdfCli.exe` + `Negocio.dll`, `Entidad.dll`, `Datos.dll` + `rpt/` Crystal Reports templates). It is a **runtime dependency**, not source.
+
+- It is **git-ignored** (see `.gitignore`: `/sigla-cli`).
+- It **is synced** to the Windows SDK as part of `sync-sdk.ps1` / `sync-sdk.sh` — do **not** re-add it to the exclude lists.
+- The path is resolved at runtime by `src/features/envio-resultados/infrastructure/informes/constants.ts` as `path.resolve(process.cwd(), 'sigla-cli', 'SIGLA.PdfCli.exe')`. Override with the `PDFCLI_EXE_PATH` env var if you need to point at a different binary location.
+- Because `robocopy /MIR` is used, deleting `sigla-cli/` locally and re-syncing will **also delete it on the SDK** — do not run the sync with the folder missing unless you intend to.
+
 ## External Workspace Permissions
 
 By explicit user instruction, this agent is permitted to read and write outside the default project root at the following paths:
