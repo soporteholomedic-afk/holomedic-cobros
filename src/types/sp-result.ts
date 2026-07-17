@@ -130,3 +130,22 @@ export interface UnifiedPerson {
   condic: string;
   fichas: UnifiedFicha[];   // order entries + extra worker rows with distinct DesDes
 }
+
+/**
+ * Patient row returned by the /api/areas/medicina/pacientes endpoint.
+ * Generic — used by any company, not tied to a specific client.
+ */
+export interface PacientePorEmpresaRow {
+  idAtencion: string;
+  dni: string;
+  paciente: string;
+  sexo: string;
+  fechaNac: string;
+  edad: number;
+  fechaAtencion: string;
+  servicio: string;
+  especialidad: string;
+  empresa: string;
+  tipoExamen: string;
+  puesto: string;
+}

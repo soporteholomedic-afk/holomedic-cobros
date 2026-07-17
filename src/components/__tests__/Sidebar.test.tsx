@@ -1,9 +1,11 @@
 import React from 'react';
 import { fireEvent, render, screen } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, vi, beforeEach } from 'vitest';
+
+const mockUsePathname = vi.hoisted(() => vi.fn().mockReturnValue('/'));
 
 vi.mock('next/navigation', () => ({
-  usePathname: () => '/',
+  usePathname: mockUsePathname,
 }));
 
 vi.mock('next/link', () => ({
@@ -21,12 +23,13 @@ describe('Sidebar Component', () => {
     expect(screen.getByText('Facturación')).toBeInTheDocument();
   });
 
-  it('debe mostrar los ítems de navegación: Inicio, Cobranza, Consolidados, Valoraciones, Plantillas', () => {
+  it('debe mostrar los ítems de navegación: Inicio, Cobranza, Consolidados, Valoraciones, Areas, Plantillas', () => {
     render(<Sidebar />);
     expect(screen.getByText('Inicio')).toBeInTheDocument();
     expect(screen.getByText('Cobranza')).toBeInTheDocument();
     expect(screen.getByText('Consolidados')).toBeInTheDocument();
     expect(screen.getByText('Valoraciones')).toBeInTheDocument();
+    expect(screen.getByText('Areas')).toBeInTheDocument();
     expect(screen.getByText('Plantillas')).toBeInTheDocument();
   });
 
@@ -88,5 +91,88 @@ describe('Sidebar Component', () => {
     render(<Sidebar />);
     const brandLink = screen.getByText('Holomedic').closest('a');
     expect(brandLink).toHaveAttribute('href', '/');
+  });
+
+  describe('AreasMenuItem dropdown', () => {
+    beforeEach(() => {
+      mockUsePathname.mockReturnValue('/');
+    });
+
+    it('debe mostrar el trigger "Areas" con aria-expanded=false inicialmente', () => {
+      render(<Sidebar />);
+      const trigger = screen.getByRole('button', { name: /Areas/i });
+      expect(trigger).toBeInTheDocument();
+      expect(trigger).toHaveAttribute('aria-expanded', 'false');
+      expect(trigger).toHaveAttribute('aria-haspopup', 'menu');
+    });
+
+    it('debe mostrar los 3 sub-ítems al hacer click en el trigger', () => {
+      render(<Sidebar />);
+      const trigger = screen.getByRole('button', { name: /Areas/i });
+      fireEvent.click(trigger);
+
+      expect(screen.getByText('MusculoEsqueletica')).toBeInTheDocument();
+      expect(screen.getByText('Medicina')).toBeInTheDocument();
+      expect(screen.getByText('Calidad')).toBeInTheDocument();
+    });
+
+    it('debe ocultar los sub-ítems al hacer click nuevamente en el trigger', () => {
+      render(<Sidebar />);
+      const trigger = screen.getByRole('button', { name: /Areas/i });
+      fireEvent.click(trigger);
+      expect(screen.getByText('MusculoEsqueletica')).toBeInTheDocument();
+
+      fireEvent.click(trigger);
+      expect(screen.queryByText('MusculoEsqueletica')).not.toBeInTheDocument();
+    });
+
+    it('cada sub-ítem debe enlazar a su ruta /areas/<slug>', () => {
+      render(<Sidebar />);
+      fireEvent.click(screen.getByRole('button', { name: /Areas/i }));
+
+      const musculo = screen.getByText('MusculoEsqueletica').closest('a');
+      expect(musculo).toHaveAttribute('href', '/areas/musculoesqueletica');
+
+      const medicina = screen.getByText('Medicina').closest('a');
+      expect(medicina).toHaveAttribute('href', '/areas/medicina');
+
+      const calidad = screen.getByText('Calidad').closest('a');
+      expect(calidad).toHaveAttribute('href', '/areas/calidad');
+    });
+
+    it('debe cerrar el dropdown al hacer click fuera', () => {
+      render(<Sidebar />);
+      fireEvent.click(screen.getByRole('button', { name: /Areas/i }));
+      expect(screen.getByText('MusculoEsqueletica')).toBeInTheDocument();
+
+      fireEvent.mouseDown(document.body);
+      expect(screen.queryByText('MusculoEsqueletica')).not.toBeInTheDocument();
+    });
+
+    it('debe cerrar el dropdown al presionar Escape', () => {
+      render(<Sidebar />);
+      fireEvent.click(screen.getByRole('button', { name: /Areas/i }));
+      expect(screen.getByText('MusculoEsqueletica')).toBeInTheDocument();
+
+      fireEvent.keyDown(document, { key: 'Escape' });
+      expect(screen.queryByText('MusculoEsqueletica')).not.toBeInTheDocument();
+    });
+
+    it('debe marcar como activo el sub-ítem correspondiente a la ruta actual', () => {
+      mockUsePathname.mockReturnValue('/areas/medicina');
+      render(<Sidebar />);
+      fireEvent.click(screen.getByRole('button', { name: /Areas/i }));
+
+      const medicinaLink = screen.getByText('Medicina').closest('a');
+      expect(medicinaLink).toHaveAttribute('href', '/areas/medicina');
+      expect(screen.getByText('Medicina')).toBeInTheDocument();
+    });
+
+    it('debe cambiar aria-expanded a true al abrir el dropdown', () => {
+      render(<Sidebar />);
+      const trigger = screen.getByRole('button', { name: /Areas/i });
+      fireEvent.click(trigger);
+      expect(trigger).toHaveAttribute('aria-expanded', 'true');
+    });
   });
 });
