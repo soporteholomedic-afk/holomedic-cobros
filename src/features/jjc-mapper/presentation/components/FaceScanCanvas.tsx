@@ -1,10 +1,10 @@
 'use client';
 
+import Image from 'next/image';
 import { useCallback, useRef, type PointerEvent } from 'react';
 import type { ActiveTool } from '@/features/jjc-mapper/presentation/hooks/useJjcEvaluacion';
 import type { LesionPoint, LesionType } from '@/types/jjc';
 import { LesionMarkers } from './LesionMarkers';
-import rostroImg from '@/app/areas/medicina/jjc/assets/rostro.png';
 
 let nextId = 1;
 function generateId(): string {
@@ -49,18 +49,19 @@ export function FaceScanCanvas({
   );
 
   return (
-    <div className="relative w-full max-w-[300px] mx-auto">
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img
-        src={typeof rostroImg === 'string' ? rostroImg : rostroImg.src}
+    <div className="relative w-full mx-auto">
+      <Image
+        src="/rostro.png"
         alt="Rostro"
-        className="w-full h-auto rounded-xl block"
+        width={300}
+        height={400}
+        className="w-full h-auto rounded-xl block select-none"
         draggable={false}
+        priority
       />
       <svg
         ref={svgRef}
-        viewBox="0 0 100 100"
-        preserveAspectRatio="none"
+        viewBox="0 0 300 400"
         className="absolute inset-0 w-full h-full cursor-crosshair"
         onPointerDown={handlePointerDown}
         onClick={handleCircleClick}

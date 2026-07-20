@@ -39,15 +39,12 @@ export function JjcFaceLesionMapper({ atencion }: JjcFaceLesionMapperProps) {
 
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(atencion?.idAtencion != null);
 
   // ---- Load existing evaluation on mount ----
   useEffect(() => {
     const idAtencion = atencion?.idAtencion;
-    if (!idAtencion) {
-      setLoading(false);
-      return;
-    }
+    if (!idAtencion) return;
 
     let cancelled = false;
 
@@ -111,9 +108,9 @@ export function JjcFaceLesionMapper({ atencion }: JjcFaceLesionMapperProps) {
   }, [atencion?.idAtencion, state.form, state.points]);
 
   return (
-    <div className="flex gap-6 h-full">
+    <div className="grid grid-cols-1 md:grid-cols-[2fr_1fr] gap-6 h-full">
       {/* Left: Face canvas with vertical toolbar to its right */}
-      <div className="flex gap-3 flex-shrink-0">
+      <div className="flex gap-3">
         <FaceScanCanvas
           points={state.points}
           activeTool={state.activeTool}
@@ -127,7 +124,7 @@ export function JjcFaceLesionMapper({ atencion }: JjcFaceLesionMapperProps) {
       </div>
 
       {/* Right: Evaluation form */}
-      <div className="flex-1 min-w-0 bg-white rounded-xl border border-slate-200 p-6">
+      <div className="bg-white rounded-xl border border-slate-200 p-6">
         {loading ? (
           <p className="text-sm text-slate-400 text-center py-8">Cargando evaluación…</p>
         ) : (
