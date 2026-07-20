@@ -13,13 +13,16 @@ interface EvaluacionFormProps {
   onFototipoChange: (f: Fototipo) => void;
   onFechaChange: (fecha: string) => void;
   onObservacionesChange: (text: string) => void;
+  onSave?: () => void;
+  saving?: boolean;
+  saveError?: string | null;
 }
 
 /**
  * Right-pane evaluation form with patient summary, evaluation metadata,
  * Fototipo Fitzpatrick picker, and lesion counters.
  *
- * Scrollable with sticky footer for the (future) save button.
+ * Scrollable with sticky footer and Save button.
  */
 export function EvaluacionForm({
   atencion,
@@ -28,6 +31,9 @@ export function EvaluacionForm({
   onFototipoChange,
   onFechaChange,
   onObservacionesChange,
+  onSave,
+  saving = false,
+  saveError = null,
 }: EvaluacionFormProps) {
   return (
     <div className="h-full flex flex-col">
@@ -119,11 +125,19 @@ export function EvaluacionForm({
         </section>
       </div>
 
-      {/* Sticky footer (Save button — wired in PR3) */}
-      <div className="sticky bottom-0 pt-4 pb-2 bg-white border-t border-slate-100 mt-4">
-        <p className="text-xs text-slate-400 text-center">
-          Guardar evaluación disponible en la próxima versión
-        </p>
+      {/* Sticky footer — Save button */}
+      <div className="sticky bottom-0 pt-4 pb-2 bg-white border-t border-slate-100 mt-4 space-y-2">
+        {saveError && (
+          <p className="text-xs text-red-500 text-center">{saveError}</p>
+        )}
+        <button
+          type="button"
+          onClick={onSave}
+          disabled={!form.fototipo || saving}
+          className="w-full py-2.5 rounded-lg text-sm font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-50 bg-sky-600 text-white hover:bg-sky-700"
+        >
+          {saving ? 'Guardando…' : 'Guardar Evaluación'}
+        </button>
       </div>
     </div>
   );
