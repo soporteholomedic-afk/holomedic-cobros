@@ -66,6 +66,11 @@
 - Sanitize any HTML rendered via `dangerouslySetInnerHTML`
 - Do not commit secrets, API keys, or `.env` files — use environment variables and `.env.local`
 
+### SIGLA Database Access
+
+- **SIGLA exploration**: use the `EXPLORADOR_DATOS` profile only (`HOLOMEDIC_DB_USER=explorar_datos` in `.env.local`). This profile has read-only access to the `SIGLA` database and is safer for querying and inspection.
+- **NEVER** use the `SA` profile (`DB_USER=sa`) for exploration. `sa` is an administrative account with full write access — only use it when the application code requires it at runtime (and never for interactive exploration).
+
 ## Environment & Shell
 
 - Write and execute all terminal commands specifically for PowerShell compatibility
