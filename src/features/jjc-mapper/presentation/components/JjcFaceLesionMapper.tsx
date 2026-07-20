@@ -3,6 +3,8 @@
 import type { AtencionDetalle } from '@/types/jjc';
 import { useJjcEvaluacion } from '@/features/jjc-mapper/presentation/hooks/useJjcEvaluacion';
 import { EvaluacionForm } from './EvaluacionForm';
+import { FaceScanCanvas } from './FaceScanCanvas';
+import { VerticalLesionToolbar } from './VerticalLesionToolbar';
 
 interface JjcFaceLesionMapperProps {
   atencion: AtencionDetalle | null;
@@ -12,8 +14,7 @@ interface JjcFaceLesionMapperProps {
  * Top-level client shell for the JJC face-lesion mapper page.
  *
  * Two-column layout:
- * - **Left**: Face canvas area (placeholder for PR2 — renders a
- *   bordered box with a "Rostro" label).
+ * - **Left**: Face canvas (FaceScanCanvas with SVG overlay + VerticalLesionToolbar).
  * - **Right**: EvaluacionForm (patient fields, fototipo, counters).
  *
  * All state is lifted to `useJjcEvaluacion` (single hook, reducer-based).
@@ -25,17 +26,25 @@ export function JjcFaceLesionMapper({ atencion }: JjcFaceLesionMapperProps) {
     setFecha,
     setFototipo,
     setObservaciones,
+    setActiveTool,
+    addPoint,
+    removePoint,
   } = useJjcEvaluacion();
 
   return (
     <div className="flex gap-6 h-full">
-      {/* Left: Face canvas placeholder (PR2 implements the SVG overlay) */}
-      <div className="w-[400px] flex-shrink-0">
-        <div className="rounded-xl border-2 border-dashed border-slate-200 bg-slate-50 flex items-center justify-center h-[500px]">
-          <span className="text-slate-400 text-sm font-medium">
-            Rostro — disponible próximamente
-          </span>
-        </div>
+      {/* Left: Face canvas with vertical toolbar to its right */}
+      <div className="flex gap-3 flex-shrink-0">
+        <FaceScanCanvas
+          points={state.points}
+          activeTool={state.activeTool}
+          onAddPoint={addPoint}
+          onRemovePoint={removePoint}
+        />
+        <VerticalLesionToolbar
+          activeTool={state.activeTool}
+          onToolChange={setActiveTool}
+        />
       </div>
 
       {/* Right: Evaluation form */}
