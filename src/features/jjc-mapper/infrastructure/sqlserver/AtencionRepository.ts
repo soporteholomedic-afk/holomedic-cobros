@@ -8,7 +8,7 @@ import { getPool } from '@/lib/db';
  *
  * Queries the SIGLA database (`ICCGSA`) joining `Orden` + `Persona` +
  * `Cliente` + `Servicio` to build the full attention detail, including
- * the `Área` column (via `Servicio.DesSer`).
+ * the `Área` column (via `Servicio.NomSer`).
  *
  * The `idAtencion` param is the composite string
  * `(CodSed + CodTCl + NumOrd)` — the same format produced by the
@@ -18,6 +18,7 @@ import { getPool } from '@/lib/db';
 export class SqlServerAtencionRepository implements IAtencionRepository {
   async getDetalle(idAtencion: string): Promise<AtencionDetalle | null> {
     const pool = await getPool();
+    await pool.connect();
 
     const result = await pool
       .request()
@@ -40,13 +41,13 @@ export class SqlServerAtencionRepository implements IAtencionRepository {
         C.NomCom AS empresa,
         TC.DesTCh AS tipoExamen,
         O.DesPue AS puesto,
-        ISNULL(S.DesSer, '') AS area
+        ISNULL(S.NomSer, '') AS area
       FROM Orden O
       INNER JOIN Cliente C ON C.CodCli = O.CodCli
       INNER JOIN Persona P ON P.CodPer = O.CodPac
       LEFT JOIN TipoChequeo TC ON TC.CodTCh = O.CodTCh
       OUTER APPLY (
-        SELECT TOP 1 S2.DesSer
+        SELECT TOP 1 S2.NomSer
         FROM OrdenxServicio OS2
         INNER JOIN Servicio S2 ON S2.CodSer = OS2.CodSer
         WHERE OS2.CodEmp = O.CodEmp

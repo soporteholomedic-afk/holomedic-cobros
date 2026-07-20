@@ -14,6 +14,7 @@ import { parseFototipo } from '@/features/jjc-mapper/domain/entities';
 export class SqlServerJjcEvaluacionRepository implements IJjcEvaluacionRepository {
   async save(evaluacion: JjcEvaluacion): Promise<void> {
     const pool = await getHolomedicPool();
+    await pool.connect();
     const lesionesJson = JSON.stringify(evaluacion.lesiones);
     const now = new Date();
 
@@ -46,6 +47,7 @@ export class SqlServerJjcEvaluacionRepository implements IJjcEvaluacionRepositor
 
   async loadByAtencion(idAtencion: string): Promise<JjcEvaluacion | null> {
     const pool = await getHolomedicPool();
+    await pool.connect();
 
     const result = await pool
       .request()

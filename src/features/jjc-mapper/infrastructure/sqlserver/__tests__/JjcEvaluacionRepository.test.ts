@@ -68,6 +68,7 @@ function makeFakeRequest() {
 
 const fakePool = {
   request: vi.fn(() => makeFakeRequest()),
+  connect: vi.fn().mockResolvedValue(undefined),
   close: vi.fn(),
 };
 
