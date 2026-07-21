@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { ArrowRight, Search, Stethoscope } from 'lucide-react';
 import { getLocalDateString } from '@/lib/dates';
 import type { PacientePorEmpresaRow } from '@/types/sp-result';
+import { DownloadCell } from './DownloadCell';
 
 const COMPANY_CODCLI = 149;
 
@@ -229,6 +230,7 @@ export default function MedicinaJjcPage() {
                   <th className="px-4 py-3 font-medium text-slate-600">Fecha</th>
                   <th className="px-4 py-3 font-medium text-slate-600">Puesto</th>
                   <th className="px-4 py-3 font-medium text-slate-600"><span className="sr-only">Acción</span></th>
+                  <th className="px-4 py-3 font-medium text-slate-600">PDF</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -277,6 +279,13 @@ export default function MedicinaJjcPage() {
                             <ArrowRight className="w-3.5 h-3.5" />
                           </button>
                         )
+                      ) : (
+                        <span className="text-slate-300 text-xs">{EM_DASH}</span>
+                      )}
+                    </td>
+                    <td className="px-4 py-3">
+                      {row.idAtencion ? (
+                        <DownloadCell idAten={row.idAtencion} paciente={row.paciente} />
                       ) : (
                         <span className="text-slate-300 text-xs">{EM_DASH}</span>
                       )}

@@ -75,6 +75,15 @@
 
 - Write and execute all terminal commands specifically for PowerShell compatibility
 
+## Package Manager
+
+- All package installations, upgrades, and removals **MUST** be done with **pnpm** (currently 11.9.0). The lockfile is `pnpm-lock.yaml` and is the source of truth.
+- Use `pnpm add <pkg>` to add a runtime dependency and `pnpm add -D <pkg>` for a dev dependency; `pnpm remove <pkg>` to remove one.
+- To install all dependencies from the lockfile (after cloning, switching branches, or pulling new commits), use `pnpm install` — never `npm install` or `yarn install`.
+- Do NOT use `npm install`, `npm i`, `yarn add`, or any other package manager. Other managers will produce an incompatible `node_modules` and will silently drift from `pnpm-lock.yaml`.
+- Run scripts with `pnpm <script>` (e.g., `pnpm dev`, `pnpm test`, `pnpm lint`, `pnpm build`).
+- CI and the Windows SDK sync must also use pnpm — when in doubt, check `package.json` for the `packageManager` field.
+
 ## SDK Sync
 
 After every code change (especially to API routes or constants), sync the project to the Windows SDK:
