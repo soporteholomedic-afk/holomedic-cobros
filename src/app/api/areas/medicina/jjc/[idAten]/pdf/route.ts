@@ -23,9 +23,9 @@ import { mapAtencionToPdfFields } from './mapAtencionToPdfFields';
  */
 export async function GET(
   _request: Request,
-  { params }: { params: { idAten: string } },
+  { params }: { params: Promise<{ idAten: string }> },
 ): Promise<NextResponse> {
-  const idAten = params.idAten;
+  const { idAten } = await params;
 
   try {
     // 1. Fetch attention detail (required)
@@ -111,7 +111,7 @@ export async function GET(
 
     const pdfBytes = await pdfDoc.save();
 
-    return new NextResponse(pdfBytes, {
+    return new NextResponse(new Uint8Array(pdfBytes), {
       status: 200,
       headers: {
         'Content-Type': 'application/pdf',

@@ -32,7 +32,7 @@ describe('mapAtencionToPdfFields', () => {
       ],
       preguntas: {
         sufreEnfermedadesPiel: { respuesta: 'si', detalle: 'dermatitis atópica' },
-        tieneLesionActual: { respuesta: 'no', detalle: '', fecha: '' },
+        tieneLesionActual: { respuesta: 'no', detalle: '', fecha: '15/06/2026' },
         cambioColoracion: { respuesta: null, detalle: '' },
         lesionesRepiten: { respuesta: null, detalle: '' },
         enrojecimiento: { respuesta: null, detalle: '' },
@@ -60,7 +60,7 @@ describe('mapAtencionToPdfFields', () => {
     expect(result.text.txt_lugar).toBe('HOLOMEDIC');
 
     // Fototipo
-    expect(result.text.txt_fototipo).toBe('III-IV');
+    expect(result.text.txt_tipo_fototipo).toBe('III-IV');
 
     // Checkboxes — sufreEnfermedadesPiel = si
     expect(result.checks.cbk_1_si).toBe(true);
@@ -70,11 +70,13 @@ describe('mapAtencionToPdfFields', () => {
     // Checkboxes — tieneLesionActual = no
     expect(result.checks.cbk_2_si).toBe(false);
     expect(result.checks.cbk_2_no).toBe(true);
+    // Pregunta 2's detail field uses a hyphen: `txt_2-1_response`.
+    expect(result.text['txt_2-1_response']).toBe('');
+    expect(result.text['txt_2-2_response']).toBe('15/06/2026');
 
-    // Checkboxes — tomaMedicacion = si
+    // Checkboxes — tomaMedicacion = si (no detail field in template)
     expect(result.checks.cbk_11_si).toBe(true);
     expect(result.checks.cbk_11_no).toBe(false);
-    expect(result.text.txt_11_response).toBe('Losartán 50mg');
 
     // Lesion counts
     expect(result.text.txt_count_lunar).toBe('2');
@@ -85,10 +87,14 @@ describe('mapAtencionToPdfFields', () => {
     // Observaciones (short, fits in one chunk)
     expect(result.chunks.Observaciones).toEqual(['Paciente presenta lesión en brazo izquierdo.']);
 
-    // DescribaPositivo (short, fits in one chunk)
-    expect(result.chunks.DescribaPositiva).toEqual([
+    // Describa en caso de tener alguna respuesta positiva (short, fits in one chunk)
+    expect(result.chunks['Describa en caso de tener alguna respuesta positiva']).toEqual([
       'Paciente refiere mejoría con el tratamiento actual.',
     ]);
+
+    // Real template field coverage
+    expect(result.text.txt_fecha).toBe('2026-07-21');
+    expect(result.text.txt_count_otras).toBe('0');
   });
 
   it('handles null evaluation gracefully', () => {
@@ -99,13 +105,15 @@ describe('mapAtencionToPdfFields', () => {
     expect(result.text.txt_lugar).toBe('HOLOMEDIC');
 
     // No evaluation-dependent fields
-    expect(result.text.txt_fototipo).toBe('');
+    expect(result.text.txt_tipo_fototipo).toBe('');
     expect(result.text.txt_count_lunar).toBe('0');
     expect(result.text.txt_count_mancha).toBe('0');
     expect(result.text.txt_count_peca).toBe('0');
     expect(result.text.txt_count_cicatriz).toBe('0');
     expect(result.chunks.Observaciones).toEqual([]);
-    expect(result.chunks.DescribaPositiva).toEqual([]);
+    expect(result.chunks['Describa en caso de tener alguna respuesta positiva']).toEqual([]);
+    expect(result.text.txt_fecha).toBe('');
+    expect(result.text.txt_count_otras).toBe('0');
     expect(Object.keys(result.checks)).toHaveLength(0);
   });
 
@@ -138,7 +146,7 @@ describe('mapAtencionToPdfFields', () => {
     const result = mapAtencionToPdfFields(fullAtencion, evalNoPreguntas);
 
     // Fototipo and observaciones still work
-    expect(result.text.txt_fototipo).toBe('I-II');
+    expect(result.text.txt_tipo_fototipo).toBe('I-II');
     expect(result.chunks.Observaciones).toEqual(['Todo normal']);
 
     // No checkboxes set
@@ -188,15 +196,16 @@ describe('mapAtencionToPdfFields', () => {
       expect(chunk.length).toBeLessThanOrEqual(160);
     }
 
-    // DescribaPositiva should be chunked (budget 200)
-    expect(result.chunks.DescribaPositiva.length).toBeGreaterThan(1);
-    for (const chunk of result.chunks.DescribaPositiva) {
+    // Describa en caso de tener alguna respuesta positiva should be chunked (budget 200)
+    const describaKey = 'Describa en caso de tener alguna respuesta positiva';
+    expect(result.chunks[describaKey].length).toBeGreaterThan(1);
+    for (const chunk of result.chunks[describaKey]) {
       expect(chunk.length).toBeLessThanOrEqual(200);
     }
 
     // Content preserved (only word-boundary whitespace may differ at split points)
     const allObs = result.chunks.Observaciones.join('');
-    const allDesc = result.chunks.DescribaPositiva.join('');
+    const allDesc = result.chunks[describaKey].join('');
     // Non-whitespace characters should all be present
     expect(allObs.replace(/\s/g, '')).toBe(longObs.replace(/\s/g, ''));
     expect(allDesc.replace(/\s/g, '')).toBe(longDesc.replace(/\s/g, ''));
@@ -240,7 +249,7 @@ describe('mapAtencionToPdfFields', () => {
     expect(result.text.txt_1_response).toBe('');
   });
 
-  it('sets cbk_12 and cbk_13 from SiNo fields', () => {
+  it('sets cbk_M-1 and cbk_M-2 from SiNo fields', () => {
     const evaluacion: JjcEvaluacion = {
       idAtencion: '01234567',
       fechaEvaluacion: '2026-07-21',
@@ -268,9 +277,9 @@ describe('mapAtencionToPdfFields', () => {
 
     const result = mapAtencionToPdfFields(fullAtencion, evaluacion);
 
-    expect(result.checks.cbk_12_si).toBe(true);
-    expect(result.checks.cbk_12_no).toBe(false);
-    expect(result.checks.cbk_13_si).toBe(false);
-    expect(result.checks.cbk_13_no).toBe(true);
+    expect(result.checks['cbk_M-1_si']).toBe(true);
+    expect(result.checks['cbk_M-1_no']).toBe(false);
+    expect(result.checks['cbk_M-2_si']).toBe(false);
+    expect(result.checks['cbk_M-2_no']).toBe(true);
   });
 });
