@@ -26,6 +26,7 @@ interface EvaluacionFormProps {
   onDescribaChange: (value: string) => void;
   onSave?: () => void;
   saving?: boolean;
+  saved?: boolean;
   saveError?: string | null;
 }
 
@@ -46,6 +47,7 @@ export function EvaluacionForm({
   onDescribaChange,
   onSave,
   saving = false,
+  saved = false,
   saveError = null,
 }: EvaluacionFormProps) {
   return (
@@ -148,6 +150,11 @@ export function EvaluacionForm({
       <div className="sticky bottom-0 pt-4 pb-2 bg-white border-t border-slate-100 mt-4 space-y-2">
         {saveError && (
           <p className="text-xs text-red-500 text-center">{saveError}</p>
+        )}
+        {saved && (
+          <p className="text-xs text-green-600 text-center font-medium">
+            Evaluación guardada correctamente
+          </p>
         )}
         <button
           type="button"

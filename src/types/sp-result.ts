@@ -148,4 +148,5 @@ export interface PacientePorEmpresaRow {
   empresa: string;
   tipoExamen: string;
   puesto: string;
+  hasEvaluacion: boolean;
 }

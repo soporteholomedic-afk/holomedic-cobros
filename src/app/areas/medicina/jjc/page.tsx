@@ -257,14 +257,26 @@ export default function MedicinaJjcPage() {
                     </td>
                     <td className="px-4 py-3">
                       {row.idAtencion ? (
-                        <button
-                          type="button"
-                          onClick={() => router.push(`/areas/medicina/jjc/${row.idAtencion}`)}
-                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-sky-50 text-sky-700 hover:bg-sky-100 text-xs font-medium transition-colors cursor-pointer"
-                        >
-                          Seleccionar
-                          <ArrowRight className="w-3.5 h-3.5" />
-                        </button>
+                        row.hasEvaluacion ? (
+                          <button
+                            type="button"
+                            onClick={() => router.push(`/areas/medicina/jjc/${row.idAtencion}`)}
+                            className="group inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-green-50 text-green-700 hover:bg-green-100 text-xs font-medium transition-colors cursor-pointer"
+                          >
+                            <span className="group-hover:hidden">Hecho</span>
+                            <span className="hidden group-hover:inline">Editar</span>
+                            <ArrowRight className="w-3.5 h-3.5" />
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => router.push(`/areas/medicina/jjc/${row.idAtencion}`)}
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-sky-50 text-sky-700 hover:bg-sky-100 text-xs font-medium transition-colors cursor-pointer"
+                          >
+                            Seleccionar
+                            <ArrowRight className="w-3.5 h-3.5" />
+                          </button>
+                        )
                       ) : (
                         <span className="text-slate-300 text-xs">{EM_DASH}</span>
                       )}

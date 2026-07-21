@@ -36,6 +36,7 @@ export function JjcFaceLesionMapper({ atencion }: JjcFaceLesionMapperProps) {
 
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [saved, setSaved] = useState(false);
   const [loading, setLoading] = useState(atencion?.idAtencion != null);
   const [activeTab, setActiveTab] = useState<FormTab>('datos');
 
@@ -95,6 +96,8 @@ export function JjcFaceLesionMapper({ atencion }: JjcFaceLesionMapperProps) {
 
       if (res.ok) {
         setSaveError(null);
+        setSaved(true);
+        setTimeout(() => setSaved(false), 3000);
       } else {
         const body: { error?: string } = await res.json();
         setSaveError(body.error ?? 'Error al guardar la evaluación');
@@ -144,6 +147,7 @@ export function JjcFaceLesionMapper({ atencion }: JjcFaceLesionMapperProps) {
             onDescribaChange={setDescriba}
             onSave={handleSave}
             saving={saving}
+            saved={saved}
             saveError={saveError}
           />
         )}

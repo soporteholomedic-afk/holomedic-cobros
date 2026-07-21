@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import mssql from 'mssql';
-import { getPool } from '@/lib/db';
+import { getHolomedicPool, getPool } from '@/lib/db';
 import type { PacientePorEmpresaRow } from '@/types/sp-result';
 
 /**
@@ -107,7 +107,38 @@ export async function GET(request: Request): Promise<NextResponse> {
         ORDER BY paciente
       `);
 
-    return NextResponse.json(result.recordset as PacientePorEmpresaRow[]);
+    const rows = result.recordset as PacientePorEmpresaRow[];
+
+    // ---- Determine which idAtencion values have saved evaluations ----
+    let evaluacionIds = new Set<string>();
+    if (rows.length > 0) {
+      try {
+        const hPool = await getHolomedicPool();
+        await hPool.connect();
+        const conditions = rows.map((_, i) => `@id${i}`);
+        const evalRequest = hPool.request();
+        for (let i = 0; i < rows.length; i++) {
+          evalRequest.input(`id${i}`, mssql.VarChar(50), rows[i].idAtencion);
+        }
+        const evalResult = await evalRequest.query(`
+          SELECT DISTINCT idAtencion FROM dbo.JjcEvaluacion
+          WHERE idAtencion IN (${conditions.join(', ')})
+        `);
+        evaluacionIds = new Set<string>(
+          (evalResult.recordset as { idAtencion: string }[]).map((r) => r.idAtencion),
+        );
+      } catch {
+        // If HOLOMEDIC is unreachable, treat all as not evaluated (graceful fallback)
+        console.warn('areas/medicina/pacientes: could not query evaluations from HOLOMEDIC');
+      }
+    }
+
+    const enriched = rows.map((row) => ({
+      ...row,
+      hasEvaluacion: evaluacionIds.has(row.idAtencion),
+    }));
+
+    return NextResponse.json(enriched);
   } catch (error) {
     const message =
       error instanceof Error ? error.message : 'An unexpected error occurred';
