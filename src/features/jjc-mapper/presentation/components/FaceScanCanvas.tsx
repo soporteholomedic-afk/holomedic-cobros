@@ -62,7 +62,9 @@ export function FaceScanCanvas({
       <svg
         ref={svgRef}
         viewBox="0 0 300 400"
-        className="absolute inset-0 w-full h-full cursor-crosshair"
+        preserveAspectRatio="none"
+        className="absolute top-0 left-0 w-full cursor-crosshair"
+        style={{ aspectRatio: '3 / 4' }}
         onPointerDown={handlePointerDown}
         onClick={handleCircleClick}
       >

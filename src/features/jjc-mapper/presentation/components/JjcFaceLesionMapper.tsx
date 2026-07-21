@@ -107,7 +107,7 @@ export function JjcFaceLesionMapper({ atencion }: JjcFaceLesionMapperProps) {
   }, [atencion?.idAtencion, state.form, state.points]);
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-[2fr_1fr] gap-6 h-full">
+    <div className="grid grid-cols-1 md:grid-cols-[2fr_1fr] gap-6 h-full items-start">
       {/* Left: Face canvas with vertical toolbar to its right */}
       <div className="flex gap-3">
         <FaceScanCanvas
