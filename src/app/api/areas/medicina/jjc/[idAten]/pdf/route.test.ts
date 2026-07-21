@@ -14,6 +14,8 @@ vi.mock('@/features/jjc-mapper/composition/container', () => ({
   buildLoadJjcEvaluacion: () => ({ execute: mockLoadExecute }),
 }));
 
+vi.mock('@pdf-lib/fontkit', () => ({ default: {} }));
+
 // ---- Template PDF factory ----
 // Creates a minimal PDF with AcroForm fields matching the route's expectations.
 
@@ -103,9 +105,17 @@ beforeAll(async () => {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  vi.spyOn(fs, 'readFileSync').mockReturnValue(
-    templateBytes as unknown as ReturnType<typeof fs.readFileSync>,
-  );
+  vi.spyOn(fs, 'readFileSync').mockImplementation(((
+    filePath: fs.PathOrFileDescriptor,
+  ) => {
+    const p = String(filePath);
+    if (p.includes('Tahoma')) {
+      const err = new Error('ENOENT: no such file') as NodeJS.ErrnoException;
+      err.code = 'ENOENT';
+      throw err;
+    }
+    return templateBytes as unknown as ReturnType<typeof fs.readFileSync>;
+  }) as unknown as typeof fs.readFileSync);
 });
 
 // ---- Import under test ----

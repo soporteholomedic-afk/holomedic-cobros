@@ -2,11 +2,34 @@ import { NextResponse } from 'next/server';
 import fs from 'fs';
 import path from 'path';
 import { PDFDocument } from 'pdf-lib';
+import type { PDFFont } from 'pdf-lib';
+import fontkit from '@pdf-lib/fontkit';
 import {
   buildGetAtencionDetalle,
   buildLoadJjcEvaluacion,
 } from '@/features/jjc-mapper/composition/container';
 import { mapAtencionToPdfFields } from './mapAtencionToPdfFields';
+
+const TAHOMA_FONT_PATH = path.resolve(
+  process.cwd(),
+  'public',
+  'Tahoma Regular font.ttf',
+);
+
+async function loadAndEmbedTahomaFont(
+  pdfDoc: PDFDocument,
+): Promise<PDFFont | undefined> {
+  pdfDoc.registerFontkit(fontkit);
+  try {
+    const fontBytes = fs.readFileSync(TAHOMA_FONT_PATH);
+    return await pdfDoc.embedFont(fontBytes);
+  } catch (err) {
+    console.warn('[api/jjc/pdf] Could not load Tahoma font, using default', {
+      err,
+    });
+    return undefined;
+  }
+}
 
 /**
  * GET /api/areas/medicina/jjc/[idAten]/pdf
@@ -69,11 +92,18 @@ export async function GET(
     const pdfDoc = await PDFDocument.load(templateBytes);
     const form = pdfDoc.getForm();
 
+    const tahomaFont = await loadAndEmbedTahomaFont(pdfDoc);
+
     // Fill text fields
     for (const [fieldName, value] of Object.entries(fieldMap.text)) {
       try {
         const field = form.getTextField(fieldName);
-        field.setText(value ?? '');
+        const textValue = (value ?? '').toUpperCase();
+        field.setText(textValue);
+        if (tahomaFont) {
+          field.setFontSize(6.6);
+          field.updateAppearances(tahomaFont);
+        }
       } catch {
         // Field might not exist in template — skip gracefully
       }
@@ -99,7 +129,12 @@ export async function GET(
         try {
           const fieldName = `${prefix} ${i + 1}`;
           const field = form.getTextField(fieldName);
-          field.setText(values[i]);
+          const textValue = values[i].toUpperCase();
+          field.setText(textValue);
+          if (tahomaFont) {
+            field.setFontSize(6.6);
+            field.updateAppearances(tahomaFont);
+          }
         } catch {
           // Field might not exist — skip gracefully
         }
