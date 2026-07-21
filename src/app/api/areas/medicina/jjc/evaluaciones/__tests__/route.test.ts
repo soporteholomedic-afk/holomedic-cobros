@@ -46,6 +46,7 @@ const sampleEval: JjcEvaluacion = {
   fototipo: 'III-IV',
   observaciones: '',
   lesiones: [],
+  preguntas: null,
 };
 
 beforeEach(() => {

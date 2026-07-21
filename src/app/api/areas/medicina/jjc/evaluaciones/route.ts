@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { buildSaveJjcEvaluacion, buildLoadJjcEvaluacion } from '@/features/jjc-mapper/composition/container';
-import type { Fototipo } from '@/types/jjc';
+import type { Fototipo, CuestionarioPiel } from '@/types/jjc';
 
 /**
  * POST /api/areas/medicina/jjc/evaluaciones
@@ -24,6 +24,9 @@ export async function POST(request: Request): Promise<NextResponse> {
     const fototipo = typeof body.fototipo === 'string' ? (body.fototipo as Fototipo) : undefined;
     const observaciones = typeof body.observaciones === 'string' ? body.observaciones : '';
     const lesiones = Array.isArray(body.lesiones) ? body.lesiones : [];
+    const preguntas = body.preguntas != null && typeof body.preguntas === 'object'
+      ? (body.preguntas as CuestionarioPiel)
+      : null;
 
     const useCase = buildSaveJjcEvaluacion();
     const result = await useCase.execute({
@@ -32,6 +35,7 @@ export async function POST(request: Request): Promise<NextResponse> {
       fototipo: fototipo as Fototipo,
       observaciones,
       lesiones,
+      preguntas,
     });
 
     if (!result.ok) {

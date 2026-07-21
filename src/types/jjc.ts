@@ -35,6 +35,35 @@ export interface AtencionDetalle {
   area: string;           // Área from Servicio
 }
 
+/** Si/No answer type for the dermatology questionnaire. */
+export type SiNo = 'si' | 'no';
+
+export interface PreguntaBase {
+  respuesta: SiNo | null;
+  detalle: string;
+}
+
+export interface PreguntaConFecha extends PreguntaBase {
+  fecha: string;
+}
+
+export interface CuestionarioPiel {
+  sufreEnfermedadesPiel: PreguntaBase;
+  tieneLesionActual: PreguntaConFecha;
+  cambioColoracion: PreguntaBase;
+  lesionesRepiten: PreguntaBase;
+  enrojecimiento: PreguntaBase;
+  comezon: PreguntaBase;
+  hinchazon: PreguntaBase;
+  rinitisAsma: PreguntaBase;
+  usaEPP: PreguntaBase;
+  cambiosUnas: PreguntaBase;
+  tomaMedicacion: PreguntaBase;
+  describaPositivo: string;
+  lesionDermatopatia: SiNo | null;
+  evaluacionDermatologo: SiNo | null;
+}
+
 /** Full evaluation payload (PR3 persists this). */
 export interface JjcEvaluacion {
   idAtencion: string;
@@ -43,4 +72,5 @@ export interface JjcEvaluacion {
   fototipo: Fototipo;
   observaciones: string;     // ≤ 500
   lesiones: LesionPoint[];
+  preguntas: CuestionarioPiel | null;
 }

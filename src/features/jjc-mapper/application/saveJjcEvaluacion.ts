@@ -1,4 +1,4 @@
-import type { JjcEvaluacion, Fototipo } from '@/types/jjc';
+import type { JjcEvaluacion, Fototipo, CuestionarioPiel } from '@/types/jjc';
 import type { IJjcEvaluacionRepository } from '@/features/jjc-mapper/domain/ports';
 import { FOTOTIPO_VALUES } from '@/features/jjc-mapper/domain/entities';
 
@@ -33,6 +33,7 @@ export class SaveJjcEvaluacionUseCase {
       fototipo: input.fototipo,
       observaciones: (input.observaciones ?? '').slice(0, 500),
       lesiones: (input.lesiones ?? []) as JjcEvaluacion['lesiones'],
+      preguntas: input.preguntas ?? null,
     };
 
     try {
@@ -52,6 +53,7 @@ export interface SaveInput {
   fototipo: Fototipo;
   observaciones?: string;
   lesiones?: Array<{ id: string; type: string; x: number; y: number }>;
+  preguntas?: CuestionarioPiel | null;
 }
 
 function validateInput(input: SaveInput): { ok: true } | { ok: false; error: string } {

@@ -1,5 +1,5 @@
 import mssql from 'mssql';
-import type { JjcEvaluacion, LesionPoint } from '@/types/jjc';
+import type { JjcEvaluacion, LesionPoint, CuestionarioPiel } from '@/types/jjc';
 import type { IJjcEvaluacionRepository } from '@/features/jjc-mapper/domain/ports';
 import { getHolomedicPool } from '@/lib/db';
 import { parseFototipo } from '@/features/jjc-mapper/domain/entities';
@@ -16,6 +16,7 @@ export class SqlServerJjcEvaluacionRepository implements IJjcEvaluacionRepositor
     const pool = await getHolomedicPool();
     await pool.connect();
     const lesionesJson = JSON.stringify(evaluacion.lesiones);
+    const preguntasJson = evaluacion.preguntas ? JSON.stringify(evaluacion.preguntas) : null;
     const now = new Date();
 
     await pool
@@ -26,6 +27,7 @@ export class SqlServerJjcEvaluacionRepository implements IJjcEvaluacionRepositor
       .input('fototipo', mssql.VarChar(20), evaluacion.fototipo)
       .input('observaciones', mssql.NVarChar(500), evaluacion.observaciones)
       .input('lesionesJson', mssql.NVarChar(mssql.MAX), lesionesJson)
+      .input('preguntasJson', mssql.NVarChar(mssql.MAX), preguntasJson)
       .input('updatedAt', mssql.DateTime, now)
       .query(`
         MERGE dbo.JjcEvaluacion AS target
@@ -38,10 +40,11 @@ export class SqlServerJjcEvaluacionRepository implements IJjcEvaluacionRepositor
             fototipo        = @fototipo,
             observaciones   = @observaciones,
             lesionesJson    = @lesionesJson,
+            preguntasJson   = @preguntasJson,
             updatedAt       = @updatedAt
         WHEN NOT MATCHED THEN
-          INSERT (idAtencion, fechaEvaluacion, lugar, fototipo, observaciones, lesionesJson, createdAt, updatedAt)
-          VALUES (@idAtencion, @fechaEvaluacion, @lugar, @fototipo, @observaciones, @lesionesJson, @updatedAt, @updatedAt);
+          INSERT (idAtencion, fechaEvaluacion, lugar, fototipo, observaciones, lesionesJson, preguntasJson, createdAt, updatedAt)
+          VALUES (@idAtencion, @fechaEvaluacion, @lugar, @fototipo, @observaciones, @lesionesJson, @preguntasJson, @updatedAt, @updatedAt);
       `);
   }
 
@@ -53,7 +56,7 @@ export class SqlServerJjcEvaluacionRepository implements IJjcEvaluacionRepositor
       .request()
       .input('idAtencion', mssql.VarChar(50), idAtencion)
       .query<JjcEvaluacionRow>(`
-        SELECT idAtencion, fechaEvaluacion, lugar, fototipo, observaciones, lesionesJson
+        SELECT idAtencion, fechaEvaluacion, lugar, fototipo, observaciones, lesionesJson, preguntasJson
         FROM dbo.JjcEvaluacion
         WHERE idAtencion = @idAtencion
       `);
@@ -70,6 +73,7 @@ interface JjcEvaluacionRow {
   fototipo: string;
   observaciones: string | null;
   lesionesJson: string;
+  preguntasJson: string | null;
 }
 
 function mapRow(row: JjcEvaluacionRow): JjcEvaluacion | null {
@@ -89,6 +93,16 @@ function mapRow(row: JjcEvaluacionRow): JjcEvaluacion | null {
       ? row.fechaEvaluacion.toISOString().slice(0, 10)
       : String(row.fechaEvaluacion);
 
+  let preguntas: CuestionarioPiel | null = null;
+  if (row.preguntasJson) {
+    try {
+      const parsed = JSON.parse(row.preguntasJson);
+      if (parsed && typeof parsed === 'object') preguntas = parsed as CuestionarioPiel;
+    } catch {
+      preguntas = null;
+    }
+  }
+
   return {
     idAtencion: row.idAtencion,
     fechaEvaluacion: dateStr,
@@ -96,5 +110,6 @@ function mapRow(row: JjcEvaluacionRow): JjcEvaluacion | null {
     fototipo,
     observaciones: row.observaciones ?? '',
     lesiones,
+    preguntas,
   };
 }

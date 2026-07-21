@@ -10,6 +10,7 @@ interface FakeRow {
   fototipo: string;
   observaciones: string | null;
   lesionesJson: string;
+  preguntasJson: string | null;
 }
 
 const store = new Map<string, FakeRow>();
@@ -36,6 +37,7 @@ function makeFakeRequest() {
           fototipo: ctx.fototipo as string,
           observaciones: (ctx.observaciones as string) || null,
           lesionesJson: ctx.lesionesJson as string,
+          preguntasJson: (ctx.preguntasJson as string) || null,
         };
         store.set(row.idAtencion, row);
         return { recordset: [], rowsAffected: [1] };
@@ -54,6 +56,7 @@ function makeFakeRequest() {
               fototipo: row.fototipo,
               observaciones: row.observaciones,
               lesionesJson: row.lesionesJson,
+              preguntasJson: row.preguntasJson,
             },
           ],
         };
@@ -88,6 +91,7 @@ const sampleEval: JjcEvaluacion = {
     { id: 'p1', type: 'P', x: 0.5, y: 0.3 },
     { id: 'p2', type: 'L', x: 0.7, y: 0.6 },
   ],
+  preguntas: null,
 };
 
 beforeEach(() => {

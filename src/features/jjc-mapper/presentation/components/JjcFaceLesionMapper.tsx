@@ -1,9 +1,10 @@
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
-import type { AtencionDetalle, JjcEvaluacion, Fototipo } from '@/types/jjc';
+import type { AtencionDetalle, JjcEvaluacion, Fototipo, CuestionarioPiel } from '@/types/jjc';
 import type { LesionPoint } from '@/types/jjc';
 import { useJjcEvaluacion } from '@/features/jjc-mapper/presentation/hooks/useJjcEvaluacion';
+import type { FormTab } from './JjcFormTabs';
 import { EvaluacionForm } from './EvaluacionForm';
 import { FaceScanCanvas } from './FaceScanCanvas';
 import { VerticalLesionToolbar } from './VerticalLesionToolbar';
@@ -14,16 +15,6 @@ interface JjcFaceLesionMapperProps {
 
 const EVAL_API = '/api/areas/medicina/jjc/evaluaciones';
 
-/**
- * Top-level client shell for the JJC face-lesion mapper page.
- *
- * Two-column layout:
- * - **Left**: Face canvas (FaceScanCanvas with SVG overlay + VerticalLesionToolbar).
- * - **Right**: EvaluacionForm (patient fields, fototipo, counters).
- *
- * All state is lifted to `useJjcEvaluacion` (single hook, reducer-based).
- * On mount, loads existing evaluation from the API if one exists.
- */
 export function JjcFaceLesionMapper({ atencion }: JjcFaceLesionMapperProps) {
   const {
     state,
@@ -35,11 +26,18 @@ export function JjcFaceLesionMapper({ atencion }: JjcFaceLesionMapperProps) {
     addPoint,
     removePoint,
     reset,
+    setPreguntaSiNo,
+    setPreguntaDetalle,
+    setFechaLesion,
+    setSiNoSeccion2,
+    setDescriba,
+    setPreguntas,
   } = useJjcEvaluacion();
 
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [loading, setLoading] = useState(atencion?.idAtencion != null);
+  const [activeTab, setActiveTab] = useState<FormTab>('datos');
 
   // ---- Load existing evaluation on mount ----
   useEffect(() => {
@@ -56,7 +54,7 @@ export function JjcFaceLesionMapper({ atencion }: JjcFaceLesionMapperProps) {
         if (res.status === 200) {
           const body: { data: JjcEvaluacion } = await res.json();
           if (cancelled) return;
-          populateFromEvaluation(body.data, reset, setFecha, setFototipo, setObservaciones, addPoint);
+          populateFromEvaluation(body.data, reset, setFecha, setFototipo, setObservaciones, addPoint, setPreguntas);
         }
         // 404 = no saved evaluation yet — keep default empty state
       } catch {
@@ -68,7 +66,7 @@ export function JjcFaceLesionMapper({ atencion }: JjcFaceLesionMapperProps) {
 
     load();
     return () => { cancelled = true; };
-  }, [atencion?.idAtencion, reset, setFecha, setFototipo, setObservaciones, addPoint]);
+  }, [atencion?.idAtencion, reset, setFecha, setFototipo, setObservaciones, addPoint, setPreguntas]);
 
   // ---- Save handler ----
   const handleSave = useCallback(async () => {
@@ -91,6 +89,7 @@ export function JjcFaceLesionMapper({ atencion }: JjcFaceLesionMapperProps) {
           fototipo: state.form.fototipo,
           observaciones: state.form.observaciones,
           lesiones: state.points,
+          preguntas: state.preguntas,
         }),
       });
 
@@ -132,9 +131,17 @@ export function JjcFaceLesionMapper({ atencion }: JjcFaceLesionMapperProps) {
             atencion={atencion}
             form={state.form}
             counters={counters}
+            preguntas={state.preguntas}
+            activeTab={activeTab}
             onFototipoChange={setFototipo}
             onFechaChange={setFecha}
             onObservacionesChange={setObservaciones}
+            onTabChange={setActiveTab}
+            onPreguntaSiNoChange={setPreguntaSiNo}
+            onPreguntaDetalleChange={setPreguntaDetalle}
+            onFechaLesionChange={setFechaLesion}
+            onSiNoSeccion2Change={setSiNoSeccion2}
+            onDescribaChange={setDescriba}
             onSave={handleSave}
             saving={saving}
             saveError={saveError}
@@ -156,6 +163,7 @@ function populateFromEvaluation(
   setFototipo: (f: Fototipo) => void,
   setObservaciones: (t: string) => void,
   addPoint: (p: LesionPoint) => void,
+  setPreguntas: (p: CuestionarioPiel) => void,
 ): void {
   reset();
   setFecha(evalData.fechaEvaluacion);
@@ -163,5 +171,8 @@ function populateFromEvaluation(
   setObservaciones(evalData.observaciones);
   for (const p of evalData.lesiones) {
     addPoint(p);
+  }
+  if (evalData.preguntas) {
+    setPreguntas(evalData.preguntas);
   }
 }

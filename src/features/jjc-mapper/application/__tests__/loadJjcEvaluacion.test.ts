@@ -40,6 +40,7 @@ describe('LoadJjcEvaluacionUseCase', () => {
       fototipo: 'III-IV',
       observaciones: 'Sin novedad',
       lesiones: [{ id: 'p1', type: 'P', x: 0.5, y: 0.3 }],
+      preguntas: null,
     });
 
     const result = await useCase.execute('01001000001');

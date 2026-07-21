@@ -4,6 +4,7 @@ import {
   useJjcEvaluacion,
   jjcReducer,
   initialJjcState,
+  initialCuestionarioPiel,
   countersByType,
   type JjcEvaluacionState,
 } from '../useJjcEvaluacion';
@@ -90,6 +91,7 @@ describe('jjcReducer', () => {
       },
       points: [{ id: 'p1', type: 'P', x: 0.5, y: 0.5 }],
       activeTool: 'delete',
+      preguntas: initialCuestionarioPiel(),
     };
     const next = jjcReducer(state, { type: 'RESET' });
     expect(next.form.fototipo).toBeNull();
