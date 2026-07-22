@@ -8,8 +8,8 @@ import { renameReadyFile } from '../domain/ready-files/renameReadyFile';
 /** Maximum number of fileRefs the route accepts (per `MAX_FILES` in the route). */
 export const MAX_FILES = 10;
 
-/** Per-file size cap: 10 MB. */
-export const MAX_FILE_BYTES = 10 * 1024 * 1024;
+/** Per-file size cap: 30 MB. */
+export const MAX_FILE_BYTES = 30 * 1024 * 1024;
 
 // ---- Result discriminated union ----
 
@@ -87,7 +87,7 @@ function sanitizeRef(ref: SelectedFileRef): { safePath: string; safeName: string
  *
  * 1. Validate the `fileRefs` payload (limits, sanitisation).
  * 2. For each ref, ask the `IFileRepository` for a stream and
- *    collect the bytes into a `Buffer` (with a 10 MB cap).
+ *    collect the bytes into a `Buffer` (with a 30 MB cap).
  * 3. Hand the assembled `EmailAttachment[]` to the `IEmailService`
  *    with `cc`/`subject`/`html`.
  *
