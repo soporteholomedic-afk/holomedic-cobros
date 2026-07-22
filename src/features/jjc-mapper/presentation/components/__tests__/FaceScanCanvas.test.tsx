@@ -17,11 +17,13 @@ const pts: LesionPoint[] = [
 ];
 
 describe('FaceScanCanvas', () => {
-  it('renders img + SVG overlay', () => {
+  it('renders three images + SVG overlay', () => {
     render(<FaceScanCanvas points={[]} activeTool="P" onAddPoint={vi.fn()} onRemovePoint={vi.fn()} />);
     expect(screen.getByAltText('Rostro')).toHaveAttribute('src');
+    expect(screen.getByAltText('Oreja izquierda')).toHaveAttribute('src');
+    expect(screen.getByAltText('Oreja derecha')).toHaveAttribute('src');
     const svg = document.querySelector('svg')!;
-    expect(svg).toHaveAttribute('viewBox', '0 0 100 100');
+    expect(svg).toHaveAttribute('viewBox', '0 0 422 279');
     expect(svg).toHaveAttribute('preserveAspectRatio', 'none');
   });
 
@@ -61,5 +63,27 @@ describe('FaceScanCanvas', () => {
   it('markers have aria-labels', () => {
     render(<FaceScanCanvas points={pts} activeTool="P" onAddPoint={vi.fn()} onRemovePoint={vi.fn()} />);
     document.querySelectorAll('circle').forEach((c) => expect(c).toHaveAttribute('aria-label'));
+  });
+
+  it('calls onAddPoint when clicking left ear region', () => {
+    const fn = vi.fn();
+    render(<FaceScanCanvas points={[]} activeTool="P" onAddPoint={fn} onRemovePoint={vi.fn()} />);
+    // Ear band x ∈ [0, 15.6%] → click at x=8%
+    stubRect(document.querySelector('svg')!, 400, 500);
+    fireEvent.pointerDown(document.querySelector('svg')!, { clientX: 32, clientY: 250 });
+    expect(fn).toHaveBeenCalledTimes(1);
+    const pt = fn.mock.calls[0][0] as LesionPoint;
+    expect(pt.x).toBeLessThan(0.156);
+  });
+
+  it('calls onAddPoint when clicking right ear region', () => {
+    const fn = vi.fn();
+    render(<FaceScanCanvas points={[]} activeTool="P" onAddPoint={fn} onRemovePoint={vi.fn()} />);
+    // Ear band x ∈ [84.5%, 100%] → click at x=92%
+    stubRect(document.querySelector('svg')!, 400, 500);
+    fireEvent.pointerDown(document.querySelector('svg')!, { clientX: 368, clientY: 250 });
+    expect(fn).toHaveBeenCalledTimes(1);
+    const pt = fn.mock.calls[0][0] as LesionPoint;
+    expect(pt.x).toBeGreaterThan(0.845);
   });
 });

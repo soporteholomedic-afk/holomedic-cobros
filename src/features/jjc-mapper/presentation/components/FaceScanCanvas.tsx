@@ -6,9 +6,11 @@ import type { ActiveTool } from '@/features/jjc-mapper/presentation/hooks/useJjc
 import type { LesionPoint, LesionType } from '@/types/jjc';
 import { LesionMarkers } from './LesionMarkers';
 
-let nextId = 1;
 function generateId(): string {
-  return `lesion-${nextId++}`;
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return `lesion-${crypto.randomUUID()}`;
+  }
+  return `lesion-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
 }
 
 interface FaceScanCanvasProps {
@@ -49,22 +51,61 @@ export function FaceScanCanvas({
   );
 
   return (
-    <div className="relative w-full mx-auto">
-      <Image
-        src="/rostro.png"
-        alt="Rostro"
-        width={300}
-        height={400}
-        className="w-full h-auto rounded-xl block select-none"
-        draggable={false}
-        priority
-      />
+    <div className="relative w-full mx-auto" style={{ aspectRatio: '422 / 279' }}>
+      {/* Left ear: x 1.9%–15.6%, y 36.2%–64.1% */}
+      <div
+        className="absolute"
+        style={{ left: '1.9%', top: '36.2%', width: '13.7%', height: '27.9%' }}
+      >
+        <Image
+          src="/oreja-izquierda.jpg"
+          alt="Oreja izquierda"
+          fill
+          className="object-cover"
+          draggable={false}
+          sizes="60px"
+          priority
+        />
+      </div>
+
+      {/* Face: x 26.3%–73.8%, y 0%–100% */}
+      <div
+        className="absolute"
+        style={{ left: '26.3%', top: '0%', width: '47.5%', height: '100%' }}
+      >
+        <Image
+          src="/rostro.jpg"
+          alt="Rostro"
+          fill
+          className="object-contain"
+          draggable={false}
+          sizes="200px"
+          priority
+        />
+      </div>
+
+      {/* Right ear: x 84.5%–98.2%, y 36.2%–64.1% */}
+      <div
+        className="absolute"
+        style={{ left: '84.5%', top: '36.2%', width: '13.7%', height: '27.9%' }}
+      >
+        <Image
+          src="/oreja-derecha.jpg"
+          alt="Oreja derecha"
+          fill
+          className="object-cover"
+          draggable={false}
+          sizes="60px"
+          priority
+        />
+      </div>
+
+      {/* SVG overlay covering the full composite, matching COMPOSITE_VIEWBOX */}
       <svg
         ref={svgRef}
-        viewBox="0 0 300 400"
+        viewBox="0 0 422 279"
         preserveAspectRatio="none"
-        className="absolute top-0 left-0 w-full cursor-crosshair"
-        style={{ aspectRatio: '3 / 4' }}
+        className="absolute top-0 left-0 w-full h-full cursor-crosshair"
         onPointerDown={handlePointerDown}
         onClick={handleCircleClick}
       >

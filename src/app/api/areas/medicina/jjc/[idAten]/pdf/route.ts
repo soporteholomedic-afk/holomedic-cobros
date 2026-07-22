@@ -9,6 +9,7 @@ import {
   buildLoadJjcEvaluacion,
 } from '@/features/jjc-mapper/composition/container';
 import { mapAtencionToPdfFields } from './mapAtencionToPdfFields';
+import { drawLesionMarkers } from './drawLesionMarkers';
 
 const TAHOMA_FONT_PATH = path.resolve(
   process.cwd(),
@@ -93,6 +94,12 @@ export async function GET(
     const form = pdfDoc.getForm();
 
     const tahomaFont = await loadAndEmbedTahomaFont(pdfDoc);
+
+    // Draw lesion markers on the face image area (page 0 — first page)
+    if (evaluacion?.lesiones && evaluacion.lesiones.length > 0) {
+      const page = pdfDoc.getPage(0);
+      drawLesionMarkers({ page, points: evaluacion.lesiones, font: tahomaFont });
+    }
 
     // Fill text fields
     for (const [fieldName, value] of Object.entries(fieldMap.text)) {
