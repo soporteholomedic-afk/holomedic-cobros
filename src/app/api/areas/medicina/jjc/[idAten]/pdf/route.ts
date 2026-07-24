@@ -89,7 +89,7 @@ export async function embedPatientImages(
   for (const slot of slots) {
     if (!slot.path || !slot.rect || slot.pageIndex === undefined) continue;
     try {
-      const jpgBytes = fs.readFileSync(slot.path);
+      const jpgBytes = new Uint8Array(fs.readFileSync(slot.path));
       const img = await pdfDoc.embedJpg(jpgBytes);
       pdfDoc.getPage(slot.pageIndex).drawImage(img, {
         x: slot.rect.x,
