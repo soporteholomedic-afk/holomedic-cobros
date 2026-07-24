@@ -30,4 +30,5 @@ export interface SaveEvaluacionInput {
   fototipo: string;
   observaciones: string;
   lesiones: LesionPoint[];
+  createdBy?: string | null;
 }

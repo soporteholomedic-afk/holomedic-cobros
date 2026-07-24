@@ -34,6 +34,7 @@ export class SaveJjcEvaluacionUseCase {
       observaciones: (input.observaciones ?? '').slice(0, 500),
       lesiones: (input.lesiones ?? []) as JjcEvaluacion['lesiones'],
       preguntas: input.preguntas ?? null,
+      createdBy: input.createdBy ?? null,
     };
 
     try {
@@ -54,6 +55,7 @@ export interface SaveInput {
   observaciones?: string;
   lesiones?: Array<{ id: string; type: string; x: number; y: number }>;
   preguntas?: CuestionarioPiel | null;
+  createdBy?: string | null;
 }
 
 function validateInput(input: SaveInput): { ok: true } | { ok: false; error: string } {

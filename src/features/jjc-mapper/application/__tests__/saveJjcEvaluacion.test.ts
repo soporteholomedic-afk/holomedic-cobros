@@ -95,4 +95,20 @@ describe('SaveJjcEvaluacionUseCase', () => {
     expect(result).toEqual({ ok: true });
     expect(repo.saved[0].observaciones).toHaveLength(500);
   });
+
+  it('preserves createdBy when provided', async () => {
+    const { useCase, repo } = makeSut();
+    const result = await useCase.execute(validInput({ createdBy: 'user-001' }));
+
+    expect(result).toEqual({ ok: true });
+    expect(repo.saved[0].createdBy).toBe('user-001');
+  });
+
+  it('sets createdBy to null when omitted', async () => {
+    const { useCase, repo } = makeSut();
+    const result = await useCase.execute(validInput());
+
+    expect(result).toEqual({ ok: true });
+    expect(repo.saved[0].createdBy).toBeNull();
+  });
 });

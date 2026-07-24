@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { buildSaveJjcEvaluacion, buildLoadJjcEvaluacion } from '@/features/jjc-mapper/composition/container';
 import type { Fototipo, CuestionarioPiel } from '@/types/jjc';
+import { getSession } from '@/lib/auth';
 
 /**
  * POST /api/areas/medicina/jjc/evaluaciones
@@ -28,6 +29,8 @@ export async function POST(request: Request): Promise<NextResponse> {
       ? (body.preguntas as CuestionarioPiel)
       : null;
 
+    const session = await getSession();
+
     const useCase = buildSaveJjcEvaluacion();
     const result = await useCase.execute({
       idAtencion,
@@ -36,6 +39,7 @@ export async function POST(request: Request): Promise<NextResponse> {
       observaciones,
       lesiones,
       preguntas,
+      createdBy: session?.sub ?? null,
     });
 
     if (!result.ok) {

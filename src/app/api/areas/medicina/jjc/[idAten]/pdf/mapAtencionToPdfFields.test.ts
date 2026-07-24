@@ -46,6 +46,7 @@ describe('mapAtencionToPdfFields', () => {
         lesionDermatopatia: null,
         evaluacionDermatologo: null,
       },
+      createdBy: null,
     };
 
     const result = mapAtencionToPdfFields(fullAtencion, evaluacion);
@@ -141,6 +142,7 @@ describe('mapAtencionToPdfFields', () => {
       observaciones: 'Todo normal',
       lesiones: [],
       preguntas: null,
+      createdBy: null,
     };
 
     const result = mapAtencionToPdfFields(fullAtencion, evalNoPreguntas);
@@ -186,6 +188,7 @@ describe('mapAtencionToPdfFields', () => {
         lesionDermatopatia: null,
         evaluacionDermatologo: null,
       },
+      createdBy: null,
     };
 
     const result = mapAtencionToPdfFields(fullAtencion, evaluacion);
@@ -235,6 +238,7 @@ describe('mapAtencionToPdfFields', () => {
         lesionDermatopatia: null,
         evaluacionDermatologo: null,
       },
+      createdBy: null,
     };
 
     const result = mapAtencionToPdfFields(fullAtencion, evaluacion);
@@ -273,6 +277,7 @@ describe('mapAtencionToPdfFields', () => {
         lesionDermatopatia: 'si',
         evaluacionDermatologo: 'no',
       },
+      createdBy: null,
     };
 
     const result = mapAtencionToPdfFields(fullAtencion, evaluacion);

@@ -28,6 +28,7 @@ export class SqlServerJjcEvaluacionRepository implements IJjcEvaluacionRepositor
       .input('observaciones', mssql.NVarChar(500), evaluacion.observaciones)
       .input('lesionesJson', mssql.NVarChar(mssql.MAX), lesionesJson)
       .input('preguntasJson', mssql.NVarChar(mssql.MAX), preguntasJson)
+      .input('createdBy', mssql.NVarChar(100), evaluacion.createdBy)
       .input('updatedAt', mssql.DateTime, now)
       .query(`
         MERGE dbo.JjcEvaluacion AS target
@@ -43,8 +44,8 @@ export class SqlServerJjcEvaluacionRepository implements IJjcEvaluacionRepositor
             preguntasJson   = @preguntasJson,
             updatedAt       = @updatedAt
         WHEN NOT MATCHED THEN
-          INSERT (idAtencion, fechaEvaluacion, lugar, fototipo, observaciones, lesionesJson, preguntasJson, createdAt, updatedAt)
-          VALUES (@idAtencion, @fechaEvaluacion, @lugar, @fototipo, @observaciones, @lesionesJson, @preguntasJson, @updatedAt, @updatedAt);
+          INSERT (idAtencion, fechaEvaluacion, lugar, fototipo, observaciones, lesionesJson, preguntasJson, createdBy, createdAt, updatedAt)
+          VALUES (@idAtencion, @fechaEvaluacion, @lugar, @fototipo, @observaciones, @lesionesJson, @preguntasJson, @createdBy, @updatedAt, @updatedAt);
       `);
   }
 
@@ -56,7 +57,7 @@ export class SqlServerJjcEvaluacionRepository implements IJjcEvaluacionRepositor
       .request()
       .input('idAtencion', mssql.VarChar(50), idAtencion)
       .query<JjcEvaluacionRow>(`
-        SELECT idAtencion, fechaEvaluacion, lugar, fototipo, observaciones, lesionesJson, preguntasJson
+        SELECT idAtencion, fechaEvaluacion, lugar, fototipo, observaciones, lesionesJson, preguntasJson, createdBy
         FROM dbo.JjcEvaluacion
         WHERE idAtencion = @idAtencion
       `);
@@ -74,6 +75,7 @@ interface JjcEvaluacionRow {
   observaciones: string | null;
   lesionesJson: string;
   preguntasJson: string | null;
+  createdBy: string | null;
 }
 
 function mapRow(row: JjcEvaluacionRow): JjcEvaluacion | null {
@@ -111,5 +113,6 @@ function mapRow(row: JjcEvaluacionRow): JjcEvaluacion | null {
     observaciones: row.observaciones ?? '',
     lesiones,
     preguntas,
+    createdBy: row.createdBy ?? null,
   };
 }

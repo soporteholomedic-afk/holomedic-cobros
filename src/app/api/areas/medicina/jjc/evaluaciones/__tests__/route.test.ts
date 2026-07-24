@@ -11,6 +11,11 @@ vi.mock('@/features/jjc-mapper/composition/container', () => ({
   buildLoadJjcEvaluacion: () => ({ execute: mockLoadExecute }),
 }));
 
+const mockGetSession = vi.fn();
+vi.mock('@/lib/auth', () => ({
+  getSession: mockGetSession,
+}));
+
 // ---- Import under test ----
 
 const { POST, GET } = await import('../route');
@@ -47,10 +52,12 @@ const sampleEval: JjcEvaluacion = {
   observaciones: '',
   lesiones: [],
   preguntas: null,
+  createdBy: null,
 };
 
 beforeEach(() => {
   vi.clearAllMocks();
+  mockGetSession.mockResolvedValue({ sub: 'user-001', nombre: 'Dr. Prueba', area: 'medicina', permisos: ['jjc'] });
 });
 
 // ---- POST ----

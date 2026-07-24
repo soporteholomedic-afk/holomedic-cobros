@@ -16,6 +16,11 @@ vi.mock('@/features/jjc-mapper/composition/container', () => ({
 
 vi.mock('@pdf-lib/fontkit', () => ({ default: {} }));
 
+const mockGetFirma = vi.fn();
+vi.mock('@/features/auth/infrastructure/getUsuarioDb', () => ({
+  getUsuarioDb: () => ({ getFirma: mockGetFirma }),
+}));
+
 // ---- Template PDF factory ----
 // Creates a minimal PDF with AcroForm fields matching the route's expectations.
 
@@ -169,6 +174,7 @@ const sampleEval: JjcEvaluacion = {
     { id: 'p2', type: 'L', x: 0.5, y: 0.3 },
   ],
   preguntas: null,
+  createdBy: null,
 };
 
 // ---- Tests ----

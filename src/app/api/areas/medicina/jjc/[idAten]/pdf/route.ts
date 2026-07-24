@@ -8,6 +8,7 @@ import {
   buildGetAtencionDetalle,
   buildLoadJjcEvaluacion,
 } from '@/features/jjc-mapper/composition/container';
+import { getUsuarioDb } from '@/features/auth/infrastructure/getUsuarioDb';
 import { mapAtencionToPdfFields } from './mapAtencionToPdfFields';
 import { drawLesionMarkers } from './drawLesionMarkers';
 
@@ -35,6 +36,8 @@ async function loadAndEmbedTahomaFont(
 interface ImgSlot {
   name: string;
   path: string | null;
+  /** In-memory image buffer (for DB-sourced images like doctor signature). */
+  buffer?: Buffer | null;
   /** Saved widget rectangle — read before flatten. */
   rect?: { x: number; y: number; width: number; height: number };
   /** Page index where this widget lives (0-based). */
@@ -42,9 +45,10 @@ interface ImgSlot {
 }
 
 /**
- * Read image paths from `atencion`, capture their widget positions from the
- * PDF acroform BEFORE flatten, then draw the JPG images onto the page content
- * AFTER flatten so no generated button appearance covers them.
+ * Read image paths from `atencion` (plus optional medico firma buffer), capture
+ * their widget positions from the PDF acroform BEFORE flatten, then draw the
+ * images onto the page content AFTER flatten so no generated button appearance
+ * covers them.
  *
  * Absent paths, missing widgets, and read failures are all swallowed — the
  * PDF is generated without the image.
@@ -54,10 +58,12 @@ export async function embedPatientImages(
   form: PDFForm,
   rutaFirma: string | null,
   rutaHuella: string | null,
+  medicoFirmaBuffer?: Buffer | null,
 ): Promise<void> {
   const slots: ImgSlot[] = [
     { name: 'img_firma', path: rutaFirma },
     { name: 'img_huella', path: rutaHuella },
+    { name: 'img_firma_medico', path: null, buffer: medicoFirmaBuffer ?? null },
   ];
 
   // Build page-ref → page-index map so we can resolve widget.P() to an index
@@ -68,7 +74,7 @@ export async function embedPatientImages(
   }
 
   for (const slot of slots) {
-    if (!slot.path) continue;
+    if (!slot.path && !slot.buffer) continue;
     try {
       const button = form.getButton(slot.name);
       const widget = button.acroField.getWidgets()[0];
@@ -87,10 +93,22 @@ export async function embedPatientImages(
 
   // Now draw images over the flattened page — no widget annotation can cover them
   for (const slot of slots) {
-    if (!slot.path || !slot.rect || slot.pageIndex === undefined) continue;
+    if (!slot.rect || slot.pageIndex === undefined) continue;
     try {
-      const jpgBytes = new Uint8Array(fs.readFileSync(slot.path));
-      const img = await pdfDoc.embedJpg(jpgBytes);
+      let img;
+      if (slot.buffer) {
+        // DB-sourced image (PNG from usuario.firma)
+        try {
+          img = await pdfDoc.embedPng(new Uint8Array(slot.buffer));
+        } catch {
+          img = await pdfDoc.embedJpg(new Uint8Array(slot.buffer));
+        }
+      } else if (slot.path) {
+        const bytes = new Uint8Array(fs.readFileSync(slot.path));
+        img = await pdfDoc.embedJpg(bytes);
+      } else {
+        continue;
+      }
       pdfDoc.getPage(slot.pageIndex).drawImage(img, {
         x: slot.rect.x,
         y: slot.rect.y,
@@ -219,9 +237,27 @@ export async function GET(
       }
     }
 
-    // 5. Embed patient signature and fingerprint images (captures rects,
-    //    flattens, then draws — so no generated button appearance covers them)
-    await embedPatientImages(pdfDoc, form, atencion.rutaFirma, atencion.rutaHuella);
+    // 5. Look up medico signature from DB (if evaluation was created by someone)
+    let medicoFirmaBuf: Buffer | null = null;
+    if (evaluacion?.createdBy) {
+      try {
+        const usuarioRepo = await getUsuarioDb();
+        medicoFirmaBuf = await usuarioRepo.getFirma(evaluacion.createdBy);
+      } catch {
+        // Medico signature not found — skip gracefully
+      }
+    }
+
+    // 6. Embed patient signature, fingerprint, and medico signature images
+    //    (captures rects, flattens, then draws — so no generated button
+    //    appearance covers them)
+    await embedPatientImages(
+      pdfDoc,
+      form,
+      atencion.rutaFirma,
+      atencion.rutaHuella,
+      medicoFirmaBuf,
+    );
     // (form.flatten() is now called inside embedPatientImages)
 
     const pdfBytes = await pdfDoc.save();

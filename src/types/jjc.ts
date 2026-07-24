@@ -76,4 +76,6 @@ export interface JjcEvaluacion {
   observaciones: string;     // ≤ 500
   lesiones: LesionPoint[];
   preguntas: CuestionarioPiel | null;
+  /** idUsuario de quien guardó por primera vez la evaluación. */
+  createdBy: string | null;
 }

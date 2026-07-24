@@ -11,6 +11,7 @@ interface FakeRow {
   observaciones: string | null;
   lesionesJson: string;
   preguntasJson: string | null;
+  createdBy: string | null;
 }
 
 const store = new Map<string, FakeRow>();
@@ -38,6 +39,7 @@ function makeFakeRequest() {
           observaciones: (ctx.observaciones as string) || null,
           lesionesJson: ctx.lesionesJson as string,
           preguntasJson: (ctx.preguntasJson as string) || null,
+          createdBy: (ctx.createdBy as string) ?? null,
         };
         store.set(row.idAtencion, row);
         return { recordset: [], rowsAffected: [1] };
@@ -57,6 +59,7 @@ function makeFakeRequest() {
               observaciones: row.observaciones,
               lesionesJson: row.lesionesJson,
               preguntasJson: row.preguntasJson,
+              createdBy: row.createdBy,
             },
           ],
         };
@@ -92,6 +95,7 @@ const sampleEval: JjcEvaluacion = {
     { id: 'p2', type: 'L', x: 0.7, y: 0.6 },
   ],
   preguntas: null,
+  createdBy: null,
 };
 
 beforeEach(() => {
