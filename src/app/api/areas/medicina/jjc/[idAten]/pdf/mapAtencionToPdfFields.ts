@@ -106,8 +106,7 @@ export function mapAtencionToPdfFields(
   text.txt_count_mancha = countByType(lesiones, 'M');
   text.txt_count_peca = countByType(lesiones, 'P');
   text.txt_count_cicatriz = countByType(lesiones, 'C');
-  // No data source for "otras lesiones" — leave at 0.
-  text.txt_count_otras = '0';
+  text.txt_count_otras = countByType(lesiones, 'O');
 
   // Observaciones
   chunks.Observaciones = evaluacion.observaciones
