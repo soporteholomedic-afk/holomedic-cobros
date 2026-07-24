@@ -107,6 +107,29 @@ The `sigla-cli/` folder holds the compiled .NET runtime the Next.js server spawn
 - The path is resolved at runtime by `src/features/envio-resultados/infrastructure/informes/constants.ts` as `path.resolve(process.cwd(), 'sigla-cli', 'SIGLA.PdfCli.exe')`. Override with the `PDFCLI_EXE_PATH` env var if you need to point at a different binary location.
 - Because `robocopy /MIR` is used, deleting `sigla-cli/` locally and re-syncing will **also delete it on the SDK** — do not run the sync with the folder missing unless you intend to.
 
+## Auth & Route Protection
+
+### Route Registration
+
+Al agregar una nueva página que requiera autenticación:
+1. Registrar la ruta en `src/features/auth/domain/routes.ts` (array `RUTAS_PROTEGIDAS`)
+2. Si se necesita un **nuevo permiso**, agregarlo primero en la constante `PERMISOS` en `src/features/auth/domain/entities.ts`
+3. `PERMISOS` es la fuente de verdad única — también alimenta los checkboxes del CRUD de usuarios en `/admin/usuarios`
+
+### Permission Model
+
+Cada ruta protegida requiere exactamente un permiso. El usuario debe tenerlo en su array `permisos` para acceder. Rutas no listadas en `RUTAS_PROTEGIDAS` son públicas (home, login, acceso denegado).
+
+### Comportamiento del Proxy
+
+El proxy (`src/proxy.ts`) evalúa toda navegación a rutas internas con 3 resultados posibles:
+
+| Estado | Resultado |
+|---|---|
+| Logueado + tiene permiso | Pasa directo (`NextResponse.next()`) |
+| No logueado | Redirige a `/auth/login?redirect=<ruta>` |
+| Logueado pero sin permiso | Redirige a `/auth/denegado?permiso=<permiso>&label=<label>&ruta=<ruta>` |
+
 ## External Workspace Permissions
 
 By explicit user instruction, this agent is permitted to read and write outside the default project root at the following paths:
