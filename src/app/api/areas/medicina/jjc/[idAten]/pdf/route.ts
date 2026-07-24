@@ -109,11 +109,25 @@ export async function embedPatientImages(
       } else {
         continue;
       }
+
+      const { width: slotW, height: slotH } = slot.rect;
+      const imgW = img.width;
+      const imgH = img.height;
+
+      // Scale proportionally to fit within the widget rect
+      const scale = Math.min(slotW / imgW, slotH / imgH);
+      const drawW = imgW * scale;
+      const drawH = imgH * scale;
+
+      // Center horizontally within the slot; bottom-align vertically
+      const drawX = slot.rect.x + (slotW - drawW) / 2;
+      const drawY = slot.rect.y + (slotH - drawH);
+
       pdfDoc.getPage(slot.pageIndex).drawImage(img, {
-        x: slot.rect.x,
-        y: slot.rect.y,
-        width: slot.rect.width,
-        height: slot.rect.height,
+        x: drawX,
+        y: drawY,
+        width: drawW,
+        height: drawH,
       });
     } catch {
       // File not found or unreadable — skip silently
