@@ -9,6 +9,7 @@ const TOOLS: ToolDef[] = [
   { type: 'L', label: 'Lunar (L)', swatch: 'bg-blue-300 border-blue-500', activeRing: 'ring-blue-400' },
   { type: 'M', label: 'Mancha (M)', swatch: 'bg-green-300 border-green-500', activeRing: 'ring-green-400' },
   { type: 'C', label: 'Cicatriz (C)', swatch: 'bg-purple-300 border-purple-500', activeRing: 'ring-purple-400' },
+  { type: 'O', label: 'Otras (O)', swatch: 'bg-zinc-300 border-zinc-500', activeRing: 'ring-zinc-400' },
 ];
 
 interface VerticalLesionToolbarProps {

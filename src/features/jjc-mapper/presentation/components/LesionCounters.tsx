@@ -9,6 +9,7 @@ const LESION_LABELS: Record<LesionType, string> = {
   L: 'Lunar',
   M: 'Mancha',
   C: 'Cicatriz',
+  O: 'Otras',
 };
 
 const COUNT_COLORS: Record<LesionType, string> = {
@@ -16,6 +17,7 @@ const COUNT_COLORS: Record<LesionType, string> = {
   L: 'bg-blue-100 text-blue-700 border-blue-200',
   M: 'bg-green-100 text-green-700 border-green-200',
   C: 'bg-purple-100 text-purple-700 border-purple-200',
+  O: 'bg-zinc-100 text-zinc-700 border-zinc-200',
 };
 
 /**

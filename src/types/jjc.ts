@@ -3,8 +3,7 @@
  * Kept in `src/types/` per project convention (shared across feature boundaries).
  */
 
-/** Exactly 4 lesion types with fixed pastel colors. */
-export type LesionType = 'P' | 'L' | 'M' | 'C';
+export type LesionType = 'P' | 'L' | 'M' | 'C' | 'O';
 
 /** Normalized `0..1` coordinates over the face canvas. */
 export interface LesionPoint {

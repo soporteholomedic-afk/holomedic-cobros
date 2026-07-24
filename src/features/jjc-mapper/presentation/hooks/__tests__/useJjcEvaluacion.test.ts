@@ -105,7 +105,7 @@ describe('jjcReducer', () => {
 describe('countersByType', () => {
   it('returns 0 for all types when empty', () => {
     const c = countersByType([]);
-    expect(c).toEqual({ P: 0, L: 0, M: 0, C: 0 });
+    expect(c).toEqual({ P: 0, L: 0, M: 0, C: 0, O: 0 });
   });
 
   it('counts by type correctly', () => {
@@ -118,7 +118,7 @@ describe('countersByType', () => {
       { id: 'p6', type: 'M', x: 0.6, y: 0.6 },
     ];
     const c = countersByType(points);
-    expect(c).toEqual({ P: 2, L: 1, M: 3, C: 0 });
+    expect(c).toEqual({ P: 2, L: 1, M: 3, C: 0, O: 0 });
   });
 });
 
@@ -130,7 +130,7 @@ describe('useJjcEvaluacion (hook)', () => {
     expect(result.current.state.form.lugar).toBe('HOLOMEDIC');
     expect(result.current.state.form.fototipo).toBeNull();
     expect(result.current.state.activeTool).toBe('P');
-    expect(result.current.counters).toEqual({ P: 0, L: 0, M: 0, C: 0 });
+    expect(result.current.counters).toEqual({ P: 0, L: 0, M: 0, C: 0, O: 0 });
   });
 
   it('setFototipo updates the selection', () => {
@@ -150,15 +150,15 @@ describe('useJjcEvaluacion (hook)', () => {
     act(() => result.current.addPoint({ id: 'p1', type: 'P', x: 0.5, y: 0.5 }));
     act(() => result.current.addPoint({ id: 'p2', type: 'P', x: 0.3, y: 0.7 }));
     act(() => result.current.addPoint({ id: 'p3', type: 'L', x: 0.1, y: 0.2 }));
-    expect(result.current.counters).toEqual({ P: 2, L: 1, M: 0, C: 0 });
+    expect(result.current.counters).toEqual({ P: 2, L: 1, M: 0, C: 0, O: 0 });
 
     act(() => result.current.removePoint('p1'));
-    expect(result.current.counters).toEqual({ P: 1, L: 1, M: 0, C: 0 });
+    expect(result.current.counters).toEqual({ P: 1, L: 1, M: 0, C: 0, O: 0 });
   });
 
   it('counter never goes negative', () => {
     const { result } = renderHook(() => useJjcEvaluacion());
     act(() => result.current.removePoint('nonexistent'));
-    expect(result.current.counters).toEqual({ P: 0, L: 0, M: 0, C: 0 });
+    expect(result.current.counters).toEqual({ P: 0, L: 0, M: 0, C: 0, O: 0 });
   });
 });

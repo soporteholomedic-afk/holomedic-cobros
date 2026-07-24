@@ -195,6 +195,7 @@ export function countersByType(points: LesionPoint[]): Record<LesionType, number
     L: points.filter((p) => p.type === 'L').length,
     M: points.filter((p) => p.type === 'M').length,
     C: points.filter((p) => p.type === 'C').length,
+    O: points.filter((p) => p.type === 'O').length,
   };
 }
 

@@ -9,12 +9,13 @@ describe('VerticalLesionToolbar', () => {
     expect(tb).toHaveAttribute('aria-orientation', 'vertical');
   });
 
-  it('renders 4 type buttons + delete', () => {
+  it('renders 5 type buttons + delete', () => {
     render(<VerticalLesionToolbar activeTool="P" onToolChange={vi.fn()} />);
     expect(screen.getByText('P')).toBeInTheDocument();
     expect(screen.getByText('L')).toBeInTheDocument();
     expect(screen.getByText('M')).toBeInTheDocument();
     expect(screen.getByText('C')).toBeInTheDocument();
+    expect(screen.getByText('O')).toBeInTheDocument();
     expect(screen.getByLabelText('Eliminar lesión')).toBeInTheDocument();
   });
 
@@ -46,5 +47,6 @@ describe('VerticalLesionToolbar', () => {
     expect(screen.getByLabelText('Lunar (L)')).toBeInTheDocument();
     expect(screen.getByLabelText('Mancha (M)')).toBeInTheDocument();
     expect(screen.getByLabelText('Cicatriz (C)')).toBeInTheDocument();
+    expect(screen.getByLabelText('Otras (O)')).toBeInTheDocument();
   });
 });

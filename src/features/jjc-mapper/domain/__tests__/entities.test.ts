@@ -30,8 +30,8 @@ describe('createLesionPoint', () => {
     expect(createLesionPoint('p1', 'P', 0.5, -0.1)).toBeNull();
   });
 
-  it('accepts all four lesion types', () => {
-    const types: LesionType[] = ['P', 'L', 'M', 'C'];
+  it('accepts all five lesion types', () => {
+    const types: LesionType[] = ['P', 'L', 'M', 'C', 'O'];
     for (const t of types) {
       const point = createLesionPoint(`p-${t}`, t, 0.5, 0.5);
       expect(point?.type).toBe(t);
