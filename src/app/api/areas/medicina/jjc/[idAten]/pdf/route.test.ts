@@ -154,6 +154,8 @@ const sampleAtencion: AtencionDetalle = {
   tipoExamen: 'Pre-Ocupacional',
   puesto: 'Ingeniero',
   area: 'Producción',
+  rutaFirma: null,
+  rutaHuella: null,
 };
 
 const sampleEval: JjcEvaluacion = {

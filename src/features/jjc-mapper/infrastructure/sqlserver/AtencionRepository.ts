@@ -2,6 +2,7 @@ import mssql from 'mssql';
 import type { AtencionDetalle } from '@/types/jjc';
 import type { IAtencionRepository } from '@/features/jjc-mapper/domain/ports';
 import { getPool } from '@/lib/db';
+import { FILE_SERVER_BASE_PATH } from '@/lib/platform';
 
 /**
  * SQL Server adapter for `IAtencionRepository`.
@@ -41,11 +42,18 @@ export class SqlServerAtencionRepository implements IAtencionRepository {
         C.NomCom AS empresa,
         TC.DesTCh AS tipoExamen,
         O.DesPue AS puesto,
-        ISNULL(S.NomSer, '') AS area
+        ISNULL(S.NomSer, '') AS area,
+        O.CodPac,
+        OI.UbiFir,
+        OI.UbiHue
       FROM Orden O
       INNER JOIN Cliente C ON C.CodCli = O.CodCli
       INNER JOIN Persona P ON P.CodPer = O.CodPac
       LEFT JOIN TipoChequeo TC ON TC.CodTCh = O.CodTCh
+      LEFT JOIN OrdenImg OI ON OI.CodEmp = O.CodEmp
+        AND OI.CodSed = O.CodSed
+        AND OI.CodTCl = O.CodTCl
+        AND OI.NumOrd = O.NumOrd
       OUTER APPLY (
         SELECT TOP 1 S2.NomSer
         FROM OrdenxServicio OS2
@@ -63,7 +71,39 @@ export class SqlServerAtencionRepository implements IAtencionRepository {
     `);
 
     const rows = result.recordset;
-    return rows.length > 0 ? mapRow(rows[0]) : null;
+    if (rows.length === 0) return null;
+
+    const row = rows[0];
+    let detalle = mapRow(row);
+
+    // Fallback: if the current order has no images, look for the most
+    // recent order from the same patient that does.
+    if (detalle.rutaFirma === null && detalle.rutaHuella === null) {
+      const fb = await pool
+        .request()
+        .input('codPac', mssql.Int, row.CodPac)
+        .query<{ UbiFir: string | null; UbiHue: string | null }>(`
+          SELECT TOP 1 OI.UbiFir, OI.UbiHue
+          FROM OrdenImg OI
+          INNER JOIN Orden O2 ON O2.CodEmp = OI.CodEmp
+            AND O2.CodSed = OI.CodSed
+            AND O2.CodTCl = OI.CodTCl
+            AND O2.NumOrd = OI.NumOrd
+          WHERE O2.CodPac = @codPac
+            AND (OI.UbiFir IS NOT NULL OR OI.UbiHue IS NOT NULL)
+          ORDER BY O2.FecAte DESC
+        `);
+
+      if (fb.recordset.length > 0) {
+        detalle = {
+          ...detalle,
+          rutaFirma: mapRawPath(fb.recordset[0].UbiFir),
+          rutaHuella: mapRawPath(fb.recordset[0].UbiHue),
+        };
+      }
+    }
+
+    return detalle;
   }
 }
 
@@ -79,6 +119,28 @@ interface AtencionDetalleRow {
   tipoExamen: string;
   puesto: string;
   area: string;
+  CodPac: number;
+  UbiFir: string | null;
+  UbiHue: string | null;
+}
+
+/**
+ * Replace the UNC root in a raw SIGLA path with the platform-specific
+ * `FILE_SERVER_BASE_PATH`. The raw paths come as
+ * `\\STORAGE\SIGLA\...` and need to map to the actual mount/share
+ * used by the current environment:
+ *   - Windows: `\\172.16.10.12\sigla\...`
+ *   - Linux:   `/mnt/sigla/...`
+ */
+function mapRawPath(raw: string | null): string | null {
+  if (!raw) return null;
+  // Replace the UNC root \\SERVER\SIGLA with the platform-specific base path.
+  // On Windows it stays as \\172.16.10.12\sigla\... (native UNC support).
+  // On Linux it becomes /mnt/sigla/... (forward slashes, SMB mount).
+  const withBase = raw.replace(/^\\\\[^\\]+\\SIGLA/i, FILE_SERVER_BASE_PATH);
+  return FILE_SERVER_BASE_PATH.includes('\\')
+    ? withBase
+    : withBase.replace(/\\/g, '/');
 }
 
 function mapRow(row: AtencionDetalleRow): AtencionDetalle {
@@ -94,5 +156,7 @@ function mapRow(row: AtencionDetalleRow): AtencionDetalle {
     tipoExamen: String(row.tipoExamen ?? ''),
     puesto: String(row.puesto ?? ''),
     area: String(row.area ?? ''),
+    rutaFirma: mapRawPath(row.UbiFir),
+    rutaHuella: mapRawPath(row.UbiHue),
   };
 }

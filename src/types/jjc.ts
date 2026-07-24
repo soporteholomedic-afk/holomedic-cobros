@@ -33,6 +33,10 @@ export interface AtencionDetalle {
   tipoExamen: string;
   puesto: string;
   area: string;           // Área from Servicio
+  /** Absolute filesystem path to the patient's signature JPG (or null). */
+  rutaFirma: string | null;
+  /** Absolute filesystem path to the patient's fingerprint JPG (or null). */
+  rutaHuella: string | null;
 }
 
 /** Si/No answer type for the dermatology questionnaire. */

@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import fs from 'fs';
 import path from 'path';
 import { PDFDocument } from 'pdf-lib';
-import type { PDFFont } from 'pdf-lib';
+import type { PDFFont, PDFForm } from 'pdf-lib';
 import fontkit from '@pdf-lib/fontkit';
 import {
   buildGetAtencionDetalle,
@@ -29,6 +29,77 @@ async function loadAndEmbedTahomaFont(
       err,
     });
     return undefined;
+  }
+}
+
+interface ImgSlot {
+  name: string;
+  path: string | null;
+  /** Saved widget rectangle — read before flatten. */
+  rect?: { x: number; y: number; width: number; height: number };
+  /** Page index where this widget lives (0-based). */
+  pageIndex?: number;
+}
+
+/**
+ * Read image paths from `atencion`, capture their widget positions from the
+ * PDF acroform BEFORE flatten, then draw the JPG images onto the page content
+ * AFTER flatten so no generated button appearance covers them.
+ *
+ * Absent paths, missing widgets, and read failures are all swallowed — the
+ * PDF is generated without the image.
+ */
+export async function embedPatientImages(
+  pdfDoc: PDFDocument,
+  form: PDFForm,
+  rutaFirma: string | null,
+  rutaHuella: string | null,
+): Promise<void> {
+  const slots: ImgSlot[] = [
+    { name: 'img_firma', path: rutaFirma },
+    { name: 'img_huella', path: rutaHuella },
+  ];
+
+  // Build page-ref → page-index map so we can resolve widget.P() to an index
+  const pages = pdfDoc.getPages();
+  const pageRefToIndex = new Map<string, number>();
+  for (let i = 0; i < pages.length; i++) {
+    pageRefToIndex.set(pages[i].ref.toString(), i);
+  }
+
+  for (const slot of slots) {
+    if (!slot.path) continue;
+    try {
+      const button = form.getButton(slot.name);
+      const widget = button.acroField.getWidgets()[0];
+      slot.rect = widget.getRectangle();
+      const widgetPageRef = widget.P();
+      if (widgetPageRef) {
+        slot.pageIndex = pageRefToIndex.get(widgetPageRef.toString());
+      }
+    } catch {
+      // Button doesn't exist in this template — skip silently
+    }
+  }
+
+  // Flatten form (removes all widget annotations & generates appearances)
+  form.flatten();
+
+  // Now draw images over the flattened page — no widget annotation can cover them
+  for (const slot of slots) {
+    if (!slot.path || !slot.rect || slot.pageIndex === undefined) continue;
+    try {
+      const jpgBytes = fs.readFileSync(slot.path);
+      const img = await pdfDoc.embedJpg(jpgBytes);
+      pdfDoc.getPage(slot.pageIndex).drawImage(img, {
+        x: slot.rect.x,
+        y: slot.rect.y,
+        width: slot.rect.width,
+        height: slot.rect.height,
+      });
+    } catch {
+      // File not found or unreadable — skip silently
+    }
   }
 }
 
@@ -148,8 +219,10 @@ export async function GET(
       }
     }
 
-    // Flatten form to prevent editing
-    form.flatten();
+    // 5. Embed patient signature and fingerprint images (captures rects,
+    //    flattens, then draws — so no generated button appearance covers them)
+    await embedPatientImages(pdfDoc, form, atencion.rutaFirma, atencion.rutaHuella);
+    // (form.flatten() is now called inside embedPatientImages)
 
     const pdfBytes = await pdfDoc.save();
 
