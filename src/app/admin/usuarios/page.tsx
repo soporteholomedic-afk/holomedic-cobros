@@ -32,7 +32,6 @@ export default function UsuariosPage() {
   useEffect(() => {
     if (authLoading) return;
     if (!user?.permisos.includes('admin')) {
-      setLoading(false);
       return;
     }
     let cancelled = false;
