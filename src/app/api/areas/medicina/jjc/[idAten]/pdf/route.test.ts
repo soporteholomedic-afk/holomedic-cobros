@@ -33,6 +33,7 @@ const TEXT_FIELDS = [
   'txt_fecha_examen',
   'txt_lugar',
   'txt_tipo_fototipo',
+  'txt_fotoprotector',
   'txt_fecha',
   'txt_count_lunar',
   'txt_count_mancha',
@@ -168,6 +169,7 @@ const sampleEval: JjcEvaluacion = {
   fechaEvaluacion: '2026-07-21',
   lugar: 'HOLOMEDIC',
   fototipo: 'III-IV',
+  fotoprotector: 'FPS recomendado +65',
   observaciones: 'Paciente en buen estado general.',
   lesiones: [
     { id: 'p1', type: 'L', x: 0.3, y: 0.5 },
@@ -274,6 +276,7 @@ describe('GET /api/areas/medicina/jjc/[idAten]/pdf — real template integration
     const fullEval: JjcEvaluacion = {
       ...sampleEval,
       observaciones: 'Paciente con antecedentes de dermatitis. Control en 6 meses.',
+      fotoprotector: 'FPS recomendado +90',
       lesiones: [
         { id: 'p1', type: 'L', x: 0.3, y: 0.5 },
         { id: 'p2', type: 'L', x: 0.5, y: 0.3 },

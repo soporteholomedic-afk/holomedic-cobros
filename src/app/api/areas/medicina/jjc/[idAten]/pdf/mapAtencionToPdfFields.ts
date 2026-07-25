@@ -86,6 +86,7 @@ export function mapAtencionToPdfFields(
   if (!evaluacion) {
     // No evaluation — fill zeros for counts
     text.txt_tipo_fototipo = '';
+    text.txt_fotoprotector = '';
     text.txt_fecha = '';
     text.txt_count_lunar = '0';
     text.txt_count_mancha = '0';
@@ -98,6 +99,7 @@ export function mapAtencionToPdfFields(
   }
 
   text.txt_tipo_fototipo = evaluacion.fototipo ?? '';
+  text.txt_fotoprotector = evaluacion.fotoprotector ?? '';
   text.txt_fecha = evaluacion.fechaEvaluacion ?? '';
 
   // Lesion counts

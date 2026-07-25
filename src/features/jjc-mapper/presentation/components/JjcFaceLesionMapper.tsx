@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
-import type { AtencionDetalle, JjcEvaluacion, Fototipo, CuestionarioPiel } from '@/types/jjc';
+import type { AtencionDetalle, JjcEvaluacion, Fototipo, Fotoprotector, CuestionarioPiel } from '@/types/jjc';
 import type { LesionPoint } from '@/types/jjc';
 import { useJjcEvaluacion } from '@/features/jjc-mapper/presentation/hooks/useJjcEvaluacion';
 import type { FormTab } from './JjcFormTabs';
@@ -21,6 +21,7 @@ export function JjcFaceLesionMapper({ atencion }: JjcFaceLesionMapperProps) {
     counters,
     setFecha,
     setFototipo,
+    setFotoprotector,
     setObservaciones,
     setActiveTool,
     addPoint,
@@ -55,7 +56,7 @@ export function JjcFaceLesionMapper({ atencion }: JjcFaceLesionMapperProps) {
         if (res.status === 200) {
           const body: { data: JjcEvaluacion } = await res.json();
           if (cancelled) return;
-          populateFromEvaluation(body.data, reset, setFecha, setFototipo, setObservaciones, addPoint, setPreguntas);
+          populateFromEvaluation(body.data, reset, setFecha, setFototipo, setFotoprotector, setObservaciones, addPoint, setPreguntas);
         }
         // 404 = no saved evaluation yet — keep default empty state
       } catch {
@@ -88,6 +89,7 @@ export function JjcFaceLesionMapper({ atencion }: JjcFaceLesionMapperProps) {
           idAtencion,
           fechaEvaluacion: state.form.fechaEvaluacion,
           fototipo: state.form.fototipo,
+          fotoprotector: state.form.fotoprotector,
           observaciones: state.form.observaciones,
           lesiones: state.points,
           preguntas: state.preguntas,
@@ -137,6 +139,7 @@ export function JjcFaceLesionMapper({ atencion }: JjcFaceLesionMapperProps) {
             preguntas={state.preguntas}
             activeTab={activeTab}
             onFototipoChange={setFototipo}
+            onFotoprotectorChange={setFotoprotector}
             onFechaChange={setFecha}
             onObservacionesChange={setObservaciones}
             onTabChange={setActiveTab}
@@ -165,6 +168,7 @@ function populateFromEvaluation(
   reset: () => void,
   setFecha: (f: string) => void,
   setFototipo: (f: Fototipo) => void,
+  setFotoprotector: (f: Fotoprotector) => void,
   setObservaciones: (t: string) => void,
   addPoint: (p: LesionPoint) => void,
   setPreguntas: (p: CuestionarioPiel) => void,
@@ -172,6 +176,7 @@ function populateFromEvaluation(
   reset();
   setFecha(evalData.fechaEvaluacion);
   setFototipo(evalData.fototipo);
+  setFotoprotector(evalData.fotoprotector);
   setObservaciones(evalData.observaciones);
   for (const p of evalData.lesiones) {
     addPoint(p);

@@ -87,6 +87,7 @@ describe('jjcReducer', () => {
         fechaEvaluacion: '2026-01-01',
         lugar: 'HOLOMEDIC',
         fototipo: 'V-VI',
+        fotoprotector: 'FPS recomendado +50',
         observaciones: 'test',
       },
       points: [{ id: 'p1', type: 'P', x: 0.5, y: 0.5 }],

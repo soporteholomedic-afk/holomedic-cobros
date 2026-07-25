@@ -1,4 +1,4 @@
-import type { LesionType, LesionPoint, Fototipo } from '@/types/jjc';
+import type { LesionType, LesionPoint, Fototipo, Fotoprotector } from '@/types/jjc';
 
 /**
  * Create a `LesionPoint` with coordinates clamped to [0, 1].
@@ -18,10 +18,31 @@ export function createLesionPoint(
 /** Accepted Fototipo values (validated subset). */
 export const FOTOTIPO_VALUES: readonly Fototipo[] = ['I-II', 'III-IV', 'V-VI'] as const;
 
+/** Accepted Fotoprotector values. */
+export const FOTOPROTECTOR_VALUES: readonly Fotoprotector[] = [
+  'FPS recomendado +90',
+  'FPS recomendado +65',
+  'FPS recomendado +50',
+] as const;
+
+export const FOTOPROTECTOR_POR_FOTOTIPO: Record<Fototipo, Fotoprotector> = {
+  'I-II': 'FPS recomendado +90',
+  'III-IV': 'FPS recomendado +65',
+  'V-VI': 'FPS recomendado +50',
+};
+
 /** Parse a string into a Fototipo; returns `null` for invalid values. */
 export function parseFototipo(value: string): Fototipo | null {
   if ((FOTOTIPO_VALUES as readonly string[]).includes(value)) {
     return value as Fototipo;
+  }
+  return null;
+}
+
+/** Parse a string into a Fotoprotector; returns `null` for invalid values. */
+export function parseFotoprotector(value: string): Fotoprotector | null {
+  if ((FOTOPROTECTOR_VALUES as readonly string[]).includes(value)) {
+    return value as Fotoprotector;
   }
   return null;
 }

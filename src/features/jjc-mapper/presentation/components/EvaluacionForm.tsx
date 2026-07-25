@@ -1,6 +1,6 @@
 'use client';
 
-import type { AtencionDetalle, Fototipo, LesionType, CuestionarioPiel, SiNo } from '@/types/jjc';
+import type { AtencionDetalle, Fototipo, Fotoprotector, LesionType, CuestionarioPiel, SiNo } from '@/types/jjc';
 import type { JjcFormState, PreguntaSeccion1 } from '@/features/jjc-mapper/presentation/hooks/useJjcEvaluacion';
 import type { FormTab } from './JjcFormTabs';
 import { PatientSummaryFields } from './PatientSummaryFields';
@@ -16,6 +16,7 @@ interface EvaluacionFormProps {
   preguntas: CuestionarioPiel;
   activeTab: FormTab;
   onFototipoChange: (f: Fototipo) => void;
+  onFotoprotectorChange: (f: Fotoprotector) => void;
   onFechaChange: (fecha: string) => void;
   onObservacionesChange: (text: string) => void;
   onTabChange: (tab: FormTab) => void;
@@ -37,6 +38,7 @@ export function EvaluacionForm({
   preguntas,
   activeTab,
   onFototipoChange,
+  onFotoprotectorChange,
   onFechaChange,
   onObservacionesChange,
   onTabChange,
@@ -107,6 +109,28 @@ export function EvaluacionForm({
                     value={form.fototipo}
                     onChange={onFototipoChange}
                   />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                    Fotoprotector a usar:
+                  </label>
+                  <div className="flex flex-wrap gap-2">
+                    {(['FPS recomendado +90', 'FPS recomendado +65', 'FPS recomendado +50'] as const).map((opt) => (
+                      <button
+                        key={opt}
+                        type="button"
+                        onClick={() => onFotoprotectorChange(opt)}
+                        className={`px-3 py-2 rounded-lg border text-sm font-medium transition-colors ${
+                          form.fotoprotector === opt
+                            ? 'border-sky-500 bg-sky-50 text-sky-700'
+                            : 'border-slate-200 text-slate-600 hover:border-slate-300'
+                        }`}
+                      >
+                        {opt.replace('FPS recomendado ', 'FPS ')}
+                      </button>
+                    ))}
+                  </div>
                 </div>
 
                 <div className="space-y-1">

@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { buildSaveJjcEvaluacion, buildLoadJjcEvaluacion } from '@/features/jjc-mapper/composition/container';
-import type { Fototipo, CuestionarioPiel } from '@/types/jjc';
+import type { Fototipo, Fotoprotector, CuestionarioPiel } from '@/types/jjc';
 import { getSession } from '@/lib/auth';
 
 /**
@@ -23,6 +23,7 @@ export async function POST(request: Request): Promise<NextResponse> {
     const idAtencion = typeof body.idAtencion === 'string' ? body.idAtencion : '';
     const fechaEvaluacion = typeof body.fechaEvaluacion === 'string' ? body.fechaEvaluacion : '';
     const fototipo = typeof body.fototipo === 'string' ? (body.fototipo as Fototipo) : undefined;
+    const fotoprotector = typeof body.fotoprotector === 'string' ? (body.fotoprotector as Fotoprotector) : null;
     const observaciones = typeof body.observaciones === 'string' ? body.observaciones : '';
     const lesiones = Array.isArray(body.lesiones) ? body.lesiones : [];
     const preguntas = body.preguntas != null && typeof body.preguntas === 'object'
@@ -36,6 +37,7 @@ export async function POST(request: Request): Promise<NextResponse> {
       idAtencion,
       fechaEvaluacion,
       fototipo: fototipo as Fototipo,
+      fotoprotector: fotoprotector ?? undefined,
       observaciones,
       lesiones,
       preguntas,

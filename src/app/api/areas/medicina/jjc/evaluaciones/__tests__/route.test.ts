@@ -49,6 +49,7 @@ const sampleEval: JjcEvaluacion = {
   fechaEvaluacion: '2026-07-20',
   lugar: 'HOLOMEDIC',
   fototipo: 'III-IV',
+  fotoprotector: 'FPS recomendado +65',
   observaciones: '',
   lesiones: [],
   preguntas: null,

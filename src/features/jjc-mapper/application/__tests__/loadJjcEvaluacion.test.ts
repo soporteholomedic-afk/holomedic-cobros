@@ -38,6 +38,7 @@ describe('LoadJjcEvaluacionUseCase', () => {
       fechaEvaluacion: '2026-07-20',
       lugar: 'HOLOMEDIC',
       fototipo: 'III-IV',
+      fotoprotector: 'FPS recomendado +65',
       observaciones: 'Sin novedad',
       lesiones: [{ id: 'p1', type: 'P', x: 0.5, y: 0.3 }],
       preguntas: null,

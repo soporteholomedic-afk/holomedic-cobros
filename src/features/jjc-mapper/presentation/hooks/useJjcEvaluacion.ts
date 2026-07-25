@@ -1,8 +1,8 @@
 'use client';
 
 import { useReducer, useMemo, useCallback } from 'react';
-import type { LesionType, Fototipo, LesionPoint, SiNo, CuestionarioPiel, PreguntaBase, PreguntaConFecha } from '@/types/jjc';
-import { FOTOTIPO_VALUES } from '@/features/jjc-mapper/domain/entities';
+import type { LesionType, Fototipo, Fotoprotector, LesionPoint, SiNo, CuestionarioPiel, PreguntaBase, PreguntaConFecha } from '@/types/jjc';
+import { FOTOTIPO_VALUES, FOTOPROTECTOR_POR_FOTOTIPO, FOTOPROTECTOR_VALUES } from '@/features/jjc-mapper/domain/entities';
 
 // ---- Types ----
 
@@ -12,6 +12,7 @@ export interface JjcFormState {
   fechaEvaluacion: string;       // YYYY-MM-DD
   lugar: 'HOLOMEDIC';             // always locked
   fototipo: Fototipo | null;
+  fotoprotector: Fotoprotector | null;
   observaciones: string;         // ≤ 500
 }
 
@@ -27,6 +28,7 @@ export interface JjcEvaluacionState {
 export type JjcEvaluacionAction =
   | { type: 'SET_FECHA'; fecha: string }
   | { type: 'SET_FOTOTIPO'; fototipo: Fototipo }
+  | { type: 'SET_FOTOPROTECTOR'; fotoprotector: Fotoprotector }
   | { type: 'SET_OBSERVACIONES'; text: string }
   | { type: 'SET_ACTIVE_TOOL'; tool: ActiveTool }
   | { type: 'ADD_POINT'; point: LesionPoint }
@@ -76,6 +78,7 @@ export function initialJjcState(): JjcEvaluacionState {
       fechaEvaluacion: todayStr(),
       lugar: 'HOLOMEDIC',
       fototipo: null,
+      fotoprotector: null,
       observaciones: '',
     },
     points: [],
@@ -99,7 +102,13 @@ export function jjcReducer(
 
     case 'SET_FOTOTIPO': {
       if (!(FOTOTIPO_VALUES as readonly string[]).includes(action.fototipo)) return state;
-      return { ...state, form: { ...state.form, fototipo: action.fototipo } };
+      const fotoprotector = FOTOPROTECTOR_POR_FOTOTIPO[action.fototipo];
+      return { ...state, form: { ...state.form, fototipo: action.fototipo, fotoprotector } };
+    }
+
+    case 'SET_FOTOPROTECTOR': {
+      if (!(FOTOPROTECTOR_VALUES as readonly string[]).includes(action.fotoprotector)) return state;
+      return { ...state, form: { ...state.form, fotoprotector: action.fotoprotector } };
     }
 
     case 'SET_OBSERVACIONES': {
@@ -206,6 +215,7 @@ export interface UseJjcEvaluacionResult {
   counters: Record<LesionType, number>;
   setFecha: (fecha: string) => void;
   setFototipo: (fototipo: Fototipo) => void;
+  setFotoprotector: (fotoprotector: Fotoprotector) => void;
   setObservaciones: (text: string) => void;
   setActiveTool: (tool: ActiveTool) => void;
   addPoint: (point: LesionPoint) => void;
@@ -231,6 +241,7 @@ export function useJjcEvaluacion(
 
   const setFecha = useCallback((fecha: string) => dispatch({ type: 'SET_FECHA', fecha }), []);
   const setFototipo = useCallback((fototipo: Fototipo) => dispatch({ type: 'SET_FOTOTIPO', fototipo }), []);
+  const setFotoprotector = useCallback((fotoprotector: Fotoprotector) => dispatch({ type: 'SET_FOTOPROTECTOR', fotoprotector }), []);
   const setObservaciones = useCallback((text: string) => dispatch({ type: 'SET_OBSERVACIONES', text }), []);
   const setActiveTool = useCallback((tool: ActiveTool) => dispatch({ type: 'SET_ACTIVE_TOOL', tool }), []);
   const addPoint = useCallback((point: LesionPoint) => dispatch({ type: 'ADD_POINT', point }), []);
@@ -248,6 +259,7 @@ export function useJjcEvaluacion(
     counters,
     setFecha,
     setFototipo,
+    setFotoprotector,
     setObservaciones,
     setActiveTool,
     addPoint,

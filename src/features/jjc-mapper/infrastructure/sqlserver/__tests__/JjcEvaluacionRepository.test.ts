@@ -8,6 +8,7 @@ interface FakeRow {
   fechaEvaluacion: string;
   lugar: string;
   fototipo: string;
+  fotoprotector: string | null;
   observaciones: string | null;
   lesionesJson: string;
   preguntasJson: string | null;
@@ -36,6 +37,7 @@ function makeFakeRequest() {
               : String(ctx.fechaEvaluacion),
           lugar: ctx.lugar as string,
           fototipo: ctx.fototipo as string,
+          fotoprotector: (ctx.fotoprotector as string) ?? null,
           observaciones: (ctx.observaciones as string) || null,
           lesionesJson: ctx.lesionesJson as string,
           preguntasJson: (ctx.preguntasJson as string) || null,
@@ -56,6 +58,7 @@ function makeFakeRequest() {
               fechaEvaluacion: new Date(row.fechaEvaluacion),
               lugar: row.lugar,
               fototipo: row.fototipo,
+              fotoprotector: row.fotoprotector,
               observaciones: row.observaciones,
               lesionesJson: row.lesionesJson,
               preguntasJson: row.preguntasJson,
@@ -89,6 +92,7 @@ const sampleEval: JjcEvaluacion = {
   fechaEvaluacion: '2026-07-20',
   lugar: 'HOLOMEDIC',
   fototipo: 'III-IV',
+  fotoprotector: 'FPS recomendado +65',
   observaciones: 'Paciente con pecas en mejillas',
   lesiones: [
     { id: 'p1', type: 'P', x: 0.5, y: 0.3 },

@@ -67,12 +67,19 @@ export interface CuestionarioPiel {
   evaluacionDermatologo: SiNo | null;
 }
 
+/** FPS recommendation based on Fototipo Fitzpatrick. */
+export type Fotoprotector =
+  | 'FPS recomendado +90'
+  | 'FPS recomendado +65'
+  | 'FPS recomendado +50';
+
 /** Full evaluation payload (PR3 persists this). */
 export interface JjcEvaluacion {
   idAtencion: string;
   fechaEvaluacion: string;   // YYYY-MM-DD
   lugar: 'HOLOMEDIC';
   fototipo: Fototipo;
+  fotoprotector: Fotoprotector;
   observaciones: string;     // ≤ 500
   lesiones: LesionPoint[];
   preguntas: CuestionarioPiel | null;

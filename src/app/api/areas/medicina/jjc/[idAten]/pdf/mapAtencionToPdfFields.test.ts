@@ -14,6 +14,8 @@ const fullAtencion: AtencionDetalle = {
   tipoExamen: 'Pre-Ocupacional',
   puesto: 'Ingeniero',
   area: 'Producción',
+  rutaFirma: null,
+  rutaHuella: null,
 };
 
 describe('mapAtencionToPdfFields', () => {
@@ -23,6 +25,7 @@ describe('mapAtencionToPdfFields', () => {
       fechaEvaluacion: '2026-07-21',
       lugar: 'HOLOMEDIC',
       fototipo: 'III-IV',
+      fotoprotector: 'FPS recomendado +65',
       observaciones: 'Paciente presenta lesión en brazo izquierdo.',
       lesiones: [
         { id: 'p1', type: 'L', x: 0.3, y: 0.5 },
@@ -62,6 +65,9 @@ describe('mapAtencionToPdfFields', () => {
 
     // Fototipo
     expect(result.text.txt_tipo_fototipo).toBe('III-IV');
+
+    // Fotoprotector
+    expect(result.text.txt_fotoprotector).toBe('FPS recomendado +65');
 
     // Checkboxes — sufreEnfermedadesPiel = si
     expect(result.checks.cbk_1_si).toBe(true);
@@ -107,6 +113,7 @@ describe('mapAtencionToPdfFields', () => {
 
     // No evaluation-dependent fields
     expect(result.text.txt_tipo_fototipo).toBe('');
+    expect(result.text.txt_fotoprotector).toBe('');
     expect(result.text.txt_count_lunar).toBe('0');
     expect(result.text.txt_count_mancha).toBe('0');
     expect(result.text.txt_count_peca).toBe('0');
@@ -139,6 +146,7 @@ describe('mapAtencionToPdfFields', () => {
       fechaEvaluacion: '2026-07-21',
       lugar: 'HOLOMEDIC',
       fototipo: 'I-II',
+      fotoprotector: 'FPS recomendado +90',
       observaciones: 'Todo normal',
       lesiones: [],
       preguntas: null,
@@ -149,6 +157,7 @@ describe('mapAtencionToPdfFields', () => {
 
     // Fototipo and observaciones still work
     expect(result.text.txt_tipo_fototipo).toBe('I-II');
+    expect(result.text.txt_fotoprotector).toBe('FPS recomendado +90');
     expect(result.chunks.Observaciones).toEqual(['Todo normal']);
 
     // No checkboxes set
@@ -170,6 +179,7 @@ describe('mapAtencionToPdfFields', () => {
       fechaEvaluacion: '2026-07-21',
       lugar: 'HOLOMEDIC',
       fototipo: 'V-VI',
+      fotoprotector: 'FPS recomendado +50',
       observaciones: longObs,
       lesiones: [],
       preguntas: {
@@ -220,6 +230,7 @@ describe('mapAtencionToPdfFields', () => {
       fechaEvaluacion: '2026-07-21',
       lugar: 'HOLOMEDIC',
       fototipo: 'I-II',
+      fotoprotector: 'FPS recomendado +90',
       observaciones: '',
       lesiones: [],
       preguntas: {
@@ -259,6 +270,7 @@ describe('mapAtencionToPdfFields', () => {
       fechaEvaluacion: '2026-07-21',
       lugar: 'HOLOMEDIC',
       fototipo: 'III-IV',
+      fotoprotector: 'FPS recomendado +65',
       observaciones: '',
       lesiones: [],
       preguntas: {
