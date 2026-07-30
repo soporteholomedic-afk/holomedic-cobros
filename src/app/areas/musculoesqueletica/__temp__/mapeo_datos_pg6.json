@@ -1,0 +1,61 @@
+{
+  "evaluacionClinicaOsteomuscular": {
+    "miembrosSuperiores": {
+      "codo": {
+        "palpacionEpicondileoEpitroclear": {
+          "dolorMusculoEpicondileo": { "dx": false, "ix": false },
+          "dolorMusculoEpitroclear": { "dx": false, "ix": false }
+        },
+        "testEpicondilitis": {
+          "presenciaDolorLateralCodo": { "dx": false, "ix": false }
+        },
+        "testAtrapamientoNervioUlnar": {
+          "parestesiasIrradianAntebrazoODedos": { "dx": false, "ix": false }
+        },
+        "examenInstrumental": {
+          "noRealizado": false,
+          "ecografiaAno": null,
+          "rxAno": null,
+          "emgAno": null
+        },
+        "gravedadPatologiaCodo": null
+      },
+      "munecaMano": {
+        "realizaManiobras": false,
+        "molestiaMunecaDxDesdeMeses": null,
+        "molestiaMunecaIxDesdeMeses": null,
+        "observacionManoMuneca": {
+          "quisteDorsal": { "dx": false, "ix": false },
+          "quisteVentral": { "dx": false, "ix": false },
+          "edemaVentralEstiloideRadial": { "dx": false, "ix": false },
+          "edemaDorsalEstiloideUlnar": { "dx": false, "ix": false },
+          "hipotrofiaPosterior": { "dx": false, "ix": false },
+          "deformidadArticularTrapecioMetacarpal": { "dx": false, "ix": false },
+          "retaccionesPalmares": { "dx": false, "ix": false }
+        },
+        "palpacion": {
+          "dolorArticulacionTrapecioMetacarpal": { "dx": false, "ix": false },
+          "dolorEstiloideRadial": { "dx": false, "ix": false }
+        },
+        "maniobraClicDedosGatillo": {
+          "clicExtensionDedos": {
+            "dx": {
+              "dedo1": false,
+              "dedo2": false,
+              "dedo3": false,
+              "dedo4": false,
+              "dedo5": false
+            },
+            "ix": {
+              "dedo1": false,
+              "dedo2": false,
+              "dedo3": false,
+              "dedo4": false,
+              "dedo5": false
+            }
+          }
+        }
+      }
+    }
+  }
+}

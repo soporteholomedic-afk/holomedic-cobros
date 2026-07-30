@@ -1,0 +1,96 @@
+{
+  "datosGenerales": {
+    "fechaEntrevista": "2026-07-27",
+    "empresa": "",
+    "area": "",
+    "nombreApellidos": "",
+    "fechaNacimiento": "",
+    "edad": null,
+    "sexo": "",
+    "antiguedadEmpresa": "",
+    "antiguedadPuesto": "",
+    "miembroDominante": {
+      "dx": false,
+      "ix": false
+    },
+    "tipoExamen": {
+      "ingreso": false,
+      "periodico": false,
+      "retiro": false,
+      "otro": false
+    }
+  },
+  "miembrosSuperiores": {
+    "hombro": {
+      "tieneDolor": false,
+      "inicioMolestia": "",
+      "infoReportada": {
+        "haTomadoMedicamentos": false,
+        "fisioterapia": false,
+        "visitaOrtopedistaFisiatra": false,
+        "rx": false,
+        "ecografiaResonancia": false
+      },
+      "sintomas": {
+        "dolorMovimiento": { "dx": false, "ix": false },
+        "dolorReposo": { "dx": false, "ix": false },
+        "umbralPositivo": {
+          "dolorContinuo": { "dx": false, "ix": false },
+          "unaSemanaDolor12Meses": { "dx": false, "ix": false },
+          "unaVezMes12Meses": { "dx": false, "ix": false }
+        },
+        "molestiasLeves": { "dx": false, "ix": false }
+      }
+    },
+    "codo": {
+      "tieneDolor": false,
+      "inicioMolestia": "",
+      "infoReportada": {
+        "haTomadoMedicamentos": false,
+        "fisioterapia": false,
+        "visitaOrtopedistaFisiatra": false,
+        "rx": false,
+        "ecografiaResonancia": false,
+        "emg": false
+      },
+      "sintomas": {
+        "dolorAgarrarSoportarPeso": { "dx": false, "ix": false },
+        "dolorReposo": { "dx": false, "ix": false },
+        "umbralPositivo": {
+          "dolorContinuo": { "dx": false, "ix": false },
+          "unaSemanaDolor12Meses": { "dx": false, "ix": false },
+          "unaVezMes12Meses": { "dx": false, "ix": false }
+        },
+        "molestiasLeves": { "dx": false, "ix": false }
+      }
+    },
+    "manoMuneca": {
+      "tieneDolor": false,
+      "inicioMolestia": "",
+      "areaDistribucionAnotaciones": "",
+      "infoReportada": {
+        "haTomadoMedicamentos": false,
+        "fisioterapia": false,
+        "visitaOrtopedistaFisiatra": false,
+        "rx": false,
+        "ecografiaResonancia": false,
+        "emg": false
+      },
+      "sintomas": {
+        "dolorAgarrarPresionar": { "dx": false, "ix": false },
+        "dolorMovimiento": { "dx": false, "ix": false },
+        "dolorReposo": { "dx": false, "ix": false },
+        "dolorUnDedo": { "dx": false, "ix": false },
+        "dolorTresDedos": { "dx": false, "ix": false },
+        "dolorPalma": { "dx": false, "ix": false },
+        "dolorDorso": { "dx": false, "ix": false },
+        "umbralPositivo": {
+          "dolorContinuo": { "dx": false, "ix": false },
+          "unaSemanaDolor12Meses": { "dx": false, "ix": false },
+          "unaVezMes12Meses": { "dx": false, "ix": false }
+        },
+        "molestiasLeves": { "dx": false, "ix": false }
+      }
+    }
+  }
+}

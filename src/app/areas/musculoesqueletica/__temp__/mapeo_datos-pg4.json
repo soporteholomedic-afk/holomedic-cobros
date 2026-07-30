@@ -1,0 +1,38 @@
+{
+  "lumbalgiaAguda": {
+    "tieneLumbalgiaAguda": false,
+    "totalEpisodiosAgudos": null,
+    "episodiosUltimoAno": {
+      "lumbalgia": {
+        "aplica": false,
+        "cantidad": null
+      },
+      "lumbociatalgia": {
+        "aplica": false,
+        "cantidad": null
+      }
+    },
+    "anoPrimerEpisodio": "",
+    "diasAusenciaTrabajo": null
+  },
+
+  "diagnosticoPatologiaColumna": {
+    "tieneDiagnosticoConocido": false,
+    "herniaDiscoLumboSacra": {
+      "diagnosticada": false,
+      "tratadaQuirurgicamente": false,
+      "cuando": "",
+      "fechaIntervencion": ""
+    },
+    "patologiaTraumaCervical": "",
+    "patologiaTraumaDorsal": "",
+    "patologiaTraumaLumbosacra": ""
+  },
+
+  "medicoEvaluador": {
+    "nombreYApellidos": "",
+    "firmaSello": "",
+    "colegiaturaOCargo": "",
+    "fechaEvaluacion": ""
+  }
+}

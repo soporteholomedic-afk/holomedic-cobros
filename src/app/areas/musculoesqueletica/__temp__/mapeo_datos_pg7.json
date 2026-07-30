@@ -1,0 +1,68 @@
+{
+  "evaluacionClinicaOsteomuscular": {
+    "miembrosSuperiores": {
+      "munecaMano": {
+        "finkelstein": {
+          "dolorTabaqueraAnatomica": { "dx": false, "ix": false }
+        },
+        "flexoExtensionMuneca": {
+          "dolorFlexionContraResistencia": { "dx": false, "ix": false },
+          "dolorFlexionPasiva": { "dx": false, "ix": false },
+          "dolorExtensionContraResistencia": { "dx": false, "ix": false },
+          "dolorExtensionPasiva": { "dx": false, "ix": false }
+        }
+      },
+      "sintomatologiaParestesica": {
+        "realizaManiobras": false,
+        "molestiaParestesicaMunecaDxDesdeMeses": null,
+        "molestiaParestesicaMunecaIxDesdeMeses": null,
+        "regionProximal": {
+          "dolorPresionPalpacion": {
+            "apofisisEspinosa": false,
+            "mTrapecioSuperior": false,
+            "mParavertebral": false
+          },
+          "dolorMovimiento": {
+            "flexion": false,
+            "extension": false,
+            "inclinacionDerecha": false,
+            "inclinacionIzquierda": false,
+            "rotacionDerecha": false,
+            "rotacionIzquierda": false
+          },
+          "testFatiga": {
+            "parestesia": { "dx": false, "ix": false }
+          },
+          "testCandelero": {
+            "parestesia": { "dx": false, "ix": false }
+          }
+        },
+        "regionDistal": {
+          "testPhalen": {
+            "parestesia": {
+              "nervioMediano": { "dx": false, "ix": false },
+              "nervioUlnar": { "dx": false, "ix": false },
+              "noTerritorializada": { "dx": false, "ix": false }
+            }
+          },
+          "testPresion": {
+            "parestesia": {
+              "nervioMediano": { "dx": false, "ix": false },
+              "nervioUlnar": { "dx": false, "ix": false },
+              "noTerritorializada": { "dx": false, "ix": false }
+            }
+          }
+        },
+        "examenInstrumental": {
+          "noRealizado": false,
+          "ecografiaAno": null,
+          "rxAno": null,
+          "rmnAno": null,
+          "emgAno": null
+        },
+        "gravedadPatologiaManoMuneca": null,
+        "aproximacionDiagnosticaEvaluacion": ""
+      }
+    }
+  }
+}

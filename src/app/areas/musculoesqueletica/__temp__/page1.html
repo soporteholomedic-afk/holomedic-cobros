@@ -1,0 +1,403 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Entrevista de Cuestionario Anamnésico Osteomuscular - Formulario Interactivo</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            font-family: Arial, Helvetica, sans-serif;
+            color: #000;
+        }
+        /* Estilos para que los inputs se integren perfectamente sin romper bordes */
+        input[type="text"], input[type="date"], input[type="number"], select {
+            background: transparent;
+            outline: none;
+        }
+        input[type="text"]:focus, input[type="date"]:focus, input[type="number"]:focus, select:focus {
+            background-color: #f0fdf4; /* Resaltado suave al enfocar */
+        }
+        /* Estilo uniforme para casillas de verificación */
+        input[type="checkbox"], input[type="radio"] {
+            cursor: pointer;
+            width: 13px;
+            height: 13px;
+            accent-color: #0070c0;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 py-6 text-[11px] leading-tight">
+
+    <!-- FORMULARIO CONTENEDOR PRINCIPAL -->
+    <form id="formAnamnesico" onsubmit="event.preventDefault();" class="max-w-[850px] mx-auto bg-white p-6 shadow-md border border-gray-300">
+
+        <!-- LOGO Y ENCABEZADO -->
+        <div class="flex items-center justify-between mb-2">
+            <div class="flex items-center">
+                <div class="flex flex-col">
+                    <span class="text-2xl font-black text-[#003366] tracking-tighter leading-none">JJC</span>
+                    <span class="text-[7px] text-gray-500 tracking-wider">INGENIERIA Y CONSTRUCCIÓN</span>
+                </div>
+                <div class="ml-2 flex items-center">
+                    <div class="w-0 h-0 border-y-[8px] border-y-transparent border-r-[12px] border-r-[#008080]"></div>
+                    <div class="w-0 h-0 border-y-[8px] border-y-transparent border-l-[12px] border-l-[#003366] -ml-1"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- TÍTULO AZUL -->
+        <div class="bg-[#0070c0] text-white font-bold text-center py-1.5 text-sm uppercase tracking-wide mb-3">
+            ENTREVISTA DE CUESTIONARIO ANAMNÉSICO OSTEMUSCULAR
+        </div>
+
+        <!-- FECHA DE ENTREVISTA -->
+        <div class="flex justify-center items-center mb-3 font-bold">
+            <label for="fechaEntrevista" class="mr-2">Fecha de entrevista</label>
+            <input type="date" id="fechaEntrevista" class="border-b border-black w-60 px-2 py-0.5 font-normal">
+        </div>
+
+        <!-- TABLA DATOS GENERALES -->
+        <table class="w-full border-collapse border border-black mb-3 text-[11px]">
+            <tbody>
+                <tr>
+                    <td class="border border-black p-1 w-1/2">
+                        <strong class="mr-1">Empresa:</strong>
+                        <input type="text" class="w-[80%] px-1" placeholder="Ingrese empresa">
+                    </td>
+                    <td class="border border-black p-1 w-1/2">
+                        <strong class="mr-1">Área:</strong>
+                        <input type="text" class="w-[85%] px-1" placeholder="Ingrese área">
+                    </td>
+                </tr>
+                <tr>
+                    <td colspan="2" class="border border-black p-1">
+                        <strong class="mr-1">Nombre y apellidos:</strong>
+                        <input type="text" class="w-[85%] px-1" placeholder="Nombre completo del trabajador">
+                    </td>
+                </tr>
+                <tr>
+                    <td class="border border-black p-1">
+                        <strong class="mr-1">Fecha de nacimiento:</strong>
+                        <input type="date" class="px-1">
+                    </td>
+                    <td class="border border-black p-1">
+                        <div class="flex items-center space-x-6">
+                            <div>
+                                <strong class="mr-1">Edad:</strong>
+                                <input type="number" class="w-12 border-b border-gray-400 text-center" min="18" max="99">
+                            </div>
+                            <div>
+                                <strong class="mr-1">Sexo:</strong>
+                                <select class="border-b border-gray-400 px-1">
+                                    <option value="">-</option>
+                                    <option value="M">M</option>
+                                    <option value="F">F</option>
+                                </select>
+                            </div>
+                        </div>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="border border-black p-1">
+                        <strong class="mr-1">Antigüedad en la empresa:</strong>
+                        <input type="text" class="w-[50%] px-1" placeholder="Ej. 2 años">
+                    </td>
+                    <td class="border border-black p-1">
+                        <strong class="mr-1">Antigüedad en el puesto:</strong>
+                        <input type="text" class="w-[50%] px-1" placeholder="Ej. 6 meses">
+                    </td>
+                </tr>
+                <tr>
+                    <td class="border border-black p-1">
+                        <strong>Miembro superior dominante:</strong>
+                        <span class="ml-2">
+                            <label class="cursor-pointer mr-2"><input type="checkbox" class="mr-0.5"> Dx</label>
+                            <label class="cursor-pointer"><input type="checkbox" class="mr-0.5"> Ix</label>
+                        </span>
+                    </td>
+                    <td class="border border-black p-1">
+                        <strong>Exam.</strong>
+                        <label class="cursor-pointer ml-1"><input type="checkbox"> Ingreso</label>
+                        <label class="cursor-pointer ml-1"><input type="checkbox"> Periódico</label>
+                        <label class="cursor-pointer ml-1"><input type="checkbox"> Retiro</label>
+                        <label class="cursor-pointer ml-1"><input type="checkbox"> Otro</label>
+                    </td>
+                </tr>
+            </tbody>
+        </table>
+
+        <!-- SECCIÓN I TÍTULO -->
+        <div class="font-bold text-[11px] mb-1">
+            I.- MIEMBROS SUPERIORES <span class="font-normal text-[10px]">(SINTOMATOLOGÍA DOLOROSA ARTICULAR E INDAGACIÓN POR SEGMENTO EN LOS ÚLTIMOS 12 MESES)</span>
+        </div>
+
+        <!-- ================= TABLA 1: HOMBRO ================= -->
+        <table class="w-full border-collapse border border-black mb-2 text-[11px]">
+            <colgroup>
+                <col class="w-[22%]">
+                <col class="w-[28%]">
+                <col class="w-[38%]">
+                <col class="w-[6%]">
+                <col class="w-[6%]">
+            </colgroup>
+            <thead>
+                <tr class="bg-[#d9e1f2]">
+                    <td colspan="2" class="border border-black p-1 font-bold text-[#b25900]">
+                        DOLOR EN EL HOMBRO
+                        <span class="text-black font-normal ml-3">
+                            <label class="cursor-pointer mr-2"><input type="radio" name="dolorHombro" value="NO" class="mr-0.5 align-middle">NO</label>
+                            <label class="cursor-pointer"><input type="radio" name="dolorHombro" value="SI" class="mr-0.5 align-middle">SI</label>
+                        </span>
+                    </td>
+                    <td class="border border-black p-1 text-[10px]">
+                        <strong>¿CUÁNDO SE INCIO LA MOLESTIA?:</strong>
+                        <input type="text" class="w-full border-b border-gray-400 mt-0.5 px-1 font-normal text-xs" placeholder="(años, meses, semanas o días)">
+                    </td>
+                    <td class="border border-black p-1 text-center font-bold">Dx</td>
+                    <td class="border border-black p-1 text-center font-bold">Ix</td>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td class="border border-black p-2 text-center align-middle" rowspan="4">
+                        <div class="flex justify-between font-bold px-2 text-[10px]">
+                            <span>Dx</span>
+                            <span>Ix</span>
+                        </div>
+                        <div class="h-28 flex items-center justify-center text-gray-400 italic text-[10px]">
+                            [Imagen Hombro]
+                        </div>
+                    </td>
+                    <td class="border border-black p-1 align-top space-y-1" rowspan="4">
+                        <div class="font-bold leading-snug">Información reportada sobre la molestia: <span class="font-normal">(marcar x)</span></div>
+                        <div><label class="cursor-pointer"><input type="checkbox" class="mr-1"> ha tomado medicamentos</label></div>
+                        <div class="font-bold mt-1">ha realizado: <span class="font-normal">(marcar x)</span></div>
+                        <div><label class="cursor-pointer"><input type="checkbox" class="mr-1"> fisioterapia</label></div>
+                        <div><label class="cursor-pointer"><input type="checkbox" class="mr-1"> visita al ortopedista / fisiatra</label></div>
+                        <div><label class="cursor-pointer"><input type="checkbox" class="mr-1"> RX</label></div>
+                        <div><label class="cursor-pointer"><input type="checkbox" class="mr-1"> ECOGRAFÍA / RESONANCIA</label></div>
+                    </td>
+                    <td class="border border-black p-1">Dolor al movimiento</td>
+                    <td class="border border-black p-1 text-center align-middle"><input type="checkbox"></td>
+                    <td class="border border-black p-1 text-center align-middle"><input type="checkbox"></td>
+                </tr>
+                <tr>
+                    <td class="border border-black p-1">Dolor en reposo</td>
+                    <td class="border border-black p-1 text-center align-middle"><input type="checkbox"></td>
+                    <td class="border border-black p-1 text-center align-middle"><input type="checkbox"></td>
+                </tr>
+                <tr>
+                    <td class="border border-black p-1 space-y-0.5">
+                        <div class="font-bold">UMBRAL POSITIVO <span class="font-normal">(marcar x)</span></div>
+                        <div><label class="cursor-pointer"><input type="checkbox" class="mr-1"> dolor continuo</label></div>
+                        <div><label class="cursor-pointer"><input type="checkbox" class="mr-1"> al menos 1 semana de dolor en los últimos 12 meses</label></div>
+                        <div><label class="cursor-pointer"><input type="checkbox" class="mr-1"> al menos 1 vez al mes en los últimos 12 meses</label></div>
+                    </td>
+                    <td class="border border-black p-1 text-center align-middle"><input type="checkbox"></td>
+                    <td class="border border-black p-1 text-center align-middle"><input type="checkbox"></td>
+                </tr>
+                <tr>
+                    <td class="border border-black p-1">
+                        <div class="font-bold">MOLESTIAS LEVES</div>
+                        <div>episodios de molestias por debajo del umbral</div>
+                    </td>
+                    <td class="border border-black p-1 text-center align-middle"><input type="checkbox"></td>
+                    <td class="border border-black p-1 text-center align-middle"><input type="checkbox"></td>
+                </tr>
+            </tbody>
+        </table>
+
+        <!-- ================= TABLA 2: CODO ================= -->
+        <table class="w-full border-collapse border border-black mb-2 text-[11px]">
+            <colgroup>
+                <col class="w-[22%]">
+                <col class="w-[28%]">
+                <col class="w-[38%]">
+                <col class="w-[6%]">
+                <col class="w-[6%]">
+            </colgroup>
+            <thead>
+                <tr class="bg-[#d9e1f2]">
+                    <td colspan="2" class="border border-black p-1 font-bold text-[#b25900]">
+                        DOLOR EN EL CODO
+                        <span class="text-black font-normal ml-3">
+                            <label class="cursor-pointer mr-2"><input type="radio" name="dolorCodo" value="NO" class="mr-0.5 align-middle">NO</label>
+                            <label class="cursor-pointer"><input type="radio" name="dolorCodo" value="SI" class="mr-0.5 align-middle">SI</label>
+                        </span>
+                    </td>
+                    <td class="border border-black p-1 text-[10px]">
+                        <strong>¿CUÁNDO SE INCIO LA MOLESTIA?:</strong>
+                        <input type="text" class="w-full border-b border-gray-400 mt-0.5 px-1 font-normal text-xs" placeholder="(años, meses, semanas o días)">
+                    </td>
+                    <td class="border border-black p-1 text-center font-bold">Dx</td>
+                    <td class="border border-black p-1 text-center font-bold">Ix</td>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td class="border border-black p-2 text-center align-middle" rowspan="4">
+                        <div class="flex justify-between font-bold px-2 text-[10px]">
+                            <span>Dx</span>
+                            <span>Ix</span>
+                        </div>
+                        <div class="h-28 flex items-center justify-center text-gray-400 italic text-[10px]">
+                            [Imagen Codo]
+                        </div>
+                    </td>
+                    <td class="border border-black p-1 align-top space-y-1" rowspan="4">
+                        <div class="font-bold leading-snug">Información reportada sobre la molestia: <span class="font-normal">(marcar x)</span></div>
+                        <div><label class="cursor-pointer"><input type="checkbox" class="mr-1"> ha tomado medicamentos</label></div>
+                        <div class="font-bold mt-1">ha realizado: <span class="font-normal">(marcar x)</span></div>
+                        <div><label class="cursor-pointer"><input type="checkbox" class="mr-1"> fisioterapia</label></div>
+                        <div><label class="cursor-pointer"><input type="checkbox" class="mr-1"> visita al ortopedista / fisiatra</label></div>
+                        <div><label class="cursor-pointer"><input type="checkbox" class="mr-1"> RX</label></div>
+                        <div><label class="cursor-pointer"><input type="checkbox" class="mr-1"> ECOGRAFÍA / RESONANCIA</label></div>
+                        <div><label class="cursor-pointer"><input type="checkbox" class="mr-1"> EMG (electromiografía)</label></div>
+                    </td>
+                    <td class="border border-black p-1">Dolor al agarrar objetos o al soportar peso</td>
+                    <td class="border border-black p-1 text-center align-middle"><input type="checkbox"></td>
+                    <td class="border border-black p-1 text-center align-middle"><input type="checkbox"></td>
+                </tr>
+                <tr>
+                    <td class="border border-black p-1">Dolor en reposo</td>
+                    <td class="border border-black p-1 text-center align-middle"><input type="checkbox"></td>
+                    <td class="border border-black p-1 text-center align-middle"><input type="checkbox"></td>
+                </tr>
+                <tr>
+                    <td class="border border-black p-1 space-y-0.5">
+                        <div class="font-bold">UMBRAL POSITIVO <span class="font-normal">(marcar x)</span></div>
+                        <div><label class="cursor-pointer"><input type="checkbox" class="mr-1"> dolor continuo</label></div>
+                        <div><label class="cursor-pointer"><input type="checkbox" class="mr-1"> al menos 1 semana de dolor en los últimos 12 meses</label></div>
+                        <div><label class="cursor-pointer"><input type="checkbox" class="mr-1"> al menos 1 vez al mes en los últimos 12 meses</label></div>
+                    </td>
+                    <td class="border border-black p-1 text-center align-middle"><input type="checkbox"></td>
+                    <td class="border border-black p-1 text-center align-middle"><input type="checkbox"></td>
+                </tr>
+                <tr>
+                    <td class="border border-black p-1">
+                        <div class="font-bold">MOLESTIAS LEVES</div>
+                        <div>episodios de molestias por debajo del umbral</div>
+                    </td>
+                    <td class="border border-black p-1 text-center align-middle"><input type="checkbox"></td>
+                    <td class="border border-black p-1 text-center align-middle"><input type="checkbox"></td>
+                </tr>
+            </tbody>
+        </table>
+
+        <!-- ================= TABLA 3: MANO / MUÑECA ================= -->
+        <table class="w-full border-collapse border border-black mb-2 text-[11px]">
+            <colgroup>
+                <col class="w-[22%]">
+                <col class="w-[28%]">
+                <col class="w-[38%]">
+                <col class="w-[6%]">
+                <col class="w-[6%]">
+            </colgroup>
+            <thead>
+                <tr class="bg-[#d9e1f2]">
+                    <td colspan="2" class="border border-black p-1 font-bold text-[#b25900]">
+                        DOLOR MANO/MUÑECA
+                        <span class="text-black font-normal ml-3">
+                            <label class="cursor-pointer mr-2"><input type="radio" name="dolorMano" value="NO" class="mr-0.5 align-middle">NO</label>
+                            <label class="cursor-pointer"><input type="radio" name="dolorMano" value="SI" class="mr-0.5 align-middle">SI</label>
+                        </span>
+                    </td>
+                    <td class="border border-black p-1 text-[10px]">
+                        <strong>¿CUÁNDO SE INCIO LA MOLESTIA?:</strong>
+                        <input type="text" class="w-full border-b border-gray-400 mt-0.5 px-1 font-normal text-xs" placeholder="(años, meses, semanas o días)">
+                    </td>
+                    <td class="border border-black p-1 text-center font-bold">Dx</td>
+                    <td class="border border-black p-1 text-center font-bold">Ix</td>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td class="border border-black p-1 text-left align-top" rowspan="9">
+                        <div class="text-[9px] font-bold leading-tight mb-2">
+                            N: Indicar sobre la figura el área de distribución de la molestia
+                        </div>
+                        <div class="h-36 flex items-center justify-center text-gray-400 italic text-[10px]">
+                            [Imagen Manos]
+                        </div>
+                        <div class="flex justify-between font-bold px-2 text-[10px] mt-1">
+                            <span>Ix</span>
+                            <span>DX</span>
+                        </div>
+                    </td>
+                    <td class="border border-black p-1 align-top space-y-1" rowspan="9">
+                        <div class="font-bold leading-snug">Información reportada sobre la molestia: <span class="font-normal">(marcar x)</span></div>
+                        <div><label class="cursor-pointer"><input type="checkbox" class="mr-1"> ha tomado medicamentos</label></div>
+                        <div class="font-bold mt-1">ha realizado: <span class="font-normal">(marcar x)</span></div>
+                        <div><label class="cursor-pointer"><input type="checkbox" class="mr-1"> fisioterapia</label></div>
+                        <div><label class="cursor-pointer"><input type="checkbox" class="mr-1"> visita al ortopedista / fisiatra</label></div>
+                        <div><label class="cursor-pointer"><input type="checkbox" class="mr-1"> RX</label></div>
+                        <div><label class="cursor-pointer"><input type="checkbox" class="mr-1"> ECOGRAFÍA / RESONANCIA</label></div>
+                        <div><label class="cursor-pointer"><input type="checkbox" class="mr-1"> EMG (electromiografía)</label></div>
+                    </td>
+                    <td class="border border-black p-1">Dolor al agarrar o al presionar</td>
+                    <td class="border border-black p-1 text-center align-middle"><input type="checkbox"></td>
+                    <td class="border border-black p-1 text-center align-middle"><input type="checkbox"></td>
+                </tr>
+                <tr>
+                    <td class="border border-black p-1">Dolor al movimiento</td>
+                    <td class="border border-black p-1 text-center align-middle"><input type="checkbox"></td>
+                    <td class="border border-black p-1 text-center align-middle"><input type="checkbox"></td>
+                </tr>
+                <tr>
+                    <td class="border border-black p-1">Dolor en reposo</td>
+                    <td class="border border-black p-1 text-center align-middle"><input type="checkbox"></td>
+                    <td class="border border-black p-1 text-center align-middle"><input type="checkbox"></td>
+                </tr>
+                <tr>
+                    <td class="border border-black p-1">Dolor en un dedo</td>
+                    <td class="border border-black p-1 text-center align-middle"><input type="checkbox"></td>
+                    <td class="border border-black p-1 text-center align-middle"><input type="checkbox"></td>
+                </tr>
+                <tr>
+                    <td class="border border-black p-1">Dolor en tres dedos</td>
+                    <td class="border border-black p-1 text-center align-middle"><input type="checkbox"></td>
+                    <td class="border border-black p-1 text-center align-middle"><input type="checkbox"></td>
+                </tr>
+                <tr>
+                    <td class="border border-black p-1">Dolor en la palma</td>
+                    <td class="border border-black p-1 text-center align-middle"><input type="checkbox"></td>
+                    <td class="border border-black p-1 text-center align-middle"><input type="checkbox"></td>
+                </tr>
+                <tr>
+                    <td class="border border-black p-1">Dolor en el dorso</td>
+                    <td class="border border-black p-1 text-center align-middle"><input type="checkbox"></td>
+                    <td class="border border-black p-1 text-center align-middle"><input type="checkbox"></td>
+                </tr>
+                <tr>
+                    <td class="border border-black p-1 space-y-0.5">
+                        <div class="font-bold">UMBRAL POSITIVO <span class="font-normal">(marcar x)</span></div>
+                        <div><label class="cursor-pointer"><input type="checkbox" class="mr-1"> dolor continuo</label></div>
+                        <div><label class="cursor-pointer"><input type="checkbox" class="mr-1"> al menos 1 semana de dolor en los últimos 12 meses</label></div>
+                        <div><label class="cursor-pointer"><input type="checkbox" class="mr-1"> al menos 1 vez al mes en los últimos 12 meses</label></div>
+                    </td>
+                    <td class="border border-black p-1 text-center align-middle"><input type="checkbox"></td>
+                    <td class="border border-black p-1 text-center align-middle"><input type="checkbox"></td>
+                </tr>
+                <tr>
+                    <td class="border border-black p-1">
+                        <div class="font-bold">MOLESTIAS LEVES</div>
+                        <div>episodios de molestias por debajo del umbral</div>
+                    </td>
+                    <td class="border border-black p-1 text-center align-middle"><input type="checkbox"></td>
+                    <td class="border border-black p-1 text-center align-middle"><input type="checkbox"></td>
+                </tr>
+            </tbody>
+        </table>
+
+        <!-- PIE DE PÁGINA Y BOTÓN -->
+        <div class="flex justify-between items-center mt-3">
+            <div class="text-[11px] font-bold">
+                Dx.= Derecho &nbsp;&nbsp;&nbsp; Ix.= Izquierdo
+            </div>
+        </div>
+
+    </form>
+
+</body>
+</html>

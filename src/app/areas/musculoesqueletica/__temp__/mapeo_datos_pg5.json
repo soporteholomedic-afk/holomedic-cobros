@@ -1,0 +1,55 @@
+{
+  "evaluacionClinicaOsteomuscular": {
+    "miembrosSuperiores": {
+      "escapuloHumeral": {
+        "realizaManiobras": false,
+        "molestiaHombroDxDesdeMeses": null,
+        "molestiaHombroIxDesdeMeses": null,
+        "palpacionHombro": {
+          "dolorAnterior": { "dx": false, "ix": false },
+          "dolorLateral": { "dx": false, "ix": false },
+          "dolorPosterior": { "dx": false, "ix": false }
+        },
+        "movilidadPresenciaDolor": {
+          "flexionElevacionAnterior": { "dx": false, "ix": false },
+          "abduccionElevacionLateral": { "dx": false, "ix": false },
+          "rotacionInterna": { "dx": false, "ix": false },
+          "rotacionExterna": { "dx": false, "ix": false }
+        },
+        "arcoDoloroso": {
+          "presenteDx": false,
+          "presenteIx": false,
+          "ausente": false
+        },
+        "testTendinitisTendonLargoBiceps": {
+          "dolorAusente": false,
+          "presenciaDolorAnteriorHombroDx": false,
+          "presenciaDolorAnteriorHombroIx": false
+        },
+        "examenInstrumental": {
+          "noRealizo": false,
+          "ecografia": { "realiza": false, "ano": "" },
+          "rx": { "realiza": false, "ano": "" },
+          "rmn": { "realiza": false, "ano": "" }
+        },
+        "gravedadPatologiaHombro": null
+      },
+
+      "codo": {
+        "realizaManiobras": false,
+        "molestiaCodoDxDesdeMeses": null,
+        "molestiaCodoIxDesdeMeses": null,
+        "observacionInspeccion": {
+          "edemaLocalizado": { "dx": false, "ix": false },
+          "sitio": "",
+          "edemaNoLocalizado": { "dx": false, "ix": false }
+        },
+        "palpacion": {
+          "dolorEpicondilo": { "dx": false, "ix": false },
+          "dolorEpitroclea": { "dx": false, "ix": false },
+          "dolorOlecranon": { "dx": false, "ix": false }
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>II.- COLUMNA - Evaluación Musculoesquelética</title>
+  <!-- Tailwind CSS via CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    /* Estilos personalizados para emular un formulario impreso A4 preciso */
+    body {
+      font-family: Arial, Helvetica, sans-serif;
+      background-color: #f3f4f6;
+    }
+    .page-container {
+      width: 210mm;
+      min-height: 297mm;
+      margin: 20px auto;
+      background: white;
+      padding: 12mm 15mm;
+      box-shadow: 0 0 10px rgba(0,0,0,0.1);
+      box-sizing: border-box;
+      position: relative;
+    }
+  </style>
+</head>
+<body class="text-xs text-black">
+
+  <div class="page-container flex flex-col justify-between border border-gray-300">
+    <div>
+      <!-- TÍTULO PRINCIPAL DE SECCIÓN -->
+      <h2 class="text-base font-bold mb-0.5">II.- COLUMNA</h2>
+      <p class="text-[11px] mb-2 italic">Marcar "x" en los cuadraditos según corresponda.</p>
+
+      <!-- SECCIÓN A: OBSERVACION -->
+      <div class="border border-gray-800 mb-4">
+        <!-- Header A -->
+        <div class="bg-[#EAE6D9] font-bold px-2 py-1 border-b border-gray-800 text-sm tracking-wide">
+          A) OBSERVACION
+        </div>
+
+        <!-- Fila 1: Cifosis / Lordosis / Escoliosis -->
+        <div class="grid grid-cols-12 border-b border-gray-800">
+          <!-- Ilustración Espalda -->
+          <div class="col-span-4 border-r border-gray-800 p-2 flex items-center justify-center bg-white">
+            <svg class="w-28 h-40" viewBox="0 0 100 150" fill="none" stroke="#666" stroke-width="1.5">
+              <!-- Silueta simplified SVG espalda -->
+              <path d="M 30,20 C 35,10 65,10 70,20 C 75,35 85,45 90,60 C 95,75 80,80 80,95 C 80,110 75,130 75,140 L 25,140 C 25,130 20,110 20,95 C 20,80 5,75 10,60 C 15,45 25,35 30,20 Z" fill="#f9f9f9"/>
+              <!-- Columna roja -->
+              <line x1="50" y1="25" x2="50" y2="105" stroke="#ef4444" stroke-width="4"/>
+              <!-- Pelvis naranja -->
+              <path d="M 40,105 C 45,100 55,100 60,105 C 65,115 35,115 40,105 Z" fill="#f97316" stroke="none"/>
+            </svg>
+          </div>
+
+          <!-- Columna Central: Cifosis y Lordosis -->
+          <div class="col-span-4 border-r border-gray-800 p-2 flex flex-col justify-between text-[11px]">
+            <div>
+              <p class="font-bold mb-1">CIFOSIS DORSAL:</p>
+              <div class="space-y-1 pl-2">
+                <label class="flex items-center gap-1.5 cursor-pointer">
+                  <span class="w-3.5 h-3.5 border border-black inline-block flex-shrink-0"></span>
+                  NORMAL
+                </label>
+                <label class="flex items-center gap-1.5 cursor-pointer">
+                  <span class="w-3.5 h-3.5 border border-black inline-block flex-shrink-0"></span>
+                  HIPERCIFOSIS
+                </label>
+                <label class="flex items-start gap-1.5 cursor-pointer">
+                  <span class="w-3.5 h-3.5 border border-black inline-block flex-shrink-0 mt-0.5"></span>
+                  APLANAMIENTO CIFOSIS DORSAL
+                </label>
+              </div>
+            </div>
+
+            <div class="mt-3">
+              <p class="font-bold mb-1">LORDOSIS LUMBAR</p>
+              <div class="space-y-1 pl-2">
+                <label class="flex items-center gap-1.5 cursor-pointer">
+                  <span class="w-3.5 h-3.5 border border-black inline-block flex-shrink-0"></span>
+                  NORMAL
+                </label>
+                <label class="flex items-center gap-1.5 cursor-pointer">
+                  <span class="w-3.5 h-3.5 border border-black inline-block flex-shrink-0"></span>
+                  HIPERCIFOSIS
+                </label>
+                <label class="flex items-start gap-1.5 cursor-pointer">
+                  <span class="w-3.5 h-3.5 border border-black inline-block flex-shrink-0 mt-0.5"></span>
+                  APLANAMIENTO LORDOSIS LUMBAR
+                </label>
+              </div>
+            </div>
+          </div>
+
+          <!-- Columna Derecha: Escoliosis -->
+          <div class="col-span-4 p-2 text-[11px]">
+            <p class="font-bold mb-3">PRESENCIA DE ESCOLIOSIS <span class="font-normal text-[10px]">(curva &gt; 1cm)</span></p>
+            <div class="space-y-1.5 pl-4">
+              <label class="flex items-center gap-2 cursor-pointer">
+                <span class="w-3.5 h-3.5 border border-black inline-block flex-shrink-0"></span>
+                AUSENTE
+              </label>
+              <label class="flex items-center gap-2 cursor-pointer">
+                <span class="w-3.5 h-3.5 border border-black inline-block flex-shrink-0"></span>
+                DORSAL DX
+              </label>
+              <label class="flex items-center gap-2 cursor-pointer">
+                <span class="w-3.5 h-3.5 border border-black inline-block flex-shrink-0"></span>
+                DORSAL IX
+              </label>
+              <label class="flex items-center gap-2 cursor-pointer">
+                <span class="w-3.5 h-3.5 border border-black inline-block flex-shrink-0"></span>
+                LUMBAR DX
+              </label>
+              <label class="flex items-center gap-2 cursor-pointer">
+                <span class="w-3.5 h-3.5 border border-black inline-block flex-shrink-0"></span>
+                LUMBAR IX
+              </label>
+            </div>
+          </div>
+        </div>
+
+        <!-- Fila 2: Sub-header Ritmo Lumbo Pélvico -->
+        <div class="bg-gray-200 text-center font-bold py-0.5 border-b border-gray-800 text-[11px] tracking-wide">
+          OBSERVACION RITMO LUMBO PELVICO:
+        </div>
+
+        <!-- Fila 3: Contenido Ritmo Lumbo Pélvico -->
+        <div class="grid grid-cols-12 border-b border-gray-800">
+          <div class="col-span-4 border-r border-gray-800 p-2 flex items-center justify-center">
+            <!-- Diagrama Flexión Lumbar -->
+            <svg class="w-32 h-20" viewBox="0 0 120 70" fill="none" stroke="#333" stroke-width="1.2">
+              <path d="M 20,60 L 20,30 L 25,10" />
+              <path d="M 60,60 L 60,35 L 75,20 L 85,30" />
+              <path d="M 100,60 L 105,45 L 90,30 L 70,35" />
+              <circle cx="20" cy="60" r="1.5" fill="black"/>
+              <circle cx="60" cy="60" r="1.5" fill="black"/>
+              <circle cx="100" cy="60" r="1.5" fill="black"/>
+            </svg>
+          </div>
+          <div class="col-span-8 p-3 flex flex-col justify-center space-y-2 text-[11px]">
+            <label class="flex items-center gap-2 cursor-pointer">
+              <span class="w-3.5 h-3.5 border border-black inline-block flex-shrink-0"></span>
+              NORMAL
+            </label>
+            <label class="flex items-center gap-2 cursor-pointer">
+              <span class="w-3.5 h-3.5 border border-black inline-block flex-shrink-0"></span>
+              LORDOSIS LUMBAR INMODIFICADA
+            </label>
+            <label class="flex items-center gap-2 cursor-pointer">
+              <span class="w-3.5 h-3.5 border border-black inline-block flex-shrink-0"></span>
+              DOLOR LUMBAR
+            </label>
+          </div>
+        </div>
+
+        <!-- Fila 4: Sub-header Dorso Curvo Estructurado -->
+        <div class="bg-gray-200 text-center font-bold py-0.5 border-b border-gray-800 text-[11px] tracking-wide">
+          OBSERVACION DE PRESENCIA DE DORSO CURVO ESTRUCTURADO CIFO ESCOLIOSIS :
+        </div>
+
+        <!-- Fila 5: Contenido Dorso Curvo Estructurado -->
+        <div class="grid grid-cols-12">
+          <div class="col-span-4 border-r border-gray-800 p-2 flex items-center justify-center">
+            <!-- Diagrama Postura Manos en Cabeza -->
+            <svg class="w-28 h-24" viewBox="0 0 100 80" fill="none" stroke="#333" stroke-width="1.2">
+              <circle cx="50" cy="20" r="10"/>
+              <path d="M 50,30 L 50,70 M 35,25 L 25,15 L 35,10 L 45,15 Z M 65,25 L 75,15 L 65,10 L 55,15 Z"/>
+            </svg>
+          </div>
+          <div class="col-span-8 p-3 flex flex-col justify-center space-y-2 text-[11px]">
+            <label class="flex items-center gap-2 cursor-pointer">
+              <span class="w-3.5 h-3.5 border border-black inline-block flex-shrink-0"></span>
+              NORMAL
+            </label>
+            <label class="flex items-center gap-2 cursor-pointer">
+              <span class="w-3.5 h-3.5 border border-black inline-block flex-shrink-0"></span>
+              PRESENCIA DE DORSO CURVO ESTRUCTURADO
+            </label>
+            <label class="flex items-center gap-2 cursor-pointer">
+              <span class="w-3.5 h-3.5 border border-black inline-block flex-shrink-0"></span>
+              DOLOR DORSAL
+            </label>
+          </div>
+        </div>
+      </div>
+
+      <!-- SECCIÓN B: MANIOBRA DE PRESO PALPACION -->
+      <div class="border border-gray-800">
+        <!-- Header B -->
+        <div class="bg-[#EAE6D9] px-2 py-1 border-b border-gray-800 text-sm tracking-wide">
+          <span class="font-bold">B) MANIOBRA DE PRESO PALPACION</span>
+          <span class="text-xs ml-1">(Apófisis espinosa, espacio intervertebral y musculatura para vertebral)</span>
+        </div>
+
+        <div class="grid grid-cols-12">
+          <!-- Columna Cervical (Izquierda) -->
+          <div class="col-span-6 border-r border-gray-800 flex">
+            <!-- Diagrama Cuello -->
+            <div class="w-1/3 border-r border-gray-300 p-2 flex items-center justify-center">
+              <svg class="w-20 h-32" viewBox="0 0 80 120" fill="none" stroke="#666" stroke-width="1.2">
+                <path d="M 15,10 C 20,30 25,40 20,60 C 15,80 10,90 5,110 L 75,110 C 70,90 65,80 60,60 C 55,40 60,30 65,10 Z" fill="#f9f9f9"/>
+                <line x1="40" y1="15" x2="40" y2="70" stroke="#ef4444" stroke-width="5"/>
+              </svg>
+            </div>
+            <!-- Opciones Cervical -->
+            <div class="w-2/3 p-3 flex flex-col justify-start space-y-3 text-[10px]">
+              <label class="flex items-center gap-2 cursor-pointer">
+                <span class="w-3.5 h-3.5 border border-black inline-block flex-shrink-0"></span>
+                DOLOR AUSENTE
+              </label>
+
+              <div>
+                <label class="flex items-start gap-2 cursor-pointer font-bold mb-1">
+                  <span class="w-3.5 h-3.5 border border-black inline-block flex-shrink-0 mt-0.5"></span>
+                  DOLOR PRESENTE:
+                </label>                <div class="pl-5 space-y-2 text-[10px]">
+                  <p class="leading-tight">
+                    APOFISIS Y/O ESPACIO INTERVERTEB.<br>
+                    <span class="font-normal">n° apófisis/ espacio :</span>
+                    <input type="text" class="border-b border-black outline-none w-16 px-1">
+                  </p>
+                  <p class="leading-tight pt-2">
+                    SEGMENTO MUSCULAR:
+                    <input type="text" class="border-b border-black outline-none w-20 px-1">
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Columna Dorsal y Lumbar (Derecha) -->
+          <div class="col-span-6 flex">
+            <!-- Diagrama Dorsal/Lumbar -->
+            <div class="w-1/3 border-r border-gray-800 p-2 flex items-center justify-center">
+              <svg class="w-20 h-32" viewBox="0 0 80 120" fill="none" stroke="#666" stroke-width="1.2">
+                <path d="M 20,10 C 25,30 35,40 40,60 C 45,80 35,100 25,115 L 55,115 C 45,100 35,80 40,60 C 45,40 55,30 60,10 Z" fill="#f9f9f9"/>
+                <line x1="40" y1="20" x2="40" y2="85" stroke="#ef4444" stroke-width="5"/>
+                <path d="M 30,85 C 35,80 45,80 50,85 C 55,95 25,95 30,85 Z" fill="#f97316" stroke="none"/>
+              </svg>
+            </div>
+
+            <!-- Opciones Dorsal / Lumbar -->
+            <div class="w-2/3 flex flex-col justify-between">
+              <!-- Bloque Dorsal -->
+              <div class="p-2 border-b border-gray-800 text-[10px]">
+                <label class="flex items-center gap-2 cursor-pointer mb-2">
+                  <span class="w-3.5 h-3.5 border border-black inline-block flex-shrink-0"></span>
+                  DOLOR AUSENTE
+                </label>
+                <div>
+                  <label class="flex items-start gap-2 cursor-pointer font-bold">
+                    <span class="w-3.5 h-3.5 border border-black inline-block flex-shrink-0 mt-0.5"></span>
+                    <div>
+                      DOLORE PRESENTE:
+                      <ul class="list-disc pl-4 font-normal text-[9.5px] mt-0.5 space-y-0.5">
+                        <li>APOFISIS Y/O ESPACIO INTERVERTEBRAL</li>
+                        <li>SEGMENTO MUSCULAR</li>
+                      </ul>
+                    </div>
+                  </label>
+                </div>
+                <div class="text-right font-bold text-[11px] mt-1 pr-2">DORSAL</div>
+              </div>
+
+              <!-- Bloque Lumbar -->
+              <div class="p-2 text-[10px]">
+                <label class="flex items-center gap-2 cursor-pointer mb-1">
+                  <span class="w-3.5 h-3.5 border border-black inline-block flex-shrink-0"></span>
+                  DOLOR AUSENTE
+                </label>
+                <label class="flex items-start gap-2 cursor-pointer">
+                  <span class="w-3.5 h-3.5 border border-black inline-block flex-shrink-0 mt-0.5"></span>
+                  <div>
+                    <span class="font-bold">DOLOR PRESENTE:</span>
+                    <p class="text-[9.5px] leading-tight mt-0.5">- APOFISIS Y/O ESPACIO INTERVERTEBRAL</p>
+                    <p class="text-[9.5px] leading-tight">- SEGMENTO MUSCULAR</p>
+                  </div>
+                </label>
+                <div class="text-right font-bold text-[11px] mt-2 pr-2">LUMBAR</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- FOOTER / PIE DE PÁGINA -->
+    <div class="flex justify-between items-end text-[9px] text-gray-700 pt-4">
+      <div>Fo. JJC-SIG-13-31 Cuestionario anamnesico y evaluación de extremidad superior y espalda. Rev. 0</div>
+      <div class="font-bold text-xs text-black">6</div>
+    </div>
+  </div>
+
+</body>
+</html>

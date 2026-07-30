@@ -1,0 +1,71 @@
+{
+  "columna": {
+    "cervical": {
+      "presentaDisturbio": false,
+      "frecuenciaMolestia": {
+        "raramente": false,
+        "episodios2a3Dias": false,
+        "episodiosConMedicamentos": false,
+        "presenteTodoElDia": false
+      },
+      "frecuenciaDolor": {
+        "raramente": false,
+        "episodios2a3Dias": false,
+        "episodiosConMedicamentos": false,
+        "presenteTodoElDia": false
+      },
+      "irradiacion": {
+        "tieneIrradiacion": false,
+        "miembroSuperior": {
+          "dx": false,
+          "ix": false
+        }
+      },
+      "diasAusenciaTrabajo": null
+    },
+
+    "dorsal": {
+      "presentaDisturbio": false,
+      "frecuenciaMolestia": {
+        "raramente": false,
+        "episodios2a3Dias": false,
+        "episodiosConMedicamentos": false,
+        "presenteTodoElDia": false
+      },
+      "frecuenciaDolor": {
+        "raramente": false,
+        "episodios2a3Dias": false,
+        "episodiosConMedicamentos": false,
+        "presenteTodoElDia": false
+      },
+      "irradiacion": {
+        "tieneIrradiacion": false,
+        "emitorax": false,
+        "dx": false
+      },
+      "diasAusenciaTrabajo": null
+    },
+
+    "lumboSacra": {
+      "presentaDisturbio": false,
+      "frecuenciaMolestia": {
+        "raramente": false,
+        "episodios2a3Dias": false,
+        "episodiosConMedicamentos": false,
+        "presenteTodoElDia": false
+      },
+      "frecuenciaDolor": {
+        "raramente": false,
+        "episodios2a3Dias": false,
+        "episodiosConMedicamentos": false,
+        "presenteTodoElDia": false
+      },
+      "irradiacion": {
+        "tieneIrradiacion": false,
+        "miembrosInferiores": false,
+        "ix": false
+      },
+      "diasAusenciaTrabajo": null
+    }
+  }
+}

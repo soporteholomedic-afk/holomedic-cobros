@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Entrevista Cuestionario Anamnésico Osteomuscular - Página 3 (Columna)</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            font-family: Arial, Helvetica, sans-serif;
+            color: #000;
+        }
+        input[type="text"], input[type="number"] {
+            background: transparent;
+            outline: none;
+        }
+        input[type="text"]:focus, input[type="number"]:focus {
+            background-color: #f0fdf4;
+        }
+        input[type="checkbox"], input[type="radio"] {
+            cursor: pointer;
+            width: 12px;
+            height: 12px;
+            accent-color: #0070c0;
+            vertical-align: middle;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 py-6 text-[10px] leading-tight">
+
+    <!-- CONTENEDOR PRINCIPAL PÁGINA 3 -->
+    <form id="formAnamnesicoPag3" onsubmit="event.preventDefault();" class="max-w-[850px] mx-auto bg-white p-6 shadow-md border border-gray-300">
+
+        <!-- TÍTULO DE SECCIÓN -->
+        <div class="font-bold text-[12px] mb-2 uppercase">
+            II.- COLUMNA <span class="font-normal text-[11px]">(DISTURBIOS EN LA COLUMNA ULTIMOS 12 MESES)</span>
+        </div>
+
+        <!-- CONTENEDOR PRINCIPAL TABLA DE COLUMNA -->
+        <div class="border border-black flex mb-3">
+
+            <!-- COLUMNA IZQUIERDA: ILUSTRACIONES DE LA ESPALDA -->
+            <div class="w-[30%] border-r border-black p-2 flex flex-col justify-between items-center text-left bg-white">
+                <div class="font-bold text-[9px] mb-2 leading-tight w-full">
+                    N: Señale en la figura el area del disturbioy la irradiación.
+                </div>
+
+                <!-- Figura Cervical -->
+                <div class="my-auto py-2 text-center w-full">
+                    <svg viewBox="0 0 150 140" class="w-36 h-32 mx-auto">
+                        <!-- Cabeza y Hombros -->
+                        <path d="M 50 40 C 50 15, 100 15, 100 40 C 100 50, 95 65, 88 70 C 95 72, 120 80, 135 110 L 140 135" fill="none" stroke="#000" stroke-width="1.2"/>
+                        <path d="M 50 40 C 50 50, 55 65, 62 70 C 55 72, 30 80, 15 110 L 10 135" fill="none" stroke="#000" stroke-width="1.2"/>
+                        <!-- Orejas / Cuello -->
+                        <path d="M 50 40 C 47 40, 47 48, 52 48" fill="none" stroke="#000" stroke-width="1"/>
+                        <path d="M 100 40 C 103 40, 103 48, 98 48" fill="none" stroke="#000" stroke-width="1"/>
+                        <!-- ZONA ROJA: Cervical -->
+                        <rect x="70" y="65" width="10" height="30" fill="#e5533c" opacity="0.85"/>
+                    </svg>
+                </div>
+
+                <!-- Figura Dorsal / Lumbo Sacra -->
+                <div class="my-auto py-2 text-center w-full">
+                    <svg viewBox="0 0 150 200" class="w-36 h-48 mx-auto">
+                        <!-- Silueta Cuerpo Completo Espalda -->
+                        <path d="M 55 25 C 55 8, 95 8, 95 25 C 95 35, 90 45, 84 50 C 92 52, 115 60, 125 90 L 145 150 L 135 155 L 120 115 C 115 125, 112 140, 115 155 C 108 160, 95 160, 88 150 C 85 165, 82 180, 80 195 L 70 195 C 68 180, 65 165, 62 150 C 55 160, 42 160, 35 155 C 38 140, 35 125, 30 115 L 15 155 L 5 150 L 25 90 C 35 60, 58 52, 66 50 C 60 45, 55 35, 55 25 Z" fill="none" stroke="#000" stroke-width="1.2"/>
+                        <!-- ZONA ROJA: Dorsal y Lumbar -->
+                        <rect x="71" y="75" width="8" height="80" fill="#e5533c" opacity="0.85"/>
+                        <path d="M 60 148 C 60 140, 90 140, 90 148 C 95 158, 80 165, 75 165 C 70 165, 55 158, 60 148 Z" fill="#e5533c" opacity="0.85"/>
+                    </svg>
+                </div>
+            </div>
+
+            <!-- COLUMNA DERECHA: BLOQUES DE EVALUACIÓN -->
+            <div class="w-[70%]">
+
+                <!-- ================= BLOQUE 1: CERVICAL ================= -->
+                <div>
+                    <!-- Encabezado Cervical -->
+                    <div class="bg-[#d9e1f2] border-b border-black p-1 flex justify-between items-center">
+                        <div class="font-bold text-[#b25900] text-[11px]">
+                            CERVICAL <span class="font-normal text-[10px] text-[#b25900]">(molestia, sensación de peso, dolor)</span>
+                        </div>
+                        <div class="font-bold text-black space-x-3 pr-2">
+                            <label class="cursor-pointer"><input type="radio" name="columna.cervical.presentaDisturbio" :value="true" v-model="columna.cervical.presentaDisturbio"> SI</label>
+                            <label class="cursor-pointer"><input type="radio" name="columna.cervical.presentaDisturbio" :value="false" v-model="columna.cervical.presentaDisturbio"> NO</label>
+                        </div>
+                    </div>
+
+                    <!-- Tabla Opciones Cervical -->
+                    <table class="w-full border-collapse text-center text-[9px]">
+                        <thead>
+                            <tr class="font-bold border-b border-black bg-white">
+                                <td class="border-r border-black p-1 w-[22%]">RARAMENTE</td>
+                                <td class="border-r border-black p-1 w-[28%]">AL MENOS 3-4 EPISODIOS DE 2-3 DIAS C/U</td>
+                                <td class="border-r border-black p-1 w-[28%]">AL MENOS 3-4 EPISODIOS CON USO DE MEDICAMENTOS O TRATAMIENTO MD</td>
+                                <td class="p-1 w-[22%]">PRESENTE TODO EL DIA</td>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr class="border-b border-black bg-[#f2f2f2]">
+                                <td class="border-r border-black p-1 text-left"><label class="cursor-pointer"><input type="checkbox" name="columna.cervical.frecuenciaMolestia.raramente" v-model="columna.cervical.frecuenciaMolestia.raramente" class="mr-1"> MOLESTIA</label></td>
+                                <td class="border-r border-black p-1 text-left"><label class="cursor-pointer"><input type="checkbox" name="columna.cervical.frecuenciaMolestia.episodios2a3Dias" v-model="columna.cervical.frecuenciaMolestia.episodios2a3Dias" class="mr-1"> MOLESTIA</label></td>
+                                <td class="border-r border-black p-1 text-left"><label class="cursor-pointer"><input type="checkbox" name="columna.cervical.frecuenciaMolestia.episodiosConMedicamentos" v-model="columna.cervical.frecuenciaMolestia.episodiosConMedicamentos" class="mr-1"> MOLESTIA</label></td>
+                                <td class="p-1 text-left"><label class="cursor-pointer"><input type="checkbox" name="columna.cervical.frecuenciaMolestia.presenteTodoElDia" v-model="columna.cervical.frecuenciaMolestia.presenteTodoElDia" class="mr-1"> MOLESTIA</label></td>
+                            </tr>
+                            <tr class="border-b border-black bg-[#e6e6e6]">
+                                <td class="border-r border-black p-1 text-left"><label class="cursor-pointer"><input type="checkbox" name="columna.cervical.frecuenciaDolor.raramente" v-model="columna.cervical.frecuenciaDolor.raramente" class="mr-1"> DOLOR</label></td>
+                                <td class="border-r border-black p-1 text-left"><label class="cursor-pointer"><input type="checkbox" name="columna.cervical.frecuenciaDolor.episodios2a3Dias" v-model="columna.cervical.frecuenciaDolor.episodios2a3Dias" class="mr-1"> DOLOR</label></td>
+                                <td class="border-r border-black p-1 text-left"><label class="cursor-pointer"><input type="checkbox" name="columna.cervical.frecuenciaDolor.episodiosConMedicamentos" v-model="columna.cervical.frecuenciaDolor.episodiosConMedicamentos" class="mr-1"> DOLOR</label></td>
+                                <td class="p-1 text-left"><label class="cursor-pointer"><input type="checkbox" name="columna.cervical.frecuenciaDolor.presenteTodoElDia" v-model="columna.cervical.frecuenciaDolor.presenteTodoElDia" class="mr-1"> DOLOR</label></td>
+                            </tr>
+                            <!-- FILA IRRADIACIÓN CERVICAL -->
+                            <tr class="border-b border-black font-bold">
+                                <td class="border-r border-black p-1 text-left">IRRADIACION</td>
+                                <td class="border-r border-black p-1">
+                                    <label class="cursor-pointer mr-2"><input type="radio" name="columna.cervical.irradiacion.tieneIrradiacion" :value="false" v-model="columna.cervical.irradiacion.tieneIrradiacion"> NO</label>
+                                    <label class="cursor-pointer"><input type="radio" name="columna.cervical.irradiacion.tieneIrradiacion" :value="true" v-model="columna.cervical.irradiacion.tieneIrradiacion"> SI</label>
+                                </td>
+                                <td class="border-r border-black p-1">MIEMBRO SUPERIOR</td>
+                                <td class="p-1">
+                                    <label class="cursor-pointer mr-2"><input type="checkbox" name="columna.cervical.irradiacion.miembroSuperior.dx" v-model="columna.cervical.irradiacion.miembroSuperior.dx"> DX</label>
+                                    <label class="cursor-pointer"><input type="checkbox" name="columna.cervical.irradiacion.miembroSuperior.ix" v-model="columna.cervical.irradiacion.miembroSuperior.ix"> IX</label>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+
+                    <!-- Ausencia Laboral Cervical -->
+                    <div class="border-b-2 border-black p-1 font-bold bg-white text-[10px]">
+                        AUSENCIA AL TRABAJO POR DISTURBIO CERVICAL
+                        <input type="number" name="columna.cervical.diasAusenciaTrabajo" v-model.number="columna.cervical.diasAusenciaTrabajo" class="border-b border-black w-24 text-center font-normal outline-none px-1" min="0"> días
+                    </div>
+                </div>
+
+                <!-- ================= BLOQUE 2: DORSAL ================= -->
+                <div>
+                    <!-- Encabezado Dorsal -->
+                    <div class="bg-[#d9e1f2] border-b border-black p-1 flex justify-between items-center">
+                        <div class="font-bold text-[#b25900] text-[11px]">
+                            DORSAL <span class="font-normal text-[10px] text-[#b25900]">(molestia, sensación de peso, dolor)</span>
+                        </div>
+                        <div class="font-bold text-black space-x-3 pr-2">
+                            <label class="cursor-pointer"><input type="radio" name="columna.dorsal.presentaDisturbio" :value="true" v-model="columna.dorsal.presentaDisturbio"> SI</label>
+                            <label class="cursor-pointer"><input type="radio" name="columna.dorsal.presentaDisturbio" :value="false" v-model="columna.dorsal.presentaDisturbio"> NO</label>
+                        </div>
+                    </div>
+
+                    <!-- Tabla Opciones Dorsal -->
+                    <table class="w-full border-collapse text-center text-[9px]">
+                        <thead>
+                            <tr class="font-bold border-b border-black bg-white">
+                                <td class="border-r border-black p-1 w-[22%]">RARAMENTE</td>
+                                <td class="border-r border-black p-1 w-[28%]">AL MENOS 3-4 EPISODIOS DE 2-3 DIAS C/U</td>
+                                <td class="border-r border-black p-1 w-[28%]">AL MENOS 3-4 EPISODIOS CON USO DE MEDICAMENTOS O TRATAMIENTO MD</td>
+                                <td class="p-1 w-[22%]">PRESENTE TODO EL DIA</td>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr class="border-b border-black bg-[#f2f2f2]">
+                                <td class="border-r border-black p-1 text-left"><label class="cursor-pointer"><input type="checkbox" name="columna.dorsal.frecuenciaMolestia.raramente" v-model="columna.dorsal.frecuenciaMolestia.raramente" class="mr-1"> MOLESTIA</label></td>
+                                <td class="border-r border-black p-1 text-left"><label class="cursor-pointer"><input type="checkbox" name="columna.dorsal.frecuenciaMolestia.episodios2a3Dias" v-model="columna.dorsal.frecuenciaMolestia.episodios2a3Dias" class="mr-1"> MOLESTIA</label></td>
+                                <td class="border-r border-black p-1 text-left"><label class="cursor-pointer"><input type="checkbox" name="columna.dorsal.frecuenciaMolestia.episodiosConMedicamentos" v-model="columna.dorsal.frecuenciaMolestia.episodiosConMedicamentos" class="mr-1"> MOLESTIA</label></td>
+                                <td class="p-1 text-left"><label class="cursor-pointer"><input type="checkbox" name="columna.dorsal.frecuenciaMolestia.presenteTodoElDia" v-model="columna.dorsal.frecuenciaMolestia.presenteTodoElDia" class="mr-1"> MOLESTIA</label></td>
+                            </tr>
+                            <tr class="border-b border-black bg-[#e6e6e6]">
+                                <td class="border-r border-black p-1 text-left"><label class="cursor-pointer"><input type="checkbox" name="columna.dorsal.frecuenciaDolor.raramente" v-model="columna.dorsal.frecuenciaDolor.raramente" class="mr-1"> DOLOR</label></td>
+                                <td class="border-r border-black p-1 text-left"><label class="cursor-pointer"><input type="checkbox" name="columna.dorsal.frecuenciaDolor.episodios2a3Dias" v-model="columna.dorsal.frecuenciaDolor.episodios2a3Dias" class="mr-1"> DOLOR</label></td>
+                                <td class="border-r border-black p-1 text-left"><label class="cursor-pointer"><input type="checkbox" name="columna.dorsal.frecuenciaDolor.episodiosConMedicamentos" v-model="columna.dorsal.frecuenciaDolor.episodiosConMedicamentos" class="mr-1"> DOLOR</label></td>
+                                <td class="p-1 text-left"><label class="cursor-pointer"><input type="checkbox" name="columna.dorsal.frecuenciaDolor.presenteTodoElDia" v-model="columna.dorsal.frecuenciaDolor.presenteTodoElDia" class="mr-1"> DOLOR</label></td>
+                            </tr>
+                            <!-- FILA IRRADIACIÓN DORSAL (CORREGIDA) -->
+                            <tr class="border-b border-black font-bold">
+                                <td class="border-r border-black p-1 text-left">IRRADIACION</td>
+                                <td class="border-r border-black p-1">
+                                    <label class="cursor-pointer mr-2"><input type="radio" name="columna.dorsal.irradiacion.tieneIrradiacion" :value="false" v-model="columna.dorsal.irradiacion.tieneIrradiacion"> NO</label>
+                                    <label class="cursor-pointer"><input type="radio" name="columna.dorsal.irradiacion.tieneIrradiacion" :value="true" v-model="columna.dorsal.irradiacion.tieneIrradiacion"> SI</label>
+                                </td>
+                                <td class="border-r border-black p-1"><label class="cursor-pointer"><input type="checkbox" name="columna.dorsal.irradiacion.emitorax" v-model="columna.dorsal.irradiacion.emitorax" class="mr-1"> EMITORAX</label></td>
+                                <td class="p-1">
+                                    <label class="cursor-pointer mr-2"><input type="checkbox" name="columna.dorsal.irradiacion.dx" v-model="columna.dorsal.irradiacion.dx"> DX</label>
+                                    <label class="cursor-pointer"><input type="checkbox" name="columna.dorsal.irradiacion.ix" v-model="columna.dorsal.irradiacion.ix"> IX</label>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+
+                    <!-- Ausencia Laboral Dorsal -->
+                    <div class="border-b-2 border-black p-1 font-bold bg-white text-[10px]">
+                        AUSENCIA AL TRABAJO POR DISTURBIO DORSAL
+                        <input type="number" name="columna.dorsal.diasAusenciaTrabajo" v-model.number="columna.dorsal.diasAusenciaTrabajo" class="border-b border-black w-24 text-center font-normal outline-none px-1" min="0"> días
+                    </div>
+                </div>
+
+                <!-- ================= BLOQUE 3: LUMBO SACRA ================= -->
+                <div>
+                    <!-- Encabezado Lumbo Sacra -->
+                    <div class="bg-[#d9e1f2] border-b border-black p-1 flex justify-between items-center">
+                        <div class="font-bold text-[#b25900] text-[11px]">
+                            LUMBO SACRA <span class="font-normal text-[10px] text-[#b25900]">(molestia, sensación de peso,)</span>
+                        </div>
+                        <div class="font-bold text-black space-x-3 pr-2">
+                            <label class="cursor-pointer"><input type="radio" name="columna.lumboSacra.presentaDisturbio" :value="true" v-model="columna.lumboSacra.presentaDisturbio"> SI</label>
+                            <label class="cursor-pointer"><input type="radio" name="columna.lumboSacra.presentaDisturbio" :value="false" v-model="columna.lumboSacra.presentaDisturbio"> NO</label>
+                        </div>
+                    </div>
+
+                    <!-- Tabla Opciones Lumbo Sacra -->
+                    <table class="w-full border-collapse text-center text-[9px]">
+                        <thead>
+                            <tr class="font-bold border-b border-black bg-white">
+                                <td class="border-r border-black p-1 w-[22%]">RARAMENTE</td>
+                                <td class="border-r border-black p-1 w-[28%]">AL MENOS 3-4 EPISODIOS DE 2-3 DIAS C/U</td>
+                                <td class="border-r border-black p-1 w-[28%]">AL MENOS 3-4 EPISODIOS CON USO DE MEDICAMENTOS O TRATAMIENTO MD</td>
+                                <td class="p-1 w-[22%]">PRESENTE TODOEL DIA</td>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr class="border-b border-black bg-[#f2f2f2]">
+                                <td class="border-r border-black p-1 text-left"><label class="cursor-pointer"><input type="checkbox" name="columna.lumboSacra.frecuenciaMolestia.raramente" v-model="columna.lumboSacra.frecuenciaMolestia.raramente" class="mr-1"> MOLESTIA</label></td>
+                                <td class="border-r border-black p-1 text-left"><label class="cursor-pointer"><input type="checkbox" name="columna.lumboSacra.frecuenciaMolestia.episodios2a3Dias" v-model="columna.lumboSacra.frecuenciaMolestia.episodios2a3Dias" class="mr-1"> MOLESTIA</label></td>
+                                <td class="border-r border-black p-1 text-left"><label class="cursor-pointer"><input type="checkbox" name="columna.lumboSacra.frecuenciaMolestia.episodiosConMedicamentos" v-model="columna.lumboSacra.frecuenciaMolestia.episodiosConMedicamentos" class="mr-1"> MOLESTIA</label></td>
+                                <td class="p-1 text-left"><label class="cursor-pointer"><input type="checkbox" name="columna.lumboSacra.frecuenciaMolestia.presenteTodoElDia" v-model="columna.lumboSacra.frecuenciaMolestia.presenteTodoElDia" class="mr-1"> MOLESTIA</label></td>
+                            </tr>
+                            <tr class="border-b border-black bg-[#e6e6e6]">
+                                <td class="border-r border-black p-1 text-left"><label class="cursor-pointer"><input type="checkbox" name="columna.lumboSacra.frecuenciaDolor.raramente" v-model="columna.lumboSacra.frecuenciaDolor.raramente" class="mr-1"> DOLOR</label></td>
+                                <td class="border-r border-black p-1 text-left"><label class="cursor-pointer"><input type="checkbox" name="columna.lumboSacra.frecuenciaDolor.episodios2a3Dias" v-model="columna.lumboSacra.frecuenciaDolor.episodios2a3Dias" class="mr-1"> DOLOR</label></td>
+                                <td class="border-r border-black p-1 text-left"><label class="cursor-pointer"><input type="checkbox" name="columna.lumboSacra.frecuenciaDolor.episodiosConMedicamentos" v-model="columna.lumboSacra.frecuenciaDolor.episodiosConMedicamentos" class="mr-1"> DOLOR</label></td>
+                                <td class="p-1 text-left"><label class="cursor-pointer"><input type="checkbox" name="columna.lumboSacra.frecuenciaDolor.presenteTodoElDia" v-model="columna.lumboSacra.frecuenciaDolor.presenteTodoElDia" class="mr-1"> DOLOR</label></td>
+                            </tr>
+                            <!-- FILA IRRADIACIÓN LUMBO SACRA (CORREGIDA) -->
+                            <tr class="border-b border-black font-bold">
+                                <td class="border-r border-black p-1 text-left">IRRADIACION</td>
+                                <td class="border-r border-black p-1">
+                                    <label class="cursor-pointer mr-2"><input type="radio" name="columna.lumboSacra.irradiacion.tieneIrradiacion" :value="false" v-model="columna.lumboSacra.irradiacion.tieneIrradiacion"> NO</label>
+                                    <label class="cursor-pointer"><input type="radio" name="columna.lumboSacra.irradiacion.tieneIrradiacion" :value="true" v-model="columna.lumboSacra.irradiacion.tieneIrradiacion"> SI</label>
+                                </td>
+                                <td class="border-r border-black p-1"><label class="cursor-pointer"><input type="checkbox" name="columna.lumboSacra.irradiacion.miembrosInferiores" v-model="columna.lumboSacra.irradiacion.miembrosInferiores" class="mr-1"> MIEMBROS INFERIORES</label></td>
+                                <td class="p-1">
+                                    <label class="cursor-pointer mr-2"><input type="checkbox" name="columna.lumboSacra.irradiacion.dx" v-model="columna.lumboSacra.irradiacion.dx"> DX</label>
+                                    <label class="cursor-pointer"><input type="checkbox" name="columna.lumboSacra.irradiacion.ix" v-model="columna.lumboSacra.irradiacion.ix"> IX</label>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+
+                    <!-- Ausencia Laboral Lumbar -->
+                    <div class="p-1 font-bold bg-white text-[10px]">
+                        AUSENCIA AL TRABAJO POR DISTURBIO LUMBAR
+                        <input type="number" name="columna.lumboSacra.diasAusenciaTrabajo" v-model.number="columna.lumboSacra.diasAusenciaTrabajo" class="border-b border-black w-24 text-center font-normal outline-none px-1" min="0"> días
+                    </div>
+                </div>
+
+            </div>
+        </div>
+
+        <!-- NOTAS AL PIE Y DEFINICIONES -->
+        <div class="text-[9px] leading-tight space-y-1 mb-6 text-justify">
+            <p>
+                <strong>NB*:</strong> umbral anamnésico positivo para la <strong>COLUMNA</strong> (identificado por cuadros grises) es la presencia de: dolor / malestar casi todos los días en los últimos 12 meses o episodios de dolor (3-4 episodios de 2-3 días, 10 episodios de 1 día, 8 episodios de hace 2 días, 2 episodios de 30 días, un episodio de 90 días).
+            </p>
+            <p>
+                Dolor agudo de espalda baja significa: episodio de dolor intenso en la espalda baja que no permite la flexión, inclinación y rotación ("lumbago), cuyo comienzo puede ser agudo o insidioso y se prolongó durante al menos 2 días (o uno con tratamiento farmacológico)
+            </p>
+        </div>
+
+        <!-- PIE DE PÁGINA (CÓDIGO DE DOCUMENTO) -->
+        <div class="flex justify-between items-center text-[9px] border-t border-gray-200 pt-2 text-gray-700">
+            <div>
+                Fo. JJC-SIG-13-31 Cuestionario anamnesico y evaluación de extremidad superior y espalda. Rev. 0
+            </div>
+            <div class="font-bold">
+                1
+            </div>
+        </div>
+
+    </form>
+
+</body>
+</html>

@@ -1,0 +1,66 @@
+{
+  "evaluacionColumna": {
+    "observacion": {
+      "cifosisDorsal": {
+        "normal": false,
+        "hipercifosis": false,
+        "aplanamientoCifosisDorsal": false
+      },
+      "lordosisLumbar": {
+        "normal": false,
+        "hipercifosis": false,
+        "aplanamientoLordosisLumbar": false
+      },
+      "presenciaEscoliosis": {
+        "ausente": false,
+        "dorsalDx": false,
+        "dorsalIx": false,
+        "lumbarDx": false,
+        "lumbarIx": false
+      },
+      "ritmoLumboPelvico": {
+        "normal": false,
+        "lordosisLumbarInmodificada": false,
+        "dolorLumbar": false
+      },
+      "dorsoCurvoEstructuradoCifoEscoliosis": {
+        "normal": false,
+        "presenciaDorsoCurvoEstructurado": false,
+        "dolorDorsal": false
+      }
+    },
+
+    "maniobraPresoPalpacion": {
+      "cervical": {
+        "dolorAusente": false,
+        "dolorPresente": {
+          "aplica": false,
+          "apofisisEspacioIntervertebral": {
+            "aplica": false,
+            "numeroApofisisEspacio": ""
+          },
+          "segmentoMuscular": {
+            "aplica": false,
+            "detalle": ""
+          }
+        }
+      },
+      "dorsal": {
+        "dolorAusente": false,
+        "dolorPresente": {
+          "aplica": false,
+          "apofisisEspacioIntervertebral": false,
+          "segmentoMuscular": false
+        }
+      },
+      "lumbar": {
+        "dolorAusente": false,
+        "dolorPresente": {
+          "aplica": false,
+          "apofisisEspacioIntervertebral": false,
+          "segmentoMuscular": false
+        }
+      }
+    }
+  }
+}

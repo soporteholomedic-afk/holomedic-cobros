@@ -1,0 +1,417 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Entrevista Cuestionario Anamnésico Osteomuscular - Página 2</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            font-family: Arial, Helvetica, sans-serif;
+            color: #000;
+        }
+        input[type="text"], input[type="number"] {
+            background: transparent;
+            outline: none;
+        }
+        input[type="text"]:focus, input[type="number"]:focus {
+            background-color: #f0fdf4;
+        }
+        input[type="checkbox"], input[type="radio"] {
+            cursor: pointer;
+            width: 13px;
+            height: 13px;
+            accent-color: #0070c0;
+            vertical-align: middle;
+        }
+        .box-check {
+            width: 13px;
+            height: 13px;
+            border: 1px solid #000;
+            display: inline-block;
+            vertical-align: middle;
+            margin: 0 2px;
+            background-color: #fff;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 py-6 text-[11px] leading-tight">
+
+    <!-- CONTENEDOR PRINCIPAL PÁGINA 2 -->
+    <form id="formAnamnesicoPag2" onsubmit="event.preventDefault();" class="max-w-[850px] mx-auto bg-white p-6 shadow-md border border-gray-300">
+
+        <!-- LOGO ENCABEZADO -->
+        <div class="flex items-center justify-between mb-3">
+            <div class="flex items-center">
+                <div class="flex flex-col">
+                    <span class="text-2xl font-black text-[#003366] tracking-tighter leading-none">JJC</span>
+                    <span class="text-[7px] text-gray-500 tracking-wider">INGENIERIA Y CONSTRUCCIÓN</span>
+                </div>
+                <div class="ml-2 flex items-center">
+                    <div class="w-0 h-0 border-y-[8px] border-y-transparent border-r-[12px] border-r-[#008080]"></div>
+                    <div class="w-0 h-0 border-y-[8px] border-y-transparent border-l-[12px] border-l-[#003366] -ml-1"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ================= TABLA 1: PARESTESIA NOCTURNA ================= -->
+        <table class="w-full border-collapse border border-black mb-2 text-[11px]">
+            <colgroup>
+                <col class="w-[22%]">
+                <col class="w-[28%]">
+                <col class="w-[38%]">
+                <col class="w-[6%]">
+                <col class="w-[6%]">
+            </colgroup>
+            <thead>
+                <tr class="bg-[#d9e1f2]">
+                    <td colspan="2" class="border border-black p-1 font-bold text-[#b25900]">
+                        PARESTESIA NOCTURNA
+                        <span class="text-black font-normal ml-3">
+                            <label class="cursor-pointer mr-2">
+                                <input type="radio" name="parestesiaNocturna.tieneParestesia" :value="false" v-model="parestesiaNocturna.tieneParestesia"> NO
+                            </label>
+                            <label class="cursor-pointer">
+                                <input type="radio" name="parestesiaNocturna.tieneParestesia" :value="true" v-model="parestesiaNocturna.tieneParestesia"> SI
+                            </label>
+                        </span>
+                    </td>
+                    <td class="border border-black p-1 text-[10px]">
+                        <strong>¿CUÁNDO SE INCIO LA MOLESTIA?:</strong> <span class="text-[9px]">(años, meses, semanas o días):</span>
+                        <input type="text" name="parestesiaNocturna.inicioMolestia" v-model="parestesiaNocturna.inicioMolestia" class="w-full border-b border-gray-400 font-normal outline-none mt-0.5">
+                    </td>
+                    <td class="border border-black p-1 text-center font-bold">Dx</td>
+                    <td class="border border-black p-1 text-center font-bold">Ix</td>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <!-- Columna Ilustración y Descripción -->
+                    <td class="border border-black p-1 text-center align-top" rowspan="9">
+                        <div class="text-[9px] leading-tight mb-1 text-left font-bold">
+                            hormigueo, ardor, entumecimiento, sensación de pinchazo o corrientazo ^
+                        </div>
+                        <div class="flex justify-between font-bold px-2 text-[9px] my-1">
+                            <span>Ix</span>
+                            <span>DX</span>
+                        </div>
+                        <svg class="w-32 h-24 mx-auto" viewBox="0 0 160 100" fill="none" stroke="currentColor" stroke-width="1">
+                            <path d="M 20 80 L 20 60 C 15 55, 10 40, 10 35 C 10 30, 13 30, 15 35 L 22 50 C 20 35, 20 20, 23 15 C 25 12, 28 12, 29 17 L 33 45 C 33 30, 35 10, 40 10 C 43 10, 45 13, 44 25 L 43 45 C 45 30, 50 20, 53 22 C 55 24, 53 35, 50 48 L 48 55 C 55 58, 60 65, 55 80 Z"/>
+                            <path d="M 140 80 L 140 60 C 145 55, 150 40, 150 35 C 150 30, 147 30, 145 35 L 138 50 C 140 35, 140 20, 137 15 C 135 12, 132 12, 131 17 L 127 45 C 127 30, 125 10, 120 10 C 117 10, 115 13, 116 25 L 117 45 C 115 30, 110 20, 107 22 C 105 24, 107 35, 110 48 L 112 55 C 105 58, 100 65, 105 80 Z"/>
+                        </svg>
+                        <div class="text-[8px] text-left font-bold mt-1 leading-tight">
+                            N: Indicar sobre la figura el área de distribución de la molestia
+                        </div>
+                    </td>
+
+                    <!-- Columna Información Reportada -->
+                    <td class="border border-black p-1 align-top space-y-1" rowspan="9">
+                        <div class="font-bold leading-snug">Información reportada sobre la molestia:</div>
+                        <div><label class="cursor-pointer"><input type="checkbox" name="parestesiaNocturna.infoReportada.haTomadoMedicamentos" v-model="parestesiaNocturna.infoReportada.haTomadoMedicamentos" class="mr-1"> ha tomado medicamentos</label></div>
+                        <div class="font-bold mt-1">ha realizado:</div>
+                        <div><label class="cursor-pointer"><input type="checkbox" name="parestesiaNocturna.infoReportada.fisioterapia" v-model="parestesiaNocturna.infoReportada.fisioterapia" class="mr-1"> fisioterapia</label></div>
+                        <div><label class="cursor-pointer"><input type="checkbox" name="parestesiaNocturna.infoReportada.visitaOrtopedistaFisiatra" v-model="parestesiaNocturna.infoReportada.visitaOrtopedistaFisiatra" class="mr-1"> visita al ortopedista/fisiatra</label></div>
+                        <div><label class="cursor-pointer"><input type="checkbox" name="parestesiaNocturna.infoReportada.rx" v-model="parestesiaNocturna.infoReportada.rx" class="mr-1"> RX</label></div>
+                        <div><label class="cursor-pointer"><input type="checkbox" name="parestesiaNocturna.infoReportada.ecografiaRmn" v-model="parestesiaNocturna.infoReportada.ecografiaRmn" class="mr-1"> ECOGRAFÍA / RMN</label></div>
+                        <div><label class="cursor-pointer"><input type="checkbox" name="parestesiaNocturna.infoReportada.emg" v-model="parestesiaNocturna.infoReportada.emg" class="mr-1"> EMG (electromiografía)</label></div>
+                    </td>
+
+                    <!-- Filas Síntomas -->
+                    <td class="border border-black p-1">brazo</td>
+                    <td class="border border-black p-1 text-center align-middle"><input type="checkbox" name="parestesiaNocturna.sintomas.brazo.dx" v-model="parestesiaNocturna.sintomas.brazo.dx"></td>
+                    <td class="border border-black p-1 text-center align-middle"><input type="checkbox" name="parestesiaNocturna.sintomas.brazo.ix" v-model="parestesiaNocturna.sintomas.brazo.ix"></td>
+                </tr>
+                <tr>
+                    <td class="border border-black p-1">antebrazo</td>
+                    <td class="border border-black p-1 text-center align-middle"><input type="checkbox" name="parestesiaNocturna.sintomas.antebrazo.dx" v-model="parestesiaNocturna.sintomas.antebrazo.dx"></td>
+                    <td class="border border-black p-1 text-center align-middle"><input type="checkbox" name="parestesiaNocturna.sintomas.antebrazo.ix" v-model="parestesiaNocturna.sintomas.antebrazo.ix"></td>
+                </tr>
+                <tr>
+                    <td class="border border-black p-1">mano</td>
+                    <td class="border border-black p-1 text-center align-middle"><input type="checkbox" name="parestesiaNocturna.sintomas.mano.dx" v-model="parestesiaNocturna.sintomas.mano.dx"></td>
+                    <td class="border border-black p-1 text-center align-middle"><input type="checkbox" name="parestesiaNocturna.sintomas.mano.ix" v-model="parestesiaNocturna.sintomas.mano.ix"></td>
+                </tr>
+                <tr>
+                    <td class="border border-black p-1">Duración menor a 10 minutos.</td>
+                    <td class="border border-black p-1 text-center align-middle"><input type="checkbox" name="parestesiaNocturna.sintomas.duracionMenor10Min.dx" v-model="parestesiaNocturna.sintomas.duracionMenor10Min.dx"></td>
+                    <td class="border border-black p-1 text-center align-middle"><input type="checkbox" name="parestesiaNocturna.sintomas.duracionMenor10Min.ix" v-model="parestesiaNocturna.sintomas.duracionMenor10Min.ix"></td>
+                </tr>
+                <tr>
+                    <td class="border border-black p-1">Duración mayor a 10 minutos.</td>
+                    <td class="border border-black p-1 text-center align-middle"><input type="checkbox" name="parestesiaNocturna.sintomas.duracionMayor10Min.dx" v-model="parestesiaNocturna.sintomas.duracionMayor10Min.dx"></td>
+                    <td class="border border-black p-1 text-center align-middle"><input type="checkbox" name="parestesiaNocturna.sintomas.duracionMayor10Min.ix" v-model="parestesiaNocturna.sintomas.duracionMayor10Min.ix"></td>
+                </tr>
+                <tr>
+                    <td class="border border-black p-1">Presencia durante el sueño</td>
+                    <td class="border border-black p-1 text-center align-middle"><input type="checkbox" name="parestesiaNocturna.sintomas.presenciaDuranteSueno.dx" v-model="parestesiaNocturna.sintomas.presenciaDuranteSueno.dx"></td>
+                    <td class="border border-black p-1 text-center align-middle"><input type="checkbox" name="parestesiaNocturna.sintomas.presenciaDuranteSueno.ix" v-model="parestesiaNocturna.sintomas.presenciaDuranteSueno.ix"></td>
+                </tr>
+                <tr>
+                    <td class="border border-black p-1">Aparición al despertar</td>
+                    <td class="border border-black p-1 text-center align-middle"><input type="checkbox" name="parestesiaNocturna.sintomas.aparicionAlDespertar.dx" v-model="parestesiaNocturna.sintomas.aparicionAlDespertar.dx"></td>
+                    <td class="border border-black p-1 text-center align-middle"><input type="checkbox" name="parestesiaNocturna.sintomas.aparicionAlDespertar.ix" v-model="parestesiaNocturna.sintomas.aparicionAlDespertar.ix"></td>
+                </tr>
+                <tr>
+                    <td class="border border-black p-1 space-y-0.5">
+                        <div class="font-bold">UMBRAL POSITIVO<span class="font-normal">(marcar x en <span class="box-check"></span>)</span></div>
+                        <div><label class="cursor-pointer"><input type="checkbox" name="parestesiaNocturna.sintomas.umbralPositivo.molestiaSuenoCasiTodaNoche.dx" v-model="parestesiaNocturna.sintomas.umbralPositivo.molestiaSuenoCasiTodaNoche.dx" class="mr-1"> molestia durante el sueño casi toda la noche.</label></div>
+                        <div><label class="cursor-pointer"><input type="checkbox" name="parestesiaNocturna.sintomas.umbralPositivo.ocurrenciaUnaSemana12Meses.dx" v-model="parestesiaNocturna.sintomas.umbralPositivo.ocurrenciaUnaSemana12Meses.dx" class="mr-1"> ocurrencia por lo menos en 1 semana en los últimos 12 meses</label></div>
+                        <div><label class="cursor-pointer"><input type="checkbox" name="parestesiaNocturna.sintomas.umbralPositivo.ocurrenciaUnaVezMes.dx" v-model="parestesiaNocturna.sintomas.umbralPositivo.ocurrenciaUnaVezMes.dx" class="mr-1"> ocurrencia una vez al mes</label></div>
+                    </td>
+                    <td class="border border-black p-1 text-center align-middle"><input type="checkbox" name="parestesiaNocturna.sintomas.umbralPositivo.dx" v-model="parestesiaNocturna.sintomas.umbralPositivo.dx"></td>
+                    <td class="border border-black p-1 text-center align-middle"><input type="checkbox" name="parestesiaNocturna.sintomas.umbralPositivo.ix" v-model="parestesiaNocturna.sintomas.umbralPositivo.ix"></td>
+                </tr>
+                <tr>
+                    <td class="border border-black p-1">
+                        <div class="font-bold">MOLESTIAS LEVES</div>
+                        <div>episodios de molestias por debajo del umbral</div>
+                    </td>
+                    <td class="border border-black p-1 text-center align-middle"><input type="checkbox" name="parestesiaNocturna.sintomas.molestiasLeves.dx" v-model="parestesiaNocturna.sintomas.molestiasLeves.dx"></td>
+                    <td class="border border-black p-1 text-center align-middle"><input type="checkbox" name="parestesiaNocturna.sintomas.molestiasLeves.ix" v-model="parestesiaNocturna.sintomas.molestiasLeves.ix"></td>
+                </tr>
+            </tbody>
+        </table>
+
+        <!-- ================= TABLA 2: PARESTESIA DIURNA ================= -->
+        <table class="w-full border-collapse border border-black mb-2 text-[11px]">
+            <colgroup>
+                <col class="w-[22%]">
+                <col class="w-[28%]">
+                <col class="w-[38%]">
+                <col class="w-[6%]">
+                <col class="w-[6%]">
+            </colgroup>
+            <thead>
+                <tr class="bg-[#d9e1f2]">
+                    <td colspan="2" class="border border-black p-1 font-bold text-[#b25900]">
+                        PARESTESIA DIURNA
+                        <span class="text-black font-normal ml-3">
+                            <label class="cursor-pointer mr-2">
+                                <input type="radio" name="parestesiaDiurna.tieneParestesia" :value="false" v-model="parestesiaDiurna.tieneParestesia"> NO
+                            </label>
+                            <label class="cursor-pointer">
+                                <input type="radio" name="parestesiaDiurna.tieneParestesia" :value="true" v-model="parestesiaDiurna.tieneParestesia"> SI
+                            </label>
+                        </span>
+                    </td>
+                    <td class="border border-black p-1 text-[10px]">
+                        <strong>¿CUÁNDO SE INCIO LA MOLESTIA? :</strong> <span class="text-[9px]">(años, meses, semanas o días):</span>
+                        <input type="text" name="parestesiaDiurna.inicioMolestia" v-model="parestesiaDiurna.inicioMolestia" class="w-full border-b border-gray-400 font-normal outline-none mt-0.5">
+                    </td>
+                    <td class="border border-black p-1 text-center font-bold">Dx</td>
+                    <td class="border border-black p-1 text-center font-bold">Ix</td>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <!-- Columna Ilustración -->
+                    <td class="border border-black p-1 text-center align-top" rowspan="10">
+                        <div class="flex justify-between font-bold px-4 text-[10px] mb-1">
+                            <span>Dx</span>
+                            <span>Ix</span>
+                        </div>
+                        <svg class="w-24 h-28 mx-auto" viewBox="0 0 100 120" fill="none" stroke="currentColor" stroke-width="1">
+                            <path d="M50 10 C 45 10, 42 15, 42 22 C 42 26, 45 28, 50 28 C 55 28, 58 26, 58 22 C 58 15, 55 10, 50 10 Z" />
+                            <path d="M42 25 L 35 32 L 20 38 L 15 65 L 20 85 L 25 85 L 22 65 L 32 60 L 32 95 L 48 95 L 48 60 L 52 60 L 52 95 L 68 95 L 68 60 L 78 65 L 75 85 L 80 85 L 85 65 L 80 38 L 65 32 L 58 25" />
+                        </svg>
+                        <div class="text-[8px] text-left font-bold mt-1 leading-tight">
+                            N: Indicar sobre la figura el área de distribución de la molestia.
+                        </div>
+                    </td>
+
+                    <!-- Columna Información Reportada -->
+                    <td class="border border-black p-1 align-top space-y-1" rowspan="10">
+                        <div class="font-bold leading-snug">Información reportada sobre la molestia:</div>
+                        <div><label class="cursor-pointer"><input type="checkbox" name="parestesiaDiurna.infoReportada.haTomadoMedicamentos" v-model="parestesiaDiurna.infoReportada.haTomadoMedicamentos" class="mr-1"> ha tomado medicamentos</label></div>
+                        <div class="font-bold mt-1">ha realizado:</div>
+                        <div><label class="cursor-pointer"><input type="checkbox" name="parestesiaDiurna.infoReportada.fisioterapia" v-model="parestesiaDiurna.infoReportada.fisioterapia" class="mr-1"> fisioterapia</label></div>
+                        <div><label class="cursor-pointer"><input type="checkbox" name="parestesiaDiurna.infoReportada.visitaOrtopedistaFisiatra" v-model="parestesiaDiurna.infoReportada.visitaOrtopedistaFisiatra" class="mr-1"> visita al ortopedista/fisiatra</label></div>
+                        <div><label class="cursor-pointer"><input type="checkbox" name="parestesiaDiurna.infoReportada.rx" v-model="parestesiaDiurna.infoReportada.rx" class="mr-1"> RX</label></div>
+                        <div><label class="cursor-pointer"><input type="checkbox" name="parestesiaDiurna.infoReportada.ecografiaRmn" v-model="parestesiaDiurna.infoReportada.ecografiaRmn" class="mr-1"> ECOGRAFÍA / RMN</label></div>
+                        <div><label class="cursor-pointer"><input type="checkbox" name="parestesiaDiurna.infoReportada.emg" v-model="parestesiaDiurna.infoReportada.emg" class="mr-1"> EMG (electromiografía)</label></div>
+                    </td>
+
+                    <!-- Filas Síntomas -->
+                    <td class="border border-black p-1">brazo</td>
+                    <td class="border border-black p-1 text-center align-middle"><input type="checkbox" name="parestesiaDiurna.sintomas.brazo.dx" v-model="parestesiaDiurna.sintomas.brazo.dx"></td>
+                    <td class="border border-black p-1 text-center align-middle"><input type="checkbox" name="parestesiaDiurna.sintomas.brazo.ix" v-model="parestesiaDiurna.sintomas.brazo.ix"></td>
+                </tr>
+                <tr>
+                    <td class="border border-black p-1">antebrazo</td>
+                    <td class="border border-black p-1 text-center align-middle"><input type="checkbox" name="parestesiaDiurna.sintomas.antebrazo.dx" v-model="parestesiaDiurna.sintomas.antebrazo.dx"></td>
+                    <td class="border border-black p-1 text-center align-middle"><input type="checkbox" name="parestesiaDiurna.sintomas.antebrazo.ix" v-model="parestesiaDiurna.sintomas.antebrazo.ix"></td>
+                </tr>
+                <tr>
+                    <td class="border border-black p-1">mano</td>
+                    <td class="border border-black p-1 text-center align-middle"><input type="checkbox" name="parestesiaDiurna.sintomas.mano.dx" v-model="parestesiaDiurna.sintomas.mano.dx"></td>
+                    <td class="border border-black p-1 text-center align-middle"><input type="checkbox" name="parestesiaDiurna.sintomas.mano.ix" v-model="parestesiaDiurna.sintomas.mano.ix"></td>
+                </tr>
+                <tr>
+                    <td class="border border-black p-1">Duración menor a 10 minutos.</td>
+                    <td class="border border-black p-1 text-center align-middle"><input type="checkbox" name="parestesiaDiurna.sintomas.duracionMenor10Min.dx" v-model="parestesiaDiurna.sintomas.duracionMenor10Min.dx"></td>
+                    <td class="border border-black p-1 text-center align-middle"><input type="checkbox" name="parestesiaDiurna.sintomas.duracionMenor10Min.ix" v-model="parestesiaDiurna.sintomas.duracionMenor10Min.ix"></td>
+                </tr>
+                <tr>
+                    <td class="border border-black p-1">Duración mayor a 10 minutos.</td>
+                    <td class="border border-black p-1 text-center align-middle"><input type="checkbox" name="parestesiaDiurna.sintomas.duracionMayor10Min.dx" v-model="parestesiaDiurna.sintomas.duracionMayor10Min.dx"></td>
+                    <td class="border border-black p-1 text-center align-middle"><input type="checkbox" name="parestesiaDiurna.sintomas.duracionMayor10Min.ix" v-model="parestesiaDiurna.sintomas.duracionMayor10Min.ix"></td>
+                </tr>
+                <tr>
+                    <td class="border border-black p-1">Aparecen con los brazos levantados</td>
+                    <td class="border border-black p-1 text-center align-middle"><input type="checkbox" name="parestesiaDiurna.sintomas.aparecenBrazosLevantados.dx" v-model="parestesiaDiurna.sintomas.aparecenBrazosLevantados.dx"></td>
+                    <td class="border border-black p-1 text-center align-middle"><input type="checkbox" name="parestesiaDiurna.sintomas.aparecenBrazosLevantados.ix" v-model="parestesiaDiurna.sintomas.aparecenBrazosLevantados.ix"></td>
+                </tr>
+                <tr>
+                    <td class="border border-black p-1">Aparecen cuando se apoya el codo</td>
+                    <td class="border border-black p-1 text-center align-middle"><input type="checkbox" name="parestesiaDiurna.sintomas.aparecenApoyaCodo.dx" v-model="parestesiaDiurna.sintomas.aparecenApoyaCodo.dx"></td>
+                    <td class="border border-black p-1 text-center align-middle"><input type="checkbox" name="parestesiaDiurna.sintomas.aparecenApoyaCodo.ix" v-model="parestesiaDiurna.sintomas.aparecenApoyaCodo.ix"></td>
+                </tr>
+                <tr>
+                    <td class="border border-black p-1">Aparicio con la presencia de fuerza y/o durante la ejecución del trabajo.</td>
+                    <td class="border border-black p-1 text-center align-middle"><input type="checkbox" name="parestesiaDiurna.sintomas.aparicionFuerzaEjecucionTrabajo.dx" v-model="parestesiaDiurna.sintomas.aparicionFuerzaEjecucionTrabajo.dx"></td>
+                    <td class="border border-black p-1 text-center align-middle"><input type="checkbox" name="parestesiaDiurna.sintomas.aparicionFuerzaEjecucionTrabajo.ix" v-model="parestesiaDiurna.sintomas.aparicionFuerzaEjecucionTrabajo.ix"></td>
+                </tr>
+                <tr>
+                    <td class="border border-black p-1 space-y-0.5">
+                        <div class="font-bold">UMBRAL POSITIVO<span class="font-normal">(marcar x en <span class="box-check"></span>)</span></div>
+                        <div><label class="cursor-pointer"><input type="checkbox" name="parestesiaDiurna.sintomas.umbralPositivo.molestiaCasiTodosDias.dx" v-model="parestesiaDiurna.sintomas.umbralPositivo.molestiaCasiTodosDias.dx" class="mr-1"> molestia casi todos los días.</label></div>
+                        <div><label class="cursor-pointer"><input type="checkbox" name="parestesiaDiurna.sintomas.umbralPositivo.ocurrenciaUnaSemana12Meses.dx" v-model="parestesiaDiurna.sintomas.umbralPositivo.ocurrenciaUnaSemana12Meses.dx" class="mr-1"> ocurrencia por lo menos en 1 semana en los últimos 12 meses.</label></div>
+                        <div><label class="cursor-pointer"><input type="checkbox" name="parestesiaDiurna.sintomas.umbralPositivo.ocurrenciaUnDiaMes.dx" v-model="parestesiaDiurna.sintomas.umbralPositivo.ocurrenciaUnDiaMes.dx" class="mr-1"> ocurrencia por lo menos un día al mes.</label></div>
+                    </td>
+                    <td class="border border-black p-1 text-center align-middle"><input type="checkbox" name="parestesiaDiurna.sintomas.umbralPositivo.dx" v-model="parestesiaDiurna.sintomas.umbralPositivo.dx"></td>
+                    <td class="border border-black p-1 text-center align-middle"><input type="checkbox" name="parestesiaDiurna.sintomas.umbralPositivo.ix" v-model="parestesiaDiurna.sintomas.umbralPositivo.ix"></td>
+                </tr>
+                <tr>
+                    <td class="border border-black p-1">
+                        <div class="font-bold">MOLESTIAS LEVES</div>
+                        <div>episodios de molestias por debajo del umbral</div>
+                    </td>
+                    <td class="border border-black p-1 text-center align-middle"><input type="checkbox" name="parestesiaDiurna.sintomas.molestiasLeves.dx" v-model="parestesiaDiurna.sintomas.molestiasLeves.dx"></td>
+                    <td class="border border-black p-1 text-center align-middle"><input type="checkbox" name="parestesiaDiurna.sintomas.molestiasLeves.ix" v-model="parestesiaDiurna.sintomas.molestiasLeves.ix"></td>
+                </tr>
+            </tbody>
+        </table>
+
+        <!-- ================= SECCIÓN 3: MOLESTIA CERVICAL IRRADIADA ================= -->
+        <div class="border border-black mb-2 text-[11px]">
+            <div class="bg-[#d9e1f2] border-b border-black p-1">
+                <div class="font-bold text-[#b25900]">
+                    MOLESTIA CERVICAL IRRADIADA A LA EXTREMIDAD SUPERIOR.
+                    <span class="text-black font-normal ml-3">
+                        <label class="cursor-pointer mr-3"><input type="radio" name="molestiaCervicalIrradiada.tieneMolestia" :value="true" v-model="molestiaCervicalIrradiada.tieneMolestia"> SI</label>
+                        <label class="cursor-pointer"><input type="radio" name="molestiaCervicalIrradiada.tieneMolestia" :value="false" v-model="molestiaCervicalIrradiada.tieneMolestia"> NO</label>
+                    </span>
+                </div>
+                <div class="text-[10px] mt-1">
+                    <strong>¿CUÁNDO SE INCIO LA MOLESTIA?</strong> <span class="text-[9px]">(años, meses, semanas o días) :</span>
+                    <input type="text" name="molestiaCervicalIrradiada.inicioMolestia" v-model="molestiaCervicalIrradiada.inicioMolestia" class="border-b border-gray-400 w-96 font-normal outline-none ml-1">
+                </div>
+            </div>
+
+            <table class="w-full border-collapse">
+                <tbody>
+                    <tr>
+                        <td class="border-b border-r border-black p-1 font-bold w-[75%]">EXTREMIDAD SUPERIOR AFECTADA</td>
+                        <td class="border-b border-black p-1 text-center w-[25%]">
+                            <label class="cursor-pointer mr-4"><input type="checkbox" name="molestiaCervicalIrradiada.extremidadAfectada.dx" v-model="molestiaCervicalIrradiada.extremidadAfectada.dx"> Dx</label>
+                            <label class="cursor-pointer"><input type="checkbox" name="molestiaCervicalIrradiada.extremidadAfectada.ix" v-model="molestiaCervicalIrradiada.extremidadAfectada.ix"> Ix</label>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td class="border-r border-black p-1 font-bold align-top">
+                            INICIAN O EMPEORAN ELEVANDO LAS EXTREMIDADES SUPERIORES
+                            <div class="font-normal space-y-0.5 mt-1">
+                                <div><label class="cursor-pointer"><input type="checkbox" name="molestiaCervicalIrradiada.frecuencia.presentandoCasiTodoDia" v-model="molestiaCervicalIrradiada.frecuencia.presentandoCasiTodoDia" class="mr-1"> se está presentando casi todo el día.</label></div>
+                                <div><label class="cursor-pointer"><input type="checkbox" name="molestiaCervicalIrradiada.frecuencia.presenciaUnaSemana12Meses" v-model="molestiaCervicalIrradiada.frecuencia.presenciaUnaSemana12Meses" class="mr-1"> presencia por lo menos en 1 semana en los últimos 12 meses</label></div>
+                                <div><label class="cursor-pointer"><input type="checkbox" name="molestiaCervicalIrradiada.frecuencia.presenciaUnDiaMes" v-model="molestiaCervicalIrradiada.frecuencia.presenciaUnDiaMes" class="mr-1"> presencia por lo menos un día al mes</label></div>
+                            </div>
+                        </td>
+                        <td class="border-black p-1 text-center align-top">
+                            <label class="cursor-pointer mr-3"><input type="radio" name="molestiaCervicalIrradiada.inicianOEmpeoranElevandoExtremidades" :value="true" v-model="molestiaCervicalIrradiada.inicianOEmpeoranElevandoExtremidades"> SI</label>
+                            <label class="cursor-pointer"><input type="radio" name="molestiaCervicalIrradiada.inicianOEmpeoranElevandoExtremidades" :value="false" v-model="molestiaCervicalIrradiada.inicianOEmpeoranElevandoExtremidades"> NO</label>
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <!-- ================= SECCIÓN 4: AUSENCIA DEL TRABAJO Y TRASTORNOS ================= -->
+        <div class="border border-black p-1 font-bold text-[11px] bg-white">
+            Ausencia del trabajo por trastornos/dolencias en extremidad superior
+            <input type="number" name="ausenciaYTrastornos.diasAusenciaExtremidadSuperior" v-model.number="ausenciaYTrastornos.diasAusenciaExtremidadSuperior" class="border-b border-black w-24 text-center font-normal outline-none px-1" min="0"> días
+        </div>
+
+        <table class="w-full border-collapse border border-black text-[11px]">
+            <thead>
+                <tr class="bg-[#d9e1f2]">
+                    <td colspan="3" class="border border-black p-1 font-bold text-[#b25900]">
+                        TRASTORNO - DIAGNÓSTICO (ya conocido)
+                        <span class="text-black font-normal ml-3">
+                            <label class="cursor-pointer mr-3"><input type="radio" name="ausenciaYTrastornos.tieneTrastornoDiagnosticado" :value="true" v-model="ausenciaYTrastornos.tieneTrastornoDiagnosticado"> SI</label>
+                            <label class="cursor-pointer"><input type="radio" name="ausenciaYTrastornos.tieneTrastornoDiagnosticado" :value="false" v-model="ausenciaYTrastornos.tieneTrastornoDiagnosticado"> NO</label>
+                        </span>
+                    </td>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td class="border border-black p-1 font-bold w-[55%]">
+                        HOMBRO <span class="font-normal">(tendinopatía del manguito rotador; tendinitis, etc.)</span>
+                    </td>
+                    <td class="border border-black p-1 text-center w-[20%]">
+                        <label class="cursor-pointer mr-2"><input type="radio" name="ausenciaYTrastornos.diagnosticos.hombro.tiene" :value="true" v-model="ausenciaYTrastornos.diagnosticos.hombro.tiene"> SI</label>
+                        <label class="cursor-pointer"><input type="radio" name="ausenciaYTrastornos.diagnosticos.hombro.tiene" :value="false" v-model="ausenciaYTrastornos.diagnosticos.hombro.tiene"> NO</label>
+                    </td>
+                    <td class="border border-black p-1 w-[25%] font-bold">
+                        ¿CUÁNDO? <input type="text" name="ausenciaYTrastornos.diagnosticos.hombro.cuando" v-model="ausenciaYTrastornos.diagnosticos.hombro.cuando" class="border-b border-gray-400 font-normal outline-none w-28 ml-1">
+                    </td>
+                </tr>
+                <tr>
+                    <td class="border border-black p-1 font-bold">
+                        CODO <span class="font-normal">(epicondilitis; epitrocleitis; etc.)</span>
+                    </td>
+                    <td class="border border-black p-1 text-center">
+                        <label class="cursor-pointer mr-2"><input type="radio" name="ausenciaYTrastornos.diagnosticos.codo.tiene" :value="true" v-model="ausenciaYTrastornos.diagnosticos.codo.tiene"> SI</label>
+                        <label class="cursor-pointer"><input type="radio" name="ausenciaYTrastornos.diagnosticos.codo.tiene" :value="false" v-model="ausenciaYTrastornos.diagnosticos.codo.tiene"> NO</label>
+                    </td>
+                    <td class="border border-black p-1 font-bold">
+                        ¿CUÁNDO? <input type="text" name="ausenciaYTrastornos.diagnosticos.codo.cuando" v-model="ausenciaYTrastornos.diagnosticos.codo.cuando" class="border-b border-gray-400 font-normal outline-none w-28 ml-1">
+                    </td>
+                </tr>
+                <tr>
+                    <td class="border border-black p-1 font-bold">
+                        MANO/MUÑECA <span class="font-normal">(tendinitis; quiste en el tendón; etc.)</span>
+                    </td>
+                    <td class="border border-black p-1 text-center">
+                        <label class="cursor-pointer mr-2"><input type="radio" name="ausenciaYTrastornos.diagnosticos.manoMunecaTendinitis.tiene" :value="true" v-model="ausenciaYTrastornos.diagnosticos.manoMunecaTendinitis.tiene"> SI</label>
+                        <label class="cursor-pointer"><input type="radio" name="ausenciaYTrastornos.diagnosticos.manoMunecaTendinitis.tiene" :value="false" v-model="ausenciaYTrastornos.diagnosticos.manoMunecaTendinitis.tiene"> NO</label>
+                    </td>
+                    <td class="border border-black p-1 font-bold">
+                        ¿CUÁNDO? <input type="text" name="ausenciaYTrastornos.diagnosticos.manoMunecaTendinitis.cuando" v-model="ausenciaYTrastornos.diagnosticos.manoMunecaTendinitis.cuando" class="border-b border-gray-400 font-normal outline-none w-28 ml-1">
+                    </td>
+                </tr>
+                <tr>
+                    <td class="border border-black p-1 font-bold">
+                        MANO/MUÑECA: <span class="font-normal">(Síndrome del túnel carpiano, Síndrome del canal de Guyón)</span>
+                    </td>
+                    <td class="border border-black p-1 text-center">
+                        <label class="cursor-pointer mr-2"><input type="radio" name="ausenciaYTrastornos.diagnosticos.manoMunecaTunelCarpiano.tiene" :value="true" v-model="ausenciaYTrastornos.diagnosticos.manoMunecaTunelCarpiano.tiene"> SI</label>
+                        <label class="cursor-pointer"><input type="radio" name="ausenciaYTrastornos.diagnosticos.manoMunecaTunelCarpiano.tiene" :value="false" v-model="ausenciaYTrastornos.diagnosticos.manoMunecaTunelCarpiano.tiene"> NO</label>
+                    </td>
+                    <td class="border border-black p-1 font-bold">
+                        ¿CUÁNDO? <input type="text" name="ausenciaYTrastornos.diagnosticos.manoMunecaTunelCarpiano.cuando" v-model="ausenciaYTrastornos.diagnosticos.manoMunecaTunelCarpiano.cuando" class="border-b border-gray-400 font-normal outline-none w-28 ml-1">
+                    </td>
+                </tr>
+                <tr>
+                    <td colspan="3" class="border border-black p-1 font-bold text-[11px]">
+                        N ° TOTAL DE DÍAS DE ENFERMEDAD EN LOS ÚLTIMOS 12 MESES:
+                        <input type="number" name="ausenciaYTrastornos.totalDiasEnfermedad12Meses" v-model.number="ausenciaYTrastornos.totalDiasEnfermedad12Meses" class="border-b border-black w-24 text-center font-normal outline-none px-1 ml-2" min="0">
+                    </td>
+                </tr>
+            </tbody>
+        </table>
+
+    </form>
+
+</body>
+</html>

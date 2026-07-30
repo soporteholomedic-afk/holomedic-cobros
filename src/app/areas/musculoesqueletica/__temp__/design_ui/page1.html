@@ -1,0 +1,605 @@
+<!DOCTYPE html><html class="light" lang="es" style=""><head>
+<meta charset="utf-8">
+<meta content="width=device-width, initial-scale=1.0" name="viewport">
+<title>Evaluación de Miembros Superiores - Holomedic</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;500;600;700&amp;family=Inter:wght@400;500&amp;family=Geist:wght@400;500;600&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "tertiary-fixed-dim": "#c4c7c9",
+                        "tertiary": "#585d5e",
+                        "on-error": "#ffffff",
+                        "on-tertiary": "#ffffff",
+                        "on-secondary-fixed": "#111c2f",
+                        "surface-container-low": "#eff4ff",
+                        "error-container": "#ffdad6",
+                        "primary-container": "#007ac0",
+                        "on-tertiary-container": "#fafdff",
+                        "on-primary-container": "#fdfcff",
+                        "on-secondary-fixed-variant": "#3d475c",
+                        "on-error-container": "#93000a",
+                        "on-primary-fixed-variant": "#004a77",
+                        "on-surface": "#0b1c30",
+                        "secondary": "#545e75",
+                        "on-surface-variant": "#404751",
+                        "tertiary-container": "#717577",
+                        "surface-bright": "#f8f9ff",
+                        "background": "#f8f9ff",
+                        "tertiary-fixed": "#e0e3e5",
+                        "outline": "#707882",
+                        "surface-variant": "#d3e4fe",
+                        "surface-dim": "#cbdbf5",
+                        "on-background": "#0b1c30",
+                        "surface-container": "#e5eeff",
+                        "on-tertiary-fixed-variant": "#434749",
+                        "outline-variant": "#bfc7d2",
+                        "surface-tint": "#00629d",
+                        "primary-fixed": "#cfe5ff",
+                        "surface-container-lowest": "#ffffff",
+                        "primary": "#006099",
+                        "inverse-primary": "#98cbff",
+                        "on-secondary-container": "#5a647b",
+                        "secondary-fixed": "#d8e2fd",
+                        "primary-fixed-dim": "#98cbff",
+                        "error": "#ba1a1a",
+                        "on-primary": "#ffffff",
+                        "surface-container-highest": "#d3e4fe",
+                        "surface-container-high": "#dce9ff",
+                        "on-secondary": "#ffffff",
+                        "surface": "#f8f9ff",
+                        "on-primary-fixed": "#001d33",
+                        "secondary-container": "#d8e2fd",
+                        "inverse-surface": "#213145",
+                        "on-tertiary-fixed": "#181c1e",
+                        "inverse-on-surface": "#eaf1ff",
+                        "secondary-fixed-dim": "#bcc6e0"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.125rem",
+                        "lg": "0.25rem",
+                        "xl": "0.5rem",
+                        "full": "0.75rem"
+                    },
+                    "spacing": {
+                        "baseline": "4px",
+                        "margin-mobile": "16px",
+                        "sidebar-width": "260px",
+                        "container-max": "1440px",
+                        "margin-desktop": "32px",
+                        "gutter": "24px"
+                    },
+                    "fontFamily": {
+                        "headline-lg": ["Hanken Grotesk"],
+                        "headline-md": ["Hanken Grotesk"],
+                        "headline-sm": ["Hanken Grotesk"],
+                        "label-sm": ["Geist"],
+                        "body-md": ["Inter"],
+                        "body-lg": ["Inter"],
+                        "label-md": ["Geist"]
+                    },
+                    "fontSize": {
+                        "headline-lg": ["30px", { "lineHeight": "38px", "letterSpacing": "-0.02em", "fontWeight": "700" }],
+                        "headline-md": ["24px", { "lineHeight": "32px", "letterSpacing": "-0.01em", "fontWeight": "600" }],
+                        "headline-sm": ["20px", { "lineHeight": "28px", "fontWeight": "600" }],
+                        "label-sm": ["11px", { "lineHeight": "14px", "fontWeight": "600" }],
+                        "body-md": ["14px", { "lineHeight": "20px", "fontWeight": "400" }],
+                        "body-lg": ["16px", { "lineHeight": "24px", "fontWeight": "400" }],
+                        "label-md": ["12px", { "lineHeight": "16px", "letterSpacing": "0.05em", "fontWeight": "500" }]
+                    }
+                },
+            },
+        }
+    </script>
+<style>
+        body {
+            background-color: #F4F7F9;
+            font-family: 'Inter', sans-serif;
+        }
+        .sidebar-active {
+            background-color: #d8e2fd;
+            color: #5a647b;
+            border-top-left-radius: 9999px;
+            border-bottom-left-radius: 9999px;
+            margin-left: 1rem;
+        }
+        .clinical-card {
+            background: #FFFFFF;
+            border: 1px solid #E2E8F0;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+        .form-label {
+            font-family: 'Geist';
+            font-size: 12px;
+            font-weight: 500;
+            letter-spacing: 0.05em;
+            color: #404751;
+            margin-bottom: 4px;
+            display: block;
+        }
+        .form-input {
+            width: 100%;
+            height: 40px;
+            border: 1px solid #E2E8F0;
+            border-radius: 4px;
+            padding: 0 12px;
+            font-size: 14px;
+            transition: all 0.2s;
+        }
+        .form-input:focus {
+            outline: none;
+            border-color: #007DC5;
+            box-shadow: 0 0 0 2px rgba(0, 125, 197, 0.1);
+        }
+        .table-header {
+            background-color: #F8FAFC;
+            font-family: 'Geist';
+            font-size: 12px;
+            font-weight: 500;
+            color: #707882;
+            text-transform: uppercase;
+        }
+    </style>
+</head>
+<body class="min-h-screen text-on-surface">
+<!-- SideNavBar -->
+<aside class="fixed left-0 top-0 h-full w-[260px] bg-secondary flex flex-col py-8 border-r border-outline-variant z-50">
+<div class="px-6 mb-10">
+<h1 class="text-headline-md font-headline-md font-bold text-on-secondary">Holomedic</h1>
+<p class="text-label-md font-label-md text-on-secondary/70">Clinical Management System</p>
+</div>
+<nav class="flex-1 space-y-1">
+<a class="flex items-center px-6 py-3 text-on-secondary/80 hover:bg-white/10 transition-colors" href="#">
+<span class="material-symbols-outlined mr-3">home</span>
+<span class="font-label-md text-label-md">Inicio</span>
+</a>
+<a class="flex items-center px-6 py-3 text-on-secondary/80 hover:bg-white/10 transition-colors" href="#">
+<span class="material-symbols-outlined mr-3">payments</span>
+<span class="font-label-md text-label-md">Cobranza</span>
+</a>
+<a class="flex items-center px-6 py-3 text-on-secondary/80 hover:bg-white/10 transition-colors" href="#">
+<span class="material-symbols-outlined mr-3">analytics</span>
+<span class="font-label-md text-label-md">Consolidados</span>
+</a>
+<a class="flex items-center px-6 py-3 text-on-secondary/80 hover:bg-white/10 transition-colors" href="#">
+<span class="material-symbols-outlined mr-3">clinical_notes</span>
+<span class="font-label-md text-label-md">Registros</span>
+</a>
+<a class="sidebar-active flex items-center px-6 py-3 text-on-secondary-container transition-colors" href="#">
+<span class="material-symbols-outlined mr-3">medical_services</span>
+<span class="font-label-md text-label-md">Valoraciones</span>
+</a>
+<a class="flex items-center px-6 py-3 text-on-secondary/80 hover:bg-white/10 transition-colors" href="#">
+<span class="material-symbols-outlined mr-3">domain</span>
+<span class="font-label-md text-label-md">Áreas</span>
+</a>
+<a class="flex items-center px-6 py-3 text-on-secondary/80 hover:bg-white/10 transition-colors" href="#">
+<span class="material-symbols-outlined mr-3">description</span>
+<span class="font-label-md text-label-md">Plantillas</span>
+</a>
+</nav>
+<div class="px-6 mt-auto">
+<div class="flex items-center gap-3 p-3 rounded-lg bg-white/5">
+<div class="w-10 h-10 rounded-full bg-primary-fixed flex items-center justify-center text-primary font-bold">DR</div>
+<div class="overflow-hidden">
+<p class="text-label-md font-bold text-on-secondary truncate">Dr. Ricardo Pérez</p>
+<p class="text-[10px] text-on-secondary/60">Especialista Ocupacional</p>
+</div>
+</div>
+</div>
+</aside>
+<!-- TopAppBar -->
+<header class="fixed top-0 right-0 w-[calc(100%-260px)] h-16 bg-surface border-b border-outline-variant flex items-center justify-between px-8 z-40">
+<h2 class="font-headline-sm text-headline-sm font-bold text-primary">Evaluación de Miembros Superiores</h2>
+<div class="flex items-center space-x-4">
+<div class="relative">
+<span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-outline-variant">search</span>
+<input class="bg-surface-container-low border-none rounded-full pl-10 pr-4 py-2 text-sm w-64 focus:ring-2 focus:ring-primary/20" placeholder="Buscar paciente..." type="text">
+</div>
+<button class="p-2 hover:bg-surface-container-high rounded-full transition-all text-on-surface-variant">
+<span class="material-symbols-outlined">notifications</span>
+</button>
+<button class="p-2 hover:bg-surface-container-high rounded-full transition-all text-on-surface-variant">
+<span class="material-symbols-outlined">help</span>
+</button>
+<button class="p-2 hover:bg-surface-container-high rounded-full transition-all text-on-surface-variant">
+<span class="material-symbols-outlined">settings</span>
+</button>
+</div>
+</header>
+<!-- Main Content -->
+<main class="ml-[260px] pt-24 pb-12 px-8 max-w-[1440px]">
+<!-- General Data Section -->
+<section class="clinical-card mb-8 p-6">
+<div class="flex items-center justify-between mb-6 border-b border-outline-variant pb-4">
+<h3 class="font-headline-sm text-primary flex items-center">
+<span class="material-symbols-outlined mr-2">person</span> Datos Generales
+                </h3>
+<span class="text-label-md px-3 py-1 bg-surface-container-highest rounded text-primary">ID: 2024-MS-089</span>
+</div>
+<div class="grid grid-cols-1 md:grid-cols-4 gap-6">
+<div>
+<label class="form-label">FECHA DE ENTREVISTA</label>
+<input class="form-input" type="date">
+</div>
+<div>
+<label class="form-label">EMPRESA</label>
+<input class="form-input" placeholder="Nombre empresa" type="text">
+</div>
+<div>
+<label class="form-label">ÁREA</label>
+<input class="form-input" placeholder="Departamento" type="text">
+</div>
+<div>
+<label class="form-label">TIPO DE EXAMEN</label>
+<select class="form-input">
+<option>Ingreso</option>
+<option>Periódico</option>
+<option>Retiro</option>
+<option>Otro</option>
+</select>
+</div>
+<div class="md:col-span-2">
+<label class="form-label">NOMBRE Y APELLIDOS</label>
+<input class="form-input" placeholder="Nombre completo del paciente" type="text">
+</div>
+<div>
+<label class="form-label">FECHA DE NACIMIENTO</label>
+<input class="form-input" type="date">
+</div>
+<div>
+<label class="form-label">EDAD</label>
+<input class="form-input" placeholder="0" type="number">
+</div>
+<div>
+<label class="form-label">SEXO</label>
+<div class="flex gap-4 mt-2">
+<label class="flex items-center text-body-md"><input class="mr-2 text-primary" name="sex" type="radio"> M</label>
+<label class="flex items-center text-body-md"><input class="mr-2 text-primary" name="sex" type="radio"> F</label>
+</div>
+</div>
+<div>
+<label class="form-label">ANTIGÜEDAD PUESTO (Meses)</label>
+<input class="form-input" placeholder="0" type="number">
+</div>
+<div>
+<label class="form-label">ANTIGÜEDAD EMPRESA (Meses)</label>
+<input class="form-input" placeholder="0" type="number">
+</div>
+<div>
+<label class="form-label">MIEMBRO DOMINANTE</label>
+<div class="flex gap-4 mt-2">
+<label class="flex items-center text-body-md text-primary font-medium"><input class="mr-2 text-primary" name="dominant" type="radio"> Dx</label>
+<label class="flex items-center text-body-md text-primary font-medium"><input class="mr-2 text-primary" name="dominant" type="radio"> Ix</label>
+</div>
+</div>
+</div>
+</section>
+<!-- Evaluation Sections -->
+<div class="grid grid-cols-1 gap-8">
+<!-- HOMBRO -->
+<div class="clinical-card grid grid-cols-1 lg:grid-cols-3 ring-1 ring-primary/20">
+<div class="p-6 lg:border-r border-outline-variant">
+<div class="flex items-center justify-between mb-4">
+<h4 class="font-headline-sm text-primary">HOMBRO</h4>
+<div class="flex items-center">
+<span class="text-label-md mr-2">¿Dolor?</span>
+<label class="relative inline-flex items-center cursor-pointer text-primary font-medium">
+<input class="sr-only peer" type="checkbox">
+<div class="w-11 h-6 bg-tertiary-fixed-dim peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
+</label>
+</div>
+</div>
+<div class="mb-4">
+<label class="form-label">INICIO DE MOLESTIA</label>
+<input class="form-input" placeholder="ej. Hace 2 semanas" type="text">
+</div>
+<div class="space-y-2">
+<p class="form-label">INFORMACIÓN REPORTADA</p>
+<div class="grid grid-cols-2 gap-2">
+<label class="flex items-center text-body-md"><input class="mr-2 rounded text-primary" type="checkbox"> Medicamentos</label>
+<label class="flex items-center text-body-md"><input class="mr-2 rounded text-primary" type="checkbox"> Fisioterapia</label>
+<label class="flex items-center text-body-md"><input class="mr-2 rounded text-primary" type="checkbox"> Infiltración</label>
+<label class="flex items-center text-body-md"><input class="mr-2 rounded text-primary" type="checkbox"> Cirugía</label>
+</div>
+</div>
+<div class="mt-8 border-t border-outline-variant pt-4 flex justify-center bg-surface-container-lowest rounded-lg p-4">
+<img class="h-48 object-contain opacity-80 mix-blend-multiply" data-alt="A clean, medical line drawing illustration showing a male torso from the front with arrows pointing specifically to both shoulder joints. The style is minimalist and clinical with thin, precise lines on a soft light blue background. This is a medical reference diagram for clinical assessment software with a professional and sterile mood." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCVfzTLCnck-E2gQeoQBBS5lcxuyF2zUlgxgF05VDVbbxGaa7oEggzQVFFxPwDh_QNA-WAL_fMLBxthkMOSZkeBuCgV_xH6IErfdpdL_DDWFILx8CchjIFO6s4JXcaGCdVFmvzFSxyU5CqJvcuApwe7LrRvzuM8PfNZFK2nF5NhgkGjid4ZC_balVsI9lGNUhkhpBlLIDSqQaHq3DjDKe0pyRbwZBHkkXsGZC532Gxi7HNeagcBS7BzPbXRFWwOUbSYXIp7gEbocSFM">
+</div>
+</div>
+<div class="lg:col-span-2 p-6">
+<table class="w-full border-collapse">
+<thead>
+<tr class="table-header">
+<th class="text-left p-3">SÍNTOMAS / SIGNOS</th>
+<th class="text-center p-3 w-24">DX</th>
+<th class="text-center p-3 w-24">IX</th>
+</tr>
+</thead>
+<tbody class="divide-y divide-outline-variant">
+<tr>
+<td class="p-3 text-body-md">Dolor al movimiento</td>
+<td class="p-3 text-center"><input class="rounded text-primary" type="checkbox"></td>
+<td class="p-3 text-center"><input class="rounded text-primary" type="checkbox"></td>
+</tr>
+<tr>
+<td class="p-3 text-body-md">Dolor en reposo</td>
+<td class="p-3 text-center"><input class="rounded text-primary" type="checkbox"></td>
+<td class="p-3 text-center"><input class="rounded text-primary" type="checkbox"></td>
+</tr>
+<tr class="">
+<td class="p-3 text-body-md font-medium">Umbral doloroso positivo</td>
+<td class="p-3 text-center"><input class="rounded text-primary" type="checkbox"></td>
+<td class="p-3 text-center"><input class="rounded text-primary" type="checkbox"></td>
+</tr>
+<tr class="">
+<td class="p-3 pl-8 text-body-md text-on-surface-variant">• Dolor continuo</td>
+<td class="p-3 text-center"><input class="rounded text-primary" type="checkbox"></td>
+<td class="p-3 text-center"><input class="rounded text-primary" type="checkbox"></td>
+</tr>
+<tr class="">
+<td class="p-3 pl-8 text-body-md text-on-surface-variant">• Al menos 1 semana de dolor en los últimos 12 meses</td>
+<td class="p-3 text-center"><input class="rounded text-primary" type="checkbox"></td>
+<td class="p-3 text-center"><input class="rounded text-primary" type="checkbox"></td>
+</tr>
+<tr class="">
+<td class="p-3 pl-8 text-body-md text-on-surface-variant">• Al menos 1 vez al mes en los últimos 12 meses</td>
+<td class="p-3 text-center"><input class="rounded text-primary" type="checkbox"></td>
+<td class="p-3 text-center"><input class="rounded text-primary" type="checkbox"></td>
+</tr>
+<tr>
+<td class="p-3 text-body-md">Molestias leves esporádicas</td>
+<td class="p-3 text-center"><input class="rounded text-primary" type="checkbox"></td>
+<td class="p-3 text-center"><input class="rounded text-primary" type="checkbox"></td>
+</tr>
+</tbody>
+</table>
+<div class="mt-6">
+<label class="form-label">OBSERVACIONES ESPECÍFICAS - HOMBRO</label>
+<textarea class="form-input h-24 pt-2" placeholder="Notas adicionales..."></textarea>
+</div>
+</div>
+</div>
+<!-- CODO -->
+<div class="clinical-card grid grid-cols-1 lg:grid-cols-3">
+<div class="p-6 lg:border-r border-outline-variant">
+<div class="flex items-center justify-between mb-4">
+<h4 class="font-headline-sm text-primary">CODO</h4>
+<div class="flex items-center">
+<span class="text-label-md mr-2">¿Dolor?</span>
+<label class="relative inline-flex items-center cursor-pointer">
+<input class="sr-only peer" type="checkbox">
+<div class="w-11 h-6 bg-tertiary-fixed-dim peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
+</label>
+</div>
+</div>
+<div class="mb-4">
+<label class="form-label">INICIO DE MOLESTIA</label>
+<input class="form-input" placeholder="ej. Crónico" type="text">
+</div>
+<div class="space-y-2">
+<p class="form-label">INFORMACIÓN REPORTADA</p>
+<div class="grid grid-cols-2 gap-2">
+<label class="flex items-center text-body-md"><input class="mr-2 rounded text-primary" type="checkbox"> Medicamentos</label>
+<label class="flex items-center text-body-md"><input class="mr-2 rounded text-primary" type="checkbox"> Fisioterapia</label>
+<label class="flex items-center text-body-md"><input class="mr-2 rounded text-primary" type="checkbox"> EMG (Electro)</label>
+<label class="flex items-center text-body-md"><input class="mr-2 rounded text-primary" type="checkbox"> Cirugía</label>
+</div>
+</div>
+<div class="mt-8 border-t border-outline-variant pt-4 flex justify-center bg-surface-container-lowest rounded-lg p-4">
+<img class="h-48 object-contain opacity-80 mix-blend-multiply" data-alt="A clinical anatomical line art drawing of a male figure from the front with specific focus and arrows pointing to both elbow joints. The style is clean, medical, and professional, using fine black lines on a light grey-blue clinical background. The image is designed for a medical diagnostic interface, emphasizing clarity and precision in high-stakes healthcare software." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCbrxDgCpTxaGsd9azchuQPIVB5ZOHTz-JUMV_vGSJVxmqnC05-4uD6Sw8dPQ2ruFrJKEZMbHbrM0sxs9Nx-zaAMcDjK5fW-xx4HhZQkKeRpY_YvLU6SAxkuYCT7tWM9AfmU_pAHqESXEfRW99qEB3K67C3esUaI7kFXs9J2JQHopeB1eGytx__65v50RpGwhG20oQ5kPsW6HftZ-_VHZWH8vc6z6zJUwl1wkF-ntQsZudY4nyqnFOA2cYDsO5WblwFvkc-6bMLk9v7">
+</div>
+</div>
+<div class="lg:col-span-2 p-6">
+<table class="w-full border-collapse">
+<thead>
+<tr class="table-header">
+<th class="text-left p-3">SÍNTOMAS / SIGNOS</th>
+<th class="text-center p-3 w-24">DX</th>
+<th class="text-center p-3 w-24">IX</th>
+</tr>
+</thead>
+<tbody class="divide-y divide-outline-variant">
+<tr>
+<td class="p-3 text-body-md">Dolor al agarrar o pesar</td>
+<td class="p-3 text-center"><input class="rounded text-primary" type="checkbox"></td>
+<td class="p-3 text-center"><input class="rounded text-primary" type="checkbox"></td>
+</tr>
+<tr>
+<td class="p-3 text-body-md">Dolor en reposo</td>
+<td class="p-3 text-center"><input class="rounded text-primary" type="checkbox"></td>
+<td class="p-3 text-center"><input class="rounded text-primary" type="checkbox"></td>
+</tr>
+<tr>
+<td class="p-3 text-body-md">Umbral doloroso positivo</td>
+<td class="p-3 text-center"><input class="rounded text-primary" type="checkbox"></td>
+<td class="p-3 text-center"><input class="rounded text-primary" type="checkbox"></td>
+</tr><tr>
+<td class="p-3 pl-8 text-body-md text-on-surface-variant">• Dolor continuo</td>
+<td class="p-3 text-center"><input class="rounded text-primary" type="checkbox"></td>
+<td class="p-3 text-center"><input class="rounded text-primary" type="checkbox"></td>
+</tr>
+<tr>
+<td class="p-3 pl-8 text-body-md text-on-surface-variant">• Al menos 1 semana de dolor en los últimos 12 meses</td>
+<td class="p-3 text-center"><input class="rounded text-primary" type="checkbox"></td>
+<td class="p-3 text-center"><input class="rounded text-primary" type="checkbox"></td>
+</tr>
+<tr>
+<td class="p-3 pl-8 text-body-md text-on-surface-variant">• Al menos 1 vez al mes en los últimos 12 meses</td>
+<td class="p-3 text-center"><input class="rounded text-primary" type="checkbox"></td>
+<td class="p-3 text-center"><input class="rounded text-primary" type="checkbox"></td>
+</tr>
+<tr>
+<td class="p-3 text-body-md">Molestias leves esporádicas</td>
+<td class="p-3 text-center"><input class="rounded text-primary" type="checkbox"></td>
+<td class="p-3 text-center"><input class="rounded text-primary" type="checkbox"></td>
+</tr>
+</tbody>
+</table>
+<div class="mt-6">
+<label class="form-label">OBSERVACIONES ESPECÍFICAS - CODO</label>
+<textarea class="form-input h-24 pt-2" placeholder="Notas adicionales..."></textarea>
+</div>
+</div>
+</div>
+<!-- MANO / MUÑECA -->
+<div class="clinical-card grid grid-cols-1 lg:grid-cols-3">
+<div class="p-6 lg:border-r border-outline-variant">
+<div class="flex items-center justify-between mb-4">
+<h4 class="font-headline-sm text-primary">MANO / MUÑECA</h4>
+<div class="flex items-center">
+<span class="text-label-md mr-2">¿Dolor?</span>
+<label class="relative inline-flex items-center cursor-pointer">
+<input class="sr-only peer" type="checkbox">
+<div class="w-11 h-6 bg-tertiary-fixed-dim peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
+</label>
+</div>
+</div>
+<div class="space-y-4">
+<div>
+<label class="form-label">INICIO DE MOLESTIA</label>
+<input class="form-input" placeholder="ej. Repetitivo" type="text">
+</div>
+<div>
+<label class="form-label">DISTRIBUCIÓN DE MOLESTIA</label>
+<input class="form-input" placeholder="Zonas específicas" type="text">
+</div>
+</div>
+<div class="space-y-2 mt-4">
+<p class="form-label">INFORMACIÓN REPORTADA</p>
+<div class="grid grid-cols-2 gap-2">
+<label class="flex items-center text-body-md"><input class="mr-2 rounded text-primary" type="checkbox"> Medicamentos</label>
+<label class="flex items-center text-body-md"><input class="mr-2 rounded text-primary" type="checkbox"> Fisioterapia</label>
+<label class="flex items-center text-body-md"><input class="mr-2 rounded text-primary" type="checkbox"> Férula</label>
+<label class="flex items-center text-body-md"><input class="mr-2 rounded text-primary" type="checkbox"> Cirugía</label>
+</div>
+</div>
+<div class="mt-8 border-t border-outline-variant pt-4 flex justify-center bg-surface-container-lowest rounded-lg p-4">
+<img class="h-48 object-contain opacity-80 mix-blend-multiply" data-alt="A detailed clinical line drawing of a pair of hands held open showing the palms, with anatomical annotations labeling the left (Ix) and right (Dx) sides. The illustration is in a clean, professional medical style with crisp black ink lines on a bright white background. This specialized diagram is for a clinical evaluation dashboard, evoking a sense of diagnostic hygiene and efficiency." src="https://lh3.googleusercontent.com/aida-public/AB6AXuAqIu3x4gleXtYzQeQbjQH5l_HBtyEwd4N4UPIGj53_-hEQQX7mJ10LwZ5fy7Y4iEcLsKXLA4JBXuWl5RbLDGnjjkdifwSj5hBsnyIwMp2ySANGo8CcTtA81eqHmBagQ6zpJLwtKBo46DUaphKYU63W4nRx8nJDKEoa8hIKOJ0GOsy_3k2mOWCumD9Rm1gv7Uk23GWT70oSMHKRVYZ_YNXtGz7pKeO0T2g6Wgksl4zNgcNUSs8UKwNPth-BRfGgNmpfBVvidu3fWS9x">
+</div>
+</div>
+<div class="lg:col-span-2 p-6">
+<table class="w-full border-collapse">
+<thead>
+<tr class="table-header">
+<th class="text-left p-3">SÍNTOMAS / SIGNOS</th>
+<th class="text-center p-3 w-24">DX</th>
+<th class="text-center p-3 w-24">IX</th>
+</tr>
+</thead>
+<tbody class="divide-y divide-outline-variant">
+<tr>
+<td class="p-3 text-body-md">Dolor al agarrar o pinza</td>
+<td class="p-3 text-center"><input class="rounded text-primary" type="checkbox"></td>
+<td class="p-3 text-center"><input class="rounded text-primary" type="checkbox"></td>
+</tr>
+<tr>
+<td class="p-3 text-body-md">Dolor al movimiento articular</td>
+<td class="p-3 text-center"><input class="rounded text-primary" type="checkbox"></td>
+<td class="p-3 text-center"><input class="rounded text-primary" type="checkbox"></td>
+</tr>
+<tr>
+<td class="p-3 text-body-md">Dolor en reposo</td>
+<td class="p-3 text-center"><input class="rounded text-primary" type="checkbox"></td>
+<td class="p-3 text-center"><input class="rounded text-primary" type="checkbox"></td>
+</tr>
+<tr>
+<td class="p-3 text-body-md">Molestia en 1er dedo</td>
+<td class="p-3 text-center"><input class="rounded text-primary" type="checkbox"></td>
+<td class="p-3 text-center"><input class="rounded text-primary" type="checkbox"></td>
+</tr>
+<tr>
+<td class="p-3 text-body-md">Molestia en 3 primeros dedos</td>
+<td class="p-3 text-center"><input class="rounded text-primary" type="checkbox"></td>
+<td class="p-3 text-center"><input class="rounded text-primary" type="checkbox"></td>
+</tr>
+<tr>
+<td class="p-3 text-body-md">Molestia en Palma</td>
+<td class="p-3 text-center"><input class="rounded text-primary" type="checkbox"></td>
+<td class="p-3 text-center"><input class="rounded text-primary" type="checkbox"></td>
+</tr>
+<tr>
+<td class="p-3 text-body-md">Molestia en Dorso</td>
+<td class="p-3 text-center"><input class="rounded text-primary" type="checkbox"></td>
+<td class="p-3 text-center"><input class="rounded text-primary" type="checkbox"></td>
+</tr>
+<tr>
+<td class="p-3 text-body-md">Umbral doloroso positivo</td>
+<td class="p-3 text-center"><input class="rounded text-primary" type="checkbox"></td>
+<td class="p-3 text-center"><input class="rounded text-primary" type="checkbox"></td>
+</tr><tr>
+<td class="p-3 pl-8 text-body-md text-on-surface-variant">• Dolor continuo</td>
+<td class="p-3 text-center"><input class="rounded text-primary" type="checkbox"></td>
+<td class="p-3 text-center"><input class="rounded text-primary" type="checkbox"></td>
+</tr>
+<tr>
+<td class="p-3 pl-8 text-body-md text-on-surface-variant">• Al menos 1 semana de dolor en los últimos 12 meses</td>
+<td class="p-3 text-center"><input class="rounded text-primary" type="checkbox"></td>
+<td class="p-3 text-center"><input class="rounded text-primary" type="checkbox"></td>
+</tr>
+<tr>
+<td class="p-3 pl-8 text-body-md text-on-surface-variant">• Al menos 1 vez al mes en los últimos 12 meses</td>
+<td class="p-3 text-center"><input class="rounded text-primary" type="checkbox"></td>
+<td class="p-3 text-center"><input class="rounded text-primary" type="checkbox"></td>
+</tr>
+<tr>
+<td class="p-3 text-body-md">Molestias leves esporádicas</td>
+<td class="p-3 text-center"><input class="rounded text-primary" type="checkbox"></td>
+<td class="p-3 text-center"><input class="rounded text-primary" type="checkbox"></td>
+</tr>
+</tbody>
+</table>
+<div class="mt-6">
+<label class="form-label">OBSERVACIONES ESPECÍFICAS - MANO / MUÑECA</label>
+<textarea class="form-input h-24 pt-2" placeholder="Notas adicionales..."></textarea>
+</div>
+</div>
+</div>
+</div>
+<!-- Action Footer -->
+<div class="mt-12 flex justify-end gap-4 border-t border-outline-variant pt-8">
+<button class="px-6 py-2 border border-primary text-primary font-medium rounded-lg hover:bg-primary/5 transition-all">
+                Cancelar y Borrar
+            </button>
+<button class="px-6 py-2 bg-primary text-white font-medium rounded-lg hover:bg-primary-container shadow-md transition-all active:scale-95">
+                Guardar Registro de Evaluación
+            </button>
+</div>
+</main>
+<!-- Contextual FAB (Floating Action Button) - Only for major screens, here we keep it as a 'Save' shortcut -->
+<button class="fixed bottom-8 right-8 w-14 h-14 bg-primary text-white rounded-full shadow-lg flex items-center justify-center hover:scale-105 transition-all active:scale-95 z-50">
+<span class="material-symbols-outlined">save</span>
+</button>
+<script>
+        // Micro-interaction for radio and checkbox selection clarity
+        document.querySelectorAll('input[type="checkbox"], input[type="radio"]').forEach(el => {
+            el.addEventListener('change', function() {
+                if (this.checked) {
+                    this.parentElement.classList.add('text-primary', 'font-medium');
+                } else {
+                    this.parentElement.classList.remove('text-primary', 'font-medium');
+                }
+            });
+        });
+
+        // Simple animation on toggle switch for pain
+        document.querySelectorAll('.sr-only.peer').forEach(toggle => {
+            toggle.addEventListener('change', function() {
+                const card = this.closest('.clinical-card');
+                if (this.checked) {
+                    card.classList.add('ring-1', 'ring-primary/20');
+                } else {
+                    card.classList.remove('ring-1', 'ring-primary/20');
+                }
+            });
+        });
+    </script>
+
+
+</body></html>

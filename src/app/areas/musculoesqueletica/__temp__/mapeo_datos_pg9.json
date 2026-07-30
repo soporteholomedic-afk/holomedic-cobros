@@ -1,0 +1,52 @@
+{
+  "evaluacionMotilidad": {
+    "columnaCervical": {
+      "presenciaDolorMovimiento": {
+        "flexion": "",
+        "extension": "",
+        "inclinacionDx": "",
+        "inclinacionIx": "",
+        "rotacionDx": "",
+        "rotacionIx": ""
+      }
+    },
+    "columnaDorsoLumbar": {
+      "presenciaDolorMovimiento": {
+        "flexion": "",
+        "extension": "",
+        "inclinacionDx": "",
+        "inclinacionIx": "",
+        "rotacionDx": "",
+        "rotacionIx": ""
+      }
+    }
+  },
+
+  "maniobraLasegueRetraccionIsquioCrural": {
+    "lasegueSlr": {
+      "normal": false,
+      "dx": false,
+      "ix": false,
+      "observacion": ""
+    },
+    "presenciaRetraccionIsquioCrural": false
+  },
+
+  "maniobraWassermanRetraccionIleopsoas": {
+    "wassermanLasegueInvertido": {
+      "dx": false,
+      "ix": false,
+      "observacion": ""
+    },
+    "presenciaRetraccionIleopsoas": false
+  },
+
+  "aproximacionDiagnosticaEvaluacion": "",
+
+  "medicoEvaluador": {
+    "nombreYApellidos": "",
+    "firmaSello": "",
+    "cargo": "MEDICO EVALUADOR / OCUPACIONAL",
+    "fecha": ""
+  }
+}

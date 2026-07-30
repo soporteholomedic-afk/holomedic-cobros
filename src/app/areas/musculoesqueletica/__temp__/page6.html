@@ -1,0 +1,409 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Plantilla Músculo Esquelética - Página 4</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 p-4 md:p-8 font-sans text-gray-900 text-xs select-none">
+
+  <!-- Contenedor Principal de la Ficha Médica -->
+  <div class="max-w-4xl mx-auto bg-white border border-gray-900 p-3 shadow-md space-y-2">
+
+    <!-- 1. PALPACIÓN MÚSCULO EPICÓNDILEO - EPITRÓCLEAR -->
+    <div class="border border-gray-900">
+      <div class="grid grid-cols-12 divide-x divide-gray-900">
+
+        <!-- Bloque Izquierdo: Título + (Texto e Imagen) + Opciones de Dolor -->
+        <div class="col-span-10 grid grid-cols-12 divide-x divide-gray-900">
+
+          <!-- Cabecera de la sección -->
+          <div class="col-span-12 bg-gray-200 font-bold p-1 px-2 uppercase border-b border-gray-900 text-[11px]">
+            PALPACION MUSCULO EPICÓNDILEO - EPITRÓCLEAR
+          </div>
+
+          <!-- Sub-bloque 1: Texto Explicativo (Izquierda) + Imagen (Derecha) -->
+          <div class="col-span-6 p-2 flex items-center justify-between space-x-2">
+            <p class="text-[9px] uppercase font-semibold leading-tight max-w-[130px] text-gray-800">
+              SE EFECTÚA A 2 CM DEL EPICÓNDILO SOBRE LA INSERCIÓN DEL TENDÓN
+            </p>
+            <!-- Gráfico Palpación -->
+            <div class="w-28 h-14 border border-dashed border-gray-400 flex items-center justify-center bg-gray-50 text-[9px] text-gray-400 shrink-0">
+              [Gráfico Palpación]
+            </div>
+          </div>
+
+          <!-- Sub-bloque 2: Opciones de Dolor -->
+          <div class="col-span-6 flex flex-col justify-center divide-y divide-gray-900 font-semibold text-[10px]">
+            <div class="p-2 flex items-center h-1/2">
+              DOLOR MUSCULO EPICÓNDILEO.........................
+            </div>
+            <div class="p-2 flex items-center h-1/2">
+              DOLOR MUSCULO EPITRÓCLEAR.........................
+            </div>
+          </div>
+
+        </div>
+
+        <!-- Bloque Derecho: Columnas Dx / Ix alineadas -->
+        <div class="col-span-2 grid grid-cols-2 divide-x divide-gray-900 text-center">
+          <div class="bg-gray-200 font-bold p-1 border-b border-gray-900 text-[11px]">Dx</div>
+          <div class="bg-gray-200 font-bold p-1 border-b border-gray-900 text-[11px]">Ix</div>
+
+          <div class="p-1 flex items-center justify-center border-b border-gray-900">
+            <input type="checkbox" name="evaluacionClinicaOsteomuscular.miembrosSuperiores.codo.palpacionEpicondileoEpitroclear.dolorMusculoEpicondileo.dx" class="w-4 h-4 rounded border-gray-400 cursor-pointer" />
+          </div>
+          <div class="p-1 flex items-center justify-center border-b border-gray-900">
+            <input type="checkbox" name="evaluacionClinicaOsteomuscular.miembrosSuperiores.codo.palpacionEpicondileoEpitroclear.dolorMusculoEpicondileo.ix" class="w-4 h-4 rounded border-gray-400 cursor-pointer" />
+          </div>
+
+          <div class="p-1 flex items-center justify-center">
+            <input type="checkbox" name="evaluacionClinicaOsteomuscular.miembrosSuperiores.codo.palpacionEpicondileoEpitroclear.dolorMusculoEpitroclear.dx" class="w-4 h-4 rounded border-gray-400 cursor-pointer" />
+          </div>
+          <div class="p-1 flex items-center justify-center">
+            <input type="checkbox" name="evaluacionClinicaOsteomuscular.miembrosSuperiores.codo.palpacionEpicondileoEpitroclear.dolorMusculoEpitroclear.ix" class="w-4 h-4 rounded border-gray-400 cursor-pointer" />
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- 2. TESTS DE CODO (EPICONDILITIS Y ATRAPAMIENTO N. ULNAR) -->
+    <div class="border border-gray-900 grid grid-cols-2 divide-x divide-gray-900">
+
+      <!-- TEST PARA EPICONDILITIS -->
+      <div class="flex flex-col justify-between">
+        <div class="bg-gray-200 font-bold p-1 border-b border-gray-900 uppercase px-2 text-[11px]">
+          TEST PARA EPICONDILITIS
+        </div>
+
+        <div class="p-2 grid grid-cols-12 gap-2 items-start">
+          <div class="col-span-6 flex flex-col items-start space-y-1">
+            <div class="w-full h-20 border border-dashed border-gray-400 flex items-center justify-center bg-gray-50 text-[9px] text-gray-400">
+              [Gráfico Extensión Codo]
+            </div>
+            <p class="text-[8px] uppercase leading-tight font-semibold text-gray-800 pt-1">
+              FLEXIÓN PASIVA DE LA MUÑECA CON EXTENSIÓN DEL CODO
+            </p>
+          </div>
+
+          <div class="col-span-6 space-y-3 pt-1">
+            <label class="flex items-start space-x-1 font-semibold text-[10px] leading-tight cursor-pointer">
+              <input type="checkbox" class="mt-0.5 w-3.5 h-3.5 rounded border-gray-400 shrink-0" />
+              <span>Presencia de dolor lateral en el codo.</span>
+            </label>
+            <div class="flex space-x-4 font-bold text-[11px] pl-1">
+              <label class="inline-flex items-center space-x-1 cursor-pointer">
+                <input type="checkbox" name="evaluacionClinicaOsteomuscular.miembrosSuperiores.codo.testEpicondilitis.presenciaDolorLateralCodo.dx" class="w-3.5 h-3.5 rounded border-gray-400" />
+                <span>Dx</span>
+              </label>
+              <label class="inline-flex items-center space-x-1 cursor-pointer">
+                <input type="checkbox" name="evaluacionClinicaOsteomuscular.miembrosSuperiores.codo.testEpicondilitis.presenciaDolorLateralCodo.ix" class="w-3.5 h-3.5 rounded border-gray-400" />
+                <span>Ix</span>
+              </label>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- TEST PARA ATRAPAMIENTO N. ULNAR EN EL CODO -->
+      <div class="flex flex-col justify-between">
+        <div class="bg-gray-200 font-bold p-1 border-b border-gray-900 uppercase px-2 text-[11px]">
+          TEST PARA ATRAPAMIENTO N. ULNAR EN EL CODO
+        </div>
+
+        <div class="p-2 grid grid-cols-12 gap-2 items-center">
+          <div class="col-span-6">
+            <div class="w-full h-20 border border-dashed border-gray-400 flex items-center justify-center bg-gray-50 text-[9px] text-gray-400">
+              [Gráfico Nervio Ulnar]
+            </div>
+          </div>
+
+          <div class="col-span-6 space-y-3">
+            <p class="font-semibold text-[9px] uppercase leading-tight text-gray-900">
+              PARESTESIAS IRRADIAN AL ANTEBRAZO Y/O AL 4° Y 5° DEDO:
+            </p>
+            <div class="flex space-x-4 font-bold text-[11px]">
+              <label class="inline-flex items-center space-x-1 cursor-pointer">
+                <input type="checkbox" name="evaluacionClinicaOsteomuscular.miembrosSuperiores.codo.testAtrapamientoNervioUlnar.parestesiasIrradianAntebrazoODedos.dx" class="w-3.5 h-3.5 rounded border-gray-400" />
+                <span>Dx</span>
+              </label>
+              <label class="inline-flex items-center space-x-1 cursor-pointer">
+                <input type="checkbox" name="evaluacionClinicaOsteomuscular.miembrosSuperiores.codo.testAtrapamientoNervioUlnar.parestesiasIrradianAntebrazoODedos.ix" class="w-3.5 h-3.5 rounded border-gray-400" />
+                <span>Ix</span>
+              </label>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- 3. EXAMEN INSTRUMENTAL -->
+    <div class="border border-gray-900 p-1.5 flex flex-wrap items-center justify-between text-[11px] gap-2">
+      <span class="font-bold">Examen instrumental:</span>
+      <label class="inline-flex items-center space-x-1 cursor-pointer">
+        <input type="checkbox" name="evaluacionClinicaOsteomuscular.miembrosSuperiores.codo.examenInstrumental.noRealizado" class="w-3.5 h-3.5 rounded border-gray-400" />
+        <span class="font-bold">NO</span>
+      </label>
+
+      <div class="inline-flex items-center space-x-1">
+        <label class="inline-flex items-center space-x-1 cursor-pointer">
+          <input type="checkbox" class="w-3.5 h-3.5 rounded border-gray-400" />
+          <span>ECOGRAFÍA (año</span>
+        </label>
+        <input type="number" name="evaluacionClinicaOsteomuscular.miembrosSuperiores.codo.examenInstrumental.ecografiaAno" class="w-12 border-b border-gray-800 text-center focus:outline-none p-0 h-4 text-xs font-semibold" />
+        <span>)</span>
+      </div>
+
+      <div class="inline-flex items-center space-x-1">
+        <label class="inline-flex items-center space-x-1 cursor-pointer">
+          <input type="checkbox" class="w-3.5 h-3.5 rounded border-gray-400" />
+          <span>RX (año</span>
+        </label>
+        <input type="number" name="evaluacionClinicaOsteomuscular.miembrosSuperiores.codo.examenInstrumental.rxAno" class="w-12 border-b border-gray-800 text-center focus:outline-none p-0 h-4 text-xs font-semibold" />
+        <span>)</span>
+      </div>
+
+      <div class="inline-flex items-center space-x-1">
+        <label class="inline-flex items-center space-x-1 cursor-pointer">
+          <input type="checkbox" class="w-3.5 h-3.5 rounded border-gray-400" />
+          <span>EMG (año</span>
+        </label>
+        <input type="number" name="evaluacionClinicaOsteomuscular.miembrosSuperiores.codo.examenInstrumental.emgAno" class="w-12 border-b border-gray-800 text-center focus:outline-none p-0 h-4 text-xs font-semibold" />
+        <span>)</span>
+      </div>
+    </div>
+
+    <!-- 4. GRAVEDAD PATOLOGÍA DEL CODO -->
+    <div class="border border-gray-900 bg-gray-100 p-1.5 flex items-center justify-between text-[11px]">
+      <span class="font-bold uppercase">GRAVEDAD PATOLOGÍA DEL CODO (última página)</span>
+      <div class="flex space-x-6 font-bold">
+        <label class="inline-flex items-center space-x-1 cursor-pointer">
+          <input type="radio" value="LEVE" name="evaluacionClinicaOsteomuscular.miembrosSuperiores.codo.gravedadPatologiaCodo" class="w-3.5 h-3.5 border-gray-400 text-gray-800 focus:ring-0" />
+          <span>LEVE</span>
+        </label>
+        <label class="inline-flex items-center space-x-1 cursor-pointer">
+          <input type="radio" value="MEDIA" name="evaluacionClinicaOsteomuscular.miembrosSuperiores.codo.gravedadPatologiaCodo" class="w-3.5 h-3.5 border-gray-400 text-gray-800 focus:ring-0" />
+          <span>MEDIA</span>
+        </label>
+        <label class="inline-flex items-center space-x-1 cursor-pointer">
+          <input type="radio" value="GRAVE" name="evaluacionClinicaOsteomuscular.miembrosSuperiores.codo.gravedadPatologiaCodo" class="w-3.5 h-3.5 border-gray-400 text-gray-800 focus:ring-0" />
+          <span>GRAVE</span>
+        </label>
+      </div>
+    </div>
+
+    <!-- 5. SECCIÓN C: MUÑECA - MANO -->
+    <div class="border border-gray-900">
+      <div class="bg-gray-200 p-1 font-bold border-b border-gray-900 flex items-center justify-between text-[12px]">
+        <div class="text-amber-900 font-extrabold">c) MUÑECA - MANO: <span class="text-amber-800">REALIZA MANIOBRAS</span></div>
+        <label class="inline-flex items-center space-x-1 text-black font-semibold cursor-pointer">
+          <input type="checkbox" name="evaluacionClinicaOsteomuscular.miembrosSuperiores.munecaMano.realizaManiobras" class="w-4 h-4 rounded border-gray-400" />
+          <span>SI</span>
+        </label>
+      </div>
+
+      <div class="p-2 border-b border-gray-900 flex justify-around items-center font-bold text-[11px]">
+        <div>
+          <span>MOLESTIA MUÑECA Dx desde</span>
+          <input type="number" name="evaluacionClinicaOsteomuscular.miembrosSuperiores.munecaMano.molestiaMunecaDxDesdeMeses" class="w-20 border-b border-gray-800 text-center focus:outline-none p-0 mx-1 font-semibold" />
+          <span>(meses)</span>
+        </div>
+        <div>
+          <span>MOLESTIA MUÑECA Ix desde</span>
+          <input type="number" name="evaluacionClinicaOsteomuscular.miembrosSuperiores.munecaMano.molestiaMunecaIxDesdeMeses" class="w-20 border-b border-gray-800 text-center focus:outline-none p-0 mx-1 font-semibold" />
+          <span>(meses)</span>
+        </div>
+      </div>
+
+      <!-- OBSERVACIÓN MANO / MUÑECA -->
+      <div>
+        <div class="bg-gray-200 font-bold p-1 text-center border-b border-gray-900 uppercase text-[11px]">
+          OBSERVACIÓN MANO/MUÑECA
+        </div>
+        <div class="divide-y divide-gray-900 font-semibold text-[10px]">
+
+          <!-- QUISTE -->
+          <div class="grid grid-cols-12 divide-x divide-gray-900 p-1 items-center">
+            <div class="col-span-3 font-bold pl-2 uppercase">QUISTE</div>
+            <div class="col-span-4 pl-2 flex items-center justify-between pr-2">
+              <span>QUISTE DORSAL</span>
+              <div class="space-x-2">
+                <label class="cursor-pointer"><input type="checkbox" name="evaluacionClinicaOsteomuscular.miembrosSuperiores.munecaMano.observacionManoMuneca.quisteDorsal.dx" /> Dx</label>
+                <label class="cursor-pointer"><input type="checkbox" name="evaluacionClinicaOsteomuscular.miembrosSuperiores.munecaMano.observacionManoMuneca.quisteDorsal.ix" /> Ix</label>
+              </div>
+            </div>
+            <div class="col-span-5 pl-2 flex items-center justify-between pr-2">
+              <span>QUISTE VENTRAL</span>
+              <div class="space-x-2">
+                <label class="cursor-pointer"><input type="checkbox" name="evaluacionClinicaOsteomuscular.miembrosSuperiores.munecaMano.observacionManoMuneca.quisteVentral.dx" /> Dx</label>
+                <label class="cursor-pointer"><input type="checkbox" name="evaluacionClinicaOsteomuscular.miembrosSuperiores.munecaMano.observacionManoMuneca.quisteVentral.ix" /> Ix</label>
+              </div>
+            </div>
+          </div>
+
+          <!-- EDEMA -->
+          <div class="grid grid-cols-12 divide-x divide-gray-900 p-1 items-center">
+            <div class="col-span-3 font-bold pl-2 uppercase">EDEMA</div>
+            <div class="col-span-4 pl-2 flex items-center justify-between pr-2">
+              <div>
+                <div>VENTRAL (muñeca)</div>
+                <div>ESTILOIDE RADIAL</div>
+              </div>
+              <div class="space-x-2">
+                <label class="cursor-pointer"><input type="checkbox" name="evaluacionClinicaOsteomuscular.miembrosSuperiores.munecaMano.observacionManoMuneca.edemaVentralEstiloideRadial.dx" /> Dx</label>
+                <label class="cursor-pointer"><input type="checkbox" name="evaluacionClinicaOsteomuscular.miembrosSuperiores.munecaMano.observacionManoMuneca.edemaVentralEstiloideRadial.ix" /> Ix</label>
+              </div>
+            </div>
+            <div class="col-span-5 pl-2 flex items-center justify-between pr-2">
+              <div>
+                <div>DORSAL (Muñeca)</div>
+                <div>ESTILOIDE ULNAR</div>
+              </div>
+              <div class="space-x-2">
+                <label class="cursor-pointer"><input type="checkbox" name="evaluacionClinicaOsteomuscular.miembrosSuperiores.munecaMano.observacionManoMuneca.edemaDorsalEstiloideUlnar.dx" /> Dx</label>
+                <label class="cursor-pointer"><input type="checkbox" name="evaluacionClinicaOsteomuscular.miembrosSuperiores.munecaMano.observacionManoMuneca.edemaDorsalEstiloideUlnar.ix" /> Ix</label>
+              </div>
+            </div>
+          </div>
+
+          <!-- HIPOTROFIA -->
+          <div class="grid grid-cols-12 divide-x divide-gray-900 p-1 items-center">
+            <div class="col-span-3 font-bold pl-2 uppercase">HIPOTROFIA</div>
+            <div class="col-span-4 pl-2">
+              <label class="cursor-pointer"><input type="checkbox" name="evaluacionClinicaOsteomuscular.miembrosSuperiores.munecaMano.observacionManoMuneca.hipotrofiaPosterior.dx" /> Dx posterior:</label>
+            </div>
+            <div class="col-span-5 pl-2">
+              <label class="cursor-pointer"><input type="checkbox" name="evaluacionClinicaOsteomuscular.miembrosSuperiores.munecaMano.observacionManoMuneca.hipotrofiaPosterior.ix" /> Ix posterior:</label>
+            </div>
+          </div>
+
+          <!-- DEFORMIDAD ARTICULAR -->
+          <div class="grid grid-cols-12 divide-x divide-gray-900 p-1 items-center">
+            <div class="col-span-3 font-bold pl-2 uppercase">DEFORM. ARTIC. TRAPECIO - METACARPAL</div>
+            <div class="col-span-4 pl-2">
+              <label class="cursor-pointer"><input type="checkbox" name="evaluacionClinicaOsteomuscular.miembrosSuperiores.munecaMano.observacionManoMuneca.deformidadArticularTrapecioMetacarpal.dx" /> Dx</label>
+            </div>
+            <div class="col-span-5 pl-2">
+              <label class="cursor-pointer"><input type="checkbox" name="evaluacionClinicaOsteomuscular.miembrosSuperiores.munecaMano.observacionManoMuneca.deformidadArticularTrapecioMetacarpal.ix" /> Ix</label>
+            </div>
+          </div>
+
+          <!-- RETACCIONES PALMARES -->
+          <div class="grid grid-cols-12 divide-x divide-gray-900 p-1 items-center">
+            <div class="col-span-3 font-bold pl-2 uppercase">RETACCIONES PALMARES</div>
+            <div class="col-span-4 pl-2">
+              <label class="cursor-pointer"><input type="checkbox" name="evaluacionClinicaOsteomuscular.miembrosSuperiores.munecaMano.observacionManoMuneca.retaccionesPalmares.dx" /> Dx</label>
+            </div>
+            <div class="col-span-5 pl-2">
+              <label class="cursor-pointer"><input type="checkbox" name="evaluacionClinicaOsteomuscular.miembrosSuperiores.munecaMano.observacionManoMuneca.retaccionesPalmares.ix" /> Ix</label>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </div>
+
+    <!-- 6. SECCIÓN FINAL: PALPACIÓN Y DEDO EN GATILLO -->
+    <div class="border border-gray-900 grid grid-cols-2 divide-x divide-gray-900">
+
+      <!-- PALPACIÓN -->
+      <div class="flex flex-col justify-between">
+        <div class="bg-gray-200 font-bold p-1 text-center border-b border-gray-900 uppercase text-[11px]">
+          PALPACIÓN
+        </div>
+        <div class="p-2 flex items-center space-x-2">
+          <!-- Ilustración de la mano -->
+          <div class="w-24 h-28 border border-dashed border-gray-400 flex flex-col items-center justify-center bg-gray-50 text-[9px] text-gray-400 shrink-0">
+            <span>[Esquema Mano]</span>
+            <span class="font-bold text-gray-600">A</span>
+            <span class="font-bold text-gray-600">B</span>
+          </div>
+
+          <div class="space-y-1 text-[9px] font-semibold">
+            <label class="flex items-start space-x-1 cursor-pointer">
+              <input type="checkbox" name="evaluacionClinicaOsteomuscular.miembrosSuperiores.munecaMano.palpacion.dolorArticulacionTrapecioMetacarpal.dx" class="mt-0.5 shrink-0" />
+              <span>(A) DOLOR A LA PALPACIÓN ARTI. TRAPECIO – METACARPALE Dx.</span>
+            </label>
+            <label class="flex items-start space-x-1 cursor-pointer">
+              <input type="checkbox" name="evaluacionClinicaOsteomuscular.miembrosSuperiores.munecaMano.palpacion.dolorArticulacionTrapecioMetacarpal.ix" class="mt-0.5 shrink-0" />
+              <span>(A) DOLOR A LA PALPACIÓN ARTI. TRAPECIO – METACARPAL Ix.</span>
+            </label>
+            <label class="flex items-start space-x-1 cursor-pointer">
+              <input type="checkbox" name="evaluacionClinicaOsteomuscular.miembrosSuperiores.munecaMano.palpacion.dolorEstiloideRadial.dx" class="mt-0.5 shrink-0" />
+              <span>(B) DOLOR A LA PALPACIÓN ESTILOIDE RADIAL Dx.</span>
+            </label>
+            <label class="flex items-start space-x-1 cursor-pointer">
+              <input type="checkbox" name="evaluacionClinicaOsteomuscular.miembrosSuperiores.munecaMano.palpacion.dolorEstiloideRadial.ix" class="mt-0.5 shrink-0" />
+              <span>(B) DOLOR A LA PALPACIÓN ESTILOIDE RADIAL Ix.</span>
+            </label>
+          </div>
+        </div>
+      </div>
+
+      <!-- MANIOBRA PARA CLIC (GATILLO) -->
+      <div class="flex flex-col justify-between">
+        <div class="bg-gray-200 font-bold p-1 text-center border-b border-gray-900 uppercase text-[11px]">
+          MANIOBRA PARA CLIC (chasquido) DE DEDOS (GATILLO)
+        </div>
+        <div class="p-2 space-y-3">
+          <div class="flex items-center space-x-2">
+            <div class="w-20 h-20 border border-dashed border-gray-400 flex items-center justify-center bg-gray-50 text-[9px] text-gray-400 shrink-0">
+              [Gráfico Dedo]
+            </div>
+
+            <div class="space-y-2 text-[9px] font-semibold">
+              <!-- Dedo Dx -->
+              <div>
+                <label class="flex items-center space-x-1 font-bold">
+                  <input type="checkbox" class="w-3.5 h-3.5" />
+                  <span>CLIC DURANTE LA EXTENSIÓN DEDO Dx:</span>
+                </label>
+                <div class="flex space-x-1 pl-4 mt-1">
+                  <label class="inline-flex items-center space-x-0.5 cursor-pointer"><input type="checkbox" name="evaluacionClinicaOsteomuscular.miembrosSuperiores.munecaMano.maniobraClicDedosGatillo.clicExtensionDedos.dx.dedo1" /><span>1°</span></label>
+                  <label class="inline-flex items-center space-x-0.5 cursor-pointer"><input type="checkbox" name="evaluacionClinicaOsteomuscular.miembrosSuperiores.munecaMano.maniobraClicDedosGatillo.clicExtensionDedos.dx.dedo2" /><span>2°</span></label>
+                  <label class="inline-flex items-center space-x-0.5 cursor-pointer"><input type="checkbox" name="evaluacionClinicaOsteomuscular.miembrosSuperiores.munecaMano.maniobraClicDedosGatillo.clicExtensionDedos.dx.dedo3" /><span>3°</span></label>
+                  <label class="inline-flex items-center space-x-0.5 cursor-pointer"><input type="checkbox" name="evaluacionClinicaOsteomuscular.miembrosSuperiores.munecaMano.maniobraClicDedosGatillo.clicExtensionDedos.dx.dedo4" /><span>4°</span></label>
+                  <label class="inline-flex items-center space-x-0.5 cursor-pointer"><input type="checkbox" name="evaluacionClinicaOsteomuscular.miembrosSuperiores.munecaMano.maniobraClicDedosGatillo.clicExtensionDedos.dx.dedo5" /><span>5°</span></label>
+                </div>
+              </div>
+
+              <!-- Dedo Ix -->
+              <div>
+                <label class="flex items-center space-x-1 font-bold">
+                  <input type="checkbox" class="w-3.5 h-3.5" />
+                  <span>CLIC DURANTE LA EXTENSIÓN DEDO Ix:</span>
+                </label>
+                <div class="flex space-x-1 pl-4 mt-1">
+                  <label class="inline-flex items-center space-x-0.5 cursor-pointer"><input type="checkbox" name="evaluacionClinicaOsteomuscular.miembrosSuperiores.munecaMano.maniobraClicDedosGatillo.clicExtensionDedos.ix.dedo1" /><span>1°</span></label>
+                  <label class="inline-flex items-center space-x-0.5 cursor-pointer"><input type="checkbox" name="evaluacionClinicaOsteomuscular.miembrosSuperiores.munecaMano.maniobraClicDedosGatillo.clicExtensionDedos.ix.dedo2" /><span>2°</span></label>
+                  <label class="inline-flex items-center space-x-0.5 cursor-pointer"><input type="checkbox" name="evaluacionClinicaOsteomuscular.miembrosSuperiores.munecaMano.maniobraClicDedosGatillo.clicExtensionDedos.ix.dedo3" /><span>3°</span></label>
+                  <label class="inline-flex items-center space-x-0.5 cursor-pointer"><input type="checkbox" name="evaluacionClinicaOsteomuscular.miembrosSuperiores.munecaMano.maniobraClicDedosGatillo.clicExtensionDedos.ix.dedo4" /><span>4°</span></label>
+                  <label class="inline-flex items-center space-x-0.5 cursor-pointer"><input type="checkbox" name="evaluacionClinicaOsteomuscular.miembrosSuperiores.munecaMano.maniobraClicDedosGatillo.clicExtensionDedos.ix.dedo5" /><span>5°</span></label>
+                </div>
+              </div>
+
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- Leyenda -->
+    <div class="text-[10px] font-bold pt-1">
+      Dx.= Derecho &nbsp;&nbsp;&nbsp; Ix.= Izquierdo
+    </div>
+
+    <!-- Pie de página -->
+    <div class="flex justify-between items-center text-[9px] text-gray-600 pt-2 border-t border-gray-300">
+      <div>Fo. JJC-SIGLA-13-31 Cuestionario anamnesico y evaluación de extremidad superior y espalda. Rev. 0</div>
+      <div class="font-bold text-gray-900 text-xs">4</div>
+    </div>
+
+  </div>
+
+</body>
+</html>
