@@ -76,6 +76,7 @@ export type Fotoprotector =
 /** Full evaluation payload (PR3 persists this). */
 export interface JjcEvaluacion {
   idAtencion: string;
+  area: string;
   fechaEvaluacion: string;   // YYYY-MM-DD
   lugar: 'HOLOMEDIC';
   fototipo: Fototipo;

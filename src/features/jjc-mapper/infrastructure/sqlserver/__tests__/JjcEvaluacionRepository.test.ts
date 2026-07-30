@@ -2,9 +2,11 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { JjcEvaluacion } from '@/types/jjc';
 
 // ---- In-memory store ----
+// Combined row from Evaluacion (generic) JOIN EvaluacionMedicina (medicina-specific).
 
 interface FakeRow {
   idAtencion: string;
+  area: string;
   fechaEvaluacion: string;
   lugar: string;
   fototipo: string;
@@ -17,66 +19,86 @@ interface FakeRow {
 
 const store = new Map<string, FakeRow>();
 
-// Build a chained fake request. Each call to .input() records the value
-// and returns the same fakeRequest so the .query() chain works.
-function makeFakeRequest() {
-  const ctx: Record<string, unknown> = {};
+// FakeRequest mimics the chained .input() → .query() API. Inputs are stored
+// in a private context and the SQL is parsed to decide between MERGE (upsert)
+// and SELECT (lookup) branches.
+class FakeRequest {
+  private ctx: Record<string, unknown> = {};
+  constructor(private readonly sharedCtx?: Record<string, unknown>) {}
+  input(name: string, _type: unknown, value: unknown): this {
+    this.ctx[name] = value;
+    if (this.sharedCtx) this.sharedCtx[name] = value;
+    return this;
+  }
+  async query(sql: string) {
+    if (sql.includes('MERGE')) {
+      // MERGE may target either Evaluacion (generic) or EvaluacionMedicina
+      // (medicina-specific). Use whichever fields are present in ctx; the
+      // repository issues both statements within a single transaction so
+      // they share the same logical row by (idAtencion, area).
+      const src = { ...(this.sharedCtx ?? {}), ...this.ctx };
+      const key = `${src.idAtencion}:${src.area}`;
+      const existing = store.get(key);
+      const row: FakeRow = {
+        idAtencion: src.idAtencion as string,
+        area: src.area as string,
+        fechaEvaluacion: existing?.fechaEvaluacion ?? (
+          src.fechaEvaluacion instanceof Date
+            ? (src.fechaEvaluacion as Date).toISOString().slice(0, 10)
+            : String(src.fechaEvaluacion ?? '')
+        ),
+        lugar: existing?.lugar ?? (src.lugar as string | undefined) ?? 'HOLOMEDIC',
+        fototipo: (src.fototipo as string | undefined) ?? existing?.fototipo ?? 'unknown',
+        fotoprotector: (src.fotoprotector as string | undefined) ?? existing?.fotoprotector ?? null,
+        observaciones: (src.observaciones as string | undefined) ?? existing?.observaciones ?? null,
+        lesionesJson: (src.lesionesJson as string | undefined) ?? existing?.lesionesJson ?? '[]',
+        preguntasJson: (src.preguntasJson as string | undefined) ?? existing?.preguntasJson ?? null,
+        createdBy: (src.createdBy as string | undefined) ?? existing?.createdBy ?? null,
+      };
+      store.set(key, row);
+      return { recordset: [], rowsAffected: [1] };
+    }
 
-  const fakeRequest = {
-    input: vi.fn((name: string, _type: unknown, value: unknown) => {
-      ctx[name] = value;
-      return fakeRequest;
-    }),
-    query: vi.fn(async (sql: string) => {
-      if (sql.includes('MERGE')) {
-        const row: FakeRow = {
-          idAtencion: ctx.idAtencion as string,
-          fechaEvaluacion:
-            ctx.fechaEvaluacion instanceof Date
-              ? ctx.fechaEvaluacion.toISOString().slice(0, 10)
-              : String(ctx.fechaEvaluacion),
-          lugar: ctx.lugar as string,
-          fototipo: ctx.fototipo as string,
-          fotoprotector: (ctx.fotoprotector as string) ?? null,
-          observaciones: (ctx.observaciones as string) || null,
-          lesionesJson: ctx.lesionesJson as string,
-          preguntasJson: (ctx.preguntasJson as string) || null,
-          createdBy: (ctx.createdBy as string) ?? null,
-        };
-        store.set(row.idAtencion, row);
-        return { recordset: [], rowsAffected: [1] };
-      }
+    if (sql.includes('SELECT') && sql.includes('dbo.Evaluacion')) {
+      const id = this.ctx.idAtencion as string;
+      const area = this.ctx.area as string;
+      const row = store.get(`${id}:${area}`);
+      if (!row) return { recordset: [] };
+      return {
+        recordset: [
+          {
+            idAtencion: row.idAtencion,
+            area: row.area,
+            fechaEvaluacion: new Date(row.fechaEvaluacion),
+            lugar: row.lugar,
+            fototipo: row.fototipo,
+            fotoprotector: row.fotoprotector,
+            observaciones: row.observaciones,
+            lesionesJson: row.lesionesJson,
+            preguntasJson: row.preguntasJson,
+            createdBy: row.createdBy,
+          },
+        ],
+      };
+    }
 
-      if (sql.includes('SELECT') && sql.includes('dbo.JjcEvaluacion')) {
-        const id = ctx.idAtencion as string;
-        const row = store.get(id);
-        if (!row) return { recordset: [] };
-        return {
-          recordset: [
-            {
-              idAtencion: row.idAtencion,
-              fechaEvaluacion: new Date(row.fechaEvaluacion),
-              lugar: row.lugar,
-              fototipo: row.fototipo,
-              fotoprotector: row.fotoprotector,
-              observaciones: row.observaciones,
-              lesionesJson: row.lesionesJson,
-              preguntasJson: row.preguntasJson,
-              createdBy: row.createdBy,
-            },
-          ],
-        };
-      }
+    return { recordset: [] };
+  }
+}
 
-      return { recordset: [] };
-    }),
-  };
-
-  return fakeRequest;
+// FakeTransaction supports begin/commit/rollback. Requests inside the
+// transaction share a private context so the two MERGEs (Evaluacion +
+// EvaluacionMedicina) contribute fields to the same logical row.
+class FakeTransaction {
+  private sharedCtx: Record<string, unknown> = {};
+  begin(): Promise<void> { return Promise.resolve(); }
+  commit(): Promise<void> { return Promise.resolve(); }
+  rollback(): Promise<void> { return Promise.resolve(); }
+  request(): FakeRequest { return new FakeRequest(this.sharedCtx); }
 }
 
 const fakePool = {
-  request: vi.fn(() => makeFakeRequest()),
+  request: vi.fn(() => new FakeRequest()),
   connect: vi.fn().mockResolvedValue(undefined),
   close: vi.fn(),
 };
@@ -85,10 +107,25 @@ vi.mock('@/lib/db', () => ({
   getHolomedicPool: vi.fn().mockResolvedValue(fakePool),
 }));
 
+// Mock mssql to provide our FakeRequest / FakeTransaction. The type
+// constructors (VarChar, NVarChar, Date, DateTime, MAX) are no-op markers
+// for the test — the fake just records names, not values.
+const mssqlMock = {
+  Request: FakeRequest,
+  Transaction: FakeTransaction,
+  VarChar: (n: number) => ({ __varchar: n }),
+  NVarChar: (n: number) => ({ __nvarchar: n }),
+  Date: () => ({ __date: true }),
+  DateTime: () => ({ __datetime: true }),
+  MAX: Number.MAX_SAFE_INTEGER,
+};
+vi.mock('mssql', () => ({ ...mssqlMock, default: mssqlMock }));
+
 const { SqlServerJjcEvaluacionRepository } = await import('../JjcEvaluacionRepository');
 
 const sampleEval: JjcEvaluacion = {
   idAtencion: '01001000001',
+  area: 'medicina',
   fechaEvaluacion: '2026-07-20',
   lugar: 'HOLOMEDIC',
   fototipo: 'III-IV',
@@ -112,7 +149,7 @@ describe('SqlServerJjcEvaluacionRepository', () => {
     const repo = new SqlServerJjcEvaluacionRepository();
 
     await repo.save(sampleEval);
-    const loaded = await repo.loadByAtencion('01001000001');
+    const loaded = await repo.loadByAtencion('01001000001', 'medicina');
 
     expect(loaded).not.toBeNull();
     expect(loaded!.idAtencion).toBe('01001000001');
@@ -125,7 +162,7 @@ describe('SqlServerJjcEvaluacionRepository', () => {
 
   it('loadByAtencion returns null for unknown id', async () => {
     const repo = new SqlServerJjcEvaluacionRepository();
-    const loaded = await repo.loadByAtencion('unknown');
+    const loaded = await repo.loadByAtencion('unknown', 'medicina');
     expect(loaded).toBeNull();
   });
 
@@ -142,7 +179,7 @@ describe('SqlServerJjcEvaluacionRepository', () => {
     };
     await repo.save(updated);
 
-    const loaded = await repo.loadByAtencion('01001000001');
+    const loaded = await repo.loadByAtencion('01001000001', 'medicina');
     expect(loaded!.fototipo).toBe('V-VI');
     expect(loaded!.observaciones).toBe('Actualizado');
     expect(loaded!.lesiones).toHaveLength(0);
@@ -153,7 +190,7 @@ describe('SqlServerJjcEvaluacionRepository', () => {
     const evalNoObs: JjcEvaluacion = { ...sampleEval, observaciones: '' };
 
     await repo.save(evalNoObs);
-    const loaded = await repo.loadByAtencion('01001000001');
+    const loaded = await repo.loadByAtencion('01001000001', 'medicina');
 
     expect(loaded!.observaciones).toBe('');
   });

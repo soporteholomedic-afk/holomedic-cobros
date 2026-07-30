@@ -10,13 +10,13 @@ import type { IJjcEvaluacionRepository } from '@/features/jjc-mapper/domain/port
 export class LoadJjcEvaluacionUseCase {
   constructor(private readonly repo: IJjcEvaluacionRepository) {}
 
-  async execute(idAtencion: string): Promise<LoadEvaluacionResult> {
+  async execute(idAtencion: string, area: string): Promise<LoadEvaluacionResult> {
     if (!idAtencion?.trim()) {
       return { ok: false as const, error: 'idAtencion es requerido', data: null };
     }
 
     try {
-      const evaluacion = await this.repo.loadByAtencion(idAtencion.trim());
+      const evaluacion = await this.repo.loadByAtencion(idAtencion.trim(), area);
       return { ok: true as const, data: evaluacion ?? null, error: null };
     } catch (err) {
       const message =

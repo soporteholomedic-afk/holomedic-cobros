@@ -110,6 +110,9 @@ export async function GET(request: Request): Promise<NextResponse> {
     const rows = result.recordset as PacientePorEmpresaRow[];
 
     // ---- Determine which idAtencion values have saved evaluations ----
+    // Evaluations live in `dbo.Evaluacion` (generic base) with the `area`
+    // discriminator — filter by 'medicina' to avoid false positives from
+    // other areas (e.g., musculoesqueletica).
     let evaluacionIds = new Set<string>();
     if (rows.length > 0) {
       try {
@@ -121,8 +124,9 @@ export async function GET(request: Request): Promise<NextResponse> {
           evalRequest.input(`id${i}`, mssql.VarChar(50), rows[i].idAtencion);
         }
         const evalResult = await evalRequest.query(`
-          SELECT DISTINCT idAtencion FROM dbo.JjcEvaluacion
+          SELECT DISTINCT idAtencion FROM dbo.Evaluacion
           WHERE idAtencion IN (${conditions.join(', ')})
+            AND area = 'medicina'
         `);
         evaluacionIds = new Set<string>(
           (evalResult.recordset as { idAtencion: string }[]).map((r) => r.idAtencion),

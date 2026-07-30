@@ -28,6 +28,7 @@ export class SaveJjcEvaluacionUseCase {
 
     const evaluacion: JjcEvaluacion = {
       idAtencion: input.idAtencion.trim(),
+      area: input.area,
       fechaEvaluacion: input.fechaEvaluacion,
       lugar: 'HOLOMEDIC',
       fototipo: input.fototipo,
@@ -51,6 +52,7 @@ export class SaveJjcEvaluacionUseCase {
 
 export interface SaveInput {
   idAtencion: string;
+  area: string;
   fechaEvaluacion: string;
   fototipo: Fototipo;
   fotoprotector?: Fotoprotector | null;

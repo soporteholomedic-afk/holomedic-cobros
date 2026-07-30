@@ -46,6 +46,7 @@ function createInvalidJsonRequest(): Request {
 
 const sampleEval: JjcEvaluacion = {
   idAtencion: '01001000001',
+  area: 'medicina',
   fechaEvaluacion: '2026-07-20',
   lugar: 'HOLOMEDIC',
   fototipo: 'III-IV',

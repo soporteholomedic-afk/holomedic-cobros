@@ -166,6 +166,7 @@ const sampleAtencion: AtencionDetalle = {
 
 const sampleEval: JjcEvaluacion = {
   idAtencion: '01234567',
+  area: 'medicina',
   fechaEvaluacion: '2026-07-21',
   lugar: 'HOLOMEDIC',
   fototipo: 'III-IV',

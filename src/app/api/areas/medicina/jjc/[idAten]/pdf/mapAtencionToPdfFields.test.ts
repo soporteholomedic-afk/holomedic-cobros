@@ -22,6 +22,7 @@ describe('mapAtencionToPdfFields', () => {
   it('maps full atencion and evaluation data correctly', () => {
     const evaluacion: JjcEvaluacion = {
       idAtencion: '01234567',
+      area: 'medicina',
       fechaEvaluacion: '2026-07-21',
       lugar: 'HOLOMEDIC',
       fototipo: 'III-IV',
@@ -143,6 +144,7 @@ describe('mapAtencionToPdfFields', () => {
   it('handles null preguntas in evaluation', () => {
     const evalNoPreguntas: JjcEvaluacion = {
       idAtencion: '01234567',
+      area: 'medicina',
       fechaEvaluacion: '2026-07-21',
       lugar: 'HOLOMEDIC',
       fototipo: 'I-II',
@@ -176,6 +178,7 @@ describe('mapAtencionToPdfFields', () => {
 
     const evaluacion: JjcEvaluacion = {
       idAtencion: '01234567',
+      area: 'medicina',
       fechaEvaluacion: '2026-07-21',
       lugar: 'HOLOMEDIC',
       fototipo: 'V-VI',
@@ -227,6 +230,7 @@ describe('mapAtencionToPdfFields', () => {
   it('sets cbk_si=false and cbk_no=false for unanswered questions', () => {
     const evaluacion: JjcEvaluacion = {
       idAtencion: '01234567',
+      area: 'medicina',
       fechaEvaluacion: '2026-07-21',
       lugar: 'HOLOMEDIC',
       fototipo: 'I-II',
@@ -267,6 +271,7 @@ describe('mapAtencionToPdfFields', () => {
   it('sets cbk_M-1 and cbk_M-2 from SiNo fields', () => {
     const evaluacion: JjcEvaluacion = {
       idAtencion: '01234567',
+      area: 'medicina',
       fechaEvaluacion: '2026-07-21',
       lugar: 'HOLOMEDIC',
       fototipo: 'III-IV',

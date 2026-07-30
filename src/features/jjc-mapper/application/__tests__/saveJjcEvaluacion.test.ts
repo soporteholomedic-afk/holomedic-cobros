@@ -9,11 +9,11 @@ class FakeRepo implements IJjcEvaluacionRepository {
   private store = new Map<string, JjcEvaluacion>();
 
   async save(evaluacion: JjcEvaluacion): Promise<void> {
-    this.store.set(evaluacion.idAtencion, { ...evaluacion });
+    this.store.set(`${evaluacion.idAtencion}:${evaluacion.area}`, { ...evaluacion });
   }
 
-  async loadByAtencion(id: string): Promise<JjcEvaluacion | null> {
-    return this.store.get(id) ?? null;
+  async loadByAtencion(id: string, area: string): Promise<JjcEvaluacion | null> {
+    return this.store.get(`${id}:${area}`) ?? null;
   }
 
   get saved(): JjcEvaluacion[] {
@@ -30,6 +30,7 @@ function makeSut(repo?: IJjcEvaluacionRepository) {
 function validInput(overrides: Partial<SaveInput> = {}): SaveInput {
   return {
     idAtencion: '01001000001',
+    area: 'medicina',
     fechaEvaluacion: '2026-07-20',
     fototipo: 'III-IV',
     observaciones: '',

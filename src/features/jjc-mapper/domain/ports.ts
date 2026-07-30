@@ -14,7 +14,7 @@ export interface IAtencionRepository {
  */
 export interface IJjcEvaluacionRepository {
   save(evaluacion: JjcEvaluacion): Promise<void>;
-  loadByAtencion(idAtencion: string): Promise<JjcEvaluacion | null>;
+  loadByAtencion(idAtencion: string, area: string): Promise<JjcEvaluacion | null>;
 }
 
 // ---- DTOs shared between layers ----

@@ -40,7 +40,7 @@ export default async function MedicinaJjcDetallePage({ params }: PageProps) {
       </div>
 
       {/* Mapper */}
-      <JjcFaceLesionMapper atencion={atencion} />
+      <JjcFaceLesionMapper atencion={atencion} area="medicina" />
     </div>
   );
 }

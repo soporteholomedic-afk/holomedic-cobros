@@ -35,6 +35,7 @@ export async function POST(request: Request): Promise<NextResponse> {
     const useCase = buildSaveJjcEvaluacion();
     const result = await useCase.execute({
       idAtencion,
+      area: 'medicina',
       fechaEvaluacion,
       fototipo: fototipo as Fototipo,
       fotoprotector: fotoprotector ?? undefined,
@@ -80,7 +81,7 @@ export async function GET(request: Request): Promise<NextResponse> {
     }
 
     const useCase = buildLoadJjcEvaluacion();
-    const result = await useCase.execute(idAtencion);
+    const result = await useCase.execute(idAtencion, 'medicina');
 
     if (!result.ok) {
       return NextResponse.json({ error: result.error }, { status: 500 });

@@ -7,11 +7,11 @@ class FakeRepo implements IJjcEvaluacionRepository {
   private store = new Map<string, JjcEvaluacion>();
 
   async save(evaluacion: JjcEvaluacion): Promise<void> {
-    this.store.set(evaluacion.idAtencion, { ...evaluacion });
+    this.store.set(`${evaluacion.idAtencion}:${evaluacion.area}`, { ...evaluacion });
   }
 
-  async loadByAtencion(id: string): Promise<JjcEvaluacion | null> {
-    return this.store.get(id) ?? null;
+  async loadByAtencion(id: string, area: string): Promise<JjcEvaluacion | null> {
+    return this.store.get(`${id}:${area}`) ?? null;
   }
 }
 
@@ -21,10 +21,12 @@ function makeSut(repo?: IJjcEvaluacionRepository) {
   return { useCase, repo: r as FakeRepo };
 }
 
+const AREA = 'medicina';
+
 describe('LoadJjcEvaluacionUseCase', () => {
   it('returns null when no evaluation exists', async () => {
     const { useCase } = makeSut();
-    const result = await useCase.execute('01001000001');
+    const result = await useCase.execute('01001000001', AREA);
 
     expect(result.ok).toBe(true);
     expect(result.data).toBeNull();
@@ -35,6 +37,7 @@ describe('LoadJjcEvaluacionUseCase', () => {
     const { useCase, repo } = makeSut();
     await repo.save({
       idAtencion: '01001000001',
+      area: AREA,
       fechaEvaluacion: '2026-07-20',
       lugar: 'HOLOMEDIC',
       fototipo: 'III-IV',
@@ -45,7 +48,7 @@ describe('LoadJjcEvaluacionUseCase', () => {
       createdBy: null,
     });
 
-    const result = await useCase.execute('01001000001');
+    const result = await useCase.execute('01001000001', AREA);
 
     expect(result.ok).toBe(true);
     expect(result.data).not.toBeNull();
@@ -55,7 +58,7 @@ describe('LoadJjcEvaluacionUseCase', () => {
 
   it('returns error for empty idAtencion', async () => {
     const { useCase } = makeSut();
-    const result = await useCase.execute('');
+    const result = await useCase.execute('', AREA);
 
     expect(result.ok).toBe(false);
     expect(result.error).toBe('idAtencion es requerido');
@@ -67,7 +70,7 @@ describe('LoadJjcEvaluacionUseCase', () => {
       loadByAtencion: async () => { throw new Error('DB failure'); },
     };
     const { useCase } = makeSut(failingRepo);
-    const result = await useCase.execute('01001000001');
+    const result = await useCase.execute('01001000001', AREA);
 
     expect(result.ok).toBe(false);
     expect(result.error).toBe('DB failure');

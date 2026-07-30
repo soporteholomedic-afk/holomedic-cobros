@@ -11,11 +11,11 @@ import { VerticalLesionToolbar } from './VerticalLesionToolbar';
 
 interface JjcFaceLesionMapperProps {
   atencion: AtencionDetalle | null;
+  area: string;
 }
 
-const EVAL_API = '/api/areas/medicina/jjc/evaluaciones';
-
-export function JjcFaceLesionMapper({ atencion }: JjcFaceLesionMapperProps) {
+export function JjcFaceLesionMapper({ atencion, area }: JjcFaceLesionMapperProps) {
+  const EVAL_API = `/api/areas/${area}/jjc/evaluaciones`;
   const {
     state,
     counters,

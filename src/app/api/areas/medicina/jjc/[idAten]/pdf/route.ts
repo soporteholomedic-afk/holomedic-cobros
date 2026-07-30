@@ -181,7 +181,7 @@ export async function GET(
     let evaluacion = null;
     try {
       const evaluacionUseCase = buildLoadJjcEvaluacion();
-      const evalResult = await evaluacionUseCase.execute(idAten);
+      const evalResult = await evaluacionUseCase.execute(idAten, 'medicina');
       if (evalResult.ok) {
         evaluacion = evalResult.data;
       }
