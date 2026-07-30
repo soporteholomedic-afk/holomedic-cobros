@@ -18,6 +18,8 @@ const TAHOMA_FONT_PATH = path.resolve(
   'Tahoma Regular font.ttf',
 );
 
+const PDF_FIELD_FONT_SIZE = 8;
+
 async function loadAndEmbedTahomaFont(
   pdfDoc: PDFDocument,
 ): Promise<PDFFont | undefined> {
@@ -211,7 +213,7 @@ export async function GET(
         const textValue = (value ?? '').toUpperCase();
         field.setText(textValue);
         if (tahomaFont) {
-          field.setFontSize(6.6);
+          field.setFontSize(PDF_FIELD_FONT_SIZE);
           field.updateAppearances(tahomaFont);
         }
       } catch {
@@ -242,7 +244,7 @@ export async function GET(
           const textValue = values[i].toUpperCase();
           field.setText(textValue);
           if (tahomaFont) {
-            field.setFontSize(6.6);
+            field.setFontSize(PDF_FIELD_FONT_SIZE);
             field.updateAppearances(tahomaFont);
           }
         } catch {
