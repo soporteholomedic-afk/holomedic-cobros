@@ -1,9 +1,10 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
+import { TOTAL_PAGINAS } from '@/features/entrevista-osteomuscular/presentation/constants/paginas';
 
 interface PaginacionProps {
-  totalPaginas: number;
+  totalPaginas?: number;
   paginaActual: number;
   baseUrl?: string;
   onChange?: (pagina: number) => void;
@@ -14,7 +15,7 @@ function resolveUrl(baseUrl: string, pagina: number): string {
   return `${baseUrl}/pagina${pagina}`;
 }
 
-export function Paginacion({ totalPaginas, paginaActual, baseUrl, onChange }: PaginacionProps) {
+export function Paginacion({ totalPaginas = TOTAL_PAGINAS, paginaActual, baseUrl, onChange }: PaginacionProps) {
   const router = useRouter();
 
   if (totalPaginas <= 0) return null;
@@ -30,7 +31,7 @@ export function Paginacion({ totalPaginas, paginaActual, baseUrl, onChange }: Pa
 
   return (
     <div className="flex items-center justify-center gap-1.5 mt-6">
-      {Array.from({ length: totalPaginas }, (_, i) => i + 1).map((num) => (
+      {Array.from({ length: totalPaginas }, (_, i: number) => i + 1).map((num) => (
         <button
           key={num}
           type="button"

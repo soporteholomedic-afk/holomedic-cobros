@@ -412,7 +412,7 @@ export function EntrevistaOsteomuscularFormPag3() {
           </div>
         </div>
 
-        <Paginacion totalPaginas={3} paginaActual={3} baseUrl={`/areas/musculoesqueletica/jjc/${idAtencion}/entrevista`} />
+        <Paginacion paginaActual={3} baseUrl={`/areas/musculoesqueletica/jjc/${idAtencion}/entrevista`} />
       </form>
     </div>
   );

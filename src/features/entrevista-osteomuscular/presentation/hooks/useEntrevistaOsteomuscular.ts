@@ -16,6 +16,8 @@ import type {
   UmbralPositivoParestesiaDiurna,
   DatosGenerales,
   FrecuenciaMolestiaDolor,
+  LumbalgiaAguda,
+  DiagnosticoPatologiaColumna,
 } from '@/types/entrevista-osteomuscular';
 import type { AtencionDetalle } from '@/types/jjc';
 
@@ -55,6 +57,34 @@ function initialFrecuencia(): FrecuenciaMolestiaDolor {
     episodios2a3Dias: false,
     episodiosConMedicamentos: false,
     presenteTodoElDia: false,
+  };
+}
+
+function initialLumbalgiaAguda(): LumbalgiaAguda {
+  return {
+    tieneLumbalgiaAguda: false,
+    totalEpisodiosAgudos: null,
+    episodiosUltimoAno: {
+      lumbalgia: { aplica: false, cantidad: null },
+      lumbociatalgia: { aplica: false, cantidad: null },
+    },
+    anoPrimerEpisodio: '',
+    diasAusenciaTrabajo: null,
+  };
+}
+
+function initialDiagnosticoPatologiaColumna(): DiagnosticoPatologiaColumna {
+  return {
+    tieneDiagnosticoConocido: false,
+    herniaDiscoLumboSacra: {
+      diagnosticada: false,
+      tratadaQuirurgicamente: false,
+      cuando: '',
+      fechaIntervencion: '',
+    },
+    patologiaTraumaCervical: '',
+    patologiaTraumaDorsal: '',
+    patologiaTraumaLumbosacra: '',
   };
 }
 
@@ -254,6 +284,8 @@ export function initialEntrevistaState(atencion: AtencionDetalle | null): Entrev
         diasAusenciaTrabajo: null,
       },
     },
+    lumbalgiaAguda: initialLumbalgiaAguda(),
+    diagnosticoPatologiaColumna: initialDiagnosticoPatologiaColumna(),
   };
 }
 

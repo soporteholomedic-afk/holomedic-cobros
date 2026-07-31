@@ -250,6 +250,39 @@ export interface DatosGenerales {
   tipoExamen: TipoExamen;
 }
 
+// ---- Página 4: Lumbalgia aguda y diagnóstico de columna ----
+
+export interface EpisodioUltimoAno {
+  aplica: boolean;
+  cantidad: number | null;
+}
+
+export interface LumbalgiaAguda {
+  tieneLumbalgiaAguda: boolean;
+  totalEpisodiosAgudos: number | null;
+  episodiosUltimoAno: {
+    lumbalgia: EpisodioUltimoAno;
+    lumbociatalgia: EpisodioUltimoAno;
+  };
+  anoPrimerEpisodio: string;
+  diasAusenciaTrabajo: number | null;
+}
+
+export interface HerniaDiscoLumboSacra {
+  diagnosticada: boolean;
+  tratadaQuirurgicamente: boolean;
+  cuando: string;
+  fechaIntervencion: string;
+}
+
+export interface DiagnosticoPatologiaColumna {
+  tieneDiagnosticoConocido: boolean;
+  herniaDiscoLumboSacra: HerniaDiscoLumboSacra;
+  patologiaTraumaCervical: string;
+  patologiaTraumaDorsal: string;
+  patologiaTraumaLumbosacra: string;
+}
+
 export interface EntrevistaOsteomuscular {
   idAtencion: string;
   datosGenerales: DatosGenerales;
@@ -263,4 +296,6 @@ export interface EntrevistaOsteomuscular {
   molestiaCervicalIrradiada: MolestiaCervicalIrradiada;
   ausenciaYTrastornos: AusenciaYTrastornos;
   columna: Columna;
+  lumbalgiaAguda: LumbalgiaAguda;
+  diagnosticoPatologiaColumna: DiagnosticoPatologiaColumna;
 }
