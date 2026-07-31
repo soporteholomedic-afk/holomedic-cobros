@@ -2,7 +2,6 @@
 
 import { useMemo } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
 import { ArrowLeft, ClipboardList } from 'lucide-react';
 import { useEntrevistaContext } from '@/features/entrevista-osteomuscular/presentation/context/EntrevistaOsteomuscularContext';
 import { SectionCard, type TableRow, type InfoReportadaItem } from './SectionCard';
@@ -31,7 +30,6 @@ function buildInfoItems<T>(
 
 export function EntrevistaOsteomuscularForm() {
   const { idAtencion, atencion, state, setField, reset } = useEntrevistaContext();
-  const router = useRouter();
 
   const handleCheck = (path: string, value: boolean) => setField(path, value);
 
@@ -385,15 +383,9 @@ export function EntrevistaOsteomuscularForm() {
 
         {/* Paginación */}
         <Paginacion
-          totalPaginas={2}
+          totalPaginas={3}
           paginaActual={1}
-          onChange={(pagina) => {
-            if (pagina === 2) {
-              router.push(
-                `/areas/musculoesqueletica/jjc/${idAtencion}/entrevista/pagina2`,
-              );
-            }
-          }}
+          baseUrl={`/areas/musculoesqueletica/jjc/${idAtencion}/entrevista`}
         />
 
         {/* Action Footer */}

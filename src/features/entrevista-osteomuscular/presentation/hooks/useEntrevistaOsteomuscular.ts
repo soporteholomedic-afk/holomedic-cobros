@@ -15,6 +15,7 @@ import type {
   UmbralPositivoParestesiaNocturna,
   UmbralPositivoParestesiaDiurna,
   DatosGenerales,
+  FrecuenciaMolestiaDolor,
 } from '@/types/entrevista-osteomuscular';
 import type { AtencionDetalle } from '@/types/jjc';
 
@@ -46,6 +47,15 @@ function initialInfoReportadaCodo(): InfoReportadaCodo {
 
 function initialInfoReportadaManoMuneca(): InfoReportadaManoMuneca {
   return { ...initialInfoReportadaBase(), emg: false };
+}
+
+function initialFrecuencia(): FrecuenciaMolestiaDolor {
+  return {
+    raramente: false,
+    episodios2a3Dias: false,
+    episodiosConMedicamentos: false,
+    presenteTodoElDia: false,
+  };
 }
 
 function initialUmbralPositivo() {
@@ -220,6 +230,29 @@ export function initialEntrevistaState(atencion: AtencionDetalle | null): Entrev
         manoMunecaTunelCarpiano: { tiene: false, cuando: '' },
       },
       totalDiasEnfermedad12Meses: null,
+    },
+    columna: {
+      cervical: {
+        presentaDisturbio: false,
+        frecuenciaMolestia: initialFrecuencia(),
+        frecuenciaDolor: initialFrecuencia(),
+        irradiacion: { tieneIrradiacion: false, miembroSuperior: { dx: false, ix: false } },
+        diasAusenciaTrabajo: null,
+      },
+      dorsal: {
+        presentaDisturbio: false,
+        frecuenciaMolestia: initialFrecuencia(),
+        frecuenciaDolor: initialFrecuencia(),
+        irradiacion: { tieneIrradiacion: false, emitorax: false, dx: false, ix: false },
+        diasAusenciaTrabajo: null,
+      },
+      lumboSacra: {
+        presentaDisturbio: false,
+        frecuenciaMolestia: initialFrecuencia(),
+        frecuenciaDolor: initialFrecuencia(),
+        irradiacion: { tieneIrradiacion: false, miembrosInferiores: false, dx: false, ix: false },
+        diasAusenciaTrabajo: null,
+      },
     },
   };
 }

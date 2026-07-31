@@ -159,6 +159,59 @@ export interface DiagnosticoTrastorno {
   cuando: string;
 }
 
+// ---- Página 3: Columna ----
+
+export interface FrecuenciaMolestiaDolor {
+  raramente: boolean;
+  episodios2a3Dias: boolean;
+  episodiosConMedicamentos: boolean;
+  presenteTodoElDia: boolean;
+}
+
+export interface IrradiacionCervical {
+  tieneIrradiacion: boolean;
+  miembroSuperior: DxIxBool;
+}
+
+export interface IrradiacionDorsal {
+  tieneIrradiacion: boolean;
+  emitorax: boolean;
+  dx: boolean;
+  ix: boolean;
+}
+
+export interface IrradiacionLumboSacra {
+  tieneIrradiacion: boolean;
+  miembrosInferiores: boolean;
+  dx: boolean;
+  ix: boolean;
+}
+
+export interface SeccionColumna {
+  presentaDisturbio: boolean;
+  frecuenciaMolestia: FrecuenciaMolestiaDolor;
+  frecuenciaDolor: FrecuenciaMolestiaDolor;
+  diasAusenciaTrabajo: number | null;
+}
+
+export interface SeccionCervical extends SeccionColumna {
+  irradiacion: IrradiacionCervical;
+}
+
+export interface SeccionDorsal extends SeccionColumna {
+  irradiacion: IrradiacionDorsal;
+}
+
+export interface SeccionLumboSacra extends SeccionColumna {
+  irradiacion: IrradiacionLumboSacra;
+}
+
+export interface Columna {
+  cervical: SeccionCervical;
+  dorsal: SeccionDorsal;
+  lumboSacra: SeccionLumboSacra;
+}
+
 export interface AusenciaYTrastornos {
   diasAusenciaExtremidadSuperior: number | null;
   tieneTrastornoDiagnosticado: boolean;
@@ -209,4 +262,5 @@ export interface EntrevistaOsteomuscular {
   parestesiaDiurna: ParestesiaDiurna;
   molestiaCervicalIrradiada: MolestiaCervicalIrradiada;
   ausenciaYTrastornos: AusenciaYTrastornos;
+  columna: Columna;
 }
