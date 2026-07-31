@@ -6,9 +6,14 @@ import type {
   InfoReportadaBase,
   InfoReportadaCodo,
   InfoReportadaManoMuneca,
+  InfoReportadaParestesia,
   SintomasHombro,
   SintomasCodo,
   SintomasManoMuneca,
+  SintomasParestesiaNocturna,
+  SintomasParestesiaDiurna,
+  UmbralPositivoParestesiaNocturna,
+  UmbralPositivoParestesiaDiurna,
   DatosGenerales,
 } from '@/types/entrevista-osteomuscular';
 import type { AtencionDetalle } from '@/types/jjc';
@@ -83,6 +88,66 @@ function initialSintomasManoMuneca(): SintomasManoMuneca {
   };
 }
 
+function initialInfoReportadaParestesia(): InfoReportadaParestesia {
+  return {
+    haTomadoMedicamentos: false,
+    fisioterapia: false,
+    visitaOrtopedistaFisiatra: false,
+    rx: false,
+    ecografiaRmn: false,
+    emg: false,
+  };
+}
+
+function initialUmbralPositivoParestesiaNocturna(): UmbralPositivoParestesiaNocturna {
+  return {
+    dx: false,
+    ix: false,
+    molestiaSuenoCasiTodaNoche: { dx: false, ix: false },
+    ocurrenciaUnaSemana12Meses: { dx: false, ix: false },
+    ocurrenciaUnaVezMes: { dx: false, ix: false },
+  };
+}
+
+function initialUmbralPositivoParestesiaDiurna(): UmbralPositivoParestesiaDiurna {
+  return {
+    dx: false,
+    ix: false,
+    molestiaCasiTodosDias: { dx: false, ix: false },
+    ocurrenciaUnaSemana12Meses: { dx: false, ix: false },
+    ocurrenciaUnDiaMes: { dx: false, ix: false },
+  };
+}
+
+function initialSintomasParestesiaNocturna(): SintomasParestesiaNocturna {
+  return {
+    brazo: { dx: false, ix: false },
+    antebrazo: { dx: false, ix: false },
+    mano: { dx: false, ix: false },
+    duracionMenor10Min: { dx: false, ix: false },
+    duracionMayor10Min: { dx: false, ix: false },
+    presenciaDuranteSueno: { dx: false, ix: false },
+    aparicionAlDespertar: { dx: false, ix: false },
+    umbralPositivo: initialUmbralPositivoParestesiaNocturna(),
+    molestiasLeves: { dx: false, ix: false },
+  };
+}
+
+function initialSintomasParestesiaDiurna(): SintomasParestesiaDiurna {
+  return {
+    brazo: { dx: false, ix: false },
+    antebrazo: { dx: false, ix: false },
+    mano: { dx: false, ix: false },
+    duracionMenor10Min: { dx: false, ix: false },
+    duracionMayor10Min: { dx: false, ix: false },
+    aparecenBrazosLevantados: { dx: false, ix: false },
+    aparecenApoyaCodo: { dx: false, ix: false },
+    aparicionFuerzaEjecucionTrabajo: { dx: false, ix: false },
+    umbralPositivo: initialUmbralPositivoParestesiaDiurna(),
+    molestiasLeves: { dx: false, ix: false },
+  };
+}
+
 export function initialEntrevistaState(atencion: AtencionDetalle | null): EntrevistaOsteomuscular {
   return {
     idAtencion: atencion?.idAtencion ?? '',
@@ -121,6 +186,40 @@ export function initialEntrevistaState(atencion: AtencionDetalle | null): Entrev
         sintomas: initialSintomasManoMuneca(),
         observaciones: '',
       },
+    },
+    parestesiaNocturna: {
+      tieneParestesia: false,
+      inicioMolestia: '',
+      infoReportada: initialInfoReportadaParestesia(),
+      sintomas: initialSintomasParestesiaNocturna(),
+    },
+    parestesiaDiurna: {
+      tieneParestesia: false,
+      inicioMolestia: '',
+      infoReportada: initialInfoReportadaParestesia(),
+      sintomas: initialSintomasParestesiaDiurna(),
+    },
+    molestiaCervicalIrradiada: {
+      tieneMolestia: false,
+      inicioMolestia: '',
+      extremidadAfectada: { dx: false, ix: false },
+      inicianOEmpeoranElevandoExtremidades: false,
+      frecuencia: {
+        presentandoCasiTodoDia: false,
+        presenciaUnaSemana12Meses: false,
+        presenciaUnDiaMes: false,
+      },
+    },
+    ausenciaYTrastornos: {
+      diasAusenciaExtremidadSuperior: null,
+      tieneTrastornoDiagnosticado: false,
+      diagnosticos: {
+        hombro: { tiene: false, cuando: '' },
+        codo: { tiene: false, cuando: '' },
+        manoMunecaTendinitis: { tiene: false, cuando: '' },
+        manoMunecaTunelCarpiano: { tiene: false, cuando: '' },
+      },
+      totalDiasEnfermedad12Meses: null,
     },
   };
 }

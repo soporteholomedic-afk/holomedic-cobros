@@ -2,9 +2,9 @@
 
 import { useMemo } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { ArrowLeft, ClipboardList } from 'lucide-react';
-import type { AtencionDetalle } from '@/types/jjc';
-import { useEntrevistaOsteomuscular } from '@/features/entrevista-osteomuscular/presentation/hooks/useEntrevistaOsteomuscular';
+import { useEntrevistaContext } from '@/features/entrevista-osteomuscular/presentation/context/EntrevistaOsteomuscularContext';
 import { SectionCard, type TableRow, type InfoReportadaItem } from './SectionCard';
 import { Paginacion } from './Paginacion';
 
@@ -16,11 +16,6 @@ const INFO_LABELS: Record<string, string> = {
   ecografiaResonancia: 'Ecografía / Resonancia',
   emg: 'EMG',
 };
-
-interface EntrevistaOsteomuscularFormProps {
-  idAtencion: string;
-  atencion: AtencionDetalle;
-}
 
 function buildInfoItems<T>(
   obj: T,
@@ -34,11 +29,9 @@ function buildInfoItems<T>(
   }));
 }
 
-export function EntrevistaOsteomuscularForm({
-  idAtencion,
-  atencion,
-}: EntrevistaOsteomuscularFormProps) {
-  const { state, setField, reset } = useEntrevistaOsteomuscular(atencion);
+export function EntrevistaOsteomuscularForm() {
+  const { idAtencion, atencion, state, setField, reset } = useEntrevistaContext();
+  const router = useRouter();
 
   const handleCheck = (path: string, value: boolean) => setField(path, value);
 
@@ -391,7 +384,17 @@ export function EntrevistaOsteomuscularForm({
         </div>
 
         {/* Paginación */}
-        <Paginacion totalPaginas={1} paginaActual={1} />
+        <Paginacion
+          totalPaginas={2}
+          paginaActual={1}
+          onChange={(pagina) => {
+            if (pagina === 2) {
+              router.push(
+                `/areas/musculoesqueletica/jjc/${idAtencion}/entrevista/pagina2`,
+              );
+            }
+          }}
+        />
 
         {/* Action Footer */}
         <div className="flex justify-end gap-4 border-t border-slate-200 pt-8">

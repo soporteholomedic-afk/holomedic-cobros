@@ -18,10 +18,12 @@
       "duracionMayor10Min": { "dx": false, "ix": false },
       "presenciaDuranteSueno": { "dx": false, "ix": false },
       "aparicionAlDespertar": { "dx": false, "ix": false },
-      "umbralPositivo": {
-        "molestiaSuenoCasiTodaNoche": { "dx": false, "ix": false },
-        "ocurrenciaUnaSemana12Meses": { "dx": false, "ix": false },
-        "ocurrenciaUnaVezMes": { "dx": false, "ix": false }
+    "umbralPositivo": {
+      "dx": false,
+      "ix": false,
+      "molestiaSuenoCasiTodaNoche": { "dx": false, "ix": false },
+      "ocurrenciaUnaSemana12Meses": { "dx": false, "ix": false },
+      "ocurrenciaUnaVezMes": { "dx": false, "ix": false }
       },
       "molestiasLeves": { "dx": false, "ix": false }
     }
@@ -47,10 +49,12 @@
       "aparecenBrazosLevantados": { "dx": false, "ix": false },
       "aparecenApoyaCodo": { "dx": false, "ix": false },
       "aparicionFuerzaEjecucionTrabajo": { "dx": false, "ix": false },
-      "umbralPositivo": {
-        "molestiaCasiTodosDias": { "dx": false, "ix": false },
-        "ocurrenciaUnaSemana12Meses": { "dx": false, "ix": false },
-        "ocurrenciaUnDiaMes": { "dx": false, "ix": false }
+    "umbralPositivo": {
+      "dx": false,
+      "ix": false,
+      "molestiaCasiTodosDias": { "dx": false, "ix": false },
+      "ocurrenciaUnaSemana12Meses": { "dx": false, "ix": false },
+      "ocurrenciaUnDiaMes": { "dx": false, "ix": false }
       },
       "molestiasLeves": { "dx": false, "ix": false }
     }

@@ -76,6 +76,101 @@ export interface SeccionManoMuneca {
   observaciones: string;
 }
 
+// ---- Página 2: Parestesia y trastornos ----
+
+export interface InfoReportadaParestesia {
+  haTomadoMedicamentos: boolean;
+  fisioterapia: boolean;
+  visitaOrtopedistaFisiatra: boolean;
+  rx: boolean;
+  ecografiaRmn: boolean;
+  emg: boolean;
+}
+
+export interface UmbralPositivoParestesiaNocturna {
+  dx: boolean;
+  ix: boolean;
+  molestiaSuenoCasiTodaNoche: DxIxBool;
+  ocurrenciaUnaSemana12Meses: DxIxBool;
+  ocurrenciaUnaVezMes: DxIxBool;
+}
+
+export interface UmbralPositivoParestesiaDiurna {
+  dx: boolean;
+  ix: boolean;
+  molestiaCasiTodosDias: DxIxBool;
+  ocurrenciaUnaSemana12Meses: DxIxBool;
+  ocurrenciaUnDiaMes: DxIxBool;
+}
+
+export interface SintomasParestesiaNocturna {
+  brazo: DxIxBool;
+  antebrazo: DxIxBool;
+  mano: DxIxBool;
+  duracionMenor10Min: DxIxBool;
+  duracionMayor10Min: DxIxBool;
+  presenciaDuranteSueno: DxIxBool;
+  aparicionAlDespertar: DxIxBool;
+  umbralPositivo: UmbralPositivoParestesiaNocturna;
+  molestiasLeves: DxIxBool;
+}
+
+export interface SintomasParestesiaDiurna {
+  brazo: DxIxBool;
+  antebrazo: DxIxBool;
+  mano: DxIxBool;
+  duracionMenor10Min: DxIxBool;
+  duracionMayor10Min: DxIxBool;
+  aparecenBrazosLevantados: DxIxBool;
+  aparecenApoyaCodo: DxIxBool;
+  aparicionFuerzaEjecucionTrabajo: DxIxBool;
+  umbralPositivo: UmbralPositivoParestesiaDiurna;
+  molestiasLeves: DxIxBool;
+}
+
+export interface ParestesiaNocturna {
+  tieneParestesia: boolean;
+  inicioMolestia: string;
+  infoReportada: InfoReportadaParestesia;
+  sintomas: SintomasParestesiaNocturna;
+}
+
+export interface ParestesiaDiurna {
+  tieneParestesia: boolean;
+  inicioMolestia: string;
+  infoReportada: InfoReportadaParestesia;
+  sintomas: SintomasParestesiaDiurna;
+}
+
+export interface MolestiaCervicalIrradiada {
+  tieneMolestia: boolean;
+  inicioMolestia: string;
+  extremidadAfectada: DxIxBool;
+  inicianOEmpeoranElevandoExtremidades: boolean;
+  frecuencia: {
+    presentandoCasiTodoDia: boolean;
+    presenciaUnaSemana12Meses: boolean;
+    presenciaUnDiaMes: boolean;
+  };
+}
+
+export interface DiagnosticoTrastorno {
+  tiene: boolean;
+  cuando: string;
+}
+
+export interface AusenciaYTrastornos {
+  diasAusenciaExtremidadSuperior: number | null;
+  tieneTrastornoDiagnosticado: boolean;
+  diagnosticos: {
+    hombro: DiagnosticoTrastorno;
+    codo: DiagnosticoTrastorno;
+    manoMunecaTendinitis: DiagnosticoTrastorno;
+    manoMunecaTunelCarpiano: DiagnosticoTrastorno;
+  };
+  totalDiasEnfermedad12Meses: number | null;
+}
+
 export interface MiembroDominante {
   dx: boolean;
   ix: boolean;
@@ -110,4 +205,8 @@ export interface EntrevistaOsteomuscular {
     codo: SeccionCodo;
     manoMuneca: SeccionManoMuneca;
   };
+  parestesiaNocturna: ParestesiaNocturna;
+  parestesiaDiurna: ParestesiaDiurna;
+  molestiaCervicalIrradiada: MolestiaCervicalIrradiada;
+  ausenciaYTrastornos: AusenciaYTrastornos;
 }
