@@ -1,0 +1,516 @@
+<!DOCTYPE html><html class="light" lang="es" style=""><head>
+<meta charset="utf-8">
+<meta content="width=device-width, initial-scale=1.0" name="viewport">
+<title>MedCore MSK - Evaluación de Columna</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;500;600;700;800&amp;family=Inter:wght@400;500;600&amp;family=Geist:wght@400;500;600&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "on-tertiary-fixed-variant": "#434749",
+                        "on-tertiary-container": "#fafdff",
+                        "tertiary-fixed": "#e0e3e5",
+                        "surface-bright": "#f8f9ff",
+                        "inverse-surface": "#213145",
+                        "secondary-fixed": "#d8e2fd",
+                        "on-secondary-fixed-variant": "#3d475c",
+                        "on-surface-variant": "#404751",
+                        "on-primary-container": "#fdfcff",
+                        "inverse-primary": "#98cbff",
+                        "background": "#f8f9ff",
+                        "on-primary-fixed-variant": "#004a77",
+                        "on-primary-fixed": "#001d33",
+                        "error": "#ba1a1a",
+                        "on-secondary": "#ffffff",
+                        "on-error": "#ffffff",
+                        "on-error-container": "#93000a",
+                        "secondary-fixed-dim": "#bcc6e0",
+                        "primary-fixed-dim": "#98cbff",
+                        "surface-container": "#e5eeff",
+                        "on-secondary-fixed": "#111c2f",
+                        "error-container": "#ffdad6",
+                        "on-surface": "#0b1c30",
+                        "surface-tint": "#00629d",
+                        "on-background": "#0b1c30",
+                        "surface-variant": "#d3e4fe",
+                        "surface": "#f8f9ff",
+                        "surface-container-highest": "#d3e4fe",
+                        "tertiary": "#585d5e",
+                        "primary": "#006099",
+                        "surface-dim": "#cbdbf5",
+                        "surface-container-lowest": "#ffffff",
+                        "surface-container-low": "#eff4ff",
+                        "outline": "#707882",
+                        "outline-variant": "#bfc7d2",
+                        "on-tertiary-fixed": "#181c1e",
+                        "on-secondary-container": "#5a647b",
+                        "on-tertiary": "#ffffff",
+                        "surface-container-high": "#dce9ff",
+                        "primary-fixed": "#cfe5ff",
+                        "tertiary-container": "#717577",
+                        "on-primary": "#ffffff",
+                        "tertiary-fixed-dim": "#c4c7c9",
+                        "inverse-on-surface": "#eaf1ff",
+                        "secondary": "#545e75",
+                        "primary-container": "#007ac0",
+                        "secondary-container": "#d8e2fd"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.125rem",
+                        "lg": "0.25rem",
+                        "xl": "0.5rem",
+                        "full": "0.75rem"
+                    },
+                    "spacing": {
+                        "sidebar-width": "260px",
+                        "margin-mobile": "16px",
+                        "gutter": "24px",
+                        "margin-desktop": "32px",
+                        "container-max": "1440px",
+                        "baseline": "4px"
+                    },
+                    "fontFamily": {
+                        "headline-lg": ["Hanken Grotesk"],
+                        "body-lg": ["Inter"],
+                        "label-md": ["Geist"],
+                        "label-sm": ["Geist"],
+                        "headline-md": ["Hanken Grotesk"],
+                        "body-md": ["Inter"],
+                        "headline-sm": ["Hanken Grotesk"],
+                        "headline-lg-mobile": ["Hanken Grotesk"]
+                    },
+                    "fontSize": {
+                        "headline-lg": ["30px", {"lineHeight": "38px", "letterSpacing": "-0.02em", "fontWeight": "700"}],
+                        "body-lg": ["16px", {"lineHeight": "24px", "fontWeight": "400"}],
+                        "label-md": ["12px", {"lineHeight": "16px", "letterSpacing": "0.05em", "fontWeight": "500"}],
+                        "label-sm": ["11px", {"lineHeight": "14px", "fontWeight": "600"}],
+                        "headline-md": ["24px", {"lineHeight": "32px", "letterSpacing": "-0.01em", "fontWeight": "600"}],
+                        "body-md": ["14px", {"lineHeight": "20px", "fontWeight": "400"}],
+                        "headline-sm": ["20px", {"lineHeight": "28px", "fontWeight": "600"}],
+                        "headline-lg-mobile": ["24px", {"lineHeight": "32px", "fontWeight": "700"}]
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+        body {
+            background-color: #f8f9ff;
+            color: #0b1c30;
+        }
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .sidebar-active {
+            color: #006099 !important;
+            background-color: #ffffff !important;
+            font-weight: 700 !important;
+            border-left: 4px solid #006099;
+        }
+        .custom-scrollbar::-webkit-scrollbar {
+            width: 6px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+            background: #f1f5f9;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 3px;
+        }
+        input[type="checkbox"]:checked {
+            background-color: #006099;
+            border-color: #006099;
+        }
+    </style>
+</head>
+<body class="font-body-md text-body-md overflow-x-hidden">
+<!-- SideNavBar Shell -->
+<aside class="flex flex-col h-screen fixed left-0 top-0 w-sidebar-width bg-secondary dark:bg-secondary-fixed-dim border-r border-outline-variant z-50">
+<div class="p-6 flex flex-col gap-1">
+<div class="font-headline-sm text-headline-sm font-bold text-on-primary">MedCore MSK</div>
+<div class="text-on-secondary opacity-80 text-xs uppercase tracking-wider">Clinical Management</div>
+</div>
+<nav class="flex-1 px-4 mt-4 space-y-1">
+<a class="flex items-center px-4 py-3 text-on-secondary dark:text-on-secondary-fixed-variant hover:bg-on-secondary-fixed-variant transition-colors duration-200 cursor-pointer active:opacity-80 rounded-sm" href="#">
+<span class="material-symbols-outlined mr-3">dashboard</span>
+<span class="font-body-md">Dashboard</span>
+</a>
+<a class="sidebar-active flex items-center px-4 py-3 cursor-pointer active:opacity-80 rounded-sm" href="#">
+<span class="material-symbols-outlined mr-3">person_search</span>
+<span class="font-body-md">Patients</span>
+</a>
+<a class="flex items-center px-4 py-3 text-on-secondary dark:text-on-secondary-fixed-variant hover:bg-on-secondary-fixed-variant transition-colors duration-200 cursor-pointer active:opacity-80 rounded-sm" href="#">
+<span class="material-symbols-outlined mr-3">assignment_ind</span>
+<span class="font-body-md">Evaluations</span>
+</a>
+<a class="flex items-center px-4 py-3 text-on-secondary dark:text-on-secondary-fixed-variant hover:bg-on-secondary-fixed-variant transition-colors duration-200 cursor-pointer active:opacity-80 rounded-sm" href="#">
+<span class="material-symbols-outlined mr-3">calendar_today</span>
+<span class="font-body-md">Schedules</span>
+</a>
+<a class="flex items-center px-4 py-3 text-on-secondary dark:text-on-secondary-fixed-variant hover:bg-on-secondary-fixed-variant transition-colors duration-200 cursor-pointer active:opacity-80 rounded-sm" href="#">
+<span class="material-symbols-outlined mr-3">analytics</span>
+<span class="font-body-md">Reports</span>
+</a>
+<a class="flex items-center px-4 py-3 text-on-secondary dark:text-on-secondary-fixed-variant hover:bg-on-secondary-fixed-variant transition-colors duration-200 cursor-pointer active:opacity-80 rounded-sm" href="#">
+<span class="material-symbols-outlined mr-3">settings</span>
+<span class="font-body-md">Settings</span>
+</a>
+</nav>
+<div class="p-6 border-t border-outline-variant bg-black/5">
+<button class="w-full bg-primary-container text-on-primary-container py-3 rounded-lg font-bold flex items-center justify-center gap-2 hover:opacity-90 transition-opacity">
+<span class="material-symbols-outlined">add</span>
+                New Evaluation
+            </button>
+</div>
+<div class="p-4 space-y-1">
+<a class="flex items-center px-4 py-2 text-on-secondary dark:text-on-secondary-fixed-variant hover:bg-on-secondary-fixed-variant transition-colors duration-200 text-sm" href="#">
+<span class="material-symbols-outlined mr-3 text-base">help</span>
+                Help Center
+            </a>
+<a class="flex items-center px-4 py-2 text-on-secondary dark:text-on-secondary-fixed-variant hover:bg-on-secondary-fixed-variant transition-colors duration-200 text-sm" href="#">
+<span class="material-symbols-outlined mr-3 text-base">logout</span>
+                Logout
+            </a>
+</div>
+</aside>
+<!-- Main Content Area -->
+<main class="ml-sidebar-width min-h-screen">
+<!-- TopNavBar Shell -->
+<header class="flex justify-between items-center h-16 px-margin-desktop bg-surface dark:bg-surface-dim border-b border-outline-variant sticky top-0 z-40">
+<div class="flex items-center gap-4">
+<h1 class="font-headline-sm text-headline-sm font-bold text-primary">Musculoskeletal Evaluation: Spine</h1>
+</div>
+<nav class="hidden md:flex gap-8 h-full">
+<a class="flex items-center h-full text-on-surface-variant hover:text-primary transition-colors cursor-pointer active:scale-95 px-1" href="#">Patient File</a>
+<a class="flex items-center h-full text-on-surface-variant hover:text-primary transition-colors cursor-pointer active:scale-95 px-1" href="#">History</a>
+<a class="flex items-center h-full text-primary border-b-2 border-primary font-bold pb-0.5 px-1" href="#">Physical Exam</a>
+<a class="flex items-center h-full text-on-surface-variant hover:text-primary transition-colors cursor-pointer active:scale-95 px-1" href="#">Plan</a>
+</nav>
+<div class="flex items-center gap-4">
+<div class="flex gap-2">
+<span class="material-symbols-outlined p-2 text-on-surface-variant hover:bg-surface-variant rounded-full cursor-pointer transition-colors">notifications</span>
+<span class="material-symbols-outlined p-2 text-on-surface-variant hover:bg-surface-variant rounded-full cursor-pointer transition-colors">account_circle</span>
+</div>
+<button class="bg-primary text-white px-6 py-2 rounded font-bold hover:opacity-90 active:scale-95 transition-all">Save Progress</button>
+</div>
+</header>
+<!-- Evaluation Form Content -->
+<div class="p-margin-desktop max-w-container-max mx-auto">
+<div class="grid grid-cols-12 gap-gutter">
+<!-- Left Column: Visual References -->
+<div class="col-span-12 lg:col-span-3 space-y-6">
+<div class="bg-white rounded-lg border border-outline-variant p-4 sticky top-24">
+<h3 class="font-headline-sm text-primary mb-4">Referencias Anatómicas</h3>
+<p class="text-sm text-on-surface-variant mb-6">N: Señale en la figura el área del disturbio y la irradiación.</p>
+<div class="space-y-8">
+<div class="flex flex-col items-center">
+<span class="label-sm text-on-surface-variant mb-2 font-bold">VISTA CERVICAL</span>
+<div class="w-full aspect-square bg-surface-container-lowest rounded-lg overflow-hidden border border-outline-variant flex items-center justify-center p-2 group hover:border-primary transition-colors">
+<img class="w-full h-full object-contain mix-blend-multiply opacity-90 group-hover:opacity-100 transition-opacity" data-alt="A clinical medical illustration showing the back view of a person's head and neck. A red vertical highlight accurately depicts the cervical spine area from the base of the skull to the upper shoulder region. The drawing style is minimalist and precise, typical of anatomical charts used in professional medical evaluations, set against a clean white background." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCDBtnxJeMcxMsIPuhiW5Vm1o05kG6C0TMayMjDC_JMfWzEr-Ugm4UwPRZdmFh6EBsfQFP9WiyWt15jIoahgwPDUI7SX4B9ZdPYIvzoPBGjf-oiJnkCzt_jhYNb0cD72a7wWTy13Fh-tXtiNuaq5ej2y8hDaLSNmYlT1M4Vsojbu79UxckQjDn1IcxdLP-rsjXKWWkt-_N-DDIy8yzzAi130q45QBNK5l2ka2xZXcrVyBw7UHeHoXrJHmy36pFCzwXGhzo0eF6Re5Al">
+</div>
+</div>
+<div class="flex flex-col items-center">
+<span class="label-sm text-on-surface-variant mb-2 font-bold">VISTA COMPLETA</span>
+<div class="w-full aspect-3/4 bg-surface-container-lowest rounded-lg overflow-hidden border border-outline-variant flex items-center justify-center p-2 group hover:border-primary transition-colors">
+<img class="w-full h-full object-contain mix-blend-multiply opacity-90 group-hover:opacity-100 transition-opacity" data-alt="A detailed medical diagram illustrating the posterior view of the entire human spine. A red vertical line highlights the spinal column from the cervical region through the thoracic and lumbar sections, ending at the sacrum. The sacral area is highlighted with a larger red shape to indicate focused assessment. The illustration is clean, professional, and formatted for diagnostic software with high-contrast outlines." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCFASa5YosW7dN-NGmKJOMV-c5ZwgRlPLOc4BjFqVfZnKjn_qhjTs4Oi5_nfAGlwS2VK-mI-2SqdGwor2wT1u7pFxZ442jYG7jnhVXpAtuciDBLyG3SC2avcAd_z-YoLSHD26SMmEuWZo-znO2pAafnqFHyFYySyekwAxa5-Q1Jr2-K5WXECOPKS721s1LAzGlkiOj-ihOCJ5e7mYe_ziRAaDhZr1rU6oSYhdM4bwXD0PsmYeQShGAh3dnKr6fLel2W2dcX04eXZdGp">
+</div>
+</div>
+</div>
+</div>
+</div>
+<!-- Right Column: Evaluation Fields -->
+<div class="col-span-12 lg:col-span-9 space-y-8">
+<!-- Section Header -->
+<div class="border-b border-outline-variant pb-4">
+<h2 class="font-headline-md text-on-surface">II.- COLUMNA <span class="text-on-surface-variant font-normal text-lg">(DISTURBIOS EN LA COLUMNA ULTIMOS 12 MESES)</span></h2>
+</div>
+<!-- CERVICAL Section -->
+<section class="bg-white rounded-lg border border-outline-variant overflow-hidden shadow-sm">
+<div class="bg-surface-container-low px-6 py-4 flex justify-between items-center border-b border-outline-variant">
+<div class="flex items-center gap-4">
+<h3 class="font-headline-sm text-primary uppercase tracking-wide">1. CERVICAL</h3>
+<span class="text-sm italic text-on-surface-variant">(molestia, sensación de peso, dolor)</span>
+</div>
+<div class="flex gap-6 items-center">
+<label class="flex items-center gap-2 cursor-pointer group">
+<input class="w-4 h-4 text-primary border-outline-variant focus:ring-primary-container" name="cervical_status" type="radio">
+<span class="font-bold text-on-surface group-hover:text-primary">SI</span>
+</label>
+<label class="flex items-center gap-2 cursor-pointer group">
+<input class="w-4 h-4 text-primary border-outline-variant focus:ring-primary-container" name="cervical_status" type="radio">
+<span class="font-bold text-on-surface group-hover:text-primary">NO</span>
+</label>
+</div>
+</div>
+<div class="p-6">
+<table class="w-full border-collapse">
+<thead>
+<tr class="bg-surface-container-low/50">
+<th class="p-3 text-left border border-outline-variant w-1/4"></th>
+<th class="p-3 text-center border border-outline-variant font-bold text-xs uppercase text-on-surface-variant">Raramente</th>
+<th class="p-3 text-center border border-outline-variant font-bold text-xs uppercase text-on-surface-variant">Al menos 3-4 episodios de 2-3 días c/u</th>
+<th class="p-3 text-center border border-outline-variant font-bold text-xs uppercase text-on-surface-variant">Al menos 3-4 episodios con uso de medicamentos o tratamiento MD</th>
+<th class="p-3 text-center border border-outline-variant font-bold text-xs uppercase text-on-surface-variant">Presente todo el día</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td class="p-3 border border-outline-variant font-bold text-sm bg-surface-container-lowest">MOLESTIA</td>
+<td class="p-3 border border-outline-variant text-center"><input class="rounded-sm border-outline-variant" type="checkbox"></td>
+<td class="p-3 border border-outline-variant text-center"><input class="rounded-sm border-outline-variant" type="checkbox"></td>
+<td class="p-3 border border-outline-variant text-center"><input class="rounded-sm border-outline-variant" type="checkbox"></td>
+<td class="p-3 border border-outline-variant text-center"><input class="rounded-sm border-outline-variant" type="checkbox"></td>
+</tr>
+<tr>
+<td class="p-3 border border-outline-variant font-bold text-sm bg-surface-container-lowest">DOLOR</td>
+<td class="p-3 border border-outline-variant text-center"><input class="rounded-sm border-outline-variant" type="checkbox"></td>
+<td class="p-3 border border-outline-variant text-center"><input class="rounded-sm border-outline-variant" type="checkbox"></td>
+<td class="p-3 border border-outline-variant text-center"><input class="rounded-sm border-outline-variant" type="checkbox"></td>
+<td class="p-3 border border-outline-variant text-center"><input class="rounded-sm border-outline-variant" type="checkbox"></td>
+</tr>
+</tbody>
+</table>
+<div class="mt-6 grid grid-cols-2 gap-8 items-end">
+<div class="bg-surface-container-low/30 p-4 rounded border border-outline-variant">
+<div class="flex items-center gap-4 mb-4">
+<span class="font-bold text-sm text-primary uppercase">Irradiación:</span>
+<div class="flex gap-4">
+<label class="flex items-center gap-2"><input class="text-primary" name="cerv_irr" type="radio"> <span class="text-sm">NO</span></label>
+<label class="flex items-center gap-2"><input class="text-primary" name="cerv_irr" type="radio"> <span class="text-sm">SI</span></label>
+</div>
+</div>
+<div class="grid grid-cols-2 gap-4">
+<div class="space-y-2">
+<span class="text-xs font-bold text-on-surface-variant block">LOCALIZACIÓN</span>
+<div class="p-2 border border-outline-variant bg-white text-sm">Miembro Superior</div>
+</div>
+<div class="flex gap-4 items-end">
+<label class="flex items-center gap-2 text-xs font-bold"><input class="rounded-sm" type="checkbox"> DX</label>
+<label class="flex items-center gap-2 text-xs font-bold"><input class="rounded-sm" type="checkbox"> IX</label>
+</div>
+</div>
+</div>
+<div class="space-y-2">
+<label class="text-sm font-bold text-on-surface uppercase block">Ausencia al trabajo por disturbio cervical</label>
+<div class="flex items-center gap-3">
+<input class="w-full border-outline-variant rounded p-3 text-headline-sm text-primary font-bold text-center" placeholder="0" type="number">
+<span class="font-bold text-on-surface-variant">Días</span>
+</div>
+</div>
+</div>
+</div>
+</section>
+<!-- DORSAL Section -->
+<section class="bg-white rounded-lg border border-outline-variant overflow-hidden shadow-sm">
+<div class="bg-surface-container-low px-6 py-4 flex justify-between items-center border-b border-outline-variant">
+<div class="flex items-center gap-4">
+<h3 class="font-headline-sm text-primary uppercase tracking-wide">2. DORSAL</h3>
+<span class="text-sm italic text-on-surface-variant">(molestia, sensación de peso, dolor)</span>
+</div>
+<div class="flex gap-6 items-center">
+<label class="flex items-center gap-2 cursor-pointer group">
+<input class="w-4 h-4 text-primary border-outline-variant" name="dorsal_status" type="radio">
+<span class="font-bold text-on-surface group-hover:text-primary">SI</span>
+</label>
+<label class="flex items-center gap-2 cursor-pointer group">
+<input class="w-4 h-4 text-primary border-outline-variant" name="dorsal_status" type="radio">
+<span class="font-bold text-on-surface group-hover:text-primary">NO</span>
+</label>
+</div>
+</div>
+<div class="p-6">
+<table class="w-full border-collapse">
+<thead>
+<tr class="bg-surface-container-low/50">
+<th class="p-3 text-left border border-outline-variant w-1/4"></th>
+<th class="p-3 text-center border border-outline-variant font-bold text-xs uppercase text-on-surface-variant">Raramente</th>
+<th class="p-3 text-center border border-outline-variant font-bold text-xs uppercase text-on-surface-variant">Al menos 3-4 episodios de 2-3 días c/u</th>
+<th class="p-3 text-center border border-outline-variant font-bold text-xs uppercase text-on-surface-variant">Al menos 3-4 episodios con uso de medicamentos o tratamiento MD</th>
+<th class="p-3 text-center border border-outline-variant font-bold text-xs uppercase text-on-surface-variant">Presente todo el día</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td class="p-3 border border-outline-variant font-bold text-sm bg-surface-container-lowest">MOLESTIA</td>
+<td class="p-3 border border-outline-variant text-center"><input class="rounded-sm border-outline-variant" type="checkbox"></td>
+<td class="p-3 border border-outline-variant text-center"><input class="rounded-sm border-outline-variant" type="checkbox"></td>
+<td class="p-3 border border-outline-variant text-center"><input class="rounded-sm border-outline-variant" type="checkbox"></td>
+<td class="p-3 border border-outline-variant text-center"><input class="rounded-sm border-outline-variant" type="checkbox"></td>
+</tr>
+<tr>
+<td class="p-3 border border-outline-variant font-bold text-sm bg-surface-container-lowest">DOLOR</td>
+<td class="p-3 border border-outline-variant text-center"><input class="rounded-sm border-outline-variant" type="checkbox"></td>
+<td class="p-3 border border-outline-variant text-center"><input class="rounded-sm border-outline-variant" type="checkbox"></td>
+<td class="p-3 border border-outline-variant text-center"><input class="rounded-sm border-outline-variant" type="checkbox"></td>
+<td class="p-3 border border-outline-variant text-center"><input class="rounded-sm border-outline-variant" type="checkbox"></td>
+</tr>
+</tbody>
+</table>
+<div class="mt-6 grid grid-cols-2 gap-8 items-end">
+<div class="bg-surface-container-low/30 p-4 rounded border border-outline-variant">
+<div class="flex items-center gap-4 mb-4">
+<span class="font-bold text-sm text-primary uppercase">Irradiación:</span>
+<div class="flex gap-4">
+<label class="flex items-center gap-2"><input class="text-primary" name="dors_irr" type="radio"> <span class="text-sm">NO</span></label>
+<label class="flex items-center gap-2"><input class="text-primary" name="dors_irr" type="radio"> <span class="text-sm">SI</span></label>
+</div>
+</div>
+<div class="grid grid-cols-2 gap-4">
+<div class="space-y-2">
+<span class="text-xs font-bold text-on-surface-variant block">LOCALIZACIÓN</span>
+<div class="p-2 border border-outline-variant bg-white text-sm">Emitorax</div>
+</div>
+<div class="flex gap-4 items-end">
+<label class="flex items-center gap-2 text-xs font-bold"><input class="rounded-sm" type="checkbox"> DX</label>
+<label class="flex items-center gap-2 text-xs font-bold"><input class="rounded-sm" type="checkbox"> IX</label></div>
+</div>
+</div>
+<div class="space-y-2">
+<label class="text-sm font-bold text-on-surface uppercase block">Ausencia al trabajo por disturbio dorsal</label>
+<div class="flex items-center gap-3">
+<input class="w-full border-outline-variant rounded p-3 text-headline-sm text-primary font-bold text-center" placeholder="0" type="number">
+<span class="font-bold text-on-surface-variant">Días</span>
+</div>
+</div>
+</div>
+</div>
+</section>
+<!-- LUMBO SACRA Section -->
+<section class="bg-white rounded-lg border border-outline-variant overflow-hidden shadow-sm">
+<div class="bg-surface-container-low px-6 py-4 flex justify-between items-center border-b border-outline-variant">
+<div class="flex items-center gap-4">
+<h3 class="font-headline-sm text-primary uppercase tracking-wide">3. LUMBO SACRA</h3>
+<span class="text-sm italic text-on-surface-variant">(molestia, sensación de peso, dolor)</span>
+</div>
+<div class="flex gap-6 items-center">
+<label class="flex items-center gap-2 cursor-pointer group">
+<input class="w-4 h-4 text-primary border-outline-variant" name="lumbo_status" type="radio">
+<span class="font-bold text-on-surface group-hover:text-primary">SI</span>
+</label>
+<label class="flex items-center gap-2 cursor-pointer group">
+<input class="w-4 h-4 text-primary border-outline-variant" name="lumbo_status" type="radio">
+<span class="font-bold text-on-surface group-hover:text-primary">NO</span>
+</label>
+</div>
+</div>
+<div class="p-6">
+<table class="w-full border-collapse">
+<thead>
+<tr class="bg-surface-container-low/50">
+<th class="p-3 text-left border border-outline-variant w-1/4"></th>
+<th class="p-3 text-center border border-outline-variant font-bold text-xs uppercase text-on-surface-variant">Raramente</th>
+<th class="p-3 text-center border border-outline-variant font-bold text-xs uppercase text-on-surface-variant">Al menos 3-4 episodios de 2-3 días c/u</th>
+<th class="p-3 text-center border border-outline-variant font-bold text-xs uppercase text-on-surface-variant">Al menos 3-4 episodios con uso de medicamentos o tratamiento MD</th>
+<th class="p-3 text-center border border-outline-variant font-bold text-xs uppercase text-on-surface-variant">Presente todo el día</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td class="p-3 border border-outline-variant font-bold text-sm bg-surface-container-lowest">MOLESTIA</td>
+<td class="p-3 border border-outline-variant text-center"><input class="rounded-sm border-outline-variant" type="checkbox"></td>
+<td class="p-3 border border-outline-variant text-center"><input class="rounded-sm border-outline-variant" type="checkbox"></td>
+<td class="p-3 border border-outline-variant text-center"><input class="rounded-sm border-outline-variant" type="checkbox"></td>
+<td class="p-3 border border-outline-variant text-center"><input class="rounded-sm border-outline-variant" type="checkbox"></td>
+</tr>
+<tr>
+<td class="p-3 border border-outline-variant font-bold text-sm bg-surface-container-lowest">DOLOR</td>
+<td class="p-3 border border-outline-variant text-center"><input class="rounded-sm border-outline-variant" type="checkbox"></td>
+<td class="p-3 border border-outline-variant text-center"><input class="rounded-sm border-outline-variant" type="checkbox"></td>
+<td class="p-3 border border-outline-variant text-center"><input class="rounded-sm border-outline-variant" type="checkbox"></td>
+<td class="p-3 border border-outline-variant text-center"><input class="rounded-sm border-outline-variant" type="checkbox"></td>
+</tr>
+</tbody>
+</table>
+<div class="mt-6 grid grid-cols-2 gap-8 items-end">
+<div class="bg-surface-container-low/30 p-4 rounded border border-outline-variant">
+<div class="flex items-center gap-4 mb-4">
+<span class="font-bold text-sm text-primary uppercase">Irradiación:</span>
+<div class="flex gap-4">
+<label class="flex items-center gap-2"><input class="text-primary" name="lumbo_irr" type="radio"> <span class="text-sm">NO</span></label>
+<label class="flex items-center gap-2"><input class="text-primary" name="lumbo_irr" type="radio"> <span class="text-sm">SI</span></label>
+</div>
+</div>
+<div class="grid grid-cols-2 gap-4">
+<div class="space-y-2">
+<span class="text-xs font-bold text-on-surface-variant block">LOCALIZACIÓN</span>
+<div class="p-2 border border-outline-variant bg-white text-sm">Miembros Inferiores</div>
+</div>
+<div class="flex gap-4 items-end">
+<label class="flex items-center gap-2 text-xs font-bold"><input class="rounded-sm" type="checkbox"> DX</label><label class="flex items-center gap-2 text-xs font-bold"><input class="rounded-sm" type="checkbox"> IX</label>
+</div>
+</div>
+</div>
+<div class="space-y-2">
+<label class="text-sm font-bold text-on-surface uppercase block">Ausencia al trabajo por disturbio lumbar</label>
+<div class="flex items-center gap-3">
+<input class="w-full border-outline-variant rounded p-3 text-headline-sm text-primary font-bold text-center" placeholder="0" type="number">
+<span class="font-bold text-on-surface-variant">Días</span>
+</div>
+</div>
+</div>
+</div>
+</section>
+<!-- Clinical Notes footer -->
+<footer class="mt-12 bg-surface-container-high/50 p-6 rounded-lg border border-outline-variant">
+<div class="flex items-start gap-3">
+<span class="material-symbols-outlined text-primary mt-1">info</span>
+<div class="space-y-4">
+<p class="text-sm text-on-surface-variant leading-relaxed">
+<span class="font-bold text-on-surface">NB*:</span> umbral anamnésico positivo para la <span class="font-bold">COLUMNA</span> (identificado por cuadros grises) es la presencia de: dolor / malestar casi todos los días en los últimos 12 meses o episodios de dolor (3-4 episodios de 2-3 días, 10 episodios de 1 día, 8 episodios de hace 2 días, 2 episodios de 30 días, un episodio de 90 días).
+                                </p>
+<p class="text-sm text-on-surface-variant leading-relaxed italic">
+                                    Dolor agudo de espalda baja significa: episodio de dolor intenso en la espalda baja que no permite la flexión, inclinación y rotación ("lumbago"), cuyo comienzo puede ser agudo o insidioso y se prolongó durante al menos 2 días (o uno con tratamiento farmacológico).
+                                </p>
+</div>
+</div>
+</footer>
+</div>
+</div>
+<!-- Page Footer Branding -->
+<div class="mt-16 flex justify-between items-center text-xs text-outline-variant border-t border-outline-variant pt-6 pb-12">
+<div class="">Fo. JJC-SIG-13-31 Cuestionario anamnésico y evaluación de extremidad superior y espalda. Rev. 0</div>
+<div class="flex items-center gap-4">
+<span class="">HOLOMEDIC SYSTEM v2.4</span>
+<span class="font-bold text-on-surface">Página 1</span>
+</div>
+</div>
+</div>
+</main>
+<!-- Floating Action for Mobile -->
+<button class="fixed bottom-6 right-6 bg-primary text-white p-4 rounded-full shadow-lg md:hidden z-50 flex items-center justify-center">
+<span class="material-symbols-outlined">save</span>
+</button>
+<script>
+        // Simple interactivity for demonstration
+        document.querySelectorAll('input[type="checkbox"]').forEach(checkbox => {
+            checkbox.addEventListener('change', function() {
+                const row = this.closest('tr');
+                if (this.checked) {
+                    row.classList.add('bg-primary-container/5');
+                } else {
+                    const anyChecked = row.querySelectorAll('input[type="checkbox"]:checked').length > 0;
+                    if (!anyChecked) row.classList.remove('bg-primary-container/5');
+                }
+            });
+        });
+
+        // Toggle radio button style effects
+        document.querySelectorAll('input[type="radio"]').forEach(radio => {
+            radio.addEventListener('change', function() {
+                const section = this.closest('section');
+                if (this.value === 'SI' || this.nextElementSibling.textContent.trim() === 'SI') {
+                    section.classList.add('border-primary');
+                } else {
+                    section.classList.remove('border-primary');
+                }
+            });
+        });
+    </script>
+
+
+</body></html>

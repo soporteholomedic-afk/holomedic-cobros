@@ -160,7 +160,7 @@ export default function MusculoEsqueleticaJjcPage() {
         <button
           type="submit"
           disabled={isInvalidRange}
-          className="px-5 py-2 rounded-lg bg-sky-600 hover:bg-sky-700 text-white font-medium text-sm transition-all duration-200 cursor-pointer shadow-sm hover:shadow flex items-center justify-center gap-2 h-[38px] sm:w-auto w-full disabled:opacity-50 disabled:cursor-not-allowed"
+          className="px-5 py-2 rounded-lg bg-sky-600 hover:bg-sky-700 text-white font-medium text-sm transition-all duration-200 cursor-pointer shadow-sm hover:shadow flex items-center justify-center gap-2 h-9.5 sm:w-auto w-full disabled:opacity-50 disabled:cursor-not-allowed"
         >
           Filtrar
         </button>
@@ -234,7 +234,7 @@ export default function MusculoEsqueleticaJjcPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {filteredRows.map((row, idx) => (
+                {filteredRows.map((row) => (
                   <tr
                     key={row.idAtencion}
                     className="hover:bg-slate-50"

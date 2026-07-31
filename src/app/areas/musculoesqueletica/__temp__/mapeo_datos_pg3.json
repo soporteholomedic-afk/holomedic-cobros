@@ -38,11 +38,12 @@
         "episodiosConMedicamentos": false,
         "presenteTodoElDia": false
       },
-      "irradiacion": {
-        "tieneIrradiacion": false,
-        "emitorax": false,
-        "dx": false
-      },
+        "irradiacion": {
+          "tieneIrradiacion": false,
+          "emitorax": false,
+          "dx": false,
+          "ix": false
+        },
       "diasAusenciaTrabajo": null
     },
 
@@ -60,11 +61,12 @@
         "episodiosConMedicamentos": false,
         "presenteTodoElDia": false
       },
-      "irradiacion": {
-        "tieneIrradiacion": false,
-        "miembrosInferiores": false,
-        "ix": false
-      },
+        "irradiacion": {
+          "tieneIrradiacion": false,
+          "miembrosInferiores": false,
+          "dx": false,
+          "ix": false
+        },
       "diasAusenciaTrabajo": null
     }
   }
