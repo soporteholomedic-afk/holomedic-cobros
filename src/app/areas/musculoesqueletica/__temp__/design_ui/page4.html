@@ -1,0 +1,372 @@
+<!DOCTYPE html>
+
+<html class="light" lang="es"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Holomedic - Diagnóstico de Columna</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;600;700&family=Inter:wght@400;500&family=Geist:wght@500;600&family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@100..900&family=Hanken+Grotesk:wght@100..900&family=Inter:wght@100..900&display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "surface-variant": "#d3e4fe",
+                        "on-primary-fixed": "#001d33",
+                        "on-background": "#0b1c30",
+                        "surface": "#f8f9ff",
+                        "tertiary-fixed": "#e0e3e5",
+                        "surface-bright": "#f8f9ff",
+                        "on-primary": "#ffffff",
+                        "inverse-surface": "#213145",
+                        "secondary-fixed-dim": "#bcc6e0",
+                        "primary": "#006099",
+                        "surface-dim": "#cbdbf5",
+                        "surface-container-high": "#dce9ff",
+                        "on-tertiary-fixed-variant": "#434749",
+                        "on-tertiary-fixed": "#181c1e",
+                        "error": "#ba1a1a",
+                        "surface-container": "#e5eeff",
+                        "on-primary-container": "#fdfcff",
+                        "tertiary-fixed-dim": "#c4c7c9",
+                        "secondary-container": "#d8e2fd",
+                        "on-tertiary-container": "#fafdff",
+                        "on-secondary": "#ffffff",
+                        "on-surface": "#0b1c30",
+                        "on-secondary-fixed-variant": "#3d475c",
+                        "error-container": "#ffdad6",
+                        "secondary-fixed": "#d8e2fd",
+                        "tertiary": "#585d5e",
+                        "tertiary-container": "#717577",
+                        "inverse-primary": "#98cbff",
+                        "on-secondary-container": "#5a647b",
+                        "surface-tint": "#00629d",
+                        "secondary": "#545e75",
+                        "outline-variant": "#bfc7d2",
+                        "surface-container-lowest": "#ffffff",
+                        "primary-container": "#007ac0",
+                        "on-error-container": "#93000a",
+                        "outline": "#707882",
+                        "inverse-on-surface": "#eaf1ff",
+                        "on-primary-fixed-variant": "#004a77",
+                        "primary-fixed-dim": "#98cbff",
+                        "on-error": "#ffffff",
+                        "primary-fixed": "#cfe5ff",
+                        "on-secondary-fixed": "#111c2f",
+                        "surface-container-low": "#eff4ff",
+                        "surface-container-highest": "#d3e4fe",
+                        "background": "#f8f9ff",
+                        "on-surface-variant": "#404751",
+                        "on-tertiary": "#ffffff"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.125rem",
+                        "lg": "0.25rem",
+                        "xl": "0.5rem",
+                        "full": "0.75rem"
+                    },
+                    "spacing": {
+                        "gutter": "24px",
+                        "sidebar-width": "260px",
+                        "margin-desktop": "32px",
+                        "margin-mobile": "16px",
+                        "baseline": "4px",
+                        "container-max": "1440px"
+                    },
+                    "fontFamily": {
+                        "headline-md": ["Hanken Grotesk"],
+                        "body-lg": ["Inter"],
+                        "body-md": ["Inter"],
+                        "headline-lg-mobile": ["Hanken Grotesk"],
+                        "label-sm": ["Geist"],
+                        "label-md": ["Geist"],
+                        "headline-lg": ["Hanken Grotesk"],
+                        "headline-sm": ["Hanken Grotesk"]
+                    },
+                    "fontSize": {
+                        "headline-md": ["24px", { "lineHeight": "32px", "letterSpacing": "-0.01em", "fontWeight": "600" }],
+                        "body-lg": ["16px", { "lineHeight": "24px", "fontWeight": "400" }],
+                        "body-md": ["14px", { "lineHeight": "20px", "fontWeight": "400" }],
+                        "headline-lg-mobile": ["24px", { "lineHeight": "32px", "fontWeight": "700" }],
+                        "label-sm": ["11px", { "lineHeight": "14px", "fontWeight": "600" }],
+                        "label-md": ["12px", { "lineHeight": "16px", "letterSpacing": "0.05em", "fontWeight": "500" }],
+                        "headline-lg": ["30px", { "lineHeight": "38px", "letterSpacing": "-0.02em", "fontWeight": "700" }],
+                        "headline-sm": ["20px", { "lineHeight": "28px", "fontWeight": "600" }]
+                    }
+                },
+            },
+        }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        body {
+            background-color: #F4F7F9;
+            color: #0b1c30;
+        }
+        .form-card {
+            background-color: #ffffff;
+            border: 1px solid #E2E8F0;
+            border-radius: 8px;
+            transition: border-color 0.2s ease;
+        }
+        .form-input {
+            border: 1px solid #E2E8F0;
+            border-radius: 4px;
+            padding: 8px 12px;
+            width: 100%;
+            transition: all 0.2s ease;
+        }
+        .form-input:focus {
+            border-color: #007DC5;
+            outline: none;
+            box-shadow: 0 0 0 2px rgba(0, 125, 197, 0.1);
+        }
+        .section-header {
+            border-bottom: 1px solid #E2E8F0;
+            padding: 16px 24px;
+            background-color: #F8FAFC;
+            border-radius: 8px 8px 0 0;
+        }
+        .custom-radio:checked {
+            background-color: #007DC5;
+            border-color: #007DC5;
+        }
+    </style>
+</head>
+<body class="font-body-md text-body-md overflow-x-hidden">
+<!-- SideNavBar (Authority: JSON) -->
+<aside class="fixed left-0 top-0 bottom-0 flex flex-col pt-16 z-40 bg-surface-container-low dark:bg-on-background border-r border-outline-variant w-sidebar-width">
+<div class="px-6 py-4 flex items-center gap-3">
+<div class="w-8 h-8 bg-primary rounded-lg flex items-center justify-center text-on-primary">
+<span class="material-symbols-outlined">clinical_notes</span>
+</div>
+<div>
+<h2 class="font-headline-sm text-headline-sm font-semibold text-primary dark:text-primary-fixed-dim">Clinical Portal</h2>
+<p class="text-[10px] uppercase tracking-wider text-on-surface-variant">Dr. Practitioner</p>
+</div>
+</div>
+<nav class="flex-1 mt-6">
+<div class="flex items-center gap-3 px-4 py-3 mx-2 my-1 cursor-pointer text-on-surface-variant hover:bg-surface-container-high transition-all">
+<span class="material-symbols-outlined">dashboard</span>
+<span>Dashboard</span>
+</div>
+<!-- Active Navigation Logic: Patient Records maps to the context of clinical entry -->
+<div class="flex items-center gap-3 px-4 py-3 mx-2 my-1 cursor-pointer bg-secondary-container text-on-secondary-container font-semibold rounded-lg">
+<span class="material-symbols-outlined">folder_shared</span>
+<span>Patient Records</span>
+</div>
+<div class="flex items-center gap-3 px-4 py-3 mx-2 my-1 cursor-pointer text-on-surface-variant hover:bg-surface-container-high transition-all">
+<span class="material-symbols-outlined">edit_document</span>
+<span>Clinical Entry</span>
+</div>
+<div class="flex items-center gap-3 px-4 py-3 mx-2 my-1 cursor-pointer text-on-surface-variant hover:bg-surface-container-high transition-all">
+<span class="material-symbols-outlined">biotech</span>
+<span>Diagnostics</span>
+</div>
+<div class="flex items-center gap-3 px-4 py-3 mx-2 my-1 cursor-pointer text-on-surface-variant hover:bg-surface-container-high transition-all">
+<span class="material-symbols-outlined">analytics</span>
+<span>Reports</span>
+</div>
+</nav>
+<div class="mt-auto border-t border-outline-variant py-4">
+<div class="flex items-center gap-3 px-4 py-3 mx-2 my-1 cursor-pointer text-on-surface-variant hover:bg-surface-container-high transition-all">
+<span class="material-symbols-outlined">support_agent</span>
+<span>Support</span>
+</div>
+<div class="flex items-center gap-3 px-4 py-3 mx-2 my-1 cursor-pointer text-on-surface-variant hover:bg-surface-container-high transition-all">
+<span class="material-symbols-outlined">logout</span>
+<span>Logout</span>
+</div>
+</div>
+</aside>
+<!-- TopNavBar (Authority: JSON) -->
+<header class="fixed top-0 right-0 left-0 h-16 bg-surface dark:bg-on-background border-b border-outline-variant flex justify-between items-center px-margin-desktop z-50">
+<div class="flex items-center gap-8 pl-sidebar-width">
+<span class="font-headline-md text-headline-md font-bold text-primary dark:text-primary-fixed-dim">Holomedic</span>
+<div class="relative hidden lg:block">
+<span class="absolute left-3 top-1/2 -translate-y-1/2 text-outline material-symbols-outlined">search</span>
+<input class="pl-10 pr-4 py-2 bg-surface-container-low border border-outline-variant rounded-full text-body-md focus:outline-none focus:ring-2 focus:ring-primary/20 w-64" placeholder="Buscar paciente..." type="text"/>
+</div>
+</div>
+<div class="flex items-center gap-4">
+<button class="p-2 text-on-surface-variant hover:bg-surface-container-low transition-colors rounded-full">
+<span class="material-symbols-outlined">notifications</span>
+</button>
+<button class="p-2 text-on-surface-variant hover:bg-surface-container-low transition-colors rounded-full">
+<span class="material-symbols-outlined">settings</span>
+</button>
+<button class="p-2 text-on-surface-variant hover:bg-surface-container-low transition-colors rounded-full">
+<span class="material-symbols-outlined">help</span>
+</button>
+<div class="h-8 w-8 rounded-full overflow-hidden border border-outline-variant ml-2">
+<img class="w-full h-full object-cover" data-alt="A professional medical practitioner avatar in a clean clinical setting, wearing a white lab coat with a stethoscope around the neck. The background is a soft-focus medical office with high-key lighting. The style is modern corporate photography, reflecting trust and medical expertise in a minimalist health tech ecosystem." src="https://lh3.googleusercontent.com/aida-public/AB6AXuD1RATgCIOoGzOuQDojgWwEZjK-Gx0eOegLvRwgE-L3OlMXQHc7ZRLHKIqAgbUBTP1oe4i0XrJyvoRYaai_T3zk_8P9QqLzQldrsQtW0CjFlssPV9X71CDiM9sXKMCzi8z-Huzl5yTFsP18CTuLHJoxXkLdu0qae3-pYLAZRcTSWinLkP7sUuFtDakcs_NGCQXJMMLtI-GhWfNs__5QZv1CuVuhjxkspBDbgcCE28NeRNQuaKw-3nHMDqqXlIUKWbfXuxIFL-VTga_I"/>
+</div>
+</div>
+</header>
+<!-- Main Content Canvas -->
+<main class="ml-sidebar-width pt-16 min-h-screen">
+<div class="max-w-[1000px] mx-auto px-gutter py-8">
+<!-- Page Title Header -->
+<div class="mb-8 flex items-end justify-between">
+<div>
+<h1 class="font-headline-lg text-headline-lg text-primary">Diagnóstico de Columna</h1>
+<p class="text-on-surface-variant mt-1 font-body-md">Formulario de evaluación clínica y antecedentes del paciente</p>
+</div>
+<div class="flex gap-3">
+<button class="px-6 py-2 border border-primary text-primary font-semibold rounded hover:bg-surface-container-low transition-all">Cancelar</button>
+<button class="px-6 py-2 bg-primary text-on-primary font-semibold rounded hover:brightness-110 transition-all">Guardar Registro</button>
+</div>
+</div>
+<div class="space-y-8">
+<!-- Section 1: LUMBALGIA AGUDA -->
+<section class="form-card overflow-hidden">
+<div class="section-header flex justify-between items-center">
+<h3 class="font-headline-sm text-headline-sm text-on-surface uppercase tracking-tight">LUMBALGIA AGUDA</h3>
+<div class="flex items-center gap-6">
+<label class="flex items-center gap-2 cursor-pointer">
+<input class="custom-radio w-4 h-4 text-primary border-outline focus:ring-primary" name="lumbalgia_presenta" type="radio"/>
+<span class="font-label-md text-label-md">SÍ</span>
+</label>
+<label class="flex items-center gap-2 cursor-pointer">
+<input class="custom-radio w-4 h-4 text-primary border-outline focus:ring-primary" name="lumbalgia_presenta" type="radio"/>
+<span class="font-label-md text-label-md">NO</span>
+</label>
+</div>
+</div>
+<div class="p-6 grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-6">
+<div class="space-y-2">
+<label class="block font-label-md text-label-md text-on-surface-variant uppercase">N° total de episodios agudos</label>
+<input class="form-input" placeholder="Ingrese cantidad" type="number"/>
+</div>
+<div class="space-y-2">
+<label class="block font-label-md text-label-md text-on-surface-variant uppercase">Año del 1° episodio</label>
+<input class="form-input" placeholder="AAAA" type="text"/>
+</div>
+<div class="md:col-span-2 bg-surface-container-low p-4 rounded border border-outline-variant/30 space-y-4">
+<label class="block font-label-md text-label-md text-on-surface-variant uppercase">N° episodios agudos en el último año</label>
+<div class="grid grid-cols-1 sm:grid-cols-2 gap-6">
+<div class="flex items-center gap-4">
+<div class="flex items-center gap-2 min-w-[120px]">
+<input class="w-4 h-4 rounded text-primary border-outline focus:ring-primary" type="checkbox"/>
+<span class="text-body-md">Lumbalgia</span>
+</div>
+<input class="form-input max-w-[120px]" placeholder="Cant." type="number"/>
+</div>
+<div class="flex items-center gap-4">
+<div class="flex items-center gap-2 min-w-[140px]">
+<input class="w-4 h-4 rounded text-primary border-outline focus:ring-primary" type="checkbox"/>
+<span class="text-body-md">Lumbociatalgia</span>
+</div>
+<input class="form-input max-w-[120px]" placeholder="Cant." type="number"/>
+</div>
+</div>
+</div>
+<div class="md:col-span-2 space-y-2">
+<label class="block font-label-md text-label-md text-on-surface-variant uppercase">N° de días de ausencia al trabajo por lumbalgia aguda</label>
+<input class="form-input" placeholder="Días totales de ausencia" type="number"/>
+</div>
+</div>
+</section>
+<!-- Section 2: DIAGNOSTICO PATOLOGIA DE LA COLUMNA -->
+<section class="form-card overflow-hidden">
+<div class="section-header flex justify-between items-center">
+<h3 class="font-headline-sm text-headline-sm text-on-surface uppercase tracking-tight">DIAGNÓSTICO PATOLOGÍA DE LA COLUMNA (Conocido)</h3>
+<div class="flex items-center gap-6">
+<label class="flex items-center gap-2 cursor-pointer">
+<input class="custom-radio w-4 h-4 text-primary border-outline focus:ring-primary" name="diagnostico_conocido" type="radio"/>
+<span class="font-label-md text-label-md">SÍ</span>
+</label>
+<label class="flex items-center gap-2 cursor-pointer">
+<input class="custom-radio w-4 h-4 text-primary border-outline focus:ring-primary" name="diagnostico_conocido" type="radio"/>
+<span class="font-label-md text-label-md">NO</span>
+</label>
+</div>
+</div>
+<div class="p-6 space-y-8">
+<!-- Hernia Sub-group -->
+<div class="p-5 border border-outline-variant/50 rounded-lg bg-surface/50">
+<h4 class="font-label-md text-label-md text-primary mb-4 flex items-center gap-2">
+<span class="material-symbols-outlined text-[18px]">medical_services</span>
+                                HERNIA DE DISCO LUMBO SACRA
+                            </h4>
+<div class="grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-6">
+<div class="flex items-center gap-3 h-10">
+<input class="w-5 h-5 rounded text-primary border-outline focus:ring-primary" id="diag_hernia" type="checkbox"/>
+<label class="text-body-md font-medium" for="diag_hernia">DIAGNOSTICADA</label>
+</div>
+<div class="space-y-4">
+<div class="flex items-center gap-3">
+<input class="w-5 h-5 rounded text-primary border-outline focus:ring-primary" id="trata_hernia" type="checkbox"/>
+<label class="text-body-md font-medium uppercase" for="trata_hernia">Tratada quirúrgicamente</label>
+</div>
+<div class="pl-8 grid grid-cols-1 gap-4">
+<div class="space-y-1">
+<label class="text-[11px] font-semibold text-on-surface-variant uppercase">Cuándo</label>
+<input class="form-input" placeholder="Lugar o situación" type="text"/>
+</div>
+<div class="space-y-1">
+<label class="text-[11px] font-semibold text-on-surface-variant uppercase">Fecha de intervención</label>
+<input class="form-input" type="date"/>
+</div>
+</div>
+</div>
+</div>
+</div>
+<!-- Multi-line text fields -->
+<div class="space-y-6">
+<div class="space-y-2">
+<label class="block font-label-md text-label-md text-on-surface-variant uppercase">Patología/Trauma de la Columna Cervical (Cual/es)</label>
+<textarea class="form-input min-h-[80px] resize-none" placeholder="Describa hallazgos o antecedentes..."></textarea>
+</div>
+<div class="space-y-2">
+<label class="block font-label-md text-label-md text-on-surface-variant uppercase">Patología/Trauma de la Columna Dorsal (Cual/es)</label>
+<textarea class="form-input min-h-[80px] resize-none" placeholder="Describa hallazgos o antecedentes..."></textarea>
+</div>
+<div class="space-y-2">
+<label class="block font-label-md text-label-md text-on-surface-variant uppercase">Patología/Trauma de la Columna Lumbosacra (Cual/es)</label>
+<textarea class="form-input min-h-[80px] resize-none" placeholder="Describa hallazgos o antecedentes..."></textarea>
+</div>
+</div>
+</div>
+</section>
+<!-- Helpful context card -->
+<div class="bg-surface-variant/30 border border-surface-variant p-4 rounded-xl flex items-start gap-4">
+<span class="material-symbols-outlined text-primary" style="font-variation-settings: 'FILL' 1;">info</span>
+<div>
+<p class="font-label-md text-label-md text-primary uppercase">Nota informativa</p>
+<p class="text-on-surface-variant mt-1 text-sm leading-relaxed">
+                            Asegúrese de registrar fechas precisas y descripciones detalladas de traumas previos. Esta información es fundamental para determinar el plan de tratamiento ocupacional y las restricciones laborales necesarias.
+                        </p>
+</div>
+</div>
+</div>
+</div>
+</main>
+<!-- Contextual Footer (Simplified) -->
+<footer class="ml-sidebar-width py-6 px-margin-desktop border-t border-outline-variant bg-white">
+<div class="max-w-[1000px] mx-auto flex justify-between items-center text-on-surface-variant text-[12px]">
+<span>© 2024 Holomedic Healthcare Systems</span>
+<div class="flex gap-6">
+<a class="hover:text-primary" href="#">Políticas de Privacidad</a>
+<a class="hover:text-primary" href="#">Guías Clínicas</a>
+</div>
+<span>v2.1.0-clinical</span>
+</div>
+</footer>
+<script>
+        // Micro-interaction for radio groups
+        document.querySelectorAll('input[type="radio"]').forEach(radio => {
+            radio.addEventListener('change', (e) => {
+                const parent = e.target.closest('section');
+                if (e.target.value === 'on') {
+                    // Visual cue could go here
+                }
+            });
+        });
+    </script>
+</body></html>

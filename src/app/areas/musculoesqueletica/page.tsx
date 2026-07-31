@@ -1,5 +1,6 @@
-import { Bone } from 'lucide-react';
+import { Bone, Building } from 'lucide-react';
 import type { Metadata } from 'next';
+import Link from 'next/link';
 
 export const metadata: Metadata = {
   title: 'MusculoEsqueletica | Holomedic',
@@ -19,13 +20,21 @@ export default function MusculoEsqueleticaPage() {
       <p className="text-slate-500 dark:text-slate-400 mb-8">
         Gestión documental y plantillas del área de MusculoEsqueletica.
       </p>
-      <div className="rounded-2xl border border-dashed border-slate-300 dark:border-slate-700 p-8 text-center">
-        <p className="text-sm font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-          Próximamente
-        </p>
-        <p className="text-xs text-slate-400 dark:text-slate-500 mt-2">
-          Esta sección está en desarrollo.
-        </p>
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+        <Link
+          href="/areas/musculoesqueletica/jjc"
+          className="flex flex-col p-6 rounded-2xl bg-white/50 dark:bg-slate-900/30 border border-slate-200/40 dark:border-slate-800/40 hover:border-sky-300 dark:hover:border-sky-700 transition-all"
+        >
+          <div className="w-10 h-10 rounded-xl bg-sky-50 dark:bg-sky-950/30 text-sky-600 dark:text-sky-400 flex items-center justify-center mb-3">
+            <Building className="w-5 h-5" />
+          </div>
+          <h3 className="font-bold text-slate-800 dark:text-slate-200">
+            Empresa JJC
+          </h3>
+          <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">
+            MusculoEsqueletica · JJC
+          </p>
+        </Link>
       </div>
     </div>
   );
