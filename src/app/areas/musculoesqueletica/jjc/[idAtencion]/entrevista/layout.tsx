@@ -1,6 +1,7 @@
 import { notFound } from 'next/navigation';
 import { buildGetAtencionDetalle } from '@/features/jjc-mapper/composition/container';
 import { EntrevistaOsteomuscularProvider } from '@/features/entrevista-osteomuscular/presentation/context/EntrevistaOsteomuscularContext';
+import { EntrevistaLayoutShell } from '@/features/entrevista-osteomuscular/presentation/components/EntrevistaLayoutShell';
 
 interface LayoutProps {
   params: Promise<{ idAtencion: string }>;
@@ -19,7 +20,7 @@ export default async function EntrevistaLayout({ params, children }: LayoutProps
 
   return (
     <EntrevistaOsteomuscularProvider idAtencion={idAtencion} atencion={atencion}>
-      {children}
+      <EntrevistaLayoutShell>{children}</EntrevistaLayoutShell>
     </EntrevistaOsteomuscularProvider>
   );
 }

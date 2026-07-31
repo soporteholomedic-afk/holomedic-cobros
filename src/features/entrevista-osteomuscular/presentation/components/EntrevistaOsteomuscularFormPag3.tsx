@@ -1,8 +1,6 @@
 'use client';
 
 import { useMemo } from 'react';
-import Link from 'next/link';
-import { ArrowLeft, ClipboardList } from 'lucide-react';
 import { useEntrevistaContext } from '@/features/entrevista-osteomuscular/presentation/context/EntrevistaOsteomuscularContext';
 import { Paginacion } from './Paginacion';
 import type {
@@ -306,43 +304,14 @@ function IrradiacionCheckboxes(region: 'cervical' | 'dorsal' | 'lumboSacra', bas
 // ---- Componente principal ----
 
 export function EntrevistaOsteomuscularFormPag3() {
-  const { idAtencion, atencion, state } = useEntrevistaContext();
+  const { idAtencion, state } = useEntrevistaContext();
 
   const cervical = useMemo(() => state.columna.cervical, [state.columna.cervical]);
   const dorsal = useMemo(() => state.columna.dorsal, [state.columna.dorsal]);
   const lumboSacra = useMemo(() => state.columna.lumboSacra, [state.columna.lumboSacra]);
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <div className="bg-white border-b border-slate-200">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex items-center space-x-3">
-          <div className="flex items-center justify-center w-10 h-10 rounded-xl bg-sky-50 text-sky-600">
-            <ClipboardList className="w-5 h-5" />
-          </div>
-          <div className="flex-1">
-            <h1 className="text-xl font-bold text-slate-900">
-              Entrevista de Cuestionario Anamnésico Osteomuscular
-            </h1>
-            <p className="text-sm text-slate-500">
-              Atención #{idAtencion} — {atencion.paciente}
-            </p>
-          </div>
-          <Link
-            href={`/areas/musculoesqueletica/jjc/${idAtencion}`}
-            className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-sky-600 text-white text-sm font-medium hover:bg-sky-700 transition-colors"
-          >
-            <ArrowLeft className="w-4 h-4" />
-            Volver
-          </Link>
-        </div>
-      </div>
-
-      {/* Formulario */}
-      <form
-        onSubmit={(e) => e.preventDefault()}
-        className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8 flex flex-col gap-8"
-      >
+    <>
         {/* Título sección II */}
         <div>
           <h2 className="text-base font-bold text-slate-800">
@@ -413,7 +382,6 @@ export function EntrevistaOsteomuscularFormPag3() {
         </div>
 
         <Paginacion paginaActual={3} baseUrl={`/areas/musculoesqueletica/jjc/${idAtencion}/entrevista`} />
-      </form>
-    </div>
+    </>
   );
 }
