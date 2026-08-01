@@ -32,7 +32,7 @@
 <body class="bg-gray-100 py-6 text-[10px] leading-tight">
 
     <!-- CONTENEDOR PRINCIPAL -->
-    <form id="formEvaluacionPag5" onsubmit="event.preventDefault();" class="max-w-[850px] mx-auto bg-white p-6 shadow-md border border-gray-300">
+    <form id="formEvaluacionPag5" onsubmit="event.preventDefault();" class="max-w-212.5 mx-auto bg-white p-6 shadow-md border border-gray-300">
 
         <!-- BANNER TÍTULO PRINCIPAL -->
         <div class="bg-[#0070c0] text-white font-bold text-center py-1.5 text-[12px] tracking-wide mb-2 uppercase">
@@ -322,8 +322,8 @@
                                         <label class="cursor-pointer ml-1"><input type="checkbox" v-model="evaluacionClinicaOsteomuscular.miembrosSuperiores.codo.observacionInspeccion.edemaLocalizado.dx"> Dx</label>
                                         <label class="cursor-pointer ml-1"><input type="checkbox" v-model="evaluacionClinicaOsteomuscular.miembrosSuperiores.codo.observacionInspeccion.edemaLocalizado.ix"> Ix</label>
                                     </div>
-                                    <div class="flex-grow ml-2 flex items-center">
-                                        <span>SITIO...........................................................</span>
+                                    <div class="grow ml-2 flex items-center">
+                                        <input type="text" v-model="evaluacionClinicaOsteomuscular.miembrosSuperiores.codo.observacionInspeccion.sitio" class="dotted-input grow text-center" placeholder="Sitio">
                                     </div>
                                 </div>
                             </td>

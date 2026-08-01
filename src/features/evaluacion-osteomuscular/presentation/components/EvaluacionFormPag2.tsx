@@ -2,6 +2,7 @@
 
 import { useMemo } from 'react';
 import { useEvaluacionContext } from '@/features/evaluacion-osteomuscular/presentation/context/EvaluacionOsteomuscularContext';
+import { Paginacion } from './Paginacion';
 import type {
   DxIxBool,
   GravedadPatologia,
@@ -75,7 +76,7 @@ function RadioGravedad({ value, current, path, groupName }: RadioGravedadProps) 
 const BASE = 'evaluacionClinicaOsteomuscular.miembrosSuperiores';
 
 export function EvaluacionFormPag2() {
-  const { state, setField } = useEvaluacionContext();
+  const { idAtencion, state, setField } = useEvaluacionContext();
 
   const codo = useMemo(
     () => state.evaluacionClinicaOsteomuscular.miembrosSuperiores.codo,
@@ -678,6 +679,11 @@ export function EvaluacionFormPag2() {
           </div>
         </div>
       </section>
+
+      <Paginacion
+        paginaActual={2}
+        baseUrl={`/areas/musculoesqueletica/jjc/${idAtencion}/evaluacion`}
+      />
     </div>
   );
 }

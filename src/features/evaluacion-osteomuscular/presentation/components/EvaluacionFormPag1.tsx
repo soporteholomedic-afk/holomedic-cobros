@@ -3,6 +3,7 @@
 import { useMemo } from 'react';
 import { Bone, Activity } from 'lucide-react';
 import { useEvaluacionContext } from '@/features/evaluacion-osteomuscular/presentation/context/EvaluacionOsteomuscularContext';
+import { Paginacion } from './Paginacion';
 import type {
   DxIxBool,
   GravedadPatologia,
@@ -86,7 +87,7 @@ function ImagePlaceholder({ label }: ImagePlaceholderProps) {
 const BASE = 'evaluacionClinicaOsteomuscular.miembrosSuperiores';
 
 export function EvaluacionFormPag1() {
-  const { state, setField } = useEvaluacionContext();
+  const { idAtencion, state, setField } = useEvaluacionContext();
 
   const esc = useMemo(
     () => state.evaluacionClinicaOsteomuscular.miembrosSuperiores.escapuloHumeral,
@@ -667,6 +668,11 @@ export function EvaluacionFormPag1() {
           </div>
         </div>
       </section>
+
+      <Paginacion
+        paginaActual={1}
+        baseUrl={`/areas/musculoesqueletica/jjc/${idAtencion}/evaluacion`}
+      />
     </div>
   );
 }

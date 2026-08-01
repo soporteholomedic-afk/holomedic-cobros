@@ -1,0 +1,529 @@
+<!DOCTYPE html><html class="light" lang="es" style=""><head>
+<meta charset="utf-8">
+<meta content="width=device-width, initial-scale=1.0" name="viewport">
+<title>Evaluación Clínica Osteomuscular - Holomedic</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&amp;family=Hanken+Grotesk:wght@600;700;800&amp;family=Geist:wght@500;600&amp;family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@100..900&amp;family=Hanken+Grotesk:wght@100..900&amp;family=Inter:wght@100..900&amp;display=swap" rel="stylesheet">
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "on-secondary": "#ffffff",
+                        "surface-container": "#e5eeff",
+                        "secondary-fixed": "#d8e2fd",
+                        "secondary": "#545e75",
+                        "secondary-fixed-dim": "#bcc6e0",
+                        "on-primary-fixed": "#001d33",
+                        "primary-fixed-dim": "#98cbff",
+                        "inverse-on-surface": "#eaf1ff",
+                        "outline-variant": "#bfc7d2",
+                        "on-secondary-container": "#5a647b",
+                        "error-container": "#ffdad6",
+                        "on-tertiary-fixed-variant": "#434749",
+                        "on-primary-fixed-variant": "#004a77",
+                        "surface-variant": "#d3e4fe",
+                        "surface-container-low": "#eff4ff",
+                        "surface-container-highest": "#d3e4fe",
+                        "inverse-surface": "#213145",
+                        "inverse-primary": "#98cbff",
+                        "on-surface": "#0b1c30",
+                        "tertiary": "#585d5e",
+                        "outline": "#707882",
+                        "on-tertiary": "#ffffff",
+                        "on-surface-variant": "#404751",
+                        "tertiary-fixed-dim": "#c4c7c9",
+                        "tertiary-container": "#717577",
+                        "secondary-container": "#d8e2fd",
+                        "on-tertiary-container": "#fafdff",
+                        "on-primary": "#ffffff",
+                        "surface-tint": "#00629d",
+                        "error": "#ba1a1a",
+                        "primary-container": "#007ac0",
+                        "on-error": "#ffffff",
+                        "surface-container-high": "#dce9ff",
+                        "on-background": "#0b1c30",
+                        "surface-bright": "#f8f9ff",
+                        "on-secondary-fixed": "#111c2f",
+                        "primary": "#006099",
+                        "on-primary-container": "#fdfcff",
+                        "on-error-container": "#93000a",
+                        "on-secondary-fixed-variant": "#3d475c",
+                        "surface": "#f8f9ff",
+                        "surface-container-lowest": "#ffffff",
+                        "surface-dim": "#cbdbf5",
+                        "primary-fixed": "#cfe5ff",
+                        "background": "#f8f9ff",
+                        "on-tertiary-fixed": "#181c1e",
+                        "tertiary-fixed": "#e0e3e5"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.125rem",
+                        "lg": "0.25rem",
+                        "xl": "0.5rem",
+                        "full": "0.75rem"
+                    },
+                    "spacing": {
+                        "sidebar-width": "260px",
+                        "margin-mobile": "16px",
+                        "margin-desktop": "32px",
+                        "baseline": "4px",
+                        "gutter": "24px",
+                        "container-max": "1440px"
+                    },
+                    "fontFamily": {
+                        "label-md": ["Geist"],
+                        "body-lg": ["Inter"],
+                        "body-md": ["Inter"],
+                        "label-sm": ["Geist"],
+                        "headline-sm": ["Hanken Grotesk"],
+                        "headline-lg": ["Hanken Grotesk"],
+                        "headline-md": ["Hanken Grotesk"]
+                    },
+                    "fontSize": {
+                        "label-md": ["12px", {"lineHeight": "16px", "letterSpacing": "0.05em", "fontWeight": "500"}],
+                        "body-lg": ["16px", {"lineHeight": "24px", "fontWeight": "400"}],
+                        "body-md": ["14px", {"lineHeight": "20px", "fontWeight": "400"}],
+                        "label-sm": ["11px", {"lineHeight": "14px", "fontWeight": "600"}],
+                        "headline-sm": ["20px", {"lineHeight": "28px", "fontWeight": "600"}],
+                        "headline-lg": ["30px", {"lineHeight": "38px", "letterSpacing": "-0.02em", "fontWeight": "700"}],
+                        "headline-md": ["24px", {"lineHeight": "32px", "letterSpacing": "-0.01em", "fontWeight": "600"}]
+                    }
+                },
+            },
+        }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+            display: inline-block;
+            vertical-align: middle;
+        }
+        .bento-grid {
+            display: grid;
+            grid-template-columns: repeat(12, 1fr);
+            gap: 24px;
+        }
+        .clinical-card {
+            background-color: #ffffff;
+            border: 1px solid #E2E8F0;
+            border-radius: 8px;
+            transition: border-color 0.2s ease;
+        }
+        .clinical-card:hover {
+            border-color: #007DC5;
+        }
+        .amber-header {
+            background-color: #FFFBEB;
+            border-bottom: 2px solid #F59E0B;
+            color: #92400E;
+        }
+        input[type="checkbox"] {
+            @apply rounded-sm text-primary focus:ring-primary/20 border-outline-variant;
+        }
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: #f1f1f1; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+        ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+    </style>
+</head>
+<body class="bg-background text-on-background font-body-md overflow-x-hidden">
+<!-- SideNavBar Shell -->
+<aside class="fixed h-screen w-sidebar-width left-0 top-0 bg-secondary dark:bg-inverse-surface border-r border-outline-variant dark:border-outline flex flex-col py-6 z-50">
+<div class="px-6 mb-10">
+<h1 class="text-headline-md font-headline-md font-bold text-on-secondary dark:text-inverse-primary">Holomedic</h1>
+<p class="text-label-md font-label-md text-on-secondary/70">Plataforma Clínica</p>
+</div>
+<div class="flex-1 flex flex-col space-y-2">
+<nav class="flex-1 px-2 space-y-1">
+<a class="flex items-center px-4 py-3 text-secondary-fixed-dim hover:text-on-secondary hover:bg-on-secondary/10 rounded-lg transition-colors" href="#">
+<span class="material-symbols-outlined mr-3" data-icon="dashboard">dashboard</span>
+<span class="text-label-md font-label-md">Dashboard</span>
+</a>
+<a class="flex items-center px-4 py-3 text-secondary-fixed-dim hover:text-on-secondary hover:bg-on-secondary/10 rounded-lg transition-colors" href="#">
+<span class="material-symbols-outlined mr-3" data-icon="group">group</span>
+<span class="text-label-md font-label-md">Pacientes</span>
+</a>
+<a class="flex items-center px-4 py-3 bg-secondary-container text-on-secondary-container font-bold rounded-lg transition-all active:scale-[0.98]" href="#">
+<span class="material-symbols-outlined mr-3" data-icon="medical_services">medical_services</span>
+<span class="text-label-md font-label-md">Entradas Clínicas</span>
+</a>
+<a class="flex items-center px-4 py-3 text-secondary-fixed-dim hover:text-on-secondary hover:bg-on-secondary/10 rounded-lg transition-colors" href="#">
+<span class="material-symbols-outlined mr-3" data-icon="assessment">assessment</span>
+<span class="text-label-md font-label-md">Reportes</span>
+</a>
+</nav>
+<div class="px-4 mb-8">
+<button class="w-full py-3 bg-primary-container text-on-primary-container rounded-lg flex items-center justify-center font-bold hover:brightness-110 transition-all">
+<span class="material-symbols-outlined mr-2">add_circle</span>
+                    Nueva Evaluación
+                </button>
+</div>
+<div class="px-4 py-4 mt-auto border-t border-white/10">
+<div class="flex items-center space-x-3 mb-6 px-2">
+<div class="w-10 h-10 rounded-full bg-surface-container overflow-hidden">
+<img class="w-full h-full object-cover" data-alt="Professional studio portrait of a male doctor in his 40s wearing a white clinical coat and a stethoscope. He has a friendly and trustworthy expression against a clean, minimalist clinical background with soft lighting. The image maintains a high-key medical aesthetic with cool blue and sterile white tones." src="https://lh3.googleusercontent.com/aida-public/AB6AXuBHLZ0Mi2bQku4RGgq-SrSjVhzjCip0E-AZiG6u49RnfNNoXpl7DFttP4N6I-uVqSF5hD0QLhY2N4Q3pf9v7DUEO8FH3NDdCXtgUbbUPx8N1_Jk12RMhiY7p80qLAgIiOT1TQWXutA5YXvA1zUww-RxlO0wl3WNKz2uzfOv5sMJ8uj2F7V-RsrT4_nw38G56cSvvor3aFTl-yB9KXagdm8QHc-hITnwAU5yhM_pMyp8bGQ0wAzTYqnKuS1Pfio6eLba146z_RmYbt59">
+</div>
+<div>
+<p class="text-label-md font-label-md text-on-secondary font-bold">Dr. Especialista</p>
+<p class="text-[10px] text-secondary-fixed-dim uppercase tracking-wider">Traumatología</p>
+</div>
+</div>
+<nav class="space-y-1">
+<a class="flex items-center px-4 py-2 text-secondary-fixed-dim hover:text-on-secondary hover:bg-on-secondary/10 rounded-lg transition-colors" href="#">
+<span class="material-symbols-outlined mr-3" data-icon="settings">settings</span>
+<span class="text-label-md font-label-md">Configuración</span>
+</a>
+<a class="flex items-center px-4 py-2 text-error-container/80 hover:text-error-container hover:bg-error/10 rounded-lg transition-colors" href="#">
+<span class="material-symbols-outlined mr-3" data-icon="logout">logout</span>
+<span class="text-label-md font-label-md">Cerrar Sesión</span>
+</a>
+</nav>
+</div>
+</div>
+</aside>
+<!-- Main Content Area -->
+<main class="ml-sidebar-width min-h-screen flex flex-col">
+<!-- TopAppBar -->
+<header class="h-16 flex justify-between items-center px-margin-desktop bg-surface dark:bg-background border-b border-outline-variant z-40 sticky top-0">
+<h2 class="text-headline-sm font-headline-sm text-primary">Evaluación Clínica Osteomuscular</h2>
+<div class="flex items-center space-x-6">
+<div class="relative flex items-center bg-surface-container-low rounded-full px-4 py-1.5 border border-outline-variant focus-within:ring-2 focus-within:ring-primary/20">
+<span class="material-symbols-outlined text-outline text-sm mr-2">search</span>
+<input class="bg-transparent border-none focus:ring-0 text-body-md w-64 p-0" placeholder="Buscar paciente..." type="text">
+</div>
+<div class="flex items-center space-x-2">
+<button class="p-2 text-on-surface-variant hover:text-primary transition-colors">
+<span class="material-symbols-outlined">notifications</span>
+</button>
+<button class="p-2 text-on-surface-variant hover:text-primary transition-colors">
+<span class="material-symbols-outlined">help</span>
+</button>
+<div class="h-8 w-[1px] bg-outline-variant mx-2"></div>
+<button class="p-2 text-on-surface-variant hover:text-primary transition-colors">
+<span class="material-symbols-outlined">account_circle</span>
+</button>
+</div>
+</div>
+</header>
+<!-- Content Canvas -->
+<div class="p-8 max-w-container-max mx-auto w-full space-y-8">
+<!-- SECTION 1: Evaluación Muñeca/Mano -->
+<section class="space-y-4">
+<div class="amber-header px-6 py-3 rounded-t-lg flex justify-between items-center">
+<h3 class="font-headline-sm text-headline-sm uppercase tracking-wide">Bloque 1: Evaluación Muñeca / Mano</h3>
+<span class="text-label-sm font-label-sm">REF: JJC-SIG-13-31</span>
+</div>
+<div class="bento-grid">
+<!-- Finkelstein -->
+<div class="col-span-12 lg:col-span-5 clinical-card p-6 flex flex-col">
+<div class="flex justify-between items-start mb-4">
+<h4 class="font-bold text-primary flex items-center">
+<span class="material-symbols-outlined mr-2">precision_manufacturing</span>
+                                TEST DE FINKELSTEIN
+                            </h4>
+<span class="text-[10px] text-outline uppercase font-bold tracking-widest bg-surface-container px-2 py-0.5 rounded">Desviación Ulnar</span>
+</div>
+<div class="grid grid-cols-2 gap-4 flex-1">
+<div class="bg-surface-container-low rounded-lg overflow-hidden flex items-center justify-center p-4">
+<img class="max-h-32 object-contain mix-blend-multiply" data-alt="A clean medical illustration of the Finkelstein test showing a hand with the thumb tucked into the palm and the fingers closed over it, being tilted downwards towards the floor. Minimalist linework on a white background with subtle blue anatomical highlights. Scientific and educational medical style." src="https://lh3.googleusercontent.com/aida-public/AB6AXuANqGTqiEAsjpehAeFSmfVoebIiTsSTVaXkRXrI4JL5jsrPfvc_mll8RlqzlqBTTe_sa8I_mQvytg9ouu9ME3zm0w92-Yx6-fVSMVvW_cDMOusVWI-kmfQ4rEexkWTJsd61a9N0MFu0v2DQsdsuNfhIKnW0MUVSvxmrvJKq7PtQcz8ok2us_Pi0bwfy_iOIk3e3BvCfWxJP9o54pwLx5YPacB4HvJrusF043gkKx_Sx6Yj12mG1SvsbldHfFc-oj_R8gyavqji84sAJ">
+</div>
+<div class="flex flex-col justify-center space-y-4 px-2">
+<div class="space-y-2">
+<label class="flex items-center space-x-2 cursor-pointer group mb-2"><input type="checkbox" class="w-5 h-5"><span class="text-label-md font-bold text-secondary uppercase group-hover:text-primary transition-colors">DOLOR EN TABAQUERA ANATÓMICA</span></label>
+<div class="flex space-x-6">
+<label class="flex items-center space-x-2 cursor-pointer group">
+<input class="w-5 h-5" type="checkbox">
+<span class="text-body-md group-hover:text-primary">Dx</span>
+</label>
+<label class="flex items-center space-x-2 cursor-pointer group">
+<input class="w-5 h-5" type="checkbox">
+<span class="text-body-md group-hover:text-primary">Ix</span>
+</label>
+</div>
+</div>
+</div>
+</div>
+</div>
+<!-- Flexo-Extensión -->
+<div class="col-span-12 lg:col-span-7 clinical-card p-6">
+<h4 class="font-bold text-primary flex items-center mb-4">
+<span class="material-symbols-outlined mr-2">settings_accessibility</span>
+                            FLEXO-EXTENSIÓN DE LA MUÑECA
+                        </h4>
+<div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+<div class="flex items-center justify-center bg-surface-container-low rounded-lg p-4">
+<img class="max-h-32 object-contain mix-blend-multiply" data-alt="Medical diagram showing the passive and resisted range of motion for wrist flexion and extension. Clear anatomical lines showing the hand bending forward and backward. Clinical white and light blue color scheme, minimal and focused on the joint movement." src="https://lh3.googleusercontent.com/aida-public/AB6AXuBAJuIAdvI1eOYQxr6fqyVkGGm-re7j-4kamx7v_LP7im-R2f0iFbpGnxAsj7ZmV_RudlgfzZGbMUqpTUEfSUGLwAmELGqWY14lxe2ASxG1HcAVZzKA0uH4dt4Et46l883Xm0Ip7Qv3GeWDtl-RQ3-GnxfWfTls9Gl0LZxBwx9ZvYHWpha4N1YIlUfl7c9u4u24tdnqKrSq1xUnBchGAYknsveZZU57zCN18tTUnHi3yhHbJLH_mBkhX66FAuwOil0vHlMTQsAEhsDu">
+</div>
+<div class="col-span-2 space-y-4">
+<p class="text-label-md font-bold text-secondary uppercase border-b border-outline-variant pb-1">Motilidad Pasiva y Contra Resistencia (C/R)</p>
+<div class="grid grid-cols-2 gap-y-4 gap-x-8">
+<!-- Item 1 -->
+<div class="space-y-1">
+<p class="text-label-sm text-outline font-bold">DOLOR EN FLEXIÓN C/R</p>
+<div class="flex space-x-4">
+<label class="flex items-center space-x-2"><input type="checkbox"><span class="text-xs">Dx</span></label>
+<label class="flex items-center space-x-2"><input type="checkbox"><span class="text-xs">Ix</span></label>
+</div>
+</div>
+<!-- Item 2 -->
+<div class="space-y-1">
+<p class="text-label-sm text-outline font-bold">DOLOR EN FLEXIÓN PASIVA</p>
+<div class="flex space-x-4">
+<label class="flex items-center space-x-2"><input type="checkbox"><span class="text-xs">Dx</span></label>
+<label class="flex items-center space-x-2"><input type="checkbox"><span class="text-xs">Ix</span></label>
+</div>
+</div>
+<!-- Item 3 -->
+<div class="space-y-1">
+<p class="text-label-sm text-outline font-bold">DOLOR EN EXTENSIÓN C/R</p>
+<div class="flex space-x-4">
+<label class="flex items-center space-x-2"><input type="checkbox"><span class="text-xs">Dx</span></label>
+<label class="flex items-center space-x-2"><input type="checkbox"><span class="text-xs">Ix</span></label>
+</div>
+</div>
+<!-- Item 4 -->
+<div class="space-y-1">
+<p class="text-label-sm text-outline font-bold">DOLOR EN EXTENSIÓN PASIVA</p>
+<div class="flex space-x-4">
+<label class="flex items-center space-x-2"><input type="checkbox"><span class="text-xs">Dx</span></label>
+<label class="flex items-center space-x-2"><input type="checkbox"><span class="text-xs">Ix</span></label>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</section>
+<!-- SECTION 2: Sintomatología Parestésica -->
+<section class="space-y-4">
+<div class="amber-header px-6 py-3 rounded-t-lg flex justify-between items-center">
+<h3 class="font-headline-sm text-headline-sm uppercase tracking-wide">Bloque 2: Sintomatología Parestésica</h3>
+<div class="flex items-center space-x-4">
+<span class="text-label-md font-bold">REALIZA MANIOBRAS:</span>
+<label class="relative inline-flex items-center cursor-pointer">
+<input checked="" class="sr-only peer" type="checkbox" value="">
+<div class="w-11 h-6 bg-secondary-fixed rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
+<span class="ml-3 text-label-md font-bold">SI</span>
+</label>
+</div>
+</div>
+<!-- Basic Inputs -->
+<div class="clinical-card p-6 flex flex-wrap gap-8 items-end">
+<div class="space-y-2 flex-1 min-w-[250px]">
+<label class="text-label-md font-bold text-secondary uppercase">Molestia Muñeca Dx desde (meses)</label>
+<input class="w-full border-outline-variant rounded-lg focus:ring-primary focus:border-primary px-4 py-2" placeholder="0" type="number">
+</div>
+<div class="space-y-2 flex-1 min-w-[250px]">
+<label class="text-label-md font-bold text-secondary uppercase">Molestia Muñeca Ix desde (meses)</label>
+<input class="w-full border-outline-variant rounded-lg focus:ring-primary focus:border-primary px-4 py-2" placeholder="0" type="number">
+</div>
+</div>
+<div class="bento-grid">
+<!-- Región Proximal -->
+<div class="col-span-12 clinical-card">
+<div class="bg-surface-container-high/50 px-6 py-2 border-b border-outline-variant">
+<h4 class="text-label-md font-extrabold text-primary tracking-widest uppercase">Región Proximal</h4>
+</div>
+<div class="p-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
+<!-- Column 1: Palpación -->
+<div class="space-y-4">
+<h5 class="text-label-sm font-bold text-outline uppercase">Dolor a la presión o palpación</h5>
+<div class="space-y-3">
+<label class="flex items-center justify-between group cursor-pointer">
+<span class="text-body-md group-hover:text-primary transition-colors">Apófisis Espinosa</span>
+<input type="checkbox">
+</label>
+<label class="flex items-center justify-between group cursor-pointer">
+<span class="text-body-md group-hover:text-primary transition-colors">M. Trapecio Sup.</span>
+<input type="checkbox">
+</label>
+<label class="flex items-center justify-between group cursor-pointer">
+<span class="text-body-md group-hover:text-primary transition-colors">M. Paravertebral</span>
+<input type="checkbox">
+</label>
+</div>
+</div>
+<!-- Column 2: Movimiento -->
+<div class="space-y-4">
+<h5 class="text-label-sm font-bold text-outline uppercase">Dolor al movimiento</h5>
+<div class="space-y-2 text-body-md"><label class="flex justify-between items-center"><span class="">Flexión</span> <input type="checkbox"></label><label class="flex justify-between items-center"><span class="">Extensión</span> <input type="checkbox"></label><label class="flex justify-between items-center"><span class="">Inclinación DER</span> <input type="checkbox"></label><label class="flex justify-between items-center"><span class="">Inclinación IZQ</span> <input type="checkbox"></label><label class="flex justify-between items-center"><span class="">Rotación DER</span> <input type="checkbox"></label><label class="flex justify-between items-center"><span class="">Rotación IZQ</span> <input type="checkbox"></label></div>
+</div>
+<!-- Column 3: Fatigue Test -->
+<div class="space-y-4 flex flex-col items-center border-l border-outline-variant pl-4">
+<img class="h-32 object-contain mb-2" data-alt="Clinical line drawing of the 'Test de Fatiga' showing a person with both arms raised straight up, palms facing inward. Simple anatomic representation with arrows indicating sustained posture. High clinical clarity for a medical assessment application." src="https://lh3.googleusercontent.com/aida-public/AB6AXuBROboTxlGRVUkTB4ZTcqTTZ6spZrt4W11IUFWdN8m5KUs8V-PJxZhZsJ0T1SwsiInxF0T4RFtgsQxOukl-11x8pCJnx4_OcIiM3VcaT0wL7zm-w_01j5P0q7s3VaZSL_XJNDho-Oo42V02WdxIMd2CaFtaP1L1_x8Z8ji1iOxwZbwUw-0Ak2DzsoUlEQ2s4rbiznY9_LARRlnZsyxzASnW75TWKEXrOVMBvjI94AjzlL8KsJzB3B1zlD7gl0c-4QP0t_yH-o6ie_CS">
+<div class="text-center">
+<p class="text-label-sm font-bold">Test de Fatiga (30")</p>
+<p class="text-[10px] text-outline mb-2">Parestesia:</p>
+<div class="flex space-x-4 justify-center">
+<label class="flex items-center space-x-1"><input type="checkbox"><span class="text-xs">Dx</span></label>
+<label class="flex items-center space-x-1"><input type="checkbox"><span class="text-xs">Ix</span></label>
+</div>
+</div>
+</div>
+<!-- Column 4: Candelero Test -->
+<div class="space-y-4 flex flex-col items-center border-l border-outline-variant pl-4">
+<img class="h-32 object-contain mb-2" data-alt="Scientific illustration of the 'Test del Candelero' showing a person with arms bent at 90 degrees, elbows at shoulder height and hands pointing upwards, resembling a candelabra. Clean anatomical drawing on a white background with precise clinical lines." src="https://lh3.googleusercontent.com/aida-public/AB6AXuB8dqhcqVC7ConEGukmw3kYlUr-yyp_gYyTgjqrboZSJn7mXqqrxEKst_WQMJ5QrdDv4hFnqiMWZFSOA_HNKivUAe-sQ0-83GxIxRsL15BcvwvtWbpX_9_dB5Sh_LMoJNZ3XWUwwLlrIsGbGKOQNlsNChn8dKfMKjEGP7lMk0u5oDyT-tWYjSs0WhDZ42HXCOztGCBURX1e74THrQYWAJUJpGFZET_9ikamINmkXE288YbHJPIMq9UcWfVwgUyF3zMZxlQuM-WjhCHU">
+<div class="text-center">
+<p class="text-label-sm font-bold">Test del Candelero (30")</p>
+<p class="text-[10px] text-outline mb-2">Parestesia:</p>
+<div class="flex space-x-4 justify-center">
+<label class="flex items-center space-x-1"><input type="checkbox"><span class="text-xs">Dx</span></label>
+<label class="flex items-center space-x-1"><input type="checkbox"><span class="text-xs">Ix</span></label>
+</div>
+</div>
+</div>
+</div>
+</div>
+<!-- Región Distal -->
+<div class="col-span-12 clinical-card">
+<div class="bg-surface-container-high/50 px-6 py-2 border-b border-outline-variant">
+<h4 class="text-label-md font-extrabold text-primary tracking-widest uppercase">Región Distal</h4>
+</div>
+<div class="p-0 grid grid-cols-1 lg:grid-cols-2 divide-y lg:divide-y-0 lg:divide-x divide-outline-variant">
+<!-- Phalen Test -->
+<div class="p-6 grid grid-cols-1 md:grid-cols-2 gap-4">
+<div class="space-y-3">
+<h5 class="text-label-md font-bold text-secondary">TEST DE PHALEN</h5>
+<span class="text-[10px] bg-secondary-container text-on-secondary-container px-2 py-0.5 rounded font-bold">MANTENER 60"</span>
+<img class="h-32 object-contain pt-2" data-alt="Medical illustration of Phalen's test showing two hands placed back-to-back with wrists fully flexed. Clear representation of the wrist position to provoke carpal tunnel symptoms. Professional, technical drawing style suitable for clinical documentation." src="https://lh3.googleusercontent.com/aida-public/AB6AXuAZuMWWgXyB7lHSe9UotS8mMEjH_Kem0_70hlXbEYBAwPoMEtvf382OjV6bM-4wO3u-1PGiQZRXtb33-wJ6mXEj3RXFz9_7MUm311Vk9czN5NSLWeCn6Ud1tZMrh7iZaXWazazJQeEDM92p2XwlLAI6sn97N_8QYD0zfOnOa2ZgSoth-FfRr4xNiFTvMo1hT_6VN5C0C07H4R0ifQrTAhv9EHl0SM2yWsKMi1INZzUQJD4wZ-tX2M79tYmxcTDm65sY6xG7hO0mswcW">
+</div>
+<div class="space-y-3 bg-surface-container-lowest p-4 rounded-lg border border-outline-variant/30">
+<p class="text-label-sm font-bold text-outline">Parestesia por Nervio:</p>
+<div class="space-y-2">
+<div class="flex justify-between items-center text-xs">
+<span class="">N. Mediano</span>
+<div class="flex space-x-2"><input type="checkbox"> Dx <input type="checkbox"> Ix</div>
+</div>
+<div class="flex justify-between items-center text-xs">
+<span class="">N. Ulnar</span>
+<div class="flex space-x-2"><input type="checkbox"> Dx <input type="checkbox"> Ix</div>
+</div>
+<div class="pt-2 border-t border-outline-variant/50">
+<p class="text-[10px] text-outline mb-1">NO TERRITORIALIZADA</p>
+<div class="flex space-x-4"><label class="text-xs"><input type="checkbox"> Dx</label> <label class="text-xs"><input type="checkbox"> Ix</label></div>
+</div>
+</div>
+</div>
+</div>
+<!-- Compression Test -->
+<div class="p-6 grid grid-cols-1 md:grid-cols-2 gap-4">
+<div class="space-y-3">
+<h5 class="text-label-md font-bold text-secondary">TEST DE PRESIÓN</h5>
+<span class="text-[10px] bg-secondary-container text-on-secondary-container px-2 py-0.5 rounded font-bold">DORSAL 30"</span>
+<img class="h-32 object-contain pt-2" data-alt="Hand pressing down on the dorsal side of another hand's wrist to perform a clinical compression test. Minimalist clinical line-art showing the exact point of application of pressure. White background, technical blue accents." src="https://lh3.googleusercontent.com/aida-public/AB6AXuAV7SihG27ijNwzIbYJnb1RNStORH-eF73HfgjkA1m8aJ2x2ifbWe_4wRYSTF8Lfq93etEC5cBinQjC-YXL_8LXTEa8ezvnnFflMGv-unWhJKg55fTdzLWV6xeH3NKpGGIhuiWbW__VynpJZfjRl0UawFOmnUGTryXiTeGCQaz7e3X7O083JdtOnt0uTXA36m57rDDuc_Ucnx5-YYXCV8WcUej8qxMP-d1FG0TeEntWGwiWAbVpwbYrCnS0UGDBv5IqAOj26L_0DZZp">
+</div>
+<div class="space-y-3 bg-surface-container-lowest p-4 rounded-lg border border-outline-variant/30">
+<p class="text-label-sm font-bold text-outline">Parestesia por Nervio:</p>
+<div class="space-y-2">
+<div class="flex justify-between items-center text-xs">
+<span class="">N. Mediano</span>
+<div class="flex space-x-2"><input type="checkbox"> Dx <input type="checkbox"> Ix</div>
+</div>
+<div class="flex justify-between items-center text-xs">
+<span class="">N. Ulnar</span>
+<div class="flex space-x-2"><input type="checkbox"> Dx <input type="checkbox"> Ix</div>
+</div>
+<div class="pt-2 border-t border-outline-variant/50">
+<p class="text-[10px] text-outline mb-1">NO TERRITORIALIZADA</p>
+<div class="flex space-x-4"><label class="text-xs"><input type="checkbox"> Dx</label> <label class="text-xs"><input type="checkbox"> Ix</label></div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</section>
+<!-- SECTION 3: Examen Instrumental and Diagnosis -->
+<section class="space-y-6 pb-12">
+<div class="amber-header px-6 py-3 rounded-t-lg flex justify-between items-center">
+<h3 class="font-headline-sm text-headline-sm uppercase tracking-wide">Bloque 3: Examen Instrumental y Diagnóstico</h3>
+</div>
+<div class="bento-grid">
+<!-- Instrumental Exams -->
+<div class="col-span-12 lg:col-span-8 clinical-card p-6">
+<h4 class="text-label-md font-bold text-secondary mb-4 uppercase">Examen instrumental realizado:</h4>
+<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+<label class="flex items-center space-x-3 p-3 bg-surface-container-lowest rounded border border-outline-variant/20 hover:border-primary cursor-pointer">
+<input class="w-5 h-5" type="checkbox">
+<span class="text-body-md">ECOGRAFÍA</span>
+<input class="ml-auto w-16 border-none bg-surface-container text-xs p-1 rounded focus:ring-0" placeholder="Año" type="text">
+</label>
+<label class="flex items-center space-x-3 p-3 bg-surface-container-lowest rounded border border-outline-variant/20 hover:border-primary cursor-pointer">
+<input class="w-5 h-5" type="checkbox">
+<span class="text-body-md">RX</span>
+<input class="ml-auto w-16 border-none bg-surface-container text-xs p-1 rounded focus:ring-0" placeholder="Año" type="text">
+</label>
+<label class="flex items-center space-x-3 p-3 bg-surface-container-lowest rounded border border-outline-variant/20 hover:border-primary cursor-pointer">
+<input class="w-5 h-5" type="checkbox">
+<span class="text-body-md">RMN</span>
+<input class="ml-auto w-16 border-none bg-surface-container text-xs p-1 rounded focus:ring-0" placeholder="Año" type="text">
+</label>
+<label class="flex items-center space-x-3 p-3 bg-surface-container-lowest rounded border border-outline-variant/20 hover:border-primary cursor-pointer">
+<input class="w-5 h-5" type="checkbox">
+<span class="text-body-md">EMG</span>
+<input class="ml-auto w-16 border-none bg-surface-container text-xs p-1 rounded focus:ring-0" placeholder="Año" type="text">
+</label>
+<label class="flex items-center space-x-3 p-3 bg-surface-container-low rounded border-dashed border-outline-variant cursor-pointer col-span-1 sm:col-span-2 lg:col-span-1">
+<input class="w-5 h-5" type="checkbox">
+<span class="text-body-md font-bold">NO REALIZADO</span>
+</label>
+</div>
+</div>
+<!-- Gravity Selector -->
+<div class="col-span-12 lg:col-span-4 clinical-card p-6 flex flex-col">
+<h4 class="text-label-md font-bold text-secondary mb-6 uppercase">Gravedad Patología</h4>
+<div class="flex-1 flex flex-col justify-center space-y-4">
+<label class="flex items-center justify-between p-3 rounded-lg border-2 border-emerald-100 bg-emerald-50 text-emerald-800 cursor-pointer hover:bg-emerald-100 transition-all">
+<span class="font-bold">LEVE</span>
+<input class="text-emerald-600 focus:ring-emerald-500" name="gravity" type="radio">
+</label>
+<label class="flex items-center justify-between p-3 rounded-lg border-2 border-amber-100 bg-amber-50 text-amber-800 cursor-pointer hover:bg-amber-100 transition-all">
+<span class="font-bold">MEDIA</span>
+<input class="text-amber-600 focus:ring-amber-500" name="gravity" type="radio">
+</label>
+<label class="flex items-center justify-between p-3 rounded-lg border-2 border-rose-100 bg-rose-50 text-rose-800 cursor-pointer hover:bg-rose-100 transition-all">
+<span class="font-bold">GRAVE</span>
+<input class="text-rose-600 focus:ring-rose-500" name="gravity" type="radio">
+</label>
+</div>
+</div>
+<!-- Diagnosis Text Area -->
+<div class="col-span-12 clinical-card p-6">
+<h4 class="text-label-md font-bold text-secondary mb-3 uppercase">Aproximación Diagnóstica de Evaluación</h4>
+<textarea class="w-full border-outline-variant rounded-lg focus:ring-primary focus:border-primary p-4 text-body-md" placeholder="Ingrese el resumen del diagnóstico clínico y las observaciones de la evaluación..." rows="6"></textarea>
+<div class="mt-6 flex justify-end space-x-4">
+<button class="px-6 py-2 text-primary border border-primary rounded-lg font-bold hover:bg-primary/5 transition-all">Guardar Borrador</button>
+<button class="px-8 py-2 bg-primary text-on-primary rounded-lg font-bold hover:brightness-110 shadow-lg shadow-primary/20 transition-all">Finalizar Evaluación</button>
+</div>
+</div>
+</div>
+</section>
+</div>
+</main>
+<script>
+        // Micro-interaction for radio group custom styles
+        const gravityRadios = document.querySelectorAll('input[name="gravity"]');
+        gravityRadios.forEach(radio => {
+            radio.addEventListener('change', (e) => {
+                gravityRadios.forEach(r => r.parentElement.classList.remove('ring-2', 'ring-offset-2', 'ring-primary'));
+                if(e.target.checked) {
+                    e.target.parentElement.classList.add('ring-2', 'ring-offset-2', 'ring-primary');
+                }
+            });
+        });
+
+        // Toggle maneuvers section visibility logic
+        const maneuverSwitch = document.querySelector('input[type="checkbox"][checked]');
+        const maneuverSections = document.querySelectorAll('.bento-grid .col-span-12.clinical-card');
+
+        // Initial state logic (if needed)
+    </script>
+
+
+</body></html>

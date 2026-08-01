@@ -2,12 +2,13 @@
 
 import { useMemo } from 'react';
 import { useEvaluacionContext } from '@/features/evaluacion-osteomuscular/presentation/context/EvaluacionOsteomuscularContext';
+import { Paginacion } from './Paginacion';
 import { MunecaFinkelsteinFlexoExtensionBlock } from './blocks/MunecaFinkelsteinFlexoExtensionBlock';
 import { MunecaParestesiaRegionesBlock } from './blocks/MunecaParestesiaRegionesBlock';
 import { MunecaInstrumentalSeveridadDiagnosticoBlock } from './blocks/MunecaInstrumentalSeveridadDiagnosticoBlock';
 
 export function EvaluacionFormPag3() {
-  const { state } = useEvaluacionContext();
+  const { idAtencion, state } = useEvaluacionContext();
 
   const munecaMano = useMemo(
     () => state.evaluacionClinicaOsteomuscular.miembrosSuperiores.munecaMano,
@@ -47,6 +48,11 @@ export function EvaluacionFormPag3() {
           <MunecaInstrumentalSeveridadDiagnosticoBlock sintomatologiaParestesica={munecaMano.sintomatologiaParestesica} />
         </div>
       </section>
+
+      <Paginacion
+        paginaActual={3}
+        baseUrl={`/areas/musculoesqueletica/jjc/${idAtencion}/evaluacion`}
+      />
     </div>
   );
 }

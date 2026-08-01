@@ -9,6 +9,10 @@ import {
 import { EvaluacionFormPag3 } from '../EvaluacionFormPag3';
 import { parseOptionalNumber } from '../../helpers/parseOptionalNumber';
 
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({ push: vi.fn() }),
+}));
+
 const ATENCION: AtencionDetalle = {
   idAtencion: 'AT-1001',
   dni: '11223344',

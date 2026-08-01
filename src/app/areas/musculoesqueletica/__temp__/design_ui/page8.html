@@ -1,0 +1,514 @@
+<!DOCTYPE html>
+
+<html class="light" lang="es"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Holomedic | Evaluación de Columna</title>
+<!-- Fonts -->
+<link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@600;700&amp;family=Inter:wght@400;500&amp;family=Geist:wght@500;600&amp;display=swap" rel="stylesheet"/>
+<!-- Icons -->
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                    "surface-dim": "#cbdbf5",
+                    "surface-container": "#e5eeff",
+                    "secondary": "#545e75",
+                    "on-primary-fixed-variant": "#004a77",
+                    "surface-container-highest": "#d3e4fe",
+                    "on-tertiary-fixed-variant": "#434749",
+                    "surface": "#f8f9ff",
+                    "on-primary": "#ffffff",
+                    "primary-container": "#007ac0",
+                    "on-primary-fixed": "#001d33",
+                    "on-secondary-container": "#5a647b",
+                    "inverse-on-surface": "#eaf1ff",
+                    "on-background": "#0b1c30",
+                    "tertiary-fixed-dim": "#c4c7c9",
+                    "surface-container-lowest": "#ffffff",
+                    "outline": "#707882",
+                    "on-error-container": "#93000a",
+                    "secondary-container": "#d8e2fd",
+                    "secondary-fixed-dim": "#bcc6e0",
+                    "inverse-primary": "#98cbff",
+                    "on-secondary-fixed": "#111c2f",
+                    "error-container": "#ffdad6",
+                    "background": "#f8f9ff",
+                    "surface-bright": "#f8f9ff",
+                    "on-tertiary-fixed": "#181c1e",
+                    "secondary-fixed": "#d8e2fd",
+                    "error": "#ba1a1a",
+                    "tertiary-container": "#717577",
+                    "primary-fixed-dim": "#98cbff",
+                    "on-secondary": "#ffffff",
+                    "on-surface": "#0b1c30",
+                    "tertiary-fixed": "#e0e3e5",
+                    "on-tertiary-container": "#fafdff",
+                    "tertiary": "#585d5e",
+                    "on-tertiary": "#ffffff",
+                    "surface-container-high": "#dce9ff",
+                    "on-secondary-fixed-variant": "#3d475c",
+                    "inverse-surface": "#213145",
+                    "on-primary-container": "#fdfcff",
+                    "surface-variant": "#d3e4fe",
+                    "on-error": "#ffffff",
+                    "outline-variant": "#bfc7d2",
+                    "surface-container-low": "#eff4ff",
+                    "on-surface-variant": "#404751",
+                    "primary-fixed": "#cfe5ff",
+                    "primary": "#006099",
+                    "surface-tint": "#00629d"
+            },
+            "borderRadius": {
+                    "DEFAULT": "0.125rem",
+                    "lg": "0.25rem",
+                    "xl": "0.5rem",
+                    "full": "0.75rem"
+            },
+            "spacing": {
+                    "margin-desktop": "32px",
+                    "container-max": "1440px",
+                    "baseline": "4px",
+                    "sidebar-width": "260px",
+                    "margin-mobile": "16px",
+                    "gutter": "24px"
+            },
+            "fontFamily": {
+                    "headline-sm": ["Hanken Grotesk"],
+                    "body-md": ["Inter"],
+                    "body-lg": ["Inter"],
+                    "headline-lg": ["Hanken Grotesk"],
+                    "label-sm": ["Geist"],
+                    "label-md": ["Geist"],
+                    "headline-md": ["Hanken Grotesk"],
+                    "headline-lg-mobile": ["Hanken Grotesk"]
+            },
+            "fontSize": {
+                    "headline-sm": ["20px", {"lineHeight": "28px", "fontWeight": "600"}],
+                    "body-md": ["14px", {"lineHeight": "20px", "fontWeight": "400"}],
+                    "body-lg": ["16px", {"lineHeight": "24px", "fontWeight": "400"}],
+                    "headline-lg": ["30px", {"lineHeight": "38px", "letterSpacing": "-0.02em", "fontWeight": "700"}],
+                    "label-sm": ["11px", {"lineHeight": "14px", "fontWeight": "600"}],
+                    "label-md": ["12px", {"lineHeight": "16px", "letterSpacing": "0.05em", "fontWeight": "500"}],
+                    "headline-md": ["24px", {"lineHeight": "32px", "letterSpacing": "-0.01em", "fontWeight": "600"}],
+                    "headline-lg-mobile": ["24px", {"lineHeight": "32px", "fontWeight": "700"}]
+            }
+          },
+        },
+      }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .filled-icon {
+            font-variation-settings: 'FILL' 1;
+        }
+        /* Custom input styles to match medical UI */
+        input[type="checkbox"], input[type="radio"] {
+            @apply border-outline-variant text-primary focus:ring-primary-container;
+        }
+        .glass-card {
+            background: rgba(255, 255, 255, 0.8);
+            backdrop-filter: blur(8px);
+        }
+    </style>
+</head>
+<body class="bg-background text-on-background font-body-md">
+<!-- SideNavBar Shell -->
+<aside class="flex flex-col h-full fixed left-0 top-0 z-40 bg-secondary dark:bg-inverse-surface border-r border-outline-variant dark:border-outline w-[260px]">
+<div class="p-6">
+<h1 class="text-headline-md font-headline-md font-bold text-on-secondary dark:text-inverse-primary">Holomedic</h1>
+<p class="text-label-md font-label-md opacity-70 text-on-secondary">Clinical Portal v2.4</p>
+</div>
+<nav class="flex-1 px-2 space-y-1">
+<div class="px-4 py-2 text-on-secondary-fixed-variant hover:text-on-secondary hover:bg-surface-variant/10 transition-colors flex items-center gap-3 cursor-pointer">
+<span class="material-symbols-outlined" data-icon="dashboard">dashboard</span>
+<span class="text-label-md font-label-md">Dashboard</span>
+</div>
+<div class="px-4 py-2 text-on-secondary-fixed-variant hover:text-on-secondary hover:bg-surface-variant/10 transition-colors flex items-center gap-3 cursor-pointer">
+<span class="material-symbols-outlined" data-icon="groups">groups</span>
+<span class="text-label-md font-label-md">Patients</span>
+</div>
+<div class="bg-primary-container text-on-primary-container font-bold rounded-lg mx-2 px-4 py-2 flex items-center gap-3 opacity-90 transition-all duration-200 cursor-pointer">
+<span class="material-symbols-outlined filled-icon" data-icon="clinical_notes">clinical_notes</span>
+<span class="text-label-md font-label-md">Evaluations</span>
+</div>
+<div class="px-4 py-2 text-on-secondary-fixed-variant hover:text-on-secondary hover:bg-surface-variant/10 transition-colors flex items-center gap-3 cursor-pointer">
+<span class="material-symbols-outlined" data-icon="biotech">biotech</span>
+<span class="text-label-md font-label-md">Diagnostics</span>
+</div>
+<div class="px-4 py-2 text-on-secondary-fixed-variant hover:text-on-secondary hover:bg-surface-variant/10 transition-colors flex items-center gap-3 cursor-pointer">
+<span class="material-symbols-outlined" data-icon="description">description</span>
+<span class="text-label-md font-label-md">Medical Reports</span>
+</div>
+<div class="px-4 py-2 text-on-secondary-fixed-variant hover:text-on-secondary hover:bg-surface-variant/10 transition-colors flex items-center gap-3 cursor-pointer">
+<span class="material-symbols-outlined" data-icon="settings">settings</span>
+<span class="text-label-md font-label-md">Settings</span>
+</div>
+</nav>
+<div class="p-4 mt-auto">
+<button class="w-full bg-primary-container text-on-primary-container py-3 rounded-lg font-bold flex items-center justify-center gap-2 mb-4 hover:opacity-90">
+<span class="material-symbols-outlined" data-icon="add">add</span>
+<span>New Evaluation</span>
+</button>
+<div class="space-y-1">
+<div class="px-4 py-2 text-on-secondary-fixed-variant hover:text-on-secondary flex items-center gap-3 cursor-pointer">
+<span class="material-symbols-outlined" data-icon="help">help</span>
+<span class="text-label-md font-label-md">Support</span>
+</div>
+<div class="px-4 py-2 text-on-secondary-fixed-variant hover:text-on-secondary flex items-center gap-3 cursor-pointer">
+<span class="material-symbols-outlined" data-icon="logout">logout</span>
+<span class="text-label-md font-label-md">Log Out</span>
+</div>
+</div>
+</div>
+</aside>
+<!-- TopNavBar Shell -->
+<header class="flex justify-between items-center h-16 w-full pl-[292px] pr-8 fixed top-0 z-30 bg-surface border-b border-outline-variant">
+<div class="flex items-center gap-8">
+<div class="flex items-center gap-2">
+<span class="text-headline-sm font-headline-sm font-bold text-primary">Columna Evaluator</span>
+</div>
+<nav class="flex gap-6">
+<a class="text-primary border-b-2 border-primary font-bold pb-2 text-label-md" href="#">Current Session</a>
+<a class="text-on-surface-variant hover:text-primary transition-colors text-label-md" href="#">History</a>
+<a class="text-on-surface-variant hover:text-primary transition-colors text-label-md" href="#">Anatomy Reference</a>
+</nav>
+</div>
+<div class="flex items-center gap-4">
+<div class="flex items-center bg-surface-container-low px-3 py-1 rounded-full border border-outline-variant">
+<span class="material-symbols-outlined text-outline" data-icon="search">search</span>
+<input class="bg-transparent border-none focus:ring-0 text-body-md w-48" placeholder="Search patient ID..." type="text"/>
+</div>
+<div class="flex items-center gap-2">
+<button class="p-2 hover:bg-surface-variant/20 rounded-full transition-colors relative">
+<span class="material-symbols-outlined" data-icon="notifications">notifications</span>
+<span class="absolute top-1 right-1 w-2 h-2 bg-error rounded-full"></span>
+</button>
+<div class="flex items-center gap-3 pl-4 border-l border-outline-variant">
+<div class="text-right hidden xl:block">
+<p class="text-label-md font-bold text-on-surface">Dr. Specialist</p>
+<p class="text-[10px] text-outline uppercase tracking-wider">Orthopedics</p>
+</div>
+<div class="w-10 h-10 rounded-full bg-primary-container flex items-center justify-center text-on-primary-container overflow-hidden">
+<img alt="Dr. Specialist Profile" class="w-full h-full object-cover" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBiDDhE48-9flJ_p12IQLAl3OqvrivL15M2nf_1QRgdtQW36mdRkPZF_BsbQippkbVcI1JE6fDiFBFwR5UPy31e4vdHmbJVdfQKenKnevI7p74XeBgQhQdL_sgdjbJBzj6BkZOyLvHRjo0V0s1P8eTiOcI57aJBzjAlzrLXbT1zrSSd2s5p09Xs_x-t6cUXmhBgQzMJNOHMQFwJ7lXV6HXBn-7NuK7UAhPbb4rLNYobo4V1PjKNzpsv82HFScU0mLMvhY0nIS52k5ck"/>
+</div>
+</div>
+</div>
+<button class="ml-4 bg-primary text-on-primary px-6 py-2 rounded font-bold shadow-sm hover:opacity-90 transition-all active:scale-95">
+                Save Progress
+            </button>
+</div>
+</header>
+<!-- Main Content Area -->
+<main class="ml-[260px] pt-24 px-8 pb-12 min-h-screen">
+<div class="max-w-[1440px] mx-auto">
+<!-- Header Section -->
+<div class="flex justify-between items-end mb-8">
+<div>
+<h2 class="text-headline-lg font-headline-lg text-on-background">II.- COLUMNA</h2>
+<p class="text-body-lg text-on-surface-variant">Evaluación Musculoesquelética Integral</p>
+</div>
+<div class="text-right">
+<span class="inline-block px-3 py-1 bg-surface-container-highest text-primary-fixed-dim font-bold text-label-md rounded border border-primary/20">
+                        REF: JJC-SIG-13-31
+                    </span>
+<p class="text-label-sm text-outline mt-1 uppercase tracking-widest">Page 06 of 12</p>
+</div>
+</div>
+<!-- SECTION A: OBSERVACIÓN -->
+<section class="mb-12">
+<div class="bg-secondary-container/30 px-6 py-3 border-l-4 border-primary mb-6 flex justify-between items-center">
+<h3 class="text-headline-sm font-headline-sm text-on-secondary-container">A) OBSERVACION</h3>
+<span class="text-label-md text-outline italic">Marcar "x" en los cuadraditos según corresponda.</span>
+</div>
+<div class="grid grid-cols-12 gap-gutter">
+<!-- Anatomy Diagram -->
+<div class="col-span-4 bg-surface-container-lowest p-6 border border-outline-variant rounded flex flex-col items-center justify-center min-h-[400px]">
+<img class="max-h-[350px] object-contain mb-4" data-alt="A clinical anatomical medical illustration of a human male back viewed from behind. A bright red vertical line highlights the spinal column from the cervical region down to the lumbar region. The lighting is clean and sterile, against a neutral white and light grey background, emphasizing technical precision and medical accuracy." src="https://lh3.googleusercontent.com/aida-public/AB6AXuAZyxax7ifOXJACVeR8tFtCCASgQ6I-5oc4o0BC1GiXH13yrX0n8tAXizt02kE--KLzMFsKT9-AaRKeRiGXvHwKdBAbd-T_WeVE7S53CGFqW9LBtWCszX6Ea0EJvUjISz7irthbdW0uYnPLf8BBKZe8lAh8bc6gUXCNJhGbi9q5qbQnu_aTJagwxG--ZKnQOQMM6V_0Mywo6onerPNu7yuPsrezKZyul5Cm-fBk2kBdT5WRvKBGUOU1VlCaqPAIJhcia3YYwmqKZLwR"/>
+<p class="text-label-sm text-outline uppercase">Vista Posterior de Columna</p>
+</div>
+<!-- Clinical Findings Center -->
+<div class="col-span-4 space-y-gutter">
+<div class="bg-surface-container-lowest p-6 border border-outline-variant rounded h-full">
+<div class="mb-6">
+<h4 class="text-label-md font-bold text-primary mb-4 uppercase tracking-wider border-b border-outline-variant pb-2">CIFOSIS DORSAL</h4>
+<div class="space-y-3">
+<label class="flex items-center gap-3 cursor-pointer group">
+<input class="w-5 h-5 rounded-sm" name="cifosis" type="radio"/>
+<span class="text-body-md group-hover:text-primary transition-colors">NORMAL</span>
+</label>
+<label class="flex items-center gap-3 cursor-pointer group">
+<input class="w-5 h-5 rounded-sm" name="cifosis" type="radio"/>
+<span class="text-body-md group-hover:text-primary transition-colors">HIPERCIFOSIS</span>
+</label>
+<label class="flex items-center gap-3 cursor-pointer group">
+<input class="w-5 h-5 rounded-sm" name="cifosis" type="radio"/>
+<span class="text-body-md group-hover:text-primary transition-colors uppercase">Aplanamiento Cifosis Dorsal</span>
+</label>
+</div>
+</div>
+<div>
+<h4 class="text-label-md font-bold text-primary mb-4 uppercase tracking-wider border-b border-outline-variant pb-2">LORDOSIS LUMBAR</h4>
+<div class="space-y-3">
+<label class="flex items-center gap-3 cursor-pointer group">
+<input class="w-5 h-5 rounded-sm" name="lordosis" type="radio"/>
+<span class="text-body-md group-hover:text-primary transition-colors">NORMAL</span>
+</label>
+<label class="flex items-center gap-3 cursor-pointer group">
+<input class="w-5 h-5 rounded-sm" name="lordosis" type="radio"/>
+<span class="text-body-md group-hover:text-primary transition-colors">HIPERCIFOSIS</span>
+</label>
+<label class="flex items-center gap-3 cursor-pointer group">
+<input class="w-5 h-5 rounded-sm" name="lordosis" type="radio"/>
+<span class="text-body-md group-hover:text-primary transition-colors uppercase">Aplanamiento Lordosis Lumbar</span>
+</label>
+</div>
+</div>
+</div>
+</div>
+<!-- Scoliosis Right -->
+<div class="col-span-4">
+<div class="bg-surface-container-lowest p-6 border border-outline-variant rounded h-full">
+<h4 class="text-label-md font-bold text-primary mb-4 uppercase tracking-wider border-b border-outline-variant pb-2">PRESENCIA DE ESCOLIOSIS <span class="text-[10px] font-normal lowercase">(curva &gt; 1cm)</span></h4>
+<div class="space-y-4 mt-6">
+<label class="flex justify-between items-center p-3 border border-outline-variant/30 rounded hover:bg-surface-container-low transition-all cursor-pointer">
+<span class="text-body-md font-bold">AUSENTE</span>
+<input class="w-6 h-6 rounded" type="checkbox"/>
+</label>
+<div class="grid grid-cols-2 gap-4">
+<label class="flex flex-col gap-2 p-3 border border-outline-variant/30 rounded hover:bg-surface-container-low transition-all cursor-pointer">
+<span class="text-label-sm text-outline uppercase">Dorsal</span>
+<div class="flex justify-between items-center">
+<span class="text-body-md">Derecha (DX)</span>
+<input class="w-5 h-5 rounded" type="checkbox"/>
+</div>
+</label>
+<label class="flex flex-col gap-2 p-3 border border-outline-variant/30 rounded hover:bg-surface-container-low transition-all cursor-pointer">
+<span class="text-label-sm text-outline uppercase">Dorsal</span>
+<div class="flex justify-between items-center">
+<span class="text-body-md">Izquierda (IX)</span>
+<input class="w-5 h-5 rounded" type="checkbox"/>
+</div>
+</label>
+<label class="flex flex-col gap-2 p-3 border border-outline-variant/30 rounded hover:bg-surface-container-low transition-all cursor-pointer">
+<span class="text-label-sm text-outline uppercase">Lumbar</span>
+<div class="flex justify-between items-center">
+<span class="text-body-md">Derecha (DX)</span>
+<input class="w-5 h-5 rounded" type="checkbox"/>
+</div>
+</label>
+<label class="flex flex-col gap-2 p-3 border border-outline-variant/30 rounded hover:bg-surface-container-low transition-all cursor-pointer">
+<span class="text-label-sm text-outline uppercase">Lumbar</span>
+<div class="flex justify-between items-center">
+<span class="text-body-md">Izquierda (IX)</span>
+<input class="w-5 h-5 rounded" type="checkbox"/>
+</div>
+</label>
+</div>
+</div>
+</div>
+</div>
+<!-- Sub-sections: Rhythm and Structural -->
+<div class="col-span-12 grid grid-cols-2 gap-gutter">
+<!-- Ritmo Lumbo Pelvico -->
+<div class="bg-surface-container-lowest border border-outline-variant rounded overflow-hidden flex">
+<div class="w-1/3 p-4 bg-surface flex items-center justify-center border-r border-outline-variant">
+<img class="max-w-full" data-alt="Technical schematic diagram showing the biomechanics of a human spine in flexion, depicting the lumbo-pelvic rhythm. Arrows indicate vectors of movement and rotation. Minimalist black and white line art with professional blue accents on a clean white background, suitable for high-end medical software." src="https://lh3.googleusercontent.com/aida-public/AB6AXuA5M_gD5OIYwgiDc74FHad_GBFoe9VBs9emimIAnKevenUPB3eIyTkLSVEyeDfXjnuBKPp1445iuaXpVuK8avbjsNeIiuxUGsl1OMH0go-_y4v2dM5YxiwKlvQSNe9nEASuA7Pw8vzh2LHyXG3ZclNA5I8SxKe3qYaK1AANrgMDq4gIHdaqY8ZI92TBgslmKtTTtiHydNMj7uczr8P-Sj8FuJJBCWJHt72DIIoP_vExSCVMa5_ueZU5KcHmzqbDG3QHs7LD8Gfwgszw"/>
+</div>
+<div class="w-2/3 p-6">
+<h4 class="text-label-md font-bold text-primary mb-4 uppercase tracking-wider">OBSERVACION RITMO LUMBO PELVICO</h4>
+<div class="space-y-4">
+<label class="flex items-center gap-3 cursor-pointer p-2 rounded hover:bg-surface-container transition-colors">
+<input class="w-5 h-5 rounded-full" type="checkbox"/>
+<span class="text-body-md uppercase">Normal</span>
+</label>
+<label class="flex items-center gap-3 cursor-pointer p-2 rounded hover:bg-surface-container transition-colors">
+<input class="w-5 h-5 rounded-full" type="checkbox"/>
+<span class="text-body-md uppercase">Lordosis Lumbar Inmodificada</span>
+</label>
+<label class="flex items-center gap-3 cursor-pointer p-2 rounded hover:bg-surface-container transition-colors">
+<input class="w-5 h-5 rounded-full" type="checkbox"/>
+<span class="text-body-md uppercase">Dolor Lumbar</span>
+</label>
+</div>
+</div>
+</div>
+<!-- Dorso Curvo -->
+<div class="bg-surface-container-lowest border border-outline-variant rounded overflow-hidden flex">
+<div class="w-1/3 p-4 bg-surface flex items-center justify-center border-r border-outline-variant">
+<img class="max-w-full" data-alt="Medical diagnostic line drawing of a patient in a bent-over position for a scoliosis test, known as the Adam's Forward Bend Test. The focus is on the thoracic spine curvature and symmetry. Clean, clinical vector illustration style in high contrast grayscale." src="https://lh3.googleusercontent.com/aida-public/AB6AXuAkB6V_grsTY4k_6amlp303cuuley_UcsoYYqK67VAg9FOOo9QfgKVDTsmBVqUKlUfUrL3KTpJRtjL6uctsUunrVLf1uPAhWAQdQxsg5LWi9umSqu3gpsz2Ty-K7Pc1q6E5h4CAcpAsp3EaWEogajpqzdmJwZHyHFpGgbyJ7CFAf_eeOQ3JL0zMjz19j1sFIWRhEgblotfTW8OvC3oKs8GE9wdO72RvfjoV-HTgNyWWx_eF1z62ouVsdarAEaZeUG2DLKRg-6kk9Eq-"/>
+</div>
+<div class="w-2/3 p-6">
+<h4 class="text-label-md font-bold text-primary mb-4 uppercase tracking-wider leading-tight">PRESENCIA DE DORSO CURVO ESTRUCTURADO / CIFO ESCOLIOSIS</h4>
+<div class="space-y-4">
+<label class="flex items-center gap-3 cursor-pointer p-2 rounded hover:bg-surface-container transition-colors">
+<input class="w-5 h-5 rounded-full" type="checkbox"/>
+<span class="text-body-md uppercase">Normal</span>
+</label>
+<label class="flex items-center gap-3 cursor-pointer p-2 rounded hover:bg-surface-container transition-colors">
+<input class="w-5 h-5 rounded-full" type="checkbox"/>
+<span class="text-body-md uppercase">Presencia de Dorso Curvo Estructurado</span>
+</label>
+<label class="flex items-center gap-3 cursor-pointer p-2 rounded hover:bg-surface-container transition-colors">
+<input class="w-5 h-5 rounded-full" type="checkbox"/>
+<span class="text-body-md uppercase">Dolor Dorsal</span>
+</label>
+</div>
+</div>
+</div>
+</div>
+</div>
+</section>
+<!-- SECTION B: MANIOBRA DE PRESO PALPACIÓN -->
+<section class="mb-12">
+<div class="bg-secondary-container/30 px-6 py-3 border-l-4 border-tertiary mb-6 flex justify-between items-center">
+<div class="flex flex-col">
+<h3 class="text-headline-sm font-headline-sm text-on-secondary-container uppercase">B) MANIOBRA DE PRESO PALPACION</h3>
+<span class="text-label-md text-outline">(Apófisis espinosa, espacio intervertebral y musculatura para vertebral)</span>
+</div>
+<span class="bg-surface px-4 py-1 rounded-full text-label-sm border border-outline-variant text-secondary">Manual Assessment</span>
+</div>
+<div class="grid grid-cols-3 gap-gutter">
+<!-- CERVICAL BLOCK -->
+<div class="bg-surface-container-lowest border border-outline-variant rounded overflow-hidden shadow-sm">
+<div class="bg-surface-container p-4 border-b border-outline-variant flex justify-between items-center">
+<span class="font-bold text-primary text-label-md uppercase tracking-widest">CERVICAL</span>
+<span class="material-symbols-outlined text-primary/50" data-icon="accessibility_new">accessibility_new</span>
+</div>
+<div class="p-6">
+<div class="flex justify-center mb-6 bg-surface-container-low rounded-xl p-4 border border-outline-variant/20">
+<img class="h-40 object-contain" data-alt="A detailed clinical anatomical illustration of the human cervical spine and neck muscles from a rear-lateral angle. Highlights include the vertebrae C1-C7 and the surrounding musculature. Soft lighting, high contrast white background, minimalist digital art style for a medical interface." src="https://lh3.googleusercontent.com/aida-public/AB6AXuA_p936IfR1aHg77kGMiYZDBQBq7YJH3mKwBhPsG2gYHZ5uHzQRxfkQwwZm085mOyx72VpfU2DZe1PQVL-EQ_FUZ9lLl1yaZR3eUt9gMVgyOtDHXl67pmQcdIatxdgaLUtyBy4QqkFKf1xmRFzuTt-rT44ley5_UR_2kKy1a9NtJF38NahUOMzhNeCO4I_QnSX2c6UvfVx0cJCqLub-UAEbGUpDPY-cmn0cXWTFQMuq0vzcCGIBIhMST2XXgBRHgrKlux5_A0UN2dKi"/>
+</div>
+<div class="space-y-6">
+<label class="flex items-center gap-3 cursor-pointer">
+<input class="w-5 h-5 rounded border-outline-variant" name="pain_cervical" type="radio"/>
+<span class="text-body-md font-bold text-on-surface">DOLOR AUSENTE</span>
+</label>
+<div class="border-t border-outline-variant/30 pt-4">
+<label class="flex items-center gap-3 cursor-pointer mb-4">
+<input class="w-5 h-5 rounded border-outline-variant" name="pain_cervical" type="radio"/>
+<span class="text-body-md font-bold text-error">DOLOR PRESENTE</span>
+</label>
+<div class="ml-8 space-y-4">
+<div>
+<label class="block text-label-sm text-outline uppercase mb-1">N° Apófisis / Espacio</label>
+<input class="w-full bg-surface border border-outline-variant rounded px-3 py-2 text-body-md focus:border-primary focus:ring-1 focus:ring-primary/20 transition-all" placeholder="e.g. C5-C6" type="text"/>
+</div>
+<div>
+<label class="block text-label-sm text-outline uppercase mb-1">Segmento Muscular</label>
+<input class="w-full bg-surface border border-outline-variant rounded px-3 py-2 text-body-md focus:border-primary focus:ring-1 focus:ring-primary/20 transition-all" placeholder="Specify region..." type="text"/>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+<!-- DORSAL BLOCK -->
+<div class="bg-surface-container-lowest border border-outline-variant rounded overflow-hidden shadow-sm">
+<div class="bg-surface-container p-4 border-b border-outline-variant flex justify-between items-center">
+<span class="font-bold text-primary text-label-md uppercase tracking-widest">DORSAL</span>
+<span class="material-symbols-outlined text-primary/50" data-icon="straighten">straighten</span>
+</div>
+<div class="p-6">
+<div class="flex justify-center mb-6 bg-surface-container-low rounded-xl p-4 border border-outline-variant/20">
+<img class="h-40 object-contain" data-alt="Professional medical illustration of the thoracic (dorsal) region of the human back, showing the rib cage attachment to the spinal column. The lighting is bright and technical. High detail in the vertebrae T1-T12. Clean background, medical software aesthetic." src="https://lh3.googleusercontent.com/aida-public/AB6AXuACvX-fUxKh6nbiKohHIDFtgyyK6KUuqGKjOEsTGVhzj4v2prAUOBORjkuni62aiwjXkkZLGoWHqob9gsXfgTzSvUXDVY-dUay1sBz3Wdt_1d26j2SBRYvFZ_74BGA6n5U-575jBp_gRpXuUXUJdi7HOHr12koreTQrQV2fvAhHhUhSVugIge3c4dgviWmD0YOfhQizO4JqTa33F5ie5aFo08IAHb31FtrOFtHyucgyrM5CAruewpLrfIYI8yS4yRKbmrIMtRjqAXM1"/>
+</div>
+<div class="space-y-6">
+<label class="flex items-center gap-3 cursor-pointer">
+<input class="w-5 h-5 rounded border-outline-variant" name="pain_dorsal" type="radio"/>
+<span class="text-body-md font-bold text-on-surface">DOLOR AUSENTE</span>
+</label>
+<div class="border-t border-outline-variant/30 pt-4">
+<label class="flex items-center gap-3 cursor-pointer mb-4">
+<input class="w-5 h-5 rounded border-outline-variant" name="pain_dorsal" type="radio"/>
+<span class="text-body-md font-bold text-error">DOLOR PRESENTE</span>
+</label>
+<div class="ml-8 space-y-4">
+<div class="flex items-center justify-between p-2 border border-outline-variant/20 rounded bg-surface">
+<span class="text-body-md uppercase">Apófisis/Espacio</span>
+<input class="w-5 h-5 rounded" type="checkbox"/>
+</div>
+<div class="flex items-center justify-between p-2 border border-outline-variant/20 rounded bg-surface">
+<span class="text-body-md uppercase">Segmento Muscular</span>
+<input class="w-5 h-5 rounded" type="checkbox"/>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+<!-- LUMBAR BLOCK -->
+<div class="bg-surface-container-lowest border border-outline-variant rounded overflow-hidden shadow-sm">
+<div class="bg-surface-container p-4 border-b border-outline-variant flex justify-between items-center">
+<span class="font-bold text-primary text-label-md uppercase tracking-widest">LUMBAR</span>
+<span class="material-symbols-outlined text-primary/50" data-icon="fitness_center">fitness_center</span>
+</div>
+<div class="p-6">
+<div class="flex justify-center mb-6 bg-surface-container-low rounded-xl p-4 border border-outline-variant/20">
+<img class="h-40 object-contain" data-alt="Medical illustration of the lower human back and lumbar spine, focusing on L1-L5 vertebrae and the pelvic connection. Clinical lighting highlighting the spinal structures and lumbar muscle groups. Blue and grey color palette, professional technical drawing style." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDd0xbQNSrjJz0ERVcB6lM4H8hezo_sWwugR6ct4yIsb8SnzY7Zcz9ZyDBgnR9vSh0Z0d72nrxMlwoFslXgV_wiO2DWlwvOqOiLy3U6X5FVBbIEO-O6-bbF5Pg2UkSysiE1aUfDnfxEz9ilLtCASI498nhADHrsilO2tyUM0ea0jKZxeOn5GI5BvnF_I2NP9B7HgiVKzMi0Xgl5Q11D0MbEEJdUPzgrUgLiA0LO557HfzQGslVzZfBV4_OQeeMbXntVgzp2TUfZzfsc"/>
+</div>
+<div class="space-y-6">
+<label class="flex items-center gap-3 cursor-pointer">
+<input class="w-5 h-5 rounded border-outline-variant" name="pain_lumbar" type="radio"/>
+<span class="text-body-md font-bold text-on-surface">DOLOR AUSENTE</span>
+</label>
+<div class="border-t border-outline-variant/30 pt-4">
+<label class="flex items-center gap-3 cursor-pointer mb-4">
+<input class="w-5 h-5 rounded border-outline-variant" name="pain_lumbar" type="radio"/>
+<span class="text-body-md font-bold text-error">DOLOR PRESENTE</span>
+</label>
+<div class="ml-8 space-y-4">
+<div class="flex items-center justify-between p-2 border border-outline-variant/20 rounded bg-surface">
+<span class="text-body-md uppercase">Apófisis/Espacio</span>
+<input class="w-5 h-5 rounded" type="checkbox"/>
+</div>
+<div class="flex items-center justify-between p-2 border border-outline-variant/20 rounded bg-surface">
+<span class="text-body-md uppercase">Segmento Muscular</span>
+<input class="w-5 h-5 rounded" type="checkbox"/>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</section>
+</div>
+</main>
+<!-- Footer Controls -->
+<footer class="ml-[260px] bg-surface-container-lowest border-t border-outline-variant px-8 py-4 fixed bottom-0 left-0 right-0 z-20 flex justify-between items-center">
+<div class="flex items-center gap-4 text-label-sm text-outline">
+<span>Doc Code: <strong class="text-on-surface">Fo. JJC-SIG-13-31</strong></span>
+<span class="w-px h-4 bg-outline-variant"></span>
+<span>Rev. 0</span>
+<span class="w-px h-4 bg-outline-variant"></span>
+<span>Page <strong class="text-primary">6</strong></span>
+</div>
+<div class="flex gap-4">
+<button class="px-6 py-2 border border-outline-variant text-on-surface font-bold rounded-lg hover:bg-surface-variant transition-colors">
+                Back to Part I
+            </button>
+<button class="px-8 py-2 bg-primary text-on-primary font-bold rounded-lg shadow-sm hover:brightness-110 active:scale-95 transition-all flex items-center gap-2">
+<span class="material-symbols-outlined text-[20px]" data-icon="check_circle">check_circle</span>
+                Finish Assessment
+            </button>
+</div>
+</footer>
+<script>
+        // Simple micro-interaction for active states or notifications
+        document.querySelectorAll('input').forEach(input => {
+            input.addEventListener('change', (e) => {
+                if(e.target.checked) {
+                    console.log(`Updated assessment: ${e.target.name || e.target.type}`);
+                }
+            });
+        });
+    </script>
+</body></html>

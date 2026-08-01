@@ -224,6 +224,96 @@ export interface MiembrosSuperioresEvaluacion {
   munecaMano: MunecaMano;
 }
 
+// ---- Evaluación Columna (page 4) ----
+
+export interface CifosisDorsalObs {
+  normal: boolean;
+  hipercifosis: boolean;
+  aplanamientoCifosisDorsal: boolean;
+}
+
+export interface LordosisLumbarObs {
+  normal: boolean;
+  hipercifosis: boolean;
+  aplanamientoLordosisLumbar: boolean;
+}
+
+export interface PresenciaEscoliosisObs {
+  ausente: boolean;
+  dorsalDx: boolean;
+  dorsalIx: boolean;
+  lumbarDx: boolean;
+  lumbarIx: boolean;
+}
+
+export interface RitmoLumboPelvicoObs {
+  normal: boolean;
+  lordosisLumbarInmodificada: boolean;
+  dolorLumbar: boolean;
+}
+
+export interface DorsoCurvoEstructuradoCifoEscoliosisObs {
+  normal: boolean;
+  presenciaDorsoCurvoEstructurado: boolean;
+  dolorDorsal: boolean;
+}
+
+export interface ObservacionColumna {
+  cifosisDorsal: CifosisDorsalObs;
+  lordosisLumbar: LordosisLumbarObs;
+  presenciaEscoliosis: PresenciaEscoliosisObs;
+  ritmoLumboPelvico: RitmoLumboPelvicoObs;
+  dorsoCurvoEstructuradoCifoEscoliosis: DorsoCurvoEstructuradoCifoEscoliosisObs;
+}
+
+export interface ApofisisCervicalDetalle {
+  aplica: boolean;
+  numeroApofisisEspacio: string;
+}
+
+export interface SegmentoCervicalDetalle {
+  aplica: boolean;
+  detalle: string;
+}
+
+export interface DolorPresenteCervical {
+  aplica: boolean;
+  apofisisEspacioIntervertebral: ApofisisCervicalDetalle;
+  segmentoMuscular: SegmentoCervicalDetalle;
+}
+
+export interface DolorPresenteSimple {
+  aplica: boolean;
+  apofisisEspacioIntervertebral: boolean;
+  segmentoMuscular: boolean;
+}
+
+export interface PalpacionCervical {
+  dolorAusente: boolean;
+  dolorPresente: DolorPresenteCervical;
+}
+
+export interface PalpacionDorsal {
+  dolorAusente: boolean;
+  dolorPresente: DolorPresenteSimple;
+}
+
+export interface PalpacionLumbar {
+  dolorAusente: boolean;
+  dolorPresente: DolorPresenteSimple;
+}
+
+export interface ManiobraPresoPalpacionColumna {
+  cervical: PalpacionCervical;
+  dorsal: PalpacionDorsal;
+  lumbar: PalpacionLumbar;
+}
+
+export interface EvaluacionColumna {
+  observacion: ObservacionColumna;
+  maniobraPresoPalpacion: ManiobraPresoPalpacionColumna;
+}
+
 // ---- Estado global de evaluación ----
 
 export interface EvaluacionOsteomuscular {
@@ -231,4 +321,5 @@ export interface EvaluacionOsteomuscular {
   evaluacionClinicaOsteomuscular: {
     miembrosSuperiores: MiembrosSuperioresEvaluacion;
   };
+  evaluacionColumna: EvaluacionColumna;
 }

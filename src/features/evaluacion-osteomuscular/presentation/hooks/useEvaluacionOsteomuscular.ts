@@ -30,6 +30,14 @@ import type {
   ParestesiaNerviosa,
   ExamenInstrumentalMuneca,
   SintomatologiaParestesica,
+  EvaluacionColumna,
+  ObservacionColumna,
+  ManiobraPresoPalpacionColumna,
+  PalpacionCervical,
+  PalpacionDorsal,
+  PalpacionLumbar,
+  DolorPresenteCervical,
+  DolorPresenteSimple,
 } from '@/types/evaluacion-osteomuscular';
 
 function initialDxIxBool() {
@@ -266,6 +274,68 @@ function initialCodo(): Codo {
   };
 }
 
+function initialDolorPresenteCervical(): DolorPresenteCervical {
+  return {
+    aplica: false,
+    apofisisEspacioIntervertebral: { aplica: false, numeroApofisisEspacio: '' },
+    segmentoMuscular: { aplica: false, detalle: '' },
+  };
+}
+
+function initialDolorPresenteSimple(): DolorPresenteSimple {
+  return {
+    aplica: false,
+    apofisisEspacioIntervertebral: false,
+    segmentoMuscular: false,
+  };
+}
+
+function initialPalpacionCervical(): PalpacionCervical {
+  return {
+    dolorAusente: false,
+    dolorPresente: initialDolorPresenteCervical(),
+  };
+}
+
+function initialPalpacionDorsal(): PalpacionDorsal {
+  return {
+    dolorAusente: false,
+    dolorPresente: initialDolorPresenteSimple(),
+  };
+}
+
+function initialPalpacionLumbar(): PalpacionLumbar {
+  return {
+    dolorAusente: false,
+    dolorPresente: initialDolorPresenteSimple(),
+  };
+}
+
+function initialManiobraPresoPalpacionColumna(): ManiobraPresoPalpacionColumna {
+  return {
+    cervical: initialPalpacionCervical(),
+    dorsal: initialPalpacionDorsal(),
+    lumbar: initialPalpacionLumbar(),
+  };
+}
+
+function initialObservacionColumna(): ObservacionColumna {
+  return {
+    cifosisDorsal: { normal: false, hipercifosis: false, aplanamientoCifosisDorsal: false },
+    lordosisLumbar: { normal: false, hipercifosis: false, aplanamientoLordosisLumbar: false },
+    presenciaEscoliosis: { ausente: false, dorsalDx: false, dorsalIx: false, lumbarDx: false, lumbarIx: false },
+    ritmoLumboPelvico: { normal: false, lordosisLumbarInmodificada: false, dolorLumbar: false },
+    dorsoCurvoEstructuradoCifoEscoliosis: { normal: false, presenciaDorsoCurvoEstructurado: false, dolorDorsal: false },
+  };
+}
+
+function initialEvaluacionColumna(): EvaluacionColumna {
+  return {
+    observacion: initialObservacionColumna(),
+    maniobraPresoPalpacion: initialManiobraPresoPalpacionColumna(),
+  };
+}
+
 export function initialEvaluacionState(atencion: AtencionDetalle | null): EvaluacionOsteomuscular {
   return {
     idAtencion: atencion?.idAtencion ?? '',
@@ -276,6 +346,7 @@ export function initialEvaluacionState(atencion: AtencionDetalle | null): Evalua
         munecaMano: initialMunecaMano(),
       },
     },
+    evaluacionColumna: initialEvaluacionColumna(),
   };
 }
 

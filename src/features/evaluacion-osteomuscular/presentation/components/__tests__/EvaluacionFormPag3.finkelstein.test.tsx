@@ -1,8 +1,12 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { AtencionDetalle } from '@/types/jjc';
 import type { DxIxBool } from '@/types/evaluacion-osteomuscular';
+
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({ push: vi.fn() }),
+}));
 import {
   EvaluacionOsteomuscularProvider,
   useEvaluacionContext,

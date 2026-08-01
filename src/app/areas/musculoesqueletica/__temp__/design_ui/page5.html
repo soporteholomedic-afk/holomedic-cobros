@@ -1,0 +1,498 @@
+<!DOCTYPE html>
+
+<html class="light" lang="es"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Holomedic - Evaluación Clínica Osteomuscular</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600&family=Geist:wght@400;500;600&family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@100..900&family=Hanken+Grotesk:wght@100..900&family=Inter:wght@100..900&display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "on-primary-fixed-variant": "#004a77",
+                        "tertiary-fixed": "#e0e3e5",
+                        "tertiary-container": "#717577",
+                        "surface": "#f8f9ff",
+                        "surface-container-high": "#dce9ff",
+                        "background": "#f8f9ff",
+                        "tertiary-fixed-dim": "#c4c7c9",
+                        "primary": "#006099",
+                        "primary-container": "#007ac0",
+                        "on-surface-variant": "#404751",
+                        "on-error": "#ffffff",
+                        "surface-container-highest": "#d3e4fe",
+                        "secondary": "#545e75",
+                        "on-tertiary-fixed-variant": "#434749",
+                        "on-tertiary-fixed": "#181c1e",
+                        "on-tertiary": "#ffffff",
+                        "error": "#ba1a1a",
+                        "on-secondary": "#ffffff",
+                        "on-primary-container": "#fdfcff",
+                        "inverse-on-surface": "#eaf1ff",
+                        "surface-bright": "#f8f9ff",
+                        "on-primary": "#ffffff",
+                        "secondary-fixed-dim": "#bcc6e0",
+                        "on-secondary-container": "#5a647b",
+                        "primary-fixed": "#cfe5ff",
+                        "on-tertiary-container": "#fafdff",
+                        "primary-fixed-dim": "#98cbff",
+                        "surface-container": "#e5eeff",
+                        "on-error-container": "#93000a",
+                        "on-surface": "#0b1c30",
+                        "surface-variant": "#d3e4fe",
+                        "inverse-surface": "#213145",
+                        "inverse-primary": "#98cbff",
+                        "surface-dim": "#cbdbf5",
+                        "error-container": "#ffdad6",
+                        "on-primary-fixed": "#001d33",
+                        "outline-variant": "#bfc7d2",
+                        "surface-tint": "#00629d",
+                        "surface-container-lowest": "#ffffff",
+                        "outline": "#707882",
+                        "surface-container-low": "#eff4ff",
+                        "tertiary": "#585d5e",
+                        "secondary-fixed": "#d8e2fd",
+                        "secondary-container": "#d8e2fd",
+                        "on-background": "#0b1c30",
+                        "on-secondary-fixed-variant": "#3d475c",
+                        "on-secondary-fixed": "#111c2f"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.125rem",
+                        "lg": "0.25rem",
+                        "xl": "0.5rem",
+                        "full": "0.75rem"
+                    },
+                    "spacing": {
+                        "sidebar-width": "260px",
+                        "margin-mobile": "16px",
+                        "margin-desktop": "32px",
+                        "gutter": "24px",
+                        "container-max": "1440px",
+                        "baseline": "4px"
+                    },
+                    "fontFamily": {
+                        "headline-sm": ["Hanken Grotesk"],
+                        "headline-lg": ["Hanken Grotesk"],
+                        "label-sm": ["Geist"],
+                        "headline-md": ["Hanken Grotesk"],
+                        "body-md": ["Inter"],
+                        "body-lg": ["Inter"],
+                        "label-md": ["Geist"]
+                    },
+                    "fontSize": {
+                        "headline-sm": ["20px", {"lineHeight": "28px", "fontWeight": "600"}],
+                        "headline-lg": ["30px", {"lineHeight": "38px", "letterSpacing": "-0.02em", "fontWeight": "700"}],
+                        "label-sm": ["11px", {"lineHeight": "14px", "fontWeight": "600"}],
+                        "headline-md": ["24px", {"lineHeight": "32px", "letterSpacing": "-0.01em", "fontWeight": "600"}],
+                        "body-md": ["14px", {"lineHeight": "20px", "fontWeight": "400"}],
+                        "body-lg": ["16px", {"lineHeight": "24px", "fontWeight": "400"}],
+                        "label-md": ["12px", {"lineHeight": "16px", "letterSpacing": "0.05em", "fontWeight": "500"}]
+                    }
+                },
+            },
+        }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .clinical-scroll::-webkit-scrollbar {
+            width: 6px;
+        }
+        .clinical-scroll::-webkit-scrollbar-track {
+            background: #f1f5f9;
+        }
+        .clinical-scroll::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 10px;
+        }
+        .custom-checkbox:checked {
+            background-color: #006099;
+            border-color: #006099;
+        }
+    </style>
+</head>
+<body class="bg-background text-on-surface font-body-md flex h-screen overflow-hidden">
+<!-- Sidebar Component -->
+<aside class="w-sidebar-width h-screen sticky top-0 left-0 bg-secondary dark:bg-inverse-surface flex flex-col py-baseline border-r border-outline-variant dark:border-outline">
+<div class="px-6 py-8">
+<h1 class="font-headline-md text-headline-md font-bold text-on-primary dark:text-inverse-primary tracking-tight">Holomedic</h1>
+<p class="font-label-md text-label-md text-secondary-fixed-dim uppercase tracking-widest mt-1">Clinical Portal</p>
+</div>
+<nav class="flex-1 px-4 space-y-1">
+<a class="flex items-center gap-3 px-3 py-3 rounded-lg text-secondary-fixed-dim hover:text-on-primary hover:bg-on-secondary-fixed-variant transition-colors duration-200" href="#">
+<span class="material-symbols-outlined">dashboard</span>
+<span class="font-label-md text-label-md">Dashboard</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-3 rounded-lg text-secondary-fixed-dim hover:text-on-primary hover:bg-on-secondary-fixed-variant transition-colors duration-200" href="#">
+<span class="material-symbols-outlined">folder_shared</span>
+<span class="font-label-md text-label-md">Patient Records</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-3 rounded-lg bg-primary dark:bg-primary-container text-on-primary dark:text-on-primary-container font-semibold" href="#">
+<span class="material-symbols-outlined">edit_note</span>
+<span class="font-label-md text-label-md">Clinical Entry</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-3 rounded-lg text-secondary-fixed-dim hover:text-on-primary hover:bg-on-secondary-fixed-variant transition-colors duration-200" href="#">
+<span class="material-symbols-outlined">analytics</span>
+<span class="font-label-md text-label-md">Reports</span>
+</a>
+</nav>
+<div class="px-4 py-6 border-t border-on-secondary-fixed-variant">
+<button class="w-full py-3 bg-primary-container text-white rounded-lg font-semibold hover:opacity-90 active:scale-95 transition-all text-sm mb-4">
+                New Consultation
+            </button>
+<div class="space-y-1">
+<a class="flex items-center gap-3 px-3 py-2 text-secondary-fixed-dim hover:text-on-primary transition-colors" href="#">
+<span class="material-symbols-outlined">settings</span>
+<span class="font-label-md text-label-md">Settings</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2 text-secondary-fixed-dim hover:text-on-primary transition-colors" href="#">
+<span class="material-symbols-outlined">help</span>
+<span class="font-label-md text-label-md">Support</span>
+</a>
+</div>
+</div>
+</aside>
+<!-- Main Content -->
+<main class="flex-1 flex flex-col min-w-0">
+<!-- Top Nav Bar -->
+<header class="flex justify-between items-center w-full px-margin-desktop h-16 bg-surface-container-lowest border-b border-outline-variant shrink-0">
+<div class="flex items-center gap-6">
+<h2 class="font-headline-sm text-headline-sm text-primary">Evaluación Clínica</h2>
+<div class="relative w-64">
+<span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-outline">search</span>
+<input class="w-full bg-surface-container-low border border-outline-variant rounded-full pl-10 pr-4 py-1.5 text-xs focus:ring-1 focus:ring-primary outline-none" placeholder="Search patient..." type="text"/>
+</div>
+</div>
+<div class="flex items-center gap-4">
+<button class="flex items-center gap-2 bg-error text-white px-4 py-2 rounded font-bold text-xs uppercase tracking-wide hover:bg-red-700 transition-colors">
+<span class="material-symbols-outlined text-sm">emergency</span>
+                    Emergency Alert
+                </button>
+<div class="flex items-center gap-2 border-l pl-4 ml-2">
+<button class="p-2 hover:bg-surface-container-low rounded-full transition-all">
+<span class="material-symbols-outlined text-outline">notifications</span>
+</button>
+<button class="p-2 hover:bg-surface-container-low rounded-full transition-all">
+<span class="material-symbols-outlined text-outline">history</span>
+</button>
+<div class="w-8 h-8 rounded-full bg-surface-container-high flex items-center justify-center border border-outline-variant ml-2 overflow-hidden">
+<img class="w-full h-full object-cover" data-alt="Close up professional portrait of a male doctor wearing a white lab coat with a stethoscope around his neck, clinical blue background, medical photography style, high quality." src="https://lh3.googleusercontent.com/aida-public/AB6AXuC0kBJjJGvagwf3Jqy74c0BnRk_TEwxVCFOcvckmqah5ZDUzf13W1lgQOe48c3eDT3yL-uwZJW4XU7Qx9t45sbNdYJqFBKC8tLQJW2Zpp4Ijo5XWwi7zd2vepm1fL-zs1sfCUFd2piLozqcji8W5MUBbwDqQKUR214YYSuue6H6SZ-T64ZvIiOJPCOiP5hDLB3H9TQ8A099oPiT-WquNKFDpyy6_QCZU-bdzzYuNwAq1ZnvJu6wEp2pacO3dkVtZr4-GA6cTCUJVxAs"/>
+</div>
+</div>
+</div>
+</header>
+<!-- Content Area -->
+<div class="flex-1 overflow-y-auto clinical-scroll p-8 bg-[#F4F7F9]">
+<div class="max-w-container-max mx-auto space-y-6">
+<!-- Page Header -->
+<div class="flex justify-between items-end border-b-2 border-primary pb-4">
+<div>
+<h1 class="font-headline-lg text-headline-lg text-on-surface">I.- MIEMBROS SUPERIORES</h1>
+<p class="text-on-surface-variant font-label-md mt-1">EVALUACION CLINICA OSTEMUSCULAR</p>
+</div>
+<div class="flex items-center gap-3 bg-white px-4 py-2 border border-outline-variant rounded-lg">
+<span class="text-xs font-bold text-primary uppercase">Expediente No.</span>
+<span class="text-lg font-headline-sm text-on-surface">HM-2023-8842</span>
+</div>
+</div>
+<!-- Subsection A: Escapulo Humeral -->
+<section class="bg-white border border-outline-variant rounded-lg shadow-sm overflow-hidden">
+<div class="bg-surface-container-low px-6 py-4 border-b border-outline-variant flex justify-between items-center">
+<h3 class="font-headline-sm text-headline-sm text-primary">a) ESCAPULO HUMERAL</h3>
+<label class="flex items-center gap-2 cursor-pointer">
+<span class="font-label-md text-on-surface-variant">REALIZA MANIOBRAS</span>
+<input checked="" class="w-5 h-5 rounded text-primary focus:ring-primary border-outline-variant" type="checkbox"/>
+<span class="font-bold text-primary">SI</span>
+</label>
+</div>
+<div class="p-6 space-y-8">
+<!-- Initial Inputs -->
+<div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+<div class="space-y-2">
+<label class="block text-xs font-bold text-on-surface-variant uppercase tracking-wider">Molestia de Hombro Dx Desde (meses)</label>
+<input class="w-full border border-outline-variant rounded p-3 focus:ring-1 focus:ring-primary outline-none" placeholder="0" type="number"/>
+</div>
+<div class="space-y-2">
+<label class="block text-xs font-bold text-on-surface-variant uppercase tracking-wider">Molestia de Hombro Ix Desde (meses)</label>
+<input class="w-full border border-outline-variant rounded p-3 focus:ring-1 focus:ring-primary outline-none" placeholder="0" type="number"/>
+</div>
+</div>
+<!-- Palpación Hombro Table -->
+<div class="border border-outline-variant rounded overflow-hidden">
+<div class="bg-surface-container-low text-center font-bold text-xs py-2 border-b border-outline-variant uppercase tracking-widest text-on-surface-variant">
+                                Palpación Hombro (Dolor)
+                            </div>
+<div class="grid grid-cols-3 divide-x divide-outline-variant">
+<div class="p-4 space-y-3">
+<p class="text-xs font-bold text-center border-b pb-2 mb-2">DOLOR ANTERIOR</p>
+<div class="flex justify-around">
+<label class="flex items-center gap-1.5 text-xs"><input class="rounded" type="checkbox"/> Dx</label>
+<label class="flex items-center gap-1.5 text-xs"><input class="rounded" type="checkbox"/> Ix</label>
+</div>
+</div>
+<div class="p-4 space-y-3">
+<p class="text-xs font-bold text-center border-b pb-2 mb-2">DOLOR LATERAL</p>
+<div class="flex justify-around">
+<label class="flex items-center gap-1.5 text-xs"><input class="rounded" type="checkbox"/> Dx</label>
+<label class="flex items-center gap-1.5 text-xs"><input class="rounded" type="checkbox"/> Ix</label>
+</div>
+</div>
+<div class="p-4 space-y-3">
+<p class="text-xs font-bold text-center border-b pb-2 mb-2">DOLOR POSTERIOR</p>
+<div class="flex justify-around">
+<label class="flex items-center gap-1.5 text-xs"><input class="rounded" type="checkbox"/> Dx</label>
+<label class="flex items-center gap-1.5 text-xs"><input class="rounded" type="checkbox"/> Ix</label>
+</div>
+</div>
+</div>
+</div>
+<!-- Movilidad Bento Grid -->
+<div class="space-y-4">
+<h4 class="text-sm font-bold uppercase text-primary border-l-4 border-primary pl-3">Evaluación de Movilidad</h4>
+<div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+<!-- Flexión -->
+<div class="bg-surface-container-lowest border border-outline-variant rounded-lg p-4 flex flex-col items-center">
+<div class="w-full h-32 mb-4 bg-white flex items-center justify-center overflow-hidden rounded">
+<img class="h-full object-contain mix-blend-multiply opacity-80" data-alt="A clean, minimalist medical diagram showing a lateral view of a human silhouette performing shoulder flexion movement, indicating an arc from neutral to full elevation. Vector style illustration, professional clinical documentation aesthetic, blue and gray tones." src="https://lh3.googleusercontent.com/aida-public/AB6AXuBafpA95Wyem-bIycv1cQDo8a1whvabVvsRTbGB_U47_zAJY5GgUIjlJ738Y67PFGAp4DwLhy6ai_0Mf62p0ZLMYC8FMwfEKIS5oD6KoBsDTD99YV0r6F5HtkIPzD-3lyZigDp4dqrNNW36zzFPjVByCiAFKiuzl-jQ3pI50Ea7MMIbXj0hQlWSoPHGemCMuUF-aV-J00HWsf5CMoSOfRrEZLVX6GJnqMIxM6jQ_XCNzTkNLRvlPFeoFlmmynCWUQjvpFe_Lji9oK1X"/>
+</div>
+<p class="text-[10px] font-bold text-on-surface-variant text-center uppercase mb-3">Flexión / Elevación Anterior</p>
+<div class="flex gap-4">
+<label class="flex items-center gap-1.5 text-[10px] font-bold"><input class="rounded" type="checkbox"/> Dx</label>
+<label class="flex items-center gap-1.5 text-[10px] font-bold"><input class="rounded" type="checkbox"/> Ix</label>
+</div>
+</div>
+<!-- Abducción -->
+<div class="bg-surface-container-lowest border border-outline-variant rounded-lg p-4 flex flex-col items-center">
+<div class="w-full h-32 mb-4 bg-white flex items-center justify-center overflow-hidden rounded">
+<img class="h-full object-contain mix-blend-multiply opacity-80" data-alt="A clinical medical illustration of a frontal human figure performing shoulder abduction, showing a 180-degree motion path. Minimalist vector art on a white background, technical anatomical drawing, sterile and precise medical style." src="https://lh3.googleusercontent.com/aida-public/AB6AXuB5Z8f3k_qJaH2OWqUPqxxS9YAcgNtvo19M4bIMN0sZNnNyfABDnnFph-KPs4x-U56t2slZnrj-H3XIUkx9hn9IDhNLUOnOePihBON_OwBCxOE_wZg9h1myjac1NG27AcNDqZai2A365C3AbA1_q79UYTaQw3ly_pu18U4w7N5ze60FXqRdPtWoOTDmbih01plAOwlbcPc9BgAjsU0pSR0GADOzmJk_WX7tCN9y79BeyLaH_azvO83k-eBjjsCQ0BmUFB-s_2x4SmLO"/>
+</div>
+<p class="text-[10px] font-bold text-on-surface-variant text-center uppercase mb-3">Abducción / Elevación Lateral</p>
+<div class="flex gap-4">
+<label class="flex items-center gap-1.5 text-[10px] font-bold"><input class="rounded" type="checkbox"/> Dx</label>
+<label class="flex items-center gap-1.5 text-[10px] font-bold"><input class="rounded" type="checkbox"/> Ix</label>
+</div>
+</div>
+<!-- Rotación Interna -->
+<div class="bg-surface-container-lowest border border-outline-variant rounded-lg p-4 flex flex-col items-center">
+<div class="w-full h-32 mb-4 bg-white flex items-center justify-center overflow-hidden rounded">
+<img class="h-full object-contain mix-blend-multiply opacity-80" data-alt="A back view illustration of a human torso showing shoulder internal rotation, where the hand reaches behind the back towards the scapula. Clean clinical line art, professional medical diagram, neutral color palette." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCbqXrf4MoD6UF7kB0q3-9LuxIa2KFyHqd90Ejmn1bIHKIPeCUa5k2Fh8I2okrYPwvHOJRffrF2kIi9DECbLjxFfpV9hKH768xeswK9KfRM9V_rsjDbChpCS3ORvn-nEfQW8gOK6jPMcSYoZsekyrk1VbvpDu57e1-Nl6dhYJimzCjwDIRfT0EC0SqwDZa3e2Ffhfj6blVFGfAoAkjF8iXkMSDcO1lUjosD9A6H7ZkctEYA-0CmXyqxrCqlI5OeGujJWbkSyw4PGKyD"/>
+</div>
+<p class="text-[10px] font-bold text-on-surface-variant text-center uppercase mb-3">Rotación Interna</p>
+<div class="flex gap-4">
+<label class="flex items-center gap-1.5 text-[10px] font-bold"><input class="rounded" type="checkbox"/> Dx</label>
+<label class="flex items-center gap-1.5 text-[10px] font-bold"><input class="rounded" type="checkbox"/> Ix</label>
+</div>
+</div>
+<!-- Rotación Externa -->
+<div class="bg-surface-container-lowest border border-outline-variant rounded-lg p-4 flex flex-col items-center">
+<div class="w-full h-32 mb-4 bg-white flex items-center justify-center overflow-hidden rounded">
+<img class="h-full object-contain mix-blend-multiply opacity-80" data-alt="An anatomical diagram of a human figure viewed from above or front showing external shoulder rotation with the elbow flexed at 90 degrees. Minimalist technical illustration, white and blue medical theme, high precision." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCchntP3Rz10kRb3nde_TcxywAJlncFJ8vrCvtGL7jmADQJHFrUb9Hxs5FAG2cj5uEHQGdNGyr9YeSKC1EyC2o4B9kt7OX95p_odDC2jeFwEhMYdZiLkNDINgVKjF9anT8mrLEDvS_YqVTKznhB8JrNBku9KsDmasd7RW9M085hJ2ZtvVsZooxbxxBQQR7mmkTTh4Lc3Q7sXdzAYKBXz1ZNvi1Xopha8dsiLSMY1EfDfFVHyef1mkiK5ZqF9Am8ZTo5J5cR55oErGHA"/>
+</div>
+<p class="text-[10px] font-bold text-on-surface-variant text-center uppercase mb-3">Rotación Externa</p>
+<div class="flex gap-4">
+<label class="flex items-center gap-1.5 text-[10px] font-bold"><input class="rounded" type="checkbox"/> Dx</label>
+<label class="flex items-center gap-1.5 text-[10px] font-bold"><input class="rounded" type="checkbox"/> Ix</label>
+</div>
+</div>
+</div>
+</div>
+<!-- Specialized Tests -->
+<div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+<div class="border border-outline-variant rounded-lg p-4">
+<h4 class="text-xs font-bold uppercase text-on-surface-variant mb-4 flex items-center gap-2">
+<span class="material-symbols-outlined text-sm">monitor_heart</span>
+                                    Arco Doloroso (70° y 120°)
+                                </h4>
+<div class="flex gap-6 items-start">
+<div class="flex flex-col gap-3">
+<label class="flex items-center gap-2 text-sm"><input class="rounded" type="checkbox"/> Presente Dx</label>
+<label class="flex items-center gap-2 text-sm"><input class="rounded" type="checkbox"/> Presente Ix</label>
+<label class="flex items-center gap-2 text-sm mt-2 font-bold text-secondary"><input class="rounded" type="checkbox"/> Ausente</label>
+</div>
+<div class="flex-1 bg-surface-container-low rounded p-2 flex justify-center">
+<img class="h-24 mix-blend-multiply" data-alt="Technical medical diagram of the painful arc of the shoulder joint, highlighting the zone between 70 and 120 degrees of elevation. Simplified blue line art, clinical documentation style, professional aesthetic." src="https://lh3.googleusercontent.com/aida-public/AB6AXuB6YPU20dtVbFDvkhrJHRKte0ixsvCTewlGkEtVxpfM6HaBREfcsv_EpaVT0Wha0rywwVN2GtKsDxeE6_XiL3oRvG9JiqpEQSFT9vL4KAWLLw8wsjJRCd342AtB-LjPEWReaViYWCaf2wz-hKFJZI5M6RZ2p6l4zSb8Mt7PTp0iAdp5S1F6Ne8CwUlpOKwJBWjk-dRHS8MmmFXhHQrtiiotgobWCyxMaO_CNrbdo1k2ACMCfXrdxKRfXKXgogXs6KoxdiIVGTfLl0WD"/>
+</div>
+</div>
+</div>
+<div class="border border-outline-variant rounded-lg p-4">
+<h4 class="text-xs font-bold uppercase text-on-surface-variant mb-4 flex items-center gap-2">
+<span class="material-symbols-outlined text-sm">pixel_fold</span>
+                                    Test Tendinitis Bíceps
+                                </h4>
+<div class="flex gap-6 items-start">
+<div class="flex flex-col gap-3">
+<label class="flex items-center gap-2 text-sm"><input class="rounded" type="checkbox"/> Dolor Ausente</label>
+<label class="flex items-center gap-2 text-sm"><input class="rounded" type="checkbox"/> Presencia Dx</label>
+<label class="flex items-center gap-2 text-sm"><input class="rounded" type="checkbox"/> Presencia Ix</label>
+</div>
+<div class="flex-1 bg-surface-container-low rounded p-2 flex justify-center">
+<img class="h-24 mix-blend-multiply" data-alt="Anatomical illustration showing the Speed's test for biceps tendonitis, hands applying pressure to the patient's forearm. Medical procedure diagram, minimalist technical style, clinical blue tones." src="https://lh3.googleusercontent.com/aida-public/AB6AXuAubpERNtb21XvVYCSqv3RVr-YXHq--OleUdPSgJ0vdOR4azbmF7f2XsipQotwncSoboDiNkGTc0jke6cMqKMwmwkFFvxtA7RVF8KOcJoRjHKU2_DXQWooX9AL7vKCxcRgTS3czo1DRFHybpWySjSIDpI-KXaAZae9I5Bmvecgy2SyICTYIx6amW_cznrRvIXbxXxMaLmjrPRKamCitV0G6tSGWX-8XFAN9CMxBAcZSPiS2OxzG8OZ6R7gTFTc1RUPbPw-q6nY_HbG9"/>
+</div>
+</div>
+</div>
+</div>
+<!-- Instrumentation & Gravity -->
+<div class="grid grid-cols-1 md:grid-cols-3 gap-6 pt-4">
+<div class="md:col-span-2 bg-surface-container-low p-4 rounded-lg">
+<p class="text-xs font-bold uppercase text-on-surface-variant mb-4">Examen Instrumental</p>
+<div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+<label class="flex items-center gap-2 text-xs"><input class="rounded" type="checkbox"/> No Realizó</label>
+<div class="flex items-center gap-2">
+<input class="rounded" type="checkbox"/>
+<span class="text-xs">ECO (año)</span>
+<input class="w-12 border-b border-outline-variant bg-transparent text-xs focus:ring-0 outline-none" type="text"/>
+</div>
+<div class="flex items-center gap-2">
+<input class="rounded" type="checkbox"/>
+<span class="text-xs">RX (año)</span>
+<input class="w-12 border-b border-outline-variant bg-transparent text-xs focus:ring-0 outline-none" type="text"/>
+</div>
+<div class="flex items-center gap-2">
+<input class="rounded" type="checkbox"/>
+<span class="text-xs">RMN (año)</span>
+<input class="w-12 border-b border-outline-variant bg-transparent text-xs focus:ring-0 outline-none" type="text"/>
+</div>
+</div>
+</div>
+<div class="bg-primary text-white p-4 rounded-lg flex flex-col justify-between">
+<p class="text-xs font-bold uppercase mb-4 opacity-80">Gravedad Patología</p>
+<div class="flex justify-between items-center">
+<label class="flex flex-col items-center gap-1 cursor-pointer">
+<input class="w-4 h-4 bg-white border-none text-primary-container focus:ring-offset-0" name="severity" type="radio"/>
+<span class="text-[10px] font-bold">LEVE</span>
+</label>
+<label class="flex flex-col items-center gap-1 cursor-pointer">
+<input class="w-4 h-4 bg-white border-none text-primary-container focus:ring-offset-0" name="severity" type="radio"/>
+<span class="text-[10px] font-bold">MEDIA</span>
+</label>
+<label class="flex flex-col items-center gap-1 cursor-pointer">
+<input class="w-4 h-4 bg-white border-none text-primary-container focus:ring-offset-0" name="severity" type="radio"/>
+<span class="text-[10px] font-bold">GRAVE</span>
+</label>
+</div>
+</div>
+</div>
+</div>
+</section>
+<!-- Subsection B: Codo -->
+<section class="bg-white border border-outline-variant rounded-lg shadow-sm overflow-hidden mb-12">
+<div class="bg-surface-container-low px-6 py-4 border-b border-outline-variant flex justify-between items-center">
+<h3 class="font-headline-sm text-headline-sm text-primary">b) CODO</h3>
+<label class="flex items-center gap-2 cursor-pointer">
+<span class="font-label-md text-on-surface-variant">REALIZA MANIOBRAS</span>
+<input checked="" class="w-5 h-5 rounded text-primary focus:ring-primary border-outline-variant" type="checkbox"/>
+<span class="font-bold text-primary">SI</span>
+</label>
+</div>
+<div class="p-6 space-y-8">
+<!-- Initial Inputs -->
+<div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+<div class="space-y-2">
+<label class="block text-xs font-bold text-on-surface-variant uppercase tracking-wider">Molestia Codo Dx desde (meses)</label>
+<input class="w-full border border-outline-variant rounded p-3 focus:ring-1 focus:ring-primary outline-none" placeholder="0" type="number"/>
+</div>
+<div class="space-y-2">
+<label class="block text-xs font-bold text-on-surface-variant uppercase tracking-wider">Molestia Codo Ix desde (meses)</label>
+<input class="w-full border border-outline-variant rounded p-3 focus:ring-1 focus:ring-primary outline-none" placeholder="0" type="number"/>
+</div>
+</div>
+<!-- Inspección -->
+<div class="bg-surface-container-low p-4 rounded-lg">
+<p class="text-xs font-bold uppercase text-on-surface-variant mb-4">Observación e Inspección</p>
+<div class="flex flex-wrap items-center gap-8">
+<div class="flex items-center gap-4">
+<span class="text-xs font-semibold">Edema Localizado:</span>
+<label class="flex items-center gap-1.5 text-xs"><input class="rounded" type="checkbox"/> Dx</label>
+<label class="flex items-center gap-1.5 text-xs"><input class="rounded" type="checkbox"/> Ix</label>
+</div>
+<div class="flex-1 flex items-center gap-3">
+<span class="text-xs font-semibold">Sitio:</span>
+<input class="flex-1 bg-transparent border-b border-outline-variant text-xs focus:ring-0 outline-none py-1" placeholder="Indicar localización específica..." type="text"/>
+</div>
+<div class="flex items-center gap-4">
+<span class="text-xs font-semibold">Edema No Localizado:</span>
+<label class="flex items-center gap-1.5 text-xs"><input class="rounded" type="checkbox"/> Dx</label>
+<label class="flex items-center gap-1.5 text-xs"><input class="rounded" type="checkbox"/> Ix</label>
+</div>
+</div>
+</div>
+<!-- Palpación Codo Table with Image -->
+<div class="grid grid-cols-1 md:grid-cols-2 gap-8 items-center">
+<div class="bg-white border border-outline-variant rounded-lg p-6 flex justify-center">
+<img class="max-h-48 object-contain mix-blend-multiply" data-alt="Highly detailed medical diagram of the human elbow joint being palpated by a clinician's hands, focusing on the epicondyle and olecranon areas. Accurate clinical line drawing, professional documentation style, sterile light mode background." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDNlro_cBU2JvKBk-qmhMOEDK-HJBHqJFPON3B7Rk1uSMjTBHLf0moeUFNogvLERt3cN9sbBPC3aHVV6bjVr5nnoWNSO6f8o5oRJ6v7h_tuUi5OnAA-4El1wb-XiX-tf4ZAtkiatXrHMNUJYQPbflPaobHcQ-HFjXws1hdHd4mGr206YjfYZLsZDykELGWwOyqjdmXbSPGUckoYePIpTFPqF307CndLXGFAARLlq6wDdJ506jvw69D207Owbbt-4GXugaW0YnZXEJas"/>
+</div>
+<table class="w-full border-collapse border border-outline-variant">
+<thead>
+<tr class="bg-surface-container-low">
+<th class="border border-outline-variant p-3 text-left text-[10px] font-bold uppercase text-on-surface-variant">Zona de Palpación</th>
+<th class="border border-outline-variant p-3 text-center text-[10px] font-bold uppercase text-on-surface-variant">Dx</th>
+<th class="border border-outline-variant p-3 text-center text-[10px] font-bold uppercase text-on-surface-variant">Ix</th>
+</tr>
+</thead>
+<tbody class="text-sm">
+<tr>
+<td class="border border-outline-variant p-3 text-on-surface font-medium">Dolor Epicóndilo (Lateral)</td>
+<td class="border border-outline-variant p-3 text-center"><input class="rounded" type="checkbox"/></td>
+<td class="border border-outline-variant p-3 text-center"><input class="rounded" type="checkbox"/></td>
+</tr>
+<tr>
+<td class="border border-outline-variant p-3 text-on-surface font-medium">Dolor Epitróclea (Medial)</td>
+<td class="border border-outline-variant p-3 text-center"><input class="rounded" type="checkbox"/></td>
+<td class="border border-outline-variant p-3 text-center"><input class="rounded" type="checkbox"/></td>
+</tr>
+<tr>
+<td class="border border-outline-variant p-3 text-on-surface font-medium">Dolor Olécranon</td>
+<td class="border border-outline-variant p-3 text-center"><input class="rounded" type="checkbox"/></td>
+<td class="border border-outline-variant p-3 text-center"><input class="rounded" type="checkbox"/></td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="flex justify-between items-center text-[10px] text-outline font-bold uppercase pt-4 border-t border-outline-variant">
+<div>Dx. = Derecho  |  Ix. = Izquierdo</div>
+<div>Fo. JJC-SIG-13-31 Cuestionario anamnesico y evaluación. Rev. 0</div>
+</div>
+</div>
+</section>
+</div>
+</div>
+<!-- Footer / Action Bar -->
+<footer class="h-16 border-t border-outline-variant bg-surface-container-lowest px-margin-desktop flex items-center justify-between shrink-0">
+<div class="flex items-center gap-4 text-xs text-outline font-medium">
+<span class="flex items-center gap-1"><span class="material-symbols-outlined text-sm">schedule</span> Last autosave: 2 mins ago</span>
+<span class="flex items-center gap-1"><span class="material-symbols-outlined text-sm">person</span> User: Dr. Rodriguez</span>
+</div>
+<div class="flex items-center gap-3">
+<button class="px-6 py-2 border border-outline-variant text-on-surface font-bold text-xs uppercase hover:bg-surface-container-low transition-all rounded">Cancel</button>
+<button class="px-8 py-2 bg-primary text-white font-bold text-xs uppercase hover:bg-primary-container transition-all rounded shadow-sm">Save & Continue</button>
+</div>
+</footer>
+</main>
+<script>
+        // Simple micro-interactions for the checkboxes
+        document.querySelectorAll('input[type="checkbox"]').forEach(checkbox => {
+            checkbox.addEventListener('change', function() {
+                if(this.checked) {
+                    this.parentElement.classList.add('text-primary');
+                } else {
+                    this.parentElement.classList.remove('text-primary');
+                }
+            });
+        });
+
+        // Dashboard active state detection logic (Simplified for static template)
+        const currentPath = "Clinical Entry"; // Hardcoded for this generation
+        document.querySelectorAll('nav a').forEach(link => {
+            if(link.textContent.includes(currentPath)) {
+                // Classes are already applied via Tailwind in HTML for demonstration
+            }
+        });
+    </script>
+</body></html>
