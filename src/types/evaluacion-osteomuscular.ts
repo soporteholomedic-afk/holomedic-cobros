@@ -140,6 +140,70 @@ export interface ManiobraClicDedosGatillo {
   clicExtensionDedos: ClicExtensionDedos;
 }
 
+export interface FinkelsteinMuneca {
+  dolorTabaqueraAnatomica: DxIxBool;
+}
+
+export interface FlexoExtensionMuneca {
+  dolorFlexionContraResistencia: DxIxBool;
+  dolorFlexionPasiva: DxIxBool;
+  dolorExtensionContraResistencia: DxIxBool;
+  dolorExtensionPasiva: DxIxBool;
+}
+
+export interface DolorPresionPalpacionProximal {
+  apofisisEspinosa: boolean;
+  mTrapecioSuperior: boolean;
+  mParavertebral: boolean;
+}
+
+export interface DolorMovimientoProximal {
+  flexion: boolean;
+  extension: boolean;
+  inclinacionDerecha: boolean;
+  inclinacionIzquierda: boolean;
+  rotacionDerecha: boolean;
+  rotacionIzquierda: boolean;
+}
+
+export interface ParestesiaNerviosa {
+  nervioMediano: DxIxBool;
+  nervioUlnar: DxIxBool;
+  noTerritorializada: DxIxBool;
+}
+
+export interface RegionProximalParestesica {
+  dolorPresionPalpacion: DolorPresionPalpacionProximal;
+  dolorMovimiento: DolorMovimientoProximal;
+  testFatiga: { parestesia: DxIxBool };
+  testCandelero: { parestesia: DxIxBool };
+}
+
+export interface RegionDistalParestesica {
+  testPhalen: { parestesia: ParestesiaNerviosa };
+  testPresion: { parestesia: ParestesiaNerviosa };
+}
+
+export interface ExamenInstrumentalMuneca {
+  noRealizado: boolean;
+  ecografia: boolean;
+  ecografiaAno: number | null;
+  rx: boolean;
+  rxAno: number | null;
+  rmn: boolean;
+  rmnAno: number | null;
+  emg: boolean;
+  emgAno: number | null;
+}
+
+export interface SintomatologiaParestesica {
+  regionProximal: RegionProximalParestesica;
+  regionDistal: RegionDistalParestesica;
+  examenInstrumental: ExamenInstrumentalMuneca;
+  gravedadPatologiaManoMuneca: GravedadPatologia | null;
+  aproximacionDiagnosticaEvaluacion: string;
+}
+
 export interface MunecaMano {
   realizaManiobras: boolean;
   molestiaMunecaDxDesdeMeses: number | null;
@@ -147,6 +211,9 @@ export interface MunecaMano {
   observacionManoMuneca: ObservacionManoMuneca;
   palpacion: PalpacionMunecaMano;
   maniobraClicDedosGatillo: ManiobraClicDedosGatillo;
+  finkelstein: FinkelsteinMuneca;
+  flexoExtensionMuneca: FlexoExtensionMuneca;
+  sintomatologiaParestesica: SintomatologiaParestesica;
 }
 
 // ---- Agregado: Miembros Superiores ----

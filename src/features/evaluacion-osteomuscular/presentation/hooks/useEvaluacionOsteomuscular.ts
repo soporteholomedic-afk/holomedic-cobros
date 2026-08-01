@@ -23,6 +23,13 @@ import type {
   ClicExtensionDedos,
   DedosCheck,
   ManiobraClicDedosGatillo,
+  FinkelsteinMuneca,
+  FlexoExtensionMuneca,
+  RegionProximalParestesica,
+  RegionDistalParestesica,
+  ParestesiaNerviosa,
+  ExamenInstrumentalMuneca,
+  SintomatologiaParestesica,
 } from '@/types/evaluacion-osteomuscular';
 
 function initialDxIxBool() {
@@ -158,6 +165,78 @@ function initialManiobraClicDedosGatillo(): ManiobraClicDedosGatillo {
   return { clicExtensionDedos: initialClicExtensionDedos() };
 }
 
+function initialFinkelsteinMuneca(): FinkelsteinMuneca {
+  return { dolorTabaqueraAnatomica: initialDxIxBool() };
+}
+
+function initialFlexoExtensionMuneca(): FlexoExtensionMuneca {
+  return {
+    dolorFlexionContraResistencia: initialDxIxBool(),
+    dolorFlexionPasiva: initialDxIxBool(),
+    dolorExtensionContraResistencia: initialDxIxBool(),
+    dolorExtensionPasiva: initialDxIxBool(),
+  };
+}
+
+function initialParestesiaNerviosa(): ParestesiaNerviosa {
+  return {
+    nervioMediano: initialDxIxBool(),
+    nervioUlnar: initialDxIxBool(),
+    noTerritorializada: initialDxIxBool(),
+  };
+}
+
+function initialRegionProximalParestesica(): RegionProximalParestesica {
+  return {
+    dolorPresionPalpacion: {
+      apofisisEspinosa: false,
+      mTrapecioSuperior: false,
+      mParavertebral: false,
+    },
+    dolorMovimiento: {
+      flexion: false,
+      extension: false,
+      inclinacionDerecha: false,
+      inclinacionIzquierda: false,
+      rotacionDerecha: false,
+      rotacionIzquierda: false,
+    },
+    testFatiga: { parestesia: initialDxIxBool() },
+    testCandelero: { parestesia: initialDxIxBool() },
+  };
+}
+
+function initialRegionDistalParestesica(): RegionDistalParestesica {
+  return {
+    testPhalen: { parestesia: initialParestesiaNerviosa() },
+    testPresion: { parestesia: initialParestesiaNerviosa() },
+  };
+}
+
+function initialExamenInstrumentalMuneca(): ExamenInstrumentalMuneca {
+  return {
+    noRealizado: false,
+    ecografia: false,
+    ecografiaAno: null,
+    rx: false,
+    rxAno: null,
+    rmn: false,
+    rmnAno: null,
+    emg: false,
+    emgAno: null,
+  };
+}
+
+function initialSintomatologiaParestesica(): SintomatologiaParestesica {
+  return {
+    regionProximal: initialRegionProximalParestesica(),
+    regionDistal: initialRegionDistalParestesica(),
+    examenInstrumental: initialExamenInstrumentalMuneca(),
+    gravedadPatologiaManoMuneca: null,
+    aproximacionDiagnosticaEvaluacion: '',
+  };
+}
+
 function initialMunecaMano(): MunecaMano {
   return {
     realizaManiobras: false,
@@ -166,6 +245,9 @@ function initialMunecaMano(): MunecaMano {
     observacionManoMuneca: initialObservacionManoMuneca(),
     palpacion: initialPalpacionMunecaMano(),
     maniobraClicDedosGatillo: initialManiobraClicDedosGatillo(),
+    finkelstein: initialFinkelsteinMuneca(),
+    flexoExtensionMuneca: initialFlexoExtensionMuneca(),
+    sintomatologiaParestesica: initialSintomatologiaParestesica(),
   };
 }
 
