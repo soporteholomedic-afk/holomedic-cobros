@@ -14,8 +14,11 @@
         },
         "examenInstrumental": {
           "noRealizado": false,
+          "ecografia": false,
           "ecografiaAno": null,
+          "rx": false,
           "rxAno": null,
+          "emg": false,
           "emgAno": null
         },
         "gravedadPatologiaCodo": null
