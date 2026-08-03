@@ -2,15 +2,22 @@
 
 import type { ReactNode } from 'react';
 import Link from 'next/link';
+import { usePathname } from 'next/navigation';
 import { ArrowLeft, ClipboardList } from 'lucide-react';
 import { useEntrevistaContext } from '@/features/entrevista-osteomuscular/presentation/context/EntrevistaOsteomuscularContext';
+import { RUTAS_PAGINAS_SIN_SHELL } from '@/features/entrevista-osteomuscular/presentation/constants/paginas';
 
 interface EntrevistaLayoutShellProps {
   children: ReactNode;
 }
 
 export function EntrevistaLayoutShell({ children }: EntrevistaLayoutShellProps) {
+  const pathname = usePathname();
   const { idAtencion, atencion, reset } = useEntrevistaContext();
+
+  if (pathname && RUTAS_PAGINAS_SIN_SHELL.test(pathname)) {
+    return <>{children}</>;
+  }
 
   return (
     <div className="min-h-screen bg-gray-50">

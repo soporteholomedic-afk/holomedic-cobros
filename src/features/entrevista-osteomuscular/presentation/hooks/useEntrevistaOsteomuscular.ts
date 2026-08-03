@@ -286,6 +286,10 @@ export function initialEntrevistaState(atencion: AtencionDetalle | null): Entrev
     },
     lumbalgiaAguda: initialLumbalgiaAguda(),
     diagnosticoPatologiaColumna: initialDiagnosticoPatologiaColumna(),
+    medicoEvaluador: {
+      nombreYApellidos: '',
+      fechaEvaluacion: '',
+    },
   };
 }
 

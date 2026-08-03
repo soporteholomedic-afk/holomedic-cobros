@@ -283,6 +283,11 @@ export interface DiagnosticoPatologiaColumna {
   patologiaTraumaLumbosacra: string;
 }
 
+export interface MedicoEvaluador {
+  nombreYApellidos: string;
+  fechaEvaluacion: string;
+}
+
 export interface EntrevistaOsteomuscular {
   idAtencion: string;
   datosGenerales: DatosGenerales;
@@ -298,4 +303,5 @@ export interface EntrevistaOsteomuscular {
   columna: Columna;
   lumbalgiaAguda: LumbalgiaAguda;
   diagnosticoPatologiaColumna: DiagnosticoPatologiaColumna;
+  medicoEvaluador: MedicoEvaluador;
 }

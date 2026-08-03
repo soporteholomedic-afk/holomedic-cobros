@@ -1,395 +1,351 @@
 'use client';
 
-import { useMemo } from 'react';
 import { useEntrevistaContext } from '@/features/entrevista-osteomuscular/presentation/context/EntrevistaOsteomuscularContext';
 import { Paginacion } from './Paginacion';
 
 export function EntrevistaOsteomuscularFormPag4() {
   const { idAtencion, state, setField } = useEntrevistaContext();
 
-  const lumbalgia = useMemo(() => state.lumbalgiaAguda, [state.lumbalgiaAguda]);
-  const diagnostico = useMemo(
-    () => state.diagnosticoPatologiaColumna,
-    [state.diagnosticoPatologiaColumna],
-  );
+  const lumbalgia = state.lumbalgiaAguda;
+  const diagnostico = state.diagnosticoPatologiaColumna;
+  const hernia = state.diagnosticoPatologiaColumna.herniaDiscoLumboSacra;
+  const medico = state.medicoEvaluador;
 
   return (
-    <>
-        {/* Título sección */}
+    <div className="anamnesis-page min-h-screen bg-gray-100 py-6 text-[11px] leading-tight text-black">
+      <form
+        onSubmit={(e) => e.preventDefault()}
+        className="max-w-[850px] mx-auto bg-white p-8 shadow-md border border-gray-300 min-h-[950px] flex flex-col justify-between"
+      >
         <div>
-          <h2 className="text-base font-bold text-slate-800">
-            III.- LUMBALGIA AGUDA Y DIAGNÓSTICO{' '}
-            <span className="font-normal text-sm text-slate-500">
-              (PATOLOGÍA DE LA COLUMNA)
-            </span>
-          </h2>
-        </div>
-
-        {/* ======== SECCIÓN 1: LUMBALGIA AGUDA ======== */}
-        <section className="bg-white border border-slate-200 rounded-xl overflow-hidden">
-          <div className="px-6 py-4 flex justify-between items-center border-b border-slate-200 bg-slate-50">
-            <h3 className="text-lg font-semibold text-sky-700 uppercase tracking-tight">
-              LUMBALGIA AGUDA
-            </h3>
-            <div className="flex gap-6 items-center">
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input
-                  type="radio"
-                  name="lumbalgia-tiene"
-                  className="w-4 h-4 text-sky-600"
-                  checked={lumbalgia.tieneLumbalgiaAguda === true}
-                  onChange={() => setField('lumbalgiaAguda.tieneLumbalgiaAguda', true)}
-                />
-                <span className="font-bold text-sm text-slate-700">SI</span>
-              </label>
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input
-                  type="radio"
-                  name="lumbalgia-tiene"
-                  className="w-4 h-4 text-sky-600"
-                  checked={lumbalgia.tieneLumbalgiaAguda === false}
-                  onChange={() => setField('lumbalgiaAguda.tieneLumbalgiaAguda', false)}
-                />
-                <span className="font-bold text-sm text-slate-700">NO</span>
-              </label>
-            </div>
-          </div>
-
-          <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-6">
-            {/* N° total episodios agudos */}
-            <div className="space-y-1.5">
-              <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider">
-                N° total de episodios agudos
-              </label>
-              <input
-                type="number"
-                min={0}
-                value={lumbalgia.totalEpisodiosAgudos ?? ''}
-                onChange={(e) =>
-                  setField(
-                    'lumbalgiaAguda.totalEpisodiosAgudos',
-                    e.target.value ? Number(e.target.value) : null,
-                  )
-                }
-                className="w-full h-10 border border-slate-200 rounded-lg px-3 text-sm focus:outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-100"
-                placeholder="Ingrese cantidad"
-              />
-            </div>
-
-            {/* N° episodios agudos en el último año */}
-            <div className="md:col-span-2 bg-slate-50/50 p-4 rounded-lg border border-slate-200 space-y-3">
-              <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider">
-                N° episodios agudos en el último año
-              </label>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                {/* Lumbalgia */}
-                <div className="flex items-center gap-3">
-                  <label className="flex items-center gap-2 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      className="rounded text-sky-600"
-                      checked={lumbalgia.episodiosUltimoAno.lumbalgia.aplica}
-                      onChange={(e) =>
-                        setField('lumbalgiaAguda.episodiosUltimoAno.lumbalgia.aplica', e.target.checked)
-                      }
-                    />
-                    <span className="text-sm font-medium text-slate-700">Lumbalgia</span>
-                  </label>
+          {/* SECCIÓN 1: LUMBALGIA AGUDA */}
+          <div className="border border-black mb-6">
+            <div className="bg-[#e6e6e6] border-b border-black p-1.5 flex justify-between items-center font-bold">
+              <div className="text-[12px] uppercase tracking-wide">LUMBALGIA AGUDA</div>
+              <div className="space-x-4 pr-4">
+                <label className="cursor-pointer">
                   <input
-                    type="number"
-                    min={0}
-                    value={lumbalgia.episodiosUltimoAno.lumbalgia.cantidad ?? ''}
-                    onChange={(e) =>
-                      setField(
-                        'lumbalgiaAguda.episodiosUltimoAno.lumbalgia.cantidad',
-                        e.target.value ? Number(e.target.value) : null,
-                      )
-                    }
-                    className="w-20 h-9 border border-slate-200 rounded-lg px-2 text-sm text-center font-bold text-sky-700 focus:outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-100"
-                    placeholder="N°"
-                  />
-                </div>
-
-                {/* Lumbociatalgia */}
-                <div className="flex items-center gap-3">
-                  <label className="flex items-center gap-2 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      className="rounded text-sky-600"
-                      checked={lumbalgia.episodiosUltimoAno.lumbociatalgia.aplica}
-                      onChange={(e) =>
-                        setField('lumbalgiaAguda.episodiosUltimoAno.lumbociatalgia.aplica', e.target.checked)
-                      }
-                    />
-                    <span className="text-sm font-medium text-slate-700">Lumbociatalgia</span>
-                  </label>
+                    type="radio"
+                    name="lumbalgiaAguda.tieneLumbalgiaAguda"
+                    checked={lumbalgia.tieneLumbalgiaAguda === true}
+                    onChange={() => setField('lumbalgiaAguda.tieneLumbalgiaAguda', true)}
+                  />{' '}
+                  SI
+                </label>
+                <label className="cursor-pointer">
                   <input
-                    type="number"
-                    min={0}
-                    value={lumbalgia.episodiosUltimoAno.lumbociatalgia.cantidad ?? ''}
-                    onChange={(e) =>
-                      setField(
-                        'lumbalgiaAguda.episodiosUltimoAno.lumbociatalgia.cantidad',
-                        e.target.value ? Number(e.target.value) : null,
-                      )
-                    }
-                    className="w-20 h-9 border border-slate-200 rounded-lg px-2 text-sm text-center font-bold text-sky-700 focus:outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-100"
-                    placeholder="N°"
-                  />
-                </div>
+                    type="radio"
+                    name="lumbalgiaAguda.tieneLumbalgiaAguda"
+                    checked={lumbalgia.tieneLumbalgiaAguda === false}
+                    onChange={() => setField('lumbalgiaAguda.tieneLumbalgiaAguda', false)}
+                  />{' '}
+                  NO
+                </label>
               </div>
             </div>
 
-            {/* año del 1° episodio */}
-            <div className="space-y-1.5">
-              <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider">
-                Año del 1° episodio
-              </label>
-              <input
-                type="text"
-                value={lumbalgia.anoPrimerEpisodio}
-                onChange={(e) => setField('lumbalgiaAguda.anoPrimerEpisodio', e.target.value)}
-                className="w-full h-10 border border-slate-200 rounded-lg px-3 text-sm focus:outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-100"
-                placeholder="Ej. 2020"
-              />
-            </div>
-
-            {/* N° días de ausencia */}
-            <div className="md:col-span-2 space-y-1.5">
-              <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider">
-                N° de días de ausencia al trabajo por lumbalgia aguda
-              </label>
-              <input
-                type="number"
-                min={0}
-                value={lumbalgia.diasAusenciaTrabajo ?? ''}
-                onChange={(e) =>
-                  setField(
-                    'lumbalgiaAguda.diasAusenciaTrabajo',
-                    e.target.value ? Number(e.target.value) : null,
-                  )
-                }
-                className="w-full h-10 border border-slate-200 rounded-lg px-3 text-sm focus:outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-100"
-                placeholder="Días totales de ausencia"
-              />
-            </div>
-          </div>
-        </section>
-
-        {/* ======== SECCIÓN 2: DIAGNÓSTICO PATOLOGÍA DE LA COLUMNA ======== */}
-        <section className="bg-white border border-slate-200 rounded-xl overflow-hidden">
-          <div className="px-6 py-4 flex justify-between items-center border-b border-slate-200 bg-slate-50">
-            <h3 className="text-lg font-semibold text-sky-700 uppercase tracking-tight">
-              DIAGNÓSTICO PATOLOGÍA DE LA COLUMNA{' '}
-              <span className="font-normal text-sm text-slate-500">(conocido)</span>
-            </h3>
-            <div className="flex gap-6 items-center">
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input
-                  type="radio"
-                  name="diagnostico-conocido"
-                  className="w-4 h-4 text-sky-600"
-                  checked={diagnostico.tieneDiagnosticoConocido === true}
-                  onChange={() =>
-                    setField('diagnosticoPatologiaColumna.tieneDiagnosticoConocido', true)
-                  }
-                />
-                <span className="font-bold text-sm text-slate-700">SI</span>
-              </label>
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input
-                  type="radio"
-                  name="diagnostico-conocido"
-                  className="w-4 h-4 text-sky-600"
-                  checked={diagnostico.tieneDiagnosticoConocido === false}
-                  onChange={() =>
-                    setField('diagnosticoPatologiaColumna.tieneDiagnosticoConocido', false)
-                  }
-                />
-                <span className="font-bold text-sm text-slate-700">NO</span>
-              </label>
-            </div>
-          </div>
-
-          <div className="p-6 space-y-8">
-            {/* Hernia de Disco Lumbo Sacra */}
-            <div className="p-5 border border-slate-200 rounded-lg bg-white">
-              <h4 className="text-sm font-bold text-sky-700 mb-4 uppercase tracking-wide">
-                HERNIA DE DISCO LUMBO SACRA
-              </h4>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-6">
-                {/* Diagnosticada */}
-                <label className="flex items-center gap-3 cursor-pointer h-10">
-                  <input
-                    type="checkbox"
-                    className="w-5 h-5 rounded text-sky-600"
-                    checked={diagnostico.herniaDiscoLumboSacra.diagnosticada}
-                    onChange={(e) =>
-                      setField(
-                        'diagnosticoPatologiaColumna.herniaDiscoLumboSacra.diagnosticada',
-                        e.target.checked,
-                      )
-                    }
-                  />
-                  <span className="text-sm font-semibold text-slate-700 uppercase">
-                    DIAGNOSTICADA
-                  </span>
-                </label>
-
-                {/* Tratada quirúrgicamente + Cuándo + Fecha */}
-                <div className="space-y-4">
-                  <label className="flex items-center gap-3 cursor-pointer">
+            <table className="w-full border-collapse">
+              <tbody>
+                <tr className="border-b border-black">
+                  <td className="w-[45%] p-1.5 border-r border-black font-normal">
+                    N° total de episodios agudos
+                  </td>
+                  <td className="w-[55%] p-1">
                     <input
-                      type="checkbox"
-                      className="w-5 h-5 rounded text-sky-600"
-                      checked={diagnostico.herniaDiscoLumboSacra.tratadaQuirurgicamente}
+                      type="number"
+                      min={0}
+                      value={lumbalgia.totalEpisodiosAgudos ?? ''}
                       onChange={(e) =>
                         setField(
-                          'diagnosticoPatologiaColumna.herniaDiscoLumboSacra.tratadaQuirurgicamente',
-                          e.target.checked,
+                          'lumbalgiaAguda.totalEpisodiosAgudos',
+                          e.target.value ? Number(e.target.value) : null,
                         )
                       }
+                      className="w-full px-1"
                     />
-                    <span className="text-sm font-semibold text-slate-700 uppercase">
-                      TRATADA QUIRÚRGICAMENTE
-                    </span>
-                  </label>
+                  </td>
+                </tr>
 
-                  <div className="pl-8 space-y-3">
-                    <div className="flex items-center gap-3">
-                      <span className="text-xs font-semibold text-slate-500 uppercase whitespace-nowrap">
-                        Cuándo
-                      </span>
+                <tr className="border-b border-black">
+                  <td className="p-1.5 border-r border-black font-normal">
+                    N° episodios agudos en el último año
+                  </td>
+                  <td className="p-1 flex items-center space-x-6">
+                    <div className="flex items-center space-x-1">
                       <input
-                        type="text"
-                        value={diagnostico.herniaDiscoLumboSacra.cuando}
+                        type="checkbox"
+                        checked={lumbalgia.episodiosUltimoAno.lumbalgia.aplica}
+                        onChange={(e) =>
+                          setField('lumbalgiaAguda.episodiosUltimoAno.lumbalgia.aplica', e.target.checked)
+                        }
+                      />
+                      <label className="cursor-pointer">lumbalgia</label>
+                      <input
+                        type="number"
+                        min={0}
+                        value={lumbalgia.episodiosUltimoAno.lumbalgia.cantidad ?? ''}
                         onChange={(e) =>
                           setField(
-                            'diagnosticoPatologiaColumna.herniaDiscoLumboSacra.cuando',
-                            e.target.value,
+                            'lumbalgiaAguda.episodiosUltimoAno.lumbalgia.cantidad',
+                            e.target.value ? Number(e.target.value) : null,
                           )
                         }
-                        className="flex-1 h-9 border border-slate-200 rounded-lg px-3 text-sm focus:outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-100"
-                        placeholder="Lugar o situación"
+                        className="dotted-input w-16 text-center"
+                        placeholder="N°"
                       />
                     </div>
 
-                    <div className="flex items-center gap-3">
-                      <span className="text-xs font-semibold text-slate-500 uppercase whitespace-nowrap">
-                        Fecha de intervención
-                      </span>
+                    <div className="flex items-center space-x-1">
                       <input
-                        type="date"
-                        value={diagnostico.herniaDiscoLumboSacra.fechaIntervencion}
+                        type="checkbox"
+                        checked={lumbalgia.episodiosUltimoAno.lumbociatalgia.aplica}
                         onChange={(e) =>
                           setField(
-                            'diagnosticoPatologiaColumna.herniaDiscoLumboSacra.fechaIntervencion',
-                            e.target.value,
+                            'lumbalgiaAguda.episodiosUltimoAno.lumbociatalgia.aplica',
+                            e.target.checked,
                           )
                         }
-                        className="flex-1 h-9 border border-slate-200 rounded-lg px-3 text-sm focus:outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-100"
+                      />
+                      <label className="cursor-pointer">lumbociatalgia</label>
+                      <input
+                        type="number"
+                        min={0}
+                        value={lumbalgia.episodiosUltimoAno.lumbociatalgia.cantidad ?? ''}
+                        onChange={(e) =>
+                          setField(
+                            'lumbalgiaAguda.episodiosUltimoAno.lumbociatalgia.cantidad',
+                            e.target.value ? Number(e.target.value) : null,
+                          )
+                        }
+                        className="dotted-input w-16 text-center"
+                        placeholder="N°"
                       />
                     </div>
+                  </td>
+                </tr>
+
+                <tr className="border-b border-black">
+                  <td className="p-1.5 border-r border-black font-normal">año del 1° episodio</td>
+                  <td className="p-1">
+                    <input
+                      type="text"
+                      value={lumbalgia.anoPrimerEpisodio}
+                      onChange={(e) => setField('lumbalgiaAguda.anoPrimerEpisodio', e.target.value)}
+                      className="w-full px-1"
+                      placeholder="Ej. 2020"
+                    />
+                  </td>
+                </tr>
+
+                <tr>
+                  <td className="p-1.5 border-r border-black font-normal">
+                    N° de días de ausencia al trabajo por lumbalgia aguda
+                  </td>
+                  <td className="p-1">
+                    <input
+                      type="number"
+                      min={0}
+                      value={lumbalgia.diasAusenciaTrabajo ?? ''}
+                      onChange={(e) =>
+                        setField(
+                          'lumbalgiaAguda.diasAusenciaTrabajo',
+                          e.target.value ? Number(e.target.value) : null,
+                        )
+                      }
+                      className="w-full px-1"
+                    />
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          {/* SECCIÓN 2: DIAGNOSTICO PATOLOGIA DE LA COLUMNA */}
+          <div className="border border-black mb-12">
+            <div className="bg-[#d9e1f2] border-b border-black p-1.5 flex justify-between items-center font-bold">
+              <div className="text-[#b25900] text-[12px] uppercase">
+                DIAGNOSTICO PATOLOGIA DE LA COLUMNA{' '}
+                <span className="font-normal text-[11px] text-[#b25900]">(conocido)</span>
+              </div>
+              <div className="text-black space-x-4 pr-4">
+                <label className="cursor-pointer">
+                  <input
+                    type="radio"
+                    name="diagnosticoPatologiaColumna.tieneDiagnosticoConocido"
+                    checked={diagnostico.tieneDiagnosticoConocido === true}
+                    onChange={() =>
+                      setField('diagnosticoPatologiaColumna.tieneDiagnosticoConocido', true)
+                    }
+                  />{' '}
+                  SI
+                </label>
+                <label className="cursor-pointer">
+                  <input
+                    type="radio"
+                    name="diagnosticoPatologiaColumna.tieneDiagnosticoConocido"
+                    checked={diagnostico.tieneDiagnosticoConocido === false}
+                    onChange={() =>
+                      setField('diagnosticoPatologiaColumna.tieneDiagnosticoConocido', false)
+                    }
+                  />{' '}
+                  NO
+                </label>
+              </div>
+            </div>
+
+            <div className="p-4 space-y-4">
+              {/* Hernia de Disco */}
+              <div className="space-y-2">
+                <div className="font-bold text-[11px]">HERNIA DE DISCO LUMBO SACRA</div>
+                <div className="pl-4 space-y-1.5">
+                  <div>
+                    <label className="cursor-pointer">
+                      <input
+                        type="checkbox"
+                        className="mr-1"
+                        checked={hernia.diagnosticada}
+                        onChange={(e) =>
+                          setField(
+                            'diagnosticoPatologiaColumna.herniaDiscoLumboSacra.diagnosticada',
+                            e.target.checked,
+                          )
+                        }
+                      />
+                      DIAGNOSTICADA
+                    </label>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <label className="cursor-pointer">
+                      <input
+                        type="checkbox"
+                        className="mr-1"
+                        checked={hernia.tratadaQuirurgicamente}
+                        onChange={(e) =>
+                          setField(
+                            'diagnosticoPatologiaColumna.herniaDiscoLumboSacra.tratadaQuirurgicamente',
+                            e.target.checked,
+                          )
+                        }
+                      />
+                      TRATADA QUIRURGICAMENTE
+                    </label>
+                    <span className="ml-4">Cuando</span>
+                    <input
+                      type="text"
+                      value={hernia.cuando}
+                      onChange={(e) =>
+                        setField(
+                          'diagnosticoPatologiaColumna.herniaDiscoLumboSacra.cuando',
+                          e.target.value,
+                        )
+                      }
+                      className="dotted-input w-48 text-center"
+                    />
+                  </div>
+                  <div className="pt-1 pl-12 flex items-center space-x-2">
+                    <span>Fecha de intervención</span>
+                    <input
+                      type="text"
+                      value={hernia.fechaIntervencion}
+                      onChange={(e) =>
+                        setField(
+                          'diagnosticoPatologiaColumna.herniaDiscoLumboSacra.fechaIntervencion',
+                          e.target.value,
+                        )
+                      }
+                      className="dotted-input w-48 text-center"
+                      placeholder="DD/MM/AAAA"
+                    />
                   </div>
                 </div>
               </div>
-            </div>
 
-            {/* Patología/Trauma por zona de columna */}
-            <div className="space-y-5">
-              <div className="space-y-2">
-                <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider">
-                  Patología/Trauma de la Columna Cervical (Cual/es)
-                </label>
-                <textarea
-                  value={diagnostico.patologiaTraumaCervical}
-                  onChange={(e) =>
-                    setField(
-                      'diagnosticoPatologiaColumna.patologiaTraumaCervical',
-                      e.target.value,
-                    )
-                  }
-                  className="w-full min-h-[80px] border border-slate-200 rounded-lg px-3 py-2 text-sm resize-none focus:outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-100"
-                  placeholder="Describa hallazgos o antecedentes..."
-                />
-              </div>
+              {/* Patología/Trauma por zona de columna */}
+              <div className="space-y-3 pt-2">
+                <div className="flex items-center">
+                  <span className="whitespace-nowrap">
+                    PATOLOGIA/TRAUMA DE LA COLUMNA CERVICAL Cual/s.
+                  </span>
+                  <input
+                    type="text"
+                    value={diagnostico.patologiaTraumaCervical}
+                    onChange={(e) =>
+                      setField('diagnosticoPatologiaColumna.patologiaTraumaCervical', e.target.value)
+                    }
+                    className="dotted-input flex-grow ml-1"
+                  />
+                </div>
 
-              <div className="space-y-2">
-                <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider">
-                  Patología/Trauma de la Columna Dorsal (Cual/es)
-                </label>
-                <textarea
-                  value={diagnostico.patologiaTraumaDorsal}
-                  onChange={(e) =>
-                    setField(
-                      'diagnosticoPatologiaColumna.patologiaTraumaDorsal',
-                      e.target.value,
-                    )
-                  }
-                  className="w-full min-h-[80px] border border-slate-200 rounded-lg px-3 py-2 text-sm resize-none focus:outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-100"
-                  placeholder="Describa hallazgos o antecedentes..."
-                />
-              </div>
+                <div className="flex items-center">
+                  <span className="whitespace-nowrap">
+                    PATOLOGIA/TRAUMA DE LA COLUMNA DORSAL. Cual/s.
+                  </span>
+                  <input
+                    type="text"
+                    value={diagnostico.patologiaTraumaDorsal}
+                    onChange={(e) =>
+                      setField('diagnosticoPatologiaColumna.patologiaTraumaDorsal', e.target.value)
+                    }
+                    className="dotted-input flex-grow ml-1"
+                  />
+                </div>
 
-              <div className="space-y-2">
-                <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider">
-                  Patología/Trauma de la Columna Lumbosacra (Cual/es)
-                </label>
-                <textarea
-                  value={diagnostico.patologiaTraumaLumbosacra}
-                  onChange={(e) =>
-                    setField(
-                      'diagnosticoPatologiaColumna.patologiaTraumaLumbosacra',
-                      e.target.value,
-                    )
-                  }
-                  className="w-full min-h-[80px] border border-slate-200 rounded-lg px-3 py-2 text-sm resize-none focus:outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-100"
-                  placeholder="Describa hallazgos o antecedentes..."
-                />
+                <div className="flex items-center">
+                  <span className="whitespace-nowrap">
+                    PATOLOGIA/TRAUMA DE LA COLUMNA LUMBOSACRA Cual/s.
+                  </span>
+                  <input
+                    type="text"
+                    value={diagnostico.patologiaTraumaLumbosacra}
+                    onChange={(e) =>
+                      setField(
+                        'diagnosticoPatologiaColumna.patologiaTraumaLumbosacra',
+                        e.target.value,
+                      )
+                    }
+                    className="dotted-input flex-grow ml-1"
+                  />
+                </div>
               </div>
             </div>
           </div>
-        </section>
 
-        {/* Nota informativa */}
-        <footer className="bg-sky-50/50 border border-sky-100 rounded-xl p-6">
-          <div className="flex items-start gap-3">
-            <span className="mt-0.5 text-sky-600 font-bold text-lg">i</span>
-            <div className="space-y-1 text-xs text-slate-600 leading-relaxed">
-              <p>
-                <span className="font-bold text-slate-800">NB*:</span> umbral anamnésico positivo
-                para <span className="font-bold text-slate-800">LUMBALGIA AGUDA</span> es la
-                presencia de episodio de dolor intenso en la espalda baja que no permite la
-                flexión, inclinación y rotación (&ldquo;lumbago&rdquo;), cuyo comienzo puede ser
-                agudo o insidioso y se prolongó durante al menos 2 días (o uno con tratamiento
-                farmacológico).
-              </p>
-              <p className="italic">
-                Asegúrese de registrar fechas precisas y descripciones detalladas de traumas
-                previos. Esta información es fundamental para determinar el plan de tratamiento
-                ocupacional y las restricciones laborales necesarias.
-              </p>
+          {/* SECCIÓN 3: FIRMA Y DATOS DEL MÉDICO */}
+          <div className="mt-16 w-[320px] text-[10px]">
+            <div className="border-b border-black border-dashed mb-1" />
+            <div className="space-y-0.5">
+              <div className="flex items-center">
+                <span className="w-32">NOMBRE Y APELLIDOS</span>
+                <span>:</span>
+                <input
+                  type="text"
+                  value={medico.nombreYApellidos}
+                  onChange={(e) => setField('medicoEvaluador.nombreYApellidos', e.target.value)}
+                  className="w-full ml-1 outline-none"
+                />
+              </div>
+              <div>FIRMA-SELLO</div>
+              <div>MEDICO EVALUADOR / OCUPACIONAL</div>
+              <div className="flex items-center">
+                <span className="w-12">FECHA</span>
+                <span>:</span>
+                <input
+                  type="text"
+                  value={medico.fechaEvaluacion}
+                  onChange={(e) => setField('medicoEvaluador.fechaEvaluacion', e.target.value)}
+                  className="w-full ml-1 outline-none"
+                  placeholder="DD/MM/AAAA"
+                />
+              </div>
             </div>
-          </div>
-        </footer>
-
-        {/* Pie de página */}
-        <div className="flex justify-between items-center text-[10px] text-slate-400 border-t border-slate-200 pt-4">
-          <div>
-            Fo. JJC-SIG-13-31 Cuestionario anamnésico y evaluación de extremidad superior y
-            espalda. Rev. 0
-          </div>
-          <div className="flex items-center gap-4">
-            <span>HOLOMEDIC SYSTEM v2.4</span>
-            <span className="font-bold text-slate-600">Página 4</span>
           </div>
         </div>
+      </form>
 
-        <Paginacion
-          paginaActual={4}
-          baseUrl={`/areas/musculoesqueletica/jjc/${idAtencion}/entrevista`}
-        />
-    </>
+      <Paginacion
+        paginaActual={4}
+        baseUrl={`/areas/musculoesqueletica/jjc/${idAtencion}/entrevista`}
+      />
+    </div>
   );
 }

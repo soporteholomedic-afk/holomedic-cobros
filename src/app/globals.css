@@ -139,3 +139,50 @@ body {
 .delay-200 {
   animation-delay: 200ms;
 }
+
+/* Entrevista osteomuscular página 1 — replica __temp__/page1.html */
+.anamnesis-page input[type="text"],
+.anamnesis-page input[type="date"],
+.anamnesis-page input[type="number"],
+.anamnesis-page select {
+  background: transparent;
+  outline: none;
+}
+
+.anamnesis-page input[type="text"]:focus,
+.anamnesis-page input[type="date"]:focus,
+.anamnesis-page input[type="number"]:focus,
+.anamnesis-page select:focus {
+  background-color: #f0fdf4;
+}
+
+.anamnesis-page input[type="checkbox"],
+.anamnesis-page input[type="radio"] {
+  cursor: pointer;
+  width: 13px;
+  height: 13px;
+  accent-color: #0070c0;
+  vertical-align: middle;
+}
+
+.anamnesis-page .box-check {
+  width: 13px;
+  height: 13px;
+  border: 1px solid #000;
+  display: inline-block;
+  vertical-align: middle;
+  margin: 0 2px;
+  background-color: #fff;
+}
+
+/* Entrevista página 4 — líneas punteadas (__temp__/page4.html) */
+.anamnesis-page .dotted-input {
+  border-bottom: 1px dotted #000;
+}
+
+/* Entrevista página 3 — controles más pequeños (12px) según __temp__/page3.html */
+.anamnesis-page--page3 input[type="checkbox"],
+.anamnesis-page--page3 input[type="radio"] {
+  width: 12px;
+  height: 12px;
+}
