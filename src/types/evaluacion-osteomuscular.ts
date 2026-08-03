@@ -314,6 +314,49 @@ export interface EvaluacionColumna {
   maniobraPresoPalpacion: ManiobraPresoPalpacionColumna;
 }
 
+// ---- Evaluación Motilidad y Maniobras (page 5) ----
+
+export interface PresenciaDolorMovimiento {
+  flexion: boolean;
+  extension: boolean;
+  inclinacionDx: boolean;
+  inclinacionIx: boolean;
+  rotacionDx: boolean;
+  rotacionIx: boolean;
+}
+
+export interface MotilidadColumna {
+  presenciaDolorMovimiento: PresenciaDolorMovimiento;
+}
+
+export interface EvaluacionMotilidad {
+  columnaCervical: MotilidadColumna;
+  columnaDorsoLumbar: MotilidadColumna;
+}
+
+export interface LasegueSlr {
+  normal: boolean;
+  dx: boolean;
+  ix: boolean;
+  observacion: string;
+}
+
+export interface ManiobraLasegueRetraccionIsquioCrural {
+  lasegueSlr: LasegueSlr;
+  presenciaRetraccionIsquioCrural: boolean;
+}
+
+export interface WassermanLasegueInvertido {
+  dx: boolean;
+  ix: boolean;
+  observacion: string;
+}
+
+export interface ManiobraWassermanRetraccionIleopsoas {
+  wassermanLasegueInvertido: WassermanLasegueInvertido;
+  presenciaRetraccionIleopsoas: boolean;
+}
+
 // ---- Estado global de evaluación ----
 
 export interface EvaluacionOsteomuscular {
@@ -322,4 +365,8 @@ export interface EvaluacionOsteomuscular {
     miembrosSuperiores: MiembrosSuperioresEvaluacion;
   };
   evaluacionColumna: EvaluacionColumna;
+  evaluacionMotilidad: EvaluacionMotilidad;
+  maniobraLasegueRetraccionIsquioCrural: ManiobraLasegueRetraccionIsquioCrural;
+  maniobraWassermanRetraccionIleopsoas: ManiobraWassermanRetraccionIleopsoas;
+  aproximacionDiagnosticaEvaluacion: string;
 }

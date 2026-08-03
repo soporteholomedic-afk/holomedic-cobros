@@ -1,0 +1,455 @@
+<!DOCTYPE html>
+
+<html class="light" lang="es"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Evaluación de Motilidad y Maniobras Especiales - Holomedic</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&amp;family=Hanken+Grotesk:wght@600;700&amp;family=Inter:wght@400;500;600&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "on-error-container": "#93000a",
+                        "on-tertiary-container": "#fafdff",
+                        "surface-container-lowest": "#ffffff",
+                        "outline-variant": "#bfc7d2",
+                        "on-surface-variant": "#404751",
+                        "inverse-primary": "#98cbff",
+                        "error": "#ba1a1a",
+                        "primary": "#006099",
+                        "surface-variant": "#d3e4fe",
+                        "surface-container": "#e5eeff",
+                        "on-tertiary-fixed": "#181c1e",
+                        "tertiary-fixed-dim": "#c4c7c9",
+                        "primary-container": "#007ac0",
+                        "on-background": "#0b1c30",
+                        "on-secondary": "#ffffff",
+                        "on-tertiary": "#ffffff",
+                        "surface-container-high": "#dce9ff",
+                        "surface-bright": "#f8f9ff",
+                        "error-container": "#ffdad6",
+                        "primary-fixed": "#cfe5ff",
+                        "on-error": "#ffffff",
+                        "primary-fixed-dim": "#98cbff",
+                        "secondary": "#545e75",
+                        "secondary-fixed": "#d8e2fd",
+                        "secondary-fixed-dim": "#bcc6e0",
+                        "surface-container-highest": "#d3e4fe",
+                        "surface": "#f8f9ff",
+                        "tertiary-container": "#717577",
+                        "outline": "#707882",
+                        "on-primary-container": "#fdfcff",
+                        "tertiary-fixed": "#e0e3e5",
+                        "secondary-container": "#d8e2fd",
+                        "inverse-surface": "#213145",
+                        "on-primary-fixed": "#001d33",
+                        "surface-container-low": "#eff4ff",
+                        "tertiary": "#585d5e",
+                        "surface-dim": "#cbdbf5",
+                        "on-tertiary-fixed-variant": "#434749",
+                        "on-secondary-fixed": "#111c2f",
+                        "on-primary-fixed-variant": "#004a77",
+                        "on-primary": "#ffffff",
+                        "on-surface": "#0b1c30",
+                        "inverse-on-surface": "#eaf1ff",
+                        "on-secondary-container": "#5a647b",
+                        "surface-tint": "#00629d",
+                        "on-secondary-fixed-variant": "#3d475c",
+                        "background": "#f8f9ff"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.125rem",
+                        "lg": "0.25rem",
+                        "xl": "0.5rem",
+                        "full": "0.75rem"
+                    },
+                    "spacing": {
+                        "gutter": "24px",
+                        "margin-desktop": "32px",
+                        "container-max": "1440px",
+                        "baseline": "4px",
+                        "sidebar-width": "260px",
+                        "margin-mobile": "16px"
+                    },
+                    "fontFamily": {
+                        "label-sm": ["Geist"],
+                        "label-md": ["Geist"],
+                        "headline-sm": ["Hanken Grotesk"],
+                        "headline-md": ["Hanken Grotesk"],
+                        "headline-lg-mobile": ["Hanken Grotesk"],
+                        "body-lg": ["Inter"],
+                        "headline-lg": ["Hanken Grotesk"],
+                        "body-md": ["Inter"]
+                    },
+                    "fontSize": {
+                        "label-sm": ["11px", {"lineHeight": "14px", "fontWeight": "600"}],
+                        "label-md": ["12px", {"lineHeight": "16px", "letterSpacing": "0.05em", "fontWeight": "500"}],
+                        "headline-sm": ["20px", {"lineHeight": "28px", "fontWeight": "600"}],
+                        "headline-md": ["24px", {"lineHeight": "32px", "letterSpacing": "-0.01em", "fontWeight": "600"}],
+                        "headline-lg-mobile": ["24px", {"lineHeight": "32px", "fontWeight": "700"}],
+                        "body-lg": ["16px", {"lineHeight": "24px", "fontWeight": "400"}],
+                        "headline-lg": ["30px", {"lineHeight": "38px", "letterSpacing": "-0.02em", "fontWeight": "700"}],
+                        "body-md": ["14px", {"lineHeight": "20px", "fontWeight": "400"}]
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .scroll-hide::-webkit-scrollbar { display: none; }
+        .scroll-hide { -ms-overflow-style: none; scrollbar-width: none; }
+
+        .clinical-card {
+            background: white;
+            border: 1px solid #E2E8F0;
+            border-radius: 8px;
+            overflow: hidden;
+            transition: border-color 0.2s ease;
+        }
+
+        .clinical-card:hover {
+            border-color: #007DC5;
+        }
+
+        .input-precision:focus {
+            outline: none;
+            border-color: #006099;
+            box-shadow: 0 0 0 2px rgba(0, 96, 153, 0.1);
+        }
+
+        .checkbox-custom {
+            appearance: none;
+            width: 18px;
+            height: 18px;
+            border: 1.5px solid #E2E8F0;
+            border-radius: 4px;
+            background-color: white;
+            cursor: pointer;
+            position: relative;
+            transition: all 0.2s ease;
+        }
+
+        .checkbox-custom:checked {
+            background-color: #006099;
+            border-color: #006099;
+        }
+
+        .checkbox-custom:checked::after {
+            content: 'check';
+            font-family: 'Material Symbols Outlined';
+            font-size: 14px;
+            color: white;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+        }
+    </style>
+</head>
+<body class="bg-surface font-body-md text-on-surface scroll-hide">
+<!-- Sidebar Navigation -->
+<aside class="fixed h-full left-0 w-[260px] bg-secondary dark:bg-inverse-surface border-r border-outline-variant flex flex-col py-6 z-50">
+<div class="px-6 mb-8">
+<h1 class="font-headline-md text-headline-md font-bold text-on-secondary">MSK Assessment</h1>
+<p class="font-label-md text-label-md text-on-secondary/70">Clinical Portal v1.0</p>
+</div>
+<nav class="flex-1 space-y-1">
+<a class="flex items-center px-6 py-3 text-on-secondary hover:bg-secondary-fixed-dim/20 ml-4 rounded-l-full transition-colors duration-200" href="#">
+<span class="material-symbols-outlined mr-3">person</span>
+<span class="font-label-md text-label-md">Patient Overview</span>
+</a>
+<a class="flex items-center px-6 py-3 text-on-secondary hover:bg-secondary-fixed-dim/20 ml-4 rounded-l-full transition-colors duration-200" href="#">
+<span class="material-symbols-outlined mr-3">settings_accessibility</span>
+<span class="font-label-md text-label-md">Mobility Evaluation</span>
+</a>
+<a class="flex items-center px-6 py-3 text-on-secondary hover:bg-secondary-fixed-dim/20 ml-4 rounded-l-full transition-colors duration-200" href="#">
+<span class="material-symbols-outlined mr-3">medical_services</span>
+<span class="font-label-md text-label-md">Special Maneuvers</span>
+</a>
+<a class="flex items-center px-6 py-3 bg-secondary-container text-on-secondary-container font-bold rounded-l-full ml-4 shadow-sm" href="#">
+<span class="material-symbols-outlined mr-3">assignment</span>
+<span class="font-label-md text-label-md">Diagnostic Summary</span>
+</a>
+<a class="flex items-center px-6 py-3 text-on-secondary hover:bg-secondary-fixed-dim/20 ml-4 rounded-l-full transition-colors duration-200" href="#">
+<span class="material-symbols-outlined mr-3">history</span>
+<span class="font-label-md text-label-md">Clinical History</span>
+</a>
+</nav>
+<div class="px-6 pt-6 border-t border-on-secondary/10 space-y-1">
+<a class="flex items-center py-2 text-on-secondary/80 hover:text-white transition-colors" href="#">
+<span class="material-symbols-outlined mr-3" style="font-size: 20px;">help</span>
+<span class="font-label-md text-label-md">Support</span>
+</a>
+<a class="flex items-center py-2 text-on-secondary/80 hover:text-white transition-colors" href="#">
+<span class="material-symbols-outlined mr-3" style="font-size: 20px;">settings</span>
+<span class="font-label-md text-label-md">Settings</span>
+</a>
+<a class="flex items-center py-2 text-error-container hover:text-error transition-colors mt-4" href="#">
+<span class="material-symbols-outlined mr-3" style="font-size: 20px;">logout</span>
+<span class="font-label-md text-label-md">Logout</span>
+</a>
+</div>
+</aside>
+<!-- Top Navigation -->
+<header class="fixed top-0 right-0 w-[calc(100%-260px)] h-16 bg-surface border-b border-outline-variant flex justify-between items-center px-gutter z-40">
+<div class="flex items-center gap-4">
+<span class="font-headline-sm text-headline-sm font-bold text-primary">MSK Mobility Assessment</span>
+<div class="h-6 w-px bg-outline-variant mx-2"></div>
+<div class="bg-surface-container px-3 py-1 rounded text-primary font-bold text-label-md border border-primary/10">
+                Atención #012110635
+            </div>
+</div>
+<div class="flex items-center gap-6">
+<div class="flex items-center gap-4 border-r border-outline-variant pr-6">
+<button class="text-primary font-bold text-label-md hover:opacity-80 transition-opacity">Export PDF</button>
+<button class="bg-primary text-on-primary px-4 py-2 rounded font-bold text-label-md hover:bg-primary-container transition-all active:scale-95 shadow-sm">Save Report</button>
+</div>
+<div class="flex items-center gap-3">
+<button class="text-on-surface-variant hover:text-primary transition-colors">
+<span class="material-symbols-outlined">notifications</span>
+</button>
+<div class="flex items-center gap-2 pl-2">
+<div class="text-right">
+<p class="font-label-md text-on-surface font-bold">Dr. Clinician</p>
+<p class="text-[10px] text-on-surface-variant leading-none uppercase tracking-wider">Occupational Health</p>
+</div>
+<div class="w-8 h-8 rounded-full bg-primary-fixed flex items-center justify-center text-primary font-bold text-xs">
+                        DC
+                    </div>
+</div>
+</div>
+</div>
+</header>
+<!-- Main Content -->
+<main class="ml-[260px] pt-16 min-h-screen">
+<div class="max-w-[1440px] mx-auto p-gutter space-y-8">
+<!-- Page Title Section -->
+<div class="flex justify-between items-end">
+<div>
+<h2 class="font-headline-lg text-headline-lg text-on-surface">Evaluación de Motilidad y Maniobras Especiales</h2>
+<p class="text-on-surface-variant font-body-md mt-1">Examen físico detallado de la columna y maniobras de retracción muscular.</p>
+</div>
+<div class="flex gap-2">
+<span class="px-2 py-1 bg-surface-container-high rounded text-primary font-bold text-[10px] border border-primary/20">PATIENT ID: MSK-9921</span>
+<span class="px-2 py-1 bg-surface-container-high rounded text-primary font-bold text-[10px] border border-primary/20">REV 1.0.2</span>
+</div>
+</div>
+<!-- 1. Evaluación de la Motilidad -->
+<section class="space-y-4">
+<div class="flex items-center gap-3 pb-2 border-b-2 border-primary-container w-max">
+<span class="w-8 h-8 rounded bg-primary text-on-primary flex items-center justify-center font-bold text-label-md">C</span>
+<h3 class="font-headline-sm text-headline-sm text-on-surface">EVALUACIÓN DE LA MOTILIDAD</h3>
+</div>
+<div class="grid grid-cols-2 gap-gutter">
+<!-- Column Cervical -->
+<div class="clinical-card">
+<div class="bg-surface-container-low px-4 py-3 border-b border-outline-variant">
+<h4 class="font-bold text-primary font-label-md tracking-widest uppercase">COLUMNA CERVICAL</h4>
+</div>
+<div class="p-6">
+<p class="font-label-md text-on-surface-variant mb-4 flex items-center">
+<span class="material-symbols-outlined text-sm mr-2 text-primary">report_problem</span>
+                                PRESENCIA DE DOLOR AL MOVIMIENTO
+                            </p>
+<div class="grid grid-cols-2 gap-y-4 gap-x-8">
+<label class="flex items-center cursor-pointer group">
+<input class="checkbox-custom mr-3" type="checkbox"/>
+<span class="font-body-md text-on-surface group-hover:text-primary transition-colors">Flexión</span>
+</label>
+<label class="flex items-center cursor-pointer group">
+<input class="checkbox-custom mr-3" type="checkbox"/>
+<span class="font-body-md text-on-surface group-hover:text-primary transition-colors">Extensión</span>
+</label>
+<label class="flex items-center cursor-pointer group">
+<input class="checkbox-custom mr-3" type="checkbox"/>
+<span class="font-body-md text-on-surface group-hover:text-primary transition-colors">Inclinación Dx</span>
+</label>
+<label class="flex items-center cursor-pointer group">
+<input class="checkbox-custom mr-3" type="checkbox"/>
+<span class="font-body-md text-on-surface group-hover:text-primary transition-colors">Inclinación Ix</span>
+</label>
+<label class="flex items-center cursor-pointer group">
+<input class="checkbox-custom mr-3" type="checkbox"/>
+<span class="font-body-md text-on-surface group-hover:text-primary transition-colors">Rotación Dx</span>
+</label>
+<label class="flex items-center cursor-pointer group">
+<input class="checkbox-custom mr-3" type="checkbox"/>
+<span class="font-body-md text-on-surface group-hover:text-primary transition-colors">Rotación Ix</span>
+</label>
+</div>
+</div>
+</div>
+<!-- Column Dorso Lumbar -->
+<div class="clinical-card">
+<div class="bg-surface-container-low px-4 py-3 border-b border-outline-variant">
+<h4 class="font-bold text-primary font-label-md tracking-widest uppercase">COLUMNA DORSO LUMBAR</h4>
+</div>
+<div class="p-6">
+<p class="font-label-md text-on-surface-variant mb-4 flex items-center">
+<span class="material-symbols-outlined text-sm mr-2 text-primary">report_problem</span>
+                                PRESENCIA DE DOLOR AL MOVIMIENTO
+                            </p>
+<div class="grid grid-cols-2 gap-y-4 gap-x-8">
+<label class="flex items-center cursor-pointer group">
+<input class="checkbox-custom mr-3" type="checkbox"/>
+<span class="font-body-md text-on-surface group-hover:text-primary transition-colors">Flexión</span>
+</label>
+<label class="flex items-center cursor-pointer group">
+<input class="checkbox-custom mr-3" type="checkbox"/>
+<span class="font-body-md text-on-surface group-hover:text-primary transition-colors">Extensión</span>
+</label>
+<label class="flex items-center cursor-pointer group">
+<input class="checkbox-custom mr-3" type="checkbox"/>
+<span class="font-body-md text-on-surface group-hover:text-primary transition-colors">Inclinación Dx</span>
+</label>
+<label class="flex items-center cursor-pointer group">
+<input class="checkbox-custom mr-3" type="checkbox"/>
+<span class="font-body-md text-on-surface group-hover:text-primary transition-colors">Inclinación Ix</span>
+</label>
+<label class="flex items-center cursor-pointer group">
+<input class="checkbox-custom mr-3" type="checkbox"/>
+<span class="font-body-md text-on-surface group-hover:text-primary transition-colors">Rotación Dx</span>
+</label>
+<label class="flex items-center cursor-pointer group">
+<input class="checkbox-custom mr-3" type="checkbox"/>
+<span class="font-body-md text-on-surface group-hover:text-primary transition-colors">Rotación Ix</span>
+</label>
+</div>
+</div>
+</div>
+</div>
+</section>
+<!-- 2 & 3. Maniobras Especiales (Bento Layout) -->
+<div class="grid grid-cols-12 gap-gutter">
+<!-- Maniobra de Lasègue -->
+<div class="col-span-6 space-y-4">
+<div class="flex items-center gap-3 pb-2 border-b-2 border-primary-container w-max">
+<span class="w-8 h-8 rounded bg-primary text-on-primary flex items-center justify-center font-bold text-label-md">D</span>
+<h3 class="font-headline-sm text-headline-sm text-on-surface">MANIOBRA DE LASEGUE</h3>
+</div>
+<div class="clinical-card flex flex-col h-full">
+<div class="relative w-full h-48 bg-white p-4 flex items-center justify-center border-b border-outline-variant overflow-hidden">
+<img class="h-full object-contain" data-alt="A clean, minimalist medical diagram of the Lasègue test. A human figure is lying flat on their back on a clinical examination table. One leg is being raised straight upwards at a 45-degree angle to illustrate the Straight Leg Raise (SLR) test. The background is a soft, high-key white, with professional line art style in primary blue and charcoal grey, matching a corporate medical UI aesthetic." src="https://lh3.googleusercontent.com/aida-public/AB6AXuATwvVsDRtLoM6R95dhHRx0AhoJNWpbdkQRxAudiHyp7LCbvR6oEDGYF39sjYfTVPQFV9sXJVlfD_rvRqJEDOUaOrVGbCJBMGJ7aq2K_gwkX3uvGbyedLZq-1ugiF7GRDpSe08CzkkJPv_8NNc22Y-4-BUi8sam6r8EBtuwjNiel3tMBI2PeHdDwJzUol-RNUF4qbtd5M9nRNhpTJ7OZej0tfK0s9zefcSg8SNOL692FGV8zZZEG4qD8xjrL2s-H5hZljKQM_-Yj5_A"/>
+<div class="absolute bottom-2 right-4 text-[10px] text-on-surface-variant font-bold uppercase tracking-tighter bg-white/80 px-1">REF: SLR_ISO_21</div>
+</div>
+<div class="p-6 space-y-6">
+<div class="space-y-4">
+<p class="font-label-md text-on-surface-variant uppercase tracking-widest">Lasègue / SLR Results</p>
+<div class="flex gap-6">
+<label class="flex items-center cursor-pointer">
+<input class="w-4 h-4 text-primary border-outline focus:ring-primary/20" name="lasegue" type="radio"/>
+<span class="ml-2 font-body-md font-medium">Normal</span>
+</label>
+<label class="flex items-center cursor-pointer">
+<input class="w-4 h-4 text-primary border-outline focus:ring-primary/20" name="lasegue" type="radio"/>
+<span class="ml-2 font-body-md font-medium">Derecho (Dx)</span>
+</label>
+<label class="flex items-center cursor-pointer">
+<input class="w-4 h-4 text-primary border-outline focus:ring-primary/20" name="lasegue" type="radio"/>
+<span class="ml-2 font-body-md font-medium">Izquierdo (Ix)</span>
+</label>
+</div>
+</div>
+<div class="pt-4 border-t border-outline-variant">
+<label class="flex items-center cursor-pointer group bg-surface-container-low p-3 rounded border border-outline-variant/30 hover:border-primary/50 transition-all">
+<input class="checkbox-custom mr-3" type="checkbox"/>
+<span class="font-label-md font-bold text-on-surface uppercase tracking-wide">Presencia de retracción isquio crural</span>
+</label>
+</div>
+</div>
+</div>
+</div>
+<!-- Maniobra de Wasserman -->
+<div class="col-span-6 space-y-4">
+<div class="flex items-center gap-3 pb-2 border-b-2 border-primary-container w-max">
+<span class="w-8 h-8 rounded bg-primary text-on-primary flex items-center justify-center font-bold text-label-md">E</span>
+<h3 class="font-headline-sm text-headline-sm text-on-surface">MANIOBRA DE WASSERMAN</h3>
+</div>
+<div class="clinical-card flex flex-col h-full">
+<div class="relative w-full h-48 bg-white p-4 flex items-center justify-center border-b border-outline-variant overflow-hidden">
+<img class="h-full object-contain" data-alt="A technical medical illustration of the Wasserman maneuver. A human figure is lying face down (prone position) on a clinical table. One leg is flexed at the knee and being extended at the hip by an external force, indicated by a subtle arrow. The visual style is minimal, high-contrast black and white with blue medical highlights, designed for a high-end medical software interface." src="https://lh3.googleusercontent.com/aida-public/AB6AXuAVGVRNqDUoYubF8vsISxSRU3T6907PSzmMbxzyS--T54yNziYFpEZUFbXbfNJoXdyOKbmM5Gm7w3Vh1c1zCRP_zTi2mxmEbQH50NEeDZDEyDI8WDCqcsQutkT7_tjbk8FI10e2DMKuu_dKnRsilzqaixtHc9DyJ-M4g1sqbBbp7_RnCRVYyOm4R8bh7oRDaaMX963NkdnGu-gkfXIq6wcc3Fn-_vy62E-c7nCpJtlj49NEI_YMVslBGK_rX2Woh9MJi6_OOQpq0AlQ"/>
+<div class="absolute bottom-2 right-4 text-[10px] text-on-surface-variant font-bold uppercase tracking-tighter bg-white/80 px-1">REF: WSS_PRN_08</div>
+</div>
+<div class="p-6 space-y-6">
+<div class="space-y-4">
+<p class="font-label-md text-on-surface-variant uppercase tracking-widest">Wasserman (Lansegué Invertido)</p>
+<div class="flex gap-6">
+<label class="flex items-center cursor-pointer">
+<input class="w-4 h-4 text-primary border-outline focus:ring-primary/20" name="wasserman" type="radio"/>
+<span class="ml-2 font-body-md font-medium">Derecho (Dx)</span>
+</label>
+<label class="flex items-center cursor-pointer">
+<input class="w-4 h-4 text-primary border-outline focus:ring-primary/20" name="wasserman" type="radio"/>
+<span class="ml-2 font-body-md font-medium">Izquierdo (Ix)</span>
+</label>
+</div>
+</div>
+<div class="pt-4 border-t border-outline-variant">
+<label class="flex items-center cursor-pointer group bg-surface-container-low p-3 rounded border border-outline-variant/30 hover:border-primary/50 transition-all">
+<input class="checkbox-custom mr-3" type="checkbox"/>
+<span class="font-label-md font-bold text-on-surface uppercase tracking-wide">Presencia de retracción ileopsoas</span>
+</label>
+</div>
+</div>
+</div>
+</div>
+</div>
+<!-- 4. Aproximación Diagnóstica -->
+<section class="space-y-4 pb-12">
+<div class="flex items-center gap-3 pb-2 border-b-2 border-primary-container w-max">
+<span class="w-8 h-8 rounded bg-primary text-on-primary flex items-center justify-center font-bold text-label-md">F</span>
+<h3 class="font-headline-sm text-headline-sm text-on-surface">APROXIMACIÓN DIAGNÓSTICA DE LA EVALUACIÓN</h3>
+</div>
+<div class="clinical-card">
+<div class="p-6 space-y-4">
+<label class="block">
+<span class="font-label-md text-on-surface-variant mb-2 block font-bold uppercase tracking-widest">Conclusiones Clínicas y Observaciones</span>
+<textarea class="w-full input-precision bg-surface-bright rounded-lg border-outline-variant font-body-md p-4 text-on-surface placeholder-on-surface-variant/40" placeholder="Ingrese el resumen del hallazgo clínico, limitaciones observadas y recomendaciones terapéuticas..." rows="6"></textarea>
+</label>
+<div class="flex justify-between items-center bg-surface-container-low p-4 rounded border border-outline-variant">
+<div class="flex gap-4">
+<div class="flex items-center gap-2">
+<div class="w-3 h-3 rounded-full bg-primary"></div>
+<span class="text-[11px] font-bold text-on-surface-variant">DX = Derecho(a)</span>
+</div>
+<div class="flex items-center gap-2">
+<div class="w-3 h-3 rounded-full bg-secondary"></div>
+<span class="text-[11px] font-bold text-on-surface-variant">IX = Izquierdo(a)</span>
+</div>
+</div>
+<div class="flex gap-2">
+<button class="px-4 py-2 text-primary font-bold text-label-md border border-primary/20 rounded hover:bg-primary/5 transition-colors">Clear Form</button>
+<button class="px-6 py-2 bg-primary text-on-primary font-bold text-label-md rounded shadow-sm hover:brightness-110 active:scale-95 transition-all">Finalize Assessment</button>
+</div>
+</div>
+</div>
+</div>
+</section>
+</div>
+</main>
+<script>
+        // Simple micro-interaction for active state indicators
+        document.querySelectorAll('.checkbox-custom, input[type="radio"]').forEach(el => {
+            el.addEventListener('change', (e) => {
+                const parent = e.target.closest('.clinical-card');
+                if (e.target.checked) {
+                    parent.style.borderColor = '#007DC5';
+                }
+            });
+        });
+
+        // Textarea auto-save simulation
+        const textarea = document.querySelector('textarea');
+        textarea.addEventListener('input', (e) => {
+            // Visualize a small "saving" indicator if needed
+        });
+    </script>
+</body></html>

@@ -38,6 +38,12 @@ import type {
   PalpacionLumbar,
   DolorPresenteCervical,
   DolorPresenteSimple,
+  PresenciaDolorMovimiento,
+  EvaluacionMotilidad,
+  LasegueSlr,
+  ManiobraLasegueRetraccionIsquioCrural,
+  WassermanLasegueInvertido,
+  ManiobraWassermanRetraccionIleopsoas,
 } from '@/types/evaluacion-osteomuscular';
 
 function initialDxIxBool() {
@@ -336,6 +342,46 @@ function initialEvaluacionColumna(): EvaluacionColumna {
   };
 }
 
+function initialPresenciaDolorMovimiento(): PresenciaDolorMovimiento {
+  return {
+    flexion: false,
+    extension: false,
+    inclinacionDx: false,
+    inclinacionIx: false,
+    rotacionDx: false,
+    rotacionIx: false,
+  };
+}
+
+function initialEvaluacionMotilidad(): EvaluacionMotilidad {
+  return {
+    columnaCervical: { presenciaDolorMovimiento: initialPresenciaDolorMovimiento() },
+    columnaDorsoLumbar: { presenciaDolorMovimiento: initialPresenciaDolorMovimiento() },
+  };
+}
+
+function initialLasegueSlr(): LasegueSlr {
+  return { normal: false, dx: false, ix: false, observacion: '' };
+}
+
+function initialManiobraLasegueRetraccionIsquioCrural(): ManiobraLasegueRetraccionIsquioCrural {
+  return {
+    lasegueSlr: initialLasegueSlr(),
+    presenciaRetraccionIsquioCrural: false,
+  };
+}
+
+function initialWassermanLasegueInvertido(): WassermanLasegueInvertido {
+  return { dx: false, ix: false, observacion: '' };
+}
+
+function initialManiobraWassermanRetraccionIleopsoas(): ManiobraWassermanRetraccionIleopsoas {
+  return {
+    wassermanLasegueInvertido: initialWassermanLasegueInvertido(),
+    presenciaRetraccionIleopsoas: false,
+  };
+}
+
 export function initialEvaluacionState(atencion: AtencionDetalle | null): EvaluacionOsteomuscular {
   return {
     idAtencion: atencion?.idAtencion ?? '',
@@ -347,6 +393,10 @@ export function initialEvaluacionState(atencion: AtencionDetalle | null): Evalua
       },
     },
     evaluacionColumna: initialEvaluacionColumna(),
+    evaluacionMotilidad: initialEvaluacionMotilidad(),
+    maniobraLasegueRetraccionIsquioCrural: initialManiobraLasegueRetraccionIsquioCrural(),
+    maniobraWassermanRetraccionIleopsoas: initialManiobraWassermanRetraccionIleopsoas(),
+    aproximacionDiagnosticaEvaluacion: '',
   };
 }
 

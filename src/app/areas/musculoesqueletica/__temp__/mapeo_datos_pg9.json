@@ -2,22 +2,22 @@
   "evaluacionMotilidad": {
     "columnaCervical": {
       "presenciaDolorMovimiento": {
-        "flexion": "",
-        "extension": "",
-        "inclinacionDx": "",
-        "inclinacionIx": "",
-        "rotacionDx": "",
-        "rotacionIx": ""
+        "flexion": false,
+        "extension": false,
+        "inclinacionDx": false,
+        "inclinacionIx": false,
+        "rotacionDx": false,
+        "rotacionIx": false
       }
     },
     "columnaDorsoLumbar": {
       "presenciaDolorMovimiento": {
-        "flexion": "",
-        "extension": "",
-        "inclinacionDx": "",
-        "inclinacionIx": "",
-        "rotacionDx": "",
-        "rotacionIx": ""
+        "flexion": false,
+        "extension": false,
+        "inclinacionDx": false,
+        "inclinacionIx": false,
+        "rotacionDx": false,
+        "rotacionIx": false
       }
     }
   },

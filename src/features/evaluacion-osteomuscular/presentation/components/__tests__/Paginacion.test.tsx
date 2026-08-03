@@ -14,14 +14,15 @@ describe('Paginacion (evaluation)', () => {
     vi.clearAllMocks();
   });
 
-  it('renders a button for each page defined in the evaluation constants (4)', () => {
+  it('renders a button for each page defined in the evaluation constants (5)', () => {
     render(<Paginacion paginaActual={2} baseUrl="/areas/musculoesqueletica/jjc/AT-1/evaluacion" />);
     const buttons = screen.getAllByRole('button');
-    expect(buttons).toHaveLength(4);
+    expect(buttons).toHaveLength(5);
     expect(buttons[0]).toHaveTextContent('1');
     expect(buttons[1]).toHaveTextContent('2');
     expect(buttons[2]).toHaveTextContent('3');
     expect(buttons[3]).toHaveTextContent('4');
+    expect(buttons[4]).toHaveTextContent('5');
   });
 
   it('disables the current page button and styles it as active', () => {
@@ -51,6 +52,13 @@ describe('Paginacion (evaluation)', () => {
     render(<Paginacion paginaActual={1} baseUrl="/areas/musculoesqueletica/jjc/AT-1/evaluacion" />);
     await user.click(screen.getByRole('button', { name: '4' }));
     expect(push).toHaveBeenCalledWith('/areas/musculoesqueletica/jjc/AT-1/evaluacion/pagina4');
+  });
+
+  it('navigates to page 5 (/pagina5) when clicking button 5', async () => {
+    const user = userEvent.setup();
+    render(<Paginacion paginaActual={1} baseUrl="/areas/musculoesqueletica/jjc/AT-1/evaluacion" />);
+    await user.click(screen.getByRole('button', { name: '5' }));
+    expect(push).toHaveBeenCalledWith('/areas/musculoesqueletica/jjc/AT-1/evaluacion/pagina5');
   });
 
   it('does not navigate when clicking the already active page', async () => {
