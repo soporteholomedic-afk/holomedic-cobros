@@ -1,7 +1,6 @@
 'use client';
 
 import { useMemo } from 'react';
-import { Bone, Activity } from 'lucide-react';
 import { useEvaluacionContext } from '@/features/evaluacion-osteomuscular/presentation/context/EvaluacionOsteomuscularContext';
 import { Paginacion } from './Paginacion';
 import type {
@@ -15,18 +14,18 @@ interface CheckDxIxProps {
   basePath: string;
   checked: DxIxBool;
   lado: Lado;
+  className?: string;
 }
 
-function CheckDxIx({ basePath, checked, lado }: CheckDxIxProps) {
+function CheckDxIx({ basePath, checked, lado, className }: CheckDxIxProps) {
   const { setDxIx } = useEvaluacionContext();
   return (
-    <label className="flex items-center gap-1.5 text-xs cursor-pointer">
+    <label className={`cursor-pointer ${className ?? ''}`}>
       <input
         type="checkbox"
-        className="rounded text-sky-600"
         checked={checked[lado]}
         onChange={(e) => setDxIx(basePath, lado, e.target.checked)}
-      />
+      />{' '}
       {lado === 'dx' ? 'Dx' : 'Ix'}
     </label>
   );
@@ -35,14 +34,15 @@ function CheckDxIx({ basePath, checked, lado }: CheckDxIxProps) {
 interface CheckSimpleProps {
   path: string;
   checked: boolean;
+  ariaLabel?: string;
 }
 
-function CheckSimple({ path, checked }: CheckSimpleProps) {
+function CheckSimple({ path, checked, ariaLabel }: CheckSimpleProps) {
   const { setField } = useEvaluacionContext();
   return (
     <input
       type="checkbox"
-      className="rounded text-sky-600"
+      aria-label={ariaLabel}
       checked={checked}
       onChange={(e) => setField(path, e.target.checked)}
     />
@@ -53,34 +53,103 @@ interface RadioGravedadProps {
   value: GravedadPatologia;
   current: GravedadPatologia | null;
   path: string;
+  groupName: string;
 }
 
-function RadioGravedad({ value, current, path }: RadioGravedadProps) {
+function RadioGravedad({ value, current, path, groupName }: RadioGravedadProps) {
   const { setField } = useEvaluacionContext();
   return (
-    <label className="flex flex-col items-center gap-1 cursor-pointer">
+    <label className="cursor-pointer">
       <input
         type="radio"
-        name="gravedadHombro"
+        name={groupName}
         value={value}
-        className="w-4 h-4 text-sky-600"
         checked={current === value}
         onChange={() => setField(path, value)}
-      />
-      <span className="text-[10px] font-bold text-white">{value}</span>
+      />{' '}
+      {value}
     </label>
   );
 }
 
-interface ImagePlaceholderProps {
-  label: string;
+/* ---- Diagramas SVG (réplica de __temp__/page5.html) ---- */
+
+function SvgFlexion() {
+  return (
+    <svg viewBox="0 0 100 100" className="w-20 h-20 mx-auto" aria-hidden="true">
+      <path d="M 40 85 L 40 40 L 35 20 C 35 15, 45 15, 45 20 L 45 40 L 45 85" fill="none" stroke="#000" strokeWidth={1.2} />
+      <circle cx={40} cy={12} r={6} fill="none" stroke="#000" strokeWidth={1.2} />
+      <path d="M 45 30 L 70 30 L 70 5" fill="none" stroke="#000" strokeWidth={1.2} />
+      <path d="M 45 30 C 60 30, 70 20, 70 5" stroke="#000" strokeWidth={1} strokeDasharray="2,2" fill="none" />
+      <path d="M 67 8 L 70 2 L 73 8" fill="none" stroke="#000" strokeWidth={1} />
+    </svg>
+  );
 }
 
-function ImagePlaceholder({ label }: ImagePlaceholderProps) {
+function SvgAbduccion() {
   return (
-    <div className="w-full h-32 mb-3 bg-slate-100 rounded flex items-center justify-center">
-      <span className="text-xs text-slate-400 italic">[Imagen {label}]</span>
-    </div>
+    <svg viewBox="0 0 100 100" className="w-20 h-20 mx-auto" aria-hidden="true">
+      <path d="M 50 85 L 50 35 M 42 22 L 58 22" fill="none" stroke="#000" strokeWidth={1.2} />
+      <circle cx={50} cy={12} r={6} fill="none" stroke="#000" strokeWidth={1.2} />
+      <path d="M 42 32 L 20 32 L 20 10 M 58 32 L 80 32 L 80 10" fill="none" stroke="#000" strokeWidth={1.2} />
+      <path d="M 42 32 C 25 32, 20 20, 20 10 M 58 32 C 75 32, 80 20, 80 10" stroke="#000" strokeWidth={1} strokeDasharray="2,2" fill="none" />
+    </svg>
+  );
+}
+
+function SvgRotacionInterna() {
+  return (
+    <svg viewBox="0 0 100 100" className="w-20 h-20 mx-auto" aria-hidden="true">
+      <path d="M 35 25 C 35 10, 65 10, 65 25 C 65 35, 60 45, 55 50 C 65 55, 75 65, 75 90" fill="none" stroke="#000" strokeWidth={1.2} />
+      <path d="M 35 25 C 35 35, 40 45, 45 50 C 35 55, 25 65, 25 90" fill="none" stroke="#000" strokeWidth={1.2} />
+      <path d="M 25 60 L 45 58 L 50 48" fill="none" stroke="#000" strokeWidth={1.2} />
+    </svg>
+  );
+}
+
+function SvgRotacionExterna() {
+  return (
+    <svg viewBox="0 0 100 100" className="w-20 h-20 mx-auto" aria-hidden="true">
+      <path d="M 35 25 C 35 10, 65 10, 65 25 C 65 35, 60 45, 55 50 C 65 55, 75 65, 75 90" fill="none" stroke="#000" strokeWidth={1.2} />
+      <path d="M 35 25 C 35 35, 40 45, 45 50 C 35 55, 25 65, 25 90" fill="none" stroke="#000" strokeWidth={1.2} />
+      <path d="M 72 60 L 60 40 L 48 28" fill="none" stroke="#000" strokeWidth={1.2} />
+    </svg>
+  );
+}
+
+function SvgArcoDoloroso() {
+  return (
+    <svg viewBox="0 0 100 80" className="w-20 h-16" aria-hidden="true">
+      <circle cx={20} cy={65} r={3} fill="#000" />
+      <path d="M 20 65 L 75 65" stroke="#000" strokeWidth={1} />
+      <path d="M 20 65 L 60 20" stroke="#000" strokeWidth={1} />
+      <path d="M 20 65 L 35 15" stroke="#000" strokeWidth={1} />
+      <path d="M 50 65 C 50 45, 42 30, 32 20" fill="none" stroke="#000" strokeWidth={1} strokeDasharray="2,2" />
+      <text x={52} y={32} fontSize={6} fontWeight="bold">DOLORE</text>
+      <text x={58} y={58} fontSize={5}>NON DOLORE</text>
+      <text x={30} y={12} fontSize={5}>NON DOLORE</text>
+    </svg>
+  );
+}
+
+function SvgTestBiceps() {
+  return (
+    <svg viewBox="0 0 100 70" className="w-20 h-16" aria-hidden="true">
+      <path d="M 10 55 C 30 55, 45 40, 50 35 L 75 25" fill="none" stroke="#000" strokeWidth={1.2} />
+      <path d="M 40 50 C 50 50, 65 45, 80 45" fill="none" stroke="#000" strokeWidth={1.2} />
+      <path d="M 52 20 L 52 38" stroke="#000" strokeWidth={1.5} />
+      <path d="M 49 32 L 52 38 L 55 32" stroke="#000" strokeWidth={1} fill="none" />
+    </svg>
+  );
+}
+
+function SvgPalpacionCodo() {
+  return (
+    <svg viewBox="0 0 150 90" className="w-48 h-24 mx-auto" aria-hidden="true">
+      <path d="M 20 70 C 40 70, 70 60, 90 40 L 130 20" stroke="#000" strokeWidth={1.5} fill="none" />
+      <path d="M 10 40 C 30 50, 60 45, 80 30 L 120 10" stroke="#000" strokeWidth={1.2} fill="none" />
+      <path d="M 70 65 C 65 45, 80 25, 95 20 C 105 30, 90 55, 80 65 Z" fill="none" stroke="#000" strokeWidth={1} />
+    </svg>
   );
 }
 
@@ -102,572 +171,645 @@ export function EvaluacionFormPag1() {
   const baseCodo = `${BASE}.codo`;
 
   return (
-    <div className="space-y-6">
-      {/* ---- Page Header ---- */}
-      <div className="flex justify-between items-end border-b-2 border-sky-600 pb-4">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-900">I.- MIEMBROS SUPERIORES</h1>
-          <p className="text-slate-500 text-xs font-medium mt-1 uppercase tracking-wider">
-            EVALUACIÓN CLÍNICA OSTEMUSCULAR
-          </p>
-        </div>
-        <div className="flex items-center gap-3 bg-white px-4 py-2 border border-slate-200 rounded-lg">
-          <span className="text-xs font-bold text-sky-600 uppercase">Expediente No.</span>
-          <span className="text-lg font-semibold text-slate-700">
-            {state.idAtencion}
-          </span>
-        </div>
-      </div>
-
-      {/* ===================== SECCIÓN A: ESCAPULO HUMERAL ===================== */}
-      <section className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
-        {/* Header */}
-        <div className="bg-slate-50 px-6 py-4 border-b border-slate-200 flex justify-between items-center">
-          <h3 className="text-lg font-semibold text-sky-600">
-            a) ESCAPULO HUMERAL
-          </h3>
-          <label className="flex items-center gap-2 cursor-pointer">
-            <span className="text-xs font-medium text-slate-500 uppercase tracking-wider">
-              REALIZA MANIOBRAS
-            </span>
-            <input
-              type="checkbox"
-              className="w-5 h-5 rounded text-sky-600 focus:ring-sky-500"
-              checked={esc.realizaManiobras}
-              onChange={(e) => setField(`${baseEsc}.realizaManiobras`, e.target.checked)}
-            />
-          </label>
+    <div className="evaluation-page min-h-screen bg-gray-100 py-6 text-[10px] leading-tight text-black">
+      <form
+        onSubmit={(e) => e.preventDefault()}
+        className="max-w-[850px] mx-auto bg-white p-6 shadow-md border border-gray-300"
+      >
+        {/* BANNER TÍTULO PRINCIPAL */}
+        <div className="bg-[#0070c0] text-white font-bold text-center py-1.5 text-[12px] tracking-wide mb-2 uppercase">
+          EVALUACION CLINICA OSTEMUSCULAR
         </div>
 
-        <div className="p-6 space-y-8">
-          {/* Molestia meses */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-            <div className="space-y-2">
-              <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider">
-                Molestia de Hombro Dx Desde (meses)
-              </label>
-              <input
-                type="number"
-                min={0}
-                value={esc.molestiaHombroDxDesdeMeses ?? ''}
-                onChange={(e) =>
-                  setField(`${baseEsc}.molestiaHombroDxDesdeMeses`, e.target.value === '' ? null : Number(e.target.value))
-                }
-                className="w-full border border-slate-200 rounded-lg p-3 text-sm focus:ring-1 focus:ring-sky-500 outline-none"
-                placeholder="0"
-              />
-            </div>
-            <div className="space-y-2">
-              <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider">
-                Molestia de Hombro Ix Desde (meses)
-              </label>
-              <input
-                type="number"
-                min={0}
-                value={esc.molestiaHombroIxDesdeMeses ?? ''}
-                onChange={(e) =>
-                  setField(`${baseEsc}.molestiaHombroIxDesdeMeses`, e.target.value === '' ? null : Number(e.target.value))
-                }
-                className="w-full border border-slate-200 rounded-lg p-3 text-sm focus:ring-1 focus:ring-sky-500 outline-none"
-                placeholder="0"
-              />
-            </div>
-          </div>
+        {/* TÍTULO SECCIÓN */}
+        <div className="font-bold text-[11px] mb-1 uppercase">
+          I.- MIEMBROS SUPERIORES
+        </div>
 
-          {/* Palpación Hombro */}
-          <div className="border border-slate-200 rounded-lg overflow-hidden">
-            <div className="bg-slate-50 text-center font-bold text-xs py-2 border-b border-slate-200 uppercase tracking-widest text-slate-500">
-              Palpación Hombro (Dolor)
-            </div>
-            <div className="grid grid-cols-3 divide-x divide-slate-200">
-              <div className="p-4 space-y-3">
-                <p className="text-xs font-bold text-center border-b border-slate-200 pb-2">
-                  DOLOR ANTERIOR
-                </p>
-                <div className="flex justify-around">
-                  <CheckDxIx
-                    basePath={`${baseEsc}.palpacionHombro.dolorAnterior`}
-                    checked={esc.palpacionHombro.dolorAnterior}
-                    lado="dx"
-                  />
-                  <CheckDxIx
-                    basePath={`${baseEsc}.palpacionHombro.dolorAnterior`}
-                    checked={esc.palpacionHombro.dolorAnterior}
-                    lado="ix"
-                  />
-                </div>
+        {/* CONTENEDOR PRINCIPAL MARCO NEGRO */}
+        <div className="border border-black mb-2">
+          {/* ================= SUBSECCIÓN A: ESCAPULO HUMERAL ================= */}
+          <div>
+            {/* Sub-banner A */}
+            <div className="bg-[#d9e1f2] border-b border-black p-1 flex justify-between items-center font-bold">
+              <div className="text-[#b25900] text-[10px] uppercase">
+                a) ESCAPULO HUMERAL: REALIZA MANIOBRAS
               </div>
-              <div className="p-4 space-y-3">
-                <p className="text-xs font-bold text-center border-b border-slate-200 pb-2">
-                  DOLOR LATERAL
-                </p>
-                <div className="flex justify-around">
-                  <CheckDxIx
-                    basePath={`${baseEsc}.palpacionHombro.dolorLateral`}
-                    checked={esc.palpacionHombro.dolorLateral}
-                    lado="dx"
-                  />
-                  <CheckDxIx
-                    basePath={`${baseEsc}.palpacionHombro.dolorLateral`}
-                    checked={esc.palpacionHombro.dolorLateral}
-                    lado="ix"
-                  />
-                </div>
-              </div>
-              <div className="p-4 space-y-3">
-                <p className="text-xs font-bold text-center border-b border-slate-200 pb-2">
-                  DOLOR POSTERIOR
-                </p>
-                <div className="flex justify-around">
-                  <CheckDxIx
-                    basePath={`${baseEsc}.palpacionHombro.dolorPosterior`}
-                    checked={esc.palpacionHombro.dolorPosterior}
-                    lado="dx"
-                  />
-                  <CheckDxIx
-                    basePath={`${baseEsc}.palpacionHombro.dolorPosterior`}
-                    checked={esc.palpacionHombro.dolorPosterior}
-                    lado="ix"
-                  />
-                </div>
+              <div className="text-[#b25900] font-bold space-x-2 pr-2">
+                <label className="cursor-pointer">
+                  <CheckSimple
+                    path={`${baseEsc}.realizaManiobras`}
+                    checked={esc.realizaManiobras}
+                  />{' '}
+                  SI
+                </label>
               </div>
             </div>
-          </div>
 
-          {/* Evaluación de Movilidad */}
-          <div className="space-y-4">
-            <h4 className="text-sm font-bold uppercase text-sky-600 border-l-4 border-sky-600 pl-3">
-              Evaluación de Movilidad de la Cintura Escapulohumeral
-            </h4>
-            <p className="text-[11px] text-slate-500 font-semibold uppercase tracking-wider">
-              Presencia de dolor al movimiento
-            </p>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-              {/* Flexión */}
-              <div className="bg-slate-50 border border-slate-200 rounded-lg p-4 flex flex-col items-center">
-                <ImagePlaceholder label="Flexión" />
-                <p className="text-[10px] font-bold text-slate-600 text-center uppercase mb-3">
-                  Flexión / Elevación Anterior
-                </p>
-                <div className="flex gap-4">
-                  <CheckDxIx
-                    basePath={`${baseEsc}.movilidadPresenciaDolor.flexionElevacionAnterior`}
-                    checked={esc.movilidadPresenciaDolor.flexionElevacionAnterior}
-                    lado="dx"
-                  />
-                  <CheckDxIx
-                    basePath={`${baseEsc}.movilidadPresenciaDolor.flexionElevacionAnterior`}
-                    checked={esc.movilidadPresenciaDolor.flexionElevacionAnterior}
-                    lado="ix"
-                  />
-                </div>
+            {/* Tiempos de Molestia */}
+            <div className="border-b border-black p-1 flex justify-around text-[9.5px]">
+              <div>
+                <span className="font-bold">MOLESTIA DE HOMBRO Dx Desde</span>{' '}
+                <input
+                  type="number"
+                  min={0}
+                  aria-label="Molestia hombro Dx desde meses"
+                  value={esc.molestiaHombroDxDesdeMeses ?? ''}
+                  onChange={(e) =>
+                    setField(
+                      `${baseEsc}.molestiaHombroDxDesdeMeses`,
+                      e.target.value === '' ? null : Number(e.target.value),
+                    )
+                  }
+                  className="dotted-input w-16 text-center"
+                />
+                <span>(meses)</span>
               </div>
-
-              {/* Abducción */}
-              <div className="bg-slate-50 border border-slate-200 rounded-lg p-4 flex flex-col items-center">
-                <ImagePlaceholder label="Abducción" />
-                <p className="text-[10px] font-bold text-slate-600 text-center uppercase mb-3">
-                  Abducción / Elevación Lateral
-                </p>
-                <div className="flex gap-4">
-                  <CheckDxIx
-                    basePath={`${baseEsc}.movilidadPresenciaDolor.abduccionElevacionLateral`}
-                    checked={esc.movilidadPresenciaDolor.abduccionElevacionLateral}
-                    lado="dx"
-                  />
-                  <CheckDxIx
-                    basePath={`${baseEsc}.movilidadPresenciaDolor.abduccionElevacionLateral`}
-                    checked={esc.movilidadPresenciaDolor.abduccionElevacionLateral}
-                    lado="ix"
-                  />
-                </div>
-              </div>
-
-              {/* Rotación Interna */}
-              <div className="bg-slate-50 border border-slate-200 rounded-lg p-4 flex flex-col items-center">
-                <ImagePlaceholder label="Rotación Interna" />
-                <p className="text-[10px] font-bold text-slate-600 text-center uppercase mb-3">
-                  Rotación Interna
-                </p>
-                <div className="flex gap-4">
-                  <CheckDxIx
-                    basePath={`${baseEsc}.movilidadPresenciaDolor.rotacionInterna`}
-                    checked={esc.movilidadPresenciaDolor.rotacionInterna}
-                    lado="dx"
-                  />
-                  <CheckDxIx
-                    basePath={`${baseEsc}.movilidadPresenciaDolor.rotacionInterna`}
-                    checked={esc.movilidadPresenciaDolor.rotacionInterna}
-                    lado="ix"
-                  />
-                </div>
-              </div>
-
-              {/* Rotación Externa */}
-              <div className="bg-slate-50 border border-slate-200 rounded-lg p-4 flex flex-col items-center">
-                <ImagePlaceholder label="Rotación Externa" />
-                <p className="text-[10px] font-bold text-slate-600 text-center uppercase mb-3">
-                  Rotación Externa
-                </p>
-                <div className="flex gap-4">
-                  <CheckDxIx
-                    basePath={`${baseEsc}.movilidadPresenciaDolor.rotacionExterna`}
-                    checked={esc.movilidadPresenciaDolor.rotacionExterna}
-                    lado="dx"
-                  />
-                  <CheckDxIx
-                    basePath={`${baseEsc}.movilidadPresenciaDolor.rotacionExterna`}
-                    checked={esc.movilidadPresenciaDolor.rotacionExterna}
-                    lado="ix"
-                  />
-                </div>
+              <div>
+                <span className="font-bold">MOLESTIA DE HOMBRO Ix desde</span>{' '}
+                <input
+                  type="number"
+                  min={0}
+                  aria-label="Molestia hombro Ix desde meses"
+                  value={esc.molestiaHombroIxDesdeMeses ?? ''}
+                  onChange={(e) =>
+                    setField(
+                      `${baseEsc}.molestiaHombroIxDesdeMeses`,
+                      e.target.value === '' ? null : Number(e.target.value),
+                    )
+                  }
+                  className="dotted-input w-16 text-center"
+                />
+                <span>(meses)</span>
               </div>
             </div>
-          </div>
 
-          {/* Specialized Tests */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {/* Arco Doloroso */}
-            <div className="border border-slate-200 rounded-lg p-4">
-              <h4 className="text-xs font-bold uppercase text-slate-600 mb-4 flex items-center gap-2">
-                <Activity className="w-4 h-4 text-sky-500" />
-                Arco Doloroso (70° y 120°)
-              </h4>
-              <div className="flex gap-6 items-start">
-                <div className="flex flex-col gap-3">
-                  <label className="flex items-center gap-2 text-sm cursor-pointer">
-                    <CheckSimple
-                      path={`${baseEsc}.arcoDoloroso.presenteDx`}
-                      checked={esc.arcoDoloroso.presenteDx}
+            {/* Tabla 1: Palpación Hombro */}
+            <table className="w-full border-collapse border-b border-black">
+              <thead>
+                <tr className="bg-[#e6e6e6] border-b border-black font-bold text-center">
+                  <th colSpan={6} className="py-1 text-[11px] font-bold uppercase">PALPACIÓN HOMBRO</th>
+                </tr>
+                <tr className="border-b border-black">
+                  <th colSpan={2} className="border-r border-black px-2 py-0.5 text-left font-normal text-[9.5px] uppercase">DOLOR ANTERIOR</th>
+                  <th colSpan={2} className="border-r border-black px-2 py-0.5 text-left font-normal text-[9.5px] uppercase">DOLOR LATERAL</th>
+                  <th colSpan={2} className="px-2 py-0.5 text-left font-normal text-[9.5px] uppercase">DOLOR POSTERIOR</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr className="text-center">
+                  <td className="w-[16.66%] border-r border-black py-1">
+                    <CheckDxIx
+                      basePath={`${baseEsc}.palpacionHombro.dolorAnterior`}
+                      checked={esc.palpacionHombro.dolorAnterior}
+                      lado="dx"
                     />
-                    Presente Dx
-                  </label>
-                  <label className="flex items-center gap-2 text-sm cursor-pointer">
-                    <CheckSimple
-                      path={`${baseEsc}.arcoDoloroso.presenteIx`}
-                      checked={esc.arcoDoloroso.presenteIx}
+                  </td>
+                  <td className="w-[16.66%] border-r border-black py-1">
+                    <CheckDxIx
+                      basePath={`${baseEsc}.palpacionHombro.dolorAnterior`}
+                      checked={esc.palpacionHombro.dolorAnterior}
+                      lado="ix"
                     />
-                    Presente Ix
-                  </label>
-                  <label className="flex items-center gap-2 text-sm mt-2 font-bold text-sky-600 cursor-pointer">
-                    <CheckSimple
-                      path={`${baseEsc}.arcoDoloroso.ausente`}
-                      checked={esc.arcoDoloroso.ausente}
+                  </td>
+                  <td className="w-[16.66%] border-r border-black py-1">
+                    <CheckDxIx
+                      basePath={`${baseEsc}.palpacionHombro.dolorLateral`}
+                      checked={esc.palpacionHombro.dolorLateral}
+                      lado="dx"
                     />
-                    Ausente
-                  </label>
-                </div>
-                <div className="flex-1 bg-slate-50 rounded-lg p-2 flex items-center justify-center">
-                  <span className="text-xs text-slate-400 italic">[Diagrama Arco Doloroso]</span>
-                </div>
-              </div>
-            </div>
+                  </td>
+                  <td className="w-[16.66%] border-r border-black py-1">
+                    <CheckDxIx
+                      basePath={`${baseEsc}.palpacionHombro.dolorLateral`}
+                      checked={esc.palpacionHombro.dolorLateral}
+                      lado="ix"
+                    />
+                  </td>
+                  <td className="w-[16.66%] border-r border-black py-1">
+                    <CheckDxIx
+                      basePath={`${baseEsc}.palpacionHombro.dolorPosterior`}
+                      checked={esc.palpacionHombro.dolorPosterior}
+                      lado="dx"
+                    />
+                  </td>
+                  <td className="w-[16.66%] py-1">
+                    <CheckDxIx
+                      basePath={`${baseEsc}.palpacionHombro.dolorPosterior`}
+                      checked={esc.palpacionHombro.dolorPosterior}
+                      lado="ix"
+                    />
+                  </td>
+                </tr>
+              </tbody>
+            </table>
 
-            {/* Test Bíceps */}
-            <div className="border border-slate-200 rounded-lg p-4">
-              <h4 className="text-xs font-bold uppercase text-slate-600 mb-4 flex items-center gap-2">
-                <Bone className="w-4 h-4 text-sky-500" />
-                Test Tendinitis Bíceps
-              </h4>
-              <div className="flex gap-6 items-start">
-                <div className="flex flex-col gap-3">
-                  <label className="flex items-center gap-2 text-sm cursor-pointer">
-                    <CheckSimple
-                      path={`${baseEsc}.testTendinitisTendonLargoBiceps.dolorAusente`}
-                      checked={esc.testTendinitisTendonLargoBiceps.dolorAusente}
-                    />
-                    Dolor Ausente
-                  </label>
-                  <label className="flex items-center gap-2 text-sm cursor-pointer">
-                    <CheckSimple
-                      path={`${baseEsc}.testTendinitisTendonLargoBiceps.presenciaDolorAnteriorHombroDx`}
-                      checked={esc.testTendinitisTendonLargoBiceps.presenciaDolorAnteriorHombroDx}
-                    />
-                    Presencia Dolor Anterior Hombro Dx
-                  </label>
-                  <label className="flex items-center gap-2 text-sm cursor-pointer">
-                    <CheckSimple
-                      path={`${baseEsc}.testTendinitisTendonLargoBiceps.presenciaDolorAnteriorHombroIx`}
-                      checked={esc.testTendinitisTendonLargoBiceps.presenciaDolorAnteriorHombroIx}
-                    />
-                    Presencia Dolor Anterior Hombro Ix
-                  </label>
-                </div>
-                <div className="flex-1 bg-slate-50 rounded-lg p-2 flex items-center justify-center">
-                  <span className="text-xs text-slate-400 italic">[Diagrama Test Bíceps]</span>
-                </div>
-              </div>
-            </div>
-          </div>
+            {/* Tabla 2: Evaluación de Movilidad Cintura Escapulohumeral */}
+            <table className="w-full border-collapse border-b border-black">
+              <thead>
+                <tr className="bg-[#e6e6e6] border-b border-black font-bold">
+                  <th colSpan={4} className="px-2 py-1 text-left text-[11px] uppercase tracking-tight">
+                    EVALUACIÓN DE LA MOVILIDAD DE LA CINTURA ESCAPULOHUMERAL PRESENCIA DE DOLOR AL MOVIMIENTO
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {/* Gráficos */}
+                <tr className="border-b border-black">
+                  <td className="w-1/4 border-r border-black p-1 text-center h-28 align-middle">
+                    <SvgFlexion />
+                  </td>
+                  <td className="w-1/4 border-r border-black p-1 text-center h-28 align-middle">
+                    <SvgAbduccion />
+                  </td>
+                  <td className="w-1/4 border-r border-black p-1 text-center h-28 align-middle">
+                    <SvgRotacionInterna />
+                  </td>
+                  <td className="w-1/4 p-1 text-center h-28 align-middle">
+                    <SvgRotacionExterna />
+                  </td>
+                </tr>
 
-          {/* Examen Instrumental + Gravedad */}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            <div className="lg:col-span-2 bg-slate-50 p-4 rounded-lg">
-              <p className="text-xs font-bold uppercase text-slate-600 mb-4">
-                Examen Instrumental
-              </p>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                <label className="flex items-center gap-2 text-xs cursor-pointer">
+                {/* Fila Texto PRESENCIA DE DOLOR */}
+                <tr className="border-b border-black text-left text-[9px]">
+                  <td className="border-r border-black px-2 py-0.5 uppercase">PRESENCIA DE DOLOR</td>
+                  <td className="border-r border-black px-2 py-0.5 uppercase">PRESENCIA DE DOLOR</td>
+                  <td className="border-r border-black px-2 py-0.5 uppercase">PRESENCIA DE DOLOR</td>
+                  <td className="px-2 py-0.5 uppercase">PRESENCIA DE DOLOR</td>
+                </tr>
+
+                {/* Fila Checkboxes */}
+                <tr className="text-center">
+                  <td className="border-r border-black py-1">
+                    <div className="flex justify-center space-x-4">
+                      <CheckDxIx
+                        basePath={`${baseEsc}.movilidadPresenciaDolor.flexionElevacionAnterior`}
+                        checked={esc.movilidadPresenciaDolor.flexionElevacionAnterior}
+                        lado="dx"
+                      />
+                      <CheckDxIx
+                        basePath={`${baseEsc}.movilidadPresenciaDolor.flexionElevacionAnterior`}
+                        checked={esc.movilidadPresenciaDolor.flexionElevacionAnterior}
+                        lado="ix"
+                      />
+                    </div>
+                  </td>
+                  <td className="border-r border-black py-1">
+                    <div className="flex justify-center space-x-4">
+                      <CheckDxIx
+                        basePath={`${baseEsc}.movilidadPresenciaDolor.abduccionElevacionLateral`}
+                        checked={esc.movilidadPresenciaDolor.abduccionElevacionLateral}
+                        lado="dx"
+                      />
+                      <CheckDxIx
+                        basePath={`${baseEsc}.movilidadPresenciaDolor.abduccionElevacionLateral`}
+                        checked={esc.movilidadPresenciaDolor.abduccionElevacionLateral}
+                        lado="ix"
+                      />
+                    </div>
+                  </td>
+                  <td className="border-r border-black p-0">
+                    <div className="grid grid-cols-2 h-full items-center">
+                      <div className="border-r border-black py-1">
+                        <CheckDxIx
+                          basePath={`${baseEsc}.movilidadPresenciaDolor.rotacionInterna`}
+                          checked={esc.movilidadPresenciaDolor.rotacionInterna}
+                          lado="dx"
+                        />
+                      </div>
+                      <div className="py-1">
+                        <CheckDxIx
+                          basePath={`${baseEsc}.movilidadPresenciaDolor.rotacionInterna`}
+                          checked={esc.movilidadPresenciaDolor.rotacionInterna}
+                          lado="ix"
+                        />
+                      </div>
+                    </div>
+                  </td>
+                  <td className="p-0">
+                    <div className="grid grid-cols-2 h-full items-center">
+                      <div className="border-r border-black py-1">
+                        <CheckDxIx
+                          basePath={`${baseEsc}.movilidadPresenciaDolor.rotacionExterna`}
+                          checked={esc.movilidadPresenciaDolor.rotacionExterna}
+                          lado="dx"
+                        />
+                      </div>
+                      <div className="py-1">
+                        <CheckDxIx
+                          basePath={`${baseEsc}.movilidadPresenciaDolor.rotacionExterna`}
+                          checked={esc.movilidadPresenciaDolor.rotacionExterna}
+                          lado="ix"
+                        />
+                      </div>
+                    </div>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+
+            {/* Tabla 3: Arco Doloroso / Test Tendinitis */}
+            <table className="w-full border-collapse border-b border-black">
+              <thead>
+                <tr className="bg-[#e6e6e6] border-b border-black font-bold">
+                  <th className="w-1/2 border-r border-black px-2 py-1 text-left text-[11px] uppercase">
+                    ARCO DOLOROSO <span className="font-normal text-[9.5px] lowercase">(DOLOR ENTRE 70° Y 120°)</span>
+                  </th>
+                  <th className="w-1/2 px-2 py-1 text-left text-[11px] uppercase">
+                    TEST TENDINITIS TENDÓN LARGO DE BÍCEPS
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  {/* Arco Doloroso Body */}
+                  <td className="border-r border-black p-2 align-top">
+                    <div className="flex items-center justify-between">
+                      <div className="space-y-2 text-[8.5px]">
+                        <div>
+                          <label className="cursor-pointer">
+                            <CheckSimple
+                              path={`${baseEsc}.arcoDoloroso.presenteDx`}
+                              checked={esc.arcoDoloroso.presenteDx}
+                            />{' '}
+                            PRESENTE Dx
+                          </label>
+                        </div>
+                        <div>
+                          <label className="cursor-pointer">
+                            <CheckSimple
+                              path={`${baseEsc}.arcoDoloroso.presenteIx`}
+                              checked={esc.arcoDoloroso.presenteIx}
+                            />{' '}
+                            PRESENTE Ix
+                          </label>
+                        </div>
+                      </div>
+                      <SvgArcoDoloroso />
+                      <div>
+                        <label className="cursor-pointer text-[8.5px]">
+                          <CheckSimple
+                            path={`${baseEsc}.arcoDoloroso.ausente`}
+                            checked={esc.arcoDoloroso.ausente}
+                          />{' '}
+                          AUSENTE
+                        </label>
+                      </div>
+                    </div>
+                  </td>
+
+                  {/* Test Bíceps Body */}
+                  <td className="p-2 align-top">
+                    <div className="flex items-center justify-between">
+                      <SvgTestBiceps />
+                      <div className="space-y-1 text-[8px] pl-1">
+                        <div>
+                          <label className="cursor-pointer">
+                            <CheckSimple
+                              path={`${baseEsc}.testTendinitisTendonLargoBiceps.dolorAusente`}
+                              checked={esc.testTendinitisTendonLargoBiceps.dolorAusente}
+                            />{' '}
+                            DOLOR AUSENTE
+                          </label>
+                        </div>
+                        <div>
+                          <label className="cursor-pointer">
+                            <CheckSimple
+                              path={`${baseEsc}.testTendinitisTendonLargoBiceps.presenciaDolorAnteriorHombroDx`}
+                              checked={esc.testTendinitisTendonLargoBiceps.presenciaDolorAnteriorHombroDx}
+                            />{' '}
+                            PRESENCIA DE DOLOR ANTERIOR HOMBRO DX
+                          </label>
+                        </div>
+                        <div>
+                          <label className="cursor-pointer">
+                            <CheckSimple
+                              path={`${baseEsc}.testTendinitisTendonLargoBiceps.presenciaDolorAnteriorHombroIx`}
+                              checked={esc.testTendinitisTendonLargoBiceps.presenciaDolorAnteriorHombroIx}
+                            />{' '}
+                            PRESENCIA DE DOLOR ANTERIOR HOMBRO IX
+                          </label>
+                        </div>
+                      </div>
+                    </div>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+
+            {/* Examen Instrumental */}
+            <div className="border-b border-black p-1 flex items-center justify-between text-[9px]">
+              <div>
+                <span className="font-bold">Examen instrumental:</span>
+                <label className="cursor-pointer ml-2">
                   <CheckSimple
                     path={`${baseEsc}.examenInstrumental.noRealizo`}
                     checked={esc.examenInstrumental.noRealizo}
-                  />
-                  No Realizó
+                  />{' '}
+                  NO
                 </label>
-                <div className="flex items-center gap-2">
+              </div>
+              <div>
+                <label className="cursor-pointer">
                   <CheckSimple
                     path={`${baseEsc}.examenInstrumental.ecografia.realiza`}
                     checked={esc.examenInstrumental.ecografia.realiza}
-                  />
-                  <span className="text-xs font-medium">ECO (año)</span>
-                  <input
-                    type="text"
-                    value={esc.examenInstrumental.ecografia.ano}
-                    onChange={(e) => setField(`${baseEsc}.examenInstrumental.ecografia.ano`, e.target.value)}
-                    className="w-12 border-b border-slate-300 bg-transparent text-xs focus:ring-0 outline-none"
-                  />
-                </div>
-                <div className="flex items-center gap-2">
+                  />{' '}
+                  ECOGRAFÍA
+                </label>{' '}
+                (año{' '}
+                <input
+                  type="text"
+                  aria-label="Año ecografía"
+                  value={esc.examenInstrumental.ecografia.ano}
+                  onChange={(e) =>
+                    setField(`${baseEsc}.examenInstrumental.ecografia.ano`, e.target.value)
+                  }
+                  className="dotted-input w-12 text-center"
+                />
+                )
+              </div>
+              <div>
+                <label className="cursor-pointer">
                   <CheckSimple
                     path={`${baseEsc}.examenInstrumental.rx.realiza`}
                     checked={esc.examenInstrumental.rx.realiza}
-                  />
-                  <span className="text-xs font-medium">RX (año)</span>
-                  <input
-                    type="text"
-                    value={esc.examenInstrumental.rx.ano}
-                    onChange={(e) => setField(`${baseEsc}.examenInstrumental.rx.ano`, e.target.value)}
-                    className="w-12 border-b border-slate-300 bg-transparent text-xs focus:ring-0 outline-none"
-                  />
-                </div>
-                <div className="flex items-center gap-2">
+                  />{' '}
+                  RX
+                </label>{' '}
+                (año{' '}
+                <input
+                  type="text"
+                  aria-label="Año RX"
+                  value={esc.examenInstrumental.rx.ano}
+                  onChange={(e) =>
+                    setField(`${baseEsc}.examenInstrumental.rx.ano`, e.target.value)
+                  }
+                  className="dotted-input w-12 text-center"
+                />
+                )
+              </div>
+              <div>
+                <label className="cursor-pointer">
                   <CheckSimple
                     path={`${baseEsc}.examenInstrumental.rmn.realiza`}
                     checked={esc.examenInstrumental.rmn.realiza}
-                  />
-                  <span className="text-xs font-medium">RMN (año)</span>
-                  <input
-                    type="text"
-                    value={esc.examenInstrumental.rmn.ano}
-                    onChange={(e) => setField(`${baseEsc}.examenInstrumental.rmn.ano`, e.target.value)}
-                    className="w-12 border-b border-slate-300 bg-transparent text-xs focus:ring-0 outline-none"
-                  />
-                </div>
+                  />{' '}
+                  RMN
+                </label>{' '}
+                (año{' '}
+                <input
+                  type="text"
+                  aria-label="Año RMN"
+                  value={esc.examenInstrumental.rmn.ano}
+                  onChange={(e) =>
+                    setField(`${baseEsc}.examenInstrumental.rmn.ano`, e.target.value)
+                  }
+                  className="dotted-input w-12 text-center"
+                />
+                )
               </div>
             </div>
 
-            <div className="bg-sky-600 text-white p-4 rounded-lg flex flex-col justify-between">
-              <p className="text-xs font-bold uppercase mb-4 opacity-80">
-                Gravedad Patología de Hombro
-              </p>
-              <div className="flex justify-between items-center">
+            {/* Gravedad Patología Hombro */}
+            <div className="p-1 flex items-center justify-between text-[9px] font-bold">
+              <div>
+                GRAVEDAD PATOLOGÍA DE HOMBRO <span className="font-normal text-[8px]">(última página*)</span>
+              </div>
+              <div className="space-x-6 pr-6">
                 <RadioGravedad
                   value="LEVE"
                   current={esc.gravedadPatologiaHombro}
                   path={`${baseEsc}.gravedadPatologiaHombro`}
+                  groupName="gravedadHombro"
                 />
                 <RadioGravedad
                   value="MEDIA"
                   current={esc.gravedadPatologiaHombro}
                   path={`${baseEsc}.gravedadPatologiaHombro`}
+                  groupName="gravedadHombro"
                 />
                 <RadioGravedad
                   value="GRAVE"
                   current={esc.gravedadPatologiaHombro}
                   path={`${baseEsc}.gravedadPatologiaHombro`}
-                />
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* ===================== SECCIÓN B: CODO ===================== */}
-      <section className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
-        {/* Header */}
-        <div className="bg-slate-50 px-6 py-4 border-b border-slate-200 flex justify-between items-center">
-          <h3 className="text-lg font-semibold text-sky-600">
-            b) CODO
-          </h3>
-          <label className="flex items-center gap-2 cursor-pointer">
-            <span className="text-xs font-medium text-slate-500 uppercase tracking-wider">
-              REALIZA MANIOBRAS
-            </span>
-            <input
-              type="checkbox"
-              className="w-5 h-5 rounded text-sky-600 focus:ring-sky-500"
-              checked={codo.realizaManiobras}
-              onChange={(e) => setField(`${baseCodo}.realizaManiobras`, e.target.checked)}
-            />
-          </label>
-        </div>
-
-        <div className="p-6 space-y-8">
-          {/* Molestia meses */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-            <div className="space-y-2">
-              <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider">
-                Molestia Codo Dx Desde (meses)
-              </label>
-              <input
-                type="number"
-                min={0}
-                value={codo.molestiaCodoDxDesdeMeses ?? ''}
-                onChange={(e) =>
-                  setField(`${baseCodo}.molestiaCodoDxDesdeMeses`, e.target.value === '' ? null : Number(e.target.value))
-                }
-                className="w-full border border-slate-200 rounded-lg p-3 text-sm focus:ring-1 focus:ring-sky-500 outline-none"
-                placeholder="0"
-              />
-            </div>
-            <div className="space-y-2">
-              <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider">
-                Molestia Codo Ix Desde (meses)
-              </label>
-              <input
-                type="number"
-                min={0}
-                value={codo.molestiaCodoIxDesdeMeses ?? ''}
-                onChange={(e) =>
-                  setField(`${baseCodo}.molestiaCodoIxDesdeMeses`, e.target.value === '' ? null : Number(e.target.value))
-                }
-                className="w-full border border-slate-200 rounded-lg p-3 text-sm focus:ring-1 focus:ring-sky-500 outline-none"
-                placeholder="0"
-              />
-            </div>
-          </div>
-
-          {/* Observación e Inspección */}
-          <div className="bg-slate-50 p-4 rounded-lg">
-            <p className="text-xs font-bold uppercase text-slate-600 mb-4">
-              Observación e Inspección
-            </p>
-            <div className="flex flex-wrap items-center gap-8">
-              <div className="flex items-center gap-4">
-                <span className="text-xs font-semibold text-slate-700">Edema Localizado:</span>
-                <CheckDxIx
-                  basePath={`${baseCodo}.observacionInspeccion.edemaLocalizado`}
-                  checked={codo.observacionInspeccion.edemaLocalizado}
-                  lado="dx"
-                />
-                <CheckDxIx
-                  basePath={`${baseCodo}.observacionInspeccion.edemaLocalizado`}
-                  checked={codo.observacionInspeccion.edemaLocalizado}
-                  lado="ix"
-                />
-              </div>
-              <div className="flex-1 flex items-center gap-3">
-                <span className="text-xs font-semibold text-slate-700">Sitio:</span>
-                <input
-                  type="text"
-                  value={codo.observacionInspeccion.sitio}
-                  onChange={(e) => setField(`${baseCodo}.observacionInspeccion.sitio`, e.target.value)}
-                  className="flex-1 bg-transparent border-b border-slate-300 text-xs focus:ring-0 outline-none py-1"
-                  placeholder="Indicar localización específica..."
-                />
-              </div>
-              <div className="flex items-center gap-4">
-                <span className="text-xs font-semibold text-slate-700">Edema No Localizado:</span>
-                <CheckDxIx
-                  basePath={`${baseCodo}.observacionInspeccion.edemaNoLocalizado`}
-                  checked={codo.observacionInspeccion.edemaNoLocalizado}
-                  lado="dx"
-                />
-                <CheckDxIx
-                  basePath={`${baseCodo}.observacionInspeccion.edemaNoLocalizado`}
-                  checked={codo.observacionInspeccion.edemaNoLocalizado}
-                  lado="ix"
+                  groupName="gravedadHombro"
                 />
               </div>
             </div>
           </div>
 
-          {/* Palpación Codo */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-start">
-            <div className="bg-slate-50 border border-slate-200 rounded-lg p-6 flex justify-center">
-              <div className="w-full h-48 flex items-center justify-center">
-                <span className="text-xs text-slate-400 italic">
-                  [Imagen Palpación Codo: Epicóndilo, Epitróclea, Olécranon]
-                </span>
-              </div>
-            </div>
-            <table className="w-full border-collapse border border-slate-200">
+          {/* ================= SUBSECCIÓN B: CODO ================= */}
+          <div className="border-t border-black">
+            <table className="w-full border-collapse">
               <thead>
-                <tr className="bg-slate-50">
-                  <th className="border border-slate-200 p-3 text-left text-[10px] font-bold uppercase text-slate-500">
-                    Zona de Palpación
-                  </th>
-                  <th className="border border-slate-200 p-3 text-center text-[10px] font-bold uppercase text-slate-500">
-                    Dx
-                  </th>
-                  <th className="border border-slate-200 p-3 text-center text-[10px] font-bold uppercase text-slate-500">
-                    Ix
+                {/* Sub-banner B */}
+                <tr className="bg-[#d9e1f2] border-b border-black font-bold text-[#b25900]">
+                  <th colSpan={4} className="p-1">
+                    <div className="flex justify-between items-center text-[10px] uppercase">
+                      <span>b) CODO: REALIZA MANIOBRAS</span>
+                      <label className="cursor-pointer pr-2">
+                        <CheckSimple
+                          path={`${baseCodo}.realizaManiobras`}
+                          checked={codo.realizaManiobras}
+                        />{' '}
+                        SI
+                      </label>
+                    </div>
                   </th>
                 </tr>
               </thead>
-              <tbody className="text-sm">
-                <tr>
-                  <td className="border border-slate-200 p-3 text-slate-700 font-medium">
-                    Dolor Epicóndilo (Lateral)
+              <tbody>
+                {/* Tiempos de Molestia Codo */}
+                <tr className="border-b border-black text-[9.5px]">
+                  <td colSpan={4} className="p-1.5">
+                    <div className="flex justify-around items-center">
+                      <div>
+                        <span className="font-bold">MOLESTIA CODO Dx desde</span>{' '}
+                        <input
+                          type="number"
+                          min={0}
+                          aria-label="Molestia codo Dx desde meses"
+                          value={codo.molestiaCodoDxDesdeMeses ?? ''}
+                          onChange={(e) =>
+                            setField(
+                              `${baseCodo}.molestiaCodoDxDesdeMeses`,
+                              e.target.value === '' ? null : Number(e.target.value),
+                            )
+                          }
+                          className="dotted-input w-20 text-center"
+                        />
+                        <span>(meses)</span>
+                      </div>
+                      <div>
+                        <span className="font-bold">MOLESTIA CODO Ix desde</span>{' '}
+                        <input
+                          type="number"
+                          min={0}
+                          aria-label="Molestia codo Ix desde meses"
+                          value={codo.molestiaCodoIxDesdeMeses ?? ''}
+                          onChange={(e) =>
+                            setField(
+                              `${baseCodo}.molestiaCodoIxDesdeMeses`,
+                              e.target.value === '' ? null : Number(e.target.value),
+                            )
+                          }
+                          className="dotted-input w-20 text-center"
+                        />
+                        <span>(meses)</span>
+                      </div>
+                    </div>
                   </td>
-                  <td className="border border-slate-200 p-3 text-center">
+                </tr>
+
+                {/* Observación / Inspección Codo Header */}
+                <tr className="bg-[#e6e6e6] border-b border-black font-bold text-center text-[9.5px] uppercase">
+                  <td colSpan={4} className="py-0.5">OBSERVACIÓN, INSPECCIÓN</td>
+                </tr>
+
+                {/* Observación / Inspección Codo Content */}
+                <tr className="border-b border-black text-[9px]">
+                  <td colSpan={2} className="w-[60%] border-r border-black p-1.5">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <span>EDEMA LOCALIZADO</span>
+                        <CheckDxIx
+                          basePath={`${baseCodo}.observacionInspeccion.edemaLocalizado`}
+                          checked={codo.observacionInspeccion.edemaLocalizado}
+                          lado="dx"
+                          className="ml-1"
+                        />
+                        <CheckDxIx
+                          basePath={`${baseCodo}.observacionInspeccion.edemaLocalizado`}
+                          checked={codo.observacionInspeccion.edemaLocalizado}
+                          lado="ix"
+                          className="ml-1"
+                        />
+                      </div>
+                      <div className="grow ml-2 flex items-center">
+                        <input
+                          type="text"
+                          placeholder="Sitio"
+                          value={codo.observacionInspeccion.sitio}
+                          onChange={(e) =>
+                            setField(`${baseCodo}.observacionInspeccion.sitio`, e.target.value)
+                          }
+                          className="dotted-input grow text-center"
+                        />
+                      </div>
+                    </div>
+                  </td>
+                  <td colSpan={2} className="w-[40%] p-1.5">
+                    <div className="flex items-center space-x-2">
+                      <span>EDEMA NO LOCALIZADO</span>
+                      <CheckDxIx
+                        basePath={`${baseCodo}.observacionInspeccion.edemaNoLocalizado`}
+                        checked={codo.observacionInspeccion.edemaNoLocalizado}
+                        lado="dx"
+                      />
+                      <CheckDxIx
+                        basePath={`${baseCodo}.observacionInspeccion.edemaNoLocalizado`}
+                        checked={codo.observacionInspeccion.edemaNoLocalizado}
+                        lado="ix"
+                      />
+                    </div>
+                  </td>
+                </tr>
+
+                {/* Palpación Header */}
+                <tr className="bg-[#e6e6e6] border-b border-black font-bold text-[9.5px]">
+                  <td colSpan={2} className="border-r border-black px-2 py-1 text-left uppercase">
+                    PALPACIÓN EPICÓNDILO (LATERAL) – EPITRÓCLEA (MEDIAL) - OLÉCRANON
+                  </td>
+                  <td className="w-[10%] border-r border-black text-center py-1">Dx</td>
+                  <td className="w-[10%] text-center py-1">Ix</td>
+                </tr>
+
+                {/* Palpación Fila 1: Epicóndilo */}
+                <tr className="border-b border-gray-300 text-[9px]">
+                  <td rowSpan={3} className="w-[40%] border-r border-black p-2 text-center align-middle">
+                    <SvgPalpacionCodo />
+                  </td>
+                  <td className="border-r border-black p-1.5 text-left">
+                    DOLOR EPICÓNDILO...........................................................
+                  </td>
+                  <td className="border-r border-black text-center py-1.5">
                     <CheckSimple
                       path={`${baseCodo}.palpacion.dolorEpicondilo.dx`}
                       checked={codo.palpacion.dolorEpicondilo.dx}
+                      ariaLabel="Dolor epicóndilo Dx"
                     />
                   </td>
-                  <td className="border border-slate-200 p-3 text-center">
+                  <td className="text-center py-1.5">
                     <CheckSimple
                       path={`${baseCodo}.palpacion.dolorEpicondilo.ix`}
                       checked={codo.palpacion.dolorEpicondilo.ix}
+                      ariaLabel="Dolor epicóndilo Ix"
                     />
                   </td>
                 </tr>
-                <tr>
-                  <td className="border border-slate-200 p-3 text-slate-700 font-medium">
-                    Dolor Epitróclea (Medial)
+
+                {/* Palpación Fila 2: Epitróclea */}
+                <tr className="border-b border-gray-300 text-[9px]">
+                  <td className="border-r border-black p-1.5 text-left">
+                    DOLOR EPITRÓCLEA...........................................................
                   </td>
-                  <td className="border border-slate-200 p-3 text-center">
+                  <td className="border-r border-black text-center py-1.5">
                     <CheckSimple
                       path={`${baseCodo}.palpacion.dolorEpitroclea.dx`}
                       checked={codo.palpacion.dolorEpitroclea.dx}
+                      ariaLabel="Dolor epitróclea Dx"
                     />
                   </td>
-                  <td className="border border-slate-200 p-3 text-center">
+                  <td className="text-center py-1.5">
                     <CheckSimple
                       path={`${baseCodo}.palpacion.dolorEpitroclea.ix`}
                       checked={codo.palpacion.dolorEpitroclea.ix}
+                      ariaLabel="Dolor epitróclea Ix"
                     />
                   </td>
                 </tr>
-                <tr>
-                  <td className="border border-slate-200 p-3 text-slate-700 font-medium">
-                    Dolor Olécranon
+
+                {/* Palpación Fila 3: Olécranon */}
+                <tr className="text-[9px]">
+                  <td className="border-r border-black p-1.5 text-left">
+                    DOLOR OLÉCRANON..........................................................
                   </td>
-                  <td className="border border-slate-200 p-3 text-center">
+                  <td className="border-r border-black text-center py-1.5">
                     <CheckSimple
                       path={`${baseCodo}.palpacion.dolorOlecranon.dx`}
                       checked={codo.palpacion.dolorOlecranon.dx}
+                      ariaLabel="Dolor olécranon Dx"
                     />
                   </td>
-                  <td className="border border-slate-200 p-3 text-center">
+                  <td className="text-center py-1.5">
                     <CheckSimple
                       path={`${baseCodo}.palpacion.dolorOlecranon.ix`}
                       checked={codo.palpacion.dolorOlecranon.ix}
+                      ariaLabel="Dolor olécranon Ix"
                     />
                   </td>
                 </tr>
               </tbody>
             </table>
           </div>
+        </div>
 
-          {/* Footer legend */}
-          <div className="flex justify-between items-center text-[10px] text-slate-400 font-bold uppercase pt-4 border-t border-slate-200">
-            <div>Dx. = Derecho | Ix. = Izquierdo</div>
-            <div>Fo. JJC-SIG-13-31 Cuestionario anamnesico y evaluación. Rev. 0</div>
+        {/* LEYENDA */}
+        <div className="text-[9px] font-bold mb-4">
+          Dx. = Derecho&nbsp;&nbsp;&nbsp;&nbsp; Ix. = Izquierdo
+        </div>
+
+        {/* PIE DE PÁGINA */}
+        <div className="flex justify-between items-center text-[9px] border-t border-gray-300 pt-2 text-black">
+          <div>
+            Fo. JJC-SIG-13-31 Cuestionario anamnesico y evaluación de extremidad superior y espalda. Rev. 0
+          </div>
+          <div className="font-bold text-[11px] pr-2">
+            3
           </div>
         </div>
-      </section>
+      </form>
 
       <Paginacion
         paginaActual={1}

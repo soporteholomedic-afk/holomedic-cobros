@@ -2,15 +2,22 @@
 
 import type { ReactNode } from 'react';
 import Link from 'next/link';
+import { usePathname } from 'next/navigation';
 import { ArrowLeft, Bone } from 'lucide-react';
 import { useEvaluacionContext } from '@/features/evaluacion-osteomuscular/presentation/context/EvaluacionOsteomuscularContext';
+import { RUTAS_SIN_SHELL_EVALUACION } from '@/features/evaluacion-osteomuscular/presentation/constants/paginas';
 
 interface EvaluacionLayoutShellProps {
   children: ReactNode;
 }
 
 export function EvaluacionLayoutShell({ children }: EvaluacionLayoutShellProps) {
+  const pathname = usePathname();
   const { idAtencion, atencion } = useEvaluacionContext();
+
+  if (pathname && RUTAS_SIN_SHELL_EVALUACION.test(pathname)) {
+    return <>{children}</>;
+  }
 
   return (
     <div className="min-h-screen bg-gray-50">

@@ -1,5 +1,5 @@
 import { describe, it, afterEach, expect, vi } from 'vitest';
-import { render, screen, within } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { AtencionDetalle } from '@/types/jjc';
 import {
@@ -62,14 +62,24 @@ function renderPag5() {
 
 afterEach(() => vi.unstubAllGlobals());
 
-describe('EvaluacionFormPag5 — motilidad y maniobras especiales', () => {
-  it('renders the full page 5 with local placeholders only, no remote image', () => {
+describe('EvaluacionFormPag5 — réplica de __temp__/page9.html (motilidad y maniobras especiales)', () => {
+  it('renders the full page 5 printed ficha with local SVG diagrams only, no remote image', () => {
     vi.stubGlobal('fetch', vi.fn());
     renderPag5();
-    expect(screen.getAllByRole('checkbox')).toHaveLength(14);
-    expect(screen.getAllByRole('radio')).toHaveLength(5);
+    expect(screen.getByText(/C\) EVALUACION DE LA MOTILIDAD/i)).toBeInTheDocument();
+    expect(screen.getByText('COLUMNA CERVICAL')).toBeInTheDocument();
+    expect(screen.getByText('COLUMNA DORSO LUMBAR')).toBeInTheDocument();
+    expect(screen.getByText(/D\) MANIOBRA DE LASEGUE/i)).toBeInTheDocument();
+    expect(screen.getByText(/E\) MANIOBRA DE WASSERMAN/i)).toBeInTheDocument();
+    expect(screen.getByText(/APROXIMACION DIAGNOSTICA DE LA EVALUACION/i)).toBeInTheDocument();
+    expect(screen.getByText('NOMBRE Y APELLIDOS')).toBeInTheDocument();
+    expect(screen.getByText('FECHA.')).toBeInTheDocument();
+    expect(screen.getByText(/Fo\. JJC-SIG-13-31/i)).toBeInTheDocument();
+    expect(screen.getByText('7')).toBeInTheDocument();
+    expect(screen.getAllByRole('checkbox')).toHaveLength(19);
+    expect(screen.queryAllByRole('radio')).toHaveLength(0);
     expect(screen.getAllByRole('textbox')).toHaveLength(3);
-    expect(screen.getByRole('textbox', { name: /aproximación diagnóstica/i })).toBeInTheDocument();
+    expect(document.querySelectorAll('svg')).toHaveLength(2);
     expect(document.querySelector('img[src^="http"]')).toBeNull();
     expect(vi.mocked(fetch)).not.toHaveBeenCalled();
   });
@@ -78,43 +88,37 @@ describe('EvaluacionFormPag5 — motilidad y maniobras especiales', () => {
     const user = userEvent.setup();
     renderPag5();
     const probe = screen.getByTestId('pg5-probe');
-    const cervical = within(screen.getByRole('group', { name: /columna cervical/i }));
-    const dorso = within(screen.getByRole('group', { name: /dorso lumbar/i }));
 
-    await user.click(cervical.getByRole('checkbox', { name: 'Flexión' }));
-    expect(probe).toHaveTextContent(
-      '"c":{"flexion":true,"extension":false,"inclinacionDx":false,"inclinacionIx":false,"rotacionDx":false,"rotacionIx":false},"dl":{"flexion":false,"extension":false,"inclinacionDx":false,"inclinacionIx":false,"rotacionDx":false,"rotacionIx":false}',
-    );
-
-    await user.click(dorso.getByRole('checkbox', { name: 'Rotación Ix' }));
-    await user.click(dorso.getByRole('checkbox', { name: 'Extensión' }));
+    await user.click(screen.getByRole('checkbox', { name: /FLEXION cervical/i }));
+    await user.click(screen.getByRole('checkbox', { name: /ROT\. IX dorso lumbar/i }));
+    await user.click(screen.getByRole('checkbox', { name: /EXTENSION dorso lumbar/i }));
     expect(probe).toHaveTextContent(
       '"c":{"flexion":true,"extension":false,"inclinacionDx":false,"inclinacionIx":false,"rotacionDx":false,"rotacionIx":false},"dl":{"flexion":false,"extension":true,"inclinacionDx":false,"inclinacionIx":false,"rotacionDx":false,"rotacionIx":true}',
     );
   });
 
-  it('selecting a Lasègue radio marks that option and clears the others', async () => {
+  it('toggles Lasègue options as independent checkboxes bound to their paths', async () => {
     const user = userEvent.setup();
     renderPag5();
     const probe = screen.getByTestId('pg5-probe');
 
-    await user.click(screen.getByRole('radio', { name: 'Lasègue Derecho Dx' }));
-    expect(probe).toHaveTextContent('"ln":false,"ld":true,"li":false');
-
-    await user.click(screen.getByRole('radio', { name: 'Lasègue Normal' }));
+    await user.click(screen.getByRole('checkbox', { name: 'Lasègue normal' }));
     expect(probe).toHaveTextContent('"ln":true,"ld":false,"li":false');
+
+    await user.click(screen.getByRole('checkbox', { name: 'Lasègue derecho' }));
+    expect(probe).toHaveTextContent('"ln":true,"ld":true,"li":false');
   });
 
-  it('selecting a Wasserman radio marks that option and clears the other', async () => {
+  it('toggles Wasserman options as independent checkboxes bound to their paths', async () => {
     const user = userEvent.setup();
     renderPag5();
     const probe = screen.getByTestId('pg5-probe');
 
-    await user.click(screen.getByRole('radio', { name: 'Wasserman Izquierdo Ix' }));
+    await user.click(screen.getByRole('checkbox', { name: 'Wasserman izquierdo' }));
     expect(probe).toHaveTextContent('"wd":false,"wi":true');
 
-    await user.click(screen.getByRole('radio', { name: 'Wasserman Derecho Dx' }));
-    expect(probe).toHaveTextContent('"wd":true,"wi":false');
+    await user.click(screen.getByRole('checkbox', { name: 'Wasserman derecho' }));
+    expect(probe).toHaveTextContent('"wd":true,"wi":true');
   });
 
   it('toggles retraccion checkboxes and binds them to their paths', async () => {
@@ -132,11 +136,9 @@ describe('EvaluacionFormPag5 — motilidad y maniobras especiales', () => {
     const user = userEvent.setup();
     renderPag5();
     const probe = screen.getByTestId('pg5-probe');
-    const lasegueGroup = within(screen.getByRole('group', { name: /lasègue/i }));
-    const wassermanGroup = within(screen.getByRole('group', { name: /wasserman/i }));
 
-    await user.type(lasegueGroup.getByRole('textbox', { name: /observación lasègue/i }), 'Dolor en raíz L5');
-    await user.type(wassermanGroup.getByRole('textbox', { name: /observación wasserman/i }), 'Hiperextensión dolorosa');
+    await user.type(screen.getByRole('textbox', { name: /observación lasègue/i }), 'Dolor en raíz L5');
+    await user.type(screen.getByRole('textbox', { name: /observación wasserman/i }), 'Hiperextensión dolorosa');
     await user.type(screen.getByRole('textbox', { name: /aproximación diagnóstica/i }), 'Lumbalgia mecánica');
 
     expect(probe).toHaveTextContent('"lo":"Dolor en raíz L5"');

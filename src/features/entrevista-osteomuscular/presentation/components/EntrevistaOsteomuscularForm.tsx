@@ -326,7 +326,7 @@ function buildInfoItems<T extends object>(
 function buildCriteriosUmbral(umbral: UmbralPositivo, basePath: string): CriterioUmbral[] {
   const criterios: Array<{ label: string; key: keyof UmbralPositivo }> = [
     { label: 'dolor continuo', key: 'dolorContinuo' },
-    { label: 'al menos 1 semana de dolor en los últimos 12 meses', key: 'unaSemanaDolor12Meses' },
+    { label: 'al menos 3 meses de dolor en los últimos 12 meses', key: 'tresMesesDolor12Meses' },
     { label: 'al menos 1 vez al mes en los últimos 12 meses', key: 'unaVezMes12Meses' },
   ];
 

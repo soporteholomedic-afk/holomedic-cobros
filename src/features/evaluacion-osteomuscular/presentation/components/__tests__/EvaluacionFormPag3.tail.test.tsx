@@ -1,5 +1,5 @@
 import { describe, it, afterEach, expect, vi } from 'vitest';
-import { render, screen, within } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { AtencionDetalle } from '@/types/jjc';
 import {
@@ -58,26 +58,33 @@ function renderPag3() {
   );
 }
 
-const group = (name: RegExp) => screen.getByRole('group', { name });
-const pair = (name: RegExp) => within(group(name));
 afterEach(() => vi.unstubAllGlobals());
 
-describe('EvaluacionFormPag3 — paresthesia regions + instrumental/severity/dx tail (PR 4)', () => {
-  it('renders the full paresthesia tail with local placeholders only, no fetch and no remote image', () => {
+describe('EvaluacionFormPag3 — réplica de __temp__/page7.html (parestesia + instrumental + diagnóstico)', () => {
+  it('renders the full printed ficha with local placeholders only, no fetch and no remote image', () => {
     vi.stubGlobal('fetch', vi.fn());
     renderPag3();
+    expect(screen.getByText(/d\) SINTOMATOLOGÍA PARESTESICA/i)).toBeInTheDocument();
+    expect(screen.getByText('REGIÓN PROXIMAL')).toBeInTheDocument();
+    expect(screen.getByText('REGION DISTAL')).toBeInTheDocument();
+    expect(screen.getByText('TEST DE PHALEN')).toBeInTheDocument();
+    expect(screen.getByText('TEST DE PRESION')).toBeInTheDocument();
+    expect(screen.getByText('[Gráfico Test Fatiga]')).toBeInTheDocument();
+    expect(screen.getByText('[Gráfico Test Candelero]')).toBeInTheDocument();
+    expect(screen.getByText(/APROXIMACION DIAGNOSTICA DE EVALUACION/i)).toBeInTheDocument();
     expect(screen.getAllByRole('checkbox')).toHaveLength(41);
     expect(screen.getAllByRole('radio')).toHaveLength(3);
+    expect(screen.getAllByRole('spinbutton')).toHaveLength(6);
     expect(screen.getByRole('textbox', { name: /aproximación diagnóstica/i })).toBeInTheDocument();
     expect(document.querySelector('img[src^="http"]')).toBeNull();
     expect(vi.mocked(fetch)).not.toHaveBeenCalled();
   });
 
-  it('binds page-2 maneuver and wrist-month controls to the existing single-source paths', async () => {
+  it('binds the paresthesia maneuver and wrist-month controls to the existing single-source paths', async () => {
     const user = userEvent.setup();
     renderPag3();
     const probe = screen.getByTestId('muneca-probe');
-    await user.click(screen.getByRole('checkbox', { name: /realiza maniobras/i }));
+    await user.click(screen.getByRole('checkbox', { name: 'SI' }));
     await user.type(screen.getByRole('spinbutton', { name: /molestia muñeca dx desde/i }), '12');
     expect(probe).toHaveTextContent('"rm":true,"md":12,"mi":null');
     await user.type(screen.getByRole('spinbutton', { name: /molestia muñeca ix desde/i }), '6');
@@ -93,13 +100,13 @@ describe('EvaluacionFormPag3 — paresthesia regions + instrumental/severity/dx 
     await user.click(screen.getByRole('checkbox', { name: 'Extensión' }));
     await user.click(screen.getByRole('checkbox', { name: 'Rotación Derecha' }));
     expect(probe).toHaveTextContent('"pp":[true,false,true],"pm":[false,true,false,false,true,false]');
-    await user.click(pair(/test de fatiga/i).getByRole('checkbox', { name: /^dx$/i }));
-    await user.click(pair(/test de candelero/i).getByRole('checkbox', { name: /^ix$/i }));
+    await user.click(screen.getByRole('checkbox', { name: 'Test de fatiga Dx' }));
+    await user.click(screen.getByRole('checkbox', { name: 'Test de candelero Ix' }));
     expect(probe).toHaveTextContent('"fat":{"dx":true,"ix":false},"can":{"dx":false,"ix":true}');
-    await user.click(pair(/test de phalen — nervio mediano/i).getByRole('checkbox', { name: /^dx$/i }));
-    await user.click(pair(/test de phalen — no territorializada/i).getByRole('checkbox', { name: /^ix$/i }));
+    await user.click(screen.getByRole('checkbox', { name: 'Phalen nervio mediano Dx' }));
+    await user.click(screen.getByRole('checkbox', { name: 'Phalen no territorializada Ix' }));
     expect(probe).toHaveTextContent('"phm":{"dx":true,"ix":false},"phu":{"dx":false,"ix":false},"phn":{"dx":false,"ix":true}');
-    await user.click(pair(/test de presión — nervio ulnar/i).getByRole('checkbox', { name: /^dx$/i }));
+    await user.click(screen.getByRole('checkbox', { name: 'Presión nervio ulnar Dx' }));
     expect(probe).toHaveTextContent('"pru":{"dx":true,"ix":false},"prn":{"dx":false,"ix":false}');
   });
 
@@ -113,7 +120,7 @@ describe('EvaluacionFormPag3 — paresthesia regions + instrumental/severity/dx 
     await user.click(screen.getByRole('checkbox', { name: 'Ecografía' }));
     await user.type(screen.getByRole('spinbutton', { name: /año ecografía/i }), '2024');
     expect(probe).toHaveTextContent('"eco":[true,2024],"rx":[false,null],"rmn":[false,null],"emg":[false,null]');
-    await user.click(screen.getByRole('checkbox', { name: 'No Realizado' }));
+    await user.click(screen.getByRole('checkbox', { name: 'NO' }));
     await user.click(screen.getByRole('checkbox', { name: 'RX' }));
     await user.type(screen.getByRole('spinbutton', { name: /año rx/i }), '2023');
     expect(probe).toHaveTextContent('"nr":true,"eco":[true,2024],"rx":[true,2023],"rmn":[false,null],"emg":[false,null]');

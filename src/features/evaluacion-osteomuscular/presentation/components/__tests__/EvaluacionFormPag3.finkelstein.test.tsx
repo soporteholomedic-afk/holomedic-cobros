@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { render, screen, within } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { AtencionDetalle } from '@/types/jjc';
 import type { DxIxBool } from '@/types/evaluacion-osteomuscular';
@@ -53,23 +53,14 @@ function renderPag3() {
   );
 }
 
-const group = (name: RegExp) => screen.getByRole('group', { name });
-const pair = (name: RegExp) => within(group(name));
-
-describe('EvaluacionFormPag3 — Finkelstein + flexo-extension slice (PR 3)', () => {
-  it('renders the full page-3 form (41 checkboxes) and local placeholders, with no remote image URL', () => {
+describe('EvaluacionFormPag3 — réplica de __temp__/page7.html (Finkelstein + flexo-extensión)', () => {
+  it('renders the printed-ficha layout (41 checkboxes) with local placeholders and no remote image URL', () => {
     renderPag3();
-    expect(screen.getByRole('heading', { name: /miembros superiores/i })).toBeInTheDocument();
-    expect(screen.getByText(/página 3/i)).toBeInTheDocument();
+    expect(screen.getByText(/^FINKELSTEIN/)).toBeInTheDocument();
+    expect(screen.getByText(/^FLEXO-EXTENSIÓN DE LA MUÑECA/)).toBeInTheDocument();
+    expect(screen.getByText('[Gráfico Finkelstein]')).toBeInTheDocument();
+    expect(screen.getByText('[Gráfico Flexo-Extensión]')).toBeInTheDocument();
     expect(screen.getAllByRole('checkbox')).toHaveLength(41);
-    expect(pair(/tabaquera anatómica/i).getAllByRole('checkbox')).toHaveLength(2);
-    expect(pair(/flexión c\/r/i).getAllByRole('checkbox')).toHaveLength(2);
-    expect(pair(/flexión pasiva/i).getAllByRole('checkbox')).toHaveLength(2);
-    expect(pair(/extensión c\/r/i).getAllByRole('checkbox')).toHaveLength(2);
-    expect(pair(/extensión pasiva/i).getAllByRole('checkbox')).toHaveLength(2);
-    expect(screen.getByText(/\[Imagen Test de Finkelstein\]/i)).toBeInTheDocument();
-    expect(screen.getByText(/\[Imagen Dolor en Flexión C\/R\]/i)).toBeInTheDocument();
-    expect(screen.queryAllByRole('img')).toHaveLength(0);
     expect(document.querySelector('img[src^="http"]')).toBeNull();
   });
 
@@ -78,21 +69,21 @@ describe('EvaluacionFormPag3 — Finkelstein + flexo-extension slice (PR 3)', ()
     renderPag3();
     const probe = screen.getByTestId('muneca-probe');
     expect(probe).toHaveTextContent('f:00 fc:00 fp:00 ec:00 ep:00');
-    await user.click(pair(/tabaquera anatómica/i).getByRole('checkbox', { name: /^dx$/i }));
+    await user.click(screen.getByRole('checkbox', { name: 'Tabaquera anatómica Dx' }));
     expect(probe).toHaveTextContent('f:10 fc:00 fp:00 ec:00 ep:00');
-    expect(pair(/tabaquera anatómica/i).getByRole('checkbox', { name: /^dx$/i })).toBeChecked();
-    await user.click(pair(/tabaquera anatómica/i).getByRole('checkbox', { name: /^ix$/i }));
+    expect(screen.getByRole('checkbox', { name: 'Tabaquera anatómica Dx' })).toBeChecked();
+    await user.click(screen.getByRole('checkbox', { name: 'Tabaquera anatómica Ix' }));
     expect(probe).toHaveTextContent('f:11 fc:00 fp:00 ec:00 ep:00');
-    expect(pair(/tabaquera anatómica/i).getByRole('checkbox', { name: /^ix$/i })).toBeChecked();
+    expect(screen.getByRole('checkbox', { name: 'Tabaquera anatómica Ix' })).toBeChecked();
   });
 
   it('changes only the touched flexo-extension pair, preserving the other three pairs', async () => {
     const user = userEvent.setup();
     renderPag3();
     const probe = screen.getByTestId('muneca-probe');
-    await user.click(pair(/extensión c\/r/i).getByRole('checkbox', { name: /^ix$/i }));
+    await user.click(screen.getByRole('checkbox', { name: 'Dolor en extensión c/r Ix' }));
     expect(probe).toHaveTextContent('f:00 fc:00 fp:00 ec:01 ep:00');
-    await user.click(pair(/flexión pasiva/i).getByRole('checkbox', { name: /^dx$/i }));
+    await user.click(screen.getByRole('checkbox', { name: 'Dolor en flexión pasiva Dx' }));
     expect(probe).toHaveTextContent('f:00 fc:00 fp:10 ec:01 ep:00');
   });
 });

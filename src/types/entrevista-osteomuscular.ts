@@ -21,7 +21,7 @@ export interface InfoReportadaManoMuneca extends InfoReportadaBase {
 
 export interface UmbralPositivo {
   dolorContinuo: DxIxBool;
-  unaSemanaDolor12Meses: DxIxBool;
+  tresMesesDolor12Meses: DxIxBool;
   unaVezMes12Meses: DxIxBool;
 }
 

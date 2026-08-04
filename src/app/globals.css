@@ -186,3 +186,55 @@ body {
   width: 12px;
   height: 12px;
 }
+
+/* Evaluación osteomuscular página 1 — réplica __temp__/page5.html */
+.evaluation-page {
+  font-family: Arial, Helvetica, sans-serif;
+  color: #000;
+}
+
+.evaluation-page input[type="text"],
+.evaluation-page input[type="number"] {
+  background: transparent;
+  outline: none;
+}
+
+.evaluation-page input[type="text"]:focus,
+.evaluation-page input[type="number"]:focus {
+  background-color: #f0fdf4;
+}
+
+.evaluation-page input[type="checkbox"],
+.evaluation-page input[type="radio"] {
+  cursor: pointer;
+  width: 12px;
+  height: 12px;
+  accent-color: #0070c0;
+  vertical-align: middle;
+}
+
+.evaluation-page .dotted-input {
+  border-bottom: 1px dotted #000;
+}
+
+/* Evaluación osteomuscular páginas 2 a 4 — réplica de __temp__/page6.html, page7.html y page8.html */
+.evaluation-page--page2 input[type="checkbox"],
+.evaluation-page--page2 input[type="radio"],
+.evaluation-page--page3 input[type="checkbox"],
+.evaluation-page--page3 input[type="radio"],
+.evaluation-page--page4 input[type="checkbox"],
+.evaluation-page--page4 input[type="radio"] {
+  width: 14px;
+  height: 14px;
+}
+
+/* Evaluación osteomuscular página 5 — réplica __temp__/page9.html */
+.evaluation-page--page5 input[type="checkbox"],
+.evaluation-page--page5 input[type="radio"] {
+  width: 14px;
+  height: 14px;
+}
+
+.evaluation-page--page5 input[type="checkbox"] {
+  accent-color: #000;
+}

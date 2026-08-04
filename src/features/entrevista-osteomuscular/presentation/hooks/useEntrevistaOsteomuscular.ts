@@ -91,7 +91,7 @@ function initialDiagnosticoPatologiaColumna(): DiagnosticoPatologiaColumna {
 function initialUmbralPositivo() {
   return {
     dolorContinuo: { dx: false, ix: false },
-    unaSemanaDolor12Meses: { dx: false, ix: false },
+    tresMesesDolor12Meses: { dx: false, ix: false },
     unaVezMes12Meses: { dx: false, ix: false },
   };
 }

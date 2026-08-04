@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo } from 'react';
+import { useMemo, type ReactNode } from 'react';
 import { useEvaluacionContext } from '@/features/evaluacion-osteomuscular/presentation/context/EvaluacionOsteomuscularContext';
 import { Paginacion } from './Paginacion';
 import type {
@@ -10,24 +10,26 @@ import type {
 
 type Lado = 'dx' | 'ix';
 
+const DEDOS = ['dedo1', 'dedo2', 'dedo3', 'dedo4', 'dedo5'] as const;
+
 interface CheckDxIxProps {
   basePath: string;
   checked: DxIxBool;
   lado: Lado;
+  ariaLabel?: string;
 }
 
-function CheckDxIx({ basePath, checked, lado }: CheckDxIxProps) {
+function CheckDxIx({ basePath, checked, lado, ariaLabel }: CheckDxIxProps) {
   const { setDxIx } = useEvaluacionContext();
-  const label = lado === 'dx' ? 'Dx' : 'Ix';
   return (
-    <label className="inline-flex items-center gap-1.5 cursor-pointer">
+    <label className="cursor-pointer">
       <input
         type="checkbox"
-        className="rounded text-sky-600 w-4 h-4"
+        aria-label={ariaLabel}
         checked={checked[lado]}
         onChange={(e) => setDxIx(basePath, lado, e.target.checked)}
-      />
-      <span className="text-[10px] font-bold uppercase">{label}</span>
+      />{' '}
+      {lado === 'dx' ? 'Dx' : 'Ix'}
     </label>
   );
 }
@@ -35,14 +37,15 @@ function CheckDxIx({ basePath, checked, lado }: CheckDxIxProps) {
 interface CheckSimpleProps {
   path: string;
   checked: boolean;
+  ariaLabel?: string;
 }
 
-function CheckSimple({ path, checked }: CheckSimpleProps) {
+function CheckSimple({ path, checked, ariaLabel }: CheckSimpleProps) {
   const { setField } = useEvaluacionContext();
   return (
     <input
       type="checkbox"
-      className="rounded text-sky-600 w-4 h-4"
+      aria-label={ariaLabel}
       checked={checked}
       onChange={(e) => setField(path, e.target.checked)}
     />
@@ -59,17 +62,34 @@ interface RadioGravedadProps {
 function RadioGravedad({ value, current, path, groupName }: RadioGravedadProps) {
   const { setField } = useEvaluacionContext();
   return (
-    <label className="flex flex-col items-center gap-1 cursor-pointer">
+    <label className="inline-flex items-center space-x-1 cursor-pointer">
       <input
         type="radio"
         name={groupName}
         value={value}
-        className="w-4 h-4 text-sky-600"
         checked={current === value}
         onChange={() => setField(path, value)}
       />
-      <span className="text-[10px] font-bold text-white">{value}</span>
+      <span>{value}</span>
     </label>
+  );
+}
+
+interface GraphPlaceholderProps {
+  className?: string;
+  column?: boolean;
+  children: ReactNode;
+}
+
+function GraphPlaceholder({ className, column, children }: GraphPlaceholderProps) {
+  return (
+    <div
+      className={`border border-dashed border-gray-400 flex items-center justify-center bg-gray-50 text-[9px] text-gray-400 shrink-0 ${
+        column ? 'flex-col' : ''
+      } ${className ?? ''}`}
+    >
+      {children}
+    </div>
   );
 }
 
@@ -90,275 +110,273 @@ export function EvaluacionFormPag2() {
   const baseCodo = `${BASE}.codo`;
   const baseMuneca = `${BASE}.munecaMano`;
 
+  const epi = codo.palpacionEpicondileoEpitroclear;
+  const obs = munecaMano.observacionManoMuneca;
+  const clic = munecaMano.maniobraClicDedosGatillo.clicExtensionDedos;
+
   return (
-    <div className="space-y-6">
-      {/* ---- Page Header ---- */}
-      <div className="flex justify-between items-end border-b-2 border-sky-600 pb-4">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-900">I.- MIEMBROS SUPERIORES (Cont.)</h1>
-          <p className="text-slate-500 text-xs font-medium mt-1 uppercase tracking-wider">
-            EVALUACIÓN CLÍNICA OSTEMUSCULAR — PÁGINA 2
-          </p>
-        </div>
-        <div className="flex items-center gap-3 bg-white px-4 py-2 border border-slate-200 rounded-lg">
-          <span className="text-xs font-bold text-sky-600 uppercase">Expediente No.</span>
-          <span className="text-lg font-semibold text-slate-700">
-            {state.idAtencion}
-          </span>
-        </div>
-      </div>
-
-      {/* ===================== SECCIÓN A: CODO (Continuación) ===================== */}
-      <section className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
-        <div className="bg-slate-50 px-6 py-4 border-b border-slate-200">
-          <h3 className="text-lg font-semibold text-sky-600">
-            A) CODO (Continuación)
-          </h3>
-        </div>
-
-        <div className="p-6 space-y-8">
-          {/* Palpación Músculo Epicóndilo - Epitróclear */}
-          <div className="border border-slate-200 rounded-lg overflow-hidden">
-            <div className="bg-slate-50 text-center font-bold text-[10px] py-2 border-b border-slate-200 uppercase tracking-widest text-slate-600">
-              Palpación Músculo Epicóndilo - Epitróclear {'(EFECTÚA A 2 CM DEL EPICÓNDILO)'}
-            </div>
-            <div className="p-4 space-y-3">
-              <div className="grid grid-cols-2 gap-8">
-                <div className="flex items-center justify-between bg-slate-50 rounded-lg px-4 py-3">
-                  <p className="text-xs font-bold text-slate-700 uppercase">
-                    Dolor Músculo Epicóndilo
-                  </p>
-                  <div className="flex gap-4">
-                    <CheckDxIx
-                      basePath={`${baseCodo}.palpacionEpicondileoEpitroclear.dolorMusculoEpicondileo`}
-                      checked={codo.palpacionEpicondileoEpitroclear.dolorMusculoEpicondileo}
-                      lado="dx"
-                    />
-                    <CheckDxIx
-                      basePath={`${baseCodo}.palpacionEpicondileoEpitroclear.dolorMusculoEpicondileo`}
-                      checked={codo.palpacionEpicondileoEpitroclear.dolorMusculoEpicondileo}
-                      lado="ix"
-                    />
-                  </div>
-                </div>
-                <div className="flex items-center justify-between bg-slate-50 rounded-lg px-4 py-3">
-                  <p className="text-xs font-bold text-slate-700 uppercase">
-                    Dolor Músculo Epitróclear
-                  </p>
-                  <div className="flex gap-4">
-                    <CheckDxIx
-                      basePath={`${baseCodo}.palpacionEpicondileoEpitroclear.dolorMusculoEpitroclear`}
-                      checked={codo.palpacionEpicondileoEpitroclear.dolorMusculoEpitroclear}
-                      lado="dx"
-                    />
-                    <CheckDxIx
-                      basePath={`${baseCodo}.palpacionEpicondileoEpitroclear.dolorMusculoEpitroclear`}
-                      checked={codo.palpacionEpicondileoEpitroclear.dolorMusculoEpitroclear}
-                      lado="ix"
-                    />
-                  </div>
-                </div>
+    <div className="evaluation-page evaluation-page--page2 min-h-screen bg-gray-100 py-6 text-xs leading-tight text-black">
+      <form
+        onSubmit={(e) => e.preventDefault()}
+        className="max-w-4xl mx-auto bg-white p-3 shadow-md border border-gray-900 space-y-2"
+      >
+        {/* 1. PALPACIÓN MÚSCULO EPICÓNDILEO - EPITRÓCLEAR */}
+        <div className="border border-gray-900">
+          <div className="grid grid-cols-12 divide-x divide-gray-900">
+            <div className="col-span-10 grid grid-cols-12 divide-x divide-gray-900">
+              <div className="col-span-12 bg-gray-200 font-bold p-1 px-2 uppercase border-b border-gray-900 text-[11px]">
+                PALPACION MUSCULO EPICÓNDILEO - EPITRÓCLEAR
               </div>
-            </div>
-          </div>
-
-          {/* Tests de Codo (Epicondilitis + Atrapamiento N. Ulnar) */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {/* Test para Epicondilitis */}
-            <div className="border border-slate-200 rounded-lg p-4">
-              <h4 className="text-xs font-bold text-slate-600 uppercase border-b border-slate-200 pb-2 mb-4">
-                Test para Epicondilitis
-              </h4>
-              <div className="flex gap-4 items-start">
-                <div className="w-24 h-20 bg-slate-100 rounded flex items-center justify-center shrink-0">
-                  <span className="text-[9px] text-slate-400 italic">[Gráfico]</span>
+              <div className="col-span-6 p-2 flex items-center justify-between space-x-2">
+                <p className="text-[9px] uppercase font-semibold leading-tight max-w-[130px] text-gray-800">
+                  SE EFECTÚA A 2 CM DEL EPICÓNDILO SOBRE LA INSERCIÓN DEL TENDÓN
+                </p>
+                <GraphPlaceholder className="w-28 h-14">[Gráfico Palpación]</GraphPlaceholder>
+              </div>
+              <div className="col-span-6 flex flex-col justify-center divide-y divide-gray-900 font-semibold text-[10px]">
+                <div className="p-2 flex items-center h-1/2">
+                  DOLOR MUSCULO EPICÓNDILEO.........................
                 </div>
-                <div className="space-y-3">
-                  <p className="text-[10px] font-semibold text-slate-600 leading-tight">
-                    Flexión pasiva de la muñeca con extensión del codo
-                  </p>
-                  <div className="space-y-1">
-                    <label className="flex items-center gap-2 text-xs cursor-pointer">
-                      <CheckSimple
-                        path={`${baseCodo}.testEpicondilitis.presenciaDolorLateralCodo.dx`}
-                        checked={codo.testEpicondilitis.presenciaDolorLateralCodo.dx}
-                      />
-                      Presencia de dolor lateral en el codo Dx
-                    </label>
-                    <label className="flex items-center gap-2 text-xs cursor-pointer">
-                      <CheckSimple
-                        path={`${baseCodo}.testEpicondilitis.presenciaDolorLateralCodo.ix`}
-                        checked={codo.testEpicondilitis.presenciaDolorLateralCodo.ix}
-                      />
-                      Presencia de dolor lateral en el codo Ix
-                    </label>
-                  </div>
+                <div className="p-2 flex items-center h-1/2">
+                  DOLOR MUSCULO EPITRÓCLEAR.........................
                 </div>
               </div>
             </div>
 
-            {/* Test Atrapamiento N. Ulnar */}
-            <div className="border border-slate-200 rounded-lg p-4">
-              <h4 className="text-xs font-bold text-slate-600 uppercase border-b border-slate-200 pb-2 mb-4">
-                Test para Atrapamiento N. Ulnar en el Codo
-              </h4>
-              <div className="flex gap-4 items-start">
-                <div className="w-24 h-20 bg-slate-100 rounded flex items-center justify-center shrink-0">
-                  <span className="text-[9px] text-slate-400 italic">[Gráfico]</span>
-                </div>
-                <div className="space-y-3">
-                  <p className="text-[10px] font-semibold text-slate-600 leading-tight">
-                    Parestesias irradian al antebrazo y/o al 4° y 5° dedo:
-                  </p>
-                  <div className="flex gap-4">
-                    <CheckDxIx
-                      basePath={`${baseCodo}.testAtrapamientoNervioUlnar.parestesiasIrradianAntebrazoODedos`}
-                      checked={codo.testAtrapamientoNervioUlnar.parestesiasIrradianAntebrazoODedos}
-                      lado="dx"
-                    />
-                    <CheckDxIx
-                      basePath={`${baseCodo}.testAtrapamientoNervioUlnar.parestesiasIrradianAntebrazoODedos`}
-                      checked={codo.testAtrapamientoNervioUlnar.parestesiasIrradianAntebrazoODedos}
-                      lado="ix"
-                    />
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Examen Instrumental + Gravedad Codo */}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            <div className="lg:col-span-2 bg-slate-50 p-4 rounded-lg">
-              <p className="text-xs font-bold uppercase text-slate-600 mb-4">
-                Examen Instrumental
-              </p>
-              <div className="flex flex-wrap items-center gap-4">
-                <label className="flex items-center gap-2 text-xs font-bold cursor-pointer">
-                  <CheckSimple
-                    path={`${baseCodo}.examenInstrumental.noRealizado`}
-                    checked={codo.examenInstrumental.noRealizado}
-                  />
-                  NO
-                </label>
-                <div className="flex items-center gap-2">
-                  <CheckSimple
-                    path={`${baseCodo}.examenInstrumental.ecografia`}
-                    checked={codo.examenInstrumental.ecografia}
-                  />
-                  <span className="text-xs font-medium">ECOGRAFÍA (año</span>
-                  <input
-                    type="number"
-                    value={codo.examenInstrumental.ecografiaAno ?? ''}
-                    onChange={(e) =>
-                      setField(
-                        `${baseCodo}.examenInstrumental.ecografiaAno`,
-                        e.target.value === '' ? null : Number(e.target.value),
-                      )
-                    }
-                    className="w-16 border-b border-slate-300 bg-transparent text-xs focus:ring-0 outline-none text-center"
-                  />
-                  <span className="text-xs">)</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <CheckSimple
-                    path={`${baseCodo}.examenInstrumental.rx`}
-                    checked={codo.examenInstrumental.rx}
-                  />
-                  <span className="text-xs font-medium">RX (año</span>
-                  <input
-                    type="number"
-                    value={codo.examenInstrumental.rxAno ?? ''}
-                    onChange={(e) =>
-                      setField(
-                        `${baseCodo}.examenInstrumental.rxAno`,
-                        e.target.value === '' ? null : Number(e.target.value),
-                      )
-                    }
-                    className="w-16 border-b border-slate-300 bg-transparent text-xs focus:ring-0 outline-none text-center"
-                  />
-                  <span className="text-xs">)</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <CheckSimple
-                    path={`${baseCodo}.examenInstrumental.emg`}
-                    checked={codo.examenInstrumental.emg}
-                  />
-                  <span className="text-xs font-medium">EMG (año</span>
-                  <input
-                    type="number"
-                    value={codo.examenInstrumental.emgAno ?? ''}
-                    onChange={(e) =>
-                      setField(
-                        `${baseCodo}.examenInstrumental.emgAno`,
-                        e.target.value === '' ? null : Number(e.target.value),
-                      )
-                    }
-                    className="w-16 border-b border-slate-300 bg-transparent text-xs focus:ring-0 outline-none text-center"
-                  />
-                  <span className="text-xs">)</span>
-                </div>
-              </div>
-            </div>
-
-            <div className="bg-sky-600 text-white p-4 rounded-lg flex flex-col justify-between">
-              <p className="text-xs font-bold uppercase mb-4 opacity-80">
-                Gravedad Patología del Codo
-              </p>
-              <div className="flex justify-between items-center">
-                <RadioGravedad
-                  value="LEVE"
-                  current={codo.gravedadPatologiaCodo}
-                  path={`${baseCodo}.gravedadPatologiaCodo`}
-                  groupName="gravedadCodo"
+            <div className="col-span-2 grid grid-cols-2 divide-x divide-gray-900 text-center">
+              <div className="bg-gray-200 font-bold p-1 border-b border-gray-900 text-[11px]">Dx</div>
+              <div className="bg-gray-200 font-bold p-1 border-b border-gray-900 text-[11px]">Ix</div>
+              <div className="p-1 flex items-center justify-center border-b border-gray-900">
+                <CheckSimple
+                  path={`${baseCodo}.palpacionEpicondileoEpitroclear.dolorMusculoEpicondileo.dx`}
+                  checked={epi.dolorMusculoEpicondileo.dx}
+                  ariaLabel="Dolor músculo epicóndilo Dx"
                 />
-                <RadioGravedad
-                  value="MEDIA"
-                  current={codo.gravedadPatologiaCodo}
-                  path={`${baseCodo}.gravedadPatologiaCodo`}
-                  groupName="gravedadCodo"
+              </div>
+              <div className="p-1 flex items-center justify-center border-b border-gray-900">
+                <CheckSimple
+                  path={`${baseCodo}.palpacionEpicondileoEpitroclear.dolorMusculoEpicondileo.ix`}
+                  checked={epi.dolorMusculoEpicondileo.ix}
+                  ariaLabel="Dolor músculo epicóndilo Ix"
                 />
-                <RadioGravedad
-                  value="GRAVE"
-                  current={codo.gravedadPatologiaCodo}
-                  path={`${baseCodo}.gravedadPatologiaCodo`}
-                  groupName="gravedadCodo"
+              </div>
+              <div className="p-1 flex items-center justify-center">
+                <CheckSimple
+                  path={`${baseCodo}.palpacionEpicondileoEpitroclear.dolorMusculoEpitroclear.dx`}
+                  checked={epi.dolorMusculoEpitroclear.dx}
+                  ariaLabel="Dolor músculo epitróclear Dx"
+                />
+              </div>
+              <div className="p-1 flex items-center justify-center">
+                <CheckSimple
+                  path={`${baseCodo}.palpacionEpicondileoEpitroclear.dolorMusculoEpitroclear.ix`}
+                  checked={epi.dolorMusculoEpitroclear.ix}
+                  ariaLabel="Dolor músculo epitróclear Ix"
                 />
               </div>
             </div>
           </div>
         </div>
-      </section>
 
-      {/* ===================== SECCIÓN B: MUÑECA - MANO ===================== */}
-      <section className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
-        <div className="bg-slate-50 px-6 py-4 border-b border-slate-200 flex justify-between items-center">
-          <h3 className="text-lg font-semibold text-sky-600">
-            B) MUÑECA - MANO
-          </h3>
-          <label className="flex items-center gap-2 cursor-pointer">
-            <span className="text-xs font-medium text-slate-500 uppercase tracking-wider">
-              REALIZA MANIOBRAS
-            </span>
-            <input
-              type="checkbox"
-              className="w-5 h-5 rounded text-sky-600 focus:ring-sky-500"
-              checked={munecaMano.realizaManiobras}
-              onChange={(e) => setField(`${baseMuneca}.realizaManiobras`, e.target.checked)}
+        {/* 2. TESTS DE CODO (EPICONDILITIS Y ATRAPAMIENTO N. ULNAR) */}
+        <div className="border border-gray-900 grid grid-cols-2 divide-x divide-gray-900">
+          {/* TEST PARA EPICONDILITIS */}
+          <div className="flex flex-col justify-between">
+            <div className="bg-gray-200 font-bold p-1 border-b border-gray-900 uppercase px-2 text-[11px]">
+              TEST PARA EPICONDILITIS
+            </div>
+            <div className="p-2 grid grid-cols-12 gap-2 items-start">
+              <div className="col-span-6 flex flex-col items-start space-y-1">
+                <GraphPlaceholder className="w-full h-20">[Gráfico Extensión Codo]</GraphPlaceholder>
+                <p className="text-[8px] uppercase leading-tight font-semibold text-gray-800 pt-1">
+                  FLEXIÓN PASIVA DE LA MUÑECA CON EXTENSIÓN DEL CODO
+                </p>
+              </div>
+              <div className="col-span-6 space-y-3 pt-1">
+                <p className="text-[10px] font-semibold leading-tight">
+                  Presencia de dolor lateral en el codo.
+                </p>
+                <div className="flex space-x-4 font-bold text-[11px] pl-1">
+                  <CheckDxIx
+                    basePath={`${baseCodo}.testEpicondilitis.presenciaDolorLateralCodo`}
+                    checked={codo.testEpicondilitis.presenciaDolorLateralCodo}
+                    lado="dx"
+                    ariaLabel="Presencia de dolor lateral en el codo Dx"
+                  />
+                  <CheckDxIx
+                    basePath={`${baseCodo}.testEpicondilitis.presenciaDolorLateralCodo`}
+                    checked={codo.testEpicondilitis.presenciaDolorLateralCodo}
+                    lado="ix"
+                    ariaLabel="Presencia de dolor lateral en el codo Ix"
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* TEST PARA ATRAPAMIENTO N. ULNAR EN EL CODO */}
+          <div className="flex flex-col justify-between">
+            <div className="bg-gray-200 font-bold p-1 border-b border-gray-900 uppercase px-2 text-[11px]">
+              TEST PARA ATRAPAMIENTO N. ULNAR EN EL CODO
+            </div>
+            <div className="p-2 grid grid-cols-12 gap-2 items-center">
+              <div className="col-span-6">
+                <GraphPlaceholder className="w-full h-20">[Gráfico Nervio Ulnar]</GraphPlaceholder>
+              </div>
+              <div className="col-span-6 space-y-3">
+                <p className="font-semibold text-[9px] uppercase leading-tight text-gray-900">
+                  PARESTESIAS IRRADIAN AL ANTEBRAZO Y/O AL 4° Y 5° DEDO:
+                </p>
+                <div className="flex space-x-4 font-bold text-[11px]">
+                  <CheckDxIx
+                    basePath={`${baseCodo}.testAtrapamientoNervioUlnar.parestesiasIrradianAntebrazoODedos`}
+                    checked={codo.testAtrapamientoNervioUlnar.parestesiasIrradianAntebrazoODedos}
+                    lado="dx"
+                    ariaLabel="Parestesias irradian antebrazo o dedos Dx"
+                  />
+                  <CheckDxIx
+                    basePath={`${baseCodo}.testAtrapamientoNervioUlnar.parestesiasIrradianAntebrazoODedos`}
+                    checked={codo.testAtrapamientoNervioUlnar.parestesiasIrradianAntebrazoODedos}
+                    lado="ix"
+                    ariaLabel="Parestesias irradian antebrazo o dedos Ix"
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* 3. EXAMEN INSTRUMENTAL */}
+        <div className="border border-gray-900 p-1.5 flex flex-wrap items-center justify-between text-[11px] gap-2">
+          <span className="font-bold">Examen instrumental:</span>
+          <label className="inline-flex items-center space-x-1 cursor-pointer">
+            <CheckSimple
+              path={`${baseCodo}.examenInstrumental.noRealizado`}
+              checked={codo.examenInstrumental.noRealizado}
             />
+            <span className="font-bold">NO</span>
           </label>
+
+          <div className="inline-flex items-center space-x-1">
+            <label className="inline-flex items-center space-x-1 cursor-pointer">
+              <CheckSimple
+                path={`${baseCodo}.examenInstrumental.ecografia`}
+                checked={codo.examenInstrumental.ecografia}
+              />
+              <span>ECOGRAFÍA (año</span>
+            </label>
+            <input
+              type="number"
+              min={0}
+              aria-label="Año ecografía codo"
+              value={codo.examenInstrumental.ecografiaAno ?? ''}
+              onChange={(e) =>
+                setField(
+                  `${baseCodo}.examenInstrumental.ecografiaAno`,
+                  e.target.value === '' ? null : Number(e.target.value),
+                )
+              }
+              className="w-12 border-b border-gray-800 text-center outline-none p-0 h-4 text-xs font-semibold"
+            />
+            <span>)</span>
+          </div>
+
+          <div className="inline-flex items-center space-x-1">
+            <label className="inline-flex items-center space-x-1 cursor-pointer">
+              <CheckSimple
+                path={`${baseCodo}.examenInstrumental.rx`}
+                checked={codo.examenInstrumental.rx}
+              />
+              <span>RX (año</span>
+            </label>
+            <input
+              type="number"
+              min={0}
+              aria-label="Año RX codo"
+              value={codo.examenInstrumental.rxAno ?? ''}
+              onChange={(e) =>
+                setField(
+                  `${baseCodo}.examenInstrumental.rxAno`,
+                  e.target.value === '' ? null : Number(e.target.value),
+                )
+              }
+              className="w-12 border-b border-gray-800 text-center outline-none p-0 h-4 text-xs font-semibold"
+            />
+            <span>)</span>
+          </div>
+
+          <div className="inline-flex items-center space-x-1">
+            <label className="inline-flex items-center space-x-1 cursor-pointer">
+              <CheckSimple
+                path={`${baseCodo}.examenInstrumental.emg`}
+                checked={codo.examenInstrumental.emg}
+              />
+              <span>EMG (año</span>
+            </label>
+            <input
+              type="number"
+              min={0}
+              aria-label="Año EMG codo"
+              value={codo.examenInstrumental.emgAno ?? ''}
+              onChange={(e) =>
+                setField(
+                  `${baseCodo}.examenInstrumental.emgAno`,
+                  e.target.value === '' ? null : Number(e.target.value),
+                )
+              }
+              className="w-12 border-b border-gray-800 text-center outline-none p-0 h-4 text-xs font-semibold"
+            />
+            <span>)</span>
+          </div>
         </div>
 
-        <div className="p-6 space-y-8">
-          {/* Molestia meses */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-            <div className="space-y-2">
-              <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider">
-                Molestia Muñeca Dx Desde (meses)
-              </label>
+        {/* 4. GRAVEDAD PATOLOGÍA DEL CODO */}
+        <div className="border border-gray-900 bg-gray-100 p-1.5 flex items-center justify-between text-[11px]">
+          <span className="font-bold uppercase">GRAVEDAD PATOLOGÍA DEL CODO (última página)</span>
+          <div className="flex space-x-6 font-bold">
+            <RadioGravedad
+              value="LEVE"
+              current={codo.gravedadPatologiaCodo}
+              path={`${baseCodo}.gravedadPatologiaCodo`}
+              groupName="gravedadCodo"
+            />
+            <RadioGravedad
+              value="MEDIA"
+              current={codo.gravedadPatologiaCodo}
+              path={`${baseCodo}.gravedadPatologiaCodo`}
+              groupName="gravedadCodo"
+            />
+            <RadioGravedad
+              value="GRAVE"
+              current={codo.gravedadPatologiaCodo}
+              path={`${baseCodo}.gravedadPatologiaCodo`}
+              groupName="gravedadCodo"
+            />
+          </div>
+        </div>
+
+        {/* 5. SECCIÓN C: MUÑECA - MANO */}
+        <div className="border border-gray-900">
+          <div className="bg-gray-200 p-1 font-bold border-b border-gray-900 flex items-center justify-between text-[12px]">
+            <div className="text-amber-900 font-extrabold">
+              c) MUÑECA - MANO: <span className="text-amber-800">REALIZA MANIOBRAS</span>
+            </div>
+            <label className="inline-flex items-center space-x-1 text-black font-semibold cursor-pointer">
+              <CheckSimple
+                path={`${baseMuneca}.realizaManiobras`}
+                checked={munecaMano.realizaManiobras}
+              />
+              <span>SI</span>
+            </label>
+          </div>
+
+          <div className="p-2 border-b border-gray-900 flex justify-around items-center font-bold text-[11px]">
+            <div>
+              <span>MOLESTIA MUÑECA Dx desde</span>{' '}
               <input
                 type="number"
                 min={0}
+                aria-label="Molestia muñeca Dx desde meses"
                 value={munecaMano.molestiaMunecaDxDesdeMeses ?? ''}
                 onChange={(e) =>
                   setField(
@@ -366,17 +384,16 @@ export function EvaluacionFormPag2() {
                     e.target.value === '' ? null : Number(e.target.value),
                   )
                 }
-                className="w-full border border-slate-200 rounded-lg p-3 text-sm focus:ring-1 focus:ring-sky-500 outline-none"
-                placeholder="0"
+                className="w-20 border-b border-gray-800 text-center outline-none p-0 mx-1 font-semibold"
               />
+              <span>(meses)</span>
             </div>
-            <div className="space-y-2">
-              <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider">
-                Molestia Muñeca Ix Desde (meses)
-              </label>
+            <div>
+              <span>MOLESTIA MUÑECA Ix desde</span>{' '}
               <input
                 type="number"
                 min={0}
+                aria-label="Molestia muñeca Ix desde meses"
                 value={munecaMano.molestiaMunecaIxDesdeMeses ?? ''}
                 onChange={(e) =>
                   setField(
@@ -384,301 +401,295 @@ export function EvaluacionFormPag2() {
                     e.target.value === '' ? null : Number(e.target.value),
                   )
                 }
-                className="w-full border border-slate-200 rounded-lg p-3 text-sm focus:ring-1 focus:ring-sky-500 outline-none"
-                placeholder="0"
+                className="w-20 border-b border-gray-800 text-center outline-none p-0 mx-1 font-semibold"
               />
+              <span>(meses)</span>
             </div>
           </div>
 
-          {/* Observación Mano/Muñeca */}
-          <div className="border border-slate-200 rounded-lg overflow-hidden">
-            <div className="bg-slate-50 text-center font-bold text-[10px] py-2 border-b border-slate-200 uppercase tracking-widest text-slate-600">
-              Observación Mano / Muñeca
+          {/* OBSERVACIÓN MANO / MUÑECA */}
+          <div>
+            <div className="bg-gray-200 font-bold p-1 text-center border-b border-gray-900 uppercase text-[11px]">
+              OBSERVACIÓN MANO/MUÑECA
             </div>
-            <div className="divide-y divide-slate-200">
-              {/* Quistes */}
-              <div className="grid grid-cols-12 items-center">
-                <div className="col-span-3 font-bold text-[10px] uppercase text-slate-500 pl-4 py-3 bg-slate-50">
-                  Quiste
-                </div>
-                <div className="col-span-4 p-3 flex items-center justify-between">
-                  <span className="text-xs font-medium text-slate-700">Quiste Dorsal</span>
-                  <div className="flex gap-3">
+            <div className="divide-y divide-gray-900 font-semibold text-[10px]">
+              {/* QUISTE */}
+              <div className="grid grid-cols-12 divide-x divide-gray-900 p-1 items-center">
+                <div className="col-span-3 font-bold pl-2 uppercase">QUISTE</div>
+                <div className="col-span-4 pl-2 flex items-center justify-between pr-2">
+                  <span>QUISTE DORSAL</span>
+                  <div className="space-x-2">
                     <CheckDxIx
                       basePath={`${baseMuneca}.observacionManoMuneca.quisteDorsal`}
-                      checked={munecaMano.observacionManoMuneca.quisteDorsal}
+                      checked={obs.quisteDorsal}
                       lado="dx"
+                      ariaLabel="Quiste dorsal Dx"
                     />
                     <CheckDxIx
                       basePath={`${baseMuneca}.observacionManoMuneca.quisteDorsal`}
-                      checked={munecaMano.observacionManoMuneca.quisteDorsal}
+                      checked={obs.quisteDorsal}
                       lado="ix"
+                      ariaLabel="Quiste dorsal Ix"
                     />
                   </div>
                 </div>
-                <div className="col-span-5 p-3 flex items-center justify-between border-l border-slate-200">
-                  <span className="text-xs font-medium text-slate-700">Quiste Ventral</span>
-                  <div className="flex gap-3">
+                <div className="col-span-5 pl-2 flex items-center justify-between pr-2">
+                  <span>QUISTE VENTRAL</span>
+                  <div className="space-x-2">
                     <CheckDxIx
                       basePath={`${baseMuneca}.observacionManoMuneca.quisteVentral`}
-                      checked={munecaMano.observacionManoMuneca.quisteVentral}
+                      checked={obs.quisteVentral}
                       lado="dx"
+                      ariaLabel="Quiste ventral Dx"
                     />
                     <CheckDxIx
                       basePath={`${baseMuneca}.observacionManoMuneca.quisteVentral`}
-                      checked={munecaMano.observacionManoMuneca.quisteVentral}
+                      checked={obs.quisteVentral}
                       lado="ix"
+                      ariaLabel="Quiste ventral Ix"
                     />
                   </div>
                 </div>
               </div>
 
-              {/* Edema */}
-              <div className="grid grid-cols-12 items-center">
-                <div className="col-span-3 font-bold text-[10px] uppercase text-slate-500 pl-4 py-3 bg-slate-50">
-                  Edema
-                </div>
-                <div className="col-span-4 p-3 flex items-center justify-between">
-                  <div className="text-[10px] leading-tight">
-                    <p className="font-medium text-slate-700">Ventral (muñeca)</p>
-                    <p className="text-slate-500">Estiloide Radial</p>
+              {/* EDEMA */}
+              <div className="grid grid-cols-12 divide-x divide-gray-900 p-1 items-center">
+                <div className="col-span-3 font-bold pl-2 uppercase">EDEMA</div>
+                <div className="col-span-4 pl-2 flex items-center justify-between pr-2">
+                  <div>
+                    <div>VENTRAL (muñeca)</div>
+                    <div>ESTILOIDE RADIAL</div>
                   </div>
-                  <div className="flex gap-3">
+                  <div className="space-x-2">
                     <CheckDxIx
                       basePath={`${baseMuneca}.observacionManoMuneca.edemaVentralEstiloideRadial`}
-                      checked={munecaMano.observacionManoMuneca.edemaVentralEstiloideRadial}
+                      checked={obs.edemaVentralEstiloideRadial}
                       lado="dx"
+                      ariaLabel="Edema ventral estiloide radial Dx"
                     />
                     <CheckDxIx
                       basePath={`${baseMuneca}.observacionManoMuneca.edemaVentralEstiloideRadial`}
-                      checked={munecaMano.observacionManoMuneca.edemaVentralEstiloideRadial}
+                      checked={obs.edemaVentralEstiloideRadial}
                       lado="ix"
+                      ariaLabel="Edema ventral estiloide radial Ix"
                     />
                   </div>
                 </div>
-                <div className="col-span-5 p-3 flex items-center justify-between border-l border-slate-200">
-                  <div className="text-[10px] leading-tight">
-                    <p className="font-medium text-slate-700">Dorsal (muñeca)</p>
-                    <p className="text-slate-500">Estiloide Ulnar</p>
+                <div className="col-span-5 pl-2 flex items-center justify-between pr-2">
+                  <div>
+                    <div>DORSAL (Muñeca)</div>
+                    <div>ESTILOIDE ULNAR</div>
                   </div>
-                  <div className="flex gap-3">
+                  <div className="space-x-2">
                     <CheckDxIx
                       basePath={`${baseMuneca}.observacionManoMuneca.edemaDorsalEstiloideUlnar`}
-                      checked={munecaMano.observacionManoMuneca.edemaDorsalEstiloideUlnar}
+                      checked={obs.edemaDorsalEstiloideUlnar}
                       lado="dx"
+                      ariaLabel="Edema dorsal estiloide ulnar Dx"
                     />
                     <CheckDxIx
                       basePath={`${baseMuneca}.observacionManoMuneca.edemaDorsalEstiloideUlnar`}
-                      checked={munecaMano.observacionManoMuneca.edemaDorsalEstiloideUlnar}
+                      checked={obs.edemaDorsalEstiloideUlnar}
                       lado="ix"
+                      ariaLabel="Edema dorsal estiloide ulnar Ix"
                     />
                   </div>
                 </div>
               </div>
 
-              {/* Hipotrofia */}
-              <div className="grid grid-cols-12 items-center">
-                <div className="col-span-3 font-bold text-[10px] uppercase text-slate-500 pl-4 py-3 bg-slate-50">
-                  Hipotrofia
-                </div>
-                <div className="col-span-4 p-3">
-                  <label className="flex items-center gap-2 text-xs cursor-pointer">
+              {/* HIPOTROFIA */}
+              <div className="grid grid-cols-12 divide-x divide-gray-900 p-1 items-center">
+                <div className="col-span-3 font-bold pl-2 uppercase">HIPOTROFIA</div>
+                <div className="col-span-4 pl-2">
+                  <label className="cursor-pointer">
                     <CheckSimple
                       path={`${baseMuneca}.observacionManoMuneca.hipotrofiaPosterior.dx`}
-                      checked={munecaMano.observacionManoMuneca.hipotrofiaPosterior.dx}
-                    />
-                    <span className="font-medium">Dx posterior</span>
+                      checked={obs.hipotrofiaPosterior.dx}
+                      ariaLabel="Hipotrofia posterior Dx"
+                    />{' '}
+                    Dx posterior:
                   </label>
                 </div>
-                <div className="col-span-5 p-3 border-l border-slate-200">
-                  <label className="flex items-center gap-2 text-xs cursor-pointer">
+                <div className="col-span-5 pl-2">
+                  <label className="cursor-pointer">
                     <CheckSimple
                       path={`${baseMuneca}.observacionManoMuneca.hipotrofiaPosterior.ix`}
-                      checked={munecaMano.observacionManoMuneca.hipotrofiaPosterior.ix}
-                    />
-                    <span className="font-medium">Ix posterior</span>
+                      checked={obs.hipotrofiaPosterior.ix}
+                      ariaLabel="Hipotrofia posterior Ix"
+                    />{' '}
+                    Ix posterior:
                   </label>
                 </div>
               </div>
 
-              {/* Deformidad Articular */}
-              <div className="grid grid-cols-12 items-center">
-                <div className="col-span-3 font-bold text-[10px] uppercase text-slate-500 pl-4 py-3 bg-slate-50 leading-tight">
-                  Deform. Artic. Trapecio - Metacarpal
-                </div>
-                <div className="col-span-4 p-3">
-                  <label className="flex items-center gap-2 text-xs cursor-pointer">
+              {/* DEFORMIDAD ARTICULAR */}
+              <div className="grid grid-cols-12 divide-x divide-gray-900 p-1 items-center">
+                <div className="col-span-3 font-bold pl-2 uppercase">DEFORM. ARTIC. TRAPECIO - METACARPAL</div>
+                <div className="col-span-4 pl-2">
+                  <label className="cursor-pointer">
                     <CheckSimple
                       path={`${baseMuneca}.observacionManoMuneca.deformidadArticularTrapecioMetacarpal.dx`}
-                      checked={
-                        munecaMano.observacionManoMuneca.deformidadArticularTrapecioMetacarpal.dx
-                      }
-                    />
-                    <span className="font-medium">Dx</span>
+                      checked={obs.deformidadArticularTrapecioMetacarpal.dx}
+                      ariaLabel="Deformidad articular trapecio metacarpal Dx"
+                    />{' '}
+                    Dx
                   </label>
                 </div>
-                <div className="col-span-5 p-3 border-l border-slate-200">
-                  <label className="flex items-center gap-2 text-xs cursor-pointer">
+                <div className="col-span-5 pl-2">
+                  <label className="cursor-pointer">
                     <CheckSimple
                       path={`${baseMuneca}.observacionManoMuneca.deformidadArticularTrapecioMetacarpal.ix`}
-                      checked={
-                        munecaMano.observacionManoMuneca.deformidadArticularTrapecioMetacarpal.ix
-                      }
-                    />
-                    <span className="font-medium">Ix</span>
+                      checked={obs.deformidadArticularTrapecioMetacarpal.ix}
+                      ariaLabel="Deformidad articular trapecio metacarpal Ix"
+                    />{' '}
+                    Ix
                   </label>
                 </div>
               </div>
 
-              {/* Retacciones Palmares */}
-              <div className="grid grid-cols-12 items-center">
-                <div className="col-span-3 font-bold text-[10px] uppercase text-slate-500 pl-4 py-3 bg-slate-50 leading-tight">
-                  Retacciones Palmares
-                </div>
-                <div className="col-span-4 p-3">
-                  <label className="flex items-center gap-2 text-xs cursor-pointer">
+              {/* RETACCIONES PALMARES */}
+              <div className="grid grid-cols-12 divide-x divide-gray-900 p-1 items-center">
+                <div className="col-span-3 font-bold pl-2 uppercase">RETACCIONES PALMARES</div>
+                <div className="col-span-4 pl-2">
+                  <label className="cursor-pointer">
                     <CheckSimple
                       path={`${baseMuneca}.observacionManoMuneca.retaccionesPalmares.dx`}
-                      checked={munecaMano.observacionManoMuneca.retaccionesPalmares.dx}
-                    />
-                    <span className="font-medium">Dx</span>
+                      checked={obs.retaccionesPalmares.dx}
+                      ariaLabel="Retracciones palmares Dx"
+                    />{' '}
+                    Dx
                   </label>
                 </div>
-                <div className="col-span-5 p-3 border-l border-slate-200">
-                  <label className="flex items-center gap-2 text-xs cursor-pointer">
+                <div className="col-span-5 pl-2">
+                  <label className="cursor-pointer">
                     <CheckSimple
                       path={`${baseMuneca}.observacionManoMuneca.retaccionesPalmares.ix`}
-                      checked={munecaMano.observacionManoMuneca.retaccionesPalmares.ix}
-                    />
-                    <span className="font-medium">Ix</span>
+                      checked={obs.retaccionesPalmares.ix}
+                      ariaLabel="Retracciones palmares Ix"
+                    />{' '}
+                    Ix
                   </label>
                 </div>
               </div>
             </div>
-          </div>
-
-          {/* Palpación + Maniobra Clic Dedos Gatillo */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {/* Palpación */}
-            <div className="border border-slate-200 rounded-lg overflow-hidden">
-              <div className="bg-slate-50 text-center font-bold text-[10px] py-2 border-b border-slate-200 uppercase tracking-widest text-slate-600">
-                Palpación
-              </div>
-              <div className="p-4 flex gap-4">
-                <div className="w-20 h-24 bg-slate-100 rounded flex flex-col items-center justify-center shrink-0">
-                  <span className="text-[8px] text-slate-400 italic">[Esquema</span>
-                  <span className="text-[8px] text-slate-400 italic">Mano]</span>
-                  <span className="text-[9px] font-bold text-slate-500 mt-1">A / B</span>
-                </div>
-                <div className="space-y-2 text-[10px]">
-                  <label className="flex items-start gap-1.5 cursor-pointer">
-                    <CheckSimple
-                      path={`${baseMuneca}.palpacion.dolorArticulacionTrapecioMetacarpal.dx`}
-                      checked={munecaMano.palpacion.dolorArticulacionTrapecioMetacarpal.dx}
-                    />
-                    <span className="leading-tight">
-                      (A) Dolor palpación arti. trapecio-metacarpal Dx
-                    </span>
-                  </label>
-                  <label className="flex items-start gap-1.5 cursor-pointer">
-                    <CheckSimple
-                      path={`${baseMuneca}.palpacion.dolorArticulacionTrapecioMetacarpal.ix`}
-                      checked={munecaMano.palpacion.dolorArticulacionTrapecioMetacarpal.ix}
-                    />
-                    <span className="leading-tight">
-                      (A) Dolor palpación arti. trapecio-metacarpal Ix
-                    </span>
-                  </label>
-                  <label className="flex items-start gap-1.5 cursor-pointer">
-                    <CheckSimple
-                      path={`${baseMuneca}.palpacion.dolorEstiloideRadial.dx`}
-                      checked={munecaMano.palpacion.dolorEstiloideRadial.dx}
-                    />
-                    <span className="leading-tight">
-                      (B) Dolor palpación estiloide radial Dx
-                    </span>
-                  </label>
-                  <label className="flex items-start gap-1.5 cursor-pointer">
-                    <CheckSimple
-                      path={`${baseMuneca}.palpacion.dolorEstiloideRadial.ix`}
-                      checked={munecaMano.palpacion.dolorEstiloideRadial.ix}
-                    />
-                    <span className="leading-tight">
-                      (B) Dolor palpación estiloide radial Ix
-                    </span>
-                  </label>
-                </div>
-              </div>
-            </div>
-
-            {/* Maniobra Clic Dedos Gatillo */}
-            <div className="border border-slate-200 rounded-lg overflow-hidden">
-              <div className="bg-slate-50 text-center font-bold text-[10px] py-2 border-b border-slate-200 uppercase tracking-widest text-slate-600">
-                Maniobra para Clic {'(chasquido)'} de Dedos {'(Gatillo)'}
-              </div>
-              <div className="p-4 space-y-4">
-                <div className="flex gap-3">
-                  <div className="w-16 h-16 bg-slate-100 rounded flex items-center justify-center shrink-0">
-                    <span className="text-[8px] text-slate-400 italic">[Gráfico</span>
-                  </div>
-                  <div className="space-y-3 flex-1">
-                    {/* Dx */}
-                    <div>
-                      <p className="text-[10px] font-bold text-slate-600 mb-1">
-                        Clic durante la extensión dedo Dx:
-                      </p>
-                      <div className="flex gap-1">
-                        {(['dedo1', 'dedo2', 'dedo3', 'dedo4', 'dedo5'] as const).map((dedo, i) => (
-                          <label
-                            key={`dx-${dedo}`}
-                            className="inline-flex items-center gap-0.5 cursor-pointer text-[10px]"
-                          >
-                            <CheckSimple
-                              path={`${baseMuneca}.maniobraClicDedosGatillo.clicExtensionDedos.dx.${dedo}`}
-                              checked={
-                                munecaMano.maniobraClicDedosGatillo.clicExtensionDedos.dx[dedo]
-                              }
-                            />
-                            <span>{i + 1}°</span>
-                          </label>
-                        ))}
-                      </div>
-                    </div>
-                    {/* Ix */}
-                    <div>
-                      <p className="text-[10px] font-bold text-slate-600 mb-1">
-                        Clic durante la extensión dedo Ix:
-                      </p>
-                      <div className="flex gap-1">
-                        {(['dedo1', 'dedo2', 'dedo3', 'dedo4', 'dedo5'] as const).map((dedo, i) => (
-                          <label
-                            key={`ix-${dedo}`}
-                            className="inline-flex items-center gap-0.5 cursor-pointer text-[10px]"
-                          >
-                            <CheckSimple
-                              path={`${baseMuneca}.maniobraClicDedosGatillo.clicExtensionDedos.ix.${dedo}`}
-                              checked={
-                                munecaMano.maniobraClicDedosGatillo.clicExtensionDedos.ix[dedo]
-                              }
-                            />
-                            <span>{i + 1}°</span>
-                          </label>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Footer legend */}
-          <div className="flex justify-between items-center text-[10px] text-slate-400 font-bold uppercase pt-4 border-t border-slate-200">
-            <div>Dx. = Derecho | Ix. = Izquierdo</div>
-            <div>Fo. JJC-SIG-13-31 Cuestionario anamnesico y evaluación. Rev. 0</div>
           </div>
         </div>
-      </section>
+
+        {/* 6. PALPACIÓN Y DEDO EN GATILLO */}
+        <div className="border border-gray-900 grid grid-cols-2 divide-x divide-gray-900">
+          {/* PALPACIÓN */}
+          <div className="flex flex-col justify-between">
+            <div className="bg-gray-200 font-bold p-1 text-center border-b border-gray-900 uppercase text-[11px]">
+              PALPACIÓN
+            </div>
+            <div className="p-2 flex items-center space-x-2">
+              <GraphPlaceholder className="w-24 h-28" column>
+                <span>[Esquema Mano]</span>
+                <span className="font-bold text-gray-600">A</span>
+                <span className="font-bold text-gray-600">B</span>
+              </GraphPlaceholder>
+
+              <div className="space-y-1 text-[9px] font-semibold">
+                <label className="flex items-start space-x-1 cursor-pointer">
+                  <CheckSimple
+                    path={`${baseMuneca}.palpacion.dolorArticulacionTrapecioMetacarpal.dx`}
+                    checked={munecaMano.palpacion.dolorArticulacionTrapecioMetacarpal.dx}
+                  />
+                  <span>(A) DOLOR A LA PALPACIÓN ARTI. TRAPECIO – METACARPALE Dx.</span>
+                </label>
+                <label className="flex items-start space-x-1 cursor-pointer">
+                  <CheckSimple
+                    path={`${baseMuneca}.palpacion.dolorArticulacionTrapecioMetacarpal.ix`}
+                    checked={munecaMano.palpacion.dolorArticulacionTrapecioMetacarpal.ix}
+                  />
+                  <span>(A) DOLOR A LA PALPACIÓN ARTI. TRAPECIO – METACARPAL Ix.</span>
+                </label>
+                <label className="flex items-start space-x-1 cursor-pointer">
+                  <CheckSimple
+                    path={`${baseMuneca}.palpacion.dolorEstiloideRadial.dx`}
+                    checked={munecaMano.palpacion.dolorEstiloideRadial.dx}
+                  />
+                  <span>(B) DOLOR A LA PALPACIÓN ESTILOIDE RADIAL Dx.</span>
+                </label>
+                <label className="flex items-start space-x-1 cursor-pointer">
+                  <CheckSimple
+                    path={`${baseMuneca}.palpacion.dolorEstiloideRadial.ix`}
+                    checked={munecaMano.palpacion.dolorEstiloideRadial.ix}
+                  />
+                  <span>(B) DOLOR A LA PALPACIÓN ESTILOIDE RADIAL Ix.</span>
+                </label>
+              </div>
+            </div>
+          </div>
+
+          {/* MANIOBRA PARA CLIC (GATILLO) */}
+          <div className="flex flex-col justify-between">
+            <div className="bg-gray-200 font-bold p-1 text-center border-b border-gray-900 uppercase text-[11px]">
+              MANIOBRA PARA CLIC (chasquido) DE DEDOS (GATILLO)
+            </div>
+            <div className="p-2 space-y-3">
+              <div className="flex items-center space-x-2">
+                <GraphPlaceholder className="w-20 h-20">[Gráfico Dedo]</GraphPlaceholder>
+
+                <div className="space-y-2 text-[9px] font-semibold">
+                  {/* Dedo Dx */}
+                  <div>
+                    <p className="font-bold">CLIC DURANTE LA EXTENSIÓN DEDO Dx:</p>
+                    <div className="flex space-x-1 pl-4 mt-1">
+                      {DEDOS.map((dedo, i) => (
+                        <label
+                          key={`dx-${dedo}`}
+                          className="inline-flex items-center space-x-0.5 cursor-pointer"
+                        >
+                          <CheckSimple
+                            path={`${baseMuneca}.maniobraClicDedosGatillo.clicExtensionDedos.dx.${dedo}`}
+                            checked={clic.dx[dedo]}
+                          />
+                          <span>{i + 1}°</span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Dedo Ix */}
+                  <div>
+                    <p className="font-bold">CLIC DURANTE LA EXTENSIÓN DEDO Ix:</p>
+                    <div className="flex space-x-1 pl-4 mt-1">
+                      {DEDOS.map((dedo, i) => (
+                        <label
+                          key={`ix-${dedo}`}
+                          className="inline-flex items-center space-x-0.5 cursor-pointer"
+                        >
+                          <CheckSimple
+                            path={`${baseMuneca}.maniobraClicDedosGatillo.clicExtensionDedos.ix.${dedo}`}
+                            checked={clic.ix[dedo]}
+                          />
+                          <span>{i + 1}°</span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* LEYENDA */}
+        <div className="text-[10px] font-bold pt-1">
+          Dx.= Derecho&nbsp;&nbsp;&nbsp; Ix.= Izquierdo
+        </div>
+
+        {/* PIE DE PÁGINA */}
+        <div className="flex justify-between items-center text-[9px] text-gray-600 pt-2 border-t border-gray-300">
+          <div>
+            Fo. JJC-SIGLA-13-31 Cuestionario anamnesico y evaluación de extremidad superior y espalda. Rev. 0
+          </div>
+          <div className="font-bold text-gray-900 text-xs">
+            6
+          </div>
+        </div>
+      </form>
 
       <Paginacion
         paginaActual={2}
