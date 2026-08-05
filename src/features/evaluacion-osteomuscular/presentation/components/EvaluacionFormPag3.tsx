@@ -211,7 +211,7 @@ export function EvaluacionFormPag3() {
             <div className="p-2 grid grid-cols-12 gap-2 items-center my-auto">
               <div className="col-span-7">
                 <AnatomicalImage
-                  src="/assets/images/musculo/entrevista/test-finkelstein.jpg"
+                  src="/assets/images/musculo/entrevista/flexo-extension-muneca.jpg"
                   alt="Test de Finkelstein"
                   className="w-full h-24"
                   sizes="240px"
@@ -246,7 +246,7 @@ export function EvaluacionFormPag3() {
             <div className="p-2 grid grid-cols-12 gap-2 items-center">
               <div className="col-span-5">
                 <AnatomicalImage
-                  src="/assets/images/musculo/entrevista/flexo-extension-muneca.jpg"
+                  src="/assets/images/musculo/entrevista/dedo-gatillo.jpg"
                   alt="Flexo-extensión pasiva y contra resistencia de la muñeca"
                   className="w-full h-28"
                   sizes="240px"

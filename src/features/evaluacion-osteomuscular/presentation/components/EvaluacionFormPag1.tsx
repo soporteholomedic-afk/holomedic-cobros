@@ -679,7 +679,7 @@ export function EvaluacionFormPag1() {
                 <tr className="border-b border-gray-300 text-[9px]">
                   <td rowSpan={3} className="w-[40%] border-r border-black p-2 text-center align-middle">
                         <AnatomicalImage
-                          src="/assets/images/musculo/entrevista/palpacion-codo.jpg"
+                          src="/assets/images/musculo/entrevista/atrapamiento-nervio-ulnar.png"
                           alt="Palpación del codo"
                           className="w-48 h-24 mx-auto"
                           sizes="192px"

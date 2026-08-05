@@ -215,7 +215,7 @@ export function EvaluacionFormPag2() {
             <div className="p-2 grid grid-cols-12 gap-2 items-center">
               <div className="col-span-6">
                 <AnatomicalImage
-                  src="/assets/images/musculo/entrevista/atrapamiento-nervio-ulnar.png"
+                  src="/assets/images/musculo/entrevista/test-finkelstein.jpg"
                   alt="Test de atrapamiento del nervio ulnar"
                   className="w-full h-20"
                   sizes="160px"
@@ -629,7 +629,7 @@ export function EvaluacionFormPag2() {
             <div className="p-2 space-y-3">
               <div className="flex items-center space-x-2">
                 <AnatomicalImage
-                  src="/assets/images/musculo/entrevista/dedo-gatillo.jpg"
+                  src="/assets/images/musculo/entrevista/palpacion-codo.jpg"
                   alt="Maniobra de dedo en gatillo"
                   className="w-20 h-20 shrink-0"
                   sizes="80px"
