@@ -3,6 +3,7 @@
 import { useMemo } from 'react';
 import { useEvaluacionContext } from '@/features/evaluacion-osteomuscular/presentation/context/EvaluacionOsteomuscularContext';
 import { Paginacion } from './Paginacion';
+import { AnatomicalImage } from './AnatomicalImage';
 
 const BASE_COLUMNA = 'evaluacionColumna';
 
@@ -46,59 +47,6 @@ function TextField({ path, value, ariaLabel, className }: TextFieldProps) {
   );
 }
 
-/* ---- Diagramas SVG (réplica de __temp__/page8.html) ---- */
-
-function SvgEspalda() {
-  return (
-    <svg viewBox="0 0 100 150" className="w-28 h-40" fill="none" stroke="#666" strokeWidth={1.5} aria-hidden="true">
-      <path d="M 30,20 C 35,10 65,10 70,20 C 75,35 85,45 90,60 C 95,75 80,80 80,95 C 80,110 75,130 75,140 L 25,140 C 25,130 20,110 20,95 C 20,80 5,75 10,60 C 15,45 25,35 30,20 Z" fill="#f9f9f9" />
-      <line x1="50" y1="25" x2="50" y2="105" stroke="#ef4444" strokeWidth={4} />
-      <path d="M 40,105 C 45,100 55,100 60,105 C 65,115 35,115 40,105 Z" fill="#f97316" stroke="none" />
-    </svg>
-  );
-}
-
-function SvgFlexionLumbar() {
-  return (
-    <svg viewBox="0 0 120 70" className="w-32 h-20" fill="none" stroke="#333" strokeWidth={1.2} aria-hidden="true">
-      <path d="M 20,60 L 20,30 L 25,10" />
-      <path d="M 60,60 L 60,35 L 75,20 L 85,30" />
-      <path d="M 100,60 L 105,45 L 90,30 L 70,35" />
-      <circle cx="20" cy="60" r="1.5" fill="black" />
-      <circle cx="60" cy="60" r="1.5" fill="black" />
-      <circle cx="100" cy="60" r="1.5" fill="black" />
-    </svg>
-  );
-}
-
-function SvgPosturaManosCabeza() {
-  return (
-    <svg viewBox="0 0 100 80" className="w-28 h-24" fill="none" stroke="#333" strokeWidth={1.2} aria-hidden="true">
-      <circle cx="50" cy="20" r="10" />
-      <path d="M 50,30 L 50,70 M 35,25 L 25,15 L 35,10 L 45,15 Z M 65,25 L 75,15 L 65,10 L 55,15 Z" />
-    </svg>
-  );
-}
-
-function SvgCuello() {
-  return (
-    <svg viewBox="0 0 80 120" className="w-20 h-32" fill="none" stroke="#666" strokeWidth={1.2} aria-hidden="true">
-      <path d="M 15,10 C 20,30 25,40 20,60 C 15,80 10,90 5,110 L 75,110 C 70,90 65,80 60,60 C 55,40 60,30 65,10 Z" fill="#f9f9f9" />
-      <line x1="40" y1="15" x2="40" y2="70" stroke="#ef4444" strokeWidth={5} />
-    </svg>
-  );
-}
-
-function SvgDorsoLumbar() {
-  return (
-    <svg viewBox="0 0 80 120" className="w-20 h-32" fill="none" stroke="#666" strokeWidth={1.2} aria-hidden="true">
-      <path d="M 20,10 C 25,30 35,40 40,60 C 45,80 35,100 25,115 L 55,115 C 45,100 35,80 40,60 C 45,40 55,30 60,10 Z" fill="#f9f9f9" />
-      <line x1="40" y1="20" x2="40" y2="85" stroke="#ef4444" strokeWidth={5} />
-      <path d="M 30,85 C 35,80 45,80 50,85 C 55,95 25,95 30,85 Z" fill="#f97316" stroke="none" />
-    </svg>
-  );
-}
-
 export function EvaluacionFormPag4() {
   const { idAtencion, state } = useEvaluacionContext();
 
@@ -129,7 +77,12 @@ export function EvaluacionFormPag4() {
           {/* Fila 1: Cifosis / Lordosis / Escoliosis */}
           <div className="grid grid-cols-12 border-b border-gray-800">
             <div className="col-span-4 border-r border-gray-800 p-2 flex items-center justify-center bg-white">
-              <SvgEspalda />
+              <AnatomicalImage
+                src="/assets/images/musculo/entrevista/columna-completa.jpg"
+                alt="Vista posterior de la columna completa"
+                className="w-28 h-40"
+                sizes="112px"
+              />
             </div>
 
             <div className="col-span-4 border-r border-gray-800 p-2 flex flex-col justify-between text-[11px]">
@@ -251,7 +204,12 @@ export function EvaluacionFormPag4() {
           {/* Fila 3: Contenido Ritmo Lumbo Pélvico */}
           <div className="grid grid-cols-12 border-b border-gray-800">
             <div className="col-span-4 border-r border-gray-800 p-2 flex items-center justify-center">
-              <SvgFlexionLumbar />
+              <AnatomicalImage
+                src="/assets/images/musculo/entrevista/ritmo-lumbo-pelvico.png"
+                alt="Ritmo lumbo pélvico durante la flexión lumbar"
+                className="w-32 h-20"
+                sizes="128px"
+              />
             </div>
             <div className="col-span-8 p-3 flex flex-col justify-center space-y-2 text-[11px]">
               <label className="flex items-center gap-2 cursor-pointer">
@@ -289,7 +247,12 @@ export function EvaluacionFormPag4() {
           {/* Fila 5: Contenido Dorso Curvo Estructurado */}
           <div className="grid grid-cols-12">
             <div className="col-span-4 border-r border-gray-800 p-2 flex items-center justify-center">
-              <SvgPosturaManosCabeza />
+              <AnatomicalImage
+                src="/assets/images/musculo/entrevista/dorso-curvo.png"
+                alt="Evaluación de dorso curvo con manos en la cabeza"
+                className="w-28 h-24"
+                sizes="112px"
+              />
             </div>
             <div className="col-span-8 p-3 flex flex-col justify-center space-y-2 text-[11px]">
               <label className="flex items-center gap-2 cursor-pointer">
@@ -331,7 +294,12 @@ export function EvaluacionFormPag4() {
             {/* Columna Cervical (Izquierda) */}
             <div className="col-span-6 border-r border-gray-800 flex">
               <div className="w-1/3 border-r border-gray-300 p-2 flex items-center justify-center">
-                <SvgCuello />
+                <AnatomicalImage
+                  src="/assets/images/musculo/entrevista/columna-media.jpg"
+                  alt="Columna cervical"
+                  className="w-20 h-32"
+                  sizes="80px"
+                />
               </div>
               <div className="w-2/3 p-3 flex flex-col justify-start space-y-3 text-[10px]">
                 <label className="flex items-center gap-2 cursor-pointer">
@@ -397,7 +365,12 @@ export function EvaluacionFormPag4() {
             {/* Columna Dorsal y Lumbar (Derecha) */}
             <div className="col-span-6 flex">
               <div className="w-1/3 border-r border-gray-800 p-2 flex items-center justify-center">
-                <SvgDorsoLumbar />
+                <AnatomicalImage
+                  src="/assets/images/musculo/entrevista/columna-completa.jpg"
+                  alt="Columna dorsal y lumbar"
+                  className="w-20 h-32"
+                  sizes="80px"
+                />
               </div>
 
               <div className="w-2/3 flex flex-col justify-between">

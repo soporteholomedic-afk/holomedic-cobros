@@ -1,5 +1,6 @@
 'use client';
 
+import Image from 'next/image';
 import { useEntrevistaContext } from '@/features/entrevista-osteomuscular/presentation/context/EntrevistaOsteomuscularContext';
 import { Paginacion } from './Paginacion';
 import type { UmbralPositivo } from '@/types/entrevista-osteomuscular';
@@ -56,7 +57,8 @@ interface SeccionAnamnesisProps {
   titulo: string;
   radioName: string;
   esMano?: boolean;
-  imagenLabel: string;
+  imagenSrc: string;
+  imagenAlt: string;
   inicioMolestia: string;
   onInicioMolestiaChange: (value: string) => void;
   tieneDolor: boolean;
@@ -71,7 +73,8 @@ function SeccionAnamnesis({
   titulo,
   radioName,
   esMano = false,
-  imagenLabel,
+  imagenSrc,
+  imagenAlt,
   inicioMolestia,
   onInicioMolestiaChange,
   tieneDolor,
@@ -151,8 +154,14 @@ function SeccionAnamnesis({
                       <div className="text-[9px] font-bold leading-tight mb-2">
                         N: Indicar sobre la figura el área de distribución de la molestia
                       </div>
-                      <div className="h-36 flex items-center justify-center text-gray-400 italic text-[10px]">
-                        {imagenLabel}
+                      <div className="h-36 flex items-center justify-center relative">
+                        <Image
+                          src={imagenSrc}
+                          alt={imagenAlt}
+                          fill
+                          className="object-contain p-1"
+                          sizes="150px"
+                        />
                       </div>
                       <div className="flex justify-between font-bold px-2 text-[10px] mt-1">
                         <span>Ix</span>
@@ -165,8 +174,14 @@ function SeccionAnamnesis({
                         <span>Dx</span>
                         <span>Ix</span>
                       </div>
-                      <div className="h-28 flex items-center justify-center text-gray-400 italic text-[10px]">
-                        {imagenLabel}
+                      <div className="h-28 flex items-center justify-center relative">
+                        <Image
+                          src={imagenSrc}
+                          alt={imagenAlt}
+                          fill
+                          className="object-contain p-1"
+                          sizes="150px"
+                        />
                       </div>
                     </>
                   )}
@@ -716,7 +731,8 @@ export function EntrevistaOsteomuscularForm() {
         <SeccionAnamnesis
           titulo="DOLOR EN EL HOMBRO"
           radioName="dolorHombro"
-          imagenLabel="[Imagen Hombro]"
+          imagenSrc="/assets/images/musculo/entrevista/hombros.png"
+          imagenAlt="Diagrama de hombros"
           inicioMolestia={hombro.inicioMolestia}
           onInicioMolestiaChange={(v) => setField('miembrosSuperiores.hombro.inicioMolestia', v)}
           tieneDolor={hombro.tieneDolor}
@@ -731,7 +747,8 @@ export function EntrevistaOsteomuscularForm() {
         <SeccionAnamnesis
           titulo="DOLOR EN EL CODO"
           radioName="dolorCodo"
-          imagenLabel="[Imagen Codo]"
+          imagenSrc="/assets/images/musculo/entrevista/codos.png"
+          imagenAlt="Diagrama de codos"
           inicioMolestia={codo.inicioMolestia}
           onInicioMolestiaChange={(v) => setField('miembrosSuperiores.codo.inicioMolestia', v)}
           tieneDolor={codo.tieneDolor}
@@ -747,7 +764,8 @@ export function EntrevistaOsteomuscularForm() {
           titulo="DOLOR MANO/MUÑECA"
           radioName="dolorMano"
           esMano
-          imagenLabel="[Imagen Manos]"
+          imagenSrc="/assets/images/musculo/entrevista/manos.png"
+          imagenAlt="Diagrama de manos"
           inicioMolestia={mano.inicioMolestia}
           onInicioMolestiaChange={(v) => setField('miembrosSuperiores.manoMuneca.inicioMolestia', v)}
           tieneDolor={mano.tieneDolor}

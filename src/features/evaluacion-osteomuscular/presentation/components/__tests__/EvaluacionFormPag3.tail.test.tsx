@@ -61,7 +61,7 @@ function renderPag3() {
 afterEach(() => vi.unstubAllGlobals());
 
 describe('EvaluacionFormPag3 — réplica de __temp__/page7.html (parestesia + instrumental + diagnóstico)', () => {
-  it('renders the full printed ficha with local placeholders only, no fetch and no remote image', () => {
+  it('renders the full printed ficha with local anatomical images, no fetch and no remote image', () => {
     vi.stubGlobal('fetch', vi.fn());
     renderPag3();
     expect(screen.getByText(/d\) SINTOMATOLOGÍA PARESTESICA/i)).toBeInTheDocument();
@@ -69,8 +69,9 @@ describe('EvaluacionFormPag3 — réplica de __temp__/page7.html (parestesia + i
     expect(screen.getByText('REGION DISTAL')).toBeInTheDocument();
     expect(screen.getByText('TEST DE PHALEN')).toBeInTheDocument();
     expect(screen.getByText('TEST DE PRESION')).toBeInTheDocument();
-    expect(screen.getByText('[Gráfico Test Fatiga]')).toBeInTheDocument();
-    expect(screen.getByText('[Gráfico Test Candelero]')).toBeInTheDocument();
+    expect(screen.getByAltText('Test de fatiga con brazos elevados')).toBeInTheDocument();
+    expect(screen.getByAltText('Test del candelero')).toBeInTheDocument();
+    expect(screen.getAllByRole('img')).toHaveLength(6);
     expect(screen.getByText(/APROXIMACION DIAGNOSTICA DE EVALUACION/i)).toBeInTheDocument();
     expect(screen.getAllByRole('checkbox')).toHaveLength(41);
     expect(screen.getAllByRole('radio')).toHaveLength(3);

@@ -62,7 +62,7 @@ function renderPag1() {
 afterEach(() => vi.unstubAllGlobals());
 
 describe('EvaluacionFormPag1 — réplica de __temp__/page5.html', () => {
-  it('renders the printed-ficha layout with banner, sections and inline SVG diagrams', () => {
+  it('renders the printed-ficha layout with banner, sections and local anatomical images', () => {
     renderPag1();
     expect(screen.getByText(/EVALUACION CLINICA OSTEMUSCULAR/i)).toBeInTheDocument();
     expect(screen.getByText(/I\.- MIEMBROS SUPERIORES/i)).toBeInTheDocument();
@@ -80,7 +80,9 @@ describe('EvaluacionFormPag1 — réplica de __temp__/page5.html', () => {
     expect(screen.getAllByRole('radio')).toHaveLength(3);
     expect(screen.getAllByRole('textbox')).toHaveLength(4);
     expect(screen.getAllByRole('spinbutton')).toHaveLength(4);
-    expect(document.querySelectorAll('svg')).toHaveLength(7);
+    expect(screen.getAllByRole('img')).toHaveLength(7);
+    expect(screen.getByAltText('Maniobra de flexión del hombro')).toBeInTheDocument();
+    expect(screen.getByAltText('Palpación del codo')).toBeInTheDocument();
   });
 
   it('binds escapulo humeral fields to their exact state paths', async () => {

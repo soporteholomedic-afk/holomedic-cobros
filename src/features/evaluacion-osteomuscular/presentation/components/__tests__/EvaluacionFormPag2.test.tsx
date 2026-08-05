@@ -60,7 +60,7 @@ function renderPag2() {
 afterEach(() => vi.unstubAllGlobals());
 
 describe('EvaluacionFormPag2 — réplica de __temp__/page6.html', () => {
-  it('renders the printed-ficha layout with sections and visual placeholders', () => {
+  it('renders the printed-ficha layout with sections and local anatomical images', () => {
     renderPag2();
     expect(screen.getByText(/PALPACION MUSCULO EPICÓNDILEO - EPITRÓCLEAR/i)).toBeInTheDocument();
     expect(screen.getByText(/SE EFECTÚA A 2 CM DEL EPICÓNDILO/i)).toBeInTheDocument();
@@ -72,11 +72,12 @@ describe('EvaluacionFormPag2 — réplica de __temp__/page6.html', () => {
     expect(screen.getByText(/OBSERVACIÓN MANO\/MUÑECA/i)).toBeInTheDocument();
     expect(screen.getByText('PALPACIÓN')).toBeInTheDocument();
     expect(screen.getByText(/MANIOBRA PARA CLIC/i)).toBeInTheDocument();
-    expect(screen.getByText('[Gráfico Palpación]')).toBeInTheDocument();
-    expect(screen.getByText('[Gráfico Extensión Codo]')).toBeInTheDocument();
-    expect(screen.getByText('[Gráfico Nervio Ulnar]')).toBeInTheDocument();
-    expect(screen.getByText(/Esquema Mano/)).toBeInTheDocument();
-    expect(screen.getByText('[Gráfico Dedo]')).toBeInTheDocument();
+    expect(screen.getByAltText('Palpación del músculo epicondíleo y epitroclear')).toBeInTheDocument();
+    expect(screen.getByAltText('Test de epicondilitis con extensión del codo')).toBeInTheDocument();
+    expect(screen.getByAltText('Test de atrapamiento del nervio ulnar')).toBeInTheDocument();
+    expect(screen.getByAltText('Esquema de palpación de la mano con puntos A y B')).toBeInTheDocument();
+    expect(screen.getByAltText('Maniobra de dedo en gatillo')).toBeInTheDocument();
+    expect(screen.getAllByRole('img')).toHaveLength(5);
     expect(screen.getByText(/Dx\.= Derecho/)).toBeInTheDocument();
     expect(screen.getByText(/Fo\. JJC-SIGLA-13-31/i)).toBeInTheDocument();
     expect(screen.getByText('6')).toBeInTheDocument();

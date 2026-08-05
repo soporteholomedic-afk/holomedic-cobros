@@ -56,7 +56,7 @@ function renderPag4() {
 afterEach(() => vi.unstubAllGlobals());
 
 describe('EvaluacionFormPag4 — réplica de __temp__/page8.html (columna)', () => {
-  it('renders the printed A4 ficha with sections, five inline SVG diagrams and local controls', () => {
+  it('renders the printed A4 ficha with sections, five local anatomical images and local controls', () => {
     renderPag4();
     expect(screen.getByText('II.- COLUMNA')).toBeInTheDocument();
     expect(screen.getByText(/Marcar "x" en los cuadraditos según corresponda\./i)).toBeInTheDocument();
@@ -69,7 +69,8 @@ describe('EvaluacionFormPag4 — réplica de __temp__/page8.html (columna)', () 
     expect(screen.getByText('6')).toBeInTheDocument();
     expect(screen.getAllByRole('checkbox')).toHaveLength(29);
     expect(screen.getAllByRole('textbox')).toHaveLength(2);
-    expect(document.querySelectorAll('svg')).toHaveLength(5);
+    expect(screen.getAllByRole('img')).toHaveLength(5);
+    expect(screen.getByAltText('Vista posterior de la columna completa')).toBeInTheDocument();
   });
 
   it('binds observacion fields to their exact evaluacionColumna paths', async () => {

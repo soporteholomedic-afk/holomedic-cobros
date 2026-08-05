@@ -54,12 +54,13 @@ function renderPag3() {
 }
 
 describe('EvaluacionFormPag3 — réplica de __temp__/page7.html (Finkelstein + flexo-extensión)', () => {
-  it('renders the printed-ficha layout (41 checkboxes) with local placeholders and no remote image URL', () => {
+  it('renders the printed-ficha layout (41 checkboxes) with local anatomical images and no remote image URL', () => {
     renderPag3();
     expect(screen.getByText(/^FINKELSTEIN/)).toBeInTheDocument();
     expect(screen.getByText(/^FLEXO-EXTENSIÓN DE LA MUÑECA/)).toBeInTheDocument();
-    expect(screen.getByText('[Gráfico Finkelstein]')).toBeInTheDocument();
-    expect(screen.getByText('[Gráfico Flexo-Extensión]')).toBeInTheDocument();
+    expect(screen.getByAltText('Test de Finkelstein')).toBeInTheDocument();
+    expect(screen.getByAltText('Flexo-extensión pasiva y contra resistencia de la muñeca')).toBeInTheDocument();
+    expect(screen.getAllByRole('img')).toHaveLength(6);
     expect(screen.getAllByRole('checkbox')).toHaveLength(41);
     expect(document.querySelector('img[src^="http"]')).toBeNull();
   });

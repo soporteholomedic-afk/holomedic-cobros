@@ -1,5 +1,6 @@
 'use client';
 
+import Image from 'next/image';
 import { useEntrevistaContext } from '@/features/entrevista-osteomuscular/presentation/context/EntrevistaOsteomuscularContext';
 import { Paginacion } from './Paginacion';
 import type {
@@ -79,6 +80,8 @@ interface ParestesiaTableProps {
   radioName: string;
   inicioTitulo: string;
   variante: 'nocturna' | 'diurna';
+  imagenSrc: string;
+  imagenAlt: string;
   tieneParestesia: boolean;
   onTieneParestesiaChange: (value: boolean) => void;
   inicioMolestia: string;
@@ -96,6 +99,8 @@ function ParestesiaTable({
   radioName,
   inicioTitulo,
   variante,
+  imagenSrc,
+  imagenAlt,
   tieneParestesia,
   onTieneParestesiaChange,
   inicioMolestia,
@@ -171,16 +176,15 @@ function ParestesiaTable({
                         <span>Ix</span>
                         <span>DX</span>
                       </div>
-                      <svg
-                        className="w-32 h-24 mx-auto"
-                        viewBox="0 0 160 100"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth={1}
-                      >
-                        <path d="M 20 80 L 20 60 C 15 55, 10 40, 10 35 C 10 30, 13 30, 15 35 L 22 50 C 20 35, 20 20, 23 15 C 25 12, 28 12, 29 17 L 33 45 C 33 30, 35 10, 40 10 C 43 10, 45 13, 44 25 L 43 45 C 45 30, 50 20, 53 22 C 55 24, 53 35, 50 48 L 48 55 C 55 58, 60 65, 55 80 Z" />
-                        <path d="M 140 80 L 140 60 C 145 55, 150 40, 150 35 C 150 30, 147 30, 145 35 L 138 50 C 140 35, 140 20, 137 15 C 135 12, 132 12, 131 17 L 127 45 C 127 30, 125 10, 120 10 C 117 10, 115 13, 116 25 L 117 45 C 115 30, 110 20, 107 22 C 105 24, 107 35, 110 48 L 112 55 C 105 58, 100 65, 105 80 Z" />
-                      </svg>
+                      <div className="relative w-32 h-24 mx-auto">
+                        <Image
+                          src={imagenSrc}
+                          alt={imagenAlt}
+                          fill
+                          className="object-contain"
+                          sizes="128px"
+                        />
+                      </div>
                     </>
                   ) : (
                     <>
@@ -188,16 +192,15 @@ function ParestesiaTable({
                         <span>Dx</span>
                         <span>Ix</span>
                       </div>
-                      <svg
-                        className="w-24 h-28 mx-auto"
-                        viewBox="0 0 100 120"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth={1}
-                      >
-                        <path d="M50 10 C 45 10, 42 15, 42 22 C 42 26, 45 28, 50 28 C 55 28, 58 26, 58 22 C 58 15, 55 10, 50 10 Z" />
-                        <path d="M42 25 L 35 32 L 20 38 L 15 65 L 20 85 L 25 85 L 22 65 L 32 60 L 32 95 L 48 95 L 48 60 L 52 60 L 52 95 L 68 95 L 68 60 L 78 65 L 75 85 L 80 85 L 85 65 L 80 38 L 65 32 L 58 25" />
-                      </svg>
+                      <div className="relative w-24 h-28 mx-auto">
+                        <Image
+                          src={imagenSrc}
+                          alt={imagenAlt}
+                          fill
+                          className="object-contain"
+                          sizes="96px"
+                        />
+                      </div>
                     </>
                   )}
                   <div className="text-[8px] text-left font-bold mt-1 leading-tight">
@@ -499,6 +502,8 @@ export function EntrevistaOsteomuscularFormPag2() {
           radioName="parestesiaNocturna.tieneParestesia"
           inicioTitulo="¿CUÁNDO SE INCIO LA MOLESTIA?:"
           variante="nocturna"
+          imagenSrc="/assets/images/musculo/entrevista/manos.png"
+          imagenAlt="Diagrama de manos"
           tieneParestesia={nocturna.tieneParestesia}
           onTieneParestesiaChange={(v) => setField('parestesiaNocturna.tieneParestesia', v)}
           inicioMolestia={nocturna.inicioMolestia}
@@ -517,6 +522,8 @@ export function EntrevistaOsteomuscularFormPag2() {
           radioName="parestesiaDiurna.tieneParestesia"
           inicioTitulo="¿CUÁNDO SE INCIO LA MOLESTIA? :"
           variante="diurna"
+          imagenSrc="/assets/images/musculo/entrevista/cuerpo_torso.png"
+          imagenAlt="Diagrama de torso"
           tieneParestesia={diurna.tieneParestesia}
           onTieneParestesiaChange={(v) => setField('parestesiaDiurna.tieneParestesia', v)}
           inicioMolestia={diurna.inicioMolestia}

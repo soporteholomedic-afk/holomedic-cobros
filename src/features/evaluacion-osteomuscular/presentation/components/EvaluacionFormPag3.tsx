@@ -1,8 +1,9 @@
 'use client';
 
-import { useMemo, type ReactNode } from 'react';
+import { useMemo } from 'react';
 import { useEvaluacionContext } from '@/features/evaluacion-osteomuscular/presentation/context/EvaluacionOsteomuscularContext';
 import { Paginacion } from './Paginacion';
+import { AnatomicalImage } from './AnatomicalImage';
 import { parseOptionalNumber } from '../helpers/parseOptionalNumber';
 import type {
   DxIxBool,
@@ -75,21 +76,6 @@ function RadioGravedad({ value, current, path, groupName }: RadioGravedadProps) 
   );
 }
 
-interface GraphPlaceholderProps {
-  className?: string;
-  children: ReactNode;
-}
-
-function GraphPlaceholder({ className, children }: GraphPlaceholderProps) {
-  return (
-    <div
-      className={`border border-dashed border-gray-400 flex items-center justify-center bg-gray-50 text-[9px] text-gray-400 ${className ?? ''}`}
-    >
-      {children}
-    </div>
-  );
-}
-
 interface DistalRowProps {
   label: string;
   ariaLabel: string;
@@ -112,12 +98,13 @@ function DistalRow({ label, ariaLabel, basePath, checked }: DistalRowProps) {
 interface DistalTestProps {
   title: string;
   instruction: string;
-  graphLabel: string;
+  imageSrc: string;
+  imageAlt: string;
   testKey: 'testPhalen' | 'testPresion';
   parestesia: ParestesiaNerviosa;
 }
 
-function DistalTest({ title, instruction, graphLabel, testKey, parestesia }: DistalTestProps) {
+function DistalTest({ title, instruction, imageSrc, imageAlt, testKey, parestesia }: DistalTestProps) {
   const base = `${SPX}.regionDistal.${testKey}.parestesia`;
   const prefix = testKey === 'testPhalen' ? 'Phalen' : 'Presión';
   return (
@@ -129,7 +116,7 @@ function DistalTest({ title, instruction, graphLabel, testKey, parestesia }: Dis
         <p className="text-[8.5px] uppercase font-semibold text-gray-700">{instruction}</p>
         <div className="grid grid-cols-12 gap-2 items-center">
           <div className="col-span-6">
-            <GraphPlaceholder className="w-full h-20">{graphLabel}</GraphPlaceholder>
+            <AnatomicalImage src={imageSrc} alt={imageAlt} className="w-full h-20" sizes="160px" />
           </div>
           <div className="col-span-6 space-y-1 text-[9.5px] font-semibold">
             <p className="font-bold">Parestesia:</p>
@@ -223,7 +210,12 @@ export function EvaluacionFormPag3() {
             </div>
             <div className="p-2 grid grid-cols-12 gap-2 items-center my-auto">
               <div className="col-span-7">
-                <GraphPlaceholder className="w-full h-24">[Gráfico Finkelstein]</GraphPlaceholder>
+                <AnatomicalImage
+                  src="/assets/images/musculo/entrevista/test-finkelstein.jpg"
+                  alt="Test de Finkelstein"
+                  className="w-full h-24"
+                  sizes="240px"
+                />
               </div>
               <div className="col-span-5 space-y-3 font-semibold text-[10px]">
                 <p className="leading-tight">DOLOR EN &quot;TABAQUERA ANATÓMICA&quot;</p>
@@ -253,7 +245,12 @@ export function EvaluacionFormPag3() {
             </div>
             <div className="p-2 grid grid-cols-12 gap-2 items-center">
               <div className="col-span-5">
-                <GraphPlaceholder className="w-full h-28">[Gráfico Flexo-Extensión]</GraphPlaceholder>
+                <AnatomicalImage
+                  src="/assets/images/musculo/entrevista/flexo-extension-muneca.jpg"
+                  alt="Flexo-extensión pasiva y contra resistencia de la muñeca"
+                  className="w-full h-28"
+                  sizes="240px"
+                />
               </div>
               <div className="col-span-7 space-y-1.5 text-[9.5px] font-semibold">
                 {FLEXO_ITEMS.map((item, idx) => (
@@ -391,7 +388,12 @@ export function EvaluacionFormPag3() {
 
               {/* Columna 3: Test de Fatiga */}
               <div className="col-span-3 p-2 flex flex-col justify-between items-center text-center">
-                <GraphPlaceholder className="w-full h-24">[Gráfico Test Fatiga]</GraphPlaceholder>
+                <AnatomicalImage
+                  src="/assets/images/musculo/entrevista/test-fatiga.png"
+                  alt="Test de fatiga con brazos elevados"
+                  className="w-full h-24"
+                  sizes="200px"
+                />
                 <div className="space-y-1 pt-1 w-full">
                   <p className="font-bold text-[9px]">Test de fatiga (por 30&quot;)</p>
                   <div className="flex justify-center space-x-3 font-semibold text-[10px]">
@@ -414,7 +416,12 @@ export function EvaluacionFormPag3() {
 
               {/* Columna 4: Test del Candelero */}
               <div className="col-span-3 p-2 flex flex-col justify-between items-center text-center">
-                <GraphPlaceholder className="w-full h-24">[Gráfico Test Candelero]</GraphPlaceholder>
+                <AnatomicalImage
+                  src="/assets/images/musculo/entrevista/test-candelero.png"
+                  alt="Test del candelero"
+                  className="w-full h-24"
+                  sizes="200px"
+                />
                 <div className="space-y-1 pt-1 w-full">
                   <p className="font-bold text-[9px]">Test del Candelero (por 30&quot;)</p>
                   <div className="flex justify-center space-x-3 font-semibold text-[10px]">
@@ -446,14 +453,16 @@ export function EvaluacionFormPag3() {
               <DistalTest
                 title="TEST DE PHALEN"
                 instruction={'MANTENER LA POSICIÓN POR 60"'}
-                graphLabel="[Gráfico Phalen]"
+                imageSrc="/assets/images/musculo/entrevista/test-phalen.jpg"
+                imageAlt="Test de Phalen"
                 testKey="testPhalen"
                 parestesia={s.regionDistal.testPhalen.parestesia}
               />
               <DistalTest
                 title="TEST DE PRESION"
                 instruction={'COMPRESIÓN DORSAL DE LA MUÑECA POR 30"'}
-                graphLabel="[Gráfico Test Presión]"
+                imageSrc="/assets/images/musculo/entrevista/test-presion-muneca.jpg"
+                imageAlt="Test de presión dorsal de la muñeca"
                 testKey="testPresion"
                 parestesia={s.regionDistal.testPresion.parestesia}
               />

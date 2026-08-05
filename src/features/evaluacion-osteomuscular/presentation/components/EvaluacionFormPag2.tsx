@@ -1,8 +1,9 @@
 'use client';
 
-import { useMemo, type ReactNode } from 'react';
+import { useMemo } from 'react';
 import { useEvaluacionContext } from '@/features/evaluacion-osteomuscular/presentation/context/EvaluacionOsteomuscularContext';
 import { Paginacion } from './Paginacion';
+import { AnatomicalImage } from './AnatomicalImage';
 import type {
   DxIxBool,
   GravedadPatologia,
@@ -75,24 +76,6 @@ function RadioGravedad({ value, current, path, groupName }: RadioGravedadProps) 
   );
 }
 
-interface GraphPlaceholderProps {
-  className?: string;
-  column?: boolean;
-  children: ReactNode;
-}
-
-function GraphPlaceholder({ className, column, children }: GraphPlaceholderProps) {
-  return (
-    <div
-      className={`border border-dashed border-gray-400 flex items-center justify-center bg-gray-50 text-[9px] text-gray-400 shrink-0 ${
-        column ? 'flex-col' : ''
-      } ${className ?? ''}`}
-    >
-      {children}
-    </div>
-  );
-}
-
 const BASE = 'evaluacionClinicaOsteomuscular.miembrosSuperiores';
 
 export function EvaluacionFormPag2() {
@@ -131,7 +114,12 @@ export function EvaluacionFormPag2() {
                 <p className="text-[9px] uppercase font-semibold leading-tight max-w-[130px] text-gray-800">
                   SE EFECTÚA A 2 CM DEL EPICÓNDILO SOBRE LA INSERCIÓN DEL TENDÓN
                 </p>
-                <GraphPlaceholder className="w-28 h-14">[Gráfico Palpación]</GraphPlaceholder>
+                <AnatomicalImage
+                  src="/assets/images/musculo/entrevista/palpacion-epicondileo.jpg"
+                  alt="Palpación del músculo epicondíleo y epitroclear"
+                  className="w-28 h-14 shrink-0"
+                  sizes="112px"
+                />
               </div>
               <div className="col-span-6 flex flex-col justify-center divide-y divide-gray-900 font-semibold text-[10px]">
                 <div className="p-2 flex items-center h-1/2">
@@ -187,7 +175,12 @@ export function EvaluacionFormPag2() {
             </div>
             <div className="p-2 grid grid-cols-12 gap-2 items-start">
               <div className="col-span-6 flex flex-col items-start space-y-1">
-                <GraphPlaceholder className="w-full h-20">[Gráfico Extensión Codo]</GraphPlaceholder>
+                <AnatomicalImage
+                  src="/assets/images/musculo/entrevista/test-epicondilitis.jpg"
+                  alt="Test de epicondilitis con extensión del codo"
+                  className="w-full h-20"
+                  sizes="160px"
+                />
                 <p className="text-[8px] uppercase leading-tight font-semibold text-gray-800 pt-1">
                   FLEXIÓN PASIVA DE LA MUÑECA CON EXTENSIÓN DEL CODO
                 </p>
@@ -221,7 +214,12 @@ export function EvaluacionFormPag2() {
             </div>
             <div className="p-2 grid grid-cols-12 gap-2 items-center">
               <div className="col-span-6">
-                <GraphPlaceholder className="w-full h-20">[Gráfico Nervio Ulnar]</GraphPlaceholder>
+                <AnatomicalImage
+                  src="/assets/images/musculo/entrevista/atrapamiento-nervio-ulnar.png"
+                  alt="Test de atrapamiento del nervio ulnar"
+                  className="w-full h-20"
+                  sizes="160px"
+                />
               </div>
               <div className="col-span-6 space-y-3">
                 <p className="font-semibold text-[9px] uppercase leading-tight text-gray-900">
@@ -583,11 +581,12 @@ export function EvaluacionFormPag2() {
               PALPACIÓN
             </div>
             <div className="p-2 flex items-center space-x-2">
-              <GraphPlaceholder className="w-24 h-28" column>
-                <span>[Esquema Mano]</span>
-                <span className="font-bold text-gray-600">A</span>
-                <span className="font-bold text-gray-600">B</span>
-              </GraphPlaceholder>
+              <AnatomicalImage
+                src="/assets/images/musculo/entrevista/palpacion-mano.jpg"
+                alt="Esquema de palpación de la mano con puntos A y B"
+                className="w-24 h-28 shrink-0"
+                sizes="96px"
+              />
 
               <div className="space-y-1 text-[9px] font-semibold">
                 <label className="flex items-start space-x-1 cursor-pointer">
@@ -629,7 +628,12 @@ export function EvaluacionFormPag2() {
             </div>
             <div className="p-2 space-y-3">
               <div className="flex items-center space-x-2">
-                <GraphPlaceholder className="w-20 h-20">[Gráfico Dedo]</GraphPlaceholder>
+                <AnatomicalImage
+                  src="/assets/images/musculo/entrevista/dedo-gatillo.jpg"
+                  alt="Maniobra de dedo en gatillo"
+                  className="w-20 h-20 shrink-0"
+                  sizes="80px"
+                />
 
                 <div className="space-y-2 text-[9px] font-semibold">
                   {/* Dedo Dx */}

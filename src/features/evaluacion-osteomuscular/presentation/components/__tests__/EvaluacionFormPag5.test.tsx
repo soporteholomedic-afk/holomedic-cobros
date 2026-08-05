@@ -63,7 +63,7 @@ function renderPag5() {
 afterEach(() => vi.unstubAllGlobals());
 
 describe('EvaluacionFormPag5 — réplica de __temp__/page9.html (motilidad y maniobras especiales)', () => {
-  it('renders the full page 5 printed ficha with local SVG diagrams only, no remote image', () => {
+  it('renders the full page 5 printed ficha with local anatomical images only, no remote image', () => {
     vi.stubGlobal('fetch', vi.fn());
     renderPag5();
     expect(screen.getByText(/C\) EVALUACION DE LA MOTILIDAD/i)).toBeInTheDocument();
@@ -79,7 +79,9 @@ describe('EvaluacionFormPag5 — réplica de __temp__/page9.html (motilidad y ma
     expect(screen.getAllByRole('checkbox')).toHaveLength(19);
     expect(screen.queryAllByRole('radio')).toHaveLength(0);
     expect(screen.getAllByRole('textbox')).toHaveLength(3);
-    expect(document.querySelectorAll('svg')).toHaveLength(2);
+    expect(screen.getAllByRole('img')).toHaveLength(2);
+    expect(screen.getByAltText('Maniobra de Lasègue o elevación de la pierna recta')).toBeInTheDocument();
+    expect(screen.getByAltText('Maniobra de Wasserman o Lasègue invertido')).toBeInTheDocument();
     expect(document.querySelector('img[src^="http"]')).toBeNull();
     expect(vi.mocked(fetch)).not.toHaveBeenCalled();
   });

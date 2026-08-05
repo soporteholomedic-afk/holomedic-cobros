@@ -3,6 +3,7 @@
 import { useMemo } from 'react';
 import { useEvaluacionContext } from '@/features/evaluacion-osteomuscular/presentation/context/EvaluacionOsteomuscularContext';
 import { Paginacion } from './Paginacion';
+import { AnatomicalImage } from './AnatomicalImage';
 
 interface CheckSimpleProps {
   path: string;
@@ -19,29 +20,6 @@ function CheckSimple({ path, checked, ariaLabel }: CheckSimpleProps) {
       checked={checked}
       onChange={(e) => setField(path, e.target.checked)}
     />
-  );
-}
-
-/* ---- Diagramas SVG (réplica de __temp__/page9.html) ---- */
-
-function SvgLasegue() {
-  return (
-    <svg viewBox="0 0 160 80" className="w-48 h-24" fill="none" stroke="#222" strokeWidth={1.3} aria-hidden="true">
-      <circle cx="25" cy="55" r="7" />
-      <path d="M 32,55 L 75,55" />
-      <path d="M 75,55 L 75,15 L 85,15" strokeWidth={1.5} />
-      <path d="M 90,25 L 90,40 M 87,36 L 90,42 L 93,36" strokeWidth={1.5} />
-      <path d="M 75,55 L 130,55 L 130,50" />
-    </svg>
-  );
-}
-
-function SvgWasserman() {
-  return (
-    <svg viewBox="0 0 160 70" className="w-48 h-20" fill="none" stroke="#222" strokeWidth={1.3} aria-hidden="true">
-      <path d="M 20,45 C 40,40 60,50 80,45 C 95,40 105,25 110,20 C 112,18 118,22 115,30 C 108,42 90,55 75,55 C 50,55 35,50 20,45 Z" />
-      <path d="M 110,55 L 110,40 M 107,44 L 110,38 L 113,44" strokeWidth={1.5} fill="black" />
-    </svg>
   );
 }
 
@@ -128,7 +106,12 @@ export function EvaluacionFormPag5() {
             </div>
             <div className="grid grid-cols-12 items-stretch">
               <div className="col-span-5 border-r border-gray-800 p-2 flex flex-col items-center justify-center">
-                <SvgLasegue />
+                <AnatomicalImage
+                  src="/assets/images/musculo/entrevista/maniobra-lasegue.png"
+                  alt="Maniobra de Lasègue o elevación de la pierna recta"
+                  className="w-48 h-24"
+                  sizes="192px"
+                />
                 <span className="text-[10px] mt-1">Lasegue / SLR( elevación de la pierna recta)</span>
               </div>
 
@@ -192,7 +175,12 @@ export function EvaluacionFormPag5() {
             </div>
             <div className="grid grid-cols-12 items-stretch">
               <div className="col-span-5 border-r border-gray-800 p-2 flex items-center justify-center">
-                <SvgWasserman />
+                <AnatomicalImage
+                  src="/assets/images/musculo/entrevista/maniobra-wasserman.jpg"
+                  alt="Maniobra de Wasserman o Lasègue invertido"
+                  className="w-48 h-20"
+                  sizes="192px"
+                />
               </div>
 
               <div className="col-span-7 p-3 flex flex-col justify-between text-[11px]">

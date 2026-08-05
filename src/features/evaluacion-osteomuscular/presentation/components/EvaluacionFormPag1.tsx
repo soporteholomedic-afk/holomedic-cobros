@@ -3,6 +3,7 @@
 import { useMemo } from 'react';
 import { useEvaluacionContext } from '@/features/evaluacion-osteomuscular/presentation/context/EvaluacionOsteomuscularContext';
 import { Paginacion } from './Paginacion';
+import { AnatomicalImage } from './AnatomicalImage';
 import type {
   DxIxBool,
   GravedadPatologia,
@@ -69,87 +70,6 @@ function RadioGravedad({ value, current, path, groupName }: RadioGravedadProps) 
       />{' '}
       {value}
     </label>
-  );
-}
-
-/* ---- Diagramas SVG (réplica de __temp__/page5.html) ---- */
-
-function SvgFlexion() {
-  return (
-    <svg viewBox="0 0 100 100" className="w-20 h-20 mx-auto" aria-hidden="true">
-      <path d="M 40 85 L 40 40 L 35 20 C 35 15, 45 15, 45 20 L 45 40 L 45 85" fill="none" stroke="#000" strokeWidth={1.2} />
-      <circle cx={40} cy={12} r={6} fill="none" stroke="#000" strokeWidth={1.2} />
-      <path d="M 45 30 L 70 30 L 70 5" fill="none" stroke="#000" strokeWidth={1.2} />
-      <path d="M 45 30 C 60 30, 70 20, 70 5" stroke="#000" strokeWidth={1} strokeDasharray="2,2" fill="none" />
-      <path d="M 67 8 L 70 2 L 73 8" fill="none" stroke="#000" strokeWidth={1} />
-    </svg>
-  );
-}
-
-function SvgAbduccion() {
-  return (
-    <svg viewBox="0 0 100 100" className="w-20 h-20 mx-auto" aria-hidden="true">
-      <path d="M 50 85 L 50 35 M 42 22 L 58 22" fill="none" stroke="#000" strokeWidth={1.2} />
-      <circle cx={50} cy={12} r={6} fill="none" stroke="#000" strokeWidth={1.2} />
-      <path d="M 42 32 L 20 32 L 20 10 M 58 32 L 80 32 L 80 10" fill="none" stroke="#000" strokeWidth={1.2} />
-      <path d="M 42 32 C 25 32, 20 20, 20 10 M 58 32 C 75 32, 80 20, 80 10" stroke="#000" strokeWidth={1} strokeDasharray="2,2" fill="none" />
-    </svg>
-  );
-}
-
-function SvgRotacionInterna() {
-  return (
-    <svg viewBox="0 0 100 100" className="w-20 h-20 mx-auto" aria-hidden="true">
-      <path d="M 35 25 C 35 10, 65 10, 65 25 C 65 35, 60 45, 55 50 C 65 55, 75 65, 75 90" fill="none" stroke="#000" strokeWidth={1.2} />
-      <path d="M 35 25 C 35 35, 40 45, 45 50 C 35 55, 25 65, 25 90" fill="none" stroke="#000" strokeWidth={1.2} />
-      <path d="M 25 60 L 45 58 L 50 48" fill="none" stroke="#000" strokeWidth={1.2} />
-    </svg>
-  );
-}
-
-function SvgRotacionExterna() {
-  return (
-    <svg viewBox="0 0 100 100" className="w-20 h-20 mx-auto" aria-hidden="true">
-      <path d="M 35 25 C 35 10, 65 10, 65 25 C 65 35, 60 45, 55 50 C 65 55, 75 65, 75 90" fill="none" stroke="#000" strokeWidth={1.2} />
-      <path d="M 35 25 C 35 35, 40 45, 45 50 C 35 55, 25 65, 25 90" fill="none" stroke="#000" strokeWidth={1.2} />
-      <path d="M 72 60 L 60 40 L 48 28" fill="none" stroke="#000" strokeWidth={1.2} />
-    </svg>
-  );
-}
-
-function SvgArcoDoloroso() {
-  return (
-    <svg viewBox="0 0 100 80" className="w-20 h-16" aria-hidden="true">
-      <circle cx={20} cy={65} r={3} fill="#000" />
-      <path d="M 20 65 L 75 65" stroke="#000" strokeWidth={1} />
-      <path d="M 20 65 L 60 20" stroke="#000" strokeWidth={1} />
-      <path d="M 20 65 L 35 15" stroke="#000" strokeWidth={1} />
-      <path d="M 50 65 C 50 45, 42 30, 32 20" fill="none" stroke="#000" strokeWidth={1} strokeDasharray="2,2" />
-      <text x={52} y={32} fontSize={6} fontWeight="bold">DOLORE</text>
-      <text x={58} y={58} fontSize={5}>NON DOLORE</text>
-      <text x={30} y={12} fontSize={5}>NON DOLORE</text>
-    </svg>
-  );
-}
-
-function SvgTestBiceps() {
-  return (
-    <svg viewBox="0 0 100 70" className="w-20 h-16" aria-hidden="true">
-      <path d="M 10 55 C 30 55, 45 40, 50 35 L 75 25" fill="none" stroke="#000" strokeWidth={1.2} />
-      <path d="M 40 50 C 50 50, 65 45, 80 45" fill="none" stroke="#000" strokeWidth={1.2} />
-      <path d="M 52 20 L 52 38" stroke="#000" strokeWidth={1.5} />
-      <path d="M 49 32 L 52 38 L 55 32" stroke="#000" strokeWidth={1} fill="none" />
-    </svg>
-  );
-}
-
-function SvgPalpacionCodo() {
-  return (
-    <svg viewBox="0 0 150 90" className="w-48 h-24 mx-auto" aria-hidden="true">
-      <path d="M 20 70 C 40 70, 70 60, 90 40 L 130 20" stroke="#000" strokeWidth={1.5} fill="none" />
-      <path d="M 10 40 C 30 50, 60 45, 80 30 L 120 10" stroke="#000" strokeWidth={1.2} fill="none" />
-      <path d="M 70 65 C 65 45, 80 25, 95 20 C 105 30, 90 55, 80 65 Z" fill="none" stroke="#000" strokeWidth={1} />
-    </svg>
   );
 }
 
@@ -317,16 +237,36 @@ export function EvaluacionFormPag1() {
                 {/* Gráficos */}
                 <tr className="border-b border-black">
                   <td className="w-1/4 border-r border-black p-1 text-center h-28 align-middle">
-                    <SvgFlexion />
+                    <AnatomicalImage
+                      src="/assets/images/musculo/entrevista/flexion-hombro.jpg"
+                      alt="Maniobra de flexión del hombro"
+                      className="w-20 h-20 mx-auto"
+                      sizes="80px"
+                    />
                   </td>
                   <td className="w-1/4 border-r border-black p-1 text-center h-28 align-middle">
-                    <SvgAbduccion />
+                    <AnatomicalImage
+                      src="/assets/images/musculo/entrevista/abduccion-hombro.jpg"
+                      alt="Maniobra de abducción del hombro"
+                      className="w-20 h-20 mx-auto"
+                      sizes="80px"
+                    />
                   </td>
                   <td className="w-1/4 border-r border-black p-1 text-center h-28 align-middle">
-                    <SvgRotacionInterna />
+                    <AnatomicalImage
+                      src="/assets/images/musculo/entrevista/rotacion-interna-hombro.jpg"
+                      alt="Maniobra de rotación interna del hombro"
+                      className="w-20 h-20 mx-auto"
+                      sizes="80px"
+                    />
                   </td>
                   <td className="w-1/4 p-1 text-center h-28 align-middle">
-                    <SvgRotacionExterna />
+                    <AnatomicalImage
+                      src="/assets/images/musculo/entrevista/rotacion-externa-hombro.jpg"
+                      alt="Maniobra de rotación externa del hombro"
+                      className="w-20 h-20 mx-auto"
+                      sizes="80px"
+                    />
                   </td>
                 </tr>
 
@@ -445,7 +385,12 @@ export function EvaluacionFormPag1() {
                           </label>
                         </div>
                       </div>
-                      <SvgArcoDoloroso />
+                      <AnatomicalImage
+                        src="/assets/images/musculo/entrevista/arco-doloroso-hombro.jpg"
+                        alt="Arco doloroso del hombro"
+                        className="w-20 h-16"
+                        sizes="80px"
+                      />
                       <div>
                         <label className="cursor-pointer text-[8.5px]">
                           <CheckSimple
@@ -461,7 +406,12 @@ export function EvaluacionFormPag1() {
                   {/* Test Bíceps Body */}
                   <td className="p-2 align-top">
                     <div className="flex items-center justify-between">
-                      <SvgTestBiceps />
+                      <AnatomicalImage
+                        src="/assets/images/musculo/entrevista/test-biceps.jpg"
+                        alt="Test del tendón largo del bíceps"
+                        className="w-20 h-16"
+                        sizes="80px"
+                      />
                       <div className="space-y-1 text-[8px] pl-1">
                         <div>
                           <label className="cursor-pointer">
@@ -728,7 +678,12 @@ export function EvaluacionFormPag1() {
                 {/* Palpación Fila 1: Epicóndilo */}
                 <tr className="border-b border-gray-300 text-[9px]">
                   <td rowSpan={3} className="w-[40%] border-r border-black p-2 text-center align-middle">
-                    <SvgPalpacionCodo />
+                        <AnatomicalImage
+                          src="/assets/images/musculo/entrevista/palpacion-codo.jpg"
+                          alt="Palpación del codo"
+                          className="w-48 h-24 mx-auto"
+                          sizes="192px"
+                        />
                   </td>
                   <td className="border-r border-black p-1.5 text-left">
                     DOLOR EPICÓNDILO...........................................................

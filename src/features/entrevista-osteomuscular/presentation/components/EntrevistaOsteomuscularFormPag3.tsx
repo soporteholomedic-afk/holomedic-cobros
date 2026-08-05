@@ -1,5 +1,6 @@
 'use client';
 
+import Image from 'next/image';
 import { useEntrevistaContext } from '@/features/entrevista-osteomuscular/presentation/context/EntrevistaOsteomuscularContext';
 import { Paginacion } from './Paginacion';
 import type {
@@ -319,51 +320,28 @@ export function EntrevistaOsteomuscularFormPag3() {
 
             {/* Figura Cervical */}
             <div className="my-auto py-2 text-center w-full">
-              <svg viewBox="0 0 150 140" className="w-36 h-32 mx-auto">
-                <path
-                  d="M 50 40 C 50 15, 100 15, 100 40 C 100 50, 95 65, 88 70 C 95 72, 120 80, 135 110 L 140 135"
-                  fill="none"
-                  stroke="#000"
-                  strokeWidth={1.2}
+              <div className="relative w-36 h-32 mx-auto">
+                <Image
+                  src="/assets/images/musculo/entrevista/columna-media.jpg"
+                  alt="Columna cervical"
+                  fill
+                  className="object-contain"
+                  sizes="144px"
                 />
-                <path
-                  d="M 50 40 C 50 50, 55 65, 62 70 C 55 72, 30 80, 15 110 L 10 135"
-                  fill="none"
-                  stroke="#000"
-                  strokeWidth={1.2}
-                />
-                <path
-                  d="M 50 40 C 47 40, 47 48, 52 48"
-                  fill="none"
-                  stroke="#000"
-                  strokeWidth={1}
-                />
-                <path
-                  d="M 100 40 C 103 40, 103 48, 98 48"
-                  fill="none"
-                  stroke="#000"
-                  strokeWidth={1}
-                />
-                <rect x="70" y="65" width="10" height="30" fill="#e5533c" opacity="0.85" />
-              </svg>
+              </div>
             </div>
 
             {/* Figura Dorsal / Lumbo Sacra */}
             <div className="my-auto py-2 text-center w-full">
-              <svg viewBox="0 0 150 200" className="w-36 h-48 mx-auto">
-                <path
-                  d="M 55 25 C 55 8, 95 8, 95 25 C 95 35, 90 45, 84 50 C 92 52, 115 60, 125 90 L 145 150 L 135 155 L 120 115 C 115 125, 112 140, 115 155 C 108 160, 95 160, 88 150 C 85 165, 82 180, 80 195 L 70 195 C 68 180, 65 165, 62 150 C 55 160, 42 160, 35 155 C 38 140, 35 125, 30 115 L 15 155 L 5 150 L 25 90 C 35 60, 58 52, 66 50 C 60 45, 55 35, 55 25 Z"
-                  fill="none"
-                  stroke="#000"
-                  strokeWidth={1.2}
+              <div className="relative w-36 h-48 mx-auto">
+                <Image
+                  src="/assets/images/musculo/entrevista/columna-completa.jpg"
+                  alt="Columna dorsal y lumbo sacra"
+                  fill
+                  className="object-contain"
+                  sizes="144px"
                 />
-                <rect x="71" y="75" width="8" height="80" fill="#e5533c" opacity="0.85" />
-                <path
-                  d="M 60 148 C 60 140, 90 140, 90 148 C 95 158, 80 165, 75 165 C 70 165, 55 158, 60 148 Z"
-                  fill="#e5533c"
-                  opacity="0.85"
-                />
-              </svg>
+              </div>
             </div>
           </div>
 
