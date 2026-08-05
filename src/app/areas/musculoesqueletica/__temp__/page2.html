@@ -110,7 +110,7 @@
                         <div><label class="cursor-pointer"><input type="checkbox" name="parestesiaNocturna.infoReportada.haTomadoMedicamentos" v-model="parestesiaNocturna.infoReportada.haTomadoMedicamentos" class="mr-1"> ha tomado medicamentos</label></div>
                         <div class="font-bold mt-1">ha realizado:</div>
                         <div><label class="cursor-pointer"><input type="checkbox" name="parestesiaNocturna.infoReportada.fisioterapia" v-model="parestesiaNocturna.infoReportada.fisioterapia" class="mr-1"> fisioterapia</label></div>
-                        <div><label class="cursor-pointer"><input type="checkbox" name="parestesiaNocturna.infoReportada.visitaOrtopedistaFisiatra" v-model="parestesiaNocturna.infoReportada.visitaOrtopedistaFisiatra" class="mr-1"> visita al ortopedista/fisiatra</label></div>
+                        <div><label class="cursor-pointer"><input type="checkbox" name="parestesiaNocturna.infoReportada.visitaTraumatologiaMedicinaGeneral" v-model="parestesiaNocturna.infoReportada.visitaTraumatologiaMedicinaGeneral" class="mr-1"> visita a traumatología / medicina general</label></div>
                         <div><label class="cursor-pointer"><input type="checkbox" name="parestesiaNocturna.infoReportada.rx" v-model="parestesiaNocturna.infoReportada.rx" class="mr-1"> RX</label></div>
                         <div><label class="cursor-pointer"><input type="checkbox" name="parestesiaNocturna.infoReportada.ecografiaRmn" v-model="parestesiaNocturna.infoReportada.ecografiaRmn" class="mr-1"> ECOGRAFÍA / RMN</label></div>
                         <div><label class="cursor-pointer"><input type="checkbox" name="parestesiaNocturna.infoReportada.emg" v-model="parestesiaNocturna.infoReportada.emg" class="mr-1"> EMG (electromiografía)</label></div>
@@ -155,8 +155,9 @@
                     <td class="border border-black p-1 space-y-0.5">
                         <div class="font-bold">UMBRAL POSITIVO<span class="font-normal">(marcar x en <span class="box-check"></span>)</span></div>
                         <div><label class="cursor-pointer"><input type="checkbox" name="parestesiaNocturna.sintomas.umbralPositivo.molestiaSuenoCasiTodaNoche.dx" v-model="parestesiaNocturna.sintomas.umbralPositivo.molestiaSuenoCasiTodaNoche.dx" class="mr-1"> molestia durante el sueño casi toda la noche.</label></div>
-                        <div><label class="cursor-pointer"><input type="checkbox" name="parestesiaNocturna.sintomas.umbralPositivo.ocurrenciaUnaSemana12Meses.dx" v-model="parestesiaNocturna.sintomas.umbralPositivo.ocurrenciaUnaSemana12Meses.dx" class="mr-1"> ocurrencia por lo menos en 1 semana en los últimos 12 meses</label></div>
+                        <div><label class="cursor-pointer"><input type="checkbox" name="parestesiaNocturna.sintomas.umbralPositivo.ocurrenciaUnaSemana3Meses.dx" v-model="parestesiaNocturna.sintomas.umbralPositivo.ocurrenciaUnaSemana3Meses.dx" class="mr-1"> ocurrencia por lo menos en 1 semana en los últimos 3 meses</label></div>
                         <div><label class="cursor-pointer"><input type="checkbox" name="parestesiaNocturna.sintomas.umbralPositivo.ocurrenciaUnaVezMes.dx" v-model="parestesiaNocturna.sintomas.umbralPositivo.ocurrenciaUnaVezMes.dx" class="mr-1"> ocurrencia una vez al mes</label></div>
+                        <label class="block mt-1 font-normal">otras veces: <input type="text" name="parestesiaNocturna.sintomas.umbralPositivo.otrasVeces" v-model="parestesiaNocturna.sintomas.umbralPositivo.otrasVeces" class="border-b border-gray-400 w-full outline-none"></label>
                     </td>
                     <td class="border border-black p-1 text-center align-middle"><input type="checkbox" name="parestesiaNocturna.sintomas.umbralPositivo.dx" v-model="parestesiaNocturna.sintomas.umbralPositivo.dx"></td>
                     <td class="border border-black p-1 text-center align-middle"><input type="checkbox" name="parestesiaNocturna.sintomas.umbralPositivo.ix" v-model="parestesiaNocturna.sintomas.umbralPositivo.ix"></td>
@@ -165,6 +166,7 @@
                     <td class="border border-black p-1">
                         <div class="font-bold">MOLESTIAS LEVES</div>
                         <div>episodios de molestias por debajo del umbral</div>
+                        <label class="block mt-1 font-normal">detalle: <input type="text" name="parestesiaNocturna.sintomas.molestiasLeves.detalle" v-model="parestesiaNocturna.sintomas.molestiasLeves.detalle" class="border-b border-gray-400 w-full outline-none"></label>
                     </td>
                     <td class="border border-black p-1 text-center align-middle"><input type="checkbox" name="parestesiaNocturna.sintomas.molestiasLeves.dx" v-model="parestesiaNocturna.sintomas.molestiasLeves.dx"></td>
                     <td class="border border-black p-1 text-center align-middle"><input type="checkbox" name="parestesiaNocturna.sintomas.molestiasLeves.ix" v-model="parestesiaNocturna.sintomas.molestiasLeves.ix"></td>
@@ -225,7 +227,7 @@
                         <div><label class="cursor-pointer"><input type="checkbox" name="parestesiaDiurna.infoReportada.haTomadoMedicamentos" v-model="parestesiaDiurna.infoReportada.haTomadoMedicamentos" class="mr-1"> ha tomado medicamentos</label></div>
                         <div class="font-bold mt-1">ha realizado:</div>
                         <div><label class="cursor-pointer"><input type="checkbox" name="parestesiaDiurna.infoReportada.fisioterapia" v-model="parestesiaDiurna.infoReportada.fisioterapia" class="mr-1"> fisioterapia</label></div>
-                        <div><label class="cursor-pointer"><input type="checkbox" name="parestesiaDiurna.infoReportada.visitaOrtopedistaFisiatra" v-model="parestesiaDiurna.infoReportada.visitaOrtopedistaFisiatra" class="mr-1"> visita al ortopedista/fisiatra</label></div>
+                        <div><label class="cursor-pointer"><input type="checkbox" name="parestesiaDiurna.infoReportada.visitaTraumatologiaMedicinaGeneral" v-model="parestesiaDiurna.infoReportada.visitaTraumatologiaMedicinaGeneral" class="mr-1"> visita a traumatología / medicina general</label></div>
                         <div><label class="cursor-pointer"><input type="checkbox" name="parestesiaDiurna.infoReportada.rx" v-model="parestesiaDiurna.infoReportada.rx" class="mr-1"> RX</label></div>
                         <div><label class="cursor-pointer"><input type="checkbox" name="parestesiaDiurna.infoReportada.ecografiaRmn" v-model="parestesiaDiurna.infoReportada.ecografiaRmn" class="mr-1"> ECOGRAFÍA / RMN</label></div>
                         <div><label class="cursor-pointer"><input type="checkbox" name="parestesiaDiurna.infoReportada.emg" v-model="parestesiaDiurna.infoReportada.emg" class="mr-1"> EMG (electromiografía)</label></div>
@@ -274,9 +276,10 @@
                 <tr>
                     <td class="border border-black p-1 space-y-0.5">
                         <div class="font-bold">UMBRAL POSITIVO<span class="font-normal">(marcar x en <span class="box-check"></span>)</span></div>
-                        <div><label class="cursor-pointer"><input type="checkbox" name="parestesiaDiurna.sintomas.umbralPositivo.molestiaCasiTodosDias.dx" v-model="parestesiaDiurna.sintomas.umbralPositivo.molestiaCasiTodosDias.dx" class="mr-1"> molestia casi todos los días.</label></div>
-                        <div><label class="cursor-pointer"><input type="checkbox" name="parestesiaDiurna.sintomas.umbralPositivo.ocurrenciaUnaSemana12Meses.dx" v-model="parestesiaDiurna.sintomas.umbralPositivo.ocurrenciaUnaSemana12Meses.dx" class="mr-1"> ocurrencia por lo menos en 1 semana en los últimos 12 meses.</label></div>
-                        <div><label class="cursor-pointer"><input type="checkbox" name="parestesiaDiurna.sintomas.umbralPositivo.ocurrenciaUnDiaMes.dx" v-model="parestesiaDiurna.sintomas.umbralPositivo.ocurrenciaUnDiaMes.dx" class="mr-1"> ocurrencia por lo menos un día al mes.</label></div>
+                         <div><label class="cursor-pointer"><input type="checkbox" name="parestesiaDiurna.sintomas.umbralPositivo.molestiaSuenoCasiTodaNoche.dx" v-model="parestesiaDiurna.sintomas.umbralPositivo.molestiaSuenoCasiTodaNoche.dx" class="mr-1"> molestia durante el sueño casi toda la noche.</label></div>
+                         <div><label class="cursor-pointer"><input type="checkbox" name="parestesiaDiurna.sintomas.umbralPositivo.ocurrenciaUnaSemana3Meses.dx" v-model="parestesiaDiurna.sintomas.umbralPositivo.ocurrenciaUnaSemana3Meses.dx" class="mr-1"> ocurrencia por lo menos en 1 semana en los últimos 3 meses</label></div>
+                         <div><label class="cursor-pointer"><input type="checkbox" name="parestesiaDiurna.sintomas.umbralPositivo.ocurrenciaUnaVezMes.dx" v-model="parestesiaDiurna.sintomas.umbralPositivo.ocurrenciaUnaVezMes.dx" class="mr-1"> ocurrencia una vez al mes</label></div>
+                         <label class="block mt-1 font-normal">otras veces: <input type="text" name="parestesiaDiurna.sintomas.umbralPositivo.otrasVeces" v-model="parestesiaDiurna.sintomas.umbralPositivo.otrasVeces" class="border-b border-gray-400 w-full outline-none"></label>
                     </td>
                     <td class="border border-black p-1 text-center align-middle"><input type="checkbox" name="parestesiaDiurna.sintomas.umbralPositivo.dx" v-model="parestesiaDiurna.sintomas.umbralPositivo.dx"></td>
                     <td class="border border-black p-1 text-center align-middle"><input type="checkbox" name="parestesiaDiurna.sintomas.umbralPositivo.ix" v-model="parestesiaDiurna.sintomas.umbralPositivo.ix"></td>
@@ -284,7 +287,8 @@
                 <tr>
                     <td class="border border-black p-1">
                         <div class="font-bold">MOLESTIAS LEVES</div>
-                        <div>episodios de molestias por debajo del umbral</div>
+                         <div>episodios de molestias por debajo del umbral</div>
+                         <label class="block mt-1 font-normal">detalle: <input type="text" name="parestesiaDiurna.sintomas.molestiasLeves.detalle" v-model="parestesiaDiurna.sintomas.molestiasLeves.detalle" class="border-b border-gray-400 w-full outline-none"></label>
                     </td>
                     <td class="border border-black p-1 text-center align-middle"><input type="checkbox" name="parestesiaDiurna.sintomas.molestiasLeves.dx" v-model="parestesiaDiurna.sintomas.molestiasLeves.dx"></td>
                     <td class="border border-black p-1 text-center align-middle"><input type="checkbox" name="parestesiaDiurna.sintomas.molestiasLeves.ix" v-model="parestesiaDiurna.sintomas.molestiasLeves.ix"></td>
@@ -329,6 +333,9 @@
                         <td class="border-black p-1 text-center align-top">
                             <label class="cursor-pointer mr-3"><input type="radio" name="molestiaCervicalIrradiada.inicianOEmpeoranElevandoExtremidades" :value="true" v-model="molestiaCervicalIrradiada.inicianOEmpeoranElevandoExtremidades"> SI</label>
                             <label class="cursor-pointer"><input type="radio" name="molestiaCervicalIrradiada.inicianOEmpeoranElevandoExtremidades" :value="false" v-model="molestiaCervicalIrradiada.inicianOEmpeoranElevandoExtremidades"> NO</label>
+                            <label class="block mt-2 text-left font-normal">otros momentos:
+                                <textarea name="molestiaCervicalIrradiada.otrosMomentos" v-model="molestiaCervicalIrradiada.otrosMomentos" rows="2" class="mt-1 w-full border border-gray-400 p-1 outline-none"></textarea>
+                            </label>
                         </td>
                     </tr>
                 </tbody>

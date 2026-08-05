@@ -18,6 +18,7 @@ import type {
   FrecuenciaMolestiaDolor,
   LumbalgiaAguda,
   DiagnosticoPatologiaColumna,
+  UmbralPositivo,
 } from '@/types/entrevista-osteomuscular';
 import type { AtencionDetalle } from '@/types/jjc';
 
@@ -41,7 +42,7 @@ function initialInfoReportadaBase(): InfoReportadaBase {
   return {
     haTomadoMedicamentos: false,
     fisioterapia: false,
-    visitaOrtopedistaFisiatra: false,
+    visitaTraumatologiaMedicinaGeneral: false,
     rx: false,
     ecografiaResonancia: false,
   };
@@ -92,11 +93,12 @@ function initialDiagnosticoPatologiaColumna(): DiagnosticoPatologiaColumna {
   };
 }
 
-function initialUmbralPositivo() {
+function initialUmbralPositivo(): UmbralPositivo {
   return {
     dolorContinuo: { dx: false, ix: false },
-    tresMesesDolor12Meses: { dx: false, ix: false },
+    unaSemanaDolor3Meses: { dx: false, ix: false },
     unaVezMes12Meses: { dx: false, ix: false },
+    otrasVeces: '',
   };
 }
 
@@ -105,7 +107,7 @@ function initialSintomasHombro(): SintomasHombro {
     dolorMovimiento: { dx: false, ix: false },
     dolorReposo: { dx: false, ix: false },
     umbralPositivo: initialUmbralPositivo(),
-    molestiasLeves: { dx: false, ix: false },
+    molestiasLeves: { dx: false, ix: false, detalle: '' },
   };
 }
 
@@ -114,7 +116,7 @@ function initialSintomasCodo(): SintomasCodo {
     dolorAgarrarSoportarPeso: { dx: false, ix: false },
     dolorReposo: { dx: false, ix: false },
     umbralPositivo: initialUmbralPositivo(),
-    molestiasLeves: { dx: false, ix: false },
+    molestiasLeves: { dx: false, ix: false, detalle: '' },
   };
 }
 
@@ -128,7 +130,7 @@ function initialSintomasManoMuneca(): SintomasManoMuneca {
     dolorPalma: { dx: false, ix: false },
     dolorDorso: { dx: false, ix: false },
     umbralPositivo: initialUmbralPositivo(),
-    molestiasLeves: { dx: false, ix: false },
+    molestiasLeves: { dx: false, ix: false, detalle: '' },
   };
 }
 
@@ -136,7 +138,7 @@ function initialInfoReportadaParestesia(): InfoReportadaParestesia {
   return {
     haTomadoMedicamentos: false,
     fisioterapia: false,
-    visitaOrtopedistaFisiatra: false,
+    visitaTraumatologiaMedicinaGeneral: false,
     rx: false,
     ecografiaRmn: false,
     emg: false,
@@ -148,8 +150,9 @@ function initialUmbralPositivoParestesiaNocturna(): UmbralPositivoParestesiaNoct
     dx: false,
     ix: false,
     molestiaSuenoCasiTodaNoche: { dx: false, ix: false },
-    ocurrenciaUnaSemana12Meses: { dx: false, ix: false },
+    ocurrenciaUnaSemana3Meses: { dx: false, ix: false },
     ocurrenciaUnaVezMes: { dx: false, ix: false },
+    otrasVeces: '',
   };
 }
 
@@ -157,9 +160,10 @@ function initialUmbralPositivoParestesiaDiurna(): UmbralPositivoParestesiaDiurna
   return {
     dx: false,
     ix: false,
-    molestiaCasiTodosDias: { dx: false, ix: false },
-    ocurrenciaUnaSemana12Meses: { dx: false, ix: false },
-    ocurrenciaUnDiaMes: { dx: false, ix: false },
+    molestiaSuenoCasiTodaNoche: { dx: false, ix: false },
+    ocurrenciaUnaSemana3Meses: { dx: false, ix: false },
+    ocurrenciaUnaVezMes: { dx: false, ix: false },
+    otrasVeces: '',
   };
 }
 
@@ -173,7 +177,7 @@ function initialSintomasParestesiaNocturna(): SintomasParestesiaNocturna {
     presenciaDuranteSueno: { dx: false, ix: false },
     aparicionAlDespertar: { dx: false, ix: false },
     umbralPositivo: initialUmbralPositivoParestesiaNocturna(),
-    molestiasLeves: { dx: false, ix: false },
+    molestiasLeves: { dx: false, ix: false, detalle: '' },
   };
 }
 
@@ -188,7 +192,7 @@ function initialSintomasParestesiaDiurna(): SintomasParestesiaDiurna {
     aparecenApoyaCodo: { dx: false, ix: false },
     aparicionFuerzaEjecucionTrabajo: { dx: false, ix: false },
     umbralPositivo: initialUmbralPositivoParestesiaDiurna(),
-    molestiasLeves: { dx: false, ix: false },
+    molestiasLeves: { dx: false, ix: false, detalle: '' },
   };
 }
 
@@ -253,6 +257,7 @@ export function initialEntrevistaState(atencion: AtencionDetalle | null): Entrev
         presenciaUnaSemana12Meses: false,
         presenciaUnDiaMes: false,
       },
+      otrosMomentos: '',
     },
     ausenciaYTrastornos: {
       diasAusenciaExtremidadSuperior: null,
@@ -270,21 +275,37 @@ export function initialEntrevistaState(atencion: AtencionDetalle | null): Entrev
         presentaDisturbio: false,
         frecuenciaMolestia: initialFrecuencia(),
         frecuenciaDolor: initialFrecuencia(),
-        irradiacion: { tieneIrradiacion: false, miembroSuperior: { dx: false, ix: false } },
+        irradiacion: {
+          tieneIrradiacion: false,
+          miembroSuperior: { dx: false, ix: false },
+          detalleIrradiacion: '',
+        },
         diasAusenciaTrabajo: null,
       },
       dorsal: {
         presentaDisturbio: false,
         frecuenciaMolestia: initialFrecuencia(),
         frecuenciaDolor: initialFrecuencia(),
-        irradiacion: { tieneIrradiacion: false, emitorax: false, dx: false, ix: false },
+        irradiacion: {
+          tieneIrradiacion: false,
+          emitorax: false,
+          dx: false,
+          ix: false,
+          detalleIrradiacion: '',
+        },
         diasAusenciaTrabajo: null,
       },
       lumboSacra: {
         presentaDisturbio: false,
         frecuenciaMolestia: initialFrecuencia(),
         frecuenciaDolor: initialFrecuencia(),
-        irradiacion: { tieneIrradiacion: false, miembrosInferiores: false, dx: false, ix: false },
+        irradiacion: {
+          tieneIrradiacion: false,
+          miembrosInferiores: false,
+          dx: false,
+          ix: false,
+          detalleIrradiacion: '',
+        },
         diasAusenciaTrabajo: null,
       },
     },
@@ -314,10 +335,47 @@ function setDeep<T extends Record<string, unknown>>(obj: T, path: string, value:
   };
 }
 
+// ---- Deep merge helper (hydration of stored interviews) ----
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+/**
+ * Merge a stored (possibly outdated) interview payload over a fresh initial
+ * state, so missing fields fall back to their defaults instead of breaking
+ * the form.
+ */
+export function mergeEntrevista(
+  base: EntrevistaOsteomuscular,
+  override: unknown,
+): EntrevistaOsteomuscular {
+  return mergeDeep(
+    base as unknown as Record<string, unknown>,
+    override,
+  ) as unknown as EntrevistaOsteomuscular;
+}
+
+function mergeDeep(base: Record<string, unknown>, override: unknown): Record<string, unknown> {
+  if (!isPlainObject(override)) return base;
+
+  const result: Record<string, unknown> = { ...base };
+  for (const [key, value] of Object.entries(override)) {
+    const baseValue = base[key];
+    if (isPlainObject(baseValue) && isPlainObject(value)) {
+      result[key] = mergeDeep(baseValue, value);
+    } else if (value !== undefined) {
+      result[key] = value;
+    }
+  }
+  return result;
+}
+
 // ---- Action types ----
 
 export type EntrevistaAction =
   | { type: 'SET_FIELD'; path: string; value: unknown }
+  | { type: 'LOAD'; state: EntrevistaOsteomuscular }
   | { type: 'RESET'; atencion: AtencionDetalle | null };
 
 // ---- Reducer ----
@@ -329,6 +387,8 @@ export function entrevistaReducer(
   switch (action.type) {
     case 'SET_FIELD':
       return setDeep(state as unknown as Record<string, unknown>, action.path, action.value) as unknown as EntrevistaOsteomuscular;
+    case 'LOAD':
+      return action.state;
     case 'RESET':
       return initialEntrevistaState(action.atencion);
     default:
@@ -346,6 +406,7 @@ export interface UseEntrevistaOsteomuscularResult {
   reset: (atencion: AtencionDetalle | null) => void;
   setDatosGenerales: (value: Partial<DatosGenerales>) => void;
   setDxIx: (basePath: string, lado: 'dx' | 'ix', value: boolean) => void;
+  hydrate: (saved: unknown) => void;
 }
 
 export function useEntrevistaOsteomuscular(
@@ -393,6 +454,15 @@ export function useEntrevistaOsteomuscular(
     [],
   );
 
+  const hydrate = useCallback(
+    (saved: unknown) => {
+      const merged = mergeEntrevista(initialEntrevistaState(atencion), saved);
+      dispatch({ type: 'LOAD', state: merged });
+      setSavedSnapshot(serializeState(merged));
+    },
+    [atencion],
+  );
+
   return {
     state,
     isDirty,
@@ -401,5 +471,6 @@ export function useEntrevistaOsteomuscular(
     reset,
     setDatosGenerales,
     setDxIx,
+    hydrate,
   };
 }

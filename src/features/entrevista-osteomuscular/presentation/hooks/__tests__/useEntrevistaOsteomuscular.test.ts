@@ -47,4 +47,112 @@ describe('useEntrevistaOsteomuscular', () => {
     expect(result.current.isDirty).toBe(false);
     expect(result.current.state.datosGenerales.antiguedadEmpresa).toBe('');
   });
+
+  it('initializes and updates the upper-limb free-text fields', () => {
+    const { result } = renderHook(() => useEntrevistaOsteomuscular(ATENCION));
+
+    expect(result.current.state.miembrosSuperiores.hombro.infoReportada).toHaveProperty(
+      'visitaTraumatologiaMedicinaGeneral',
+      false,
+    );
+    expect(
+      result.current.state.miembrosSuperiores.hombro.sintomas.umbralPositivo.unaSemanaDolor3Meses,
+    ).toEqual({ dx: false, ix: false });
+    expect(result.current.state.miembrosSuperiores.hombro.sintomas.umbralPositivo.otrasVeces).toBe('');
+    expect(result.current.state.miembrosSuperiores.hombro.sintomas.molestiasLeves.detalle).toBe('');
+
+    act(() => {
+      result.current.setField(
+        'miembrosSuperiores.hombro.sintomas.umbralPositivo.unaSemanaDolor3Meses.dx',
+        true,
+      );
+      result.current.setField(
+        'miembrosSuperiores.hombro.sintomas.umbralPositivo.otrasVeces',
+        'cada dos semanas',
+      );
+      result.current.setField(
+        'miembrosSuperiores.hombro.sintomas.molestiasLeves.detalle',
+        'rigidez leve',
+      );
+    });
+
+    expect(result.current.state.miembrosSuperiores.hombro.sintomas.umbralPositivo.otrasVeces).toBe(
+      'cada dos semanas',
+    );
+    expect(
+      result.current.state.miembrosSuperiores.hombro.sintomas.umbralPositivo.unaSemanaDolor3Meses.dx,
+    ).toBe(true);
+    expect(result.current.state.miembrosSuperiores.hombro.sintomas.molestiasLeves.detalle).toBe(
+      'rigidez leve',
+    );
+  });
+
+  it('initializes and updates the page-two threshold and detail fields', () => {
+    const { result } = renderHook(() => useEntrevistaOsteomuscular(ATENCION));
+
+    expect(
+      result.current.state.parestesiaNocturna.sintomas.umbralPositivo.ocurrenciaUnaSemana3Meses,
+    ).toEqual({ dx: false, ix: false });
+    expect(result.current.state.parestesiaNocturna.sintomas.umbralPositivo.otrasVeces).toBe('');
+    expect(
+      result.current.state.parestesiaNocturna.sintomas.molestiasLeves.detalle,
+    ).toBe('');
+    expect(
+      result.current.state.parestesiaDiurna.sintomas.umbralPositivo.ocurrenciaUnaSemana3Meses,
+    ).toEqual({ dx: false, ix: false });
+    expect(result.current.state.parestesiaDiurna.sintomas.umbralPositivo.otrasVeces).toBe('');
+    expect(result.current.state.parestesiaDiurna.sintomas.molestiasLeves.detalle).toBe('');
+    expect(result.current.state.molestiaCervicalIrradiada.otrosMomentos).toBe('');
+
+    act(() => {
+      result.current.setField(
+        'parestesiaNocturna.sintomas.umbralPositivo.ocurrenciaUnaSemana3Meses.dx',
+        true,
+      );
+      result.current.setField(
+        'parestesiaNocturna.sintomas.umbralPositivo.otrasVeces',
+        'cada dos semanas',
+      );
+      result.current.setField(
+        'parestesiaNocturna.sintomas.molestiasLeves.detalle',
+        'hormigueo leve',
+      );
+      result.current.setField(
+        'parestesiaDiurna.sintomas.umbralPositivo.ocurrenciaUnaVezMes.ix',
+        true,
+      );
+      result.current.setField(
+        'parestesiaDiurna.sintomas.umbralPositivo.otrasVeces',
+        'al conducir',
+      );
+      result.current.setField(
+        'parestesiaDiurna.sintomas.molestiasLeves.detalle',
+        'adormecimiento leve',
+      );
+      result.current.setField(
+        'molestiaCervicalIrradiada.otrosMomentos',
+        'al levantar peso',
+      );
+    });
+
+    expect(
+      result.current.state.parestesiaNocturna.sintomas.umbralPositivo.ocurrenciaUnaSemana3Meses.dx,
+    ).toBe(true);
+    expect(result.current.state.parestesiaNocturna.sintomas.umbralPositivo.otrasVeces).toBe(
+      'cada dos semanas',
+    );
+    expect(result.current.state.parestesiaNocturna.sintomas.molestiasLeves.detalle).toBe(
+      'hormigueo leve',
+    );
+    expect(
+      result.current.state.parestesiaDiurna.sintomas.umbralPositivo.ocurrenciaUnaVezMes.ix,
+    ).toBe(true);
+    expect(result.current.state.parestesiaDiurna.sintomas.umbralPositivo.otrasVeces).toBe(
+      'al conducir',
+    );
+    expect(result.current.state.parestesiaDiurna.sintomas.molestiasLeves.detalle).toBe(
+      'adormecimiento leve',
+    );
+    expect(result.current.state.molestiaCervicalIrradiada.otrosMomentos).toBe('al levantar peso');
+  });
 });

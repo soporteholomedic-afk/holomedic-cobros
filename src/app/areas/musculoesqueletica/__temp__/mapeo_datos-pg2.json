@@ -5,7 +5,7 @@
     "infoReportada": {
       "haTomadoMedicamentos": false,
       "fisioterapia": false,
-      "visitaOrtopedistaFisiatra": false,
+      "visitaTraumatologiaMedicinaGeneral": false,
       "rx": false,
       "ecografiaRmn": false,
       "emg": false
@@ -22,10 +22,11 @@
       "dx": false,
       "ix": false,
       "molestiaSuenoCasiTodaNoche": { "dx": false, "ix": false },
-      "ocurrenciaUnaSemana12Meses": { "dx": false, "ix": false },
-      "ocurrenciaUnaVezMes": { "dx": false, "ix": false }
+      "ocurrenciaUnaSemana3Meses": { "dx": false, "ix": false },
+      "ocurrenciaUnaVezMes": { "dx": false, "ix": false },
+      "otrasVeces": ""
       },
-      "molestiasLeves": { "dx": false, "ix": false }
+      "molestiasLeves": { "dx": false, "ix": false, "detalle": "" }
     }
   },
 
@@ -35,7 +36,7 @@
     "infoReportada": {
       "haTomadoMedicamentos": false,
       "fisioterapia": false,
-      "visitaOrtopedistaFisiatra": false,
+      "visitaTraumatologiaMedicinaGeneral": false,
       "rx": false,
       "ecografiaRmn": false,
       "emg": false
@@ -52,11 +53,12 @@
     "umbralPositivo": {
       "dx": false,
       "ix": false,
-      "molestiaCasiTodosDias": { "dx": false, "ix": false },
-      "ocurrenciaUnaSemana12Meses": { "dx": false, "ix": false },
-      "ocurrenciaUnDiaMes": { "dx": false, "ix": false }
+      "molestiaSuenoCasiTodaNoche": { "dx": false, "ix": false },
+      "ocurrenciaUnaSemana3Meses": { "dx": false, "ix": false },
+      "ocurrenciaUnaVezMes": { "dx": false, "ix": false },
+      "otrasVeces": ""
       },
-      "molestiasLeves": { "dx": false, "ix": false }
+      "molestiasLeves": { "dx": false, "ix": false, "detalle": "" }
     }
   },
 
@@ -72,7 +74,8 @@
       "presentandoCasiTodoDia": false,
       "presenciaUnaSemana12Meses": false,
       "presenciaUnDiaMes": false
-    }
+    },
+    "otrosMomentos": ""
   },
 
   "ausenciaYTrastornos": {

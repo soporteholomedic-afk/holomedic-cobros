@@ -1,7 +1,13 @@
 'use client';
 
 import Image from 'next/image';
+import { useState } from 'react';
 import { useEntrevistaContext } from '@/features/entrevista-osteomuscular/presentation/context/EntrevistaOsteomuscularContext';
+import {
+  DETALLE_IRRADIACION_ERROR_MESSAGE,
+  DETALLE_IRRADIACION_MAX_LENGTH,
+  isValidDetalleIrradiacion,
+} from '@/features/entrevista-osteomuscular/domain/detalleIrradiacion';
 import { Paginacion } from './Paginacion';
 import type {
   SeccionCervical,
@@ -158,9 +164,20 @@ function BloqueColumna({
   esUltima,
 }: BloqueColumnaProps) {
   const { setField } = useEntrevistaContext();
+  const [detalleError, setDetalleError] = useState<string | null>(null);
 
   const handleCheck = (path: string, value: boolean) => setField(path, value);
   const handleRadio = (path: string, value: boolean) => setField(path, value);
+
+  const handleDetalleIrradiacionChange = (value: string) => {
+    const truncated = value.slice(0, DETALLE_IRRADIACION_MAX_LENGTH);
+    if (!isValidDetalleIrradiacion(truncated)) {
+      setDetalleError(DETALLE_IRRADIACION_ERROR_MESSAGE);
+      return;
+    }
+    setDetalleError(null);
+    setField(`${basePath}.irradiacion.detalleIrradiacion`, truncated);
+  };
 
   return (
     <div>
@@ -266,6 +283,36 @@ function BloqueColumna({
               </label>
             </td>
             <CeldasIrradiacionRegion region={region} basePath={basePath} />
+          </tr>
+          {/* Detalle de irradiación: idéntico en CERVICAL, DORSAL y LUMBO SACRA */}
+          <tr className="border-b border-black bg-white">
+            <td colSpan={4} className="p-1 text-left align-top">
+              <div className="flex flex-col gap-1 sm:flex-row sm:items-center">
+                <label
+                  htmlFor={`${basePath}.irradiacion.detalleIrradiacion`}
+                  className="shrink-0 font-bold sm:w-[22%]"
+                >
+                  DETALLE DE IRRADIACIÓN
+                </label>
+                <div className="min-w-0 flex-1">
+                  <input
+                    id={`${basePath}.irradiacion.detalleIrradiacion`}
+                    type="text"
+                    maxLength={DETALLE_IRRADIACION_MAX_LENGTH}
+                    value={seccion.irradiacion.detalleIrradiacion}
+                    onChange={(e) => handleDetalleIrradiacionChange(e.target.value)}
+                    placeholder="Zona o trayectoria de la irradiación"
+                    aria-invalid={detalleError !== null}
+                    className="w-full border border-black px-1 py-0.5 font-normal outline-none focus:bg-sky-50"
+                  />
+                  {detalleError !== null && (
+                    <p role="alert" className="mt-0.5 font-normal text-red-600">
+                      {detalleError}
+                    </p>
+                  )}
+                </div>
+              </div>
+            </td>
           </tr>
         </tbody>
       </table>

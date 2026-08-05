@@ -8,7 +8,7 @@ import type { UmbralPositivo } from '@/types/entrevista-osteomuscular';
 const INFO_LABELS: Record<string, string> = {
   haTomadoMedicamentos: 'ha tomado medicamentos',
   fisioterapia: 'fisioterapia',
-  visitaOrtopedistaFisiatra: 'visita al ortopedista / fisiatra',
+  visitaTraumatologiaMedicinaGeneral: 'visita a traumatología / medicina general',
   rx: 'RX',
   ecografiaResonancia: 'ECOGRAFÍA / RESONANCIA',
   emg: 'EMG (electromiografía)',
@@ -44,13 +44,20 @@ type Fila =
       dxChecked: boolean;
       ixChecked: boolean;
     }
-  | { tipo: 'umbral'; criterios: CriterioUmbral[] }
+  | {
+      tipo: 'umbral';
+      criterios: CriterioUmbral[];
+      otrasVecesPath: string;
+      otrasVeces: string;
+    }
   | {
       tipo: 'molestias';
       dxPath: string;
       ixPath: string;
       dxChecked: boolean;
       ixChecked: boolean;
+      detallePath: string;
+      detalle: string;
     };
 
 interface SeccionAnamnesisProps {
@@ -66,7 +73,7 @@ interface SeccionAnamnesisProps {
   infoInicial: InfoItem[];
   infoRealizado: InfoItem[];
   filas: Fila[];
-  onCheckChange: (path: string, value: boolean) => void;
+  onCheckChange: (path: string, value: boolean | string) => void;
 }
 
 function SeccionAnamnesis({
@@ -274,6 +281,16 @@ function SeccionAnamnesis({
                       </label>
                     </div>
                   ))}
+                  <label className="flex items-center gap-1 mt-1">
+                    <span>otras veces:</span>
+                    <input
+                      type="text"
+                      value={fila.otrasVeces}
+                      onChange={(e) => onCheckChange(fila.otrasVecesPath, e.target.value)}
+                      className="min-w-0 flex-1 border-b border-gray-400 px-1 font-normal outline-none"
+                      aria-label="Otras veces"
+                    />
+                  </label>
                 </td>
                 <td className="border border-black p-1 text-center align-middle">
                   <input
@@ -303,6 +320,14 @@ function SeccionAnamnesis({
               <td className="border border-black p-1">
                 <div className="font-bold">MOLESTIAS LEVES</div>
                 <div>episodios de molestias por debajo del umbral</div>
+                <input
+                  type="text"
+                  value={fila.detalle}
+                  onChange={(e) => onCheckChange(fila.detallePath, e.target.value)}
+                  className="w-full border-b border-gray-400 mt-1 px-1 font-normal outline-none"
+                  placeholder="Escriba el detalle"
+                  aria-label="Detalle de molestias leves"
+                />
               </td>
               <td className="border border-black p-1 text-center align-middle">
                 <input
@@ -339,9 +364,15 @@ function buildInfoItems<T extends object>(
 }
 
 function buildCriteriosUmbral(umbral: UmbralPositivo, basePath: string): CriterioUmbral[] {
-  const criterios: Array<{ label: string; key: keyof UmbralPositivo }> = [
+  const criterios: Array<{
+    label: string;
+    key: 'dolorContinuo' | 'unaSemanaDolor3Meses' | 'unaVezMes12Meses';
+  }> = [
     { label: 'dolor continuo', key: 'dolorContinuo' },
-    { label: 'al menos 3 meses de dolor en los últimos 12 meses', key: 'tresMesesDolor12Meses' },
+    {
+      label: 'al menos 1 semana de dolor en los últimos 3 meses',
+      key: 'unaSemanaDolor3Meses',
+    },
     { label: 'al menos 1 vez al mes en los últimos 12 meses', key: 'unaVezMes12Meses' },
   ];
 
@@ -359,7 +390,7 @@ function buildCriteriosUmbral(umbral: UmbralPositivo, basePath: string): Criteri
 
 export function EntrevistaOsteomuscularForm() {
   const { idAtencion, state, setField } = useEntrevistaContext();
-  const handleCheck = (path: string, value: boolean) => setField(path, value);
+  const handleCheck = (path: string, value: boolean | string) => setField(path, value);
 
   const hombro = state.miembrosSuperiores.hombro;
   const codo = state.miembrosSuperiores.codo;
@@ -371,7 +402,7 @@ export function EntrevistaOsteomuscularForm() {
   const hombroInfoRealizado = buildInfoItems(
     hombro.infoReportada,
     'miembrosSuperiores.hombro.infoReportada',
-    ['fisioterapia', 'visitaOrtopedistaFisiatra', 'rx', 'ecografiaResonancia'],
+    ['fisioterapia', 'visitaTraumatologiaMedicinaGeneral', 'rx', 'ecografiaResonancia'],
   );
 
   const codoInfoInicial = buildInfoItems(codo.infoReportada, 'miembrosSuperiores.codo.infoReportada', [
@@ -379,7 +410,7 @@ export function EntrevistaOsteomuscularForm() {
   ]);
   const codoInfoRealizado = buildInfoItems(codo.infoReportada, 'miembrosSuperiores.codo.infoReportada', [
     'fisioterapia',
-    'visitaOrtopedistaFisiatra',
+    'visitaTraumatologiaMedicinaGeneral',
     'rx',
     'ecografiaResonancia',
     'emg',
@@ -391,7 +422,7 @@ export function EntrevistaOsteomuscularForm() {
   const manoInfoRealizado = buildInfoItems(
     mano.infoReportada,
     'miembrosSuperiores.manoMuneca.infoReportada',
-    ['fisioterapia', 'visitaOrtopedistaFisiatra', 'rx', 'ecografiaResonancia', 'emg'],
+    ['fisioterapia', 'visitaTraumatologiaMedicinaGeneral', 'rx', 'ecografiaResonancia', 'emg'],
   );
 
   const hombroFilas: Fila[] = [
@@ -414,6 +445,8 @@ export function EntrevistaOsteomuscularForm() {
     {
       tipo: 'umbral',
       criterios: buildCriteriosUmbral(hombro.sintomas.umbralPositivo, 'miembrosSuperiores.hombro.sintomas'),
+      otrasVecesPath: 'miembrosSuperiores.hombro.sintomas.umbralPositivo.otrasVeces',
+      otrasVeces: hombro.sintomas.umbralPositivo.otrasVeces,
     },
     {
       tipo: 'molestias',
@@ -421,6 +454,8 @@ export function EntrevistaOsteomuscularForm() {
       ixPath: 'miembrosSuperiores.hombro.sintomas.molestiasLeves.ix',
       dxChecked: hombro.sintomas.molestiasLeves.dx,
       ixChecked: hombro.sintomas.molestiasLeves.ix,
+      detallePath: 'miembrosSuperiores.hombro.sintomas.molestiasLeves.detalle',
+      detalle: hombro.sintomas.molestiasLeves.detalle,
     },
   ];
 
@@ -444,6 +479,8 @@ export function EntrevistaOsteomuscularForm() {
     {
       tipo: 'umbral',
       criterios: buildCriteriosUmbral(codo.sintomas.umbralPositivo, 'miembrosSuperiores.codo.sintomas'),
+      otrasVecesPath: 'miembrosSuperiores.codo.sintomas.umbralPositivo.otrasVeces',
+      otrasVeces: codo.sintomas.umbralPositivo.otrasVeces,
     },
     {
       tipo: 'molestias',
@@ -451,6 +488,8 @@ export function EntrevistaOsteomuscularForm() {
       ixPath: 'miembrosSuperiores.codo.sintomas.molestiasLeves.ix',
       dxChecked: codo.sintomas.molestiasLeves.dx,
       ixChecked: codo.sintomas.molestiasLeves.ix,
+      detallePath: 'miembrosSuperiores.codo.sintomas.molestiasLeves.detalle',
+      detalle: codo.sintomas.molestiasLeves.detalle,
     },
   ];
 
@@ -517,6 +556,8 @@ export function EntrevistaOsteomuscularForm() {
         mano.sintomas.umbralPositivo,
         'miembrosSuperiores.manoMuneca.sintomas',
       ),
+      otrasVecesPath: 'miembrosSuperiores.manoMuneca.sintomas.umbralPositivo.otrasVeces',
+      otrasVeces: mano.sintomas.umbralPositivo.otrasVeces,
     },
     {
       tipo: 'molestias',
@@ -524,6 +565,8 @@ export function EntrevistaOsteomuscularForm() {
       ixPath: 'miembrosSuperiores.manoMuneca.sintomas.molestiasLeves.ix',
       dxChecked: mano.sintomas.molestiasLeves.dx,
       ixChecked: mano.sintomas.molestiasLeves.ix,
+      detallePath: 'miembrosSuperiores.manoMuneca.sintomas.molestiasLeves.detalle',
+      detalle: mano.sintomas.molestiasLeves.detalle,
     },
   ];
 

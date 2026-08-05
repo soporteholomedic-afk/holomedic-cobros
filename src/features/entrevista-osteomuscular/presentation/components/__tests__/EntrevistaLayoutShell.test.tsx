@@ -1,6 +1,6 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { AtencionDetalle } from '@/types/jjc';
 import { EntrevistaOsteomuscularProvider, useEntrevistaContext } from '@/features/entrevista-osteomuscular/presentation/context/EntrevistaOsteomuscularContext';
 import { EntrevistaLayoutShell } from '../EntrevistaLayoutShell';
@@ -50,7 +50,21 @@ function renderShell() {
   );
 }
 
+const fetchMock = vi.fn();
+
+beforeEach(() => {
+  fetchMock.mockReset();
+  fetchMock.mockImplementation(async (_url: unknown, init?: { method?: string }) => {
+    if (init?.method === 'POST') {
+      return new Response(JSON.stringify({ ok: true }), { status: 200 });
+    }
+    return new Response(JSON.stringify({ data: null }), { status: 404 });
+  });
+  vi.stubGlobal('fetch', fetchMock);
+});
+
 afterEach(() => {
+  vi.unstubAllGlobals();
   vi.restoreAllMocks();
   mockPush.mockReset();
 });
@@ -79,15 +93,42 @@ describe('EntrevistaLayoutShell', () => {
     expect(mockPush).toHaveBeenCalledWith('/areas/musculoesqueletica/jjc/AT-1001');
   });
 
-  it('marks changes as saved and allows leaving without confirmation', async () => {
+  it('persists the interview on Guardar and allows leaving without confirmation', async () => {
     const user = userEvent.setup();
     renderShell();
 
     await user.click(screen.getByRole('button', { name: 'Modificar' }));
     await user.click(screen.getByRole('button', { name: 'Guardar' }));
+
+    // El guardado real (POST) termina y el botón vuelve a su estado normal
+    await waitFor(() => {
+      expect(fetchMock.mock.calls.some(([url, init]) =>
+        String(url).includes('/api/areas/musculoesqueletica/jjc/entrevista')
+        && init?.method === 'POST')).toBe(true);
+    });
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Guardar' })).toBeInTheDocument();
+    });
+
     await user.click(screen.getByRole('button', { name: 'Volver' }));
 
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     expect(mockPush).toHaveBeenCalledWith('/areas/musculoesqueletica/jjc/AT-1001');
+  });
+
+  it('shows an error message when the save request fails', async () => {
+    const user = userEvent.setup();
+    fetchMock.mockImplementation(async (_url: unknown, init?: { method?: string }) => {
+      if (init?.method === 'POST') {
+        return new Response(JSON.stringify({ error: 'DB connection failed' }), { status: 500 });
+      }
+      return new Response(JSON.stringify({ data: null }), { status: 404 });
+    });
+    renderShell();
+
+    await user.click(screen.getByRole('button', { name: 'Modificar' }));
+    await user.click(screen.getByRole('button', { name: 'Guardar' }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('DB connection failed');
   });
 });

@@ -27,7 +27,7 @@
       "infoReportada": {
         "haTomadoMedicamentos": false,
         "fisioterapia": false,
-        "visitaOrtopedistaFisiatra": false,
+        "visitaTraumatologiaMedicinaGeneral": false,
         "rx": false,
         "ecografiaResonancia": false
       },
@@ -36,10 +36,11 @@
         "dolorReposo": { "dx": false, "ix": false },
         "umbralPositivo": {
           "dolorContinuo": { "dx": false, "ix": false },
-          "unaSemanaDolor12Meses": { "dx": false, "ix": false },
-          "unaVezMes12Meses": { "dx": false, "ix": false }
+          "unaSemanaDolor3Meses": { "dx": false, "ix": false },
+          "unaVezMes12Meses": { "dx": false, "ix": false },
+          "otrasVeces": ""
         },
-        "molestiasLeves": { "dx": false, "ix": false }
+        "molestiasLeves": { "dx": false, "ix": false, "detalle": "" }
       }
     },
     "codo": {
@@ -48,7 +49,7 @@
       "infoReportada": {
         "haTomadoMedicamentos": false,
         "fisioterapia": false,
-        "visitaOrtopedistaFisiatra": false,
+        "visitaTraumatologiaMedicinaGeneral": false,
         "rx": false,
         "ecografiaResonancia": false,
         "emg": false
@@ -58,10 +59,11 @@
         "dolorReposo": { "dx": false, "ix": false },
         "umbralPositivo": {
           "dolorContinuo": { "dx": false, "ix": false },
-          "unaSemanaDolor12Meses": { "dx": false, "ix": false },
-          "unaVezMes12Meses": { "dx": false, "ix": false }
+          "unaSemanaDolor3Meses": { "dx": false, "ix": false },
+          "unaVezMes12Meses": { "dx": false, "ix": false },
+          "otrasVeces": ""
         },
-        "molestiasLeves": { "dx": false, "ix": false }
+        "molestiasLeves": { "dx": false, "ix": false, "detalle": "" }
       }
     },
     "manoMuneca": {
@@ -71,7 +73,7 @@
       "infoReportada": {
         "haTomadoMedicamentos": false,
         "fisioterapia": false,
-        "visitaOrtopedistaFisiatra": false,
+        "visitaTraumatologiaMedicinaGeneral": false,
         "rx": false,
         "ecografiaResonancia": false,
         "emg": false
@@ -86,10 +88,11 @@
         "dolorDorso": { "dx": false, "ix": false },
         "umbralPositivo": {
           "dolorContinuo": { "dx": false, "ix": false },
-          "unaSemanaDolor12Meses": { "dx": false, "ix": false },
-          "unaVezMes12Meses": { "dx": false, "ix": false }
+          "unaSemanaDolor3Meses": { "dx": false, "ix": false },
+          "unaVezMes12Meses": { "dx": false, "ix": false },
+          "otrasVeces": ""
         },
-        "molestiasLeves": { "dx": false, "ix": false }
+        "molestiasLeves": { "dx": false, "ix": false, "detalle": "" }
       }
     }
   }

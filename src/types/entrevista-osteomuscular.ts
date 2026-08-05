@@ -6,7 +6,7 @@ export interface DxIxBool {
 export interface InfoReportadaBase {
   haTomadoMedicamentos: boolean;
   fisioterapia: boolean;
-  visitaOrtopedistaFisiatra: boolean;
+  visitaTraumatologiaMedicinaGeneral: boolean;
   rx: boolean;
   ecografiaResonancia: boolean;
 }
@@ -21,22 +21,27 @@ export interface InfoReportadaManoMuneca extends InfoReportadaBase {
 
 export interface UmbralPositivo {
   dolorContinuo: DxIxBool;
-  tresMesesDolor12Meses: DxIxBool;
+  unaSemanaDolor3Meses: DxIxBool;
   unaVezMes12Meses: DxIxBool;
+  otrasVeces: string;
+}
+
+export interface MolestiasLeves extends DxIxBool {
+  detalle: string;
 }
 
 export interface SintomasHombro {
   dolorMovimiento: DxIxBool;
   dolorReposo: DxIxBool;
   umbralPositivo: UmbralPositivo;
-  molestiasLeves: DxIxBool;
+  molestiasLeves: MolestiasLeves;
 }
 
 export interface SintomasCodo {
   dolorAgarrarSoportarPeso: DxIxBool;
   dolorReposo: DxIxBool;
   umbralPositivo: UmbralPositivo;
-  molestiasLeves: DxIxBool;
+  molestiasLeves: MolestiasLeves;
 }
 
 export interface SintomasManoMuneca {
@@ -48,7 +53,7 @@ export interface SintomasManoMuneca {
   dolorPalma: DxIxBool;
   dolorDorso: DxIxBool;
   umbralPositivo: UmbralPositivo;
-  molestiasLeves: DxIxBool;
+  molestiasLeves: MolestiasLeves;
 }
 
 export interface SeccionHombro {
@@ -81,7 +86,7 @@ export interface SeccionManoMuneca {
 export interface InfoReportadaParestesia {
   haTomadoMedicamentos: boolean;
   fisioterapia: boolean;
-  visitaOrtopedistaFisiatra: boolean;
+  visitaTraumatologiaMedicinaGeneral: boolean;
   rx: boolean;
   ecografiaRmn: boolean;
   emg: boolean;
@@ -91,16 +96,18 @@ export interface UmbralPositivoParestesiaNocturna {
   dx: boolean;
   ix: boolean;
   molestiaSuenoCasiTodaNoche: DxIxBool;
-  ocurrenciaUnaSemana12Meses: DxIxBool;
+  ocurrenciaUnaSemana3Meses: DxIxBool;
   ocurrenciaUnaVezMes: DxIxBool;
+  otrasVeces: string;
 }
 
 export interface UmbralPositivoParestesiaDiurna {
   dx: boolean;
   ix: boolean;
-  molestiaCasiTodosDias: DxIxBool;
-  ocurrenciaUnaSemana12Meses: DxIxBool;
-  ocurrenciaUnDiaMes: DxIxBool;
+  molestiaSuenoCasiTodaNoche: DxIxBool;
+  ocurrenciaUnaSemana3Meses: DxIxBool;
+  ocurrenciaUnaVezMes: DxIxBool;
+  otrasVeces: string;
 }
 
 export interface SintomasParestesiaNocturna {
@@ -112,7 +119,7 @@ export interface SintomasParestesiaNocturna {
   presenciaDuranteSueno: DxIxBool;
   aparicionAlDespertar: DxIxBool;
   umbralPositivo: UmbralPositivoParestesiaNocturna;
-  molestiasLeves: DxIxBool;
+  molestiasLeves: MolestiasLeves;
 }
 
 export interface SintomasParestesiaDiurna {
@@ -125,7 +132,7 @@ export interface SintomasParestesiaDiurna {
   aparecenApoyaCodo: DxIxBool;
   aparicionFuerzaEjecucionTrabajo: DxIxBool;
   umbralPositivo: UmbralPositivoParestesiaDiurna;
-  molestiasLeves: DxIxBool;
+  molestiasLeves: MolestiasLeves;
 }
 
 export interface ParestesiaNocturna {
@@ -152,6 +159,7 @@ export interface MolestiaCervicalIrradiada {
     presenciaUnaSemana12Meses: boolean;
     presenciaUnDiaMes: boolean;
   };
+  otrosMomentos: string;
 }
 
 export interface DiagnosticoTrastorno {
@@ -171,6 +179,7 @@ export interface FrecuenciaMolestiaDolor {
 export interface IrradiacionCervical {
   tieneIrradiacion: boolean;
   miembroSuperior: DxIxBool;
+  detalleIrradiacion: string;
 }
 
 export interface IrradiacionDorsal {
@@ -178,6 +187,7 @@ export interface IrradiacionDorsal {
   emitorax: boolean;
   dx: boolean;
   ix: boolean;
+  detalleIrradiacion: string;
 }
 
 export interface IrradiacionLumboSacra {
@@ -185,6 +195,7 @@ export interface IrradiacionLumboSacra {
   miembrosInferiores: boolean;
   dx: boolean;
   ix: boolean;
+  detalleIrradiacion: string;
 }
 
 export interface SeccionColumna {

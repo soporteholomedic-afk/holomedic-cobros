@@ -11,7 +11,7 @@ import type {
 const INFO_LABELS: Record<string, string> = {
   haTomadoMedicamentos: 'ha tomado medicamentos',
   fisioterapia: 'fisioterapia',
-  visitaOrtopedistaFisiatra: 'visita al ortopedista/fisiatra',
+  visitaTraumatologiaMedicinaGeneral: 'visita a traumatología / medicina general',
   rx: 'RX',
   ecografiaRmn: 'ECOGRAFÍA / RMN',
   emg: 'EMG (electromiografía)',
@@ -66,6 +66,8 @@ interface UmbralBlock {
   dxChecked: boolean;
   ixChecked: boolean;
   criterios: CriterioUmbral[];
+  otrasVecesPath: string;
+  otrasVeces: string;
 }
 
 interface MolestiasLevesBlock {
@@ -73,6 +75,8 @@ interface MolestiasLevesBlock {
   ixPath: string;
   dxChecked: boolean;
   ixChecked: boolean;
+  detallePath: string;
+  detalle: string;
 }
 
 interface ParestesiaTableProps {
@@ -92,6 +96,7 @@ interface ParestesiaTableProps {
   umbral: UmbralBlock;
   molestiasLeves: MolestiasLevesBlock;
   onCheckChange: (path: string, value: boolean) => void;
+  onFieldChange: (path: string, value: string) => void;
 }
 
 function ParestesiaTable({
@@ -111,6 +116,7 @@ function ParestesiaTable({
   umbral,
   molestiasLeves,
   onCheckChange,
+  onFieldChange,
 }: ParestesiaTableProps) {
   const rowSpan = filas.length + 2;
 
@@ -284,6 +290,15 @@ function ParestesiaTable({
                 </label>
               </div>
             ))}
+            <label className="block mt-1 font-normal">
+              otras veces:{' '}
+              <input
+                type="text"
+                value={umbral.otrasVeces}
+                onChange={(e) => onFieldChange(umbral.otrasVecesPath, e.target.value)}
+                className="border-b border-gray-400 w-full outline-none"
+              />
+            </label>
           </td>
           <td className="border border-black p-1 text-center align-middle">
             <input
@@ -305,6 +320,15 @@ function ParestesiaTable({
           <td className="border border-black p-1">
             <div className="font-bold">MOLESTIAS LEVES</div>
             <div>episodios de molestias por debajo del umbral</div>
+            <label className="block mt-1 font-normal">
+              detalle:{' '}
+              <input
+                type="text"
+                value={molestiasLeves.detalle}
+                onChange={(e) => onFieldChange(molestiasLeves.detallePath, e.target.value)}
+                className="border-b border-gray-400 w-full outline-none"
+              />
+            </label>
           </td>
           <td className="border border-black p-1 text-center align-middle">
             <input
@@ -338,8 +362,8 @@ function buildInfoItems<T extends object>(
   }));
 }
 
-function buildCriteriosUmbralNocturna(
-  u: UmbralPositivoParestesiaNocturna,
+function buildCriteriosUmbralParestesia(
+  u: UmbralPositivoParestesiaNocturna | UmbralPositivoParestesiaDiurna,
   basePath: string,
 ): CriterioUmbral[] {
   return [
@@ -349,9 +373,9 @@ function buildCriteriosUmbralNocturna(
       dxChecked: u.molestiaSuenoCasiTodaNoche.dx,
     },
     {
-      label: 'ocurrencia por lo menos en 1 semana en los últimos 12 meses',
-      dxPath: `${basePath}.ocurrenciaUnaSemana12Meses.dx`,
-      dxChecked: u.ocurrenciaUnaSemana12Meses.dx,
+      label: 'ocurrencia por lo menos en 1 semana en los últimos 3 meses',
+      dxPath: `${basePath}.ocurrenciaUnaSemana3Meses.dx`,
+      dxChecked: u.ocurrenciaUnaSemana3Meses.dx,
     },
     {
       label: 'ocurrencia una vez al mes',
@@ -361,32 +385,10 @@ function buildCriteriosUmbralNocturna(
   ];
 }
 
-function buildCriteriosUmbralDiurna(
-  u: UmbralPositivoParestesiaDiurna,
-  basePath: string,
-): CriterioUmbral[] {
-  return [
-    {
-      label: 'molestia casi todos los días.',
-      dxPath: `${basePath}.molestiaCasiTodosDias.dx`,
-      dxChecked: u.molestiaCasiTodosDias.dx,
-    },
-    {
-      label: 'ocurrencia por lo menos en 1 semana en los últimos 12 meses.',
-      dxPath: `${basePath}.ocurrenciaUnaSemana12Meses.dx`,
-      dxChecked: u.ocurrenciaUnaSemana12Meses.dx,
-    },
-    {
-      label: 'ocurrencia por lo menos un día al mes.',
-      dxPath: `${basePath}.ocurrenciaUnDiaMes.dx`,
-      dxChecked: u.ocurrenciaUnDiaMes.dx,
-    },
-  ];
-}
-
 export function EntrevistaOsteomuscularFormPag2() {
   const { idAtencion, state, setField } = useEntrevistaContext();
   const handleCheck = (path: string, value: boolean) => setField(path, value);
+  const handleFieldChange = (path: string, value: string) => setField(path, value);
 
   const nocturna = state.parestesiaNocturna;
   const diurna = state.parestesiaDiurna;
@@ -401,7 +403,7 @@ export function EntrevistaOsteomuscularFormPag2() {
   const nocturnaInfoRealizado = buildInfoItems(
     nocturna.infoReportada,
     'parestesiaNocturna.infoReportada',
-    ['fisioterapia', 'visitaOrtopedistaFisiatra', 'rx', 'ecografiaRmn', 'emg'],
+    ['fisioterapia', 'visitaTraumatologiaMedicinaGeneral', 'rx', 'ecografiaRmn', 'emg'],
   );
 
   const diurnaInfoInicial = buildInfoItems(
@@ -412,7 +414,7 @@ export function EntrevistaOsteomuscularFormPag2() {
   const diurnaInfoRealizado = buildInfoItems(
     diurna.infoReportada,
     'parestesiaDiurna.infoReportada',
-    ['fisioterapia', 'visitaOrtopedistaFisiatra', 'rx', 'ecografiaRmn', 'emg'],
+    ['fisioterapia', 'visitaTraumatologiaMedicinaGeneral', 'rx', 'ecografiaRmn', 'emg'],
   );
 
   const nocturnaFilas: FilaSintoma[] = [
@@ -441,7 +443,9 @@ export function EntrevistaOsteomuscularFormPag2() {
     ixPath: 'parestesiaNocturna.sintomas.umbralPositivo.ix',
     dxChecked: nocturna.sintomas.umbralPositivo.dx,
     ixChecked: nocturna.sintomas.umbralPositivo.ix,
-    criterios: buildCriteriosUmbralNocturna(
+    otrasVecesPath: 'parestesiaNocturna.sintomas.umbralPositivo.otrasVeces',
+    otrasVeces: nocturna.sintomas.umbralPositivo.otrasVeces,
+    criterios: buildCriteriosUmbralParestesia(
       nocturna.sintomas.umbralPositivo,
       'parestesiaNocturna.sintomas.umbralPositivo',
     ),
@@ -452,7 +456,9 @@ export function EntrevistaOsteomuscularFormPag2() {
     ixPath: 'parestesiaDiurna.sintomas.umbralPositivo.ix',
     dxChecked: diurna.sintomas.umbralPositivo.dx,
     ixChecked: diurna.sintomas.umbralPositivo.ix,
-    criterios: buildCriteriosUmbralDiurna(
+    otrasVecesPath: 'parestesiaDiurna.sintomas.umbralPositivo.otrasVeces',
+    otrasVeces: diurna.sintomas.umbralPositivo.otrasVeces,
+    criterios: buildCriteriosUmbralParestesia(
       diurna.sintomas.umbralPositivo,
       'parestesiaDiurna.sintomas.umbralPositivo',
     ),
@@ -463,6 +469,8 @@ export function EntrevistaOsteomuscularFormPag2() {
     ixPath: 'parestesiaNocturna.sintomas.molestiasLeves.ix',
     dxChecked: nocturna.sintomas.molestiasLeves.dx,
     ixChecked: nocturna.sintomas.molestiasLeves.ix,
+    detallePath: 'parestesiaNocturna.sintomas.molestiasLeves.detalle',
+    detalle: nocturna.sintomas.molestiasLeves.detalle,
   };
 
   const diurnaMolestiasLeves: MolestiasLevesBlock = {
@@ -470,6 +478,8 @@ export function EntrevistaOsteomuscularFormPag2() {
     ixPath: 'parestesiaDiurna.sintomas.molestiasLeves.ix',
     dxChecked: diurna.sintomas.molestiasLeves.dx,
     ixChecked: diurna.sintomas.molestiasLeves.ix,
+    detallePath: 'parestesiaDiurna.sintomas.molestiasLeves.detalle',
+    detalle: diurna.sintomas.molestiasLeves.detalle,
   };
 
   return (
@@ -514,6 +524,7 @@ export function EntrevistaOsteomuscularFormPag2() {
           umbral={nocturnaUmbral}
           molestiasLeves={nocturnaMolestiasLeves}
           onCheckChange={handleCheck}
+          onFieldChange={handleFieldChange}
         />
 
         {/* PARESTESIA DIURNA */}
@@ -534,6 +545,7 @@ export function EntrevistaOsteomuscularFormPag2() {
           umbral={diurnaUmbral}
           molestiasLeves={diurnaMolestiasLeves}
           onCheckChange={handleCheck}
+          onFieldChange={handleFieldChange}
         />
 
         {/* MOLESTIA CERVICAL IRRADIADA */}
@@ -679,6 +691,17 @@ export function EntrevistaOsteomuscularFormPag2() {
                       }
                     />{' '}
                     NO
+                  </label>
+                  <label className="block mt-2 text-left font-normal">
+                    otros momentos:
+                    <textarea
+                      value={cervical.otrosMomentos}
+                      onChange={(e) =>
+                        setField('molestiaCervicalIrradiada.otrosMomentos', e.target.value)
+                      }
+                      rows={2}
+                      className="mt-1 w-full border border-gray-400 p-1 outline-none"
+                    />
                   </label>
                 </td>
               </tr>

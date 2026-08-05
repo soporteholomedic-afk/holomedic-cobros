@@ -13,7 +13,8 @@ interface EntrevistaLayoutShellProps {
 
 export function EntrevistaLayoutShell({ children }: EntrevistaLayoutShellProps) {
   const router = useRouter();
-  const { idAtencion, atencion, isDirty, markSaved, reset } = useEntrevistaContext();
+  const { idAtencion, atencion, isDirty, reset, save, saving, saveError } =
+    useEntrevistaContext();
   const [showUnsavedChangesModal, setShowUnsavedChangesModal] = useState(false);
 
   const leaveForm = () => {
@@ -61,7 +62,12 @@ export function EntrevistaLayoutShell({ children }: EntrevistaLayoutShellProps) 
       >
         {children}
 
-        <div className="flex justify-end gap-4 border-t border-slate-200 pt-8">
+        <div className="flex flex-wrap items-center justify-end gap-4 border-t border-slate-200 pt-8">
+          {saveError !== null && (
+            <p role="alert" className="text-sm text-red-600">
+              {saveError}
+            </p>
+          )}
           <button
             type="button"
             onClick={handleExit}
@@ -71,10 +77,13 @@ export function EntrevistaLayoutShell({ children }: EntrevistaLayoutShellProps) 
           </button>
           <button
             type="button"
-            onClick={markSaved}
-            className="px-6 py-2 bg-sky-600 text-white font-medium rounded-lg hover:bg-sky-700 shadow-md transition-all active:scale-95 text-sm cursor-pointer"
+            onClick={() => {
+              void save();
+            }}
+            disabled={saving}
+            className="px-6 py-2 bg-sky-600 text-white font-medium rounded-lg hover:bg-sky-700 shadow-md transition-all active:scale-95 text-sm cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
           >
-            Guardar
+            {saving ? 'Guardando…' : 'Guardar'}
           </button>
         </div>
       </div>
