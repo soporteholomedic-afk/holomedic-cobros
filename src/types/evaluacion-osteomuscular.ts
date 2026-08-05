@@ -40,6 +40,7 @@ export interface ExamenInstrumental {
   ecografia: ExamenInstrumentalItem;
   rx: ExamenInstrumentalItem;
   rmn: ExamenInstrumentalItem;
+  otros: string;
 }
 
 export type GravedadPatologia = 'LEVE' | 'MEDIA' | 'GRAVE';

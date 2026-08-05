@@ -78,7 +78,7 @@ describe('EvaluacionFormPag1 — réplica de __temp__/page5.html', () => {
     expect(screen.getByText(/Fo\. JJC-SIG-13-31/i)).toBeInTheDocument();
     expect(screen.getAllByRole('checkbox')).toHaveLength(36);
     expect(screen.getAllByRole('radio')).toHaveLength(3);
-    expect(screen.getAllByRole('textbox')).toHaveLength(4);
+    expect(screen.getAllByRole('textbox')).toHaveLength(5);
     expect(screen.getAllByRole('spinbutton')).toHaveLength(4);
     expect(screen.getAllByRole('img')).toHaveLength(7);
     expect(screen.getByAltText('Maniobra de flexión del hombro')).toBeInTheDocument();
@@ -108,6 +108,12 @@ describe('EvaluacionFormPag1 — réplica de __temp__/page5.html', () => {
     await user.click(screen.getByRole('checkbox', { name: 'ECOGRAFÍA' }));
     await user.type(screen.getByRole('textbox', { name: 'Año ecografía' }), '2024');
     expect(probe).toHaveTextContent('"ecografia":{"realiza":true,"ano":"2024"');
+
+    await user.type(
+      screen.getByRole('textbox', { name: 'Otros exámenes instrumentales' }),
+      'TAC 2023',
+    );
+    expect(probe).toHaveTextContent('"otros":"TAC 2023"');
 
     await user.click(screen.getByRole('radio', { name: 'GRAVE' }));
     expect(probe).toHaveTextContent('"escGravedad":"GRAVE"');

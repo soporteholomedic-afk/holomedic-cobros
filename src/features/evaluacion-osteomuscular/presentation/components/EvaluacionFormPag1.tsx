@@ -521,6 +521,20 @@ export function EvaluacionFormPag1() {
               </div>
             </div>
 
+            {/* Otros exámenes instrumentales */}
+            <div className="border-b border-black p-1 text-[9px]">
+              <span className="font-bold">OTROS:</span>{' '}
+              <input
+                type="text"
+                aria-label="Otros exámenes instrumentales"
+                value={esc.examenInstrumental.otros}
+                onChange={(e) =>
+                  setField(`${baseEsc}.examenInstrumental.otros`, e.target.value)
+                }
+                className="dotted-input w-[calc(100%-4.5rem)] text-center"
+              />
+            </div>
+
             {/* Gravedad Patología Hombro */}
             <div className="p-1 flex items-center justify-between text-[9px] font-bold">
               <div>

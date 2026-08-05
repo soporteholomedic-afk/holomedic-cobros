@@ -89,6 +89,7 @@ function initialExamenInstrumental(): ExamenInstrumental {
     ecografia: { realiza: false, ano: '' },
     rx: { realiza: false, ano: '' },
     rmn: { realiza: false, ano: '' },
+    otros: '',
   };
 }
 
