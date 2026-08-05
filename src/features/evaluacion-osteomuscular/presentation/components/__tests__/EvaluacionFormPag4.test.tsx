@@ -63,7 +63,7 @@ describe('EvaluacionFormPag4 — réplica de __temp__/page8.html (columna)', () 
     expect(screen.getByText('A) OBSERVACION')).toBeInTheDocument();
     expect(screen.getByText(/OBSERVACION RITMO LUMBO PELVICO:/i)).toBeInTheDocument();
     expect(screen.getByText(/DORSO CURVO ESTRUCTURADO CIFO ESCOLIOSIS/i)).toBeInTheDocument();
-    expect(screen.getByText(/B\) MANIOBRA DE PRESO PALPACION/i)).toBeInTheDocument();
+    expect(screen.getByText(/B\) MANIOBRA DE PRESIÓN PALPACION/i)).toBeInTheDocument();
     expect(screen.getByText(/APOFISIS Y\/O ESPACIO INTERVERTEB\./)).toBeInTheDocument();
     expect(screen.getByText(/Fo\. JJC-SIG-13-31/i)).toBeInTheDocument();
     expect(screen.getByText('6')).toBeInTheDocument();

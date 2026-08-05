@@ -59,44 +59,61 @@ export function EvaluacionFormPag5() {
               C) EVALUACION DE LA MOTILIDAD
             </div>
 
-            <div className="grid grid-cols-2 border-b border-gray-800 font-bold text-center text-[11px] py-1 bg-white">
-              <div className="border-r border-gray-800">COLUMNA CERVICAL</div>
-              <div>COLUMNA DORSO LUMBAR</div>
-            </div>
+            <table className="w-full border-collapse">
+              <tbody>
+                <tr className="border-b border-gray-800 font-bold text-center text-[11px] py-1 bg-white">
+                  <td className="w-1/2 border-r border-gray-800 py-1">COLUMNA CERVICAL</td>
+                  <td className="py-1">COLUMNA DORSO LUMBAR</td>
+                </tr>
+                <tr>
+                  {/* Columna Cervical */}
+                  <td className="w-1/2 border-r border-gray-800 p-3 space-y-2 align-top">
+                    <p className="font-bold text-[10px] mb-2">PRESENCIA DE DOLOR AL MOVIMIENTO</p>
+                    {MOVIMIENTOS.map((mov) => (
+                      <label key={mov.field} className="flex items-center gap-1 cursor-pointer select-none">
+                        <span>{mov.label} (</span>
+                        <CheckSimple
+                          path={`${BASE_MOTILIDAD}.columnaCervical.presenciaDolorMovimiento.${mov.field}`}
+                          checked={motilidad.columnaCervical.presenciaDolorMovimiento[mov.field]}
+                          ariaLabel={`${mov.label} cervical`}
+                        />
+                        <span>)</span>
+                      </label>
+                    ))}
+                  </td>
 
-            <div className="grid grid-cols-2 text-[10.5px]">
-              {/* Columna Cervical */}
-              <div className="border-r border-gray-800 p-3 space-y-2">
-                <p className="font-bold text-[10px] mb-2">PRESENCIA DE DOLOR AL MOVIMIENTO</p>
-                {MOVIMIENTOS.map((mov) => (
-                  <label key={mov.field} className="flex items-center gap-1 cursor-pointer select-none">
-                    <span>{mov.label} (</span>
-                    <CheckSimple
-                      path={`${BASE_MOTILIDAD}.columnaCervical.presenciaDolorMovimiento.${mov.field}`}
-                      checked={motilidad.columnaCervical.presenciaDolorMovimiento[mov.field]}
-                      ariaLabel={`${mov.label} cervical`}
-                    />
-                    <span>)</span>
-                  </label>
-                ))}
-              </div>
-
-              {/* Columna Dorso Lumbar */}
-              <div className="p-3 space-y-2 pl-8">
-                <p className="font-bold text-[10px] mb-2">PRESENCIA DE DOLOR AL MOVIMIENTO</p>
-                {MOVIMIENTOS.map((mov) => (
-                  <label key={mov.field} className="flex items-center gap-1 cursor-pointer select-none">
-                    <span>{mov.label} (</span>
-                    <CheckSimple
-                      path={`${BASE_MOTILIDAD}.columnaDorsoLumbar.presenciaDolorMovimiento.${mov.field}`}
-                      checked={motilidad.columnaDorsoLumbar.presenciaDolorMovimiento[mov.field]}
-                      ariaLabel={`${mov.label} dorso lumbar`}
-                    />
-                    <span>)</span>
-                  </label>
-                ))}
-              </div>
-            </div>
+                  {/* Columna Dorso Lumbar */}
+                  <td className="p-3 space-y-2 pl-8 align-top">
+                    <p className="font-bold text-[10px] mb-2">PRESENCIA DE DOLOR AL MOVIMIENTO</p>
+                    {MOVIMIENTOS.map((mov) => (
+                      <label key={mov.field} className="flex items-center gap-1 cursor-pointer select-none">
+                        <span>{mov.label} (</span>
+                        <CheckSimple
+                          path={`${BASE_MOTILIDAD}.columnaDorsoLumbar.presenciaDolorMovimiento.${mov.field}`}
+                          checked={motilidad.columnaDorsoLumbar.presenciaDolorMovimiento[mov.field]}
+                          ariaLabel={`${mov.label} dorso lumbar`}
+                        />
+                        <span>)</span>
+                      </label>
+                    ))}
+                  </td>
+                </tr>
+                <tr className="border-t border-gray-800">
+                  <td colSpan={2} className="p-2">
+                    <div className="flex items-center gap-2 text-[11px]">
+                      <span className="font-bold">OBSERVACION:</span>
+                      <input
+                        type="text"
+                        aria-label="Observación motilidad"
+                        value={motilidad.observacion}
+                        onChange={(e) => setField(`${BASE_MOTILIDAD}.observacion`, e.target.value)}
+                        className="flex-1 border-b border-dotted border-black outline-none"
+                      />
+                    </div>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
           </div>
 
           {/* SECCIÓN D: MANIOBRA DE LASEGUE */}
@@ -104,68 +121,74 @@ export function EvaluacionFormPag5() {
             <div className="bg-[#EAE6D9] font-bold px-2 py-1 border-b border-gray-800 text-sm tracking-wide">
               D) MANIOBRA DE LASEGUE / RETRACCION DE MUSCULO ISQUIO CRURAL
             </div>
-            <div className="grid grid-cols-12 items-stretch">
-              <div className="col-span-5 border-r border-gray-800 p-2 flex flex-col items-center justify-center">
-                <AnatomicalImage
-                  src="/assets/images/musculo/entrevista/maniobra-lasegue.png"
-                  alt="Maniobra de Lasègue o elevación de la pierna recta"
-                  className="w-48 h-24"
-                  sizes="192px"
-                />
-                <span className="text-[10px] mt-1">Lasegue / SLR( elevación de la pierna recta)</span>
-              </div>
-
-              <div className="col-span-7 p-3 flex flex-col justify-between text-[11px]">
-                <div className="flex items-center gap-4">
-                  <span className="font-bold">LASEGUE/SLR :</span>
-                  <label className="flex items-center gap-1 cursor-pointer select-none">
-                    <CheckSimple
-                      path={`${BASE_LASEGUE}.lasegueSlr.normal`}
-                      checked={lasegue.lasegueSlr.normal}
-                      ariaLabel="Lasègue normal"
-                    />{' '}
-                    NORMAL
-                  </label>
-                  <label className="flex items-center gap-1 cursor-pointer select-none">
-                    <CheckSimple
-                      path={`${BASE_LASEGUE}.lasegueSlr.dx`}
-                      checked={lasegue.lasegueSlr.dx}
-                      ariaLabel="Lasègue derecho"
-                    />{' '}
-                    DX
-                  </label>
-                  <label className="flex items-center gap-1 cursor-pointer select-none">
-                    <CheckSimple
-                      path={`${BASE_LASEGUE}.lasegueSlr.ix`}
-                      checked={lasegue.lasegueSlr.ix}
-                      ariaLabel="Lasègue izquierdo"
-                    />{' '}
-                    IX
-                  </label>
-                </div>
-                <div className="border-b border-dotted border-gray-500 my-2" />
-                <div>
-                  <label className="flex items-center gap-2 cursor-pointer font-bold select-none">
-                    <CheckSimple
-                      path={`${BASE_LASEGUE}.presenciaRetraccionIsquioCrural`}
-                      checked={lasegue.presenciaRetraccionIsquioCrural}
-                      ariaLabel="Presencia de retracción isquio crural"
+            <table className="w-full border-collapse">
+              <tbody>
+                <tr>
+                  <td className="w-5/12 border-r border-gray-800 p-2 text-center align-middle">
+                    <AnatomicalImage
+                      src="/assets/images/musculo/entrevista/maniobra-lasegue.png"
+                      alt="Maniobra de Lasègue o elevación de la pierna recta"
+                      className="w-48 h-24"
+                      sizes="192px"
                     />
-                    PRESENCIA DE RETRACCION ISQUIO CRURAL
-                  </label>
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className="font-bold">OBSERVACION:</span>
-                  <input
-                    type="text"
-                    aria-label="Observación Lasègue"
-                    value={lasegue.lasegueSlr.observacion}
-                    onChange={(e) => setField(`${BASE_LASEGUE}.lasegueSlr.observacion`, e.target.value)}
-                    className="flex-1 border-b border-dotted border-black outline-none"
-                  />
-                </div>
-              </div>
-            </div>
+                    <span className="text-[10px] mt-1 block">Lasegue / SLR( elevación de la pierna recta)</span>
+                  </td>
+
+                  <td className="w-7/12 p-3 text-[11px] align-top">
+                    <div className="flex flex-col justify-between h-full">
+                      <div className="flex items-center gap-4">
+                        <span className="font-bold">LASEGUE/SLR :</span>
+                        <label className="flex items-center gap-1 cursor-pointer select-none">
+                          <CheckSimple
+                            path={`${BASE_LASEGUE}.lasegueSlr.normal`}
+                            checked={lasegue.lasegueSlr.normal}
+                            ariaLabel="Lasègue normal"
+                          />{' '}
+                          NORMAL
+                        </label>
+                        <label className="flex items-center gap-1 cursor-pointer select-none">
+                          <CheckSimple
+                            path={`${BASE_LASEGUE}.lasegueSlr.dx`}
+                            checked={lasegue.lasegueSlr.dx}
+                            ariaLabel="Lasègue derecho"
+                          />{' '}
+                          DX
+                        </label>
+                        <label className="flex items-center gap-1 cursor-pointer select-none">
+                          <CheckSimple
+                            path={`${BASE_LASEGUE}.lasegueSlr.ix`}
+                            checked={lasegue.lasegueSlr.ix}
+                            ariaLabel="Lasègue izquierdo"
+                          />{' '}
+                          IX
+                        </label>
+                      </div>
+                      <div className="border-b border-dotted border-gray-500 my-2" />
+                      <div>
+                        <label className="flex items-center gap-2 cursor-pointer font-bold select-none">
+                          <CheckSimple
+                            path={`${BASE_LASEGUE}.presenciaRetraccionIsquioCrural`}
+                            checked={lasegue.presenciaRetraccionIsquioCrural}
+                            ariaLabel="Presencia de retracción isquio crural"
+                          />
+                          PRESENCIA DE RETRACCION ISQUIO CRURAL
+                        </label>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="font-bold">OBSERVACION:</span>
+                        <input
+                          type="text"
+                          aria-label="Observación Lasègue"
+                          value={lasegue.lasegueSlr.observacion}
+                          onChange={(e) => setField(`${BASE_LASEGUE}.lasegueSlr.observacion`, e.target.value)}
+                          className="flex-1 border-b border-dotted border-black outline-none"
+                        />
+                      </div>
+                    </div>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
           </div>
 
           {/* SECCIÓN E: MANIOBRA DE WASSERMAN */}
@@ -173,63 +196,69 @@ export function EvaluacionFormPag5() {
             <div className="bg-[#EAE6D9] font-bold px-2 py-1 border-b border-gray-800 text-sm tracking-wide">
               E) MANIOBRA DE WASSERMAN / RETRACCION DEL MUSCULO ILEOPSOAS
             </div>
-            <div className="grid grid-cols-12 items-stretch">
-              <div className="col-span-5 border-r border-gray-800 p-2 flex items-center justify-center">
-                <AnatomicalImage
-                  src="/assets/images/musculo/entrevista/maniobra-wasserman.jpg"
-                  alt="Maniobra de Wasserman o Lasègue invertido"
-                  className="w-48 h-20"
-                  sizes="192px"
-                />
-              </div>
-
-              <div className="col-span-7 p-3 flex flex-col justify-between text-[11px]">
-                <div className="flex items-center gap-4">
-                  <span className="font-bold">
-                    WASSERMAN <span className="font-normal text-[10px]">(Lasegue invertido):</span>
-                  </span>
-                  <label className="flex items-center gap-1 cursor-pointer select-none">
-                    <CheckSimple
-                      path={`${BASE_WASSERMAN}.wassermanLasegueInvertido.dx`}
-                      checked={wasserman.wassermanLasegueInvertido.dx}
-                      ariaLabel="Wasserman derecho"
-                    />{' '}
-                    DX
-                  </label>
-                  <label className="flex items-center gap-1 cursor-pointer select-none">
-                    <CheckSimple
-                      path={`${BASE_WASSERMAN}.wassermanLasegueInvertido.ix`}
-                      checked={wasserman.wassermanLasegueInvertido.ix}
-                      ariaLabel="Wasserman izquierdo"
-                    />{' '}
-                    IX
-                  </label>
-                </div>
-                <div className="border-b border-dotted border-gray-500 my-2" />
-                <div>
-                  <label className="flex items-center gap-2 cursor-pointer font-bold select-none">
-                    <CheckSimple
-                      path={`${BASE_WASSERMAN}.presenciaRetraccionIleopsoas`}
-                      checked={wasserman.presenciaRetraccionIleopsoas}
-                      ariaLabel="Presencia de retracción ileopsoas"
+            <table className="w-full border-collapse">
+              <tbody>
+                <tr>
+                  <td className="w-5/12 border-r border-gray-800 p-2 text-center align-middle">
+                    <AnatomicalImage
+                      src="/assets/images/musculo/entrevista/maniobra-wasserman.jpg"
+                      alt="Maniobra de Wasserman o Lasègue invertido"
+                      className="w-48 h-20"
+                      sizes="192px"
                     />
-                    PRESENCIA DE RETRACCION ILEOPSOAS
-                  </label>
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className="font-bold">OBSERVACION:</span>
-                  <input
-                    type="text"
-                    aria-label="Observación Wasserman"
-                    value={wasserman.wassermanLasegueInvertido.observacion}
-                    onChange={(e) =>
-                      setField(`${BASE_WASSERMAN}.wassermanLasegueInvertido.observacion`, e.target.value)
-                    }
-                    className="flex-1 border-b border-dotted border-black outline-none"
-                  />
-                </div>
-              </div>
-            </div>
+                  </td>
+
+                  <td className="w-7/12 p-3 text-[11px] align-top">
+                    <div className="flex flex-col justify-between h-full">
+                      <div className="flex items-center gap-4">
+                        <span className="font-bold">
+                          WASSERMAN <span className="font-normal text-[10px]">(Lasegue invertido):</span>
+                        </span>
+                        <label className="flex items-center gap-1 cursor-pointer select-none">
+                          <CheckSimple
+                            path={`${BASE_WASSERMAN}.wassermanLasegueInvertido.dx`}
+                            checked={wasserman.wassermanLasegueInvertido.dx}
+                            ariaLabel="Wasserman derecho"
+                          />{' '}
+                          DX
+                        </label>
+                        <label className="flex items-center gap-1 cursor-pointer select-none">
+                          <CheckSimple
+                            path={`${BASE_WASSERMAN}.wassermanLasegueInvertido.ix`}
+                            checked={wasserman.wassermanLasegueInvertido.ix}
+                            ariaLabel="Wasserman izquierdo"
+                          />{' '}
+                          IX
+                        </label>
+                      </div>
+                      <div className="border-b border-dotted border-gray-500 my-2" />
+                      <div>
+                        <label className="flex items-center gap-2 cursor-pointer font-bold select-none">
+                          <CheckSimple
+                            path={`${BASE_WASSERMAN}.presenciaRetraccionIleopsoas`}
+                            checked={wasserman.presenciaRetraccionIleopsoas}
+                            ariaLabel="Presencia de retracción ileopsoas"
+                          />
+                          PRESENCIA DE RETRACCION ILEOPSOAS
+                        </label>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="font-bold">OBSERVACION:</span>
+                        <input
+                          type="text"
+                          aria-label="Observación Wasserman"
+                          value={wasserman.wassermanLasegueInvertido.observacion}
+                          onChange={(e) =>
+                            setField(`${BASE_WASSERMAN}.wassermanLasegueInvertido.observacion`, e.target.value)
+                          }
+                          className="flex-1 border-b border-dotted border-black outline-none"
+                        />
+                      </div>
+                    </div>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
           </div>
 
           {/* APROXIMACION DIAGNOSTICA */}
@@ -238,18 +267,26 @@ export function EvaluacionFormPag5() {
           </div>
 
           <div className="border border-gray-800 min-h-[90px]">
-            <div className="bg-gray-200 font-bold px-2 py-1 border-b border-gray-800 text-[11px] tracking-wide">
-              APROXIMACION DIAGNOSTICA DE LA EVALUACION
-            </div>
-            <div className="p-2">
-              <textarea
-                aria-label="Aproximación diagnóstica de la evaluación"
-                value={state.aproximacionDiagnosticaEvaluacion}
-                onChange={(e) => setField('aproximacionDiagnosticaEvaluacion', e.target.value)}
-                placeholder="Escriba el diagnóstico aquí..."
-                className="w-full h-16 resize-none outline-none text-xs"
-              />
-            </div>
+            <table className="w-full border-collapse">
+              <tbody>
+                <tr>
+                  <td className="bg-gray-200 font-bold px-2 py-1 border-b border-gray-800 text-[11px] tracking-wide">
+                    APROXIMACION DIAGNOSTICA DE LA EVALUACION
+                  </td>
+                </tr>
+                <tr>
+                  <td className="p-2">
+                    <textarea
+                      aria-label="Aproximación diagnóstica de la evaluación"
+                      value={state.aproximacionDiagnosticaEvaluacion}
+                      onChange={(e) => setField('aproximacionDiagnosticaEvaluacion', e.target.value)}
+                      placeholder="Escriba el diagnóstico aquí..."
+                      className="w-full h-16 resize-none outline-none text-xs"
+                    />
+                  </td>
+                </tr>
+              </tbody>
+            </table>
           </div>
 
           {/* SECCIÓN FIRMA Y DATOS MÉDICO */}

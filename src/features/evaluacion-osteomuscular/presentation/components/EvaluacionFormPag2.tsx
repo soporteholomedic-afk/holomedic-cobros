@@ -410,166 +410,252 @@ export function EvaluacionFormPag2() {
             <div className="bg-gray-200 font-bold p-1 text-center border-b border-gray-900 uppercase text-[11px]">
               OBSERVACIÓN MANO/MUÑECA
             </div>
-            <div className="divide-y divide-gray-900 font-semibold text-[10px]">
-              {/* QUISTE */}
-              <div className="grid grid-cols-12 divide-x divide-gray-900 p-1 items-center">
-                <div className="col-span-3 font-bold pl-2 uppercase">QUISTE</div>
-                <div className="col-span-4 pl-2 flex items-center justify-between pr-2">
-                  <span>QUISTE DORSAL</span>
-                  <div className="space-x-2">
-                    <CheckDxIx
-                      basePath={`${baseMuneca}.observacionManoMuneca.quisteDorsal`}
-                      checked={obs.quisteDorsal}
-                      lado="dx"
-                      ariaLabel="Quiste dorsal Dx"
-                    />
-                    <CheckDxIx
-                      basePath={`${baseMuneca}.observacionManoMuneca.quisteDorsal`}
-                      checked={obs.quisteDorsal}
-                      lado="ix"
-                      ariaLabel="Quiste dorsal Ix"
-                    />
-                  </div>
-                </div>
-                <div className="col-span-5 pl-2 flex items-center justify-between pr-2">
-                  <span>QUISTE VENTRAL</span>
-                  <div className="space-x-2">
-                    <CheckDxIx
-                      basePath={`${baseMuneca}.observacionManoMuneca.quisteVentral`}
-                      checked={obs.quisteVentral}
-                      lado="dx"
-                      ariaLabel="Quiste ventral Dx"
-                    />
-                    <CheckDxIx
-                      basePath={`${baseMuneca}.observacionManoMuneca.quisteVentral`}
-                      checked={obs.quisteVentral}
-                      lado="ix"
-                      ariaLabel="Quiste ventral Ix"
-                    />
-                  </div>
-                </div>
-              </div>
+            <table className="w-full border-collapse font-semibold text-[10px]">
+              <tbody>
+                {/* QUISTE */}
+                <tr className="border-b border-gray-900">
+                  <td className="w-[25%] border-r border-gray-900 p-1 pl-2 font-bold uppercase">
+                    QUISTE
+                    <div className="flex items-center space-x-1 mt-1 font-semibold">
+                      <span>OTROS:</span>
+                      <input
+                        type="text"
+                        aria-label="Otros quiste"
+                        value={obs.quisteOtros}
+                        onChange={(e) =>
+                          setField(`${baseMuneca}.observacionManoMuneca.quisteOtros`, e.target.value)
+                        }
+                        className="w-28 border-b border-gray-800 text-center outline-none p-0 font-semibold"
+                      />
+                    </div>
+                  </td>
+                  <td className="w-[33%] border-r border-gray-900 p-1 pl-2">
+                    <div className="flex items-center justify-between pr-2">
+                      <span>QUISTE DORSAL</span>
+                      <div className="space-x-2">
+                        <CheckDxIx
+                          basePath={`${baseMuneca}.observacionManoMuneca.quisteDorsal`}
+                          checked={obs.quisteDorsal}
+                          lado="dx"
+                          ariaLabel="Quiste dorsal Dx"
+                        />
+                        <CheckDxIx
+                          basePath={`${baseMuneca}.observacionManoMuneca.quisteDorsal`}
+                          checked={obs.quisteDorsal}
+                          lado="ix"
+                          ariaLabel="Quiste dorsal Ix"
+                        />
+                      </div>
+                    </div>
+                  </td>
+                  <td className="p-1 pl-2">
+                    <div className="flex items-center justify-between pr-2">
+                      <span>QUISTE VENTRAL</span>
+                      <div className="space-x-2">
+                        <CheckDxIx
+                          basePath={`${baseMuneca}.observacionManoMuneca.quisteVentral`}
+                          checked={obs.quisteVentral}
+                          lado="dx"
+                          ariaLabel="Quiste ventral Dx"
+                        />
+                        <CheckDxIx
+                          basePath={`${baseMuneca}.observacionManoMuneca.quisteVentral`}
+                          checked={obs.quisteVentral}
+                          lado="ix"
+                          ariaLabel="Quiste ventral Ix"
+                        />
+                      </div>
+                    </div>
+                  </td>
+                </tr>
 
-              {/* EDEMA */}
-              <div className="grid grid-cols-12 divide-x divide-gray-900 p-1 items-center">
-                <div className="col-span-3 font-bold pl-2 uppercase">EDEMA</div>
-                <div className="col-span-4 pl-2 flex items-center justify-between pr-2">
-                  <div>
-                    <div>VENTRAL (muñeca)</div>
-                    <div>ESTILOIDE RADIAL</div>
-                  </div>
-                  <div className="space-x-2">
-                    <CheckDxIx
-                      basePath={`${baseMuneca}.observacionManoMuneca.edemaVentralEstiloideRadial`}
-                      checked={obs.edemaVentralEstiloideRadial}
-                      lado="dx"
-                      ariaLabel="Edema ventral estiloide radial Dx"
-                    />
-                    <CheckDxIx
-                      basePath={`${baseMuneca}.observacionManoMuneca.edemaVentralEstiloideRadial`}
-                      checked={obs.edemaVentralEstiloideRadial}
-                      lado="ix"
-                      ariaLabel="Edema ventral estiloide radial Ix"
-                    />
-                  </div>
-                </div>
-                <div className="col-span-5 pl-2 flex items-center justify-between pr-2">
-                  <div>
-                    <div>DORSAL (Muñeca)</div>
-                    <div>ESTILOIDE ULNAR</div>
-                  </div>
-                  <div className="space-x-2">
-                    <CheckDxIx
-                      basePath={`${baseMuneca}.observacionManoMuneca.edemaDorsalEstiloideUlnar`}
-                      checked={obs.edemaDorsalEstiloideUlnar}
-                      lado="dx"
-                      ariaLabel="Edema dorsal estiloide ulnar Dx"
-                    />
-                    <CheckDxIx
-                      basePath={`${baseMuneca}.observacionManoMuneca.edemaDorsalEstiloideUlnar`}
-                      checked={obs.edemaDorsalEstiloideUlnar}
-                      lado="ix"
-                      ariaLabel="Edema dorsal estiloide ulnar Ix"
-                    />
-                  </div>
-                </div>
-              </div>
+                {/* EDEMA */}
+                <tr className="border-b border-gray-900">
+                  <td className="w-[25%] border-r border-gray-900 p-1 pl-2 font-bold uppercase">
+                    EDEMA
+                    <div className="flex items-center space-x-1 mt-1 font-semibold">
+                      <span>OTROS:</span>
+                      <input
+                        type="text"
+                        aria-label="Otros edema"
+                        value={obs.edemaOtros}
+                        onChange={(e) =>
+                          setField(`${baseMuneca}.observacionManoMuneca.edemaOtros`, e.target.value)
+                        }
+                        className="w-28 border-b border-gray-800 text-center outline-none p-0 font-semibold"
+                      />
+                    </div>
+                  </td>
+                  <td className="w-[33%] border-r border-gray-900 p-1 pl-2">
+                    <div className="flex items-center justify-between pr-2">
+                      <div>
+                        <div>VENTRAL (muñeca)</div>
+                        <div>ESTILOIDE RADIAL</div>
+                      </div>
+                      <div className="space-x-2">
+                        <CheckDxIx
+                          basePath={`${baseMuneca}.observacionManoMuneca.edemaVentralEstiloideRadial`}
+                          checked={obs.edemaVentralEstiloideRadial}
+                          lado="dx"
+                          ariaLabel="Edema ventral estiloide radial Dx"
+                        />
+                        <CheckDxIx
+                          basePath={`${baseMuneca}.observacionManoMuneca.edemaVentralEstiloideRadial`}
+                          checked={obs.edemaVentralEstiloideRadial}
+                          lado="ix"
+                          ariaLabel="Edema ventral estiloide radial Ix"
+                        />
+                      </div>
+                    </div>
+                  </td>
+                  <td className="p-1 pl-2">
+                    <div className="flex items-center justify-between pr-2">
+                      <div>
+                        <div>DORSAL (Muñeca)</div>
+                        <div>ESTILOIDE ULNAR</div>
+                      </div>
+                      <div className="space-x-2">
+                        <CheckDxIx
+                          basePath={`${baseMuneca}.observacionManoMuneca.edemaDorsalEstiloideUlnar`}
+                          checked={obs.edemaDorsalEstiloideUlnar}
+                          lado="dx"
+                          ariaLabel="Edema dorsal estiloide ulnar Dx"
+                        />
+                        <CheckDxIx
+                          basePath={`${baseMuneca}.observacionManoMuneca.edemaDorsalEstiloideUlnar`}
+                          checked={obs.edemaDorsalEstiloideUlnar}
+                          lado="ix"
+                          ariaLabel="Edema dorsal estiloide ulnar Ix"
+                        />
+                      </div>
+                    </div>
+                  </td>
+                </tr>
 
-              {/* HIPOTROFIA */}
-              <div className="grid grid-cols-12 divide-x divide-gray-900 p-1 items-center">
-                <div className="col-span-3 font-bold pl-2 uppercase">HIPOTROFIA</div>
-                <div className="col-span-4 pl-2">
-                  <label className="cursor-pointer">
-                    <CheckSimple
-                      path={`${baseMuneca}.observacionManoMuneca.hipotrofiaPosterior.dx`}
-                      checked={obs.hipotrofiaPosterior.dx}
-                      ariaLabel="Hipotrofia posterior Dx"
-                    />{' '}
-                    Dx posterior:
-                  </label>
-                </div>
-                <div className="col-span-5 pl-2">
-                  <label className="cursor-pointer">
-                    <CheckSimple
-                      path={`${baseMuneca}.observacionManoMuneca.hipotrofiaPosterior.ix`}
-                      checked={obs.hipotrofiaPosterior.ix}
-                      ariaLabel="Hipotrofia posterior Ix"
-                    />{' '}
-                    Ix posterior:
-                  </label>
-                </div>
-              </div>
+                {/* HIPOTROFIA */}
+                <tr className="border-b border-gray-900">
+                  <td className="w-[25%] border-r border-gray-900 p-1 pl-2 font-bold uppercase">
+                    HIPOTROFIA
+                    <div className="flex items-center space-x-1 mt-1 font-semibold">
+                      <span>OTROS:</span>
+                      <input
+                        type="text"
+                        aria-label="Otros hipotrofia"
+                        value={obs.hipotrofiaOtros}
+                        onChange={(e) =>
+                          setField(`${baseMuneca}.observacionManoMuneca.hipotrofiaOtros`, e.target.value)
+                        }
+                        className="w-28 border-b border-gray-800 text-center outline-none p-0 font-semibold"
+                      />
+                    </div>
+                  </td>
+                  <td className="w-[33%] border-r border-gray-900 p-1 pl-2">
+                    <label className="cursor-pointer">
+                      <CheckSimple
+                        path={`${baseMuneca}.observacionManoMuneca.hipotrofiaPosterior.dx`}
+                        checked={obs.hipotrofiaPosterior.dx}
+                        ariaLabel="Hipotrofia posterior Dx"
+                      />{' '}
+                      Dx posterior:
+                    </label>
+                  </td>
+                  <td className="p-1 pl-2">
+                    <label className="cursor-pointer">
+                      <CheckSimple
+                        path={`${baseMuneca}.observacionManoMuneca.hipotrofiaPosterior.ix`}
+                        checked={obs.hipotrofiaPosterior.ix}
+                        ariaLabel="Hipotrofia posterior Ix"
+                      />{' '}
+                      Ix posterior:
+                    </label>
+                  </td>
+                </tr>
 
-              {/* DEFORMIDAD ARTICULAR */}
-              <div className="grid grid-cols-12 divide-x divide-gray-900 p-1 items-center">
-                <div className="col-span-3 font-bold pl-2 uppercase">DEFORM. ARTIC. TRAPECIO - METACARPAL</div>
-                <div className="col-span-4 pl-2">
-                  <label className="cursor-pointer">
-                    <CheckSimple
-                      path={`${baseMuneca}.observacionManoMuneca.deformidadArticularTrapecioMetacarpal.dx`}
-                      checked={obs.deformidadArticularTrapecioMetacarpal.dx}
-                      ariaLabel="Deformidad articular trapecio metacarpal Dx"
-                    />{' '}
-                    Dx
-                  </label>
-                </div>
-                <div className="col-span-5 pl-2">
-                  <label className="cursor-pointer">
-                    <CheckSimple
-                      path={`${baseMuneca}.observacionManoMuneca.deformidadArticularTrapecioMetacarpal.ix`}
-                      checked={obs.deformidadArticularTrapecioMetacarpal.ix}
-                      ariaLabel="Deformidad articular trapecio metacarpal Ix"
-                    />{' '}
-                    Ix
-                  </label>
-                </div>
-              </div>
+                {/* DEFORMIDAD ARTICULAR */}
+                <tr className="border-b border-gray-900">
+                  <td className="w-[25%] border-r border-gray-900 p-1 pl-2 font-bold uppercase">
+                    DEFORM. ARTIC. TRAPECIO - METACARPAL
+                    <div className="flex items-center space-x-1 mt-1 font-semibold">
+                      <span>OTROS:</span>
+                      <input
+                        type="text"
+                        aria-label="Otros deformidad articular trapecio metacarpal"
+                        value={obs.deformidadArticularTrapecioMetacarpalOtros}
+                        onChange={(e) =>
+                          setField(
+                            `${baseMuneca}.observacionManoMuneca.deformidadArticularTrapecioMetacarpalOtros`,
+                            e.target.value,
+                          )
+                        }
+                        className="w-28 border-b border-gray-800 text-center outline-none p-0 font-semibold"
+                      />
+                    </div>
+                  </td>
+                  <td className="w-[33%] border-r border-gray-900 p-1 pl-2">
+                    <label className="cursor-pointer">
+                      <CheckSimple
+                        path={`${baseMuneca}.observacionManoMuneca.deformidadArticularTrapecioMetacarpal.dx`}
+                        checked={obs.deformidadArticularTrapecioMetacarpal.dx}
+                        ariaLabel="Deformidad articular trapecio metacarpal Dx"
+                      />{' '}
+                      Dx
+                    </label>
+                  </td>
+                  <td className="p-1 pl-2">
+                    <label className="cursor-pointer">
+                      <CheckSimple
+                        path={`${baseMuneca}.observacionManoMuneca.deformidadArticularTrapecioMetacarpal.ix`}
+                        checked={obs.deformidadArticularTrapecioMetacarpal.ix}
+                        ariaLabel="Deformidad articular trapecio metacarpal Ix"
+                      />{' '}
+                      Ix
+                    </label>
+                  </td>
+                </tr>
 
-              {/* RETACCIONES PALMARES */}
-              <div className="grid grid-cols-12 divide-x divide-gray-900 p-1 items-center">
-                <div className="col-span-3 font-bold pl-2 uppercase">RETACCIONES PALMARES</div>
-                <div className="col-span-4 pl-2">
-                  <label className="cursor-pointer">
-                    <CheckSimple
-                      path={`${baseMuneca}.observacionManoMuneca.retaccionesPalmares.dx`}
-                      checked={obs.retaccionesPalmares.dx}
-                      ariaLabel="Retracciones palmares Dx"
-                    />{' '}
-                    Dx
-                  </label>
-                </div>
-                <div className="col-span-5 pl-2">
-                  <label className="cursor-pointer">
-                    <CheckSimple
-                      path={`${baseMuneca}.observacionManoMuneca.retaccionesPalmares.ix`}
-                      checked={obs.retaccionesPalmares.ix}
-                      ariaLabel="Retracciones palmares Ix"
-                    />{' '}
-                    Ix
-                  </label>
-                </div>
-              </div>
-            </div>
+                {/* RETACCIONES PALMARES */}
+                <tr>
+                  <td className="w-[25%] border-r border-gray-900 p-1 pl-2 font-bold uppercase">
+                    RETACCIONES PALMARES
+                    <div className="flex items-center space-x-1 mt-1 font-semibold">
+                      <span>OTROS:</span>
+                      <input
+                        type="text"
+                        aria-label="Otros retracciones palmares"
+                        value={obs.retaccionesPalmaresOtros}
+                        onChange={(e) =>
+                          setField(
+                            `${baseMuneca}.observacionManoMuneca.retaccionesPalmaresOtros`,
+                            e.target.value,
+                          )
+                        }
+                        className="w-28 border-b border-gray-800 text-center outline-none p-0 font-semibold"
+                      />
+                    </div>
+                  </td>
+                  <td className="w-[33%] border-r border-gray-900 p-1 pl-2">
+                    <label className="cursor-pointer">
+                      <CheckSimple
+                        path={`${baseMuneca}.observacionManoMuneca.retaccionesPalmares.dx`}
+                        checked={obs.retaccionesPalmares.dx}
+                        ariaLabel="Retracciones palmares Dx"
+                      />{' '}
+                      Dx
+                    </label>
+                  </td>
+                  <td className="p-1 pl-2">
+                    <label className="cursor-pointer">
+                      <CheckSimple
+                        path={`${baseMuneca}.observacionManoMuneca.retaccionesPalmares.ix`}
+                        checked={obs.retaccionesPalmares.ix}
+                        ariaLabel="Retracciones palmares Ix"
+                      />{' '}
+                      Ix
+                    </label>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
           </div>
         </div>
 
@@ -672,6 +758,23 @@ export function EvaluacionFormPag2() {
                         </label>
                       ))}
                     </div>
+                  </div>
+
+                  {/* Otros */}
+                  <div className="flex items-center space-x-1 pl-4">
+                    <span className="font-bold">OTROS:</span>
+                    <input
+                      type="text"
+                      aria-label="Otros maniobra clic dedos gatillo"
+                      value={munecaMano.maniobraClicDedosGatillo.otros}
+                      onChange={(e) =>
+                        setField(
+                          `${baseMuneca}.maniobraClicDedosGatillo.otros`,
+                          e.target.value,
+                        )
+                      }
+                      className="w-32 border-b border-gray-800 text-center outline-none p-0 font-semibold"
+                    />
                   </div>
                 </div>
               </div>

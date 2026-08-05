@@ -40,10 +40,16 @@ function StateProbe() {
     munecaRealiza: muneca.realizaManiobras,
     munecaMolestiaDx: muneca.molestiaMunecaDxDesdeMeses,
     munecaQuiste: muneca.observacionManoMuneca.quisteDorsal,
+    munecaQuisteOtros: muneca.observacionManoMuneca.quisteOtros,
     munecaEdema: muneca.observacionManoMuneca.edemaVentralEstiloideRadial,
+    munecaEdemaOtros: muneca.observacionManoMuneca.edemaOtros,
     munecaHipotrofia: muneca.observacionManoMuneca.hipotrofiaPosterior,
+    munecaHipotrofiaOtros: muneca.observacionManoMuneca.hipotrofiaOtros,
+    munecaDeformidadOtros: muneca.observacionManoMuneca.deformidadArticularTrapecioMetacarpalOtros,
+    munecaRetraccionesOtros: muneca.observacionManoMuneca.retaccionesPalmaresOtros,
     munecaTrapecio: muneca.palpacion.dolorArticulacionTrapecioMetacarpal,
     munecaClicDx: muneca.maniobraClicDedosGatillo.clicExtensionDedos.dx,
+    munecaClicOtros: muneca.maniobraClicDedosGatillo.otros,
   });
   return <output data-testid="pg2-probe">{text}</output>;
 }
@@ -125,8 +131,29 @@ describe('EvaluacionFormPag2 — réplica de __temp__/page6.html', () => {
     await user.click(screen.getByRole('checkbox', { name: 'Quiste dorsal Ix' }));
     expect(probe).toHaveTextContent('"munecaQuiste":{"dx":false,"ix":true}');
 
+    await user.type(screen.getByRole('textbox', { name: 'Otros quiste' }), 'quiste de 2 cm');
+    expect(probe).toHaveTextContent('"munecaQuisteOtros":"quiste de 2 cm"');
+
+    await user.type(screen.getByRole('textbox', { name: 'Otros edema' }), 'edema distal');
+    expect(probe).toHaveTextContent('"munecaEdemaOtros":"edema distal"');
+
+    await user.type(screen.getByRole('textbox', { name: 'Otros hipotrofia' }), 'hipotrofia tenar');
+    expect(probe).toHaveTextContent('"munecaHipotrofiaOtros":"hipotrofia tenar"');
+
+    await user.type(
+      screen.getByRole('textbox', { name: 'Otros deformidad articular trapecio metacarpal' }),
+      'rigidez articular',
+    );
+    expect(probe).toHaveTextContent('"munecaDeformidadOtros":"rigidez articular"');
+
     await user.click(screen.getByRole('checkbox', { name: 'Hipotrofia posterior Dx' }));
     expect(probe).toHaveTextContent('"munecaHipotrofia":{"dx":true,"ix":false}');
+
+    await user.type(
+      screen.getByRole('textbox', { name: 'Otros retracciones palmares' }),
+      'fascitis palmar',
+    );
+    expect(probe).toHaveTextContent('"munecaRetraccionesOtros":"fascitis palmar"');
 
     await user.click(
       screen.getByRole('checkbox', { name: /trapecio.*Dx\./i }),
@@ -135,5 +162,11 @@ describe('EvaluacionFormPag2 — réplica de __temp__/page6.html', () => {
 
     await user.click(screen.getAllByRole('checkbox', { name: '3°' })[0]);
     expect(probe).toHaveTextContent('"munecaClicDx":{"dedo1":false,"dedo2":false,"dedo3":true,"dedo4":false,"dedo5":false}');
+
+    await user.type(
+      screen.getByRole('textbox', { name: 'Otros maniobra clic dedos gatillo' }),
+      'chasquido dedo 2',
+    );
+    expect(probe).toHaveTextContent('"munecaClicOtros":"chasquido dedo 2"');
   });
 });

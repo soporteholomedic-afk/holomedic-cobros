@@ -40,6 +40,7 @@ function StateProbe() {
     `fp:${bit(m.flexoExtensionMuneca.dolorFlexionPasiva)}`,
     `ec:${bit(m.flexoExtensionMuneca.dolorExtensionContraResistencia)}`,
     `ep:${bit(m.flexoExtensionMuneca.dolorExtensionPasiva)}`,
+    `eo:${m.flexoExtensionMuneca.otros}`,
   ].join(' ');
   return <output data-testid="muneca-probe">{text}</output>;
 }
@@ -86,5 +87,11 @@ describe('EvaluacionFormPag3 — réplica de __temp__/page7.html (Finkelstein + 
     expect(probe).toHaveTextContent('f:00 fc:00 fp:00 ec:01 ep:00');
     await user.click(screen.getByRole('checkbox', { name: 'Dolor en flexión pasiva Dx' }));
     expect(probe).toHaveTextContent('f:00 fc:00 fp:10 ec:01 ep:00');
+
+    await user.type(
+      screen.getByRole('textbox', { name: 'Otros flexo-extensión muñeca' }),
+      'dolor al supinar',
+    );
+    expect(probe).toHaveTextContent('eo:dolor al supinar');
   });
 });

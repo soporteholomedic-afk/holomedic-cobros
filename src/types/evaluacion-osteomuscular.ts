@@ -112,11 +112,16 @@ export interface Codo {
 export interface ObservacionManoMuneca {
   quisteDorsal: DxIxBool;
   quisteVentral: DxIxBool;
+  quisteOtros: string;
   edemaVentralEstiloideRadial: DxIxBool;
   edemaDorsalEstiloideUlnar: DxIxBool;
+  edemaOtros: string;
   hipotrofiaPosterior: DxIxBool;
+  hipotrofiaOtros: string;
   deformidadArticularTrapecioMetacarpal: DxIxBool;
+  deformidadArticularTrapecioMetacarpalOtros: string;
   retaccionesPalmares: DxIxBool;
+  retaccionesPalmaresOtros: string;
 }
 
 export interface PalpacionMunecaMano {
@@ -139,6 +144,7 @@ export interface DedosCheck {
 
 export interface ManiobraClicDedosGatillo {
   clicExtensionDedos: ClicExtensionDedos;
+  otros: string;
 }
 
 export interface FinkelsteinMuneca {
@@ -150,12 +156,14 @@ export interface FlexoExtensionMuneca {
   dolorFlexionPasiva: DxIxBool;
   dolorExtensionContraResistencia: DxIxBool;
   dolorExtensionPasiva: DxIxBool;
+  otros: string;
 }
 
 export interface DolorPresionPalpacionProximal {
   apofisisEspinosa: boolean;
   mTrapecioSuperior: boolean;
   mParavertebral: boolean;
+  otros: string;
 }
 
 export interface DolorMovimientoProximal {
@@ -333,6 +341,7 @@ export interface MotilidadColumna {
 export interface EvaluacionMotilidad {
   columnaCervical: MotilidadColumna;
   columnaDorsoLumbar: MotilidadColumna;
+  observacion: string;
 }
 
 export interface LasegueSlr {

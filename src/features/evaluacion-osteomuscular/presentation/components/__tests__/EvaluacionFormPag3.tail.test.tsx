@@ -45,6 +45,7 @@ function StateProbe() {
     prm: dst.testPresion.parestesia.nervioMediano, pru: dst.testPresion.parestesia.nervioUlnar, prn: dst.testPresion.parestesia.noTerritorializada,
     nr: e.noRealizado, eco: [e.ecografia, e.ecografiaAno], rx: [e.rx, e.rxAno], rmn: [e.rmn, e.rmnAno], emg: [e.emg, e.emgAno],
     g: s.gravedadPatologiaManoMuneca, diag: s.aproximacionDiagnosticaEvaluacion,
+    ppOtros: px.dolorPresionPalpacion.otros,
   });
   return <output data-testid="muneca-probe">{text}</output>;
 }
@@ -61,8 +62,11 @@ function renderPag3() {
 afterEach(() => vi.unstubAllGlobals());
 
 describe('EvaluacionFormPag3 — réplica de __temp__/page7.html (parestesia + instrumental + diagnóstico)', () => {
-  it('renders the full printed ficha with local anatomical images, no fetch and no remote image', () => {
-    vi.stubGlobal('fetch', vi.fn());
+  it('renders the full printed ficha with local anatomical images, no remote image and only the hydration GET', () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ data: null }), { status: 404 }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
     renderPag3();
     expect(screen.getByText(/d\) SINTOMATOLOGÍA PARESTESICA/i)).toBeInTheDocument();
     expect(screen.getByText('REGIÓN PROXIMAL')).toBeInTheDocument();
@@ -78,7 +82,9 @@ describe('EvaluacionFormPag3 — réplica de __temp__/page7.html (parestesia + i
     expect(screen.getAllByRole('spinbutton')).toHaveLength(6);
     expect(screen.getByRole('textbox', { name: /aproximación diagnóstica/i })).toBeInTheDocument();
     expect(document.querySelector('img[src^="http"]')).toBeNull();
-    expect(vi.mocked(fetch)).not.toHaveBeenCalled();
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringContaining('/api/areas/musculoesqueletica/jjc/evaluacion'),
+    );
   });
 
   it('binds the paresthesia maneuver and wrist-month controls to the existing single-source paths', async () => {
@@ -101,6 +107,11 @@ describe('EvaluacionFormPag3 — réplica de __temp__/page7.html (parestesia + i
     await user.click(screen.getByRole('checkbox', { name: 'Extensión' }));
     await user.click(screen.getByRole('checkbox', { name: 'Rotación Derecha' }));
     expect(probe).toHaveTextContent('"pp":[true,false,true],"pm":[false,true,false,false,true,false]');
+    await user.type(
+      screen.getByRole('textbox', { name: 'Otros dolor presión palpación región proximal' }),
+      'dolor escapular',
+    );
+    expect(probe).toHaveTextContent('"ppOtros":"dolor escapular"');
     await user.click(screen.getByRole('checkbox', { name: 'Test de fatiga Dx' }));
     await user.click(screen.getByRole('checkbox', { name: 'Test de candelero Ix' }));
     expect(probe).toHaveTextContent('"fat":{"dx":true,"ix":false},"can":{"dx":false,"ix":true}');

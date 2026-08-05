@@ -154,11 +154,16 @@ function initialObservacionManoMuneca(): ObservacionManoMuneca {
   return {
     quisteDorsal: initialDxIxBool(),
     quisteVentral: initialDxIxBool(),
+    quisteOtros: '',
     edemaVentralEstiloideRadial: initialDxIxBool(),
     edemaDorsalEstiloideUlnar: initialDxIxBool(),
+    edemaOtros: '',
     hipotrofiaPosterior: initialDxIxBool(),
+    hipotrofiaOtros: '',
     deformidadArticularTrapecioMetacarpal: initialDxIxBool(),
+    deformidadArticularTrapecioMetacarpalOtros: '',
     retaccionesPalmares: initialDxIxBool(),
+    retaccionesPalmaresOtros: '',
   };
 }
 
@@ -181,7 +186,7 @@ function initialClicExtensionDedos(): ClicExtensionDedos {
 }
 
 function initialManiobraClicDedosGatillo(): ManiobraClicDedosGatillo {
-  return { clicExtensionDedos: initialClicExtensionDedos() };
+  return { clicExtensionDedos: initialClicExtensionDedos(), otros: '' };
 }
 
 function initialFinkelsteinMuneca(): FinkelsteinMuneca {
@@ -194,6 +199,7 @@ function initialFlexoExtensionMuneca(): FlexoExtensionMuneca {
     dolorFlexionPasiva: initialDxIxBool(),
     dolorExtensionContraResistencia: initialDxIxBool(),
     dolorExtensionPasiva: initialDxIxBool(),
+    otros: '',
   };
 }
 
@@ -211,6 +217,7 @@ function initialRegionProximalParestesica(): RegionProximalParestesica {
       apofisisEspinosa: false,
       mTrapecioSuperior: false,
       mParavertebral: false,
+      otros: '',
     },
     dolorMovimiento: {
       flexion: false,
@@ -362,6 +369,7 @@ function initialEvaluacionMotilidad(): EvaluacionMotilidad {
   return {
     columnaCervical: { presenciaDolorMovimiento: initialPresenciaDolorMovimiento() },
     columnaDorsoLumbar: { presenciaDolorMovimiento: initialPresenciaDolorMovimiento() },
+    observacion: '',
   };
 }
 
@@ -420,8 +428,45 @@ function setDeep<T extends Record<string, unknown>>(obj: T, path: string, value:
   };
 }
 
+// ---- Deep merge helper (hydration of stored evaluations) ----
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+/**
+ * Merge a stored (possibly outdated) evaluation payload over a fresh initial
+ * state, so missing fields fall back to their defaults instead of breaking
+ * the form.
+ */
+export function mergeEvaluacion(
+  base: EvaluacionOsteomuscular,
+  override: unknown,
+): EvaluacionOsteomuscular {
+  return mergeDeep(
+    base as unknown as Record<string, unknown>,
+    override,
+  ) as unknown as EvaluacionOsteomuscular;
+}
+
+function mergeDeep(base: Record<string, unknown>, override: unknown): Record<string, unknown> {
+  if (!isPlainObject(override)) return base;
+
+  const result: Record<string, unknown> = { ...base };
+  for (const [key, value] of Object.entries(override)) {
+    const baseValue = base[key];
+    if (isPlainObject(baseValue) && isPlainObject(value)) {
+      result[key] = mergeDeep(baseValue, value);
+    } else if (value !== undefined) {
+      result[key] = value;
+    }
+  }
+  return result;
+}
+
 export type EvaluacionAction =
   | { type: 'SET_FIELD'; path: string; value: unknown }
+  | { type: 'LOAD'; state: EvaluacionOsteomuscular }
   | { type: 'RESET'; atencion: AtencionDetalle | null };
 
 export function evaluacionReducer(
@@ -431,6 +476,8 @@ export function evaluacionReducer(
   switch (action.type) {
     case 'SET_FIELD':
       return setDeep(state as unknown as Record<string, unknown>, action.path, action.value) as unknown as EvaluacionOsteomuscular;
+    case 'LOAD':
+      return action.state;
     case 'RESET':
       return initialEvaluacionState(action.atencion);
     default:
@@ -445,6 +492,7 @@ export interface UseEvaluacionOsteomuscularResult {
   setField: (path: string, value: unknown) => void;
   reset: (atencion: AtencionDetalle | null) => void;
   setDxIx: (basePath: string, lado: 'dx' | 'ix', value: boolean) => void;
+  hydrate: (saved: unknown) => void;
 }
 
 export function useEvaluacionOsteomuscular(
@@ -483,5 +531,14 @@ export function useEvaluacionOsteomuscular(
     [],
   );
 
-  return { state, isDirty, markSaved, setField, reset, setDxIx };
+  const hydrate = useCallback(
+    (saved: unknown) => {
+      const merged = mergeEvaluacion(initialEvaluacionState(atencion), saved);
+      dispatch({ type: 'LOAD', state: merged });
+      setSavedSnapshot(serializeState(merged));
+    },
+    [atencion],
+  );
+
+  return { state, isDirty, markSaved, setField, reset, setDxIx, hydrate };
 }

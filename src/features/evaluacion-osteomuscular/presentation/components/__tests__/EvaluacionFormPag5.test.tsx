@@ -47,6 +47,7 @@ function StateProbe() {
     wo: w.wassermanLasegueInvertido.observacion,
     wr: w.presenciaRetraccionIleopsoas,
     diag: state.aproximacionDiagnosticaEvaluacion,
+    mo: state.evaluacionMotilidad.observacion,
   });
   return <output data-testid="pg5-probe">{text}</output>;
 }
@@ -63,8 +64,11 @@ function renderPag5() {
 afterEach(() => vi.unstubAllGlobals());
 
 describe('EvaluacionFormPag5 — réplica de __temp__/page9.html (motilidad y maniobras especiales)', () => {
-  it('renders the full page 5 printed ficha with local anatomical images only, no remote image', () => {
-    vi.stubGlobal('fetch', vi.fn());
+  it('renders the full page 5 printed ficha with local anatomical images only, no remote image and only the hydration GET', () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ data: null }), { status: 404 }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
     renderPag5();
     expect(screen.getByText(/C\) EVALUACION DE LA MOTILIDAD/i)).toBeInTheDocument();
     expect(screen.getByText('COLUMNA CERVICAL')).toBeInTheDocument();
@@ -78,12 +82,14 @@ describe('EvaluacionFormPag5 — réplica de __temp__/page9.html (motilidad y ma
     expect(screen.getByText('7')).toBeInTheDocument();
     expect(screen.getAllByRole('checkbox')).toHaveLength(19);
     expect(screen.queryAllByRole('radio')).toHaveLength(0);
-    expect(screen.getAllByRole('textbox')).toHaveLength(3);
+    expect(screen.getAllByRole('textbox')).toHaveLength(4);
     expect(screen.getAllByRole('img')).toHaveLength(2);
     expect(screen.getByAltText('Maniobra de Lasègue o elevación de la pierna recta')).toBeInTheDocument();
     expect(screen.getByAltText('Maniobra de Wasserman o Lasègue invertido')).toBeInTheDocument();
     expect(document.querySelector('img[src^="http"]')).toBeNull();
-    expect(vi.mocked(fetch)).not.toHaveBeenCalled();
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringContaining('/api/areas/musculoesqueletica/jjc/evaluacion'),
+    );
   });
 
   it('binds motilidad checkboxes to the exact JSON paths', async () => {
@@ -141,10 +147,15 @@ describe('EvaluacionFormPag5 — réplica de __temp__/page9.html (motilidad y ma
 
     await user.type(screen.getByRole('textbox', { name: /observación lasègue/i }), 'Dolor en raíz L5');
     await user.type(screen.getByRole('textbox', { name: /observación wasserman/i }), 'Hiperextensión dolorosa');
+    await user.type(
+      screen.getByRole('textbox', { name: 'Observación motilidad' }),
+      'No completa rango por dolor',
+    );
     await user.type(screen.getByRole('textbox', { name: /aproximación diagnóstica/i }), 'Lumbalgia mecánica');
 
     expect(probe).toHaveTextContent('"lo":"Dolor en raíz L5"');
     expect(probe).toHaveTextContent('"wo":"Hiperextensión dolorosa"');
+    expect(probe).toHaveTextContent('"mo":"No completa rango por dolor"');
     expect(probe).toHaveTextContent('"diag":"Lumbalgia mecánica"');
   });
 });

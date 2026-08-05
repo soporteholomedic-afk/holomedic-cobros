@@ -133,7 +133,7 @@ export function EvaluacionFormPag4() {
                       checked={obs.lordosisLumbar.hipercifosis}
                       ariaLabel="Lordosis lumbar hipercifosis"
                     />
-                    HIPERCIFOSIS
+                    HIPERLORDOSIS
                   </label>
                   <label className="flex items-start gap-1.5 cursor-pointer">
                     <CheckSimple
@@ -141,7 +141,7 @@ export function EvaluacionFormPag4() {
                       checked={obs.lordosisLumbar.aplanamientoLordosisLumbar}
                       ariaLabel="Lordosis lumbar aplanamiento"
                     />
-                    APLANAMIENTO LORDOSIS LUMBAR
+                    RECTIFICACIÓN  LORDOSIS LUMBAR
                   </label>
                 </div>
               </div>
@@ -283,10 +283,10 @@ export function EvaluacionFormPag4() {
           </div>
         </div>
 
-        {/* SECCIÓN B: MANIOBRA DE PRESO PALPACION */}
+        {/* SECCIÓN B: MANIOBRA DE PRESIÓN PALPACION */}
         <div className="border border-gray-800">
           <div className="bg-[#EAE6D9] px-2 py-1 border-b border-gray-800 text-sm tracking-wide">
-            <span className="font-bold">B) MANIOBRA DE PRESO PALPACION</span>
+            <span className="font-bold">B) MANIOBRA DE PRESIÓN PALPACION</span>
             <span className="text-xs ml-1">(Apófisis espinosa, espacio intervertebral y musculatura para vertebral)</span>
           </div>
 

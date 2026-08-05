@@ -273,6 +273,18 @@ export function EvaluacionFormPag3() {
                     </label>
                   </div>
                 ))}
+                <div className="flex items-center space-x-1 pt-1">
+                  <span className="font-bold">OTROS:</span>
+                  <input
+                    type="text"
+                    aria-label="Otros flexo-extensión muñeca"
+                    value={munecaMano.flexoExtensionMuneca.otros}
+                    onChange={(ev) =>
+                      setField(`${BASE_MUNECA}.flexoExtensionMuneca.otros`, ev.target.value)
+                    }
+                    className="w-40 border-b border-gray-800 text-center outline-none p-0 font-semibold"
+                  />
+                </div>
               </div>
             </div>
           </div>
@@ -364,6 +376,21 @@ export function EvaluacionFormPag3() {
                       path={`${SPX}.regionProximal.dolorPresionPalpacion.mParavertebral`}
                       checked={px.dolorPresionPalpacion.mParavertebral}
                       ariaLabel="M. Paravertebral"
+                    />
+                  </div>
+                  <div className="flex justify-between items-center pr-2">
+                    <span className="font-bold">OTROS:</span>
+                    <input
+                      type="text"
+                      aria-label="Otros dolor presión palpación región proximal"
+                      value={px.dolorPresionPalpacion.otros}
+                      onChange={(ev) =>
+                        setField(
+                          `${SPX}.regionProximal.dolorPresionPalpacion.otros`,
+                          ev.target.value,
+                        )
+                      }
+                      className="w-24 border-b border-gray-800 text-center outline-none p-0 font-semibold"
                     />
                   </div>
                 </div>

@@ -19,11 +19,13 @@ describe('initialMunecaMano — page-3 state foundation', () => {
       dolorFlexionPasiva: { dx: false, ix: false },
       dolorExtensionContraResistencia: { dx: false, ix: false },
       dolorExtensionPasiva: { dx: false, ix: false },
+      otros: '',
     });
     expect(parestesia.regionProximal.dolorPresionPalpacion).toEqual({
       apofisisEspinosa: false,
       mTrapecioSuperior: false,
       mParavertebral: false,
+      otros: '',
     });
     expect(parestesia.regionProximal.dolorMovimiento).toEqual({
       flexion: false,
