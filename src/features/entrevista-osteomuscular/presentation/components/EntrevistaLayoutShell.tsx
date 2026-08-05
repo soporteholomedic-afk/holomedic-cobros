@@ -1,23 +1,34 @@
 'use client';
 
 import type { ReactNode } from 'react';
-import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { ArrowLeft, ClipboardList } from 'lucide-react';
+import { UnsavedChangesModal } from '@/components/UnsavedChangesModal';
 import { useEntrevistaContext } from '@/features/entrevista-osteomuscular/presentation/context/EntrevistaOsteomuscularContext';
-import { RUTAS_PAGINAS_SIN_SHELL } from '@/features/entrevista-osteomuscular/presentation/constants/paginas';
 
 interface EntrevistaLayoutShellProps {
   children: ReactNode;
 }
 
 export function EntrevistaLayoutShell({ children }: EntrevistaLayoutShellProps) {
-  const pathname = usePathname();
-  const { idAtencion, atencion, reset } = useEntrevistaContext();
+  const router = useRouter();
+  const { idAtencion, atencion, isDirty, markSaved, reset } = useEntrevistaContext();
+  const [showUnsavedChangesModal, setShowUnsavedChangesModal] = useState(false);
 
-  if (pathname && RUTAS_PAGINAS_SIN_SHELL.test(pathname)) {
-    return <>{children}</>;
-  }
+  const leaveForm = () => {
+    reset(atencion);
+    router.push(`/areas/musculoesqueletica/jjc/${idAtencion}`);
+  };
+
+  const handleExit = () => {
+    if (isDirty) {
+      setShowUnsavedChangesModal(true);
+      return;
+    }
+
+    leaveForm();
+  };
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -34,18 +45,18 @@ export function EntrevistaLayoutShell({ children }: EntrevistaLayoutShellProps) 
               Atención #{idAtencion} — {atencion.paciente}
             </p>
           </div>
-          <Link
-            href={`/areas/musculoesqueletica/jjc/${idAtencion}`}
+          <button
+            type="button"
+            onClick={handleExit}
             className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-sky-600 text-white text-sm font-medium hover:bg-sky-700 transition-colors"
           >
             <ArrowLeft className="w-4 h-4" />
             Volver
-          </Link>
+          </button>
         </div>
       </div>
 
-      <form
-        onSubmit={(e) => e.preventDefault()}
+      <div
         className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8 flex flex-col gap-8"
       >
         {children}
@@ -53,19 +64,30 @@ export function EntrevistaLayoutShell({ children }: EntrevistaLayoutShellProps) 
         <div className="flex justify-end gap-4 border-t border-slate-200 pt-8">
           <button
             type="button"
-            onClick={() => reset(atencion)}
+            onClick={handleExit}
             className="px-6 py-2 border border-sky-600 text-sky-600 font-medium rounded-lg hover:bg-sky-50 transition-all text-sm cursor-pointer"
           >
-            Cancelar y Borrar
+            Cancelar
           </button>
           <button
-            type="submit"
+            type="button"
+            onClick={markSaved}
             className="px-6 py-2 bg-sky-600 text-white font-medium rounded-lg hover:bg-sky-700 shadow-md transition-all active:scale-95 text-sm cursor-pointer"
           >
-            Guardar Registro de Evaluación
+            Guardar
           </button>
         </div>
-      </form>
+      </div>
+
+      {showUnsavedChangesModal && (
+        <UnsavedChangesModal
+          onCancel={() => setShowUnsavedChangesModal(false)}
+          onConfirm={() => {
+            setShowUnsavedChangesModal(false);
+            leaveForm();
+          }}
+        />
+      )}
     </div>
   );
 }

@@ -1,23 +1,34 @@
 'use client';
 
 import type { ReactNode } from 'react';
-import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { ArrowLeft, Bone } from 'lucide-react';
+import { UnsavedChangesModal } from '@/components/UnsavedChangesModal';
 import { useEvaluacionContext } from '@/features/evaluacion-osteomuscular/presentation/context/EvaluacionOsteomuscularContext';
-import { RUTAS_SIN_SHELL_EVALUACION } from '@/features/evaluacion-osteomuscular/presentation/constants/paginas';
 
 interface EvaluacionLayoutShellProps {
   children: ReactNode;
 }
 
 export function EvaluacionLayoutShell({ children }: EvaluacionLayoutShellProps) {
-  const pathname = usePathname();
-  const { idAtencion, atencion } = useEvaluacionContext();
+  const router = useRouter();
+  const { idAtencion, atencion, isDirty, markSaved, reset } = useEvaluacionContext();
+  const [showUnsavedChangesModal, setShowUnsavedChangesModal] = useState(false);
 
-  if (pathname && RUTAS_SIN_SHELL_EVALUACION.test(pathname)) {
-    return <>{children}</>;
-  }
+  const leaveForm = () => {
+    reset(atencion);
+    router.push(`/areas/musculoesqueletica/jjc/${idAtencion}`);
+  };
+
+  const handleExit = () => {
+    if (isDirty) {
+      setShowUnsavedChangesModal(true);
+      return;
+    }
+
+    leaveForm();
+  };
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -34,18 +45,18 @@ export function EvaluacionLayoutShell({ children }: EvaluacionLayoutShellProps) 
               Atención #{idAtencion} — {atencion.paciente}
             </p>
           </div>
-          <Link
-            href={`/areas/musculoesqueletica/jjc/${idAtencion}`}
+          <button
+            type="button"
+            onClick={handleExit}
             className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-sky-600 text-white text-sm font-medium hover:bg-sky-700 transition-colors"
           >
             <ArrowLeft className="w-4 h-4" />
             Volver
-          </Link>
+          </button>
         </div>
       </div>
 
-      <form
-        onSubmit={(e) => e.preventDefault()}
+      <div
         className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8 flex flex-col gap-8"
       >
         {children}
@@ -53,18 +64,30 @@ export function EvaluacionLayoutShell({ children }: EvaluacionLayoutShellProps) 
         <div className="flex justify-end gap-4 border-t border-slate-200 pt-8">
           <button
             type="button"
+            onClick={handleExit}
             className="px-6 py-2 border border-sky-600 text-sky-600 font-medium rounded-lg hover:bg-sky-50 transition-all text-sm cursor-pointer"
           >
             Cancelar
           </button>
           <button
-            type="submit"
+            type="button"
+            onClick={markSaved}
             className="px-6 py-2 bg-sky-600 text-white font-medium rounded-lg hover:bg-sky-700 shadow-md transition-all active:scale-95 text-sm cursor-pointer"
           >
-            Guardar y Continuar
+            Guardar
           </button>
         </div>
-      </form>
+      </div>
+
+      {showUnsavedChangesModal && (
+        <UnsavedChangesModal
+          onCancel={() => setShowUnsavedChangesModal(false)}
+          onConfirm={() => {
+            setShowUnsavedChangesModal(false);
+            leaveForm();
+          }}
+        />
+      )}
     </div>
   );
 }

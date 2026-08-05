@@ -1,6 +1,6 @@
 'use client';
 
-import { useReducer, useCallback } from 'react';
+import { useReducer, useCallback, useState } from 'react';
 import type { AtencionDetalle } from '@/types/jjc';
 import type {
   EvaluacionOsteomuscular,
@@ -45,6 +45,10 @@ import type {
   WassermanLasegueInvertido,
   ManiobraWassermanRetraccionIleopsoas,
 } from '@/types/evaluacion-osteomuscular';
+
+function serializeState(state: EvaluacionOsteomuscular): string {
+  return JSON.stringify(state) ?? '';
+}
 
 function initialDxIxBool() {
   return { dx: false, ix: false };
@@ -435,6 +439,8 @@ export function evaluacionReducer(
 
 export interface UseEvaluacionOsteomuscularResult {
   state: EvaluacionOsteomuscular;
+  isDirty: boolean;
+  markSaved: () => void;
   setField: (path: string, value: unknown) => void;
   reset: (atencion: AtencionDetalle | null) => void;
   setDxIx: (basePath: string, lado: 'dx' | 'ix', value: boolean) => void;
@@ -448,6 +454,13 @@ export function useEvaluacionOsteomuscular(
     atencion,
     initialEvaluacionState,
   );
+  const [savedSnapshot, setSavedSnapshot] = useState(() => serializeState(state));
+  const currentSnapshot = serializeState(state);
+  const isDirty = currentSnapshot !== savedSnapshot;
+
+  const markSaved = useCallback(() => {
+    setSavedSnapshot(currentSnapshot);
+  }, [currentSnapshot]);
 
   const setField = useCallback(
     (path: string, value: unknown) => dispatch({ type: 'SET_FIELD', path, value }),
@@ -455,7 +468,10 @@ export function useEvaluacionOsteomuscular(
   );
 
   const reset = useCallback(
-    (a: AtencionDetalle | null) => dispatch({ type: 'RESET', atencion: a }),
+    (a: AtencionDetalle | null) => {
+      setSavedSnapshot(serializeState(initialEvaluacionState(a)));
+      dispatch({ type: 'RESET', atencion: a });
+    },
     [],
   );
 
@@ -466,5 +482,5 @@ export function useEvaluacionOsteomuscular(
     [],
   );
 
-  return { state, setField, reset, setDxIx };
+  return { state, isDirty, markSaved, setField, reset, setDxIx };
 }
