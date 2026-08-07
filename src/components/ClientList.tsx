@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import { useState, useMemo } from 'react';
 import { Search, ChevronRight, FileWarning, CheckCircle2, X } from 'lucide-react';
 import { ClienteGroup } from '../types';
 import { formatNumber } from '../utils/excelParser';
@@ -34,10 +34,12 @@ export default function ClientList({ clients, onSelectClient }: ClientListProps)
     });
   }, [clients, searchTerm, filterStatus]);
 
-  // Reset page when filter or search changes
-  React.useEffect(() => {
+  // Reset page when filter or search changes — handled in the event
+  // handlers below so both state updates batch in a single render.
+  const handleFilter = (status: FilterStatus) => {
+    setFilterStatus(status);
     setCurrentPage(1);
-  }, [searchTerm, filterStatus]);
+  };
 
   // Pagination calculation
   const totalPages = Math.ceil(filteredClients.length / itemsPerPage);
@@ -70,7 +72,10 @@ export default function ClientList({ clients, onSelectClient }: ClientListProps)
             type="text"
             placeholder="Buscar por RUC/DNI o Razón Social..."
             value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
+            onChange={(e) => {
+              setSearchTerm(e.target.value);
+              setCurrentPage(1);
+            }}
             className="w-full pl-11 pr-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-sm placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 transition-all text-slate-800 dark:text-slate-100"
           />
         </div>
@@ -78,7 +83,7 @@ export default function ClientList({ clients, onSelectClient }: ClientListProps)
         {/* Tab Filters */}
         <div className="flex flex-wrap items-center gap-1.5 p-1 bg-slate-100/80 dark:bg-slate-950/80 rounded-2xl border border-slate-200/40 dark:border-slate-800/40 text-xs font-semibold text-slate-600 dark:text-slate-400">
           <button
-            onClick={() => setFilterStatus('all')}
+            onClick={() => handleFilter('all')}
             className={`px-4 py-2 rounded-xl transition-all ${filterStatus === 'all'
               ? 'bg-white dark:bg-slate-800 text-sky-600 dark:text-sky-300 shadow-sm border border-slate-200/10'
               : 'hover:text-slate-900 dark:hover:text-slate-200'
@@ -88,7 +93,7 @@ export default function ClientList({ clients, onSelectClient }: ClientListProps)
           </button>
 
           <button
-            onClick={() => setFilterStatus('debtors')}
+            onClick={() => handleFilter('debtors')}
             className={`px-4 py-2 rounded-xl flex items-center space-x-1.5 transition-all ${filterStatus === 'debtors'
               ? 'bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400 shadow-sm border border-rose-200/10'
               : 'hover:text-slate-900 dark:hover:text-slate-200'
@@ -99,7 +104,7 @@ export default function ClientList({ clients, onSelectClient }: ClientListProps)
           </button>
 
           <button
-            onClick={() => setFilterStatus('credito')}
+            onClick={() => handleFilter('credito')}
             className={`px-4 py-2 rounded-xl flex items-center space-x-1.5 transition-all ${filterStatus === 'credito'
               ? 'bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400 shadow-sm border border-amber-200/10'
               : 'hover:text-slate-900 dark:hover:text-slate-200'
@@ -110,7 +115,7 @@ export default function ClientList({ clients, onSelectClient }: ClientListProps)
           </button>
 
           <button
-            onClick={() => setFilterStatus('credits')}
+            onClick={() => handleFilter('credits')}
             className={`px-4 py-2 rounded-xl flex items-center space-x-1.5 transition-all ${filterStatus === 'credits'
               ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 shadow-sm border border-emerald-200/10'
               : 'hover:text-slate-900 dark:hover:text-slate-200'
@@ -121,7 +126,7 @@ export default function ClientList({ clients, onSelectClient }: ClientListProps)
           </button>
 
           <button
-            onClick={() => setFilterStatus('clean')}
+            onClick={() => handleFilter('clean')}
             className={`px-4 py-2 rounded-xl flex items-center space-x-1.5 transition-all ${filterStatus === 'clean'
               ? 'bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300 shadow-sm border border-slate-200/10'
               : 'hover:text-slate-900 dark:hover:text-slate-200'
