@@ -1,12 +1,19 @@
 'use client';
 
-import Image from 'next/image';
 import { useEntrevistaContext } from '@/features/entrevista-osteomuscular/presentation/context/EntrevistaOsteomuscularContext';
+import { FigureAreaMarking } from './FigureAreaMarking';
 import { Paginacion } from './Paginacion';
 import type {
+  FigureAreaMark,
   UmbralPositivoParestesiaNocturna,
   UmbralPositivoParestesiaDiurna,
 } from '@/types/entrevista-osteomuscular';
+
+/** Dimensiones intrínsecas de los assets (ver FigureAreaMarking). */
+const MANOS_IMAGE_WIDTH = 117;
+const MANOS_IMAGE_HEIGHT = 81;
+const TORSO_IMAGE_WIDTH = 110;
+const TORSO_IMAGE_HEIGHT = 136;
 
 const INFO_LABELS: Record<string, string> = {
   haTomadoMedicamentos: 'ha tomado medicamentos',
@@ -97,6 +104,9 @@ interface ParestesiaTableProps {
   molestiasLeves: MolestiasLevesBlock;
   onCheckChange: (path: string, value: boolean) => void;
   onFieldChange: (path: string, value: string) => void;
+  /** Marcas X normalizadas y callback de la figura de esta tabla. */
+  marcas: FigureAreaMark[];
+  onMarcasChange: (marks: FigureAreaMark[]) => void;
 }
 
 function ParestesiaTable({
@@ -117,6 +127,8 @@ function ParestesiaTable({
   molestiasLeves,
   onCheckChange,
   onFieldChange,
+  marcas,
+  onMarcasChange,
 }: ParestesiaTableProps) {
   const rowSpan = filas.length + 2;
 
@@ -182,15 +194,17 @@ function ParestesiaTable({
                         <span>Ix</span>
                         <span>DX</span>
                       </div>
-                      <div className="relative w-32 h-24 mx-auto">
-                        <Image
-                          src={imagenSrc}
-                          alt={imagenAlt}
-                          fill
-                          className="object-contain"
-                          sizes="128px"
-                        />
-                      </div>
+                      <FigureAreaMarking
+                        imageSrc={imagenSrc}
+                        imageAlt={imagenAlt}
+                        ariaLabel="Figura de manos — parestesia nocturna"
+                        imageWidth={MANOS_IMAGE_WIDTH}
+                        imageHeight={MANOS_IMAGE_HEIGHT}
+                        marks={marcas}
+                        onMarksChange={onMarcasChange}
+                        className="w-32 h-24 mx-auto"
+                        sizes="128px"
+                      />
                     </>
                   ) : (
                     <>
@@ -198,15 +212,17 @@ function ParestesiaTable({
                         <span>Dx</span>
                         <span>Ix</span>
                       </div>
-                      <div className="relative w-24 h-28 mx-auto">
-                        <Image
-                          src={imagenSrc}
-                          alt={imagenAlt}
-                          fill
-                          className="object-contain"
-                          sizes="96px"
-                        />
-                      </div>
+                      <FigureAreaMarking
+                        imageSrc={imagenSrc}
+                        imageAlt={imagenAlt}
+                        ariaLabel="Figura de torso — parestesia diurna"
+                        imageWidth={TORSO_IMAGE_WIDTH}
+                        imageHeight={TORSO_IMAGE_HEIGHT}
+                        marks={marcas}
+                        onMarksChange={onMarcasChange}
+                        className="w-24 h-28 mx-auto"
+                        sizes="96px"
+                      />
                     </>
                   )}
                   <div className="text-[8px] text-left font-bold mt-1 leading-tight">
@@ -525,6 +541,8 @@ export function EntrevistaOsteomuscularFormPag2() {
           molestiasLeves={nocturnaMolestiasLeves}
           onCheckChange={handleCheck}
           onFieldChange={handleFieldChange}
+          marcas={nocturna.areaDistribucionAnotaciones}
+          onMarcasChange={(m) => setField('parestesiaNocturna.areaDistribucionAnotaciones', m)}
         />
 
         {/* PARESTESIA DIURNA */}
@@ -546,6 +564,8 @@ export function EntrevistaOsteomuscularFormPag2() {
           molestiasLeves={diurnaMolestiasLeves}
           onCheckChange={handleCheck}
           onFieldChange={handleFieldChange}
+          marcas={diurna.areaDistribucionAnotaciones}
+          onMarcasChange={(m) => setField('parestesiaDiurna.areaDistribucionAnotaciones', m)}
         />
 
         {/* MOLESTIA CERVICAL IRRADIADA */}

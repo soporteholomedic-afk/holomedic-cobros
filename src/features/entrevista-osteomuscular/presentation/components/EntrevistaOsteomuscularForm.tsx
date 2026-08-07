@@ -2,8 +2,12 @@
 
 import Image from 'next/image';
 import { useEntrevistaContext } from '@/features/entrevista-osteomuscular/presentation/context/EntrevistaOsteomuscularContext';
+import { FigureAreaMarking } from './FigureAreaMarking';
 import { Paginacion } from './Paginacion';
-import type { UmbralPositivo } from '@/types/entrevista-osteomuscular';
+import type {
+  FigureAreaMark,
+  UmbralPositivo,
+} from '@/types/entrevista-osteomuscular';
 
 const INFO_LABELS: Record<string, string> = {
   haTomadoMedicamentos: 'ha tomado medicamentos',
@@ -13,6 +17,10 @@ const INFO_LABELS: Record<string, string> = {
   ecografiaResonancia: 'ECOGRAFÍA / RESONANCIA',
   emg: 'EMG (electromiografía)',
 };
+
+/** Dimensiones intrínsecas de `manos.png` (ver FigureAreaMarking). */
+const MANOS_IMAGE_WIDTH = 117;
+const MANOS_IMAGE_HEIGHT = 81;
 
 const TIPO_EXAMEN_LABELS: Record<string, string> = {
   ingreso: 'Ingreso',
@@ -74,6 +82,9 @@ interface SeccionAnamnesisProps {
   infoRealizado: InfoItem[];
   filas: Fila[];
   onCheckChange: (path: string, value: boolean | string) => void;
+  /** Solo la sección mano/muñeca es marcable: marcas y callback del área. */
+  marcas?: FigureAreaMark[];
+  onMarcasChange?: (marks: FigureAreaMark[]) => void;
 }
 
 function SeccionAnamnesis({
@@ -90,6 +101,8 @@ function SeccionAnamnesis({
   infoRealizado,
   filas,
   onCheckChange,
+  marcas,
+  onMarcasChange,
 }: SeccionAnamnesisProps) {
   const rowSpan = filas.length;
 
@@ -161,15 +174,29 @@ function SeccionAnamnesis({
                       <div className="text-[9px] font-bold leading-tight mb-2">
                         N: Indicar sobre la figura el área de distribución de la molestia
                       </div>
-                      <div className="h-36 flex items-center justify-center relative">
-                        <Image
-                          src={imagenSrc}
-                          alt={imagenAlt}
-                          fill
-                          className="object-contain p-1"
+                      {marcas && onMarcasChange ? (
+                        <FigureAreaMarking
+                          imageSrc={imagenSrc}
+                          imageAlt={imagenAlt}
+                          ariaLabel="Figura de manos y muñecas"
+                          imageWidth={MANOS_IMAGE_WIDTH}
+                          imageHeight={MANOS_IMAGE_HEIGHT}
+                          marks={marcas}
+                          onMarksChange={onMarcasChange}
+                          className="h-36 p-1"
                           sizes="150px"
                         />
-                      </div>
+                      ) : (
+                        <div className="h-36 flex items-center justify-center relative">
+                          <Image
+                            src={imagenSrc}
+                            alt={imagenAlt}
+                            fill
+                            className="object-contain p-1"
+                            sizes="150px"
+                          />
+                        </div>
+                      )}
                       <div className="flex justify-between font-bold px-2 text-[10px] mt-1">
                         <span>Ix</span>
                         <span>DX</span>
@@ -817,6 +844,8 @@ export function EntrevistaOsteomuscularForm() {
           infoRealizado={manoInfoRealizado}
           filas={manoFilas}
           onCheckChange={handleCheck}
+          marcas={mano.areaDistribucionAnotaciones}
+          onMarcasChange={(m) => setField('miembrosSuperiores.manoMuneca.areaDistribucionAnotaciones', m)}
         />
 
         {/* PIE DE PÁGINA */}
