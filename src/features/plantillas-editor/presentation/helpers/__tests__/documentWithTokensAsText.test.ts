@@ -5,6 +5,15 @@ import { encodeToken } from '../tokenSerializer';
 import type { TokenAttrs } from '../../../domain/entities';
 
 /**
+ * Minimal shape of the `tableContent` block output asserted below.
+ * The production return type does not expose `rows` directly, so the
+ * tests cast through `unknown` after verifying the runtime shape.
+ */
+interface TableContentShape {
+  rows: Array<{ cells: unknown[] }>;
+}
+
+/**
  * Tests for the pre-conversion helper.
  *
  * This helper is the core of the `getHtml` fix: it walks a BlockNote
@@ -252,7 +261,7 @@ describe('documentWithTokensAsText — tokens inside table cells', () => {
       },
     };
     const out = documentWithTokensAsText([tableBlock]);
-    const outTc = out[0]!.content as any;
+    const outTc = out[0]!.content as unknown as TableContentShape;
     expect(outTc.rows[0].cells[0]).toEqual([
       { type: 'text', text: 'Dato: ' },
       { type: 'text', text: '{{dni}}', styles: {} },
@@ -281,7 +290,7 @@ describe('documentWithTokensAsText — tokens inside table cells', () => {
       },
     };
     const out = documentWithTokensAsText([tableBlock]);
-    const outTc = out[0]!.content as any;
+    const outTc = out[0]!.content as unknown as TableContentShape;
     expect(outTc.rows[0].cells[0]).toEqual({
       type: 'tableCell',
       props: { backgroundColor: 'default' },

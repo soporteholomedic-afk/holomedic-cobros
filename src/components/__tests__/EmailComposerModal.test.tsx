@@ -72,7 +72,8 @@ describe('EmailComposerModal Component', () => {
 
   it('debe mostrar spinner mientras se envía el correo', () => {
     // Mock fetch to never resolve — keeps sending state active
-    global.fetch = vi.fn(() => new Promise(() => {})) as any;
+    const fetchMock = vi.fn(() => new Promise(() => {}));
+    vi.stubGlobal('fetch', fetchMock);
 
     const onClose = vi.fn();
     const onSuccess = vi.fn();
@@ -94,11 +95,12 @@ describe('EmailComposerModal Component', () => {
   });
 
   it('debe mostrar mensaje de error cuando la API responde con error', async () => {
-    global.fetch = vi.fn().mockResolvedValue({
+    const fetchMock = vi.fn().mockResolvedValue({
       ok: false,
       status: 500,
       json: async () => ({ success: false, error: 'Error SMTP del servidor', code: 'SMTP_ERROR' }),
-    }) as any;
+    } as unknown as Response);
+    vi.stubGlobal('fetch', fetchMock);
 
     const onClose = vi.fn();
     const onSuccess = vi.fn();
@@ -126,12 +128,12 @@ describe('EmailComposerModal Component', () => {
       .mockResolvedValueOnce({
         ok: false,
         json: async () => ({ success: false, error: 'Error SMTP', code: 'SMTP_ERROR' }),
-      })
+      } as unknown as Response)
       .mockResolvedValueOnce({
         ok: true,
         json: async () => ({ success: true }),
-      });
-    global.fetch = fetchMock as any;
+      } as unknown as Response);
+    vi.stubGlobal('fetch', fetchMock);
 
     const onClose = vi.fn();
     const onSuccess = vi.fn();
@@ -164,7 +166,8 @@ describe('EmailComposerModal Component', () => {
   });
 
   it('debe deshabilitar el botón Cancelar mientras se está enviando', () => {
-    global.fetch = vi.fn(() => new Promise(() => {})) as any;
+    const fetchMock = vi.fn(() => new Promise(() => {}));
+    vi.stubGlobal('fetch', fetchMock);
 
     const onClose = vi.fn();
     const onSuccess = vi.fn();
@@ -205,7 +208,8 @@ describe('EmailComposerModal Component', () => {
 
   it('debe mostrar mensaje de error de conexión cuando el servidor no responde', async () => {
     // Simular network error (fetch rejected, not just HTTP error)
-    global.fetch = vi.fn().mockRejectedValue(new Error('Failed to fetch')) as any;
+    const fetchMock = vi.fn().mockRejectedValue(new Error('Failed to fetch'));
+    vi.stubGlobal('fetch', fetchMock);
 
     const onClose = vi.fn();
     const onSuccess = vi.fn();
@@ -276,10 +280,11 @@ describe('EmailComposerModal Component', () => {
   });
 
   it('debe mostrar pantalla de éxito cuando la API responde 200', async () => {
-    global.fetch = vi.fn().mockResolvedValue({
+    const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
       json: async () => ({ success: true }),
-    }) as any;
+    } as unknown as Response);
+    vi.stubGlobal('fetch', fetchMock);
 
     const onClose = vi.fn();
     const onSuccess = vi.fn();
@@ -327,10 +332,11 @@ describe('EmailComposerModal Component', () => {
   });
 
   it('debe incluir CC en la confirmación y en el payload cuando se proporciona', async () => {
-    global.fetch = vi.fn().mockResolvedValue({
+    const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
       json: async () => ({ success: true }),
-    }) as any;
+    } as unknown as Response);
+    vi.stubGlobal('fetch', fetchMock);
 
     const onClose = vi.fn();
     const onSuccess = vi.fn();
@@ -363,7 +369,7 @@ describe('EmailComposerModal Component', () => {
     });
 
     // Verify fetch was called with CC in payload
-    expect(global.fetch).toHaveBeenCalledWith(
+    expect(fetchMock).toHaveBeenCalledWith(
       '/api/send-email',
       expect.objectContaining({
         body: expect.stringContaining('"cc":'),
@@ -371,16 +377,17 @@ describe('EmailComposerModal Component', () => {
     );
 
     // Verify CC contains the right emails
-    const fetchCall = (global.fetch as any).mock.calls[0][1];
+    const fetchCall = fetchMock.mock.calls[0][1];
     const body = JSON.parse(fetchCall.body);
     expect(body.cc).toEqual(['gerencia@holomedic.com', 'contabilidad@holomedic.com']);
   });
 
   it('debe omitir CC en el payload cuando el campo está vacío', async () => {
-    global.fetch = vi.fn().mockResolvedValue({
+    const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
       json: async () => ({ success: true }),
-    }) as any;
+    } as unknown as Response);
+    vi.stubGlobal('fetch', fetchMock);
 
     const onClose = vi.fn();
     const onSuccess = vi.fn();
@@ -402,7 +409,7 @@ describe('EmailComposerModal Component', () => {
     });
 
     // Verify fetch was called WITHOUT cc in payload
-    const fetchCall = (global.fetch as any).mock.calls[0][1];
+    const fetchCall = fetchMock.mock.calls[0][1];
     const body = JSON.parse(fetchCall.body);
     expect(body).not.toHaveProperty('cc');
     expect(body.to).toEqual(['administracion@holomedicsac.com']);
