@@ -3,13 +3,6 @@ import { sendEmail } from '@/utils/sendEmail';
 
 // ---- Request / Response types ----
 
-interface SendEmailBody {
-  to: string[];
-  cc?: string[];
-  subject: string;
-  html: string;
-}
-
 interface SuccessResponse {
   success: true;
   messageId: string;
