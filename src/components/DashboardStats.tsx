@@ -1,6 +1,6 @@
 import React from 'react';
-import { Users, AlertCircle, CheckCircle2, Coins, Landmark } from 'lucide-react';
-import { DashboardMetrics, ClienteGroup } from '../types';
+import { Users, AlertCircle, CheckCircle2, Landmark } from 'lucide-react';
+import { ClienteGroup } from '../types';
 import { calculateMetrics, formatNumber } from '../utils/excelParser';
 
 interface DashboardStatsProps {

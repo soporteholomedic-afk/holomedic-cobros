@@ -1,5 +1,5 @@
 import * as XLSX from 'xlsx';
-import { ExcelRow, Documento, ClienteGroup, DashboardMetrics, MonedaResumen } from '../types';
+import { Documento, ClienteGroup, DashboardMetrics, MonedaResumen } from '../types';
 
 // Helper to normalize strings for matching headers
 function normalizeHeader(str: string): string {
@@ -63,7 +63,7 @@ export function parseExcelData(arrayBuffer: ArrayBuffer): ClienteGroup[] {
 
   const clientsMap: Record<string, { razonSocial: string; documentos: Documento[] }> = {};
 
-  rawRows.forEach((row, index) => {
+  rawRows.forEach((row) => {
     // Extract values using dynamic keyMap or fallback to standard names
     const rawCliente = row[keyMap['cliente'] || 'Cliente'];
     if (!rawCliente) return; // Skip empty rows or rows without a client ID

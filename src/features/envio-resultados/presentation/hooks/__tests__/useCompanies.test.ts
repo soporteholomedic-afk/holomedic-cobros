@@ -1,6 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { renderHook, act, waitFor } from '@testing-library/react';
-import React from 'react';
 
 // ---- Mock the use case ----
 const mockExecute = vi.hoisted(() => vi.fn());

@@ -46,7 +46,7 @@ import { Step2Camo } from '@/features/envio-resultados/presentation/components/w
 import { Step3Emo } from '@/features/envio-resultados/presentation/components/wizard/Step3Emo';
 import { Step4Resumen } from '@/features/envio-resultados/presentation/components/wizard/Step4Resumen';
 import { WizardStepper } from '@/features/envio-resultados/presentation/components/wizard/WizardStepper';
-import { buildEmailViewDataFromWizard, type WizardEmailViewData } from '@/features/envio-resultados/presentation/helpers/buildEmailViewDataFromWizard';
+import type { WizardEmailViewData } from '@/features/envio-resultados/presentation/helpers/buildEmailViewDataFromWizard';
 import type { EmailViewData } from '@/features/envio-resultados/presentation/helpers/emailViewDataFromFiles';
 import type { Company } from '@/features/envio-resultados/domain/entities';
 import type { UnifiedPerson } from '@/types/sp-result';

@@ -234,7 +234,7 @@ export default function MedicinaJjcPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {filteredRows.map((row, idx) => (
+                {filteredRows.map((row) => (
                   <tr
                     key={row.idAtencion}
                     className="hover:bg-slate-50"

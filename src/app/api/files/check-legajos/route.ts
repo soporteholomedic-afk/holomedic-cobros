@@ -11,7 +11,7 @@ export async function POST(request: Request): Promise<NextResponse> {
   let body: CheckLegajosItem[];
   try {
     body = await request.json();
-  } catch (err) {
+  } catch {
     return NextResponse.json(
       { error: 'Invalid JSON payload' },
       { status: 400 }

@@ -1,7 +1,7 @@
 'use client';
 
 import { useReducer, useMemo, useCallback } from 'react';
-import type { LesionType, Fototipo, Fotoprotector, LesionPoint, SiNo, CuestionarioPiel, PreguntaBase, PreguntaConFecha } from '@/types/jjc';
+import type { LesionType, Fototipo, Fotoprotector, LesionPoint, SiNo, CuestionarioPiel, PreguntaBase } from '@/types/jjc';
 import { FOTOTIPO_VALUES, FOTOPROTECTOR_POR_FOTOTIPO, FOTOPROTECTOR_VALUES } from '@/features/jjc-mapper/domain/entities';
 
 // ---- Types ----

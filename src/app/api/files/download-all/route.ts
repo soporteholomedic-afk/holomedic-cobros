@@ -5,7 +5,6 @@ import { UncFileRepository } from '@/features/envio-resultados/infrastructure/fi
 import { getFileRepository } from '@/features/envio-resultados/infrastructure/files/getFileRepository';
 import { renameReadyFile } from '@/features/envio-resultados/domain/ready-files/renameReadyFile';
 import type { SelectedFileRef } from '@/features/envio-resultados/domain/entities';
-import type { IFileRepository } from '@/features/envio-resultados/domain/ports';
 import type { Archiver } from 'archiver';
 
 const BASE_PATH = process.env.FILE_SERVER_BASE_PATH ?? '';
