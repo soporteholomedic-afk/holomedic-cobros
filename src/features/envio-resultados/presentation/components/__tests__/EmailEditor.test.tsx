@@ -85,7 +85,7 @@ vi.mock('../SpitchSelector', () => ({
 // Mock LocalFileDropZone
 vi.mock('../LocalFileDropZone', () => ({
   LocalFileDropZone: vi.fn().mockImplementation(
-    ({ files, onAdd, onRemove }: { files: File[]; onAdd: (f: File[]) => void; onRemove: (i: number) => void }) => {
+    ({ files }: { files: File[] }) => {
       return React.createElement('div', {
         'data-testid': 'local-file-drop-zone',
         'data-file-count': files.length,
