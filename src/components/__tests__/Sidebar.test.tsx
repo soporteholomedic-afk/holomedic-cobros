@@ -15,16 +15,46 @@ vi.mock('next/link', () => ({
 }));
 
 import Sidebar from '../Sidebar';
+import { AuthProvider, type AuthUser } from '@/features/auth/presentation/hooks/useAuth';
+
+const nonAdminUser: AuthUser = {
+  idUsuario: 'u-cobranza',
+  nombre: 'Ana Cobranza',
+  area: 'Cobranza',
+  permisos: ['cobranza'],
+  activo: true,
+};
+
+function mockAuthMe(user: AuthUser | null): void {
+  global.fetch = vi.fn().mockImplementation((url: string) =>
+    url === '/api/auth/me'
+      ? Promise.resolve(user
+          ? { ok: true, json: () => Promise.resolve({ usuario: user }) }
+          : { ok: false })
+      : Promise.resolve({ ok: true, json: () => Promise.resolve({}) }),
+  ) as unknown as typeof fetch;
+}
+
+const renderSidebar = () =>
+  render(
+    <AuthProvider>
+      <Sidebar />
+    </AuthProvider>,
+  );
 
 describe('Sidebar Component', () => {
+  beforeEach(() => {
+    mockAuthMe(nonAdminUser);
+  });
+
   it('debe mostrar la marca "Holomedic" con subtítulo "Facturación"', () => {
-    render(<Sidebar />);
+    renderSidebar();
     expect(screen.getByText('Holomedic')).toBeInTheDocument();
     expect(screen.getByText('Facturación')).toBeInTheDocument();
   });
 
   it('debe mostrar los ítems de navegación: Inicio, Cobranza, Consolidados, Valoraciones, Areas, Plantillas', () => {
-    render(<Sidebar />);
+    renderSidebar();
     expect(screen.getByText('Inicio')).toBeInTheDocument();
     expect(screen.getByText('Cobranza')).toBeInTheDocument();
     expect(screen.getByText('Consolidados')).toBeInTheDocument();
@@ -34,38 +64,38 @@ describe('Sidebar Component', () => {
   });
 
   it('debe enlazar Inicio a "/"', () => {
-    render(<Sidebar />);
+    renderSidebar();
     const link = screen.getByText('Inicio').closest('a');
     expect(link).toHaveAttribute('href', '/');
   });
 
   it('debe enlazar Cobranza a "/cobranza"', () => {
-    render(<Sidebar />);
+    renderSidebar();
     const link = screen.getByText('Cobranza').closest('a');
     expect(link).toHaveAttribute('href', '/cobranza');
   });
 
   it('debe enlazar Valoraciones a "/valoraciones"', () => {
-    render(<Sidebar />);
+    renderSidebar();
     const link = screen.getByText('Valoraciones').closest('a');
     expect(link).toHaveAttribute('href', '/valoraciones');
   });
 
   it('debe enlazar Consolidados a "/consolidados"', () => {
-    render(<Sidebar />);
+    renderSidebar();
     const link = screen.getByText('Consolidados').closest('a');
     expect(link).toHaveAttribute('href', '/consolidados');
   });
 
   // PR 4 — Task 4.7: "Add nav entry 'Plantillas' → /admin/plantillas/consolidados"
   it('debe enlazar Plantillas a "/admin/plantillas/consolidados"', () => {
-    render(<Sidebar />);
+    renderSidebar();
     const link = screen.getByText('Plantillas').closest('a');
     expect(link).toHaveAttribute('href', '/admin/plantillas/consolidados');
   });
 
   it('debe mostrar Consolidados entre Cobranza y Valoraciones en el orden de navegación', () => {
-    render(<Sidebar />);
+    renderSidebar();
     const navLinks = screen.getAllByRole('link').map((l) => l.textContent?.trim());
     const cobranzaIdx = navLinks.indexOf('Cobranza');
     const consolidadosIdx = navLinks.indexOf('Consolidados');
@@ -75,20 +105,20 @@ describe('Sidebar Component', () => {
   });
 
   it('debe mostrar el botón hamburguesa en mobile con aria-label', () => {
-    render(<Sidebar />);
+    renderSidebar();
     const button = screen.getByLabelText('Abrir menú');
     expect(button).toBeInTheDocument();
   });
 
   it('debe cambiar aria-label a "Cerrar menú" al hacer click en hamburguesa', () => {
-    render(<Sidebar />);
+    renderSidebar();
     const button = screen.getByLabelText('Abrir menú');
     fireEvent.click(button);
     expect(screen.getByLabelText('Cerrar menú')).toBeInTheDocument();
   });
 
   it('la marca debe enlazar a "/"', () => {
-    render(<Sidebar />);
+    renderSidebar();
     const brandLink = screen.getByText('Holomedic').closest('a');
     expect(brandLink).toHaveAttribute('href', '/');
   });
@@ -99,7 +129,7 @@ describe('Sidebar Component', () => {
     });
 
     it('debe mostrar el trigger "Areas" con aria-expanded=false inicialmente', () => {
-      render(<Sidebar />);
+      renderSidebar();
       const trigger = screen.getByRole('button', { name: /Areas/i });
       expect(trigger).toBeInTheDocument();
       expect(trigger).toHaveAttribute('aria-expanded', 'false');
@@ -107,7 +137,7 @@ describe('Sidebar Component', () => {
     });
 
     it('debe mostrar los 3 sub-ítems al hacer click en el trigger', () => {
-      render(<Sidebar />);
+      renderSidebar();
       const trigger = screen.getByRole('button', { name: /Areas/i });
       fireEvent.click(trigger);
 
@@ -117,7 +147,7 @@ describe('Sidebar Component', () => {
     });
 
     it('debe ocultar los sub-ítems al hacer click nuevamente en el trigger', () => {
-      render(<Sidebar />);
+      renderSidebar();
       const trigger = screen.getByRole('button', { name: /Areas/i });
       fireEvent.click(trigger);
       expect(screen.getByText('MusculoEsqueletica')).toBeInTheDocument();
@@ -127,7 +157,7 @@ describe('Sidebar Component', () => {
     });
 
     it('cada sub-ítem debe enlazar a su ruta /areas/<slug>', () => {
-      render(<Sidebar />);
+      renderSidebar();
       fireEvent.click(screen.getByRole('button', { name: /Areas/i }));
 
       const musculo = screen.getByText('MusculoEsqueletica').closest('a');
@@ -141,7 +171,7 @@ describe('Sidebar Component', () => {
     });
 
     it('debe cerrar el dropdown al hacer click fuera', () => {
-      render(<Sidebar />);
+      renderSidebar();
       fireEvent.click(screen.getByRole('button', { name: /Areas/i }));
       expect(screen.getByText('MusculoEsqueletica')).toBeInTheDocument();
 
@@ -150,7 +180,7 @@ describe('Sidebar Component', () => {
     });
 
     it('debe cerrar el dropdown al presionar Escape', () => {
-      render(<Sidebar />);
+      renderSidebar();
       fireEvent.click(screen.getByRole('button', { name: /Areas/i }));
       expect(screen.getByText('MusculoEsqueletica')).toBeInTheDocument();
 
@@ -160,7 +190,7 @@ describe('Sidebar Component', () => {
 
     it('debe marcar como activo el sub-ítem correspondiente a la ruta actual', () => {
       mockUsePathname.mockReturnValue('/areas/medicina');
-      render(<Sidebar />);
+      renderSidebar();
       fireEvent.click(screen.getByRole('button', { name: /Areas/i }));
 
       const medicinaLink = screen.getByText('Medicina').closest('a');
@@ -169,7 +199,7 @@ describe('Sidebar Component', () => {
     });
 
     it('debe cambiar aria-expanded a true al abrir el dropdown', () => {
-      render(<Sidebar />);
+      renderSidebar();
       const trigger = screen.getByRole('button', { name: /Areas/i });
       fireEvent.click(trigger);
       expect(trigger).toHaveAttribute('aria-expanded', 'true');
