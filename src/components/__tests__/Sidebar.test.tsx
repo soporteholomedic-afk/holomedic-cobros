@@ -25,6 +25,14 @@ const nonAdminUser: AuthUser = {
   activo: true,
 };
 
+const adminUser: AuthUser = {
+  idUsuario: 'u-admin',
+  nombre: 'Admin General',
+  area: 'Sistemas',
+  permisos: ['admin'],
+  activo: true,
+};
+
 function mockAuthMe(user: AuthUser | null): void {
   global.fetch = vi.fn().mockImplementation((url: string) =>
     url === '/api/auth/me'
@@ -121,6 +129,19 @@ describe('Sidebar Component', () => {
     renderSidebar();
     const brandLink = screen.getByText('Holomedic').closest('a');
     expect(brandLink).toHaveAttribute('href', '/');
+  });
+
+  it('debe mostrar el enlace Usuarios para usuarios con permiso admin', async () => {
+    mockAuthMe(adminUser);
+    renderSidebar();
+    expect(await screen.findByText('Admin General')).toBeInTheDocument();
+    expect(screen.getByText('Usuarios')).toBeInTheDocument();
+  });
+
+  it('debe ocultar el enlace Usuarios para usuarios sin permiso admin', async () => {
+    renderSidebar();
+    expect(await screen.findByText('Ana Cobranza')).toBeInTheDocument();
+    expect(screen.queryByText('Usuarios')).not.toBeInTheDocument();
   });
 
   describe('AreasMenuItem dropdown', () => {
