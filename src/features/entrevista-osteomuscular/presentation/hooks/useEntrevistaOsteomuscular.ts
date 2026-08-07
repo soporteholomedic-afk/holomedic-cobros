@@ -233,6 +233,7 @@ export function initialEntrevistaState(atencion: AtencionDetalle | null): Entrev
         infoReportada: initialInfoReportadaManoMuneca(),
         sintomas: initialSintomasManoMuneca(),
         observaciones: '',
+        areaDistribucionAnotaciones: [],
       },
     },
     parestesiaNocturna: {
@@ -240,12 +241,14 @@ export function initialEntrevistaState(atencion: AtencionDetalle | null): Entrev
       inicioMolestia: '',
       infoReportada: initialInfoReportadaParestesia(),
       sintomas: initialSintomasParestesiaNocturna(),
+      areaDistribucionAnotaciones: [],
     },
     parestesiaDiurna: {
       tieneParestesia: false,
       inicioMolestia: '',
       infoReportada: initialInfoReportadaParestesia(),
       sintomas: initialSintomasParestesiaDiurna(),
+      areaDistribucionAnotaciones: [],
     },
     molestiaCervicalIrradiada: {
       tieneMolestia: false,
@@ -307,6 +310,10 @@ export function initialEntrevistaState(atencion: AtencionDetalle | null): Entrev
           detalleIrradiacion: '',
         },
         diasAusenciaTrabajo: null,
+      },
+      areaDistribucionAnotaciones: {
+        cervical: [],
+        dorsalLumboSacra: [],
       },
     },
     lumbalgiaAguda: initialLumbalgiaAguda(),

@@ -156,3 +156,110 @@ describe('useEntrevistaOsteomuscular', () => {
     expect(result.current.state.molestiaCervicalIrradiada.otrosMomentos).toBe('al levantar peso');
   });
 });
+
+describe('useEntrevistaOsteomuscular — marcas de área de distribución (5 colecciones)', () => {
+  const FIVE_PATHS = [
+    'miembrosSuperiores.manoMuneca.areaDistribucionAnotaciones',
+    'parestesiaNocturna.areaDistribucionAnotaciones',
+    'parestesiaDiurna.areaDistribucionAnotaciones',
+    'columna.areaDistribucionAnotaciones.cervical',
+    'columna.areaDistribucionAnotaciones.dorsalLumboSacra',
+  ] as const;
+
+  it('inicializa las cinco colecciones de marcas como vacías', () => {
+    const { result } = renderHook(() => useEntrevistaOsteomuscular(ATENCION));
+
+    expect(result.current.state.miembrosSuperiores.manoMuneca.areaDistribucionAnotaciones).toEqual([]);
+    expect(result.current.state.parestesiaNocturna.areaDistribucionAnotaciones).toEqual([]);
+    expect(result.current.state.parestesiaDiurna.areaDistribucionAnotaciones).toEqual([]);
+    expect(result.current.state.columna.areaDistribucionAnotaciones.cervical).toEqual([]);
+    expect(result.current.state.columna.areaDistribucionAnotaciones.dorsalLumboSacra).toEqual([]);
+  });
+
+  it('almacena marcas normalizadas a través de los cinco paths profundos', () => {
+    const { result } = renderHook(() => useEntrevistaOsteomuscular(ATENCION));
+
+    act(() => {
+      result.current.setField(FIVE_PATHS[0], [{ id: 'mano-1', x: 0.25, y: 0.5 }]);
+      result.current.setField(FIVE_PATHS[1], [{ id: 'noct-1', x: 0.1, y: 0.9 }]);
+      result.current.setField(FIVE_PATHS[2], [{ id: 'diur-1', x: 0.4, y: 0.6 }]);
+      result.current.setField(FIVE_PATHS[3], [{ id: 'cerv-1', x: 0.2, y: 0.3 }]);
+      result.current.setField(FIVE_PATHS[4], [{ id: 'dl-1', x: 0.7, y: 0.8 }]);
+    });
+
+    expect(result.current.state.miembrosSuperiores.manoMuneca.areaDistribucionAnotaciones).toEqual([
+      { id: 'mano-1', x: 0.25, y: 0.5 },
+    ]);
+    expect(result.current.state.parestesiaNocturna.areaDistribucionAnotaciones).toEqual([
+      { id: 'noct-1', x: 0.1, y: 0.9 },
+    ]);
+    expect(result.current.state.parestesiaDiurna.areaDistribucionAnotaciones).toEqual([
+      { id: 'diur-1', x: 0.4, y: 0.6 },
+    ]);
+    expect(result.current.state.columna.areaDistribucionAnotaciones.cervical).toEqual([
+      { id: 'cerv-1', x: 0.2, y: 0.3 },
+    ]);
+    expect(result.current.state.columna.areaDistribucionAnotaciones.dorsalLumboSacra).toEqual([
+      { id: 'dl-1', x: 0.7, y: 0.8 },
+    ]);
+  });
+
+  it('restaura las cinco colecciones al hidratar una entrevista guardada', () => {
+    const { result } = renderHook(() => useEntrevistaOsteomuscular(ATENCION));
+
+    act(() => {
+      result.current.hydrate({
+        miembrosSuperiores: {
+          manoMuneca: { areaDistribucionAnotaciones: [{ id: 'mano-1', x: 0.25, y: 0.5 }] },
+        },
+        parestesiaNocturna: { areaDistribucionAnotaciones: [{ id: 'noct-1', x: 0.1, y: 0.9 }] },
+        parestesiaDiurna: { areaDistribucionAnotaciones: [] },
+        columna: {
+          areaDistribucionAnotaciones: {
+            cervical: [{ id: 'cerv-1', x: 0.2, y: 0.3 }],
+            dorsalLumboSacra: [{ id: 'dl-1', x: 0.7, y: 0.8 }],
+          },
+        },
+      });
+    });
+
+    expect(result.current.state.miembrosSuperiores.manoMuneca.areaDistribucionAnotaciones).toEqual([
+      { id: 'mano-1', x: 0.25, y: 0.5 },
+    ]);
+    expect(result.current.state.parestesiaNocturna.areaDistribucionAnotaciones).toEqual([
+      { id: 'noct-1', x: 0.1, y: 0.9 },
+    ]);
+    expect(result.current.state.parestesiaDiurna.areaDistribucionAnotaciones).toEqual([]);
+    expect(result.current.state.columna.areaDistribucionAnotaciones.cervical).toEqual([
+      { id: 'cerv-1', x: 0.2, y: 0.3 },
+    ]);
+    expect(result.current.state.columna.areaDistribucionAnotaciones.dorsalLumboSacra).toEqual([
+      { id: 'dl-1', x: 0.7, y: 0.8 },
+    ]);
+  });
+
+  it('preserva valores existentes y deja vacías las colecciones faltantes en payloads legacy', () => {
+    const { result } = renderHook(() => useEntrevistaOsteomuscular(ATENCION));
+
+    act(() => {
+      result.current.hydrate({
+        datosGenerales: { empresa: 'Empresa Legacy', area: 'Planta 1' },
+        columna: {
+          cervical: { presentaDisturbio: true },
+        },
+      });
+    });
+
+    // Los valores previos de la entrevista se conservan intactos
+    expect(result.current.state.datosGenerales.empresa).toBe('Empresa Legacy');
+    expect(result.current.state.datosGenerales.area).toBe('Planta 1');
+    expect(result.current.state.columna.cervical.presentaDisturbio).toBe(true);
+
+    // Las cinco colecciones sin datos arrancan vacías
+    expect(result.current.state.miembrosSuperiores.manoMuneca.areaDistribucionAnotaciones).toEqual([]);
+    expect(result.current.state.parestesiaNocturna.areaDistribucionAnotaciones).toEqual([]);
+    expect(result.current.state.parestesiaDiurna.areaDistribucionAnotaciones).toEqual([]);
+    expect(result.current.state.columna.areaDistribucionAnotaciones.cervical).toEqual([]);
+    expect(result.current.state.columna.areaDistribucionAnotaciones.dorsalLumboSacra).toEqual([]);
+  });
+});

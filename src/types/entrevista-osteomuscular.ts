@@ -3,6 +3,13 @@ export interface DxIxBool {
   ix: boolean;
 }
 
+/** Marca X normalizada (0..1 inclusivo) sobre una figura anatómica. */
+export interface FigureAreaMark {
+  id: string;
+  x: number;
+  y: number;
+}
+
 export interface InfoReportadaBase {
   haTomadoMedicamentos: boolean;
   fisioterapia: boolean;
@@ -72,13 +79,14 @@ export interface SeccionCodo {
   observaciones: string;
 }
 
-/** PENDIENTE: campo areaDistribucionAnotaciones (mapeo_datos-pg1.json) */
 export interface SeccionManoMuneca {
   tieneDolor: boolean;
   inicioMolestia: string;
   infoReportada: InfoReportadaManoMuneca;
   sintomas: SintomasManoMuneca;
   observaciones: string;
+  /** Marcas X normalizadas (0..1) del área de distribución sobre la figura de manos. */
+  areaDistribucionAnotaciones: FigureAreaMark[];
 }
 
 // ---- Página 2: Parestesia y trastornos ----
@@ -140,6 +148,8 @@ export interface ParestesiaNocturna {
   inicioMolestia: string;
   infoReportada: InfoReportadaParestesia;
   sintomas: SintomasParestesiaNocturna;
+  /** Marcas X normalizadas (0..1) del área de distribución sobre la figura de manos. */
+  areaDistribucionAnotaciones: FigureAreaMark[];
 }
 
 export interface ParestesiaDiurna {
@@ -147,6 +157,8 @@ export interface ParestesiaDiurna {
   inicioMolestia: string;
   infoReportada: InfoReportadaParestesia;
   sintomas: SintomasParestesiaDiurna;
+  /** Marcas X normalizadas (0..1) del área de distribución sobre la figura de torso. */
+  areaDistribucionAnotaciones: FigureAreaMark[];
 }
 
 export interface MolestiaCervicalIrradiada {
@@ -217,10 +229,17 @@ export interface SeccionLumboSacra extends SeccionColumna {
   irradiacion: IrradiacionLumboSacra;
 }
 
+/** Marcas X normalizadas (0..1) de las dos figuras de columna, independientes del cuestionario. */
+export interface AreaDistribucionAnotacionesColumna {
+  cervical: FigureAreaMark[];
+  dorsalLumboSacra: FigureAreaMark[];
+}
+
 export interface Columna {
   cervical: SeccionCervical;
   dorsal: SeccionDorsal;
   lumboSacra: SeccionLumboSacra;
+  areaDistribucionAnotaciones: AreaDistribucionAnotacionesColumna;
 }
 
 export interface AusenciaYTrastornos {
