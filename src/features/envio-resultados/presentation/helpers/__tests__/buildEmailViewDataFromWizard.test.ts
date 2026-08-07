@@ -21,7 +21,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { buildEmailViewDataFromWizard } from '../buildEmailViewDataFromWizard';
-import type { SelectedFileRef } from '../../../../domain/entities';
+import type { SelectedFileRef } from '../../../domain/entities';
 import type { WizardFilePick } from '../../hooks/useEnvioWizard';
 import type { UnifiedPerson } from '@/types/sp-result';
 

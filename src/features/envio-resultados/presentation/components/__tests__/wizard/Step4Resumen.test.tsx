@@ -16,7 +16,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, within } from '@testing-library/react';
 
 import { Step4Resumen } from '../../wizard/Step4Resumen';
-import type { WizardFilePick } from '../../hooks/useEnvioWizard';
+import type { WizardFilePick } from '../../../hooks/useEnvioWizard';
 import type { UnifiedPerson } from '@/types/sp-result';
 import type { SelectedFileRef } from '@/features/envio-resultados/domain/entities';
 

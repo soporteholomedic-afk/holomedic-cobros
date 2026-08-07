@@ -12,7 +12,7 @@
  *  - REQ-005 — Step 2 CAMO.
  *  - Scenarios S-006, S-007, S-008, S-009.
  */
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { fireEvent, render, screen, within } from '@testing-library/react';
 
 import { createFileNode } from '@/features/envio-resultados/domain/ports';
