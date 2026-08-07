@@ -15,6 +15,8 @@ const MOCK_ATENCION: AtencionDetalle = {
   tipoExamen: 'PRE-OCUPACIONAL',
   puesto: 'OPERARIO',
   area: 'MEDICINA GENERAL',
+  rutaFirma: null,
+  rutaHuella: null,
 };
 
 describe('PatientSummaryFields', () => {
