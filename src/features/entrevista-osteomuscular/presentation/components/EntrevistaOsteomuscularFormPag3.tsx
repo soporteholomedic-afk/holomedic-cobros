@@ -1,6 +1,5 @@
 'use client';
 
-import Image from 'next/image';
 import { useState } from 'react';
 import { useEntrevistaContext } from '@/features/entrevista-osteomuscular/presentation/context/EntrevistaOsteomuscularContext';
 import {
@@ -8,6 +7,7 @@ import {
   DETALLE_IRRADIACION_MAX_LENGTH,
   isValidDetalleIrradiacion,
 } from '@/features/entrevista-osteomuscular/domain/detalleIrradiacion';
+import { FigureAreaMarking } from './FigureAreaMarking';
 import { Paginacion } from './Paginacion';
 import type {
   SeccionCervical,
@@ -341,7 +341,7 @@ function BloqueColumna({
 }
 
 export function EntrevistaOsteomuscularFormPag3() {
-  const { idAtencion, state } = useEntrevistaContext();
+  const { idAtencion, state, setField } = useEntrevistaContext();
 
   return (
     <div className="anamnesis-page anamnesis-page--page3 min-h-screen bg-gray-100 py-6 text-[10px] leading-tight text-black">
@@ -365,27 +365,37 @@ export function EntrevistaOsteomuscularFormPag3() {
               N: Señale en la figura el area del disturbioy la irradiación.
             </div>
 
-            {/* Figura Cervical */}
+            {/* Figura Cervical (columna-media.jpg 192x139) */}
             <div className="my-auto py-2 text-center w-full">
-              <div className="relative w-36 h-32 mx-auto">
-                <Image
-                  src="/assets/images/musculo/entrevista/columna-media.jpg"
-                  alt="Columna cervical"
-                  fill
-                  className="object-contain"
+              <div className="w-36 h-32 mx-auto">
+                <FigureAreaMarking
+                  imageSrc="/assets/images/musculo/entrevista/columna-media.jpg"
+                  imageAlt="Columna cervical"
+                  ariaLabel="Figura de columna cervical"
+                  imageWidth={192}
+                  imageHeight={139}
+                  marks={state.columna.areaDistribucionAnotaciones.cervical}
+                  onMarksChange={(marks) =>
+                    setField('columna.areaDistribucionAnotaciones.cervical', marks)
+                  }
                   sizes="144px"
                 />
               </div>
             </div>
 
-            {/* Figura Dorsal / Lumbo Sacra */}
+            {/* Figura Dorsal / Lumbo Sacra (columna-completa.jpg 207x235) */}
             <div className="my-auto py-2 text-center w-full">
-              <div className="relative w-36 h-48 mx-auto">
-                <Image
-                  src="/assets/images/musculo/entrevista/columna-completa.jpg"
-                  alt="Columna dorsal y lumbo sacra"
-                  fill
-                  className="object-contain"
+              <div className="w-36 h-48 mx-auto">
+                <FigureAreaMarking
+                  imageSrc="/assets/images/musculo/entrevista/columna-completa.jpg"
+                  imageAlt="Columna dorsal y lumbo sacra"
+                  ariaLabel="Figura de columna dorsal y lumbo sacra"
+                  imageWidth={207}
+                  imageHeight={235}
+                  marks={state.columna.areaDistribucionAnotaciones.dorsalLumboSacra}
+                  onMarksChange={(marks) =>
+                    setField('columna.areaDistribucionAnotaciones.dorsalLumboSacra', marks)
+                  }
                   sizes="144px"
                 />
               </div>
