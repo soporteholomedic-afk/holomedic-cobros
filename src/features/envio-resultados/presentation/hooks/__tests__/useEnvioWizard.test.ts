@@ -43,7 +43,7 @@ const people = [{ dni: '11111111' }, { dni: '22222222' }, { dni: '33333333' }] a
 
 describe('initialWizardState', () => {
   it('starts at step 1 with empty selection and empty per-patient maps', () => {
-    const state = initialWizardState(people);
+    const state = initialWizardState();
     expect(state.currentStep).toBe(1);
     expect(state.maxVisitedStep).toBe(1);
     expect(state.selectedDnIs).toBeInstanceOf(Set);
@@ -54,7 +54,7 @@ describe('initialWizardState', () => {
 });
 
 describe('canAdvance', () => {
-  const baseState = initialWizardState(people);
+  const baseState = initialWizardState();
 
   it('is false at step 1 with 0 selected patients', () => {
     expect(canAdvance(baseState)).toBe(false);
@@ -95,7 +95,7 @@ describe('canAdvance', () => {
 
 describe('envioWizardReducer', () => {
   it('TOGGLE_PATIENT adds a dni to selectedDnIs', () => {
-    const start = initialWizardState(people);
+    const start = initialWizardState();
     const next = envioWizardReducer(start, { type: 'TOGGLE_PATIENT', dni: '11111111' });
     expect(next.selectedDnIs.has('11111111')).toBe(true);
     expect(next.selectedDnIs.size).toBe(1);
@@ -103,7 +103,7 @@ describe('envioWizardReducer', () => {
 
   it('TOGGLE_PATIENT removes a dni that is already selected', () => {
     const start: WizardState = {
-      ...initialWizardState(people),
+      ...initialWizardState(),
       selectedDnIs: new Set(['11111111', '22222222']),
     };
     const next = envioWizardReducer(start, { type: 'TOGGLE_PATIENT', dni: '11111111' });
@@ -114,7 +114,7 @@ describe('envioWizardReducer', () => {
 
   it('TOGGLE_PATIENT on removal prunes the dni from camoByDni and emoByDni', () => {
     const start: WizardState = {
-      ...initialWizardState(people),
+      ...initialWizardState(),
       selectedDnIs: new Set(['11111111']),
       camoByDni: { '11111111': { ref: makeRef(), displayName: '75618561CERT.pdf' } },
       emoByDni: { '11111111': { ref: makeRef({ name: '012109975EXPED.pdf' }), displayName: '012109975EXPED.pdf' } },
@@ -126,7 +126,7 @@ describe('envioWizardReducer', () => {
 
   it('SET_CAMO stores the pick in camoByDni', () => {
     const start: WizardState = {
-      ...initialWizardState(people),
+      ...initialWizardState(),
       selectedDnIs: new Set(['11111111']),
     };
     const pick = { ref: makeRef(), displayName: '75618561CERT.pdf' };
@@ -136,7 +136,7 @@ describe('envioWizardReducer', () => {
 
   it('SET_CAMO with null stores null (Saltar)', () => {
     const start: WizardState = {
-      ...initialWizardState(people),
+      ...initialWizardState(),
       selectedDnIs: new Set(['11111111']),
     };
     const next = envioWizardReducer(start, { type: 'SET_CAMO', dni: '11111111', pick: null });
@@ -144,7 +144,7 @@ describe('envioWizardReducer', () => {
   });
 
   it('SET_CAMO is a no-op when the dni is not in selectedDnIs', () => {
-    const start = initialWizardState(people);
+    const start = initialWizardState();
     const pick = { ref: makeRef(), displayName: '75618561CERT.pdf' };
     const next = envioWizardReducer(start, { type: 'SET_CAMO', dni: '11111111', pick });
     // State must be returned unchanged (referential stability) because
@@ -155,7 +155,7 @@ describe('envioWizardReducer', () => {
 
   it('SET_EMO is symmetric to SET_CAMO', () => {
     const start: WizardState = {
-      ...initialWizardState(people),
+      ...initialWizardState(),
       selectedDnIs: new Set(['11111111']),
     };
     const pick = { ref: makeRef({ name: '012109975EXPED.pdf' }), displayName: '012109975EXPED.pdf' };
@@ -165,7 +165,7 @@ describe('envioWizardReducer', () => {
 
   it('SET_EMO with null stores null (Saltar)', () => {
     const start: WizardState = {
-      ...initialWizardState(people),
+      ...initialWizardState(),
       selectedDnIs: new Set(['11111111']),
     };
     const next = envioWizardReducer(start, { type: 'SET_EMO', dni: '11111111', pick: null });
@@ -174,7 +174,7 @@ describe('envioWizardReducer', () => {
 
   it('NEXT from step 1 with at least 1 selected advances to step 2', () => {
     const start: WizardState = {
-      ...initialWizardState(people),
+      ...initialWizardState(),
       selectedDnIs: new Set(['11111111']),
     };
     const next = envioWizardReducer(start, { type: 'NEXT' });
@@ -183,60 +183,60 @@ describe('envioWizardReducer', () => {
   });
 
   it('NEXT from step 1 with 0 selected is a no-op', () => {
-    const start = initialWizardState(people);
+    const start = initialWizardState();
     const next = envioWizardReducer(start, { type: 'NEXT' });
     expect(next).toBe(start);
   });
 
   it('NEXT from step 2 always advances to step 3', () => {
-    const start: WizardState = { ...initialWizardState(people), currentStep: 2, maxVisitedStep: 2 };
+    const start: WizardState = { ...initialWizardState(), currentStep: 2, maxVisitedStep: 2 };
     const next = envioWizardReducer(start, { type: 'NEXT' });
     expect(next.currentStep).toBe(3);
     expect(next.maxVisitedStep).toBe(3);
   });
 
   it('NEXT from step 3 always advances to step 4', () => {
-    const start: WizardState = { ...initialWizardState(people), currentStep: 3, maxVisitedStep: 3 };
+    const start: WizardState = { ...initialWizardState(), currentStep: 3, maxVisitedStep: 3 };
     const next = envioWizardReducer(start, { type: 'NEXT' });
     expect(next.currentStep).toBe(4);
     expect(next.maxVisitedStep).toBe(4);
   });
 
   it('NEXT from step 4 is a no-op (no step beyond 4)', () => {
-    const start: WizardState = { ...initialWizardState(people), currentStep: 4, maxVisitedStep: 4 };
+    const start: WizardState = { ...initialWizardState(), currentStep: 4, maxVisitedStep: 4 };
     const next = envioWizardReducer(start, { type: 'NEXT' });
     expect(next).toBe(start);
   });
 
   it('PREV from step > 1 decrements currentStep (maxVisitedStep unchanged)', () => {
-    const start: WizardState = { ...initialWizardState(people), currentStep: 3, maxVisitedStep: 3 };
+    const start: WizardState = { ...initialWizardState(), currentStep: 3, maxVisitedStep: 3 };
     const next = envioWizardReducer(start, { type: 'PREV' });
     expect(next.currentStep).toBe(2);
     expect(next.maxVisitedStep).toBe(3);
   });
 
   it('PREV from step 1 is a no-op', () => {
-    const start = initialWizardState(people);
+    const start = initialWizardState();
     const next = envioWizardReducer(start, { type: 'PREV' });
     expect(next).toBe(start);
   });
 
   it('GO_TO_STEP to a step ≤ maxVisitedStep is allowed', () => {
-    const start: WizardState = { ...initialWizardState(people), currentStep: 3, maxVisitedStep: 3 };
+    const start: WizardState = { ...initialWizardState(), currentStep: 3, maxVisitedStep: 3 };
     const next = envioWizardReducer(start, { type: 'GO_TO_STEP', step: 1 });
     expect(next.currentStep).toBe(1);
     expect(next.maxVisitedStep).toBe(3);
   });
 
   it('GO_TO_STEP to a step > maxVisitedStep is a no-op', () => {
-    const start: WizardState = { ...initialWizardState(people), currentStep: 2, maxVisitedStep: 2 };
+    const start: WizardState = { ...initialWizardState(), currentStep: 2, maxVisitedStep: 2 };
     const next = envioWizardReducer(start, { type: 'GO_TO_STEP', step: 4 });
     expect(next).toBe(start);
   });
 
   it('RESET returns to the initial state (selectedDnIs is a new Set instance)', () => {
     const start: WizardState = {
-      ...initialWizardState(people),
+      ...initialWizardState(),
       currentStep: 3,
       maxVisitedStep: 3,
       selectedDnIs: new Set(['11111111']),
@@ -306,7 +306,7 @@ describe('useEnvioWizard', () => {
 
   it('prev decrements the current step', () => {
     const initial: WizardState = {
-      ...initialWizardState(people),
+      ...initialWizardState(),
       currentStep: 2,
       maxVisitedStep: 2,
     };
@@ -319,7 +319,7 @@ describe('useEnvioWizard', () => {
 
   it('reset returns to the initial state', () => {
     const initial: WizardState = {
-      ...initialWizardState(people),
+      ...initialWizardState(),
       currentStep: 4,
       maxVisitedStep: 4,
       selectedDnIs: new Set(['11111111', '22222222']),
@@ -370,7 +370,7 @@ describe('useEnvioWizard', () => {
 
   it('goToStep is allowed for a step ≤ maxVisitedStep', () => {
     const initial: WizardState = {
-      ...initialWizardState(people),
+      ...initialWizardState(),
       currentStep: 3,
       maxVisitedStep: 3,
     };
@@ -383,7 +383,7 @@ describe('useEnvioWizard', () => {
 
   it('goToStep is a no-op for a step > maxVisitedStep', () => {
     const initial: WizardState = {
-      ...initialWizardState(people),
+      ...initialWizardState(),
       currentStep: 2,
       maxVisitedStep: 2,
     };
