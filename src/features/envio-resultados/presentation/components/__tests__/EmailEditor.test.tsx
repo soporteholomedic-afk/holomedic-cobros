@@ -373,14 +373,15 @@ describe('EmailEditor', () => {
     });
   });
 
-  it('should render Destinatario input pre-filled with patient names', () => {
+  it('should render Destinatario input empty by default', () => {
     mockFetch.mockResolvedValue({ ok: true, json: () => Promise.resolve({ success: true }) });
 
     render(<EmailEditor {...defaultProps} />);
 
     const toInput = screen.getByLabelText('Destinatario');
     expect(toInput).toBeInTheDocument();
-    expect(toInput).toHaveValue('María Elena García López');
+    // The prefill was removed deliberately (b33497b); the input starts empty.
+    expect(toInput).toHaveValue('');
   });
 
   it('should render CC input empty by default', () => {
