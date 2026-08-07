@@ -1,5 +1,5 @@
 import React, { useState, useRef } from 'react';
-import { UploadCloud, FileSpreadsheet, AlertCircle, Sparkles, CheckCircle2 } from 'lucide-react';
+import { UploadCloud, FileSpreadsheet, AlertCircle, Sparkles } from 'lucide-react';
 import { parseExcelData } from '../utils/excelParser';
 import { ClienteGroup } from '../types';
 
