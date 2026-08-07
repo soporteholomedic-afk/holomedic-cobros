@@ -8,7 +8,7 @@ import { FilesPreviewPane } from '@/features/envio-resultados/presentation/compo
 import { FilesReadyPane } from '@/features/envio-resultados/presentation/components/FilesReadyPane';
 import { FilesTabs, type FilesTab } from '@/features/envio-resultados/presentation/components/FilesTabs';
 import { useFileTree } from '@/features/envio-resultados/presentation/hooks/useFileTree';
-import { useReadyFiles } from '@/features/envio-resultados/presentation/hooks/useReadyFiles';
+import { useReadyFiles, type ReadyFilesState } from '@/features/envio-resultados/presentation/hooks/useReadyFiles';
 import type { FileNode } from '@/features/envio-resultados/domain/ports';
 import type { SelectedFileRef } from '@/features/envio-resultados/domain/entities';
 
@@ -105,6 +105,44 @@ export function FilesModal({
     () => new Map(),
   );
 
+  // Render-time state adjustment (official React pattern for
+  // prop-driven resets — replaces the previous setState-in-effect):
+  // clear the selection when the patient identity changes. The
+  // identity is derived from the props each render, so the previous
+  // value is held in state and compared during render.
+  const [prevIdentity, setPrevIdentity] = useState<string>(`${ruc}|${dni}|${idAten}`);
+  const currentIdentity = `${ruc}|${dni}|${idAten}`;
+  if (currentIdentity !== prevIdentity) {
+    setPrevIdentity(currentIdentity);
+    setSelectedFilesMap((prev) => (prev.size === 0 ? prev : new Map()));
+  }
+
+  // Render-time state adjustment for the ready-pane pre-check: when
+  // `readyState` transitions (including the initial mount when the
+  // hook is stubbed as already-ready), auto-add the ready files in
+  // multi-select mode. `null` means "no previous state yet" so the
+  // first ready state is applied exactly once, matching the previous
+  // effect's mount behavior. The merge is idempotent, so a repeated
+  // identical `readyState` reference never re-fires (identity guard).
+  const [prevReadyState, setPrevReadyState] = useState<ReadyFilesState | null>(null);
+  if (prevReadyState !== readyState) {
+    setPrevReadyState(readyState);
+    if (!isPickMode && readyState.kind === 'ready') {
+      setSelectedFilesMap((prev) => {
+        let changed = false;
+        const next = new Map(prev);
+        for (const file of readyState.files) {
+          const ref = `${READY_FOLDER}::${file.name}`;
+          if (!next.has(ref)) {
+            next.set(ref, file);
+            changed = true;
+          }
+        }
+        return changed ? next : prev;
+      });
+    }
+  }
+
   const handleGenerationSuccess = useCallback((): void => {
     readyRefetch();
     setActiveTab('ready');
@@ -122,27 +160,6 @@ export function FilesModal({
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [onClose]);
-
-  useEffect(() => {
-    setSelectedFilesMap((prev) => (prev.size === 0 ? prev : new Map()));
-  }, [ruc, dni, idAten]);
-
-  useEffect(() => {
-    if (isPickMode) return;
-    if (readyState.kind !== 'ready') return;
-    setSelectedFilesMap((prev) => {
-      let changed = false;
-      const next = new Map(prev);
-      for (const file of readyState.files) {
-        const ref = `${READY_FOLDER}::${file.name}`;
-        if (!next.has(ref)) {
-          next.set(ref, file);
-          changed = true;
-        }
-      }
-      return changed ? next : prev;
-    });
-  }, [readyState, isPickMode]);
 
   const handleToggleFile = useCallback((ref: string, file: FileNode): void => {
     if (onPickSingle) {
