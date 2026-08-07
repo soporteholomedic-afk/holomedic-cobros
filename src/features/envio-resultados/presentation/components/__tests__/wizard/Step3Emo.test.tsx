@@ -18,7 +18,7 @@
  *  - REQ-006 — Step 3 EMO.
  *  - Scenarios S-010.
  */
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { fireEvent, render, screen, within } from '@testing-library/react';
 
 import { createFileNode } from '@/features/envio-resultados/domain/ports';
