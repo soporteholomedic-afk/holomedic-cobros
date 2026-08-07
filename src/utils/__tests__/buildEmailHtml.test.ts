@@ -2,6 +2,15 @@ import { describe, it, expect } from 'vitest';
 import { buildEmailHtml } from '../buildEmailHtml';
 import { ClienteGroup } from '../../types';
 
+// Date-relative fixture helper (Time-Bomb Prevention): fixtures are
+// computed from `new Date()` so the suite never expires. DD/MM/YYYY
+// matches the parseDate format used by buildEmailHtml.
+function dateOffset(days: number): string {
+  const d = new Date();
+  d.setDate(d.getDate() + days);
+  return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`;
+}
+
 function createClient(overrides?: Partial<ClienteGroup>): ClienteGroup {
   return {
     clienteId: '20601234567',
@@ -39,6 +48,8 @@ describe('buildEmailHtml', () => {
   // Task 1.2 — Document table with all columns
   // ============================================================
   it('should render a table with all required columns for a client with documentos', () => {
+    const fechaDoc = dateOffset(-45);
+    const fechaVen = dateOffset(-30);
     const client = createClient({
       razonSocial: 'MARCO PERUANA S.A.',
       documentos: [
@@ -46,8 +57,8 @@ describe('buildEmailHtml', () => {
           tipoDoc: 'FE',
           serie: 'F001',
           numero: '101',
-          fechaDoc: '01/05/2026',
-          fechaVen: '20/05/2026',
+          fechaDoc,
+          fechaVen,
           cuenta: '121201',
           moneda: 'S/',
           debe: 1200,
@@ -72,11 +83,12 @@ describe('buildEmailHtml', () => {
     expect(html).toContain('Haber');
     expect(html).toContain('Saldo');
 
-    // Data values present
+    // Data values present — dates derive from the same relative anchor
+    // as the fixtures (the rendered cell echoes the fixture string).
     expect(html).toContain('FE');
     expect(html).toContain('F001-101');
-    expect(html).toContain('01/05/2026');
-    expect(html).toContain('20/05/2026');
+    expect(html).toContain(fechaDoc);
+    expect(html).toContain(fechaVen);
 
     // es-PE formatted numbers (1,200.00 not 1200)
     expect(html).toContain('1,200.00');
@@ -275,17 +287,17 @@ describe('buildEmailHtml', () => {
       documentos: [
         {
           tipoDoc: 'FE', serie: 'F001', numero: '101',
-          fechaDoc: '01/05/2026', fechaVen: '20/05/2026',
+          fechaDoc: dateOffset(-45), fechaVen: dateOffset(-30),
           moneda: 'S/', debe: 1200, haber: 200, saldo: 1000,
         },
         {
           tipoDoc: 'FE', serie: 'F001', numero: '200',
-          fechaDoc: '01/06/2026', fechaVen: '10/07/2026',
+          fechaDoc: dateOffset(15), fechaVen: dateOffset(30),
           moneda: 'S/', debe: 500, haber: 0, saldo: 500,
         },
         {
           tipoDoc: 'BO', serie: 'B001', numero: '50',
-          fechaDoc: '15/05/2026', fechaVen: '25/05/2026',
+          fechaDoc: dateOffset(-35), fechaVen: dateOffset(-20),
           moneda: 'S/', debe: 100, haber: 100, saldo: 0,
         },
       ],
@@ -357,7 +369,7 @@ describe('buildEmailHtml', () => {
         {
           // Future-due + positive → filtered to zero overdue docs
           tipoDoc: 'FE', serie: 'F001', numero: '300',
-          fechaDoc: '01/06/2026', fechaVen: '10/07/2026',
+          fechaDoc: dateOffset(15), fechaVen: dateOffset(30),
           moneda: 'S/', debe: 500, haber: 0, saldo: 500,
         },
       ],

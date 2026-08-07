@@ -10,9 +10,9 @@ describe('Landing Page — Home', () => {
     expect(screen.getByText('Plataforma de Facturación')).toBeInTheDocument();
   });
 
-  it('debe mostrar "Holomedic Facturación" como marca principal', () => {
+  it('debe mostrar la marca principal "Holomedic" en el hero', () => {
     render(<Home />);
-    expect(screen.getByText('Holomedic Facturación')).toBeInTheDocument();
+    expect(screen.getByText('Holomedic')).toBeInTheDocument();
   });
 
   it('debe mostrar las 3 tarjetas de características', () => {
