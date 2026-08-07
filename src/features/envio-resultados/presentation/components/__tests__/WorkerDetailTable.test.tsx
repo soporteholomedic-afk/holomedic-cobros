@@ -175,18 +175,12 @@ vi.mock('../EnvioResultadosWizard', () => ({
                 },
                 fileRefs: [
                   {
-                    ruc: '20123456789',
                     dni: '12345678',
-                    idAten: 'AT-001',
-                    path: 'LEGAJOS',
                     name: 'CERT.pdf',
                     tipoExamen: 'CAMO',
                   },
                   {
-                    ruc: '20123456789',
                     dni: '12345678',
-                    idAten: 'AT-001',
-                    path: 'LEGAJOS',
                     name: 'EXPED.pdf',
                     tipoExamen: 'EMO',
                   },
