@@ -92,9 +92,14 @@ describe('ClientDetailModal Component', () => {
     expect(vencidoChip).toHaveClass('text-rose-700');
   });
 
-  it('renders Estado chip CREDITO for future-due doc with positive balance', () => {
+  it('renders Crédito vigente card for future-due doc with positive balance', () => {
     const onClose = vi.fn();
     const onOpenEmailComposer = vi.fn();
+
+    // Date-relative fixture: fechaVen must stay in the future for the
+    // doc to hit the CREDITO branch on any run date.
+    const fechaVen = new Date();
+    fechaVen.setDate(fechaVen.getDate() + 30);
 
     // Inline fixture: a client with one future-due, positive-balance doc → CREDITO branch.
     const futureCreditClient: ClienteGroup = {
@@ -106,7 +111,7 @@ describe('ClientDetailModal Component', () => {
           serie: 'F003',
           numero: '456',
           fechaDoc: '20/06/2026',
-          fechaVen: '15/07/2026',
+          fechaVen: `${String(fechaVen.getDate()).padStart(2, '0')}/${String(fechaVen.getMonth() + 1).padStart(2, '0')}/${fechaVen.getFullYear()}`,
           moneda: 'S/',
           debe: 500,
           haber: 0,
@@ -131,9 +136,9 @@ describe('ClientDetailModal Component', () => {
       />
     );
 
-    const creditoChip = screen.getByText('CREDITO');
-    expect(creditoChip).toBeInTheDocument();
-    expect(creditoChip).toHaveClass('text-amber-700');
+    // The status card (chip → card redesign) shows the credit badge.
+    const creditoCard = screen.getByText('Crédito vigente').closest('div');
+    expect(creditoCard).toHaveClass('text-amber-800');
   });
 
   it('renders plain dash for Estado when saldo is zero or negative', () => {

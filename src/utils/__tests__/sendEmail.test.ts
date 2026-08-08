@@ -445,8 +445,8 @@ describe('MissingSmtpCredsError', () => {
     const err = new MissingSmtpCredsError!('consolidados', ['SMTP_USER_CONSOLIDADOS']);
     expect(err).toBeInstanceOf(Error);
     expect(err.message).toBe('SMTP not configured for consolidados: missing SMTP_USER_CONSOLIDADOS');
-    expect((err as { purpose: string }).purpose).toBe('consolidados');
-    expect((err as { missing: string[] }).missing).toEqual(['SMTP_USER_CONSOLIDADOS']);
+    expect((err as unknown as { purpose: string }).purpose).toBe('consolidados');
+    expect((err as unknown as { missing: string[] }).missing).toEqual(['SMTP_USER_CONSOLIDADOS']);
   });
 });
 

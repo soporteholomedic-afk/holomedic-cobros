@@ -1,5 +1,5 @@
 import React, { useState, useRef } from 'react';
-import { UploadCloud, FileSpreadsheet, AlertCircle, Sparkles, CheckCircle2 } from 'lucide-react';
+import { UploadCloud, FileSpreadsheet, AlertCircle, Sparkles } from 'lucide-react';
 import { parseExcelData } from '../utils/excelParser';
 import { ClienteGroup } from '../types';
 
@@ -27,15 +27,16 @@ export default function FileUpload({ onDataLoaded }: FileUploadProps) {
           } else {
             onDataLoaded(parsed);
           }
-        } catch (err: any) {
-          setError(`Error al procesar el archivo: ${err.message || 'Formato no soportado.'}`);
+        } catch (err: unknown) {
+          const message = err instanceof Error ? err.message : '';
+          setError(`Error al procesar el archivo: ${message || 'Formato no soportado.'}`);
         } finally {
           setIsLoading(false);
         }
       };
       reader.readAsArrayBuffer(file);
-    } catch (err: any) {
-      setError(`Error al leer el archivo: ${err.message}`);
+    } catch (err: unknown) {
+      setError(`Error al leer el archivo: ${err instanceof Error ? err.message : 'Error desconocido'}`);
       setIsLoading(false);
     }
   };
@@ -86,8 +87,8 @@ export default function FileUpload({ onDataLoaded }: FileUploadProps) {
       const buffer = await blob.arrayBuffer();
       const parsed = parseExcelData(buffer);
       onDataLoaded(parsed);
-    } catch (err: any) {
-      setError(`Error al cargar el ejemplo: ${err.message}`);
+    } catch (err: unknown) {
+      setError(`Error al cargar el ejemplo: ${err instanceof Error ? err.message : 'Error desconocido'}`);
     } finally {
       setIsLoading(false);
     }

@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useRef, useCallback } from 'react';
-import { Loader2, FileSpreadsheet, Upload, X, ArrowLeft } from 'lucide-react';
+import { Loader2, FileSpreadsheet, Upload, ArrowLeft } from 'lucide-react';
 import CompanyList from '@/components/CompanyList';
 import CompanyDetailModal from '@/components/CompanyDetailModal';
 import { parseValoracionesCsvContent } from '@/utils/valoracionesCore';

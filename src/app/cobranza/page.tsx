@@ -91,7 +91,7 @@ export default function CobranzaPage() {
         <ClientDetailModal
           client={selectedClient}
           onClose={() => setSelectedClient(null)}
-          onOpenEmailComposer={(client) => {
+          onOpenEmailComposer={() => {
             setIsEmailComposerOpen(true);
           }}
         />

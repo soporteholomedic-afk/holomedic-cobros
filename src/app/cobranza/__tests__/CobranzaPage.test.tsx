@@ -17,9 +17,7 @@ vi.mock('@/components/Navbar', () => ({
 }));
 
 vi.mock('@/components/FileUpload', () => ({
-  default: ({ onDataLoaded }: { onDataLoaded: (data: unknown) => void }) => (
-    <div data-testid="file-upload-mock">FileUpload</div>
-  ),
+  default: () => <div data-testid="file-upload-mock">FileUpload</div>,
 }));
 
 vi.mock('@/components/DashboardStats', () => ({

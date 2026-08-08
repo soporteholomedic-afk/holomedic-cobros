@@ -225,7 +225,7 @@ export function useUnifiedResults(
         merged.sort((a, b) => a.nombre.localeCompare(b.nombre));
 
         setPeople(merged);
-      } catch (err) {
+      } catch {
         if (!cancelled) {
           setError('Error al cargar los consolidados. Intente nuevamente.');
           setPeople([]);

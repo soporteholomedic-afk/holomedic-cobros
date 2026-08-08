@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { renderHook, waitFor } from '@testing-library/react';
-import type { SpResultRow, OrderRow, UnifiedPerson } from '@/types/sp-result';
+import type { SpResultRow, OrderRow } from '@/types/sp-result';
 
 // ---- Import under test ----
 import { useUnifiedResults } from '../useUnifiedResults';
@@ -51,10 +51,6 @@ function mockFetchResponse(data: unknown, ok = true): Response {
     ok,
     json: () => Promise.resolve(data),
   } as Response;
-}
-
-function mockFetchError(): never {
-  throw new Error('Network error');
 }
 
 beforeEach(() => {

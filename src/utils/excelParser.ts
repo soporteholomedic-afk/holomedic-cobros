@@ -1,5 +1,5 @@
 import * as XLSX from 'xlsx';
-import { ExcelRow, Documento, ClienteGroup, DashboardMetrics, MonedaResumen } from '../types';
+import { Documento, ClienteGroup, DashboardMetrics, MonedaResumen } from '../types';
 
 // Helper to normalize strings for matching headers
 function normalizeHeader(str: string): string {
@@ -35,7 +35,7 @@ export function parseExcelData(arrayBuffer: ArrayBuffer): ClienteGroup[] {
   const worksheet = workbook.Sheets[sheetName];
   
   // Parse rows as raw JSON objects
-  const rawRows = XLSX.utils.sheet_to_json<any>(worksheet, { defval: "" });
+  const rawRows = XLSX.utils.sheet_to_json<Record<string, string | number>>(worksheet, { defval: "" });
   
   if (rawRows.length === 0) return [];
   
@@ -63,7 +63,7 @@ export function parseExcelData(arrayBuffer: ArrayBuffer): ClienteGroup[] {
 
   const clientsMap: Record<string, { razonSocial: string; documentos: Documento[] }> = {};
 
-  rawRows.forEach((row, index) => {
+  rawRows.forEach((row) => {
     // Extract values using dynamic keyMap or fallback to standard names
     const rawCliente = row[keyMap['cliente'] || 'Cliente'];
     if (!rawCliente) return; // Skip empty rows or rows without a client ID
@@ -84,7 +84,7 @@ export function parseExcelData(arrayBuffer: ArrayBuffer): ClienteGroup[] {
     const moneda = String(row[keyMap['moneda'] || 'Mon.'] || 'S/').trim();
     
     // Parse numeric columns safely
-    const parseNum = (val: any): number => {
+    const parseNum = (val: string | number): number => {
       if (typeof val === 'number') return val;
       if (!val) return 0;
       const clean = String(val).replace(/,/g, '').trim();
@@ -215,7 +215,7 @@ export function parseExcelData(arrayBuffer: ArrayBuffer): ClienteGroup[] {
 }
 
 export function calculateMetrics(groups: ClienteGroup[]): DashboardMetrics {
-  let totalClientes = groups.length;
+  const totalClientes = groups.length;
   let clientesDeudores = 0;
   let clientesConSaldoFavor = 0;
   let clientesAlDia = 0;

@@ -22,7 +22,8 @@ export class LoginUseCase {
       permisos: usuario.permisos,
     });
 
-    const { contrasenaHash: _hash, ...usuarioSinHash } = usuario;
+    const { contrasenaHash, ...usuarioSinHash } = usuario;
+    void contrasenaHash;
     return { usuario: usuarioSinHash, token };
   }
 }
