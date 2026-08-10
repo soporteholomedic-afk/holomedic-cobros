@@ -378,6 +378,7 @@ export function EntrevistaOsteomuscularFormPag3() {
                   onMarksChange={(marks) =>
                     setField('columna.areaDistribucionAnotaciones.cervical', marks)
                   }
+                  className="h-full w-full"
                   sizes="144px"
                 />
               </div>
@@ -396,6 +397,7 @@ export function EntrevistaOsteomuscularFormPag3() {
                   onMarksChange={(marks) =>
                     setField('columna.areaDistribucionAnotaciones.dorsalLumboSacra', marks)
                   }
+                  className="h-full w-full"
                   sizes="144px"
                 />
               </div>

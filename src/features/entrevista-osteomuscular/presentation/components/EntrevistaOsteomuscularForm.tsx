@@ -183,7 +183,7 @@ function SeccionAnamnesis({
                           imageHeight={MANOS_IMAGE_HEIGHT}
                           marks={marcas}
                           onMarksChange={onMarcasChange}
-                          className="h-36 p-1"
+                          className="w-full h-36 p-1"
                           sizes="150px"
                         />
                       ) : (
