@@ -41,3 +41,6 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 .codegraph/
+
+# gentle-ai local tooling (machine-local skill registry cache)
+.atl/
