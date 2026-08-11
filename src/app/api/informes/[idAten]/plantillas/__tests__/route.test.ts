@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import mssql from 'mssql';
 
 // ---- Mock setup ----
 
@@ -102,9 +103,9 @@ describe('GET /api/informes/[idAten]/plantillas', () => {
     expect(mockRequestInput).toHaveBeenCalledWith('IncExp', expect.anything(), 0);
   });
 
-  // ---- NULL codDCo -> SP receives literal 'NULL' ----
+  // ---- NULL codDCo -> typed SQL NULL via mssql.Int ----
 
-  it('should serialise a null codDCo as the literal string "NULL" in the SP call', async () => {
+  it('should bind a null codDCo as SQL NULL via mssql.Int (never the string "NULL")', async () => {
     const mockPool = createMockPool();
     mockRequestExecute.mockResolvedValueOnce({ recordset: [] });
     mockGetPool.mockResolvedValueOnce(mockPool);
@@ -116,10 +117,10 @@ describe('GET /api/informes/[idAten]/plantillas', () => {
     );
     await GET(req, { params: Promise.resolve({ idAten: '012110021' }) });
 
-    expect(mockRequestInput).toHaveBeenCalledWith('CodDCo', expect.anything(), 'NULL');
+    expect(mockRequestInput).toHaveBeenCalledWith('CodDCo', mssql.Int, null);
   });
 
-  it('should serialise a numeric codDCo as a numeric string in the SP call', async () => {
+  it('should bind a numeric codDCo as a number via mssql.Int', async () => {
     const mockPool = createMockPool();
     mockRequestExecute.mockResolvedValueOnce({ recordset: [] });
     mockGetPool.mockResolvedValueOnce(mockPool);
@@ -130,10 +131,10 @@ describe('GET /api/informes/[idAten]/plantillas', () => {
     );
     await GET(req, { params: Promise.resolve({ idAten: '012110021' }) });
 
-    expect(mockRequestInput).toHaveBeenCalledWith('CodDCo', expect.anything(), '76');
+    expect(mockRequestInput).toHaveBeenCalledWith('CodDCo', mssql.Int, 76);
   });
 
-  it('should also accept the literal string "null" for codDCo and serialise it as "NULL"', async () => {
+  it('should also accept the literal string "null" for codDCo and bind it as SQL NULL', async () => {
     const mockPool = createMockPool();
     mockRequestExecute.mockResolvedValueOnce({ recordset: [] });
     mockGetPool.mockResolvedValueOnce(mockPool);
@@ -144,7 +145,32 @@ describe('GET /api/informes/[idAten]/plantillas', () => {
     );
     await GET(req, { params: Promise.resolve({ idAten: '012110021' }) });
 
-    expect(mockRequestInput).toHaveBeenCalledWith('CodDCo', expect.anything(), 'NULL');
+    expect(mockRequestInput).toHaveBeenCalledWith('CodDCo', mssql.Int, null);
+  });
+
+  // ---- Regression: null CodDCo must not break the response shape ----
+
+  it('should return 200 with a PlantillaRow[] (no 500) when the order has no CodDCo', async () => {
+    const spRows = [
+      { CodPMe: 100, ArcPla: 'exa_aud', OrdPri: 1, IdePMe: 39053, IdeFMe: null },
+      { CodPMe: 101, ArcPla: 'exa_lab', OrdPri: 2, IdePMe: 39056, IdeFMe: null },
+    ];
+    const mockPool = createMockPool();
+    mockRequestExecute.mockResolvedValueOnce({ recordset: spRows });
+    mockGetPool.mockResolvedValueOnce(mockPool);
+
+    const { GET } = await import('../route');
+    const req = new Request(
+      'http://localhost/api/informes/012110021/plantillas?codCli=3331&emiAfi=1&incExp=0',
+    );
+    const res = await GET(req, { params: Promise.resolve({ idAten: '012110021' }) });
+
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body).toEqual([
+      { codPMe: 100, arcPla: 'exa_aud', ordPri: 1, idePMe: 39053, ideFMe: null },
+      { codPMe: 101, arcPla: 'exa_lab', ordPri: 2, idePMe: 39056, ideFMe: null },
+    ]);
   });
 
   // ---- Validation errors ----
