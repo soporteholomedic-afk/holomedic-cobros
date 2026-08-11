@@ -17,17 +17,23 @@ const ID_ATEN = '01234567';
 const PACIENTE = 'Juan Pérez';
 
 function createMockResponse(ok: boolean, status: number, body?: unknown): Response {
+  // The component only reads `res.ok`, `res.status` and `res.blob()`, so we
+  // build a plain mock instead of a real Response. Constructing a real
+  // `new Response(blob)` throws in jsdom because its Blob lacks `.stream()`.
   if (ok) {
-    return new Response(new Blob(['fake-pdf-content'], { type: 'application/pdf' }), {
+    return {
+      ok,
       status,
       statusText: 'OK',
-    });
+      blob: async () => new Blob(['fake-pdf-content'], { type: 'application/pdf' }),
+    } as unknown as Response;
   }
-  return new Response(JSON.stringify(body ?? {}), {
+  return {
+    ok,
     status,
     statusText: status === 404 ? 'Not Found' : 'Error',
-    headers: { 'Content-Type': 'application/json' },
-  });
+    blob: async () => new Blob([JSON.stringify(body ?? {})], { type: 'application/json' }),
+  } as unknown as Response;
 }
 
 /** Creates a mock anchor element that records click/href/download. */
@@ -193,7 +199,7 @@ describe('DownloadCell', () => {
     vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:http://localhost/fake');
     vi.spyOn(URL, 'revokeObjectURL');
 
-    resolveFetch(new Response(new Blob(['pdf']), { status: 200 }));
+    resolveFetch(createMockResponse(true, 200));
 
     await waitFor(() => {
       expect(button).not.toHaveAttribute('aria-busy', 'true');

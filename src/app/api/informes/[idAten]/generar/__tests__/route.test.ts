@@ -209,9 +209,9 @@ describe('POST /api/informes/[idAten]/generar', () => {
     expect(body.manifest[0]).toMatchObject({ idePMe: 39053, status: 'success' });
   });
 
-  // ---- CLI argv: positional block + --idepme=csv ----
+  // ---- CLI argv: flag block first, then positional block ----
 
-  it('should invoke the CLI with the positional block followed by --idepme=<csv>', async () => {
+  it('should invoke the CLI with the flag block followed by the positional block', async () => {
     const { POST } = await import('../route');
     await POST(buildRequest(validBody()), {
       params: Promise.resolve({ idAten: '012110021' }),
@@ -221,24 +221,25 @@ describe('POST /api/informes/[idAten]/generar', () => {
     const call = mockExecFile.mock.calls[0] as unknown as [string, string[], { windowsHide: boolean; timeout: number }];
     const [exe, args, opts] = call;
     expect(exe).toBe('C:\\fake\\SIGLA.PdfCli.exe');
+    // Flag block first: `--idepme` takes the CSV as a separate arg (the CLI
+    // counts `--idepme=...` as an extra positional, breaking the arg count).
+    expect(args.slice(0, 2)).toEqual(['--idepme', '39053,39056']);
     // Positional block: codEmp codSed codTCl numOrd idAten codCli emiAfi incExp
     //                  outputDir user pass
-    expect(args.slice(0, 8)).toEqual([
+    expect(args.slice(2, 10)).toEqual([
       '1', // codEmp
       '1', // codSed
       '2', // codTCl
       '100200', // numOrd
       '012110021', // idAten (from path)
       '3331', // codCli
-      '1', // emiAfi
-      '0', // incExp
+      'true', // emiAfi
+      'false', // incExp
     ]);
     // No codDCo in this body, so the next slot is outputDir
-    expect(args[8]).toBe('\\\\172.16.10.12\\sigla\\20123456789\\12345678\\012110021\\LEGAJOS');
-    expect(args[9]).toBe('soporte'); // user
-    expect(args[10]).toBe('soporte'); // pass
-    // CSV flag at the tail
-    expect(args[11]).toBe('--idepme=39053,39056');
+    expect(args[10]).toBe('\\\\172.16.10.12\\sigla\\20123456789\\12345678\\012110021\\LEGAJOS');
+    expect(args[11]).toBe('soporte'); // user
+    expect(args[12]).toBe('soporte'); // pass
     expect(opts.windowsHide).toBe(true);
     expect(opts.timeout).toBe(120_000);
   });
@@ -251,9 +252,10 @@ describe('POST /api/informes/[idAten]/generar', () => {
     );
 
     const args = (mockExecFile.mock.calls[0] as unknown as [string, string[], unknown])[1] as string[];
-    // After the 8 mandatory ints, codDCo lands at slot 8, outputDir at 9.
-    expect(args[8]).toBe('76');
-    expect(args[9]).toBe('\\\\172.16.10.12\\sigla\\20123456789\\12345678\\012110021\\LEGAJOS');
+    // Flag block first (2 args), then the 8 mandatory ints; codDCo lands at
+    // slot 10, outputDir at 11.
+    expect(args[10]).toBe('76');
+    expect(args[11]).toBe('\\\\172.16.10.12\\sigla\\20123456789\\12345678\\012110021\\LEGAJOS');
   });
 
   it('should prepend --strict when strict=true', async () => {
@@ -264,6 +266,42 @@ describe('POST /api/informes/[idAten]/generar', () => {
 
     const args = (mockExecFile.mock.calls[0] as unknown as [string, string[], unknown])[1] as string[];
     expect(args[0]).toBe('--strict');
+  });
+
+  it('should invoke the CLI with the canonical argv contract (flags first, bool literals, trailing credentials)', async () => {
+    // Contract pin — verified against SIGLA.PdfCli ArgParser.cs:
+    //   [--strict] --idepme <csv> CodEmp CodSed CodTCl NumOrd IdAten CodCli
+    //   EmiAfi IncExp [CodDCo] OutputDir User Pass
+    // `--idepme` takes its value as a SEPARATE arg (a single `--idepme=...`
+    // token counts as an extra positional in the .NET parser); EmiAfi/IncExp
+    // are bool.Parse'd, so only the literal strings 'true'/'false' are valid.
+    // Any reordering, renaming, or extra/missing arg breaks the .NET arg
+    // count and must fail this test.
+    const { POST } = await import('../route');
+    await POST(
+      buildRequest(validBody({ codDCo: 76, strict: true })),
+      { params: Promise.resolve({ idAten: '012110021' }) },
+    );
+
+    expect(mockExecFile).toHaveBeenCalledTimes(1);
+    const args = (mockExecFile.mock.calls[0] as unknown as [string, string[], unknown])[1] as string[];
+    expect(args).toEqual([
+      '--strict',
+      '--idepme',
+      '39053,39056',
+      '1', // codEmp
+      '1', // codSed
+      '2', // codTCl
+      '100200', // numOrd
+      '012110021', // idAten (from path)
+      '3331', // codCli
+      'true', // emiAfi
+      'false', // incExp
+      '76', // codDCo
+      '\\\\172.16.10.12\\sigla\\20123456789\\12345678\\012110021\\LEGAJOS', // outputDir
+      'soporte', // user
+      'soporte', // pass
+    ]);
   });
 
   // ---- Validation 400s ----
