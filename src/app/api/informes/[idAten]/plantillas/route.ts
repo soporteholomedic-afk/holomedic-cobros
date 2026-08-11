@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import mssql from 'mssql';
 import { getPool } from '@/lib/db';
-import type { PlantillaRow } from '@/types/informe';
+import type { PlantillasQuery, PlantillaRow } from '@/types/informe';
 
 /**
  * GET /api/informes/[idAten]/plantillas?codCli=…&emiAfi=…&incExp=…&codDCo=…
@@ -11,13 +11,14 @@ import type { PlantillaRow } from '@/types/informe';
  *
  *   SP_SEL_PLANTILLAMEDICAXCLIENTE '<idAten>',<codCli>,<emiAfi>,<incExp>,<codDCo-or-NULL>
  *
- * The route is a thin pass-through: it validates the inputs,
- * serialises `null` as the literal `NULL` for `codDCo`, and returns
- * the SP rows mapped to `PlantillaRow[]` ordered by `ordPri`.
+ * The route is a thin pass-through: it validates the inputs, decodes
+ * an absent/`null` `codDCo` to a typed JS `null` (bound as
+ * `mssql.Int`, never the string `'NULL'`), and returns the SP rows
+ * mapped to `PlantillaRow[]` ordered by `ordPri`.
  *
  * Status codes:
  * - 200: list of plantillas (possibly empty).
- * - 400: missing or non-digit `idAten` / `codCli`, or non-integer `emiAfi` / `incExp`.
+ * - 400: missing or non-digit `idAten` / `codCli`, or non-integer `emiAfi` / `incExp` / `codDCo`.
  * - 500: unexpected error.
  */
 export async function GET(
@@ -57,55 +58,44 @@ export async function GET(
       );
     }
 
-    // `codDCo` is optional. When absent or the literal `null`, the
-    // SP receives the string `NULL` instead of a numeric. The query
-    // param contract is "omit the key OR send the literal string
-    // `null`" — both decode to the same `null` payload.
-    const codDCoLiteral =
-      codDCoRaw === '' || codDCoRaw.toLowerCase() === 'null'
-        ? 'NULL'
-        : /^\d+$/.test(codDCoRaw)
-          ? codDCoRaw
-          : null;
-
-    if (codDCoLiteral === null) {
-      return NextResponse.json(
-        { code: 'VALIDATION_ERROR', message: 'codDCo debe ser numérico o ausente.' },
-        { status: 400 },
-      );
+    // `codDCo` is optional. Absent or the literal `null` decode to
+    // SQL `NULL` — bound as `mssql.Int` with a JS `null` so the
+    // driver sends a typed NULL. (The previous implementation
+    // serialised the string `'NULL'` under `mssql.VarChar`, which
+    // mis-typed the parameter and could 500 on orders without a
+    // `CodDCo`.)
+    let codDCo: number | null = null;
+    if (codDCoRaw !== '' && codDCoRaw.toLowerCase() !== 'null') {
+      if (!/^\d+$/.test(codDCoRaw)) {
+        return NextResponse.json(
+          { code: 'VALIDATION_ERROR', message: 'codDCo debe ser numérico o ausente.' },
+          { status: 400 },
+        );
+      }
+      codDCo = Number(codDCoRaw);
     }
 
     const pool = await getPool();
     await pool.connect();
 
-    const spParams = {
-      IdAten: idAten,
-      CodCli: Number(codCliRaw),
-      EmiAfi: Number(emiAfiRaw),
-      IncExp: Number(incExpRaw),
-      CodDCo: codDCoLiteral,
+    const spParams: PlantillasQuery = {
+      idAten,
+      codCli: Number(codCliRaw),
+      emiAfi: Number(emiAfiRaw),
+      incExp: Number(incExpRaw),
+      codDCo,
     };
-
-    // --- AQUÍ SE GENERA LA CONSULTA EN UNA SOLA LÍNEA ---
-    const formatStr = (val: unknown) => (typeof val === 'string' ? `'${val}'` : val ?? 'NULL');
-
-    const sqlInline = `EXEC SP_SEL_PLANTILLAMEDICAXCLIENTE ${formatStr(spParams.IdAten)}, ${spParams.CodCli}, ${spParams.EmiAfi}, ${spParams.IncExp}, ${formatStr(spParams.CodDCo)}`;
-
-    console.log('--- CONSULTA SQL GENERADA ---');
-    console.log(sqlInline);
-    console.log('-----------------------------');
 
     const result = await pool
       .request()
-      .input('IdAten', mssql.VarChar, spParams.IdAten)
-      .input('CodCli', mssql.Int, spParams.CodCli)
-      .input('EmiAfi', mssql.Int, spParams.EmiAfi)
-      .input('IncExp', mssql.Int, spParams.IncExp)
-      .input('CodDCo', mssql.VarChar, spParams.CodDCo)
+      .input('IdAten', mssql.VarChar, spParams.idAten)
+      .input('CodCli', mssql.Int, spParams.codCli)
+      .input('EmiAfi', mssql.Int, spParams.emiAfi)
+      .input('IncExp', mssql.Int, spParams.incExp)
+      .input('CodDCo', mssql.Int, spParams.codDCo)
       .execute('SP_SEL_PLANTILLAMEDICAXCLIENTE');
 
     const rawRows = (result.recordset ?? []) as Array<Record<string, unknown>>;
-    console.table(rawRows);
 
     const plantillas: PlantillaRow[] = rawRows.map((row) => ({
       codPMe: Number(row['CodPMe'] ?? 0),
