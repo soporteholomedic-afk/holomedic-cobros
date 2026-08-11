@@ -235,6 +235,39 @@ describe('PatientsList', () => {
     expect(onViewFiles).toHaveBeenCalledWith(row);
   });
 
+  it('passes the clicked row including NumOrd through onViewFiles', async () => {
+    const row = makeRow({
+      NroDId: '99999999',
+      Pacien: 'PEREZ DIAZ MARIA',
+      NomCom: 'EMPRESA XYZ',
+      DesTCh: 'PERIODICO',
+      NumOrd: 887766,
+    });
+    mockFetch.mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ rows: [row], companies: [] }),
+    });
+
+    const onViewFiles = vi.fn();
+    render(
+      <PatientsList
+        fechaInicio="2026-06-01"
+        fechaFin="2026-06-30"
+        onViewFiles={onViewFiles}
+      />,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByRole('table')).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: /Ver Archivos/i }));
+
+    expect(onViewFiles).toHaveBeenCalledTimes(1);
+    expect(onViewFiles).toHaveBeenCalledWith(row);
+    expect(onViewFiles.mock.calls[0][0].NumOrd).toBe(887766);
+  });
+
   it('renders the expected column headers in order', async () => {
     mockFetch.mockResolvedValue({
       ok: true,
