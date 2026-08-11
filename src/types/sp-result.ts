@@ -25,6 +25,13 @@ export interface SpResultRow {
   SelRes: string;
   EstPag: string;
   NomCom: string;
+  /**
+   * Raw order number (NumOrd) as returned by SP_RPT_MATRIZICCGSA.
+   * Optional because legacy rows may lack it; `number | string` because
+   * raw SQL/JSON may vary by driver. Used to resolve the exact order
+   * behind a row when multiple orders share DNI and FecAte.
+   */
+  NumOrd?: number | string;
   [key: string]: unknown;
 }
 
@@ -65,6 +72,13 @@ export interface OrderRow {
    * (`SP_SEL_INFORMESNOCERRADOS`) can scope the query to the same day.
    */
   FecAte?: string;
+  /**
+   * Raw order number (NumOrd) as returned by SP_SEL_ORDEN. Optional for
+   * forward-compat with legacy fixtures; `number | string` because raw
+   * SQL/JSON may vary by driver. Mirrors `SpResultRow.NumOrd` so the
+   * order matcher can compare keys.
+   */
+  NumOrd?: number | string;
   [key: string]: unknown;
 }
 
