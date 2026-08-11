@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { InformeNoCerradoRow, PlantillaRow } from '@/types/informe';
 
@@ -23,6 +23,7 @@ import { FilesGeneratePane } from '../FilesGeneratePane';
 
 const mockRun = vi.fn();
 const mockReset = vi.fn();
+const mockRefetch = vi.fn();
 
 function makeOrder(overrides: Partial<InformeNoCerradoRow> = {}): InformeNoCerradoRow {
   return {
@@ -49,7 +50,10 @@ function makePlantillas(): PlantillaRow[] {
 beforeEach(() => {
   vi.clearAllMocks();
   // Default: order is ready, plantillas are ready, hook is idle.
-  mockUseInformeOrder.mockReturnValue({ state: { kind: 'ready', row: makeOrder() } });
+  mockUseInformeOrder.mockReturnValue({
+    state: { kind: 'ready', row: makeOrder() },
+    refetch: mockRefetch,
+  });
   mockUsePlantillas.mockReturnValue({ state: { kind: 'ready', items: makePlantillas() } });
   mockUseGenerarPdf.mockReturnValue({
     status: 'idle',
@@ -101,7 +105,10 @@ describe('FilesGeneratePane', () => {
   });
 
   it('renders the order-error block when the lookup fails', () => {
-    mockUseInformeOrder.mockReturnValue({ state: { kind: 'error', message: 'HTTP 500' } });
+    mockUseInformeOrder.mockReturnValue({
+      state: { kind: 'error', message: 'HTTP 500' },
+      refetch: mockRefetch,
+    });
     mockUsePlantillas.mockReturnValue({ state: { kind: 'empty' } });
 
     render(
@@ -393,5 +400,92 @@ describe('FilesGeneratePane', () => {
       screen.getByText('CERTIFICADO MEDICO DE APTITUD (GEMO Y ANEXO 16)'),
     ).toBeInTheDocument();
     expect(screen.getByText('#39183')).toBeInTheDocument();
+  });
+
+  it('shows the zero-supported warning and "0 de 3 exámenes disponibles" when no exam is supported', () => {
+    mockUsePlantillas.mockReturnValue({
+      state: {
+        kind: 'ready',
+        items: [
+          { codPMe: 200, arcPla: 'PRUEBA RAPIDA COVID-19', ordPri: 1, idePMe: 390409, ideFMe: null },
+          { codPMe: 201, arcPla: 'PRUEBA MOLECULAR COVID-19', ordPri: 2, idePMe: 390411, ideFMe: null },
+          { codPMe: 202, arcPla: 'PRUEBA ANTIGENO COVID-19', ordPri: 3, idePMe: 390412, ideFMe: null },
+        ],
+      },
+    });
+
+    render(
+      <FilesGeneratePane
+        ruc="20123456789"
+        dni="12345678"
+        idAten="012110021"
+        fecAte="17/06/2026"
+        onSuccess={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByTestId('files-generate-supported-counter')).toHaveTextContent(
+      '0 de 3 exámenes disponibles',
+    );
+    expect(
+      screen.getByText(
+        'Los exámenes de esta orden (COVID-19) no están disponibles para la generación de archivos.',
+      ),
+    ).toBeInTheDocument();
+    // Generation controls stay disabled — every checkbox is locked.
+    const checkboxes = screen.getAllByRole('checkbox');
+    expect(checkboxes).toHaveLength(3);
+    for (const checkbox of checkboxes) {
+      expect(checkbox).toBeDisabled();
+    }
+  });
+
+  it('shows the supported count with mixed X/Y and no warning when some exams are supported', () => {
+    // Default fixture: 39053 + 39056 supported, 39060 unsupported.
+    render(
+      <FilesGeneratePane
+        ruc="20123456789"
+        dni="12345678"
+        idAten="012110021"
+        fecAte="17/06/2026"
+        onSuccess={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByTestId('files-generate-supported-counter')).toHaveTextContent(
+      '2 de 3 exámenes disponibles',
+    );
+    expect(
+      screen.queryByText(/no están disponibles para la generación de archivos/),
+    ).not.toBeInTheDocument();
+    // Unsupported checkboxes stay disabled while supported ones can be toggled.
+    expect(screen.getByTestId('files-generate-checkbox-39053')).not.toBeDisabled();
+    expect(screen.getByTestId('files-generate-checkbox-39060')).toBeDisabled();
+  });
+
+  it('Reintentar on the order-error block issues a new lookup via refetch', () => {
+    mockUseInformeOrder.mockReturnValue({
+      state: { kind: 'error', message: 'HTTP 500' },
+      refetch: mockRefetch,
+    });
+    mockUsePlantillas.mockReturnValue({ state: { kind: 'empty' } });
+
+    render(
+      <FilesGeneratePane
+        ruc="20123456789"
+        dni="12345678"
+        idAten="012110021"
+        fecAte="17/06/2026"
+        onSuccess={vi.fn()}
+      />,
+    );
+
+    const retryButton = within(screen.getByTestId('files-generate-order-error')).getByRole(
+      'button',
+      { name: 'Reintentar' },
+    );
+    fireEvent.click(retryButton);
+
+    expect(mockRefetch).toHaveBeenCalledTimes(1);
   });
 });
