@@ -37,6 +37,22 @@ export interface PlantillaRow {
   [key: string]: unknown;
 }
 
+/**
+ * Parsed query parameters for `GET /api/informes/[idAten]/plantillas`.
+ *
+ * `codDCo` is optional at the wire level: absent or the literal
+ * `null` decode to SQL `NULL`, bound as `mssql.Int` with a JS `null`
+ * (never the string `'NULL'`, which mis-typed the parameter and could
+ * 500 on orders without a `CodDCo`).
+ */
+export interface PlantillasQuery {
+  idAten: string;
+  codCli: number;
+  emiAfi: number;
+  incExp: number;
+  codDCo: number | null;
+}
+
 export interface GenerarPdfRequest {
   idAten: string;
   codEmp: number;
