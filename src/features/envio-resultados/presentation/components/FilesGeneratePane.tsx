@@ -70,7 +70,7 @@ export function FilesGeneratePane({
   onSuccess,
 }: FilesGeneratePaneProps): ReactElement {
   const trimmedFecAte = fecAte.trim();
-  const { state: orderState } = useInformeOrder(idAten, trimmedFecAte);
+  const { state: orderState, refetch: refetchOrder } = useInformeOrder(idAten, trimmedFecAte);
   const order = orderState.kind === 'ready' ? orderState.row : null;
   const { state: plantillasState } = usePlantillas(idAten, order);
   const { status, result, lastError, attempts, run, reset } = useGenerarPdf();
@@ -176,17 +176,7 @@ export function FilesGeneratePane({
           <ErrorBlock
             message={orderState.message}
             actionLabel="Reintentar"
-            onAction={() => {
-              // Re-arm the lookup by remounting: simplest path is
-              // forcing a state bump in useInformeOrder via its
-              // refetch. We don't expose it here, so we use the
-              // local-selected reset + a window.location nudge
-              // would be heavy; instead trigger a stable
-              // `useGenerarPdf.reset()` so the retry path is
-              // re-armed. The operator can also click "Reintentar"
-              // on the plantillas block below.
-            }}
-            disabled
+            onAction={refetchOrder}
             testId="files-generate-order-error"
           />
         )}
