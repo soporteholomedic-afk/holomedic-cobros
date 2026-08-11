@@ -20,18 +20,11 @@ import {
   emailViewDataFromFiles,
   type EmailViewData,
 } from '@/features/envio-resultados/presentation/helpers/emailViewDataFromFiles';
+import {
+  normalizeFecAte,
+  resolveMatchingOrder,
+} from '@/features/envio-resultados/presentation/helpers/resolveMatchingOrder';
 import type { FileNode } from '@/features/envio-resultados/domain/ports';
-
-function normalizeFecAte(raw: string | undefined): string {
-  if (!raw) return '';
-  if (/^\d{2}\/\d{2}\/\d{4}$/.test(raw)) return raw;
-  const d = new Date(raw);
-  if (isNaN(d.getTime())) return '';
-  const dd = String(d.getUTCDate()).padStart(2, '0');
-  const mm = String(d.getUTCMonth() + 1).padStart(2, '0');
-  const yyyy = d.getUTCFullYear();
-  return `${dd}/${mm}/${yyyy}`;
-}
 
 function ConsolidadosContent() {
   const router = useRouter();
@@ -103,17 +96,10 @@ function ConsolidadosContent() {
 
       const orders = (await res.json()) as OrderRow[];
       const normalizedRowDni = normalizeDni(row.NroDId);
-      const normalizedRowFec = normalizeFecAte(row.FecAte);
 
-      // Find order matching DNI and FecAte (date)
-      let matchingOrder = orders.find(
-        (o) => normalizeDni(o.NroDId) === normalizedRowDni && normalizeFecAte(o.FecAte) === normalizedRowFec
-      );
-
-      // Fallback: match DNI only
-      if (!matchingOrder) {
-        matchingOrder = orders.find((o) => normalizeDni(o.NroDId) === normalizedRowDni);
-      }
+      // Resolve the exact order: explicit NumOrd first, then DNI + FecAte,
+      // then DNI-only (see resolveMatchingOrder for the precedence contract).
+      const matchingOrder = resolveMatchingOrder(orders, row);
 
       if (matchingOrder) {
         setModalState({
