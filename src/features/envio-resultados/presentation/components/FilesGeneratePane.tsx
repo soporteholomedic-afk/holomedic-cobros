@@ -75,6 +75,14 @@ export function FilesGeneratePane({
   const { state: plantillasState } = usePlantillas(idAten, order);
   const { status, result, lastError, attempts, run, reset } = useGenerarPdf();
 
+  // Derived at render (never stored in state): how many of the
+  // resolved plantillas the CLI can actually render. Drives the
+  // "X de Y exámenes disponibles" line and the zero-supported warning.
+  const supportedCount =
+    plantillasState.kind === 'ready'
+      ? plantillasState.items.filter((item) => SUPPORTED_IDEPME.has(item.idePMe)).length
+      : 0;
+
   // Selection state — `Set<number>` of `idePMe`. The pane owns it
   // locally; the parent doesn't need to read it.
   const [selected, setSelected] = useState<Set<number>>(() => new Set());
@@ -209,13 +217,27 @@ export function FilesGeneratePane({
             )}
 
             {plantillasState.kind === 'ready' && (
-              <Checklist
-                items={plantillasState.items}
-                selected={selected}
-                onToggle={toggleIdePMe}
-                disabled={status === 'loading'}
-                supportedIdePMe={SUPPORTED_IDEPME}
-              />
+              <>
+                <p
+                  data-testid="files-generate-supported-counter"
+                  className="text-xs font-medium text-slate-500 dark:text-slate-400"
+                >
+                  {supportedCount} de {plantillasState.items.length} exámenes disponibles
+                </p>
+                {supportedCount === 0 && (
+                  <Notice
+                    kind="warning"
+                    message={`Los exámenes de esta orden (${examFamilyLabel(plantillasState.items)}) no están disponibles para la generación de archivos.`}
+                  />
+                )}
+                <Checklist
+                  items={plantillasState.items}
+                  selected={selected}
+                  onToggle={toggleIdePMe}
+                  disabled={status === 'loading'}
+                  supportedIdePMe={SUPPORTED_IDEPME}
+                />
+              </>
             )}
           </>
         )}
@@ -264,6 +286,30 @@ export function FilesGeneratePane({
 }
 
 // ---- Sub-components (kept inline to stay within the 400-line budget) ----
+
+/**
+ * Best-effort exam-family label for the zero-supported warning.
+ *
+ * Exam templates that belong to the same family share their trailing
+ * wording in `arcPla` (e.g. "PRUEBA RAPIDA COVID-19" and
+ * "PRUEBA MOLECULAR COVID-19" both end with "COVID-19"). We emit the
+ * longest common trailing tag across the exams and fall back to the
+ * first exam name when no shared tag exists.
+ */
+function examFamilyLabel(items: readonly PlantillaRow[]): string {
+  const names = items.map((item) => item.arcPla.trim()).filter((name) => name.length > 0);
+  if (names.length === 0) return 'esta orden';
+  let tag = names[0];
+  for (const name of names.slice(1)) {
+    let k = 0;
+    const max = Math.min(tag.length, name.length);
+    while (k < max && tag[tag.length - 1 - k] === name[name.length - 1 - k]) k += 1;
+    tag = tag.slice(tag.length - k);
+    if (tag === '') break;
+  }
+  const label = tag.replace(/^[\s\-–—:()/]+/, '');
+  return label.length > 0 ? label : names[0];
+}
 
 interface NoticeProps {
   kind: 'info' | 'warning';
