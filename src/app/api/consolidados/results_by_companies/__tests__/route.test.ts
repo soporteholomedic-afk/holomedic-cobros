@@ -79,7 +79,7 @@ describe('GET /api/consolidados/results_by_companies', () => {
 
   // ---- Success: 200 with dates ----
 
-  it('should include date filters in WHERE clause when fechaInicio and fechaFin are provided', async () => {
+  it('should include style-120 date predicates in WHERE clause when fechaInicio and fechaFin are provided', async () => {
     const rows: OrderRow[] = [makeRow()];
     const mockPool = createMockPool();
     mockRequestExecute.mockResolvedValueOnce({ recordset: rows });
@@ -103,8 +103,73 @@ describe('GET /api/consolidados/results_by_companies', () => {
     const whereValue = whereCall[2] as string;
     expect(whereValue).toContain("NomCFa LIKE '%ACME%'");
     expect(whereValue).toContain("NomCom LIKE '%ACME%'");
-    expect(whereValue).toContain("AND FecAte >= '2026-01-01 00:00:00'");
-    expect(whereValue).toContain("AND FecAte <= '2026-06-09 23:59:59'");
+    // Style-120 CONVERT literals — never raw ISO strings or DateTime scalars.
+    expect(whereValue).toContain("AND FecAte >= CONVERT(datetime,'2026-01-01 00:00:00',120)");
+    // Inclusive end: exclusive start of the following day.
+    expect(whereValue).toContain("AND FecAte < CONVERT(datetime,'2026-06-10 00:00:00',120)");
+  });
+
+  // ---- Locale independence: Spanish dmy session ----
+  // `2026-07-02` must mean July 2, 2026 — never February 7. Because
+  // the predicate is an explicit style-120 CONVERT literal inside the
+  // textual WHERE, no scalar `mssql.DateTime` is ever bound and the
+  // session's login language cannot reorder the date.
+
+  it('should emit style-120 literals for 2026-07-02 so a Spanish dmy session cannot read it as Feb 7', async () => {
+    const rows: OrderRow[] = [makeRow()];
+    const mockPool = createMockPool();
+    mockRequestExecute.mockResolvedValueOnce({ recordset: rows });
+    mockGetPool.mockResolvedValueOnce(mockPool);
+
+    const { GET } = await import('../route');
+
+    const req = new Request(
+      'http://localhost/api/consolidados/results_by_companies?companyName=ACME&fechaInicio=2026-07-02&fechaFin=2026-07-02',
+    );
+    const res = await GET(req);
+
+    expect(res.status).toBe(200);
+
+    const whereCall = mockRequestInput.mock.calls.find(
+      (call: unknown[]) => call[0] === 'WHERE',
+    );
+    expect(whereCall).toBeDefined();
+    if (!whereCall) throw new Error('WHERE input not found');
+    const whereValue = whereCall[2] as string;
+    // July 2 00:00:00 start …
+    expect(whereValue).toContain("AND FecAte >= CONVERT(datetime,'2026-07-02 00:00:00',120)");
+    // … and exclusive end at July 3 00:00:00 (next day).
+    expect(whereValue).toContain("AND FecAte < CONVERT(datetime,'2026-07-03 00:00:00',120)");
+    // No raw ISO literal, no DateTime param — nothing left for the dmy session to misread.
+    expect(whereValue).not.toContain("'2026-07-02'");
+  });
+
+  // ---- Validation: non-ISO dates are client errors ----
+
+  it('should return 400 when fechaInicio is not YYYY-MM-DD', async () => {
+    const { GET } = await import('../route');
+
+    const req = new Request(
+      'http://localhost/api/consolidados/results_by_companies?companyName=ACME&fechaInicio=02/07/2026',
+    );
+    const res = await GET(req);
+
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    expect(body.error).toBe('fechaInicio debe tener formato YYYY-MM-DD.');
+  });
+
+  it('should return 400 when fechaFin is not YYYY-MM-DD', async () => {
+    const { GET } = await import('../route');
+
+    const req = new Request(
+      'http://localhost/api/consolidados/results_by_companies?companyName=ACME&fechaFin=2026-13-99',
+    );
+    const res = await GET(req);
+
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    expect(body.error).toBe('fechaFin debe tener formato YYYY-MM-DD.');
   });
 
   // ---- Success: 200 without dates ----
