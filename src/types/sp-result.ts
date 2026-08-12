@@ -164,3 +164,13 @@ export interface PacientePorEmpresaRow {
   puesto: string;
   hasEvaluacion: boolean;
 }
+
+/**
+ * A single active SIGLA location (`dbo.Sede`, exposed via `VW_SEDE`).
+ * Returned by the `/api/consolidados/sedes` endpoint. `nomSed` is the
+ * location name with surrounding whitespace trimmed.
+ */
+export interface SedeRow {
+  codSed: number;
+  nomSed: string;
+}

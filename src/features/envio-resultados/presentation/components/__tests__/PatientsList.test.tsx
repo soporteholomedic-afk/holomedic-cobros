@@ -34,6 +34,7 @@ describe('PatientsList', () => {
       <PatientsList
         fechaInicio="2026-06-01"
         fechaFin="2026-06-30"
+        codSed="1"
         onViewFiles={vi.fn()}
       />,
     );
@@ -52,6 +53,7 @@ describe('PatientsList', () => {
       <PatientsList
         fechaInicio="2026-06-01"
         fechaFin="2026-06-30"
+        codSed="1"
         onViewFiles={vi.fn()}
       />,
     );
@@ -71,6 +73,7 @@ describe('PatientsList', () => {
       <PatientsList
         fechaInicio="2026-06-01"
         fechaFin="2026-06-30"
+        codSed="1"
         onViewFiles={vi.fn()}
       />,
     );
@@ -95,6 +98,7 @@ describe('PatientsList', () => {
       <PatientsList
         fechaInicio="2026-06-01"
         fechaFin="2026-06-30"
+        codSed="1"
         onViewFiles={vi.fn()}
       />,
     );
@@ -127,6 +131,7 @@ describe('PatientsList', () => {
       <PatientsList
         fechaInicio="2026-06-01"
         fechaFin="2026-06-30"
+        codSed="1"
         onViewFiles={vi.fn()}
       />,
     );
@@ -156,6 +161,7 @@ describe('PatientsList', () => {
       <PatientsList
         fechaInicio="2026-06-01"
         fechaFin="2026-06-30"
+        codSed="1"
         onViewFiles={vi.fn()}
       />,
     );
@@ -191,6 +197,7 @@ describe('PatientsList', () => {
       <PatientsList
         fechaInicio="2026-06-01"
         fechaFin="2026-06-30"
+        codSed="1"
         onViewFiles={vi.fn()}
       />,
     );
@@ -221,6 +228,7 @@ describe('PatientsList', () => {
       <PatientsList
         fechaInicio="2026-06-01"
         fechaFin="2026-06-30"
+        codSed="1"
         onViewFiles={onViewFiles}
       />,
     );
@@ -253,6 +261,7 @@ describe('PatientsList', () => {
       <PatientsList
         fechaInicio="2026-06-01"
         fechaFin="2026-06-30"
+        codSed="1"
         onViewFiles={onViewFiles}
       />,
     );
@@ -278,6 +287,7 @@ describe('PatientsList', () => {
       <PatientsList
         fechaInicio="2026-06-01"
         fechaFin="2026-06-30"
+        codSed="1"
         onViewFiles={vi.fn()}
       />,
     );
@@ -308,6 +318,7 @@ describe('PatientsList', () => {
       <PatientsList
         fechaInicio="2026-06-01"
         fechaFin="2026-06-30"
+        codSed="1"
         onViewFiles={vi.fn()}
       />,
     );
@@ -336,6 +347,7 @@ describe('PatientsList', () => {
       <PatientsList
         fechaInicio="2026-06-01"
         fechaFin="2026-06-30"
+        codSed="1"
         onViewFiles={vi.fn()}
       />,
     );
@@ -366,6 +378,7 @@ describe('PatientsList', () => {
       <PatientsList
         fechaInicio="2026-06-01"
         fechaFin="2026-06-30"
+        codSed="1"
         onViewFiles={vi.fn()}
       />,
     );
@@ -393,6 +406,7 @@ describe('PatientsList', () => {
       <PatientsList
         fechaInicio="2026-06-01"
         fechaFin="2026-06-30"
+        codSed="1"
         onViewFiles={vi.fn()}
       />,
     );

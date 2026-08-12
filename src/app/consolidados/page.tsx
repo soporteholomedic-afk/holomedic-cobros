@@ -15,6 +15,7 @@ import { FilesModal } from '@/features/envio-resultados/presentation/components/
 import { normalizeDni } from '@/lib/normalize-dni';
 
 import { useCompanies } from '@/features/envio-resultados/presentation/hooks/useCompanies';
+import { useSedes } from '@/features/envio-resultados/presentation/hooks/useSedes';
 import { EmailEditor } from '@/features/envio-resultados/presentation/components/EmailEditor';
 import {
   emailViewDataFromFiles,
@@ -37,6 +38,7 @@ function ConsolidadosContent() {
   const [fechaFin, setFechaFin] = useState(() =>
     parseDateParam(searchParams.get('fechaFin'), today),
   );
+  const [codSed, setCodSed] = useState(() => searchParams.get('codSed') ?? '1');
   const [view, setView] = useState<ConsolidadosView>('pacientes');
 
   // Modal and loading states
@@ -53,6 +55,7 @@ function ConsolidadosContent() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const { companies } = useCompanies();
+  const { sedes } = useSedes();
   const [emailViewData, setEmailViewData] = useState<EmailViewData | null>(null);
 
   const isInvalidRange =
@@ -66,6 +69,9 @@ function ConsolidadosContent() {
     const params = new URLSearchParams();
     if (fechaInicio) params.set('fechaInicio', fechaInicio);
     if (fechaFin) params.set('fechaFin', fechaFin);
+    // Always encode codSed (empty string = "Todas las sedes") so the
+    // selection survives reloads and back/forward navigation.
+    params.set('codSed', codSed);
     const queryString = params.toString();
     router.push(queryString ? `/consolidados?${queryString}` : '/consolidados');
   };
@@ -88,6 +94,7 @@ function ConsolidadosContent() {
       resultsParams.set('companyName', row.NomCom);
       if (fechaInicio) resultsParams.set('fechaInicio', fechaInicio);
       if (fechaFin) resultsParams.set('fechaFin', fechaFin);
+      if (codSed) resultsParams.set('codSed', codSed);
 
       const res = await fetch(`/api/consolidados/results_by_companies?${resultsParams.toString()}`);
       if (!res.ok) {
@@ -225,6 +232,32 @@ function ConsolidadosContent() {
             className="w-full px-3 py-2 rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-transparent text-sm text-slate-700"
           />
         </div>
+        <div className="flex-1 w-full">
+          <label
+            htmlFor="sede"
+            className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1"
+          >
+            Sede
+          </label>
+          <select
+            id="sede"
+            value={codSed}
+            onChange={(e) => setCodSed(e.target.value)}
+            className="w-full px-3 py-2 rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-transparent text-sm text-slate-700"
+          >
+            <option value="">Todas las sedes</option>
+            {sedes.map((sede) => (
+              <option key={sede.codSed} value={sede.codSed}>
+                {sede.nomSed}
+              </option>
+            ))}
+            {/* Fallback while sedes load or if the fetch failed: keep the
+                current selection represented so the select stays controlled. */}
+            {!sedes.some((s) => String(s.codSed) === codSed) && codSed !== '' && (
+              <option value={codSed}>{codSed}</option>
+            )}
+          </select>
+        </div>
         <button
           type="submit"
           disabled={isInvalidRange}
@@ -246,12 +279,14 @@ function ConsolidadosContent() {
         <PatientsList
           fechaInicio={fechaInicio}
           fechaFin={fechaFin}
+          codSed={codSed}
           onViewFiles={handleViewFiles}
         />
       ) : (
         <CompanySelector
           fechaInicio={fechaInicio}
           fechaFin={fechaFin}
+          codSed={codSed}
           onSelect={handleCompanySelect}
         />
       )}

@@ -13,6 +13,7 @@ import type { SpResultRow } from '@/types/sp-result';
  * Query params (optional):
  *   fechaInicio - Start date for the SP (format: YYYY-MM-DD)
  *   fechaFin    - End date for the SP (format: YYYY-MM-DD)
+ *   codSed      - SIGLA location id (positive integer) to filter by
  *
  * If omitted, NULL is passed to the SP parameters.
  */
@@ -30,6 +31,18 @@ export async function GET(request: Request): Promise<NextResponse> {
       ? (rawFechaFin.includes(' ') ? rawFechaFin : `${rawFechaFin} 23:59:59`)
       : null;
 
+    const rawCodSed = searchParams.get('codSed');
+    let codSed: number | null = null;
+    if (rawCodSed) {
+      if (!/^\d+$/.test(rawCodSed)) {
+        return NextResponse.json(
+          { error: 'El parámetro codSed debe ser un entero válido.' },
+          { status: 400 },
+        );
+      }
+      codSed = parseInt(rawCodSed, 10);
+    }
+
     // ---- Get DB connection pool ----
     const pool = await getPool();
     await pool.connect();
@@ -43,7 +56,7 @@ export async function GET(request: Request): Promise<NextResponse> {
       .input('FecFin', mssql.VarChar, fechaFin)
       .input('CodCli', mssql.Int, null)
       .input('CodDes', mssql.Int, null)
-      .input('CodSed', mssql.Int, null)
+      .input('CodSed', mssql.Int, codSed)
       .execute('SP_RPT_MATRIZICCGSA');
 
     const rows = result.recordset as SpResultRow[];

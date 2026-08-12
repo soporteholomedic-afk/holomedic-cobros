@@ -184,7 +184,7 @@ describe('useConsolidadosResults', () => {
 
     const { result, rerender } = renderHook(
       ({ nonce }: { nonce: number }) =>
-        useConsolidadosResults('2026-06-01', '2026-06-30', nonce),
+        useConsolidadosResults('2026-06-01', '2026-06-30', '', nonce),
       { initialProps: { nonce: 0 } },
     );
 
@@ -204,5 +204,71 @@ describe('useConsolidadosResults', () => {
     const [url1] = mockFetch.mock.calls[0];
     const [url2] = mockFetch.mock.calls[1];
     expect(url1).toBe(url2);
+  });
+
+  it('includes codSed in the URL when provided', async () => {
+    mockFetch.mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ rows: [], companies: [] }),
+    });
+
+    const { result } = renderHook(() =>
+      useConsolidadosResults('2026-06-01', '2026-06-30', '2'),
+    );
+
+    await waitFor(() => {
+      expect(result.current.loading).toBe(false);
+    });
+
+    expect(mockFetch).toHaveBeenCalledTimes(1);
+    const [url] = mockFetch.mock.calls[0];
+    expect(url).toContain('/api/consolidados/results');
+    expect(url).toContain('codSed=2');
+  });
+
+  it('omits codSed from the URL when not provided', async () => {
+    mockFetch.mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ rows: [], companies: [] }),
+    });
+
+    const { result } = renderHook(() =>
+      useConsolidadosResults('2026-06-01', '2026-06-30'),
+    );
+
+    await waitFor(() => {
+      expect(result.current.loading).toBe(false);
+    });
+
+    const [url] = mockFetch.mock.calls[0];
+    expect(url).not.toContain('codSed=');
+  });
+
+  it('re-fetches when codSed changes', async () => {
+    mockFetch.mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ rows: [], companies: [] }),
+    });
+
+    const { result, rerender } = renderHook(
+      ({ sede }: { sede: string }) =>
+        useConsolidadosResults('2026-06-01', '2026-06-30', sede),
+      { initialProps: { sede: '1' } },
+    );
+
+    await waitFor(() => {
+      expect(result.current.loading).toBe(false);
+    });
+
+    expect(mockFetch).toHaveBeenCalledTimes(1);
+
+    rerender({ sede: '2' });
+
+    await waitFor(() => {
+      expect(mockFetch).toHaveBeenCalledTimes(2);
+    });
+
+    const secondCallUrl = mockFetch.mock.calls[1][0] as string;
+    expect(secondCallUrl).toContain('codSed=2');
   });
 });

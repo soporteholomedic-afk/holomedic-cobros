@@ -8,6 +8,7 @@ import { useConsolidadosResults } from '../hooks/useConsolidadosResults';
 export interface PatientsListProps {
   fechaInicio: string;
   fechaFin: string;
+  codSed: string;
   onViewFiles: (row: SpResultRow) => void;
 }
 
@@ -45,6 +46,7 @@ function normalizeText(text: string | null | undefined): string {
 export function PatientsList({
   fechaInicio,
   fechaFin,
+  codSed,
   onViewFiles,
 }: PatientsListProps) {
   const [retryNonce, setRetryNonce] = useState(0);
@@ -52,6 +54,7 @@ export function PatientsList({
   const { rows, loading, error } = useConsolidadosResults(
     fechaInicio,
     fechaFin,
+    codSed,
     retryNonce,
   );
 

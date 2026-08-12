@@ -16,6 +16,7 @@ function normalizeText(text: string | null | undefined): string {
 export interface CompanySelectorProps {
   fechaInicio: string;
   fechaFin: string;
+  codSed: string;
   onSelect: (companyName: string) => void;
 }
 
@@ -36,12 +37,13 @@ export interface CompanySelectorProps {
  *
  * Spec: R-CE-1..2.
  */
-export function CompanySelector({ fechaInicio, fechaFin, onSelect }: CompanySelectorProps) {
+export function CompanySelector({ fechaInicio, fechaFin, codSed, onSelect }: CompanySelectorProps) {
   const [retryNonce, setRetryNonce] = useState(0);
   const [searchTerm, setSearchTerm] = useState('');
   const { companies, loading, error } = useConsolidadosResults(
     fechaInicio,
     fechaFin,
+    codSed,
     retryNonce,
   );
 

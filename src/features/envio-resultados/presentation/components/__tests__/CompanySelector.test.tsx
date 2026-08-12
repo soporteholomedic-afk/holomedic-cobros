@@ -50,6 +50,7 @@ const mockFetch = vi.fn();
 const defaultProps = {
   fechaInicio: '2026-06-01',
   fechaFin: '2026-06-30',
+  codSed: '1',
 };
 
 beforeEach(() => {
@@ -189,6 +190,7 @@ describe('CompanySelector', () => {
       <CompanySelector
         fechaInicio="2026-01-15"
         fechaFin="2026-01-31"
+        codSed="1"
         onSelect={() => {}}
       />,
     );

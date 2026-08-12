@@ -13,6 +13,7 @@ import type { OrderRow } from '@/types/sp-result';
  *   companyName - (required) Company legal name to filter by
  *   fechaInicio - (optional) Start date (format: YYYY-MM-DD)
  *   fechaFin    - (optional) End date (format: YYYY-MM-DD, inclusive)
+ *   codSed      - (optional) SIGLA location id (positive integer) to filter by
  *
  * Dates are inlined into the WHERE clause as style-120
  * `CONVERT(datetime,'YYYY-MM-DD HH:mm:ss',120)` literals. The SP
@@ -58,6 +59,7 @@ function buildWhere(
   companyName: string,
   fechaInicio: string | null,
   fechaFin: string | null,
+  codSed: string | null,
 ): string {
   // Escape single quotes, strip semicolons to prevent SQL injection
   const safe = companyName.replace(/'/g, "''").replace(/;/g, '');
@@ -75,6 +77,10 @@ function buildWhere(
     // Inclusive end: exclusive start of the following day.
     const nextDay = addDays(fechaFin, 1);
     where += ` AND FecAte < CONVERT(datetime,'${nextDay} 00:00:00',120)`;
+  }
+  // Safe by construction: codSed is validated against `^\d+$` in GET.
+  if (codSed) {
+    where += ` AND CodSed = ${codSed}`;
   }
   return where;
 }
@@ -95,8 +101,20 @@ export async function GET(request: Request): Promise<NextResponse> {
     const fechaInicio = searchParams.get('fechaInicio') || null;
     const fechaFin = searchParams.get('fechaFin') || null;
 
+    const rawCodSed = searchParams.get('codSed');
+    let codSed: string | null = null;
+    if (rawCodSed) {
+      if (!/^\d+$/.test(rawCodSed)) {
+        return NextResponse.json(
+          { error: 'El parámetro codSed debe ser un entero válido.' },
+          { status: 400 },
+        );
+      }
+      codSed = rawCodSed;
+    }
+
     // ---- Build sanitized WHERE clause ----
-    const where = buildWhere(companyName, fechaInicio, fechaFin);
+    const where = buildWhere(companyName, fechaInicio, fechaFin, codSed);
 
     // ---- Execute stored procedure ----
     const pool = await getPool();

@@ -172,6 +172,45 @@ describe('GET /api/consolidados/results_by_companies', () => {
     expect(body.error).toBe('fechaFin debe tener formato YYYY-MM-DD.');
   });
 
+  // ---- Query param: codSed ----
+
+  it('should append AND CodSed = 2 to the WHERE when codSed=2 is provided', async () => {
+    const rows: OrderRow[] = [makeRow()];
+    const mockPool = createMockPool();
+    mockRequestExecute.mockResolvedValueOnce({ recordset: rows });
+    mockGetPool.mockResolvedValueOnce(mockPool);
+
+    const { GET } = await import('../route');
+
+    const req = new Request(
+      'http://localhost/api/consolidados/results_by_companies?companyName=ACME&codSed=2',
+    );
+    const res = await GET(req);
+
+    expect(res.status).toBe(200);
+
+    const whereCall = mockRequestInput.mock.calls.find(
+      (call: unknown[]) => call[0] === 'WHERE',
+    );
+    expect(whereCall).toBeDefined();
+    if (!whereCall) throw new Error('WHERE input not found');
+    const whereValue = whereCall[2] as string;
+    expect(whereValue).toContain('AND CodSed = 2');
+  });
+
+  it('should return 400 when codSed is not a valid integer', async () => {
+    const { GET } = await import('../route');
+
+    const req = new Request(
+      'http://localhost/api/consolidados/results_by_companies?companyName=ACME&codSed=abc',
+    );
+    const res = await GET(req);
+
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    expect(body.error).toBe('El parámetro codSed debe ser un entero válido.');
+  });
+
   // ---- Success: 200 without dates ----
 
   it('should build WHERE with only companyName when no dates provided', async () => {

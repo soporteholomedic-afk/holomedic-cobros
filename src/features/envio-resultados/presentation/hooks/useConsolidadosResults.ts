@@ -18,20 +18,24 @@ interface ConsolidadosResultsPayload {
 /**
  * Shared data hook for the `/consolidados` views.
  *
- * Issues a single `GET /api/consolidados/results?fechaInicio=…&fechaFin=…`
+ * Issues a single `GET /api/consolidados/results?fechaInicio=…&fechaFin=…&codSed=…`
  * and returns both the raw `rows` (used by the patients list) and the
  * `companies` projection (used by the company cards). Aborts in-flight
- * requests on unmount or on date change.
+ * requests on unmount or on param change.
  *
- * The optional `retryNonce` parameter lets consumers (e.g. an error-state
- * "Reintentar" button) force a re-fetch without changing the dates. The
- * base contract (return shape per R-HK-3) is preserved.
+ * The optional `codSed` restricts results to a single SIGLA location;
+ * when empty it is omitted from the URL and the API falls back to all
+ * locations. The optional `retryNonce` parameter lets consumers (e.g.
+ * an error-state "Reintentar" button) force a re-fetch without changing
+ * the dates or location. The base contract (return shape per R-HK-3) is
+ * preserved.
  *
  * Spec: R-HK-1..5.
  */
 export function useConsolidadosResults(
   fechaInicio: string,
   fechaFin: string,
+  codSed: string = '',
   retryNonce: number = 0,
 ): UseConsolidadosResultsReturn {
   const [rows, setRows] = useState<SpResultRow[]>([]);
@@ -53,6 +57,7 @@ export function useConsolidadosResults(
     const queryParams = new URLSearchParams();
     if (fechaInicio) queryParams.set('fechaInicio', fechaInicio);
     if (fechaFin) queryParams.set('fechaFin', fechaFin);
+    if (codSed) queryParams.set('codSed', codSed);
 
     const url = `/api/consolidados/results?${queryParams.toString()}`;
 
@@ -76,7 +81,7 @@ export function useConsolidadosResults(
       });
 
     return () => controller.abort();
-  }, [fechaInicio, fechaFin, retryNonce]);
+  }, [fechaInicio, fechaFin, codSed, retryNonce]);
 
   return { rows, companies, loading, error };
 }

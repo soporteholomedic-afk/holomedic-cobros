@@ -152,6 +152,49 @@ describe('GET /api/consolidados/results', () => {
     expect(mockRequestInput).toHaveBeenCalledWith('FecFin', expect.anything(), null);
   });
 
+  // ---- Query param: codSed ----
+
+  it('should pass codSed query param to the SP as the CodSed input', async () => {
+    const rows: SpResultRow[] = [makeRow()];
+    const mockPool = createMockPool();
+    mockRequestExecute.mockResolvedValueOnce({ recordset: rows });
+    mockGetPool.mockResolvedValueOnce(mockPool);
+
+    const { GET } = await import('../route');
+
+    const req = new Request('http://localhost/api/consolidados/results?codSed=2');
+    const res = await GET(req);
+
+    expect(res.status).toBe(200);
+    expect(mockRequestInput).toHaveBeenCalledWith('CodSed', expect.anything(), 2);
+  });
+
+  it('should pass NULL CodSed when codSed query param is absent', async () => {
+    const rows: SpResultRow[] = [makeRow()];
+    const mockPool = createMockPool();
+    mockRequestExecute.mockResolvedValueOnce({ recordset: rows });
+    mockGetPool.mockResolvedValueOnce(mockPool);
+
+    const { GET } = await import('../route');
+
+    const req = new Request('http://localhost/api/consolidados/results');
+    const res = await GET(req);
+
+    expect(res.status).toBe(200);
+    expect(mockRequestInput).toHaveBeenCalledWith('CodSed', expect.anything(), null);
+  });
+
+  it('should return 400 when codSed is not a valid integer', async () => {
+    const { GET } = await import('../route');
+
+    const req = new Request('http://localhost/api/consolidados/results?codSed=abc');
+    const res = await GET(req);
+
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    expect(body.error).toBe('El parámetro codSed debe ser un entero válido.');
+  });
+
   // ---- Error: 500 on connection failure ----
 
   it('should return 500 with user-safe error on connection failure', async () => {
