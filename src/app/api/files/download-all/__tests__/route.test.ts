@@ -303,6 +303,108 @@ describe('GET /api/files/download-all (backward compat)', () => {
       name: '012110597_39183_CERTIFICADO MEDICO DE APTITUD (GEMO Y ANEXO 16).pdf',
     });
   });
+
+  // WU-1.7 (nomenclatura-adicionales, spec S-8/REQ-5) — GET optional
+  // `tipoExamen` query param. Absent → legacy EMO/CAMO entry names;
+  // present → ADICIONAL prefix; garbage → 400.
+  it('keeps EMO entry names when no tipoExamen is sent (S-8 legacy GET)', async () => {
+    const rootNodes: FileSystemNode[] = [
+      createFileNode({
+        name: '012110336EXPED.pdf',
+        sizeBytes: 100,
+        modifiedAt: '2026-01-01T00:00:00.000Z',
+      }),
+    ];
+    const legajosNodes: FileSystemNode[] = [];
+    const mockListFolder = vi
+      .fn<IFileRepository['listFolder']>()
+      .mockImplementation((_ruc, _dni, _idAten, relativePath: string) => {
+        return relativePath === 'LEGAJOS' ? Promise.resolve(legajosNodes) : Promise.resolve(rootNodes);
+      });
+    const { repo, append } = makeZipMockRepo({ listFolder: mockListFolder });
+    __setFileRepositoryForTests(repo);
+
+    const { GET } = await import('../route');
+    const req = new Request(
+      'http://localhost/api/files/download-all?ruc=RUC&dni=12345678&idAten=AT-001' +
+        '&nombrePaciente=JUAN%20PEREZ&empresa=Acme',
+    );
+    const res = await GET(req);
+
+    expect(res.status).toBe(200);
+    expect(append).toHaveBeenCalledWith(expect.anything(), { name: 'EMO-JUAN PEREZ.pdf' });
+  });
+
+  it('renames EXPED entries to ADICIONAL-<nombre>.pdf when tipoExamen=ADICIONALES (GET)', async () => {
+    const rootNodes: FileSystemNode[] = [
+      createFileNode({
+        name: '012110336EXPED.pdf',
+        sizeBytes: 100,
+        modifiedAt: '2026-01-01T00:00:00.000Z',
+      }),
+    ];
+    const legajosNodes: FileSystemNode[] = [];
+    const mockListFolder = vi
+      .fn<IFileRepository['listFolder']>()
+      .mockImplementation((_ruc, _dni, _idAten, relativePath: string) => {
+        return relativePath === 'LEGAJOS' ? Promise.resolve(legajosNodes) : Promise.resolve(rootNodes);
+      });
+    const { repo, append } = makeZipMockRepo({ listFolder: mockListFolder });
+    __setFileRepositoryForTests(repo);
+
+    const { GET } = await import('../route');
+    const req = new Request(
+      'http://localhost/api/files/download-all?ruc=RUC&dni=12345678&idAten=AT-001' +
+        '&nombrePaciente=JUAN%20PEREZ&empresa=Acme&tipoExamen=ADICIONALES',
+    );
+    const res = await GET(req);
+
+    expect(res.status).toBe(200);
+    expect(append).toHaveBeenCalledWith(expect.anything(), { name: 'ADICIONAL-JUAN PEREZ.pdf' });
+  });
+
+  it('renames CLI cert entries to ADICIONAL_<nombre>.pdf when tipoExamen=ADICIONAL (GET)', async () => {
+    const rootNodes: FileSystemNode[] = [
+      createFileNode({
+        name: '012110336_390417_CERTIFICADO MEDICO DE APTITUD (GEMO Y ANEXO 16).pdf',
+        sizeBytes: 100,
+        modifiedAt: '2026-01-01T00:00:00.000Z',
+      }),
+    ];
+    const legajosNodes: FileSystemNode[] = [];
+    const mockListFolder = vi
+      .fn<IFileRepository['listFolder']>()
+      .mockImplementation((_ruc, _dni, _idAten, relativePath: string) => {
+        return relativePath === 'LEGAJOS' ? Promise.resolve(legajosNodes) : Promise.resolve(rootNodes);
+      });
+    const { repo, append } = makeZipMockRepo({ listFolder: mockListFolder });
+    __setFileRepositoryForTests(repo);
+
+    const { GET } = await import('../route');
+    const req = new Request(
+      'http://localhost/api/files/download-all?ruc=RUC&dni=12345678&idAten=AT-001' +
+        '&nombrePaciente=JUAN%20PEREZ&empresa=Acme&tipoExamen=ADICIONAL',
+    );
+    const res = await GET(req);
+
+    expect(res.status).toBe(200);
+    expect(append).toHaveBeenCalledWith(expect.anything(), { name: 'ADICIONAL_JUAN PEREZ.pdf' });
+  });
+
+  it('returns 400 when the GET tipoExamen query is garbage', async () => {
+    __setFileRepositoryForTests(makeMockRepo());
+
+    const { GET } = await import('../route');
+    const req = new Request(
+      'http://localhost/api/files/download-all?ruc=RUC&dni=12345678&idAten=AT-001' +
+        '&nombrePaciente=Juan&empresa=Acme&tipoExamen=RAYOS%20X',
+    );
+    const res = await GET(req);
+
+    expect(res.status).toBe(400);
+    const body = (await res.json()) as { error: string };
+    expect(body.error.toLowerCase()).toContain('tipoexamen');
+  });
 });
 
 // ---- POST tests ----
@@ -503,5 +605,129 @@ describe('POST /api/files/download-all (selection-based)', () => {
     expect(mockCreateReadStream).toHaveBeenCalledWith(
       `${BASE_URL}\\RUC\\12345678\\AT-001\\LEGAJOS\\012345CERT.pdf`,
     );
+  });
+
+  // WU-1.7 (nomenclatura-adicionales, spec S-7/REQ-5) — POST optional
+  // `tipoExamen` FormData field; per-ref `fileRefs[].tipoExamen` wins
+  // over the request-level value; garbage anywhere → 400.
+  it('renames an EXPED zip entry to ADICIONAL-<nombre>.pdf when FormData tipoExamen=ADICIONAL (S-7)', async () => {
+    const { repo, append } = makeZipMockRepo();
+    __setFileRepositoryForTests(repo);
+    const { POST } = await import('../route');
+    const fd = new FormData();
+    fd.append('ruc', 'RUC');
+    fd.append('dni', '12345678');
+    fd.append('idAten', 'AT-001');
+    fd.append('nombrePaciente', 'JUAN PEREZ');
+    fd.append('empresa', 'Acme');
+    fd.append('destino', 'METRO LIMA');
+    fd.append('tipoExamen', 'ADICIONAL');
+    fd.append(
+      'fileRefs',
+      JSON.stringify([
+        { ruc: 'RUC', dni: '12345678', idAten: 'AT-001', path: 'LEGAJOS', name: '012110336EXPED.pdf' },
+      ]),
+    );
+    const req = new Request('http://localhost/api/files/download-all', { method: 'POST', body: fd });
+    const res = await POST(req);
+
+    expect(res.status).toBe(200);
+    // Destino METRO LIMA is present but MUST be omitted for ADICIONAL.
+    expect(append).toHaveBeenCalledWith(expect.anything(), { name: 'ADICIONAL-JUAN PEREZ.pdf' });
+  });
+
+  it('lets a per-ref tipoExamen="ADICIONAL" win over the request-level CAMO', async () => {
+    const { repo, append } = makeZipMockRepo();
+    __setFileRepositoryForTests(repo);
+    const { POST } = await import('../route');
+    const fd = new FormData();
+    fd.append('ruc', 'RUC');
+    fd.append('dni', '12345678');
+    fd.append('idAten', 'AT-001');
+    fd.append('nombrePaciente', 'JUAN PEREZ');
+    fd.append('empresa', 'Acme');
+    fd.append('destino', '');
+    fd.append('tipoExamen', 'CAMO');
+    fd.append(
+      'fileRefs',
+      JSON.stringify([
+        {
+          ruc: 'RUC',
+          dni: '12345678',
+          idAten: 'AT-001',
+          path: 'LEGAJOS',
+          name: '012110336EXPED.pdf',
+          tipoExamen: 'ADICIONAL',
+        },
+      ]),
+    );
+    const req = new Request('http://localhost/api/files/download-all', { method: 'POST', body: fd });
+    const res = await POST(req);
+
+    expect(res.status).toBe(200);
+    expect(append).toHaveBeenCalledWith(expect.anything(), { name: 'ADICIONAL-JUAN PEREZ.pdf' });
+  });
+
+  it('falls back to the request-level signal when a ref carries no tipoExamen', async () => {
+    const { repo, append } = makeZipMockRepo();
+    __setFileRepositoryForTests(repo);
+    const { POST } = await import('../route');
+    const fd = new FormData();
+    fd.append('ruc', 'RUC');
+    fd.append('dni', '12345678');
+    fd.append('idAten', 'AT-001');
+    fd.append('nombrePaciente', 'JUAN PEREZ');
+    fd.append('empresa', 'Acme');
+    fd.append('destino', '');
+    fd.append('tipoExamen', 'ADICIONAL');
+    fd.append(
+      'fileRefs',
+      JSON.stringify([
+        { ruc: 'RUC', dni: '12345678', idAten: 'AT-001', path: 'LEGAJOS', name: '012110336EXPED.pdf' },
+      ]),
+    );
+    const req = new Request('http://localhost/api/files/download-all', { method: 'POST', body: fd });
+    const res = await POST(req);
+
+    expect(res.status).toBe(200);
+    expect(append).toHaveBeenCalledWith(expect.anything(), { name: 'ADICIONAL-JUAN PEREZ.pdf' });
+  });
+
+  it('returns 400 when the FormData tipoExamen is garbage', async () => {
+    __setFileRepositoryForTests(makeMockRepo());
+    const { POST } = await import('../route');
+    const fd = new FormData();
+    fd.append('ruc', 'RUC');
+    fd.append('dni', '12345678');
+    fd.append('idAten', 'AT-001');
+    fd.append('tipoExamen', 'PERIODICO');
+    fd.append('fileRefs', '[]');
+    const req = new Request('http://localhost/api/files/download-all', { method: 'POST', body: fd });
+    const res = await POST(req);
+
+    expect(res.status).toBe(400);
+    const body = (await res.json()) as { error: string };
+    expect(body.error.toLowerCase()).toContain('tipoexamen');
+  });
+
+  it('returns 400 when a per-ref tipoExamen is garbage', async () => {
+    __setFileRepositoryForTests(makeMockRepo());
+    const { POST } = await import('../route');
+    const fd = new FormData();
+    fd.append('ruc', 'RUC');
+    fd.append('dni', '12345678');
+    fd.append('idAten', 'AT-001');
+    fd.append(
+      'fileRefs',
+      JSON.stringify([
+        { ruc: 'RUC', dni: '12345678', idAten: 'AT-001', path: '', name: '012110336EXPED.pdf', tipoExamen: 'BOGUS' },
+      ]),
+    );
+    const req = new Request('http://localhost/api/files/download-all', { method: 'POST', body: fd });
+    const res = await POST(req);
+
+    expect(res.status).toBe(400);
+    const body = (await res.json()) as { error: string };
+    expect(body.error.toLowerCase()).toContain('tipoexamen');
   });
 });

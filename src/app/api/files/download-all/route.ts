@@ -5,6 +5,7 @@ import { UncFileRepository } from '@/features/envio-resultados/infrastructure/fi
 import { getFileRepository } from '@/features/envio-resultados/infrastructure/files/getFileRepository';
 import { renameReadyFile } from '@/features/envio-resultados/domain/ready-files/renameReadyFile';
 import { renameGeneratedCertificate } from '@/features/envio-resultados/domain/generated-files/renameGeneratedCertificate';
+import { normalizeTipoExamen } from '@/features/envio-resultados/domain/ready-files/normalizeTipoExamen';
 import type { SelectedFileRef } from '@/features/envio-resultados/domain/entities';
 import type { Archiver } from 'archiver';
 
@@ -38,6 +39,7 @@ function buildArchive(ruc: string, dni: string, idAten: string, files: Array<{ s
 function isFileRefShape(v: unknown): v is SelectedFileRef {
   if (typeof v !== 'object' || v === null) return false;
   const obj = v as Record<string, unknown>;
+  if (obj.tipoExamen !== undefined && typeof obj.tipoExamen !== 'string') return false;
   return (
     typeof obj.ruc === 'string' &&
     typeof obj.dni === 'string' &&
@@ -50,10 +52,11 @@ function isFileRefShape(v: unknown): v is SelectedFileRef {
 const LEGAJOS_SUBFOLDER = 'LEGAJOS';
 
 /**
- * GET /api/files/download-all?ruc&dni&idAten&nombrePaciente&empresa&destino
+ * GET /api/files/download-all?ruc&dni&idAten&nombrePaciente&empresa&destino&tipoExamen
  *
  * Backward-compat: lists files from the patient root AND LEGAJOS/, renames
- * ready files, and streams the zip.
+ * ready files, and streams the zip. Optional `tipoExamen` (∈ {CAMO, EMO,
+ * ADICIONAL}) drives the entry-name prefix; garbage → 400.
  */
 export async function GET(request: Request): Promise<Response> {
   const { searchParams } = new URL(request.url);
@@ -63,6 +66,8 @@ export async function GET(request: Request): Promise<Response> {
   const nombre = searchParams.get('nombrePaciente') ?? '';
   const empresa = searchParams.get('empresa') ?? '';
   const destino = searchParams.get('destino') ?? '';
+  const rawTipoExamen = searchParams.get('tipoExamen') ?? undefined;
+  const tipoExamen = normalizeTipoExamen(rawTipoExamen);
 
   if (!ruc || !dni || !idAten) {
     return NextResponse.json(
@@ -73,6 +78,12 @@ export async function GET(request: Request): Promise<Response> {
   if (!/^\d+$/.test(dni)) {
     return NextResponse.json(
       { error: 'dni debe ser numérico.' },
+      { status: 400 },
+    );
+  }
+  if (rawTipoExamen !== undefined && rawTipoExamen.trim() !== '' && tipoExamen === undefined) {
+    return NextResponse.json(
+      { error: 'tipoExamen inválido. Debe ser CAMO, EMO o ADICIONAL.' },
       { status: 400 },
     );
   }
@@ -98,10 +109,10 @@ export async function GET(request: Request): Promise<Response> {
   const files: Array<{ sourcePath: string; entryName: string }> = [];
   const addFile = (name: string, subPath: string): void => {
     const sourcePath = buildFileSource(ruc, dni, idAten, subPath, name);
-    const readyName = renameReadyFile({ rawName: name, nombreCompleto: nombre, destino });
+    const readyName = renameReadyFile({ rawName: name, nombreCompleto: nombre, destino, tipoExamen });
     const entryName =
       readyName === name
-        ? renameGeneratedCertificate({ rawName: name, nombreCompleto: nombre })
+        ? renameGeneratedCertificate({ rawName: name, nombreCompleto: nombre, tipoExamen })
         : readyName;
     files.push({ sourcePath, entryName });
   };
@@ -138,6 +149,8 @@ export async function GET(request: Request): Promise<Response> {
  * - nombrePaciente (string, optional)
  * - empresa (string, optional)
  * - destino (string, optional)
+ * - tipoExamen (string, optional, ∈ {CAMO, EMO, ADICIONAL}) — request-level
+ *   signal; a per-ref `fileRefs[].tipoExamen` wins over it.
  * - fileRefs (JSON string of SelectedFileRef[], required)
  */
 export async function POST(request: Request): Promise<Response> {
@@ -154,6 +167,8 @@ export async function POST(request: Request): Promise<Response> {
   const nombre = (formData.get('nombrePaciente') as string | null) ?? '';
   const empresa = (formData.get('empresa') as string | null) ?? '';
   const destino = (formData.get('destino') as string | null) ?? '';
+  const rawTipoExamen = (formData.get('tipoExamen') as string | null) ?? undefined;
+  const requestTipoExamen = normalizeTipoExamen(rawTipoExamen);
   const fileRefsRaw = formData.get('fileRefs') as string | null;
 
   if (!ruc || !dni || !idAten) {
@@ -165,6 +180,12 @@ export async function POST(request: Request): Promise<Response> {
   if (!/^\d+$/.test(dni)) {
     return NextResponse.json(
       { error: 'dni debe ser numérico.' },
+      { status: 400 },
+    );
+  }
+  if (rawTipoExamen !== undefined && rawTipoExamen.trim() !== '' && requestTipoExamen === undefined) {
+    return NextResponse.json(
+      { error: '"tipoExamen" must be CAMO, EMO or ADICIONAL' },
       { status: 400 },
     );
   }
@@ -199,11 +220,20 @@ export async function POST(request: Request): Promise<Response> {
         { status: 400 },
       );
     }
+    const refTipoExamen = normalizeTipoExamen(ref.tipoExamen);
+    if (ref.tipoExamen !== undefined && refTipoExamen === undefined) {
+      return NextResponse.json(
+        { error: `"tipoExamen" must be CAMO, EMO or ADICIONAL: ${ref.tipoExamen}` },
+        { status: 400 },
+      );
+    }
+    // Per-ref signal wins over the request-level one (design decision).
+    const tipoExamen = refTipoExamen ?? requestTipoExamen;
     const sourcePath = buildFileSource(ruc, dni, idAten, ref.path, ref.name);
-    const readyName = renameReadyFile({ rawName: ref.name, nombreCompleto: nombre, destino });
+    const readyName = renameReadyFile({ rawName: ref.name, nombreCompleto: nombre, destino, tipoExamen });
     const entryName =
       readyName === ref.name
-        ? renameGeneratedCertificate({ rawName: ref.name, nombreCompleto: nombre })
+        ? renameGeneratedCertificate({ rawName: ref.name, nombreCompleto: nombre, tipoExamen })
         : readyName;
     files.push({ sourcePath, entryName });
   }
