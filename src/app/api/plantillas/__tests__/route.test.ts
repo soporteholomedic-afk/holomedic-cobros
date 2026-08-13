@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { __setTemplateDbForTests } from '@/features/plantillas-editor/infrastructure/getTemplateDb';
+import { TemplateDefaultConflictError } from '@/features/plantillas-editor/infrastructure/sqlserver';
 import type { ITemplateRepository } from '@/features/plantillas-editor/domain/ports';
 import type { Template } from '@/features/plantillas-editor/domain/entities';
 
@@ -209,6 +210,32 @@ describe('POST /api/plantillas (save)', () => {
     expect(save).toHaveBeenCalledWith(
       expect.objectContaining({ isDefault: true }),
     );
+  });
+
+  it('forwards isDefault:false (unchecking "Por defecto") to the repo', async () => {
+    const save = vi.fn().mockResolvedValue(makeTemplate({ isDefault: false }));
+    __setTemplateDbForTests(makeMockRepo({ save }));
+
+    await POST(makePostRequest(validBody({ id: 'tpl-1', isDefault: false })));
+
+    expect(save).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'tpl-1', isDefault: false }),
+    );
+  });
+
+  it('returns 409 CONFLICT_ERROR when the repo throws a default conflict', async () => {
+    const save = vi.fn().mockRejectedValue(new TemplateDefaultConflictError());
+    __setTemplateDbForTests(makeMockRepo({ save }));
+
+    const response = await POST(makePostRequest(validBody()));
+    const body = await response.json();
+
+    expect(response.status).toBe(409);
+    expect(body).toEqual({
+      success: false,
+      error: expect.any(String),
+      code: 'CONFLICT_ERROR',
+    });
   });
 
   it('returns 400 VALIDATION_ERROR when area is unknown', async () => {

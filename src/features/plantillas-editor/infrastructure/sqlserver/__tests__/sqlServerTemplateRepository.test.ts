@@ -285,12 +285,45 @@ const mockState = vi.hoisted(() => {
     }
   }
 
+  // Transaction-level snapshot/restore so `rollback` actually undoes any
+  // multi-row mutations the transaction performed before failing. This
+  // models real SQL Server semantics for the migration-cleanup rollback
+  // test (destination-clear failure after the origin-clear already mutated
+  // the migrant row).
+  const snapshotTables = () => ({
+    templates: new Map<string, Record<string, unknown>>(
+      [...tables.templates].map(([k, v]) => [k, { ...v }]),
+    ),
+    template_versions: new Map<string, Record<string, unknown>>(
+      [...tables.template_versions].map(([k, v]) => [k, { ...v }]),
+    ),
+  });
+  const restoreTables = (snap: {
+    templates: Map<string, Record<string, unknown>>;
+    template_versions: Map<string, Record<string, unknown>>;
+  }) => {
+    tables.templates.clear();
+    for (const [k, v] of snap.templates) tables.templates.set(k, v);
+    tables.template_versions.clear();
+    for (const [k, v] of snap.template_versions) tables.template_versions.set(k, v);
+  };
+
   // Real classes so the adapter's `new mssql.Transaction(this.pool)` and
   // `new mssql.Request(tx)` work without vitest mock-fn quirks.
   class MockTransactionClass implements MockTransaction {
-    begin = vi.fn().mockResolvedValue(undefined);
+    private snapshot: ReturnType<typeof snapshotTables> | null = null;
+    begin = vi.fn().mockImplementation(() => {
+      this.snapshot = snapshotTables();
+      return Promise.resolve(undefined);
+    });
     commit = vi.fn().mockResolvedValue(undefined);
-    rollback = vi.fn().mockResolvedValue(undefined);
+    rollback = vi.fn().mockImplementation(() => {
+      if (this.snapshot) {
+        restoreTables(this.snapshot);
+        this.snapshot = null;
+      }
+      return Promise.resolve(undefined);
+    });
     request = vi.fn().mockImplementation(() => createMockRequest(() => env));
     constructor() {
       transactions.push(this);
@@ -818,6 +851,274 @@ describe('SqlServerTemplateRepository', () => {
       } finally {
         mockState.setRequestCtor(previous);
       }
+    });
+  });
+
+  describe('save UPDATE SQL shape (type + explicit default)', () => {
+    it('binds type = @type in the snapshot UPDATE and persists the new type (spec: edición feliz con cambio de tipo)', async () => {
+      const repo = makeRepo();
+      const created = await saveSample(repo, { type: 'company' });
+      const txCountBefore = pool.transactions.length;
+
+      const updated = await repo.save({
+        id: created.id,
+        area: 'consolidados',
+        type: 'patient',
+        name: 'Welcome',
+        subject: 'Hello {{paciente}}',
+        bodyHtml: '<p>{{paciente}}</p>',
+      });
+
+      expect(updated.type).toBe('patient');
+      expect((await repo.getById(created.id))?.type).toBe('patient');
+
+      // The snapshot UPDATE must carry `type = @type` bound to the new value.
+      const snapshotUpdate = pool.queryLog.find((e) =>
+        /currentVersionId\s*=\s*@versionId/i.test(e.sql),
+      );
+      expect(snapshotUpdate?.sql).toMatch(/type\s*=\s*@type/i);
+      expect(snapshotUpdate?.inputs.type).toBe('patient');
+      // Omitted isDefault is treated as false — never silently preserved.
+      expect(snapshotUpdate?.inputs.isDefault).toBe(false);
+
+      // One transaction, committed once, never rolled back.
+      const txCountAfter = pool.transactions.length;
+      expect(txCountAfter).toBe(txCountBefore + 1);
+      const lastTx = pool.transactions[txCountAfter - 1]!;
+      expect(lastTx.commit).toHaveBeenCalledTimes(1);
+      expect(lastTx.rollback).not.toHaveBeenCalled();
+    });
+
+    it('persists explicit isDefault:false on update (spec: destildar "Por defecto")', async () => {
+      const repo = makeRepo();
+      const created = await saveSample(repo, { isDefault: true });
+      expect(created.isDefault).toBe(true);
+
+      const updated = await repo.save({
+        id: created.id,
+        area: 'consolidados',
+        type: 'company',
+        name: 'Welcome',
+        subject: 'v2',
+        bodyHtml: '<p>v2</p>',
+        isDefault: false,
+      });
+
+      expect(updated.isDefault).toBe(false);
+      expect((await repo.getById(created.id))?.isDefault).toBe(false);
+      // The snapshot UPDATE binds the received false — it does NOT fall
+      // back to the stored true.
+      const snapshotUpdate = pool.queryLog.find((e) =>
+        /currentVersionId\s*=\s*@versionId/i.test(e.sql),
+      );
+      expect(snapshotUpdate?.inputs.isDefault).toBe(false);
+    });
+  });
+
+  describe('type migration default arbitration ("Limpiar" policy)', () => {
+    it('non-default migrant keeps isDefault false and leaves the destination default untouched (spec: cambio de tipo sin default)', async () => {
+      const repo = makeRepo();
+      const migrant = await saveSample(repo, { name: 'Migrant', type: 'company' });
+      const dest = await saveSample(repo, { name: 'Dest', type: 'patient', isDefault: true });
+
+      const updated = await repo.save({
+        id: migrant.id,
+        area: 'consolidados',
+        type: 'patient',
+        name: 'Migrant',
+        subject: 's',
+        bodyHtml: '<p>b</p>',
+      });
+
+      expect(updated.isDefault).toBe(false);
+      expect((await repo.getById(migrant.id))?.type).toBe('patient');
+      expect((await repo.getById(migrant.id))?.isDefault).toBe(false);
+      expect((await repo.getById(dest.id))?.isDefault).toBe(true);
+      // No destination-clear UPDATE ran for this case.
+      const destClear = pool.queryLog.find((e) => /isDefault = 1 AND deletedAt IS NULL/i.test(e.sql));
+      expect(destClear).toBeUndefined();
+    });
+
+    it('default migrant clears its origin default when the destination has none (spec: default en origen, destino sin default)', async () => {
+      const repo = makeRepo();
+      const migrant = await saveSample(repo, { name: 'Migrant', type: 'company', isDefault: true });
+
+      const updated = await repo.save({
+        id: migrant.id,
+        area: 'consolidados',
+        type: 'patient',
+        name: 'Migrant',
+        subject: 's',
+        bodyHtml: '<p>b</p>',
+      });
+
+      expect(updated.isDefault).toBe(false);
+      expect((await repo.getById(migrant.id))?.type).toBe('patient');
+      expect((await repo.getById(migrant.id))?.isDefault).toBe(false);
+      const companyDefaults = (await repo.listByAreaAndType('consolidados', 'company')).filter(
+        (t) => t.isDefault,
+      );
+      const patientDefaults = (await repo.listByAreaAndType('consolidados', 'patient')).filter(
+        (t) => t.isDefault,
+      );
+      expect(companyDefaults).toHaveLength(0);
+      expect(patientDefaults).toHaveLength(0);
+    });
+
+    it('default migrant + destination default clears BOTH in one transaction (spec: default en ambos lados)', async () => {
+      const repo = makeRepo();
+      const migrant = await saveSample(repo, { name: 'Migrant', type: 'company', isDefault: true });
+      const dest = await saveSample(repo, { name: 'Dest', type: 'patient', isDefault: true });
+      const txCountBefore = pool.transactions.length;
+
+      const updated = await repo.save({
+        id: migrant.id,
+        area: 'consolidados',
+        type: 'patient',
+        name: 'Migrant',
+        subject: 's',
+        bodyHtml: '<p>b</p>',
+      });
+
+      expect(updated.isDefault).toBe(false);
+      expect((await repo.getById(migrant.id))?.type).toBe('patient');
+      expect((await repo.getById(migrant.id))?.isDefault).toBe(false);
+      expect((await repo.getById(dest.id))?.isDefault).toBe(false);
+      // Invariant: never more than one default per (area, type).
+      const companyDefaults = (await repo.listByAreaAndType('consolidados', 'company')).filter(
+        (t) => t.isDefault,
+      );
+      const patientDefaults = (await repo.listByAreaAndType('consolidados', 'patient')).filter(
+        (t) => t.isDefault,
+      );
+      expect(companyDefaults).toHaveLength(0);
+      expect(patientDefaults).toHaveLength(0);
+
+      // Everything happened inside ONE transaction, in policy order:
+      // origin clear → destination clear → version append → snapshot update.
+      const txCountAfter = pool.transactions.length;
+      expect(txCountAfter).toBe(txCountBefore + 1);
+      const lastTx = pool.transactions[txCountAfter - 1]!;
+      expect(lastTx.commit).toHaveBeenCalledTimes(1);
+      expect(lastTx.rollback).not.toHaveBeenCalled();
+      const updates = pool.queryLog.filter((e) => /^UPDATE\s+DBO\.TEMPLATES/i.test(e.sql.trim()));
+      const originClear = updates.findIndex((e) => /WHERE id = @id/i.test(e.sql));
+      const destClear = updates.findIndex((e) => /isDefault = 1 AND deletedAt IS NULL/i.test(e.sql));
+      const snapshotUpdate = updates.findIndex((e) => /currentVersionId\s*=\s*@versionId/i.test(e.sql));
+      expect(originClear).toBeGreaterThanOrEqual(0);
+      expect(destClear).toBeGreaterThan(originClear);
+      expect(snapshotUpdate).toBeGreaterThan(destClear);
+    });
+
+    it('non-default migrant requesting the default becomes the ONLY default of the destination (invariant: >1 never happens)', async () => {
+      const repo = makeRepo();
+      const migrant = await saveSample(repo, { name: 'Migrant', type: 'company' });
+      const dest = await saveSample(repo, { name: 'Dest', type: 'patient', isDefault: true });
+
+      const updated = await repo.save({
+        id: migrant.id,
+        area: 'consolidados',
+        type: 'patient',
+        name: 'Migrant',
+        subject: 's',
+        bodyHtml: '<p>b</p>',
+        isDefault: true,
+      });
+
+      expect(updated.isDefault).toBe(true);
+      expect((await repo.getById(dest.id))?.isDefault).toBe(false);
+      const patientDefaults = (await repo.listByAreaAndType('consolidados', 'patient')).filter(
+        (t) => t.isDefault,
+      );
+      expect(patientDefaults.map((t) => t.id)).toEqual([migrant.id]);
+      const companyDefaults = (await repo.listByAreaAndType('consolidados', 'company')).filter(
+        (t) => t.isDefault,
+      );
+      expect(companyDefaults.length).toBeLessThanOrEqual(1);
+    });
+  });
+
+  describe('type migration transaction rollback (destination-clear failure)', () => {
+    it('rolls back origin + destination cleanup and leaves template/default/version rows unchanged', async () => {
+      const repo = makeRepo();
+      const migrant = await saveSample(repo, { name: 'Migrant', type: 'company', isDefault: true });
+      const dest = await saveSample(repo, { name: 'Dest', type: 'patient', isDefault: true });
+      const versionsBefore = (await repo.listVersions(migrant.id)).length;
+      const txCountBefore = pool.transactions.length;
+
+      // Fail the destination-clear UPDATE AFTER the origin clear already
+      // mutated the migrant (isDefault=0) — rollback must restore it.
+      let injected = false;
+      const FailingRequest = class implements MockRequest {
+        inputs: Record<string, unknown> = {};
+        input = vi.fn().mockImplementation((name: string, value: unknown) => {
+          this.inputs[name] = value;
+          return this;
+        });
+        query = vi.fn().mockImplementation(async (sql: string) => {
+          pool.queryLog.push({ sql, inputs: { ...this.inputs } });
+          if (!injected && /isDefault = 1 AND deletedAt IS NULL/i.test(sql)) {
+            injected = true;
+            throw new Error('destination default clear failed');
+          }
+          return executeSql(sql, this.inputs, pool.tables);
+        });
+        batch = vi.fn().mockResolvedValue({ recordset: [], rowsAffected: [0] });
+        execute = vi.fn().mockResolvedValue({ recordset: [], rowsAffected: 0 });
+      };
+      const previous = mockState.getRequestCtor();
+      mockState.setRequestCtor(FailingRequest as unknown as new () => MockRequest);
+
+      try {
+        await expect(
+          repo.save({
+            id: migrant.id,
+            area: 'consolidados',
+            type: 'patient',
+            name: 'Migrant',
+            subject: 's',
+            bodyHtml: '<p>b</p>',
+          }),
+        ).rejects.toThrow('destination default clear failed');
+
+        const txCountAfter = pool.transactions.length;
+        expect(txCountAfter).toBe(txCountBefore + 1);
+        const lastTx = pool.transactions[txCountAfter - 1]!;
+        expect(lastTx.rollback).toHaveBeenCalled();
+        expect(lastTx.commit).not.toHaveBeenCalled();
+
+        // Rollback restored every row: migrant still company+default,
+        // destination default untouched, no version appended.
+        const migrantFetched = await repo.getById(migrant.id);
+        expect(migrantFetched?.type).toBe('company');
+        expect(migrantFetched?.isDefault).toBe(true);
+        expect((await repo.getById(dest.id))?.isDefault).toBe(true);
+        expect(await repo.listVersions(migrant.id)).toHaveLength(versionsBefore);
+      } finally {
+        mockState.setRequestCtor(previous);
+      }
+    });
+  });
+
+  describe('consumer visibility after migration (EmailEditor contract)', () => {
+    it('type-filtered listing shows a migrated row only under the destination type', async () => {
+      const repo = makeRepo();
+      const t = await saveSample(repo, { name: 'Migrant', type: 'company' });
+
+      await repo.save({
+        id: t.id,
+        area: 'consolidados',
+        type: 'patient',
+        name: 'Migrant',
+        subject: 's',
+        bodyHtml: '<p>b</p>',
+      });
+
+      const company = await repo.listByAreaAndType('consolidados', 'company');
+      const patient = await repo.listByAreaAndType('consolidados', 'patient');
+      expect(company.map((x) => x.id)).not.toContain(t.id);
+      expect(patient.map((x) => x.id)).toContain(t.id);
+      expect(patient.find((x) => x.id === t.id)?.subject).toBe('s');
     });
   });
 

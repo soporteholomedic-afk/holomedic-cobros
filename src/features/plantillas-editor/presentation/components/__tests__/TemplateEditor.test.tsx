@@ -185,6 +185,36 @@ describe('TemplateEditor', () => {
       expect(body.bodyHtml).toBe('<p>Hola {{empresa}}</p>'); // from getHtml mock
     });
 
+    it('sends isDefault:false when "Por defecto" is unchecked (select default → uncheck → save)', async () => {
+      const fetchMock = vi.fn().mockResolvedValue({
+        ok: true,
+        status: 201,
+        json: async () => ({ id: 'tpl-1', currentVersionId: 'v-2' }),
+      });
+      global.fetch = fetchMock as unknown as typeof fetch;
+      const tpl = makeTemplate({ id: 'tpl-1', isDefault: true });
+      await renderEditor({ templates: [tpl] });
+
+      // Select the default template → the checkbox loads checked.
+      fireEvent.change(screen.getByRole('combobox', { name: /plantilla/i }), {
+        target: { value: 'tpl-1' },
+      });
+      const checkbox = screen.getByRole('checkbox', { name: /por defecto/i });
+      expect(checkbox).toBeChecked();
+
+      // Uncheck and save — the payload must carry the explicit false.
+      fireEvent.click(checkbox);
+      fireEvent.click(screen.getByRole('button', { name: /^guardar/i }));
+
+      await waitFor(() => {
+        expect(fetchMock).toHaveBeenCalledTimes(1);
+      });
+      const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+      const body = JSON.parse(init.body as string) as Record<string, unknown>;
+      expect(body.isDefault).toBe(false);
+      expect(body.id).toBe('tpl-1');
+    });
+
     it('surfaces a success message and clears the error on a successful save', async () => {
       global.fetch = vi.fn().mockResolvedValue({
         ok: true,
