@@ -10,7 +10,7 @@ import type {
 } from '../../domain/entities';
 import type { ITemplateRepository } from '../../domain/ports';
 
-import { TemplateNotFoundError } from './errors';
+import { TemplateDefaultConflictError, TemplateNotFoundError } from './errors';
 
 /**
  * Raw `dbo.templates` row shape as returned by mssql. `isDefault` is a
@@ -92,6 +92,26 @@ function rowToVersion(row: VersionRow): TemplateVersion {
 
 function nowIso(): string {
   return new Date().toISOString();
+}
+
+/**
+ * Re-throw `err` as `TemplateDefaultConflictError` when it is a SQL
+ * Server unique-index violation (2601 = duplicate key row, 2627 =
+ * UNIQUE KEY constraint violation) — the signal that a write would
+ * break `idx_templates_default_area_type`. Any other error rethrows
+ * unchanged so callers keep their original type/cause.
+ */
+function mapUniqueViolation(err: unknown): never {
+  if (
+    typeof err === 'object' &&
+    err !== null &&
+    'number' in err &&
+    ((err as { number?: unknown }).number === 2601 ||
+      (err as { number?: unknown }).number === 2627)
+  ) {
+    throw new TemplateDefaultConflictError();
+  }
+  throw err;
 }
 
 /**
@@ -234,26 +254,103 @@ export class SqlServerTemplateRepository implements ITemplateRepository {
       const versionId = randomUUID();
       const now = nowIso();
       const isDefault = input.isDefault ?? false;
+      try {
+        await this.withTransaction(async (tx) => {
+          const req = this.txRequest(tx);
+          req.input('id', id);
+          req.input('area', input.area);
+          req.input('type', input.type);
+          req.input('name', input.name);
+          req.input('subject', input.subject);
+          req.input('bodyHtml', input.bodyHtml);
+          req.input('isDefault', isDefault);
+          req.input('versionId', versionId);
+          req.input('now', now);
+          await req.query(
+            `INSERT INTO dbo.templates
+               (id, area, type, name, subject, bodyHtml, isDefault, currentVersionId, deletedAt, createdAt, updatedAt, ownerId)
+             VALUES
+               (@id, @area, @type, @name, @subject, @bodyHtml, @isDefault, @versionId, NULL, @now, @now, NULL)`,
+          );
+          const verReq = this.txRequest(tx);
+          verReq.input('versionId', versionId);
+          verReq.input('templateId', id);
+          verReq.input('subject', input.subject);
+          verReq.input('bodyHtml', input.bodyHtml);
+          verReq.input('now', now);
+          await verReq.query(
+            `INSERT INTO dbo.template_versions
+               (versionId, templateId, subject, bodyHtml, editedAt, editedBy)
+             VALUES
+               (@versionId, @templateId, @subject, @bodyHtml, @now, NULL)`,
+          );
+        });
+      } catch (err) {
+        mapUniqueViolation(err);
+      }
+      const created = await this.getById(id);
+      if (!created) {
+        // Defensive only — should never happen after a successful insert.
+        throw new Error(`post-write row missing for id=${id}`);
+      }
+      return created;
+    }
+
+    // UPDATE — append a new version row and update the current snapshot in
+    // one transaction. `type` IS persisted: a template's audience can change
+    // (empresa <-> paciente). `isDefault` is persisted verbatim: an omitted
+    // `isDefault` is treated as false — never as "keep the stored value" —
+    // so unchecking "Por defecto" survives a save (open-question
+    // resolution: deterministic, no silent preservation).
+    //
+    // Default arbitration on type migration follows the confirmed "Limpiar"
+    // policy, all inside the same transaction so `idx_templates_default_area_type`
+    // is never violated and no partial cleanup can persist:
+    //  - A default migrant loses its default (isDefault=0) — the origin type
+    //    is forcibly left without a default.
+    //  - If the destination type already has a default (or a new default was
+    //    explicitly requested), that default is cleared too ("limpiar también
+    //    el destino") — the destination stays without a default until one is
+    //    chosen through the existing default flow.
+    //  - A non-default migrant leaves the destination untouched.
+    const existing = await this.getById(input.id);
+    if (!existing) throw new TemplateNotFoundError(input.id);
+    const versionId = randomUUID();
+    const now = nowIso();
+    const requestedDefault = input.isDefault === true;
+    const typeChanged = input.type !== existing.type;
+    // Under "Limpiar" a previously-default migrant always ends as false;
+    // otherwise the final value is the explicit requested value.
+    const finalDefault = typeChanged && existing.isDefault ? false : requestedDefault;
+    try {
       await this.withTransaction(async (tx) => {
-        const req = this.txRequest(tx);
-        req.input('id', id);
-        req.input('area', input.area);
-        req.input('type', input.type);
-        req.input('name', input.name);
-        req.input('subject', input.subject);
-        req.input('bodyHtml', input.bodyHtml);
-        req.input('isDefault', isDefault);
-        req.input('versionId', versionId);
-        req.input('now', now);
-        await req.query(
-          `INSERT INTO dbo.templates
-             (id, area, type, name, subject, bodyHtml, isDefault, currentVersionId, deletedAt, createdAt, updatedAt, ownerId)
-           VALUES
-             (@id, @area, @type, @name, @subject, @bodyHtml, @isDefault, @versionId, NULL, @now, @now, NULL)`,
-        );
+        if (typeChanged && existing.isDefault) {
+          // Policy "Limpiar": the migrant loses its default in the origin type.
+          const clearOrigin = this.txRequest(tx);
+          clearOrigin.input('now', now);
+          clearOrigin.input('id', input.id);
+          await clearOrigin.query(
+            'UPDATE dbo.templates SET isDefault = 0, updatedAt = @now WHERE id = @id',
+          );
+        }
+        if (typeChanged && (existing.isDefault || requestedDefault)) {
+          // "Limpiar también el destino": clear any existing default in the
+          // destination type (never the migrant row itself — the snapshot
+          // UPDATE below sets its final value).
+          const clearDest = this.txRequest(tx);
+          clearDest.input('now', now);
+          clearDest.input('area', input.area);
+          clearDest.input('type', input.type);
+          clearDest.input('migrantId', input.id);
+          await clearDest.query(
+            `UPDATE dbo.templates
+               SET isDefault = 0, updatedAt = @now
+             WHERE area = @area AND type = @type AND isDefault = 1 AND deletedAt IS NULL AND id <> @migrantId`,
+          );
+        }
         const verReq = this.txRequest(tx);
         verReq.input('versionId', versionId);
-        verReq.input('templateId', id);
+        verReq.input('templateId', input.id);
         verReq.input('subject', input.subject);
         verReq.input('bodyHtml', input.bodyHtml);
         verReq.input('now', now);
@@ -263,57 +360,30 @@ export class SqlServerTemplateRepository implements ITemplateRepository {
            VALUES
              (@versionId, @templateId, @subject, @bodyHtml, @now, NULL)`,
         );
+        const updReq = this.txRequest(tx);
+        updReq.input('name', input.name);
+        updReq.input('type', input.type);
+        updReq.input('subject', input.subject);
+        updReq.input('bodyHtml', input.bodyHtml);
+        updReq.input('versionId', versionId);
+        updReq.input('isDefault', finalDefault);
+        updReq.input('now', now);
+        updReq.input('id', input.id);
+        await updReq.query(
+          `UPDATE dbo.templates
+             SET name = @name,
+                 type = @type,
+                 subject = @subject,
+                 bodyHtml = @bodyHtml,
+                 currentVersionId = @versionId,
+                 isDefault = @isDefault,
+                 updatedAt = @now
+           WHERE id = @id`,
+        );
       });
-      const created = await this.getById(id);
-      if (!created) {
-        // Defensive only — should never happen after a successful insert.
-        throw new Error(`post-write row missing for id=${id}`);
-      }
-      return created;
+    } catch (err) {
+      mapUniqueViolation(err);
     }
-
-    // UPDATE — append a new version row, update the current snapshot in
-    // one transaction. area/type are immutable (a template's audience
-    // never changes); name IS updatable. isDefault is persisted only
-    // when the caller passes it so default changes route through
-    // `setDefault` (single transaction).
-    const existing = await this.getById(input.id);
-    if (!existing) throw new TemplateNotFoundError(input.id);
-    const versionId = randomUUID();
-    const now = nowIso();
-    const isDefault = input.isDefault ?? existing.isDefault;
-    await this.withTransaction(async (tx) => {
-      const verReq = this.txRequest(tx);
-      verReq.input('versionId', versionId);
-      verReq.input('templateId', input.id);
-      verReq.input('subject', input.subject);
-      verReq.input('bodyHtml', input.bodyHtml);
-      verReq.input('now', now);
-      await verReq.query(
-        `INSERT INTO dbo.template_versions
-           (versionId, templateId, subject, bodyHtml, editedAt, editedBy)
-         VALUES
-           (@versionId, @templateId, @subject, @bodyHtml, @now, NULL)`,
-      );
-      const updReq = this.txRequest(tx);
-      updReq.input('name', input.name);
-      updReq.input('subject', input.subject);
-      updReq.input('bodyHtml', input.bodyHtml);
-      updReq.input('versionId', versionId);
-      updReq.input('isDefault', isDefault);
-      updReq.input('now', now);
-      updReq.input('id', input.id);
-      await updReq.query(
-        `UPDATE dbo.templates
-           SET name = @name,
-               subject = @subject,
-               bodyHtml = @bodyHtml,
-               currentVersionId = @versionId,
-               isDefault = @isDefault,
-               updatedAt = @now
-         WHERE id = @id`,
-      );
-    });
     const updated = await this.getById(input.id);
     if (!updated) {
       // Defensive only — should never happen after a successful update.

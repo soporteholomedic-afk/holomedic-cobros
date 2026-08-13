@@ -215,7 +215,10 @@ export function TemplateEditor({ areaConfig, templates }: TemplateEditorProps) {
         subject,
         bodyHtml,
         ...(selectedTemplateId ? { id: selectedTemplateId } : {}),
-        ...(isDefault ? { isDefault: true } : {}),
+        // Always send the checkbox state — including `false` when the user
+        // unchecks "Por defecto" — so the repository persists the uncheck
+        // instead of silently keeping the stored default.
+        isDefault,
       });
       setSaveMessage(
         selectedTemplateId

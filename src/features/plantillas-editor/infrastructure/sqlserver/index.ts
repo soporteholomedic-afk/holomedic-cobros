@@ -6,4 +6,4 @@
  */
 export { SqlServerTemplateRepository } from './sqlServerTemplateRepository';
 export { migrate } from './migrate';
-export { TemplateNotFoundError } from './errors';
+export { TemplateNotFoundError, TemplateDefaultConflictError } from './errors';

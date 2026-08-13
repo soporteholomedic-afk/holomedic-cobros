@@ -3,7 +3,7 @@ import { NextResponse } from 'next/server';
 import { SPITCH_TYPES, type SpitchType, type SaveTemplateInput } from '@/features/plantillas-editor/domain/entities';
 import { getAreaConfig } from '@/features/plantillas-editor/infrastructure/areaConfigRegistry';
 import { getTemplateDb } from '@/features/plantillas-editor/infrastructure/getTemplateDb';
-import { TemplateNotFoundError } from '@/features/plantillas-editor/infrastructure/sqlserver';
+import { TemplateDefaultConflictError, TemplateNotFoundError } from '@/features/plantillas-editor/infrastructure/sqlserver';
 import { ListTemplatesUseCase } from '@/features/plantillas-editor/application/listTemplates';
 import { SaveTemplateUseCase } from '@/features/plantillas-editor/application/saveTemplate';
 import { projectToSpitchDTO } from '@/features/plantillas-editor/application/projectToSpitchDTO';
@@ -19,7 +19,7 @@ interface SaveSuccess {
   currentVersionId: string | null;
 }
 
-type ErrorCode = 'VALIDATION_ERROR' | 'INTERNAL_ERROR';
+type ErrorCode = 'VALIDATION_ERROR' | 'INTERNAL_ERROR' | 'CONFLICT_ERROR';
 
 interface ErrorResponse {
   success: false;
@@ -124,7 +124,13 @@ export async function GET(request: Request): Promise<NextResponse<GetResponse>> 
  *
  * On success returns `{ id, currentVersionId }` with HTTP 201. Unknown
  * area / invalid type / missing fields → 400 `VALIDATION_ERROR`.
- * `TemplateNotFoundError` (updating a missing id) → 404. Other repo errors → 500.
+ * `TemplateNotFoundError` (updating a missing id) → 404.
+ * `TemplateDefaultConflictError` (the write would create a second default
+ * for the same area+type) → 409 `CONFLICT_ERROR`. Other repo errors → 500.
+ *
+ * `isDefault` is optional for backward compatibility, but an UPDATE that
+ * omits it is treated as `false` by the repository (deterministic — never
+ * "keep the stored value"). The editor always sends an explicit boolean.
  */
 export async function POST(request: Request): Promise<NextResponse<PostResponse>> {
   try {
@@ -183,6 +189,9 @@ export async function POST(request: Request): Promise<NextResponse<PostResponse>
   } catch (error) {
     if (error instanceof TemplateNotFoundError) {
       return buildError('VALIDATION_ERROR', error.message, 404);
+    }
+    if (error instanceof TemplateDefaultConflictError) {
+      return buildError('CONFLICT_ERROR', error.message, 409);
     }
     const message = error instanceof Error ? error.message : 'An unexpected error occurred';
     console.error('plantillas POST route error:', error);
