@@ -1,3 +1,5 @@
+import type { ReadyFileTipo } from './ready-files/parseReadyFile';
+
 export type SpitchType = 'company' | 'patient';
 
 export interface Company {
@@ -44,13 +46,14 @@ export interface SelectedFileRef {
   name: string;
   /**
    * Optional exam type. Set by the envio wizard when the user picks a
-   * specific CAMO or EMO file per patient; the send-pipeline rename
-   * (`renameReadyFile`) prefers this value over the type inferred from
-   * `name` via `parseReadyFile`. Legacy call sites (e.g. per-row
-   * `Ver Archivos` flow) omit it — the pipeline falls back to
-   * `parseReadyFile(ref.name)`.
+   * specific CAMO, EMO or ADICIONAL file per patient; the send-pipeline
+   * rename (`renameReadyFile`) prefers this value over the type inferred
+   * from `name` via `parseReadyFile`. `'ADICIONAL'` (ADICIONALES
+   * orders) arrives ONLY via this explicit signal — `parseReadyFile`
+   * never infers it. Legacy call sites (e.g. per-row `Ver Archivos`
+   * flow) omit it — the pipeline falls back to `parseReadyFile(ref.name)`.
    */
-  tipoExamen?: 'CAMO' | 'EMO';
+  tipoExamen?: ReadyFileTipo;
 }
 
 export interface Spitch {

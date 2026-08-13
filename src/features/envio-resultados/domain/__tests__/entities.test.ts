@@ -240,6 +240,21 @@ describe('SelectedFileRef entity', () => {
     expect(ref.tipoExamen).toBe('EMO');
   });
 
+  // WU-1.4 (nomenclatura-adicionales, REQ-1): SelectedFileRef.tipoExamen
+  // mirrors the ReadyFileTipo union — ADICIONALES orders stamp 'ADICIONAL'.
+  it('should accept an optional tipoExamen="ADICIONAL" (ADICIONALES-order pick)', () => {
+    const ref: SelectedFileRef = {
+      ruc: '20123456789',
+      dni: '12345678',
+      idAten: 'AT-001',
+      path: 'LEGAJOS',
+      name: '012110336EXPED.pdf',
+      tipoExamen: 'ADICIONAL',
+    };
+
+    expect(ref.tipoExamen).toBe('ADICIONAL');
+  });
+
   it('should stay valid when tipoExamen is omitted (legacy call sites)', () => {
     // The legacy `emailViewDataFromFiles.ts` and per-row Ver Archivos
     // path build refs without `tipoExamen`. They MUST keep compiling
