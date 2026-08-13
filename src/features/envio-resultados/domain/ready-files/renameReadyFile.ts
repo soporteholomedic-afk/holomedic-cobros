@@ -10,10 +10,13 @@ import { parseReadyFile, type ReadyFileTipo } from './parseReadyFile';
  *                      are omitted from the result (no `SIN_NOMBRE`).
  * - `destino`        — project / company. Empty/whitespace segments
  *                      are omitted from the result (no `SIN_DESTINO`).
- * - `tipoExamen`     — optional explicit `'CAMO' | 'EMO'`. When set it
- *                      overrides the tipo inferred from `rawName` via
- *                      `parseReadyFile`. Wizard call sites pass it;
- *                      legacy call sites (download routes) omit it.
+ * - `tipoExamen`     — optional explicit `'CAMO' | 'EMO' | 'ADICIONAL'`.
+ *                      When set it overrides the tipo inferred from
+ *                      `rawName` via `parseReadyFile`. Wizard call
+ *                      sites pass it; legacy call sites (download
+ *                      routes) omit it. `'ADICIONAL'` must come from an
+ *                      explicit signal — `parseReadyFile` never infers
+ *                      it from the CERT/EXPED suffix.
  */
 export interface RenameReadyFileInput {
   rawName: string;
@@ -26,15 +29,19 @@ export interface RenameReadyFileInput {
  * Build the email-attachment delivery name for a ready-to-send file.
  *
  * Format (unified): `{tipo}-{nombreCompleto}-{destino}.pdf`
- *   - `tipo` is `'CAMO' | 'EMO'` (always present — either the
- *     caller-supplied `tipoExamen` or the result of
+ *   - `tipo` is `'CAMO' | 'EMO' | 'ADICIONAL'` (always present —
+ *     either the caller-supplied `tipoExamen` or the result of
  *     `parseReadyFile(rawName)`).
- *   - `nombreCompleto` and `destino` are trimmed + run through
- *     `sanitizeComponent` (Windows-illegal chars → `_`, whitespace
- *     runs collapsed). Segments that are empty after sanitization
- *     are OMITTED — no `SIN_DESTINO` fallback.
+ *   - For `tipo === 'ADICIONAL'` the destino segment is OMITTED — the
+ *     format is `ADICIONAL-{nombreCompleto}.pdf` (ADICIONALES orders
+ *     carry no project segment).
+ *   - `nombreCompleto` (and `destino`, when present) are trimmed + run
+ *     through `sanitizeComponent` (Windows-illegal chars → `_`,
+ *     whitespace runs collapsed). Segments that are empty after
+ *     sanitization are OMITTED — no `SIN_DESTINO` fallback.
  *   - If only `tipo` survives sanitization, the result is
- *     `{tipo}.pdf` (never an empty string).
+ *     `{tipo}.pdf` (never an empty string; for ADICIONAL it is
+ *     `ADICIONAL.pdf` — never a CAMO/EMO name).
  *
  * Non-ready file names (anything `parseReadyFile` rejects) are
  * returned verbatim so the caller's email pipeline still produces a
@@ -48,7 +55,12 @@ export function renameReadyFile(input: RenameReadyFileInput): string {
 
   const tipo: ReadyFileTipo = tipoExamen ?? parsed.tipo;
 
-  const segments = [tipo, nombreCompleto.trim(), destino.trim()]
+  const rawSegments =
+    tipo === 'ADICIONAL'
+      ? [tipo, nombreCompleto.trim()]
+      : [tipo, nombreCompleto.trim(), destino.trim()];
+
+  const segments = rawSegments
     .map(sanitizeComponent)
     .filter((p) => p.length > 0);
 

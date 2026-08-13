@@ -187,4 +187,58 @@ describe('renameReadyFile', () => {
     });
     expect(result).toBe('CAMO-JOSÉ PEÑA-CLÍNICA SANTA ISABEL.pdf');
   });
+
+  // WU-1.3 (nomenclatura-adicionales) — ADICIONAL branch (spec S-1/S-2).
+  // `tipo === 'ADICIONAL'` yields `ADICIONAL-{nombre}.pdf` with the
+  // destino segment OMITTED; empty nombre falls back to `ADICIONAL.pdf`
+  // (never a CAMO/EMO name). No-signal fallback (S-4) is preserved by
+  // the pre-existing EXPED→EMO tests above.
+  it('renames an EXPED ready file to ADICIONAL-{nombre}.pdf with no destino segment (S-1)', () => {
+    const result = renameReadyFile({
+      rawName: '012110336EXPED.pdf',
+      nombreCompleto: 'JUAN PEREZ',
+      destino: 'METRO LIMA',
+      tipoExamen: 'ADICIONAL',
+    });
+    expect(result).toBe('ADICIONAL-JUAN PEREZ.pdf');
+  });
+
+  it('falls back to ADICIONAL.pdf when nombreCompleto is empty (S-2)', () => {
+    const result = renameReadyFile({
+      rawName: '012110336EXPED.pdf',
+      nombreCompleto: '',
+      destino: 'METRO LIMA',
+      tipoExamen: 'ADICIONAL',
+    });
+    expect(result).toBe('ADICIONAL.pdf');
+  });
+
+  it('omits the whitespace-only nombreCompleto for ADICIONAL → ADICIONAL.pdf', () => {
+    const result = renameReadyFile({
+      rawName: '012110336EXPED.pdf',
+      nombreCompleto: '   ',
+      destino: 'METRO LIMA',
+      tipoExamen: 'ADICIONAL',
+    });
+    expect(result).toBe('ADICIONAL.pdf');
+  });
+
+  it('ADICIONAL overrides the CERT→CAMO suffix inference (never emits a CAMO name)', () => {
+    const result = renameReadyFile({
+      rawName: '75618561CERT.pdf',
+      nombreCompleto: 'JUAN PEREZ',
+      destino: 'UNACEM',
+      tipoExamen: 'ADICIONAL',
+    });
+    expect(result).toBe('ADICIONAL-JUAN PEREZ.pdf');
+  });
+
+  it('keeps the EMO fallback when tipoExamen is absent (S-4, REQ-3 — no-signal unchanged)', () => {
+    const result = renameReadyFile({
+      rawName: '012110336EXPED.pdf',
+      nombreCompleto: 'JUAN PEREZ',
+      destino: 'UNACEM',
+    });
+    expect(result).toBe('EMO-JUAN PEREZ-UNACEM.pdf');
+  });
 });
