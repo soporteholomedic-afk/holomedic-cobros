@@ -253,15 +253,18 @@ describe('SendResultsUseCase (PR #2 — file resolver + byte-equal)', () => {
 
   // ---- Limits ----
 
-  it('rejects an empty fileRefs array (VALIDATION_ERROR)', async () => {
+  it('sends without attachments when fileRefs is empty (no read, empty attachments array)', async () => {
     const mockRead = vi.fn<ReadFn>();
     const mockEmail = makeMockEmail();
     const useCase = new SendResultsUseCase(makeMockRepo({ read: mockRead }), mockEmail);
 
     const result = await useCase.execute({ ...DEFAULT_PARAMS, fileRefs: [] });
 
-    expect(result).toMatchObject({ success: false, code: 'VALIDATION_ERROR' });
+    expect(result.success).toBe(true);
     expect(mockRead).not.toHaveBeenCalled();
+    const call = (mockEmail.sendWithAttachments as unknown as ReturnType<typeof vi.fn>).mock
+      .calls[0]?.[0] as { attachments: { filename: string }[] };
+    expect(call.attachments).toHaveLength(0);
   });
 
   it('rejects more than 10 fileRefs before any read (VALIDATION_ERROR)', async () => {
@@ -396,7 +399,7 @@ describe('SendResultsUseCase (PR #2 — file resolver + byte-equal)', () => {
     expect(call.attachments[1]!.filename).toBe('extra.docx');
   });
 
-  it('rejects VALIDATION_ERROR when both fileRefs and localAttachments are empty', async () => {
+  it('sends with an empty attachments array when both fileRefs and localAttachments are empty', async () => {
     const mockRead = vi.fn<ReadFn>();
     const mockEmail = makeMockEmail();
     const useCase = new SendResultsUseCase(makeMockRepo({ read: mockRead }), mockEmail);
@@ -407,8 +410,11 @@ describe('SendResultsUseCase (PR #2 — file resolver + byte-equal)', () => {
       localAttachments: [],
     });
 
-    expect(result).toMatchObject({ success: false, code: 'VALIDATION_ERROR' });
-    expect(mockEmail.sendWithAttachments).not.toHaveBeenCalled();
+    expect(result.success).toBe(true);
+    expect(mockRead).not.toHaveBeenCalled();
+    const call = (mockEmail.sendWithAttachments as unknown as ReturnType<typeof vi.fn>).mock
+      .calls[0]?.[0] as { attachments: { filename: string }[] };
+    expect(call.attachments).toHaveLength(0);
   });
 
   it('sanitizes local attachment filenames before dispatch', async () => {

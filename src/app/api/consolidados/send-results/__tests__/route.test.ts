@@ -287,14 +287,14 @@ describe('POST /api/consolidados/send-results (PR #2 — fileRefs flow)', () => 
     expect(body.error).toMatch(/10/);
   });
 
-  it('returns 400 when an empty fileRefs array is provided', async () => {
+  it('sends successfully when an empty fileRefs array is provided (no attachments)', async () => {
     const fd = buildFileRefsFd([]);
 
     const response = await POST(createMockRequest(fd));
     const body = await response.json();
 
-    expect(response.status).toBe(400);
-    expect(body.code).toBe('VALIDATION_ERROR');
+    expect(response.status).toBe(200);
+    expect(body.success).toBe(true);
   });
 
   // ---- Legacy fallback (clean break per design) ----

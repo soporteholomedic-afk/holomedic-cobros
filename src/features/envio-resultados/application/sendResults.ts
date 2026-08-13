@@ -101,16 +101,10 @@ export class SendResultsUseCase {
   ) {}
 
   async execute(params: SendResultsParams): Promise<SendResultsResult> {
-    const hasLocalFiles = (params.localAttachments?.length ?? 0) > 0;
-
-    // ---- 1. Refs: at least one source ----
-    if (params.fileRefs.length === 0 && !hasLocalFiles) {
-      return {
-        success: false,
-        code: 'VALIDATION_ERROR',
-        error: 'At least one fileRef or local attachment is required',
-      };
-    }
+    // ---- 1. Refs: count cap only ----
+    // Sending without attachments is allowed (the operator confirms
+    // the empty selection in the UI); the loop below simply produces
+    // an empty `attachments` array.
     if (params.fileRefs.length > MAX_FILES) {
       return {
         success: false,
