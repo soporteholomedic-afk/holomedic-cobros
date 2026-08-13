@@ -1295,6 +1295,89 @@ describe('WorkerDetailTable — Unified Table', () => {
   });
 
   // ================================================================
+  // PR-2 (nomenclatura-adicionales) — tipoExamen plumbing
+  // Spec REQ-6: WorkerDetailTable MUST forward the ficha's DesTCh
+  // (tipoExamen) to FilesModal. REQ-9/S-15: fixtures model ADICIONALES
+  // via tipoExamen, independent of proyecto.
+  // ================================================================
+
+  it('should pass ficha.tipoExamen to FilesModal — ADICIONALES happy path (REQ-6)', () => {
+    const person = makeUnifiedPerson({
+      fichas: [makeFicha({ tipoExamen: 'ADICIONALES' })],
+    });
+    mockUseUnifiedResults.mockReturnValue({
+      people: [person],
+      loading: false,
+      error: null,
+    });
+
+    render(<WorkerDetailTable {...DEFAULT_PROPS} />);
+    fireEvent.click(screen.getByRole('button', { name: /Ver Archivos/ }));
+
+    const lastProps =
+      mockFilesModalProps.mock.calls[mockFilesModalProps.mock.calls.length - 1]?.[0];
+    expect(lastProps?.['tipoExamen']).toBe('ADICIONALES');
+  });
+
+  it('should pass tipoExamen="" to FilesModal for a ficha without DesTCh (no signal → CAMO/EMO path)', () => {
+    const person = makeUnifiedPerson({
+      fichas: [makeFicha({ tipoExamen: '' })],
+    });
+    mockUseUnifiedResults.mockReturnValue({
+      people: [person],
+      loading: false,
+      error: null,
+    });
+
+    render(<WorkerDetailTable {...DEFAULT_PROPS} />);
+    fireEvent.click(screen.getByRole('button', { name: /Ver Archivos/ }));
+
+    const lastProps =
+      mockFilesModalProps.mock.calls[mockFilesModalProps.mock.calls.length - 1]?.[0];
+    expect(lastProps?.['tipoExamen']).toBe('');
+  });
+
+  it('should pass tipoExamen to FilesModal from the expanded sub-ficha (REQ-6, sub-row path)', async () => {
+    const person = makeUnifiedPerson({
+      dni: '11111111',
+      nombre: 'PERSON MULTI',
+      empresa: 'MULTI CO',
+      fichas: [
+        makeFicha({ idAten: 'ATE-100', nroRuc: '20000000001', nomCFa: 'PRIMARY CO' }),
+        makeFicha({ idAten: 'ATE-200', nroRuc: '20000000002', nomCFa: 'SECONDARY CO', tipoExamen: 'ADICIONALES' }),
+      ],
+    });
+
+    mockUseUnifiedResults.mockReturnValue({
+      people: [person],
+      loading: false,
+      error: null,
+    });
+
+    render(<WorkerDetailTable {...DEFAULT_PROPS} />);
+
+    // Expand the chevron.
+    const rows = screen.getAllByRole('row');
+    const dataRow = rows[1];
+    const chevron = dataRow.querySelector('button')!;
+    fireEvent.click(chevron);
+
+    await waitFor(() => {
+      expect(screen.getByText('ATE-200')).toBeInTheDocument();
+    });
+
+    const buttons = screen.getAllByRole('button', { name: /Ver Archivos/ });
+    expect(buttons).toHaveLength(2);
+    mockFilesModalProps.mockClear();
+    fireEvent.click(buttons[1]);
+
+    const lastProps =
+      mockFilesModalProps.mock.calls[mockFilesModalProps.mock.calls.length - 1]?.[0];
+    expect(lastProps?.['idAten']).toBe('ATE-200');
+    expect(lastProps?.['tipoExamen']).toBe('ADICIONALES');
+  });
+
+  // ================================================================
   // CAMO/EMO Status Indicator Tests
   // ================================================================
 

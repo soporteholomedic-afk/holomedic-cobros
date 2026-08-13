@@ -344,6 +344,11 @@ export function WorkerDetailTable({ companyName, fechaInicio, fechaFin }: Worker
               // future lookup SP can scope the query to the same day.
               // `''` for worker-sourced fichas (no order row).
               fecAte={ficha?.fecAte ?? ''}
+              // PR-2 (nomenclatura-adicionales) — forward the DesTCh
+              // exam-type signal so pane hrefs + zip carry
+              // `&tipoExamen=`/FormData for ADICIONALES orders
+              // (REQ-6). `''` for worker-only rows (no DesTCh).
+              tipoExamen={ficha?.tipoExamen ?? ''}
               onClose={closeFilesModal}
               onSend={handleSendFromModal}
             />
