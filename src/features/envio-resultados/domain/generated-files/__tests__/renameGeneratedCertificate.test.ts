@@ -89,4 +89,54 @@ describe('renameGeneratedCertificate', () => {
     });
     expect(result).toBe('informe.pdf');
   });
+
+  // WU-1.5 (nomenclatura-adicionales, spec S-3): an explicit
+  // `tipoExamen: 'ADICIONAL'` switches the prefix to `ADICIONAL_` and
+  // takes precedence over the raw-name CAMO inference. No input (or
+  // CAMO/EMO input) keeps `CAMO_` exactly as before.
+  it('renames a CLI certificate to ADICIONAL_<nombre>.pdf when tipoExamen="ADICIONAL" (S-3)', () => {
+    const result = renameGeneratedCertificate({
+      rawName: '012110336_390417_CERTIFICADO MEDICO DE APTITUD (GEMO Y ANEXO 16).pdf',
+      nombreCompleto: 'JUAN PEREZ',
+      tipoExamen: 'ADICIONAL',
+    });
+    expect(result).toBe('ADICIONAL_JUAN PEREZ.pdf');
+  });
+
+  it('ADICIONAL input takes precedence over the raw-name CAMO inference (never CAMO_)', () => {
+    const result = renameGeneratedCertificate({
+      rawName: '012110336_390417_CERTIFICADO MEDICO DE APTITUD (GEMO Y ANEXO 16).pdf',
+      nombreCompleto: 'JUAN PEREZ',
+      tipoExamen: 'ADICIONAL',
+    });
+    expect(result).not.toContain('CAMO_');
+    expect(result).toBe('ADICIONAL_JUAN PEREZ.pdf');
+  });
+
+  it('keeps CAMO_ output when tipoExamen is "CAMO" (only ADICIONAL changes the prefix)', () => {
+    const result = renameGeneratedCertificate({
+      rawName: '012110597_39183_CERTIFICADO MEDICO DE APTITUD (GEMO Y ANEXO 16).pdf',
+      nombreCompleto: 'JUAN PEREZ',
+      tipoExamen: 'CAMO',
+    });
+    expect(result).toBe('CAMO_JUAN PEREZ.pdf');
+  });
+
+  it('keeps CAMO_ output when tipoExamen is "EMO" (generated certs are CAMO-only)', () => {
+    const result = renameGeneratedCertificate({
+      rawName: '012110597_39183_CERTIFICADO MEDICO DE APTITUD (GEMO Y ANEXO 16).pdf',
+      nombreCompleto: 'JUAN PEREZ',
+      tipoExamen: 'EMO',
+    });
+    expect(result).toBe('CAMO_JUAN PEREZ.pdf');
+  });
+
+  it('still requires a CLI certificate name for the ADICIONAL branch (non-cert passes through)', () => {
+    const result = renameGeneratedCertificate({
+      rawName: '012110597_39053_EVALUACION OFTALMOLOGICA.pdf',
+      nombreCompleto: 'JUAN PEREZ',
+      tipoExamen: 'ADICIONAL',
+    });
+    expect(result).toBe('012110597_39053_EVALUACION OFTALMOLOGICA.pdf');
+  });
 });
