@@ -314,6 +314,7 @@ export function FilesModal({
                   ruc={ruc}
                   dni={dni}
                   idAten={idAten}
+                  nombrePaciente={nombrePaciente}
                   onSelect={handleSelectFromReady}
                   selectedRefs={selectedRefs}
                   onToggle={handleToggleFile}
@@ -328,6 +329,7 @@ export function FilesModal({
                   ruc={ruc}
                   dni={dni}
                   idAten={idAten}
+                  nombrePaciente={nombrePaciente}
                   selectedRefs={selectedRefs}
                   onToggle={handleToggleFile}
                 />

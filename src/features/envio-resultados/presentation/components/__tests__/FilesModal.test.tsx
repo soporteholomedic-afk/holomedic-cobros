@@ -213,7 +213,7 @@ describe('FilesModal', () => {
     const informeLink = informeRow!.querySelector('a');
     expect(informeLink).toHaveAttribute(
       'href',
-      '/api/files/download?ruc=RUC-1&dni=12345678&idAten=AT-001&filename=informe.pdf',
+      '/api/files/download?ruc=RUC-1&dni=12345678&idAten=AT-001&filename=informe.pdf&nombreCompleto=Juan%20P%C3%A9rez',
     );
 
     const fotoRow = screen.getByText('foto.jpg').closest('li');
@@ -221,7 +221,49 @@ describe('FilesModal', () => {
     const fotoLink = fotoRow!.querySelector('a');
     expect(fotoLink).toHaveAttribute(
       'href',
-      '/api/files/download?ruc=RUC-1&dni=12345678&idAten=AT-001&filename=foto.jpg',
+      '/api/files/download?ruc=RUC-1&dni=12345678&idAten=AT-001&filename=foto.jpg&nombreCompleto=Juan%20P%C3%A9rez',
+    );
+  });
+
+  it('ready-pane download href includes nombreCompleto when the modal has a patient name', () => {
+    const readyFiles: FileNode[] = [
+      createFileNode({
+        name: '75618561CERT.pdf',
+        sizeBytes: 1024,
+        modifiedAt: '2026-06-01T00:00:00.000Z',
+      }),
+    ];
+    mockUseFileTree.mockReturnValue({
+      viewState: readyView('', []),
+      selectionState: { kind: 'none' },
+      navigate: vi.fn(),
+      goUp: vi.fn(),
+      selectFile: vi.fn(),
+      closeSelection: vi.fn(),
+      refetch: vi.fn(),
+    });
+    mockUseReadyFiles.mockReturnValue({ state: { kind: 'ready', files: readyFiles }, refetch: vi.fn() });
+
+    render(
+      <FilesModal
+        ruc="RUC-1"
+        dni="12345678"
+        idAten="AT-001"
+        nombrePaciente="Juan Pérez"
+        empresa="Acme Corp"
+        destino=""
+        onClose={vi.fn()}
+      />,
+    );
+
+    // Default tab is the ready pane — the row is on screen without
+    // needing a tab switch.
+    const readyRow = screen.getByText('75618561CERT.pdf').closest('li');
+    expect(readyRow).toBeTruthy();
+    const readyLink = readyRow!.querySelector('a');
+    expect(readyLink).toHaveAttribute(
+      'href',
+      '/api/files/download?ruc=RUC-1&dni=12345678&idAten=AT-001&path=LEGAJOS&filename=75618561CERT.pdf&nombreCompleto=Juan%20P%C3%A9rez',
     );
   });
 

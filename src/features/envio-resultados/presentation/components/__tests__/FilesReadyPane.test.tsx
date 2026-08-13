@@ -60,6 +60,40 @@ describe('FilesReadyPane', () => {
     );
   });
 
+  it('appends &nombreCompleto= to the download href when nombrePaciente is provided', () => {
+    render(
+      <FilesReadyPane
+        {...baseProps}
+        nombrePaciente="JUAN PEREZ"
+        state={{ kind: 'ready', files: sampleFiles }}
+      />,
+    );
+
+    const certRow = screen.getByText('75618561CERT.pdf').closest('li');
+    const certLink = certRow!.querySelector('a');
+    expect(certLink).toHaveAttribute(
+      'href',
+      '/api/files/download?ruc=RUC-1&dni=12345678&idAten=AT-001&path=LEGAJOS&filename=75618561CERT.pdf&nombreCompleto=JUAN%20PEREZ',
+    );
+  });
+
+  it('omits &nombreCompleto= when nombrePaciente is an empty string', () => {
+    render(
+      <FilesReadyPane
+        {...baseProps}
+        nombrePaciente=""
+        state={{ kind: 'ready', files: sampleFiles }}
+      />,
+    );
+
+    const certRow = screen.getByText('75618561CERT.pdf').closest('li');
+    const certLink = certRow!.querySelector('a');
+    expect(certLink).toHaveAttribute(
+      'href',
+      '/api/files/download?ruc=RUC-1&dni=12345678&idAten=AT-001&path=LEGAJOS&filename=75618561CERT.pdf',
+    );
+  });
+
   it('calls onSelect with the FileNode when the Visualizar button is clicked', () => {
     const onSelect = vi.fn();
     render(

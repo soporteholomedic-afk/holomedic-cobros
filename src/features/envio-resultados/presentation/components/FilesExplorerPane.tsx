@@ -31,6 +31,12 @@ export interface FilesExplorerPaneProps {
   dni: string;
   idAten: string;
   /**
+   * Patient full name, forwarded to the download route so CLI generated
+   * certificates download as `CAMO_{nombre}.pdf`. When empty, the
+   * `&nombreCompleto=` query param is omitted entirely.
+   */
+  nombrePaciente?: string;
+  /**
    * Set of fileRefs currently selected. Each ref is
    * `"${currentPath}::${file.name}"`. When `undefined` the pane
    * defaults every row to `checked` — preserves backward compatibility
@@ -70,12 +76,14 @@ function currentFolderLabel(props: FilesExplorerPaneProps): string {
 
 function downloadHref(props: FilesExplorerPaneProps, name: string): string {
   const path = props.viewState.kind === 'ready' ? props.viewState.currentPath : '';
+  const nombre = props.nombrePaciente ?? '';
   return (
     `/api/files/download?ruc=${encodeURIComponent(props.ruc)}` +
     `&dni=${encodeURIComponent(props.dni)}` +
     `&idAten=${encodeURIComponent(props.idAten)}` +
     (path === '' ? '' : `&path=${encodeURIComponent(path)}`) +
-    `&filename=${encodeURIComponent(name)}`
+    `&filename=${encodeURIComponent(name)}` +
+    (nombre === '' ? '' : `&nombreCompleto=${encodeURIComponent(nombre)}`)
   );
 }
 

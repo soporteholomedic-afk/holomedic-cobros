@@ -139,6 +139,71 @@ describe('GET /api/files/download', () => {
     expect(disposition.startsWith('attachment')).toBe(true);
   });
 
+  it('renames a CLI generated certificate to CAMO_<nombre> in the Content-Disposition when nombreCompleto is provided', async () => {
+    const fakeStream = new Readable({ read() {} });
+    const mockRead = vi.fn<() => Promise<NodeJS.ReadableStream>>().mockResolvedValue(fakeStream);
+    __setFileRepositoryForTests(makeMockRepo({ read: mockRead }));
+
+    const { GET } = await import('../route');
+    const req = new Request(
+      'http://localhost/api/files/download?ruc=RUC&dni=12345678&idAten=AT-001' +
+        '&filename=012110597_39183_CERTIFICADO%20MEDICO%20DE%20APTITUD%20(GEMO%20Y%20ANEXO%2016).pdf' +
+        '&nombreCompleto=JUAN%20PEREZ',
+    );
+    const res = await GET(req);
+
+    expect(res.status).toBe(200);
+    expect(res.headers.get('Content-Disposition')).toBe(
+      'attachment; filename="CAMO_JUAN PEREZ.pdf"',
+    );
+    expect(res.headers.get('Content-Type')).toBe('application/pdf');
+    // The on-disk file name is untouched — only the delivery header changes.
+    expect(mockRead).toHaveBeenCalledWith(
+      'RUC',
+      '12345678',
+      'AT-001',
+      '',
+      '012110597_39183_CERTIFICADO MEDICO DE APTITUD (GEMO Y ANEXO 16).pdf',
+    );
+  });
+
+  it('does NOT rename a CLI generated certificate when nombreCompleto is empty', async () => {
+    const fakeStream = new Readable({ read() {} });
+    const mockRead = vi.fn<() => Promise<NodeJS.ReadableStream>>().mockResolvedValue(fakeStream);
+    __setFileRepositoryForTests(makeMockRepo({ read: mockRead }));
+
+    const { GET } = await import('../route');
+    const req = new Request(
+      'http://localhost/api/files/download?ruc=RUC&dni=12345678&idAten=AT-001' +
+        '&filename=012110597_39183_CERTIFICADO%20MEDICO%20DE%20APTITUD%20(GEMO%20Y%20ANEXO%2016).pdf',
+    );
+    const res = await GET(req);
+
+    expect(res.status).toBe(200);
+    expect(res.headers.get('Content-Disposition')).toBe(
+      'attachment; filename="012110597_39183_CERTIFICADO MEDICO DE APTITUD (GEMO Y ANEXO 16).pdf"',
+    );
+  });
+
+  it('does NOT rename a CLI non-certificate file even when nombreCompleto is provided', async () => {
+    const fakeStream = new Readable({ read() {} });
+    const mockRead = vi.fn<() => Promise<NodeJS.ReadableStream>>().mockResolvedValue(fakeStream);
+    __setFileRepositoryForTests(makeMockRepo({ read: mockRead }));
+
+    const { GET } = await import('../route');
+    const req = new Request(
+      'http://localhost/api/files/download?ruc=RUC&dni=12345678&idAten=AT-001' +
+        '&filename=012110597_39053_EVALUACION%20OFTALMOLOGICA.pdf' +
+        '&nombreCompleto=JUAN%20PEREZ',
+    );
+    const res = await GET(req);
+
+    expect(res.status).toBe(200);
+    expect(res.headers.get('Content-Disposition')).toBe(
+      'attachment; filename="012110597_39053_EVALUACION OFTALMOLOGICA.pdf"',
+    );
+  });
+
   describe('?path= subfolder support (PR-B1)', () => {
     it('passes the ?path= argument to the repository for subfolder downloads', async () => {
       const fakeStream = new Readable({ read() {} });

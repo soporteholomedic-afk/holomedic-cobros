@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { getFileRepository } from '@/features/envio-resultados/infrastructure/files/getFileRepository';
 import { sanitizeDownloadName, sanitizeFolderPath } from '@/lib/sanitize-filename';
 import { renameReadyFile } from '@/features/envio-resultados/domain/ready-files/renameReadyFile';
+import { renameGeneratedCertificate } from '@/features/envio-resultados/domain/generated-files/renameGeneratedCertificate';
 
 /** Minimal content-type lookup by extension. */
 function mimeFromExt(name: string): string {
@@ -88,7 +89,11 @@ export async function GET(request: Request): Promise<Response> {
     return NextResponse.json({ error: 'filename inválido.' }, { status: 400 });
   }
 
-  const deliveryName = renameReadyFile({ rawName: safe, nombreCompleto, destino });
+  const readyName = renameReadyFile({ rawName: safe, nombreCompleto, destino });
+  const deliveryName =
+    readyName === safe
+      ? renameGeneratedCertificate({ rawName: safe, nombreCompleto })
+      : readyName;
 
   try {
     const stream = await getFileRepository().read(ruc, dni, idAten, safePath, safe);

@@ -18,6 +18,12 @@ export interface FilesReadyPaneProps {
   ruc: string;
   dni: string;
   idAten: string;
+  /**
+   * Patient full name, forwarded to the download route so CLI generated
+   * certificates download as `CAMO_{nombre}.pdf`. When empty, the
+   * `&nombreCompleto=` query param is omitted entirely.
+   */
+  nombrePaciente?: string;
   onSelect: (file: FileNode) => void;
   /**
    * Set of fileRefs currently selected. Each ref is `"::" + file.name`
@@ -38,12 +44,14 @@ function formatSize(bytes: number): string {
 }
 
 function downloadHref(props: FilesReadyPaneProps, name: string): string {
+  const nombre = props.nombrePaciente ?? '';
   return (
     `/api/files/download?ruc=${encodeURIComponent(props.ruc)}` +
     `&dni=${encodeURIComponent(props.dni)}` +
     `&idAten=${encodeURIComponent(props.idAten)}` +
     `&path=${encodeURIComponent(READY_FOLDER)}` +
-    `&filename=${encodeURIComponent(name)}`
+    `&filename=${encodeURIComponent(name)}` +
+    (nombre === '' ? '' : `&nombreCompleto=${encodeURIComponent(nombre)}`)
   );
 }
 

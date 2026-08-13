@@ -187,6 +187,38 @@ describe('FilesExplorerPane', () => {
     );
   });
 
+  it('appends &nombreCompleto= to the download href only when nombrePaciente is non-empty', () => {
+    const pdf = createFileNode({ name: 'informe.pdf', sizeBytes: 100, modifiedAt: '2026-01-01T00:00:00.000Z' });
+    render(
+      <FilesExplorerPane
+        {...baseProps}
+        nombrePaciente="JUAN PEREZ"
+        viewState={makeReady([pdf])}
+      />,
+    );
+    const link = screen.getByText(/Descargar/).closest('a');
+    expect(link).toHaveAttribute(
+      'href',
+      '/api/files/download?ruc=RUC&dni=12345678&idAten=AT-001&filename=informe.pdf&nombreCompleto=JUAN%20PEREZ',
+    );
+  });
+
+  it('omits &nombreCompleto= when nombrePaciente is an empty string', () => {
+    const pdf = createFileNode({ name: 'informe.pdf', sizeBytes: 100, modifiedAt: '2026-01-01T00:00:00.000Z' });
+    render(
+      <FilesExplorerPane
+        {...baseProps}
+        nombrePaciente=""
+        viewState={makeReady([pdf])}
+      />,
+    );
+    const link = screen.getByText(/Descargar/).closest('a');
+    expect(link).toHaveAttribute(
+      'href',
+      '/api/files/download?ruc=RUC&dni=12345678&idAten=AT-001&filename=informe.pdf',
+    );
+  });
+
   it('non-previewable .docx row renders ONLY a Descargar link (no Visualizar)', () => {
     const docx = createFileNode({ name: 'plan.docx', sizeBytes: 100, modifiedAt: '2026-01-01T00:00:00.000Z' });
     render(

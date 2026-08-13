@@ -4,6 +4,7 @@ import { sanitizeZipName } from '@/lib/sanitize-filename';
 import { UncFileRepository } from '@/features/envio-resultados/infrastructure/files/UncFileRepository';
 import { getFileRepository } from '@/features/envio-resultados/infrastructure/files/getFileRepository';
 import { renameReadyFile } from '@/features/envio-resultados/domain/ready-files/renameReadyFile';
+import { renameGeneratedCertificate } from '@/features/envio-resultados/domain/generated-files/renameGeneratedCertificate';
 import type { SelectedFileRef } from '@/features/envio-resultados/domain/entities';
 import type { Archiver } from 'archiver';
 
@@ -97,7 +98,11 @@ export async function GET(request: Request): Promise<Response> {
   const files: Array<{ sourcePath: string; entryName: string }> = [];
   const addFile = (name: string, subPath: string): void => {
     const sourcePath = buildFileSource(ruc, dni, idAten, subPath, name);
-    const entryName = renameReadyFile({ rawName: name, nombreCompleto: nombre, destino });
+    const readyName = renameReadyFile({ rawName: name, nombreCompleto: nombre, destino });
+    const entryName =
+      readyName === name
+        ? renameGeneratedCertificate({ rawName: name, nombreCompleto: nombre })
+        : readyName;
     files.push({ sourcePath, entryName });
   };
 
@@ -195,7 +200,11 @@ export async function POST(request: Request): Promise<Response> {
       );
     }
     const sourcePath = buildFileSource(ruc, dni, idAten, ref.path, ref.name);
-    const entryName = renameReadyFile({ rawName: ref.name, nombreCompleto: nombre, destino });
+    const readyName = renameReadyFile({ rawName: ref.name, nombreCompleto: nombre, destino });
+    const entryName =
+      readyName === ref.name
+        ? renameGeneratedCertificate({ rawName: ref.name, nombreCompleto: nombre })
+        : readyName;
     files.push({ sourcePath, entryName });
   }
 

@@ -38,6 +38,27 @@ function makeMockRepo(
   };
 }
 
+/**
+ * Mock repo that also exposes `zipAll` so the route uses the fake
+ * archive and we can assert the `{ name: entryName }` options passed
+ * to `archive.append` — the zip entry names are not visible anywhere
+ * else in the response.
+ */
+function makeZipMockRepo(
+  overrides: { listFolder?: ReturnType<typeof vi.fn<IFileRepository['listFolder']>> } = {},
+): { repo: IFileRepository; append: ReturnType<typeof vi.fn> } {
+  const listFolderFn = overrides.listFolder ?? vi.fn<IFileRepository['listFolder']>().mockResolvedValue([]);
+  const append = vi.fn();
+  const finalize = vi.fn().mockResolvedValue(undefined);
+  const archive = { append, finalize };
+  const repo = {
+    listFolder: listFolderFn,
+    read: vi.fn().mockResolvedValue({} as NodeJS.ReadableStream),
+    zipAll: () => ({ archive, folder: '' }),
+  };
+  return { repo, append };
+}
+
 function emptyReadable() {
   return new Readable({ read() {} });
 }
@@ -225,6 +246,63 @@ describe('GET /api/files/download-all (backward compat)', () => {
     // One file from root, zero from LEGAJOS
     expect(mockCreateReadStream).toHaveBeenCalledTimes(1);
   });
+
+  it('renames a CLI generated certificate zip entry to CAMO_<nombre> when nombrePaciente is provided (GET)', async () => {
+    const rootNodes: FileSystemNode[] = [
+      createFileNode({
+        name: '012110597_39183_CERTIFICADO MEDICO DE APTITUD (GEMO Y ANEXO 16).pdf',
+        sizeBytes: 100,
+        modifiedAt: '2026-01-01T00:00:00.000Z',
+      }),
+    ];
+    const legajosNodes: FileSystemNode[] = [];
+    const mockListFolder = vi
+      .fn<IFileRepository['listFolder']>()
+      .mockImplementation((_ruc, _dni, _idAten, relativePath: string) => {
+        return relativePath === 'LEGAJOS' ? Promise.resolve(legajosNodes) : Promise.resolve(rootNodes);
+      });
+    const { repo, append } = makeZipMockRepo({ listFolder: mockListFolder });
+    __setFileRepositoryForTests(repo);
+
+    const { GET } = await import('../route');
+    const req = new Request(
+      'http://localhost/api/files/download-all?ruc=RUC&dni=12345678&idAten=AT-001' +
+        '&nombrePaciente=JUAN%20PEREZ&empresa=Acme',
+    );
+    const res = await GET(req);
+
+    expect(res.status).toBe(200);
+    expect(append).toHaveBeenCalledWith(expect.anything(), { name: 'CAMO_JUAN PEREZ.pdf' });
+  });
+
+  it('keeps the CLI generated certificate name unchanged when nombrePaciente is missing (GET)', async () => {
+    const rootNodes: FileSystemNode[] = [
+      createFileNode({
+        name: '012110597_39183_CERTIFICADO MEDICO DE APTITUD (GEMO Y ANEXO 16).pdf',
+        sizeBytes: 100,
+        modifiedAt: '2026-01-01T00:00:00.000Z',
+      }),
+    ];
+    const legajosNodes: FileSystemNode[] = [];
+    const mockListFolder = vi
+      .fn<IFileRepository['listFolder']>()
+      .mockImplementation((_ruc, _dni, _idAten, relativePath: string) => {
+        return relativePath === 'LEGAJOS' ? Promise.resolve(legajosNodes) : Promise.resolve(rootNodes);
+      });
+    const { repo, append } = makeZipMockRepo({ listFolder: mockListFolder });
+    __setFileRepositoryForTests(repo);
+
+    const { GET } = await import('../route');
+    const req = new Request(
+      'http://localhost/api/files/download-all?ruc=RUC&dni=12345678&idAten=AT-001&empresa=Acme',
+    );
+    const res = await GET(req);
+
+    expect(res.status).toBe(200);
+    expect(append).toHaveBeenCalledWith(expect.anything(), {
+      name: '012110597_39183_CERTIFICADO MEDICO DE APTITUD (GEMO Y ANEXO 16).pdf',
+    });
+  });
 });
 
 // ---- POST tests ----
@@ -365,6 +443,36 @@ describe('POST /api/files/download-all (selection-based)', () => {
     expect(mockCreateReadStream).toHaveBeenCalledWith(
       `${BASE_URL}\\RUC\\12345678\\AT-001\\LEGAJOS\\012110429CERT.pdf`,
     );
+  });
+
+  it('renames a CLI generated certificate zip entry to CAMO_<nombre> when nombrePaciente is provided (POST)', async () => {
+    const { repo, append } = makeZipMockRepo();
+    __setFileRepositoryForTests(repo);
+    const { POST } = await import('../route');
+    const fd = new FormData();
+    fd.append('ruc', 'RUC');
+    fd.append('dni', '12345678');
+    fd.append('idAten', 'AT-001');
+    fd.append('nombrePaciente', 'JUAN PEREZ');
+    fd.append('empresa', 'Acme');
+    fd.append('destino', '');
+    fd.append(
+      'fileRefs',
+      JSON.stringify([
+        {
+          ruc: 'RUC',
+          dni: '12345678',
+          idAten: 'AT-001',
+          path: '',
+          name: '012110597_39183_CERTIFICADO MEDICO DE APTITUD (GEMO Y ANEXO 16).pdf',
+        },
+      ]),
+    );
+    const req = new Request('http://localhost/api/files/download-all', { method: 'POST', body: fd });
+    const res = await POST(req);
+
+    expect(res.status).toBe(200);
+    expect(append).toHaveBeenCalledWith(expect.anything(), { name: 'CAMO_JUAN PEREZ.pdf' });
   });
 
   it('streams multiple selected files from different paths', async () => {
