@@ -32,7 +32,7 @@ function normalizeText(text: string | null | undefined): string {
  * - One `<tr>` per `SpResultRow` — no dedup by DNI (the SP returns
  *   multiple rows for the same patient when there are multiple
  *   examinations, e.g. PREOCUPACIONAL + ADICIONALES).
- * - Columns: DNI, Nombre, Empresa, Tipo de examen, Fecha, Aptitud, Acción.
+ * - Columns: DNI, Nombre, Empresa, Proyecto, Tipo de examen, Fecha, Aptitud, Acción.
  * - Sorted by `Pacien` ascending using `localeCompare`.
  * - Empty cells render the em-dash (U+2014), matching `PersonRow` in
  *   `WorkerDetailTable.tsx`.
@@ -128,7 +128,7 @@ export function PatientsList({
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
           <input
             type="text"
-            placeholder="Buscar por DNI, nombre, empresa, tipo de examen..."
+            placeholder="Buscar por DNI, nombre, empresa, proyecto..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             className="w-full pl-10 pr-4 py-2 rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-transparent text-sm text-slate-700"
@@ -149,6 +149,7 @@ export function PatientsList({
                 <th className="px-4 py-3 font-medium text-slate-600">DNI</th>
                 <th className="px-4 py-3 font-medium text-slate-600">Nombre</th>
                 <th className="px-4 py-3 font-medium text-slate-600">Empresa</th>
+                <th className="px-4 py-3 font-medium text-slate-600">Proyecto</th>
                 <th className="px-4 py-3 font-medium text-slate-600">Tipo de Examen</th>
                 <th className="px-4 py-3 font-medium text-slate-600">Fecha</th>
                 <th className="px-4 py-3 font-medium text-slate-600">Aptitud</th>
@@ -164,6 +165,7 @@ export function PatientsList({
                   <td className="px-4 py-3 text-slate-600">{cellValue(row.NroDId)}</td>
                   <td className="px-4 py-3 text-slate-800">{cellValue(row.Pacien)}</td>
                   <td className="px-4 py-3 text-slate-600">{cellValue(row.NomCom)}</td>
+                  <td className="px-4 py-3 text-slate-600">{cellValue(row.DesDes)}</td>
                   <td className="px-4 py-3 text-slate-600">{cellValue(row.DesTCh)}</td>
                   <td className="px-4 py-3 text-slate-600">{cellValue(row.FecAte)}</td>
                   <td className="px-4 py-3 text-slate-600">{cellValue(row.Condic)}</td>

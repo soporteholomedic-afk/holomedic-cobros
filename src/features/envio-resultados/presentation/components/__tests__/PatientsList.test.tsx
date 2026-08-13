@@ -19,6 +19,7 @@ function makeRow(overrides: Partial<SpResultRow> = {}): SpResultRow {
     NroDId: '12345678',
     Pacien: 'GARCIA LOPEZ JUAN',
     NomCom: 'ACME S.A.',
+    DesDes: 'UNACEM',
     DesTCh: 'PREOCUPACIONAL',
     FecAte: '2026-06-15',
     Condic: 'APTO',
@@ -186,7 +187,7 @@ describe('PatientsList', () => {
 
   it('renders em-dash (U+2014) for empty string cells', async () => {
     const rows: SpResultRow[] = [
-      makeRow({ NomCom: '', DesTCh: '', FecAte: '', Condic: '' }),
+      makeRow({ NomCom: '', DesDes: '', DesTCh: '', FecAte: '', Condic: '' }),
     ];
     mockFetch.mockResolvedValue({
       ok: true,
@@ -301,11 +302,40 @@ describe('PatientsList', () => {
       'DNI',
       'Nombre',
       'Empresa',
+      'Proyecto',
       'Tipo de Examen',
       'Fecha',
       'Aptitud',
       'Acción',
     ]);
+  });
+
+  it('renders the project (DesDes) in the Proyecto column', async () => {
+    const rows: SpResultRow[] = [
+      makeRow({ NroDId: '1', Pacien: 'GARCIA LOPEZ JUAN', DesDes: 'NEXA CAJAMARQUILLA' }),
+    ];
+    mockFetch.mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ rows, companies: [] }),
+    });
+
+    render(
+      <PatientsList
+        fechaInicio="2026-06-01"
+        fechaFin="2026-06-30"
+        codSed="1"
+        onViewFiles={vi.fn()}
+      />,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByRole('table')).toBeInTheDocument();
+    });
+
+    const dataRow = screen.getAllByRole('row')[1];
+    const cells = dataRow.querySelectorAll('td');
+    // Proyecto is the 4th column (after DNI, Nombre, Empresa)
+    expect(cells[3]?.textContent).toBe('NEXA CAJAMARQUILLA');
   });
 
   it('renders a search input when data is loaded', async () => {
