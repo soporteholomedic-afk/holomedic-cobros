@@ -1,6 +1,14 @@
 const READY_FILE_PATTERN = /^(\d+)(CERT|EXPED)\.pdf$/i;
 
-export type ReadyFileTipo = 'CAMO' | 'EMO';
+/**
+ * Domain union for ready-to-send file types.
+ *
+ * `'ADICIONAL'` is part of the union (ADICIONALES orders) but is NEVER
+ * inferred from a file suffix here — `parseReadyFile` only maps the
+ * `CERT`/`EXPED` suffix to CAMO/EMO. `'ADICIONAL'` arrives exclusively
+ * through an explicit `tipoExamen` signal normalized at the boundary.
+ */
+export type ReadyFileTipo = 'CAMO' | 'EMO' | 'ADICIONAL';
 
 export interface ParsedReadyFile {
   tipo: ReadyFileTipo;

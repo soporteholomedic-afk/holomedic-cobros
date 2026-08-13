@@ -48,4 +48,17 @@ describe('parseReadyFile', () => {
     expect(result!.tipo).toBe('CAMO');
     expect(result!.idAten).toBe('75618561');
   });
+
+  // REQ-1 (nomenclatura-adicionales): the file suffix carries no
+  // ADICIONAL signal — parseReadyFile MUST NOT infer 'ADICIONAL' from
+  // CERT/EXPED names. ADICIONAL arrives only via an explicit
+  // tipoExamen signal normalized at the boundary.
+  it.each([
+    '012110336EXPED.pdf',
+    '012110336CERT.pdf',
+  ])('never infers ADICIONAL from a ready file suffix (%s)', (name) => {
+    const result = parseReadyFile(name);
+    expect(result).not.toBeNull();
+    expect(result!.tipo).not.toBe('ADICIONAL');
+  });
 });
