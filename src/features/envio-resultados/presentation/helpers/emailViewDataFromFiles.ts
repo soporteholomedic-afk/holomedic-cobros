@@ -1,5 +1,6 @@
 import type { Patient, PatientFile, SelectedFileRef } from '../../domain/entities';
 import type { FileNode } from '../../domain/file-system/FileNode';
+import { normalizeTipoExamen } from '../../domain/ready-files/normalizeTipoExamen';
 import type { UnifiedPerson, UnifiedFicha } from '@/types/sp-result';
 
 const PDF_MIME = 'application/pdf';
@@ -77,15 +78,24 @@ export function emailViewDataFromFiles(
   // PR #1 — derive `path` from each ref (`""` for root) and stamp the
   // location triple from `ficha` + `person`. Worker-only persons
   // (no ficha) carry empty strings for ruc/dni/idAten.
+  // PR-2 (nomenclatura-adicionales) — stamp `tipoExamen: 'ADICIONAL'`
+  // on every ref ONLY when the ficha/person DesTCh signal normalizes to
+  // ADICIONAL (S-10: `ADICIONALES` → `ADICIONAL`); every other signal
+  // (CAMO, EMO, empty) leaves the ref shape untouched (S-11 — the legacy
+  // CAMO/EMO email path stays byte-for-byte identical). DesTCh is the
+  // only discriminator — `ficha.proyecto`/`person.proyecto` are never
+  // consulted (REQ-6).
+  const signalTipoExamen = normalizeTipoExamen(ficha?.tipoExamen ?? person.tipoExamen);
   const fileRefs: SelectedFileRef[] = refs.map((ref) => {
     const { path, name } = splitFileRef(ref);
-    return {
+    const base = {
       ruc: ficha?.nroRuc ?? '',
       dni: person.dni,
       idAten: ficha?.idAten ?? '',
       path,
       name,
     };
+    return signalTipoExamen === 'ADICIONAL' ? { ...base, tipoExamen: 'ADICIONAL' } : base;
   });
 
   const destino = ficha?.proyecto ?? person.proyecto ?? '';

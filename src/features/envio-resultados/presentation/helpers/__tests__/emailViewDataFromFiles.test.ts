@@ -287,4 +287,98 @@ describe('emailViewDataFromFiles (bridge helper)', () => {
 
     expect(result.fileRefs).toEqual([]);
   });
+
+  // ================================================================
+  // PR-2 (nomenclatura-adicionales) — DesTCh stamping
+  // REQ-6/S-10: ficha/person DesTCh normalized to ADICIONAL → every ref
+  // is stamped `tipoExamen: 'ADICIONAL'` so the delivery renames the
+  // ready file as `ADICIONAL-{nombre}.pdf`. S-11: any other signal
+  // leaves the legacy ref shape untouched.
+  // ================================================================
+
+  it('stamps every fileRef with tipoExamen="ADICIONAL" when ficha DesTCh is ADICIONALES (S-10)', () => {
+    const person = makePerson();
+    const ficha = makeFicha({ tipoExamen: 'ADICIONALES' });
+    const fileA = createFileNode({ name: '012110336EXPED.pdf', sizeBytes: 100, modifiedAt: '2026-06-01T00:00:00.000Z' });
+    const fileB = createFileNode({ name: '012110336CERT.pdf', sizeBytes: 200, modifiedAt: '2026-06-01T00:00:00.000Z' });
+
+    const result = emailViewDataFromFiles(
+      person,
+      ficha,
+      [fileA, fileB],
+      ['LEGAJOS::012110336EXPED.pdf', 'LEGAJOS::012110336CERT.pdf'],
+      'uuid-company-1',
+      'Holomedic S.A.',
+    );
+
+    expect(result.fileRefs).toHaveLength(2);
+    for (const ref of result.fileRefs) {
+      expect(ref.tipoExamen).toBe('ADICIONAL');
+    }
+  });
+
+  it('stamps from the person DesTCh when the ficha is null (worker-only person, S-10)', () => {
+    const person = makePerson({ tipoExamen: 'ADICIONALES' });
+    const fileA = createFileNode({ name: '012110336EXPED.pdf', sizeBytes: 100, modifiedAt: '2026-06-01T00:00:00.000Z' });
+
+    const result = emailViewDataFromFiles(
+      person,
+      null,
+      [fileA],
+      ['LEGAJOS::012110336EXPED.pdf'],
+      'uuid-company-1',
+      'Holomedic S.A.',
+    );
+
+    expect(result.fileRefs).toHaveLength(1);
+    expect(result.fileRefs[0]?.tipoExamen).toBe('ADICIONAL');
+  });
+
+  it('leaves the ref shape untouched for a non-ADICIONAL DesTCh (S-11, CAMO/EMO fallback contract)', () => {
+    // The no-signal/legacy path MUST stay byte-for-byte identical: refs
+    // carry the triple + path + name and NO tipoExamen field.
+    for (const tipo of ['PERIODICO', 'PREOCUPACIONAL', '', 'CAMO']) {
+      const person = makePerson({ tipoExamen: tipo });
+      const ficha = makeFicha({ tipoExamen: tipo });
+      const fileA = createFileNode({ name: '012110336EXPED.pdf', sizeBytes: 100, modifiedAt: '2026-06-01T00:00:00.000Z' });
+
+      const result = emailViewDataFromFiles(
+        person,
+        ficha,
+        [fileA],
+        ['LEGAJOS::012110336EXPED.pdf'],
+        'uuid-company-1',
+        'Holomedic S.A.',
+      );
+
+      expect(result.fileRefs).toHaveLength(1);
+      expect(result.fileRefs[0]).toEqual<SelectedFileRef>({
+        ruc: ficha.nroRuc,
+        dni: person.dni,
+        idAten: ficha.idAten,
+        path: 'LEGAJOS',
+        name: '012110336EXPED.pdf',
+      });
+      expect(result.fileRefs[0]?.tipoExamen).toBeUndefined();
+    }
+  });
+
+  it('never infers ADICIONAL from the proyecto/DesDes field (REQ-6 — DesTCh is the only discriminator)', () => {
+    // Fixture decoupling (REQ-9/S-15): a non-ADICIONAL DesTCh with an
+    // ADICIONAL-looking proyecto MUST NOT be stamped.
+    const person = makePerson({ tipoExamen: 'PERIODICO', proyecto: 'ADICIONALES' });
+    const ficha = makeFicha({ tipoExamen: 'PERIODICO', proyecto: 'ADICIONALES' });
+    const fileA = createFileNode({ name: '012110336EXPED.pdf', sizeBytes: 100, modifiedAt: '2026-06-01T00:00:00.000Z' });
+
+    const result = emailViewDataFromFiles(
+      person,
+      ficha,
+      [fileA],
+      ['LEGAJOS::012110336EXPED.pdf'],
+      'uuid-company-1',
+      'Holomedic S.A.',
+    );
+
+    expect(result.fileRefs[0]?.tipoExamen).toBeUndefined();
+  });
 });
