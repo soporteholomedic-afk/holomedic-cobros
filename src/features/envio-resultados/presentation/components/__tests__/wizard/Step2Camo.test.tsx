@@ -182,6 +182,14 @@ describe('Step2Camo', () => {
     expect(within(modal).getByTestId('step2-pick-modal-onsingle-11111111')).toHaveTextContent('function');
   });
 
+  it('forwards fecAte from the patient\'s first ficha so the "Generar archivos" tab can resolve the order', () => {
+    renderStep2();
+    fireEvent.click(within(screen.getByTestId('step2-card-11111111')).getByTestId('step2-elegir-camo'));
+
+    const lastProps = mockFilesModalProps.mock.calls[mockFilesModalProps.mock.calls.length - 1]?.[0];
+    expect(lastProps?.['fecAte']).toBe('17/06/2026');
+  });
+
   it('picking a file via the modal calls onPickFile with a WizardFilePick { ref, displayName } for that dni', () => {
     const { onPickFile } = renderStep2();
     fireEvent.click(within(screen.getByTestId('step2-card-11111111')).getByTestId('step2-elegir-camo'));

@@ -188,6 +188,14 @@ describe('Step3Emo', () => {
     expect(within(modal).getByTestId('step3-pick-modal-onsingle-11111111')).toHaveTextContent('function');
   });
 
+  it('forwards fecAte from the patient\'s first ficha so the "Generar archivos" tab can resolve the order', () => {
+    renderStep3();
+    fireEvent.click(within(screen.getByTestId('step3-card-11111111')).getByTestId('step3-elegir-emo'));
+
+    const lastProps = mockFilesModalProps.mock.calls[mockFilesModalProps.mock.calls.length - 1]?.[0];
+    expect(lastProps?.['fecAte']).toBe('17/06/2026');
+  });
+
   it('picking a file via the modal calls onPickFile with a WizardFilePick { ref, displayName } for that dni', () => {
     const { onPickFile } = renderStep3();
     fireEvent.click(within(screen.getByTestId('step3-card-11111111')).getByTestId('step3-elegir-emo'));

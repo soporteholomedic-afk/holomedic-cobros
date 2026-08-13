@@ -179,6 +179,10 @@ export function Step2Camo({
           nombrePaciente={activePerson.nombre}
           empresa={activePerson.empresa}
           destino=""
+          // Forward the attendance date so the "Generar archivos" tab
+          // can resolve the order (empty fecAte would render the
+          // "sin orden asociada" guard). Mirrors WorkerDetailTable.
+          fecAte={activePerson.fichas[0]?.fecAte ?? ''}
           onPickSingle={(file, folderPath) => {
             onPickFile(activePerson.dni, {
               ref: {
