@@ -219,6 +219,41 @@ describe('FilesExplorerPane', () => {
     );
   });
 
+  // -- PR-2 (nomenclatura-adicionales): DesTCh tipoExamen threading ----
+
+  it('appends &tipoExamen= to the download href when tipoExamen is provided (S-9)', () => {
+    const pdf = createFileNode({ name: 'informe.pdf', sizeBytes: 100, modifiedAt: '2026-01-01T00:00:00.000Z' });
+    render(
+      <FilesExplorerPane
+        {...baseProps}
+        tipoExamen="ADICIONALES"
+        viewState={makeReady([pdf])}
+      />,
+    );
+    const link = screen.getByText(/Descargar/).closest('a');
+    expect(link).toHaveAttribute(
+      'href',
+      '/api/files/download?ruc=RUC&dni=12345678&idAten=AT-001&filename=informe.pdf&tipoExamen=ADICIONALES',
+    );
+  });
+
+  it('omits &tipoExamen= when the prop is an empty string (S-11 — non-ADICIONAL default)', () => {
+    const pdf = createFileNode({ name: 'informe.pdf', sizeBytes: 100, modifiedAt: '2026-01-01T00:00:00.000Z' });
+    render(
+      <FilesExplorerPane
+        {...baseProps}
+        tipoExamen=""
+        viewState={makeReady([pdf])}
+      />,
+    );
+    const link = screen.getByText(/Descargar/).closest('a');
+    expect(link).toHaveAttribute(
+      'href',
+      '/api/files/download?ruc=RUC&dni=12345678&idAten=AT-001&filename=informe.pdf',
+    );
+    expect(link!.getAttribute('href')).not.toContain('tipoExamen');
+  });
+
   it('non-previewable .docx row renders ONLY a Descargar link (no Visualizar)', () => {
     const docx = createFileNode({ name: 'plan.docx', sizeBytes: 100, modifiedAt: '2026-01-01T00:00:00.000Z' });
     render(

@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ReactElement } from 'react';
 import {
@@ -8,6 +8,7 @@ import {
   type FileSystemNode,
 } from '@/features/envio-resultados/domain/ports';
 import { FilesModal } from '../FilesModal';
+import type { SelectedFileRef } from '@/features/envio-resultados/domain/entities';
 import type { UseFileTreeReturn, ViewState } from '@/features/envio-resultados/presentation/hooks/useFileTree';
 import type { UseReadyFilesReturn } from '@/features/envio-resultados/presentation/hooks/useReadyFiles';
 import type {
@@ -302,6 +303,123 @@ describe('FilesModal', () => {
     expect(downloadBtn).toBeInTheDocument();
     expect(downloadBtn).toHaveTextContent('Descargar seleccionados (2)');
     expect(downloadBtn).not.toBeDisabled();
+  });
+
+  // -- PR-2 (nomenclatura-adicionales): zip FormData signal + stamps ----
+
+  it('sends request-level tipoExamen AND stamped per-ref fileRefs in the download-selected POST (S-7/REQ-6)', async () => {
+    const readyFiles: FileNode[] = [
+      createFileNode({
+        name: '012110336EXPED.pdf',
+        sizeBytes: 1024,
+        modifiedAt: '2026-06-01T00:00:00.000Z',
+      }),
+    ];
+    mockUseFileTree.mockReturnValue({
+      viewState: readyView('', []),
+      selectionState: { kind: 'none' },
+      navigate: vi.fn(),
+      goUp: vi.fn(),
+      selectFile: vi.fn(),
+      closeSelection: vi.fn(),
+      refetch: vi.fn(),
+    });
+    mockUseReadyFiles.mockReturnValue({ state: { kind: 'ready', files: readyFiles }, refetch: vi.fn() });
+
+    const mockFetch = vi.fn().mockResolvedValue({
+      ok: true,
+      headers: new Headers({ 'Content-Disposition': 'attachment; filename="z.zip"' }),
+      blob: () => Promise.resolve(new Blob(['zip'])),
+    });
+    vi.stubGlobal('fetch', mockFetch);
+    const objectUrlSpy = vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:mock');
+    const revokeSpy = vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {});
+
+    render(
+      <FilesModal
+        ruc="RUC-1"
+        dni="12345678"
+        idAten="AT-001"
+        nombrePaciente="JUAN PEREZ"
+        empresa="Acme Corp"
+        destino=""
+        tipoExamen="ADICIONALES"
+        onClose={vi.fn()}
+      />,
+    );
+
+    fireEvent.click(screen.getByTestId('files-modal-download-selected'));
+    await waitFor(() => expect(mockFetch).toHaveBeenCalledTimes(1));
+
+    const [url, init] = mockFetch.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe('/api/files/download-all');
+    const body = init.body as FormData;
+    // Request-level signal (raw DesTCh — the route normalizes it).
+    expect(body.get('tipoExamen')).toBe('ADICIONALES');
+    // Per-ref stamping — the ref carries the normalized domain value so
+    // the route's 3-value validation accepts it.
+    const fileRefs = JSON.parse(body.get('fileRefs') as string) as SelectedFileRef[];
+    expect(fileRefs).toHaveLength(1);
+    expect(fileRefs[0]?.tipoExamen).toBe('ADICIONAL');
+    expect(fileRefs[0]?.name).toBe('012110336EXPED.pdf');
+
+    objectUrlSpy.mockRestore();
+    revokeSpy.mockRestore();
+    vi.unstubAllGlobals();
+  });
+
+  it('omits the tipoExamen signal from the POST when the prop is empty (S-11)', async () => {
+    const readyFiles: FileNode[] = [
+      createFileNode({
+        name: '012110336EXPED.pdf',
+        sizeBytes: 1024,
+        modifiedAt: '2026-06-01T00:00:00.000Z',
+      }),
+    ];
+    mockUseFileTree.mockReturnValue({
+      viewState: readyView('', []),
+      selectionState: { kind: 'none' },
+      navigate: vi.fn(),
+      goUp: vi.fn(),
+      selectFile: vi.fn(),
+      closeSelection: vi.fn(),
+      refetch: vi.fn(),
+    });
+    mockUseReadyFiles.mockReturnValue({ state: { kind: 'ready', files: readyFiles }, refetch: vi.fn() });
+
+    const mockFetch = vi.fn().mockResolvedValue({
+      ok: true,
+      headers: new Headers({ 'Content-Disposition': 'attachment; filename="z.zip"' }),
+      blob: () => Promise.resolve(new Blob(['zip'])),
+    });
+    vi.stubGlobal('fetch', mockFetch);
+    const objectUrlSpy = vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:mock');
+    const revokeSpy = vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {});
+
+    render(
+      <FilesModal
+        ruc="RUC-1"
+        dni="12345678"
+        idAten="AT-001"
+        nombrePaciente="JUAN PEREZ"
+        empresa="Acme Corp"
+        destino=""
+        onClose={vi.fn()}
+      />,
+    );
+
+    fireEvent.click(screen.getByTestId('files-modal-download-selected'));
+    await waitFor(() => expect(mockFetch).toHaveBeenCalledTimes(1));
+
+    const [, init] = mockFetch.mock.calls[0] as [string, RequestInit];
+    const body = init.body as FormData;
+    expect(body.get('tipoExamen')).toBeNull();
+    const fileRefs = JSON.parse(body.get('fileRefs') as string) as SelectedFileRef[];
+    expect(fileRefs[0]?.tipoExamen).toBeUndefined();
+
+    objectUrlSpy.mockRestore();
+    revokeSpy.mockRestore();
+    vi.unstubAllGlobals();
   });
 
   it('shows the back arrow in a subfolder and calls onGoUp when clicked', () => {

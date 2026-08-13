@@ -94,6 +94,43 @@ describe('FilesReadyPane', () => {
     );
   });
 
+  // -- PR-2 (nomenclatura-adicionales): DesTCh tipoExamen threading ----
+
+  it('appends &tipoExamen= to the download href when tipoExamen is provided (S-9)', () => {
+    render(
+      <FilesReadyPane
+        {...baseProps}
+        tipoExamen="ADICIONALES"
+        state={{ kind: 'ready', files: sampleFiles }}
+      />,
+    );
+
+    const certRow = screen.getByText('75618561CERT.pdf').closest('li');
+    const certLink = certRow!.querySelector('a');
+    expect(certLink).toHaveAttribute(
+      'href',
+      '/api/files/download?ruc=RUC-1&dni=12345678&idAten=AT-001&path=LEGAJOS&filename=75618561CERT.pdf&tipoExamen=ADICIONALES',
+    );
+  });
+
+  it('omits &tipoExamen= when the prop is an empty string (S-11 — non-ADICIONAL default)', () => {
+    render(
+      <FilesReadyPane
+        {...baseProps}
+        tipoExamen=""
+        state={{ kind: 'ready', files: sampleFiles }}
+      />,
+    );
+
+    const certRow = screen.getByText('75618561CERT.pdf').closest('li');
+    const certLink = certRow!.querySelector('a');
+    expect(certLink).toHaveAttribute(
+      'href',
+      '/api/files/download?ruc=RUC-1&dni=12345678&idAten=AT-001&path=LEGAJOS&filename=75618561CERT.pdf',
+    );
+    expect(certLink!.getAttribute('href')).not.toContain('tipoExamen');
+  });
+
   it('calls onSelect with the FileNode when the Visualizar button is clicked', () => {
     const onSelect = vi.fn();
     render(

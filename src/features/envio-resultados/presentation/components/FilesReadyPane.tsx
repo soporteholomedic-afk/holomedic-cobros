@@ -24,6 +24,13 @@ export interface FilesReadyPaneProps {
    * `&nombreCompleto=` query param is omitted entirely.
    */
   nombrePaciente?: string;
+  /**
+   * PR-2 (nomenclatura-adicionales) — the DesTCh exam-type signal. When
+   * non-empty the download href gains `&tipoExamen=${value}` so the route
+   * can rename ADICIONALES-order files as `ADICIONAL-{nombre}.pdf`
+   * (S-9). Default `''` → no param (S-11).
+   */
+  tipoExamen?: string;
   onSelect: (file: FileNode) => void;
   /**
    * Set of fileRefs currently selected. Each ref is `"::" + file.name`
@@ -45,13 +52,15 @@ function formatSize(bytes: number): string {
 
 function downloadHref(props: FilesReadyPaneProps, name: string): string {
   const nombre = props.nombrePaciente ?? '';
+  const tipoExamen = props.tipoExamen ?? '';
   return (
     `/api/files/download?ruc=${encodeURIComponent(props.ruc)}` +
     `&dni=${encodeURIComponent(props.dni)}` +
     `&idAten=${encodeURIComponent(props.idAten)}` +
     `&path=${encodeURIComponent(READY_FOLDER)}` +
     `&filename=${encodeURIComponent(name)}` +
-    (nombre === '' ? '' : `&nombreCompleto=${encodeURIComponent(nombre)}`)
+    (nombre === '' ? '' : `&nombreCompleto=${encodeURIComponent(nombre)}`) +
+    (tipoExamen === '' ? '' : `&tipoExamen=${encodeURIComponent(tipoExamen)}`)
   );
 }
 

@@ -9,6 +9,7 @@ import { FilesReadyPane } from '@/features/envio-resultados/presentation/compone
 import { FilesTabs, type FilesTab } from '@/features/envio-resultados/presentation/components/FilesTabs';
 import { useFileTree } from '@/features/envio-resultados/presentation/hooks/useFileTree';
 import { useReadyFiles, type ReadyFilesState } from '@/features/envio-resultados/presentation/hooks/useReadyFiles';
+import { normalizeTipoExamen } from '@/features/envio-resultados/domain/ready-files/normalizeTipoExamen';
 import type { FileNode } from '@/features/envio-resultados/domain/ports';
 import type { SelectedFileRef } from '@/features/envio-resultados/domain/entities';
 
@@ -33,6 +34,16 @@ export interface FilesModalProps {
    * All 3 tabs remain visible.
    */
   onPickSingle?: (file: FileNode, folderPath: string) => void;
+  /**
+   * PR-2 (nomenclatura-adicionales) — the DesTCh exam-type signal
+   * (`row.DesTCh`, e.g. `'ADICIONALES'`) forwarded from the /consolidados
+   * row. When non-empty it is appended to the ready/explorer pane
+   * download hrefs (`&tipoExamen=`), included in the download-selected
+   * POST FormData (request-level), and stamped onto each `SelectedFileRef`
+   * (per-ref, normalized to the domain union so the route accepts it).
+   * Defaults to `''` → no param, no stamping (REQ-6, S-11).
+   */
+  tipoExamen?: string;
   onClose: () => void;
   /**
    * Fired when the user clicks the "Enviar" footer button. Receives
@@ -83,6 +94,7 @@ export function FilesModal({
   empresa,
   destino,
   fecAte = '',
+  tipoExamen = '',
   onPickSingle,
   onClose,
   onSend,
@@ -212,11 +224,23 @@ export function FilesModal({
       formData.append('nombrePaciente', nombrePaciente);
       formData.append('empresa', empresa);
       formData.append('destino', destino);
+      // PR-2 — request-level DesTCh signal (raw, the route normalizes it).
+      // Omitted entirely when the modal has no signal (S-11).
+      if (tipoExamen !== '') {
+        formData.append('tipoExamen', tipoExamen);
+      }
+      // PR-2 — per-ref stamping. `SelectedFileRef.tipoExamen` is the
+      // domain union, so the raw `'ADICIONALES'` is normalized to
+      // `'ADICIONAL'` here (the route validates per-ref values and
+      // rejects anything outside the union). Garbage/absent → no stamp.
+      const normalizedTipoExamen = normalizeTipoExamen(tipoExamen);
       const fileRefs: SelectedFileRef[] = Array.from(selectedFilesMap.entries()).map(([key]) => {
         const idx = key.indexOf('::');
         const path = idx < 0 ? '' : key.slice(0, idx);
         const name = idx < 0 ? key : key.slice(idx + 2);
-        return { ruc, dni, idAten, path, name };
+        return normalizedTipoExamen === undefined
+          ? { ruc, dni, idAten, path, name }
+          : { ruc, dni, idAten, path, name, tipoExamen: normalizedTipoExamen };
       });
       formData.append('fileRefs', JSON.stringify(fileRefs));
 
@@ -241,7 +265,7 @@ export function FilesModal({
     } finally {
       setZipInFlight(false);
     }
-  }, [selectedFilesMap, ruc, dni, idAten, nombrePaciente, empresa, destino]);
+  }, [selectedFilesMap, ruc, dni, idAten, nombrePaciente, empresa, destino, tipoExamen]);
 
   const handleSelectFromReady = (file: FileNode): void => {
     selectFile(file, READY_FOLDER);
@@ -315,6 +339,7 @@ export function FilesModal({
                   dni={dni}
                   idAten={idAten}
                   nombrePaciente={nombrePaciente}
+                  tipoExamen={tipoExamen}
                   onSelect={handleSelectFromReady}
                   selectedRefs={selectedRefs}
                   onToggle={handleToggleFile}
@@ -330,6 +355,7 @@ export function FilesModal({
                   dni={dni}
                   idAten={idAten}
                   nombrePaciente={nombrePaciente}
+                  tipoExamen={tipoExamen}
                   selectedRefs={selectedRefs}
                   onToggle={handleToggleFile}
                 />

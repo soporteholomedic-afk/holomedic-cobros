@@ -37,6 +37,13 @@ export interface FilesExplorerPaneProps {
    */
   nombrePaciente?: string;
   /**
+   * PR-2 (nomenclatura-adicionales) — the DesTCh exam-type signal. When
+   * non-empty the download href gains `&tipoExamen=${value}` so the route
+   * can rename ADICIONALES-order files as `ADICIONAL-{nombre}.pdf`
+   * (S-9). Default `''` → no param (S-11).
+   */
+  tipoExamen?: string;
+  /**
    * Set of fileRefs currently selected. Each ref is
    * `"${currentPath}::${file.name}"`. When `undefined` the pane
    * defaults every row to `checked` — preserves backward compatibility
@@ -77,13 +84,15 @@ function currentFolderLabel(props: FilesExplorerPaneProps): string {
 function downloadHref(props: FilesExplorerPaneProps, name: string): string {
   const path = props.viewState.kind === 'ready' ? props.viewState.currentPath : '';
   const nombre = props.nombrePaciente ?? '';
+  const tipoExamen = props.tipoExamen ?? '';
   return (
     `/api/files/download?ruc=${encodeURIComponent(props.ruc)}` +
     `&dni=${encodeURIComponent(props.dni)}` +
     `&idAten=${encodeURIComponent(props.idAten)}` +
     (path === '' ? '' : `&path=${encodeURIComponent(path)}`) +
     `&filename=${encodeURIComponent(name)}` +
-    (nombre === '' ? '' : `&nombreCompleto=${encodeURIComponent(nombre)}`)
+    (nombre === '' ? '' : `&nombreCompleto=${encodeURIComponent(nombre)}`) +
+    (tipoExamen === '' ? '' : `&tipoExamen=${encodeURIComponent(tipoExamen)}`)
   );
 }
 
