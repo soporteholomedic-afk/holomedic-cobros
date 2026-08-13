@@ -3,6 +3,7 @@ import { getFileRepository } from '@/features/envio-resultados/infrastructure/fi
 import { sanitizeDownloadName, sanitizeFolderPath } from '@/lib/sanitize-filename';
 import { renameReadyFile } from '@/features/envio-resultados/domain/ready-files/renameReadyFile';
 import { renameGeneratedCertificate } from '@/features/envio-resultados/domain/generated-files/renameGeneratedCertificate';
+import { normalizeTipoExamen } from '@/features/envio-resultados/domain/ready-files/normalizeTipoExamen';
 
 /** Minimal content-type lookup by extension. */
 function mimeFromExt(name: string): string {
@@ -46,7 +47,8 @@ function mimeFromExt(name: string): string {
  *
  * Status codes:
  * - 200: streams the file with `Content-Disposition: attachment`.
- * - 400: missing args, non-digit `dni`, or path traversal attempt.
+ * - 400: missing args, non-digit `dni`, path traversal attempt, or a
+ *   `tipoExamen` value outside `{CAMO, EMO, ADICIONAL}`.
  * - 404: file does not exist on the share.
  * - 502: share unreachable / I/O error.
  */
@@ -59,6 +61,8 @@ export async function GET(request: Request): Promise<Response> {
   const rawName = searchParams.get('filename') ?? '';
   const nombreCompleto = searchParams.get('nombreCompleto') ?? '';
   const destino = searchParams.get('destino') ?? '';
+  const rawTipoExamen = searchParams.get('tipoExamen') ?? undefined;
+  const tipoExamen = normalizeTipoExamen(rawTipoExamen);
 
   if (!ruc || !dni || !idAten || !rawName) {
     return NextResponse.json(
@@ -69,6 +73,12 @@ export async function GET(request: Request): Promise<Response> {
   if (!/^\d+$/.test(dni)) {
     return NextResponse.json(
       { error: 'dni debe ser numérico.' },
+      { status: 400 },
+    );
+  }
+  if (rawTipoExamen !== undefined && rawTipoExamen.trim() !== '' && tipoExamen === undefined) {
+    return NextResponse.json(
+      { error: 'tipoExamen inválido. Debe ser CAMO, EMO o ADICIONAL.' },
       { status: 400 },
     );
   }
@@ -89,10 +99,10 @@ export async function GET(request: Request): Promise<Response> {
     return NextResponse.json({ error: 'filename inválido.' }, { status: 400 });
   }
 
-  const readyName = renameReadyFile({ rawName: safe, nombreCompleto, destino });
+  const readyName = renameReadyFile({ rawName: safe, nombreCompleto, destino, tipoExamen });
   const deliveryName =
     readyName === safe
-      ? renameGeneratedCertificate({ rawName: safe, nombreCompleto })
+      ? renameGeneratedCertificate({ rawName: safe, nombreCompleto, tipoExamen })
       : readyName;
 
   try {

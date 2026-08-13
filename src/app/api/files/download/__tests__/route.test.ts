@@ -204,6 +204,112 @@ describe('GET /api/files/download', () => {
     );
   });
 
+  // WU-1.6 (nomenclatura-adicionales, spec S-5/S-6/REQ-4) — optional
+  // `tipoExamen` query param: validated via normalizeTipoExamen, passed
+  // to both rename helpers. Garbage → 400; absent → legacy behavior.
+  it('renames an EXPED ready file to ADICIONAL-<nombre>.pdf when tipoExamen=ADICIONAL (S-5)', async () => {
+    const fakeStream = new Readable({ read() {} });
+    const mockRead = vi.fn<() => Promise<NodeJS.ReadableStream>>().mockResolvedValue(fakeStream);
+    __setFileRepositoryForTests(makeMockRepo({ read: mockRead }));
+
+    const { GET } = await import('../route');
+    const req = new Request(
+      'http://localhost/api/files/download?ruc=RUC&dni=09614642&idAten=AT-001' +
+        '&filename=012110336EXPED.pdf&nombreCompleto=JUAN%20PEREZ&destino=METRO%20LIMA' +
+        '&tipoExamen=ADICIONAL',
+    );
+    const res = await GET(req);
+
+    expect(res.status).toBe(200);
+    expect(res.headers.get('Content-Disposition')).toBe(
+      'attachment; filename="ADICIONAL-JUAN PEREZ.pdf"',
+    );
+  });
+
+  it('normalizes tipoExamen=ADICIONALES to the ADICIONAL prefix (UI signal shape)', async () => {
+    const fakeStream = new Readable({ read() {} });
+    const mockRead = vi.fn<() => Promise<NodeJS.ReadableStream>>().mockResolvedValue(fakeStream);
+    __setFileRepositoryForTests(makeMockRepo({ read: mockRead }));
+
+    const { GET } = await import('../route');
+    const req = new Request(
+      'http://localhost/api/files/download?ruc=RUC&dni=09614642&idAten=AT-001' +
+        '&filename=012110336EXPED.pdf&nombreCompleto=JUAN%20PEREZ' +
+        '&tipoExamen=ADICIONALES',
+    );
+    const res = await GET(req);
+
+    expect(res.status).toBe(200);
+    expect(res.headers.get('Content-Disposition')).toBe(
+      'attachment; filename="ADICIONAL-JUAN PEREZ.pdf"',
+    );
+  });
+
+  it('threads tipoExamen=ADICIONAL into the CLI cert rename (ADICIONAL_<nombre>.pdf)', async () => {
+    const fakeStream = new Readable({ read() {} });
+    const mockRead = vi.fn<() => Promise<NodeJS.ReadableStream>>().mockResolvedValue(fakeStream);
+    __setFileRepositoryForTests(makeMockRepo({ read: mockRead }));
+
+    const { GET } = await import('../route');
+    const req = new Request(
+      'http://localhost/api/files/download?ruc=RUC&dni=12345678&idAten=AT-001' +
+        '&filename=012110336_390417_CERTIFICADO%20MEDICO%20DE%20APTITUD%20(GEMO%20Y%20ANEXO%2016).pdf' +
+        '&nombreCompleto=JUAN%20PEREZ&tipoExamen=ADICIONAL',
+    );
+    const res = await GET(req);
+
+    expect(res.status).toBe(200);
+    expect(res.headers.get('Content-Disposition')).toBe(
+      'attachment; filename="ADICIONAL_JUAN PEREZ.pdf"',
+    );
+  });
+
+  it('behaves exactly as today without tipoExamen (S-6 backward-compat → EMO name)', async () => {
+    const fakeStream = new Readable({ read() {} });
+    const mockRead = vi.fn<() => Promise<NodeJS.ReadableStream>>().mockResolvedValue(fakeStream);
+    __setFileRepositoryForTests(makeMockRepo({ read: mockRead }));
+
+    const { GET } = await import('../route');
+    const req = new Request(
+      'http://localhost/api/files/download?ruc=RUC&dni=09614642&idAten=AT-001' +
+        '&filename=012110336EXPED.pdf&nombreCompleto=JUAN%20PEREZ&destino=UNACEM',
+    );
+    const res = await GET(req);
+
+    expect(res.status).toBe(200);
+    expect(res.headers.get('Content-Disposition')).toBe(
+      'attachment; filename="EMO-JUAN PEREZ-UNACEM.pdf"',
+    );
+  });
+
+  it('returns 400 when tipoExamen is garbage (REQ-4 fail-fast validation)', async () => {
+    const { GET } = await import('../route');
+    const req = new Request(
+      'http://localhost/api/files/download?ruc=RUC&dni=12345678&idAten=AT-001' +
+        '&filename=informe.pdf&tipoExamen=RAYOS%20X',
+    );
+    const res = await GET(req);
+
+    expect(res.status).toBe(400);
+    const body = (await res.json()) as { error: string };
+    expect(body.error.toLowerCase()).toContain('tipoexamen');
+  });
+
+  it('treats an empty ?tipoExamen= as absent (no 400, legacy behavior)', async () => {
+    const fakeStream = new Readable({ read() {} });
+    const mockRead = vi.fn<() => Promise<NodeJS.ReadableStream>>().mockResolvedValue(fakeStream);
+    __setFileRepositoryForTests(makeMockRepo({ read: mockRead }));
+
+    const { GET } = await import('../route');
+    const req = new Request(
+      'http://localhost/api/files/download?ruc=RUC&dni=12345678&idAten=AT-001&filename=informe.pdf&tipoExamen=',
+    );
+    const res = await GET(req);
+
+    expect(res.status).toBe(200);
+    expect(res.headers.get('Content-Disposition')).toBe('attachment; filename="informe.pdf"');
+  });
+
   describe('?path= subfolder support (PR-B1)', () => {
     it('passes the ?path= argument to the repository for subfolder downloads', async () => {
       const fakeStream = new Readable({ read() {} });
