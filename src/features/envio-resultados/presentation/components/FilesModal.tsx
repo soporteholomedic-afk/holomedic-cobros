@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState, type ReactElement } from 'react';
-import { Maximize2, Minimize2, RefreshCw, X } from 'lucide-react';
+import { AlertTriangle, Maximize2, Minimize2, RefreshCw, X } from 'lucide-react';
 import { FilesExplorerPane } from '@/features/envio-resultados/presentation/components/FilesExplorerPane';
 import { FilesGeneratePane } from '@/features/envio-resultados/presentation/components/FilesGeneratePane';
 import { FilesPreviewPane } from '@/features/envio-resultados/presentation/components/FilesPreviewPane';
@@ -113,6 +113,7 @@ export function FilesModal({
   const [activeTab, setActiveTab] = useState<FilesTab>(isPickMode ? 'all' : 'ready');
   const [zipInFlight, setZipInFlight] = useState(false);
   const [isMaximized, setIsMaximized] = useState(false);
+  const [showNoAttachmentsConfirm, setShowNoAttachmentsConfirm] = useState(false);
   const [selectedFilesMap, setSelectedFilesMap] = useState<Map<string, FileNode>>(
     () => new Map(),
   );
@@ -167,11 +168,16 @@ export function FilesModal({
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
+      if (e.key === 'Escape') {
+        // Escape closes the confirmation dialog first; only when it is
+        // not open does it close the whole modal.
+        if (showNoAttachmentsConfirm) setShowNoAttachmentsConfirm(false);
+        else onClose();
+      }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [onClose]);
+  }, [onClose, showNoAttachmentsConfirm]);
 
   const handleToggleFile = useCallback((ref: string, file: FileNode): void => {
     if (onPickSingle) {
@@ -198,6 +204,17 @@ export function FilesModal({
   }, [onPickSingle, onClose, selectedFilesMap]);
 
   const handleSendClick = useCallback((): void => {
+    // Sending without attachments is allowed, but only after explicit
+    // user confirmation (custom SI/NO dialog).
+    if (selectedFilesMap.size === 0) {
+      setShowNoAttachmentsConfirm(true);
+      return;
+    }
+    onSend?.(selectedFilesMap);
+  }, [onSend, selectedFilesMap]);
+
+  const handleConfirmSendNoAttachments = useCallback((): void => {
+    setShowNoAttachmentsConfirm(false);
     onSend?.(selectedFilesMap);
   }, [onSend, selectedFilesMap]);
 
@@ -411,7 +428,6 @@ export function FilesModal({
               <button
                 type="button"
                 onClick={handleSendClick}
-                disabled={selectedFilesMap.size === 0}
                 aria-label="Enviar archivos seleccionados"
                 data-testid="files-modal-send"
                 className="px-6 py-2.5 rounded-xl text-sm font-bold text-white shadow-lg transition-all duration-300 bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-300 disabled:cursor-not-allowed disabled:shadow-none"
@@ -435,6 +451,55 @@ export function FilesModal({
             </div>
           )}
         </div>
+
+        {/* ===== No-attachments confirmation dialog ===== */}
+        {showNoAttachmentsConfirm && (
+          <div
+            className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-sm"
+            onClick={(e) => {
+              e.stopPropagation();
+              setShowNoAttachmentsConfirm(false);
+            }}
+            data-testid="files-modal-no-attachments-confirm"
+          >
+            <div
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="no-attachments-title"
+              className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-6 text-center shadow-2xl"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-amber-100">
+                <AlertTriangle className="h-8 w-8 text-amber-600" aria-hidden="true" />
+              </div>
+              <h3
+                id="no-attachments-title"
+                className="text-xl font-semibold text-slate-800 mb-2"
+              >
+                ¿Enviar correo sin adjuntos?
+              </h3>
+              <p className="text-sm text-slate-500 mb-6">
+                No hay archivos adjuntos seleccionados. ¿Está seguro de enviar el correo
+                sin adjuntos?
+              </p>
+              <div className="flex justify-center gap-3">
+                <button
+                  onClick={handleConfirmSendNoAttachments}
+                  data-testid="files-modal-confirm-send-no-attachments"
+                  className="px-6 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors font-medium text-sm cursor-pointer"
+                >
+                  Sí
+                </button>
+                <button
+                  onClick={() => setShowNoAttachmentsConfirm(false)}
+                  className="px-6 py-2 border border-slate-300 text-slate-700 rounded-lg hover:bg-slate-50 transition-colors font-medium text-sm cursor-pointer"
+                >
+                  No
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

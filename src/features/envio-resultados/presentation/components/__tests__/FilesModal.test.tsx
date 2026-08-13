@@ -1083,7 +1083,7 @@ describe('FilesModal', () => {
     expect(sendButton).toHaveTextContent('Enviar (0)');
   });
 
-  it('disables the "Enviar" button when no file is selected (count = 0)', () => {
+  it('keeps the "Enviar" button enabled when no file is selected (count = 0)', () => {
     mockUseFileTree.mockReturnValue({
       viewState: readyView('', sampleFiles),
       selectionState: { kind: 'none' },
@@ -1107,7 +1107,113 @@ describe('FilesModal', () => {
     );
 
     const sendButton = screen.getByTestId('files-modal-send');
-    expect(sendButton).toBeDisabled();
+    expect(sendButton).not.toBeDisabled();
+  });
+
+  it('asks for confirmation before sending without attachments (Sí confirms)', () => {
+    mockUseFileTree.mockReturnValue({
+      viewState: readyView('', sampleFiles),
+      selectionState: { kind: 'none' },
+      navigate: vi.fn(),
+      goUp: vi.fn(),
+      selectFile: vi.fn(),
+      closeSelection: vi.fn(),
+      refetch: vi.fn(),
+    });
+    const onSend = vi.fn();
+
+    render(
+      <FilesModal
+        ruc="RUC-1"
+        dni="12345678"
+        idAten="AT-001"
+        nombrePaciente="Juan Pérez"
+        empresa="Acme Corp"
+        destino=""
+        onClose={vi.fn()}
+        onSend={onSend}
+      />,
+    );
+
+    // Click Enviar with an empty selection → custom confirmation dialog.
+    fireEvent.click(screen.getByTestId('files-modal-send'));
+    expect(screen.getByTestId('files-modal-no-attachments-confirm')).toBeInTheDocument();
+    expect(screen.getByText('¿Enviar correo sin adjuntos?')).toBeInTheDocument();
+    expect(onSend).not.toHaveBeenCalled();
+
+    // Confirm (Sí) → sends with an empty map.
+    fireEvent.click(screen.getByTestId('files-modal-confirm-send-no-attachments'));
+    expect(onSend).toHaveBeenCalledTimes(1);
+    expect(onSend.mock.calls[0]?.[0]).toBeInstanceOf(Map);
+    expect((onSend.mock.calls[0]?.[0] as ReadonlyMap<string, FileNode>).size).toBe(0);
+    expect(screen.queryByTestId('files-modal-no-attachments-confirm')).not.toBeInTheDocument();
+  });
+
+  it('does not send when the confirmation is declined (No)', () => {
+    mockUseFileTree.mockReturnValue({
+      viewState: readyView('', sampleFiles),
+      selectionState: { kind: 'none' },
+      navigate: vi.fn(),
+      goUp: vi.fn(),
+      selectFile: vi.fn(),
+      closeSelection: vi.fn(),
+      refetch: vi.fn(),
+    });
+    const onSend = vi.fn();
+
+    render(
+      <FilesModal
+        ruc="RUC-1"
+        dni="12345678"
+        idAten="AT-001"
+        nombrePaciente="Juan Pérez"
+        empresa="Acme Corp"
+        destino=""
+        onClose={vi.fn()}
+        onSend={onSend}
+      />,
+    );
+
+    fireEvent.click(screen.getByTestId('files-modal-send'));
+    expect(screen.getByTestId('files-modal-no-attachments-confirm')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'No' }));
+
+    expect(onSend).not.toHaveBeenCalled();
+    expect(screen.queryByTestId('files-modal-no-attachments-confirm')).not.toBeInTheDocument();
+  });
+
+  it('Escape closes only the no-attachments confirmation, not the whole modal', () => {
+    mockUseFileTree.mockReturnValue({
+      viewState: readyView('', sampleFiles),
+      selectionState: { kind: 'none' },
+      navigate: vi.fn(),
+      goUp: vi.fn(),
+      selectFile: vi.fn(),
+      closeSelection: vi.fn(),
+      refetch: vi.fn(),
+    });
+    const onClose = vi.fn();
+
+    render(
+      <FilesModal
+        ruc="RUC-1"
+        dni="12345678"
+        idAten="AT-001"
+        nombrePaciente="Juan Pérez"
+        empresa="Acme Corp"
+        destino=""
+        onClose={onClose}
+      />,
+    );
+
+    fireEvent.click(screen.getByTestId('files-modal-send'));
+    expect(screen.getByTestId('files-modal-no-attachments-confirm')).toBeInTheDocument();
+
+    fireEvent.keyDown(window, { key: 'Escape' });
+
+    expect(screen.queryByTestId('files-modal-no-attachments-confirm')).not.toBeInTheDocument();
+    expect(onClose).not.toHaveBeenCalled();
   });
 
   it('pre-checks all ready-pane files when the modal mounts (Enviar label becomes "Enviar (N)")', () => {
@@ -1383,7 +1489,7 @@ describe('FilesModal', () => {
     );
 
     expect(sendButton).toHaveTextContent('Enviar (0)');
-    expect(sendButton).toBeDisabled();
+    expect(sendButton).not.toBeDisabled();
   });
 
   it('does not trigger selectFile (Visualizar) when a ready-pane checkbox is clicked', () => {
