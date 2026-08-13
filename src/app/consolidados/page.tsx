@@ -50,6 +50,12 @@ function ConsolidadosContent() {
     empresa: string;
     proyecto: string;
     fecAte?: string;
+    // PR-2 (nomenclatura-adicionales) — the DesTCh discriminator. The
+    // ONLY signal that marks an order as ADICIONALES; DesDes/proyecto
+    // are never used for this (REQ-6). Raw DesTCh is forwarded as-is
+    // so pane hrefs carry `&tipoExamen=ADICIONALES` (S-9) and the
+    // routes/email bridge normalize it at the boundary.
+    tipoExamen?: string;
   } | null>(null);
   const [loadingPatientId, setLoadingPatientId] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -117,6 +123,9 @@ function ConsolidadosContent() {
           empresa: row.NomCom,
           proyecto: row.DesDes,
           fecAte: normalizeFecAte(matchingOrder.FecAte),
+          // PR-2 — thread the DesTCh exam-type signal (REQ-6). DesTCh is
+          // the only discriminator; DesDes/proyecto are never consulted.
+          tipoExamen: row.DesTCh,
         });
       } else {
         setErrorMessage(
@@ -143,7 +152,9 @@ function ConsolidadosContent() {
         dni: modalState.dni,
         nombre: modalState.nombrePaciente,
         empresa: modalState.empresa,
-        tipoExamen: '',
+        // PR-2 — carry the DesTCh signal on the synthetic person/ficha so
+        // `emailViewDataFromFiles` can stamp ADICIONAL refs (REQ-6).
+        tipoExamen: modalState.tipoExamen ?? '',
         proyecto: modalState.proyecto,
         condic: '',
         fichas: [],
@@ -154,7 +165,7 @@ function ConsolidadosContent() {
         nroRuc: modalState.ruc,
         nomCFa: '',
         proyecto: modalState.proyecto,
-        tipoExamen: '',
+        tipoExamen: modalState.tipoExamen ?? '',
         condic: '',
         fecAte: modalState.fecAte ?? '',
       };
