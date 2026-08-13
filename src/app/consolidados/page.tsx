@@ -323,6 +323,11 @@ function ConsolidadosContent() {
           empresa={modalState.empresa}
           destino={modalState.proyecto}
           fecAte={modalState.fecAte}
+          // PR-2 (nomenclatura-adicionales) — forward the DesTCh signal so
+          // pane download hrefs and the selected-files zip use ADICIONAL
+          // nomenclature for ADICIONALES orders (S-9 / S-7). Absent signal
+          // keeps CAMO/EMO fallback (REQ-6).
+          tipoExamen={modalState.tipoExamen}
           onClose={closeFilesModal}
           onSend={handleSendFromModal}
         />
