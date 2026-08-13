@@ -303,6 +303,10 @@ export class SqlServerTemplateRepository implements ITemplateRepository {
     // so unchecking "Por defecto" survives a save (open-question
     // resolution: deterministic, no silent preservation).
     //
+    // Historical rows whose type/default is already inconsistent are NOT
+    // auto-corrected here (non-goal) — re-saving the row through this flow
+    // is the correction mechanism.
+    //
     // Default arbitration on type migration follows the confirmed "Limpiar"
     // policy, all inside the same transaction so `idx_templates_default_area_type`
     // is never violated and no partial cleanup can persist:
