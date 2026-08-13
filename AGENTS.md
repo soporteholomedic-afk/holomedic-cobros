@@ -75,6 +75,28 @@
 
 - Write and execute all terminal commands specifically for PowerShell compatibility
 
+## Git Workflow (Deployment Flow)
+
+Flujo de despliegue obligatorio:
+
+1. **Trabajar SIEMPRE en `develop`** — todo el trabajo diario se hace sobre `develop`. `master` solo recibe merges promovidos desde `develop`.
+2. **Feature branches desde `develop`** — toda rama de feature se crea a partir de `develop`, nunca desde `master`:
+   ```powershell
+   git checkout develop
+   git checkout -b feature/<nombre>
+   ```
+3. **Promoción a `master`** — al terminar el trabajo en `develop` (verificado y mergeado), se promueve a `master` local y se sube al remoto:
+   ```powershell
+   git checkout master
+   git merge develop
+   git push origin master
+   git checkout develop
+   ```
+4. **Política de ramas remotas** — SOLO `master` y `develop` pueden existir en el remoto. Cualquier otra rama remota (feature/fix/feat) debe eliminarse al dejar de ser necesaria:
+   ```powershell
+   git push origin --delete <rama>
+   ```
+
 ## Package Manager
 
 - All package installations, upgrades, and removals **MUST** be done with **pnpm** (currently 11.9.0). The lockfile is `pnpm-lock.yaml` and is the source of truth.
