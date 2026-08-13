@@ -211,4 +211,80 @@ describe('buildEmailViewDataFromWizard', () => {
     const tipos = result.fileRefs.map((r) => r.tipoExamen).sort();
     expect(tipos).toEqual(['CAMO', 'EMO']);
   });
+
+  // ================================================================
+  // PR-2 (nomenclatura-adicionales) — stamp preservation
+  // REQ-8/S-13: `buildEmailViewDataFromWizard` MUST preserve an existing
+  // `ref.tipoExamen` (e.g. 'ADICIONAL' stamped by the wizard step) and
+  // NEVER overwrite it with a hardcoded 'CAMO'/'EMO'. S-14: mixed
+  // CAMO+ADICIONAL refs under one nombreCompleto keep per-file prefixes.
+  // ================================================================
+
+  it('preserves a pre-stamped ADICIONAL ref through the email build (S-13)', () => {
+    const people = [makePerson()];
+    const adicionalCamo = makePick({
+      ruc: '20123456789',
+      dni: '12345678',
+      idAten: 'AT-001',
+      path: 'LEGAJOS',
+      name: '012110336CERT.pdf',
+      tipoExamen: 'ADICIONAL',
+    });
+    const result = buildEmailViewDataFromWizard({
+      selectedDnIs: new Set(['12345678']),
+      camoByDni: { '12345678': adicionalCamo },
+      emoByDni: {},
+      people,
+    });
+    expect(result.fileRefs).toHaveLength(1);
+    expect(result.fileRefs[0]?.tipoExamen).toBe('ADICIONAL');
+  });
+
+  it('falls back to CAMO/EMO only when the pick ref has no stamp (default contract unchanged)', () => {
+    const people = [makePerson()];
+    const unstampedCamo = makePick({
+      ruc: '20123456789',
+      dni: '12345678',
+      idAten: 'AT-001',
+      path: 'LEGAJOS',
+      name: 'CERT.pdf',
+    });
+    const unstampedEmo = makePick({
+      ruc: '20123456789',
+      dni: '12345678',
+      idAten: 'AT-001',
+      path: 'LEGAJOS',
+      name: 'EXPED.pdf',
+    });
+    const result = buildEmailViewDataFromWizard({
+      selectedDnIs: new Set(['12345678']),
+      camoByDni: { '12345678': unstampedCamo },
+      emoByDni: { '12345678': unstampedEmo },
+      people,
+    });
+    expect(result.fileRefs).toHaveLength(2);
+    expect(result.fileRefs[0]?.tipoExamen).toBe('CAMO');
+    expect(result.fileRefs[1]?.tipoExamen).toBe('EMO');
+  });
+
+  it('preserves stamps on stray (person-missing) picks too (S-13 defensive path)', () => {
+    const people = [makePerson({ dni: '99999999', nombre: 'OTHER PERSON' })];
+    const adicionalCamo = makePick({
+      ruc: '20123456789',
+      dni: '12345678',
+      idAten: 'AT-001',
+      path: 'LEGAJOS',
+      name: '012110336CERT.pdf',
+      tipoExamen: 'ADICIONAL',
+    });
+    const result = buildEmailViewDataFromWizard({
+      selectedDnIs: new Set(['12345678']),
+      camoByDni: { '12345678': adicionalCamo },
+      emoByDni: {},
+      people,
+    });
+    expect(result.fileRefs).toHaveLength(1);
+    expect(result.fileRefs[0]?.tipoExamen).toBe('ADICIONAL');
+    expect(result.fileRefs[0]?.dni).toBe('12345678');
+  });
 });

@@ -28,6 +28,7 @@ import { FileText, X } from 'lucide-react';
 import { useState, type ReactElement } from 'react';
 
 import { FilesModal } from '@/features/envio-resultados/presentation/components/FilesModal';
+import { normalizeTipoExamen } from '@/features/envio-resultados/domain/ready-files/normalizeTipoExamen';
 import type { WizardFilePick } from '@/features/envio-resultados/presentation/hooks/useEnvioWizard';
 import type { UnifiedPerson } from '@/types/sp-result';
 
@@ -69,6 +70,12 @@ export function Step3Emo({
   const [activePickDni, setActivePickDni] = useState<string | null>(null);
   const activePerson =
     activePickDni === null ? null : people.find((p) => p.dni === activePickDni) ?? null;
+  // PR-2 (nomenclatura-adicionales, REQ-7) — the pick's tipoExamen is
+  // derived from `fichas[0].tipoExamen`: ADICIONALES orders pick
+  // `'ADICIONAL'`, everything else keeps `'EMO'` as today. Limited to
+  // `fichas[0]` (pre-existing multi-ficha limitation, documented).
+  const pickTipoExamen: 'EMO' | 'ADICIONAL' =
+    normalizeTipoExamen(activePerson?.fichas[0]?.tipoExamen) === 'ADICIONAL' ? 'ADICIONAL' : 'EMO';
 
   const selectedPeople = people.filter((p) => selectedDnIs.has(p.dni));
 
@@ -203,7 +210,7 @@ export function Step3Emo({
                 idAten: activePerson.fichas[0]?.idAten ?? '',
                 path: folderPath,
                 name: file.name,
-                tipoExamen: 'EMO',
+                tipoExamen: pickTipoExamen,
               },
               displayName: file.name,
             });

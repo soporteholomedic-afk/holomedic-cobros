@@ -83,13 +83,17 @@ export function buildEmailViewDataFromWizard(
       // from `selectedPatients`. The pick map may still carry refs
       // for it — push them to `fileRefs` so the LAN-share file
       // is still attached (the ref shape is self-describing).
+      // PR-2 (REQ-8): preserve an existing stamp (`ref.tipoExamen ?? 'CAMO'`)
+      // — a pick already stamped 'ADICIONAL' by the wizard step must
+      // survive the email build (S-13), never overwritten by a hardcoded
+      // 'CAMO'/'EMO'.
       const strayCamo = input.camoByDni[dni];
       const strayEmo = input.emoByDni[dni];
       if (strayCamo) {
-        fileRefs.push({ ...strayCamo.ref, tipoExamen: 'CAMO' });
+        fileRefs.push({ ...strayCamo.ref, tipoExamen: strayCamo.ref.tipoExamen ?? 'CAMO' });
       }
       if (strayEmo) {
-        fileRefs.push({ ...strayEmo.ref, tipoExamen: 'EMO' });
+        fileRefs.push({ ...strayEmo.ref, tipoExamen: strayEmo.ref.tipoExamen ?? 'EMO' });
       }
       continue;
     }
@@ -100,11 +104,11 @@ export function buildEmailViewDataFromWizard(
 
     if (camo) {
       files.push(camo.displayName);
-      fileRefs.push({ ...camo.ref, tipoExamen: 'CAMO' });
+      fileRefs.push({ ...camo.ref, tipoExamen: camo.ref.tipoExamen ?? 'CAMO' });
     }
     if (emo) {
       files.push(emo.displayName);
-      fileRefs.push({ ...emo.ref, tipoExamen: 'EMO' });
+      fileRefs.push({ ...emo.ref, tipoExamen: emo.ref.tipoExamen ?? 'EMO' });
     }
 
     // The patient entry is always present — even when `files` is

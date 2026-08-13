@@ -211,6 +211,70 @@ describe('Step3Emo', () => {
     expect(pick?.ref.name).toBe('75618561EXPED.pdf');
   });
 
+  // -- PR-2 (nomenclatura-adicionales): ADICIONALES picks ----------
+
+  it('stamps the pick "ADICIONAL" when fichas[0].tipoExamen is ADICIONALES (S-12)', () => {
+    const adicionalesPerson = makePerson({
+      dni: '44444444',
+      nombre: 'Diana Flores',
+      tipoExamen: 'ADICIONALES',
+      fichas: [
+        {
+          idAten: 'AT-444',
+          nroRuc: '20123456789',
+          nomCFa: 'Acme Corp',
+          proyecto: 'METRO LIMA',
+          tipoExamen: 'ADICIONALES',
+          condic: 'APTO',
+          fecAte: '17/06/2026',
+        },
+      ],
+    });
+    const { onPickFile } = renderStep3({
+      people: [adicionalesPerson],
+      selectedDnIs: new Set(['44444444']),
+      emoByDni: {},
+    });
+    fireEvent.click(within(screen.getByTestId('step3-card-44444444')).getByTestId('step3-elegir-emo'));
+    fireEvent.click(screen.getByTestId('step3-pick-modal-trigger-pick-44444444'));
+
+    expect(onPickFile).toHaveBeenCalledTimes(1);
+    const [, pick] = onPickFile.mock.calls[0] as [string, WizardFilePick];
+    expect(pick?.ref.tipoExamen).toBe('ADICIONAL');
+  });
+
+  it('stamps "ADICIONAL" even when the proyecto is NOT ADICIONALES (REQ-9/S-15 — DesTCh-only discriminator)', () => {
+    // Fixture decoupling: tipoExamen drives the stamp, never proyecto.
+    const cosapiPerson = makePerson({
+      dni: '55555555',
+      nombre: 'Elena Vega',
+      tipoExamen: 'ADICIONALES',
+      proyecto: 'COSAPI',
+      fichas: [
+        {
+          idAten: 'AT-555',
+          nroRuc: '20123456789',
+          nomCFa: 'Acme Corp',
+          proyecto: 'COSAPI',
+          tipoExamen: 'ADICIONALES',
+          condic: 'APTO',
+          fecAte: '17/06/2026',
+        },
+      ],
+    });
+    const { onPickFile } = renderStep3({
+      people: [cosapiPerson],
+      selectedDnIs: new Set(['55555555']),
+      emoByDni: {},
+    });
+    fireEvent.click(within(screen.getByTestId('step3-card-55555555')).getByTestId('step3-elegir-emo'));
+    fireEvent.click(screen.getByTestId('step3-pick-modal-trigger-pick-55555555'));
+
+    expect(onPickFile).toHaveBeenCalledTimes(1);
+    const [, pick] = onPickFile.mock.calls[0] as [string, WizardFilePick];
+    expect(pick?.ref.tipoExamen).toBe('ADICIONAL');
+  });
+
   it('after a pick, the card shows the picked filename', () => {
     renderStep3Stateful();
     fireEvent.click(within(screen.getByTestId('step3-card-11111111')).getByTestId('step3-elegir-emo'));
