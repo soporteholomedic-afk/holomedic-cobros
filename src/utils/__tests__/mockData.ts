@@ -96,5 +96,58 @@ export const mockClients: ClienteGroup[] = [
     facturasCredito: 0,
     facturasAFavor: 0,
     facturasVencidas: 0
+  },
+  {
+    clienteId: '20555666777',
+    razonSocial: 'FARMACIA SAN JOSE E.I.R.L.',
+    documentos: [
+      {
+        tipoDoc: 'FE',
+        serie: 'F003',
+        numero: '201',
+        fechaDoc: '11/05/2026',
+        fechaVen: '11/05/2026', // Same day as Fec. Doc. → contado
+        cuenta: '121201',
+        moneda: 'S/',
+        debe: 125.28,
+        haber: 0,
+        saldo: 125.28
+      },
+      {
+        tipoDoc: 'FE',
+        serie: 'F003',
+        numero: '202',
+        fechaDoc: '01/05/2026',
+        fechaVen: '20/05/2026', // Different day from Fec. Doc. → crédito
+        cuenta: '121201',
+        moneda: 'S/',
+        debe: 400,
+        haber: 0,
+        saldo: 400
+      },
+      {
+        tipoDoc: 'BO',
+        serie: 'B002',
+        numero: '55',
+        fechaDoc: '05/05/2026',
+        fechaVen: '', // No due date → crédito
+        cuenta: '121301',
+        moneda: '$',
+        debe: 50,
+        haber: 0,
+        saldo: 50
+      }
+    ],
+    saldosPorMoneda: {
+      'S/': { debe: 525.28, haber: 0, saldo: 525.28 },
+      '$': { debe: 50, haber: 0, saldo: 50 }
+    },
+    tieneDeuda: true,
+    tieneCredito: false,
+    tieneSaldoFavor: false,
+    saldoPrincipalTexto: 'Debe S/ 525.28 / Debe $ 50.00',
+    facturasCredito: 1,
+    facturasAFavor: 0,
+    facturasVencidas: 2
   }
 ];

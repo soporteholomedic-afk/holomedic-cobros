@@ -63,17 +63,21 @@ export default function DashboardStats({ data }: DashboardStatsProps) {
         </p>
       </div>
 
-      {/* Clean Accounts Card (Al Día) */}
+      {/* Deuda Crédito / Contado Card */}
       <div className="relative overflow-hidden rounded-3xl p-6 bg-white dark:bg-slate-900 border border-slate-200/60 dark:border-slate-800/80 shadow-md hover:shadow-lg transition-shadow duration-300">
-        <div className="absolute top-0 right-0 w-24 h-24 bg-slate-500/5 rounded-bl-full" />
+        <div className="absolute top-0 right-0 w-24 h-24 bg-amber-500/5 rounded-bl-full" />
         <div className="flex items-center justify-between mb-4">
-          <span className="text-sm font-semibold text-slate-500 dark:text-slate-400">Clientes Al Día</span>
-          <div className="flex items-center justify-center w-10 h-10 rounded-xl bg-slate-50 dark:bg-slate-800/60 text-slate-600 dark:text-slate-300">
+          <span className="text-sm font-semibold text-slate-500 dark:text-slate-400">Deuda Crédito / Contado</span>
+          <div className="flex items-center justify-center w-10 h-10 rounded-xl bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400">
             <Landmark className="w-5 h-5" />
           </div>
         </div>
-        <h3 className="text-3xl font-extrabold text-slate-700 dark:text-slate-200">{metrics.clientesAlDia}</h3>
-        <p className="text-xs text-slate-400 dark:text-slate-500 mt-2">Cuentas conciliadas o sin deudas</p>
+        <p className="text-xs text-amber-600/80 dark:text-amber-400/70 mt-2 font-medium">
+          Crédito: {renderCurrencyTotals(metrics.deudaCreditoPorMoneda, 'Crédito')}
+        </p>
+        <p className="text-xs text-amber-600/80 dark:text-amber-400/70 mt-2 font-medium">
+          Contado: {renderCurrencyTotals(metrics.deudaContadoPorMoneda, 'Contado')}
+        </p>
       </div>
 
     </div>
