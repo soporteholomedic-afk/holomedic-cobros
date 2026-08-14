@@ -92,7 +92,7 @@ function CeldasIrradiacionRegion({ region, basePath }: { region: Region; basePat
               checked={irr.emitorax}
               onChange={(e) => setField(`${p}.emitorax`, e.target.checked)}
             />{' '}
-            EMITORAX
+            HEMITORAX
           </label>
         </td>
         <td className="p-1">
