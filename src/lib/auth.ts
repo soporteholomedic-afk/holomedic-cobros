@@ -31,3 +31,22 @@ export async function getSession(): Promise<JwtPayload | null> {
   if (!token) return null;
   return verifyJwt(token);
 }
+
+export interface AuthCookieOptions {
+  httpOnly: boolean;
+  secure: boolean;
+  sameSite: 'lax';
+  path: string;
+  maxAge: number;
+}
+
+export function getAuthCookieOptions(maxAgeSeconds = 60 * 60 * 8): AuthCookieOptions {
+  return {
+    httpOnly: true,
+    secure: process.env.COOKIE_SECURE === 'true',
+    sameSite: 'lax',
+    path: '/',
+    maxAge: maxAgeSeconds,
+  };
+}
+

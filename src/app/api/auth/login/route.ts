@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
-import { COOKIE_NAME } from '@/lib/auth';
+import { COOKIE_NAME, getAuthCookieOptions } from '@/lib/auth';
 import { getUsuarioDb } from '@/features/auth/infrastructure/getUsuarioDb';
 import { LoginUseCase } from '@/features/auth/application/login';
 import { InvalidCredentialsError } from '@/features/auth/infrastructure/sqlserver';
@@ -48,13 +48,7 @@ export async function POST(request: Request): Promise<NextResponse<LoginResponse
     const result = await useCase.execute(body);
 
     const cookieStore = await cookies();
-    cookieStore.set(COOKIE_NAME, result.token, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
-      path: '/',
-      maxAge: 60 * 60 * 8,
-    });
+    cookieStore.set(COOKIE_NAME, result.token, getAuthCookieOptions());
 
     return NextResponse.json({
       success: true,

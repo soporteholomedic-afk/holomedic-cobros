@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
-import { getSession, signJwt, COOKIE_NAME } from '@/lib/auth';
+import { getSession, signJwt, COOKIE_NAME, getAuthCookieOptions } from '@/lib/auth';
 import { getUsuarioDb } from '@/features/auth/infrastructure/getUsuarioDb';
 import type { Permiso } from '@/features/auth/domain/entities';
 import { PERMISOS } from '@/features/auth/domain/entities';
@@ -95,13 +95,7 @@ export async function PUT(
       });
 
       const cookieStore = await cookies();
-      cookieStore.set(COOKIE_NAME, nuevoToken, {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
-        sameSite: 'lax',
-        path: '/',
-        maxAge: 60 * 60 * 8,
-      });
+      cookieStore.set(COOKIE_NAME, nuevoToken, getAuthCookieOptions());
     }
 
     return NextResponse.json({
