@@ -10,22 +10,40 @@ function normalizeHeader(str: string): string {
     .replace(/[^a-z0-9]/g, ""); // Remove spaces/symbols
 }
 
+// Normalize a DD/MM/YYYY date (padded or unpadded day/month, 4-digit year)
+// into an ISO `YYYY-MM-DD` string. Missing or unparsable values return null.
+// Calendar validity is enforced (e.g. 31/02/2026 and 29/02/2026 → null).
+export function normalizeFechaDDMMYYYY(value: string): string | null {
+  if (!value) return null;
+  const trimmed = String(value).trim();
+  const match = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(trimmed);
+  if (!match) return null;
+  const day = parseInt(match[1], 10);
+  const month = parseInt(match[2], 10);
+  const year = parseInt(match[3], 10);
+  if (month < 1 || month > 12 || day < 1) return null;
+  const daysInMonth = new Date(year, month, 0).getDate();
+  if (day > daysInMonth) return null;
+  const pad = (n: number): string => String(n).padStart(2, '0');
+  return `${year}-${pad(month)}-${pad(day)}`;
+}
+
+// True only when both dates are valid DD/MM/YYYY values for the same day.
+export function esMismoDia(a: string, b: string): boolean {
+  const na = normalizeFechaDDMMYYYY(a);
+  const nb = normalizeFechaDDMMYYYY(b);
+  return na !== null && nb !== null && na === nb;
+}
+
 // Helper to check if date DD/MM/YYYY is in the past (overdue)
 function isPastDue(dateStr: string): boolean {
-  if (!dateStr) return false;
-  try {
-    const parts = dateStr.split('/');
-    if (parts.length !== 3) return false;
-    const day = parseInt(parts[0], 10);
-    const month = parseInt(parts[1], 10) - 1;
-    const year = parseInt(parts[2], 10);
-    const date = new Date(year, month, day);
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    return date < today;
-  } catch {
-    return false;
-  }
+  const normalized = normalizeFechaDDMMYYYY(dateStr);
+  if (!normalized) return false;
+  const [year, month, day] = normalized.split('-').map(Number);
+  const date = new Date(year, month - 1, day);
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  return date < today;
 }
 
 export function parseExcelData(arrayBuffer: ArrayBuffer): ClienteGroup[] {

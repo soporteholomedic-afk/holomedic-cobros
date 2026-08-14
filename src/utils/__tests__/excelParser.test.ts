@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import * as XLSX from 'xlsx';
-import { parseExcelData, calculateMetrics, formatNumber } from '../excelParser';
+import { parseExcelData, calculateMetrics, formatNumber, normalizeFechaDDMMYYYY, esMismoDia } from '../excelParser';
 import { ClienteGroup } from '../../types';
 
 describe('formatNumber', () => {
@@ -15,6 +15,46 @@ describe('formatNumber', () => {
       minimumFractionDigits: 2, 
       maximumFractionDigits: 2 
     }).format(0));
+  });
+});
+
+describe('normalizeFechaDDMMYYYY', () => {
+  it('normaliza fechas DD/MM/YYYY con y sin ceros a la izquierda', () => {
+    expect(normalizeFechaDDMMYYYY('05/05/2026')).toBe('2026-05-05');
+    expect(normalizeFechaDDMMYYYY('5/5/2026')).toBe('2026-05-05');
+  });
+
+  it('recorta espacios alrededor de la fecha', () => {
+    expect(normalizeFechaDDMMYYYY(' 11/05/2026 ')).toBe('2026-05-11');
+  });
+
+  it('valida el calendario (año bisiesto) al normalizar', () => {
+    expect(normalizeFechaDDMMYYYY('29/02/2024')).toBe('2024-02-29');
+    expect(normalizeFechaDDMMYYYY('29/02/2026')).toBeNull();
+  });
+
+  it('retorna null para fechas ausentes, inválidas o con otro formato', () => {
+    expect(normalizeFechaDDMMYYYY('')).toBeNull();
+    expect(normalizeFechaDDMMYYYY('   ')).toBeNull();
+    expect(normalizeFechaDDMMYYYY('31/02/2026')).toBeNull();
+    expect(normalizeFechaDDMMYYYY('abc')).toBeNull();
+    expect(normalizeFechaDDMMYYYY('2026-05-05')).toBeNull();
+  });
+});
+
+describe('esMismoDia', () => {
+  it('es true solo cuando ambas fechas son válidas y representan el mismo día', () => {
+    expect(esMismoDia('11/05/2026', '11/05/2026')).toBe(true);
+    expect(esMismoDia('11/5/2026', '11/05/2026')).toBe(true);
+    expect(esMismoDia('05/05/2026', '5/5/2026')).toBe(true);
+  });
+
+  it('es false cuando las fechas difieren o alguna es inválida, vacía o ausente', () => {
+    expect(esMismoDia('01/05/2026', '20/05/2026')).toBe(false);
+    expect(esMismoDia('11/05/2026', '')).toBe(false);
+    expect(esMismoDia('11/05/2026', '31/02/2026')).toBe(false);
+    expect(esMismoDia('', '')).toBe(false);
+    expect(esMismoDia('', '11/05/2026')).toBe(false);
   });
 });
 
