@@ -3,6 +3,23 @@ import * as XLSX from 'xlsx';
 import { parseExcelData, calculateMetrics, formatNumber, normalizeFechaDDMMYYYY, esMismoDia } from '../excelParser';
 import { ClienteGroup } from '../../types';
 
+function makeGroup(overrides?: Partial<ClienteGroup>): ClienteGroup {
+  return {
+    clienteId: '20601234567',
+    razonSocial: 'TEST SAC',
+    documentos: [],
+    saldosPorMoneda: {},
+    tieneDeuda: false,
+    tieneCredito: false,
+    tieneSaldoFavor: false,
+    saldoPrincipalTexto: 'Al día',
+    facturasCredito: 0,
+    facturasAFavor: 0,
+    facturasVencidas: 0,
+    ...overrides
+  };
+}
+
 describe('formatNumber', () => {
   it('debe formatear números correctamente según el locale es-PE', () => {
     const expectedValue = new Intl.NumberFormat('es-PE', { 
@@ -115,6 +132,123 @@ describe('calculateMetrics', () => {
     expect(metrics.clientesAlDia).toBe(1);
     expect(metrics.deudaTotalPorMoneda['S/']).toBe(1000);
     expect(metrics.saldoFavorTotalPorMoneda['$']).toBe(200);
+  });
+});
+
+describe('calculateMetrics — clasificación crédito/contado', () => {
+  it('clasifica como contado un documento cuya fechaDoc y fechaVen son el mismo día', () => {
+    const group = makeGroup({
+      documentos: [
+        {
+          tipoDoc: 'FE', serie: 'F001', numero: '1',
+          fechaDoc: '11/05/2026', fechaVen: '11/05/2026',
+          moneda: 'S/', debe: 125.28, haber: 0, saldo: 125.28
+        }
+      ]
+    });
+
+    const metrics = calculateMetrics([group]);
+    expect(metrics.deudaContadoPorMoneda).toEqual({ 'S/': 125.28 });
+    expect(metrics.deudaCreditoPorMoneda).toEqual({});
+  });
+
+  it('clasifica como crédito documentos con fechaVen distinta, vacía o inválida', () => {
+    const group = makeGroup({
+      documentos: [
+        {
+          tipoDoc: 'FE', serie: 'F001', numero: '1',
+          fechaDoc: '01/05/2026', fechaVen: '20/05/2026',
+          moneda: 'S/', debe: 400, haber: 0, saldo: 400
+        },
+        {
+          tipoDoc: 'FE', serie: 'F001', numero: '2',
+          fechaDoc: '05/05/2026', fechaVen: '',
+          moneda: '$', debe: 50, haber: 0, saldo: 50
+        },
+        {
+          tipoDoc: 'BO', serie: 'B001', numero: '3',
+          fechaDoc: '05/05/2026', fechaVen: 'abc',
+          moneda: 'S/', debe: 30, haber: 0, saldo: 30
+        }
+      ]
+    });
+
+    const metrics = calculateMetrics([group]);
+    expect(metrics.deudaCreditoPorMoneda).toEqual({ 'S/': 430, '$': 50 });
+    expect(metrics.deudaContadoPorMoneda).toEqual({});
+  });
+
+  it('excluye de ambas deudas los saldos iguales o menores a 0.01', () => {
+    const group = makeGroup({
+      documentos: [
+        {
+          tipoDoc: 'FE', serie: 'F001', numero: '1',
+          fechaDoc: '11/05/2026', fechaVen: '11/05/2026',
+          moneda: 'S/', debe: 0, haber: 0, saldo: 0
+        },
+        {
+          tipoDoc: 'FE', serie: 'F001', numero: '2',
+          fechaDoc: '11/05/2026', fechaVen: '11/05/2026',
+          moneda: 'S/', debe: 0, haber: 10, saldo: -10
+        },
+        {
+          tipoDoc: 'FE', serie: 'F001', numero: '3',
+          fechaDoc: '11/05/2026', fechaVen: '11/05/2026',
+          moneda: 'S/', debe: 0.01, haber: 0, saldo: 0.01
+        },
+        {
+          tipoDoc: 'FE', serie: 'F001', numero: '4',
+          fechaDoc: '11/05/2026', fechaVen: '11/05/2026',
+          moneda: 'S/', debe: 0.02, haber: 0, saldo: 0.02
+        }
+      ]
+    });
+
+    const metrics = calculateMetrics([group]);
+    expect(metrics.deudaContadoPorMoneda).toEqual({ 'S/': 0.02 });
+    expect(metrics.deudaCreditoPorMoneda).toEqual({});
+  });
+
+  it('acumula por moneda y clasifica cada documento una sola vez', () => {
+    const group = makeGroup({
+      documentos: [
+        {
+          tipoDoc: 'FE', serie: 'F001', numero: '1',
+          fechaDoc: '11/05/2026', fechaVen: '11/05/2026',
+          moneda: 'S/', debe: 125.28, haber: 0, saldo: 125.28
+        },
+        {
+          tipoDoc: 'FE', serie: 'F001', numero: '2',
+          fechaDoc: '01/05/2026', fechaVen: '20/05/2026',
+          moneda: 'S/', debe: 400, haber: 0, saldo: 400
+        },
+        {
+          tipoDoc: 'BO', serie: 'B001', numero: '3',
+          fechaDoc: '05/05/2026', fechaVen: '',
+          moneda: '$', debe: 50, haber: 0, saldo: 50
+        }
+      ]
+    });
+
+    const metrics = calculateMetrics([group]);
+    expect(metrics.deudaCreditoPorMoneda).toEqual({ 'S/': 400, '$': 50 });
+    expect(metrics.deudaContadoPorMoneda).toEqual({ 'S/': 125.28 });
+  });
+
+  it('usa S/ como moneda por defecto cuando el documento no trae moneda', () => {
+    const group = makeGroup({
+      documentos: [
+        {
+          tipoDoc: 'FE', serie: 'F001', numero: '1',
+          fechaDoc: '01/05/2026', fechaVen: '20/05/2026',
+          moneda: '', debe: 20, haber: 0, saldo: 20
+        }
+      ]
+    });
+
+    const metrics = calculateMetrics([group]);
+    expect(metrics.deudaCreditoPorMoneda).toEqual({ 'S/': 20 });
+    expect(metrics.deudaContadoPorMoneda).toEqual({});
   });
 });
 

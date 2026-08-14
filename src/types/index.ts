@@ -76,4 +76,6 @@ export interface DashboardMetrics {
   clientesAlDia: number;
   deudaTotalPorMoneda: Record<string, number>;
   saldoFavorTotalPorMoneda: Record<string, number>;
+  deudaCreditoPorMoneda: Record<string, number>;
+  deudaContadoPorMoneda: Record<string, number>;
 }

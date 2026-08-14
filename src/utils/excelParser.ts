@@ -240,6 +240,8 @@ export function calculateMetrics(groups: ClienteGroup[]): DashboardMetrics {
   
   const deudaTotalPorMoneda: Record<string, number> = {};
   const saldoFavorTotalPorMoneda: Record<string, number> = {};
+  const deudaCreditoPorMoneda: Record<string, number> = {};
+  const deudaContadoPorMoneda: Record<string, number> = {};
 
   groups.forEach(g => {
     let hasDebt = false;
@@ -254,6 +256,18 @@ export function calculateMetrics(groups: ClienteGroup[]): DashboardMetrics {
         hasCredit = true;
         saldoFavorTotalPorMoneda[mon] = (saldoFavorTotalPorMoneda[mon] || 0) + Math.abs(saldo);
       }
+    });
+
+    // Document-level classification: contado only when document and due dates
+    // are the same calendar day; every other positive-balance document is crédito
+    // (including empty or invalid due dates).
+    g.documentos.forEach(doc => {
+      if (doc.saldo <= 0.01) return;
+      const mon = doc.moneda || 'S/';
+      const target = esMismoDia(doc.fechaDoc, doc.fechaVen)
+        ? deudaContadoPorMoneda
+        : deudaCreditoPorMoneda;
+      target[mon] = (target[mon] || 0) + doc.saldo;
     });
 
     if (hasDebt) {
@@ -271,7 +285,9 @@ export function calculateMetrics(groups: ClienteGroup[]): DashboardMetrics {
     clientesConSaldoFavor,
     clientesAlDia,
     deudaTotalPorMoneda,
-    saldoFavorTotalPorMoneda
+    saldoFavorTotalPorMoneda,
+    deudaCreditoPorMoneda,
+    deudaContadoPorMoneda
   };
 }
 
