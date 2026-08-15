@@ -639,7 +639,48 @@ describe('EmailEditor', () => {
     expect(onBack).toHaveBeenCalledTimes(1);
   });
 
-  it('does NOT render the back button when onBack is undefined (R5 mitigation for page.tsx)', () => {
+  // ================================================================
+  // Proyecto / Destino — the `destino` prop must reach
+  // interpolateSpitch so {{destino}} resolves in the live preview.
+  // The stale-closure guard: a NEW destino value after a rerender must
+  // be used, not the value captured when handleSpitchSelect was first
+  // created. Without `destino` in that useCallback dep array the
+  // callback keeps the OLD value (stale closure) and this test fails.
+  // ================================================================
+
+  it('should interpolate {{destino}} with the current destino prop (stale-closure guard)', async () => {
+    mockFetch.mockResolvedValue({ ok: true, json: () => Promise.resolve({ success: true }) });
+
+    const previous = { ...mockSpitchOverride };
+    mockSpitchOverride.bodyHtml = '<p>Destino: {{destino}}</p>';
+    mockSpitchOverride.subject = 'Proyecto: {{destino}}';
+    mockSpitchOverride.name = 'Plantilla destino';
+
+    try {
+      const { rerender } = render(
+        <EmailEditor {...defaultProps} destino="Proyecto Uno" />,
+      );
+      const preview = await screen.findByTestId('email-preview');
+      expect(preview.textContent).toContain('Destino: Proyecto Uno');
+      expect(screen.getByLabelText('Asunto')).toHaveValue('Proyecto: Proyecto Uno');
+
+      // Rerender with a NEW destino — the callback must not be stale.
+      rerender(<EmailEditor {...defaultProps} destino="Proyecto Dos" />);
+      const spitchSelect = screen.getByTestId('spitch-selector');
+      fireEvent.change(spitchSelect, { target: { value: 'spitch-002' } });
+
+      await waitFor(() => {
+        expect(screen.getByTestId('email-preview').textContent).toContain(
+          'Destino: Proyecto Dos',
+        );
+      });
+      expect(screen.getByLabelText('Asunto')).toHaveValue('Proyecto: Proyecto Dos');
+    } finally {
+      Object.assign(mockSpitchOverride, previous);
+    }
+  });
+
+  it('should not render the back button when onBack is undefined (R5 mitigation for page.tsx)', () => {
     mockFetch.mockResolvedValue({ ok: true, json: () => Promise.resolve({ success: true }) });
 
     // backContext default is 'table', but the absence of onBack must

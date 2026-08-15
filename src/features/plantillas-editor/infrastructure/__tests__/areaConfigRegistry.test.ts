@@ -43,6 +43,20 @@ describe('areaConfigRegistry', () => {
       expect(cfg!.mockPreviewData.companyName.length).toBeGreaterThan(0);
     });
 
+    it('exposes the Paciente token `destino` labelled "Proyecto / Destino" (spec: Palette exposes destination token)', () => {
+      const cfg = getAreaConfig('consolidados');
+      expect(cfg).toBeDefined();
+      const pacienteCategory = cfg!.availableTokens.find((c) => c.category === 'Paciente');
+      expect(pacienteCategory).toBeDefined();
+      const destinoToken = pacienteCategory!.tokens.find((t) => t.key === 'destino');
+      expect(destinoToken).toBeDefined();
+      expect(destinoToken!.label).toBe('Proyecto / Destino');
+      // Inserting the token must persist the canonical placeholder.
+      expect(destinoToken!.key).toBe('destino');
+      // The mock preview value must be non-empty so the preview renders it.
+      expect(cfg!.mockPreviewData.destino.length).toBeGreaterThan(0);
+    });
+
     it('returns undefined for an unregistered area (cobranza)', () => {
       expect(getAreaConfig('cobranza')).toBeUndefined();
     });

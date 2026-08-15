@@ -56,6 +56,7 @@ const consolidadosConfig: AreaConfig = {
         { key: 'dni', label: 'DNI' },
         { key: 'nombrePaciente', label: 'Nombre Paciente' },
         { key: 'listaPacientes', label: 'Lista de Pacientes' },
+        { key: 'destino', label: 'Proyecto / Destino' },
       ],
     },
     { category: 'Firma', tokens: [{ key: 'firma', label: 'Firma' }] },
@@ -101,6 +102,7 @@ const consolidadosConfig: AreaConfig = {
     today: '2026-01-01',
     pacienteDni: '12345678',
     pacienteNombre: 'Test Paciente',
+    destino: 'Proyecto Test',
   },
 };
 
@@ -122,6 +124,7 @@ const minimalConfig: AreaConfig = {
     today: '2026-01-01',
     pacienteDni: '',
     pacienteNombre: '',
+    destino: '',
   },
 };
 
@@ -134,6 +137,7 @@ describe('TokenPalette', () => {
       expect(screen.getByRole('img', { name: 'Empresa' })).toBeInTheDocument();
       expect(screen.getByRole('img', { name: 'Fecha' })).toBeInTheDocument();
       expect(screen.getByRole('img', { name: 'Lista de Pacientes' })).toBeInTheDocument();
+      expect(screen.getByRole('img', { name: 'Proyecto / Destino' })).toBeInTheDocument();
       expect(screen.getByRole('img', { name: 'Firma' })).toBeInTheDocument();
       expect(
         screen.getByRole('img', { name: 'Documentos vencidos' }),

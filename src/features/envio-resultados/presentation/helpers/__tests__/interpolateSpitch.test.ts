@@ -187,6 +187,38 @@ describe('interpolateSpitch (legacy thin wrapper) — behaviour-preserving for E
     expect(out.subject).not.toContain('{{')    
     expect(out.subject).not.toContain('</p>');
   });
+
+  it('forwards `destino` to the interpolation context (optional param wiring)', () => {
+    const out = interpolateSpitch({
+      html: '<p>Destino: {{destino}}</p>',
+      subject: 'Proyecto: {{destino}}',
+      companyName: 'C',
+      patientNames: [],
+      fileNames: [],
+      destino: 'A & B <C>',
+    });
+    // Body is HTML-escaped; subject stays plain.
+    expect(out.html).toContain('Destino: A &amp; B &lt;C&gt;');
+    expect(out.html).not.toContain('<C>');
+    expect(out.subject).toBe('Proyecto: A & B <C>');
+    expect(out.subject).not.toContain('&amp;');
+    expect(out.html).not.toContain('{{destino}}');
+  });
+
+  it('omitting `destino` resolves it empty and removes its containing <p> block (spec: Missing destination removes its body block)', () => {
+    const out = interpolateSpitch({
+      html: '<p>{{destino}}</p>',
+      subject: 'Subj: {{destino}}',
+      companyName: 'C',
+      patientNames: [],
+      fileNames: [],
+    });
+    // The <p> block is removed entirely — no empty paragraph remains.
+    expect(out.html).not.toContain('<p>');
+    expect(out.html).not.toContain('{{destino}}');
+    // The subject placeholder is removed too.
+    expect(out.subject).toBe('Subj: ');
+  });
 });
 
 describe('interpolate(html, subject, ctx, registry) — new orchestrator (PR 4 core)', () => {

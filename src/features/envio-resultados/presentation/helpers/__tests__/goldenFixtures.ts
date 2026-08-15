@@ -24,6 +24,7 @@ export const GOLDEN_CTX: InterpolationContext = {
   patientNames: ['Juan Pérez', 'María Gómez'],
   fileNames: ['CAMO.pdf', 'EMO.pdf'],
   firma: '<p>Dr. Pérez — Clínica Demo S.A.</p>',
+  destino: 'Proyecto Cardio — Centro Médico',
   patients: [
     {
       id: 'pat-1',

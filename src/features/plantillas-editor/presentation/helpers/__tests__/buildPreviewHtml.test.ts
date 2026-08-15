@@ -30,6 +30,7 @@ const mock: MockPreviewData = {
   today: '2026-01-15',
   pacienteDni: '12345678',
   pacienteNombre: 'Juan Pérez',
+  destino: 'Proyecto Cardio — Centro Médico',
 };
 
 const emptyFirmaMock: MockPreviewData = { ...mock, firma: '' };
@@ -70,6 +71,23 @@ describe('buildPreviewHtml', () => {
       expect(out).toMatch(/<\/ol>/);
       expect(out).toContain('<li>Juan Pérez</li>');
       expect(out).not.toContain('{{listaPacientes}}');
+    });
+
+    it('replaces {{destino}} with the configured non-empty mock destination (spec: Preview renders mock destination)', () => {
+      const out = buildPreviewHtml('<p>Destino: {{destino}}</p>', mock);
+      expect(out).toContain('Destino: Proyecto Cardio — Centro Médico');
+      expect(out).not.toContain('{{destino}}');
+    });
+
+    it('keeps an unrecognized token visible while {{destino}} resolves (spec: Unknown preview token remains visible)', () => {
+      const out = buildPreviewHtml(
+        '<p>{{destino}} — {{unknownToken}}</p>',
+        mock,
+      );
+      // The recognized token resolves to the mock value.
+      expect(out).toContain('Proyecto Cardio — Centro Médico');
+      // The unrecognized token stays visible as its original placeholder.
+      expect(out).toContain('{{unknownToken}}');
     });
   });
 

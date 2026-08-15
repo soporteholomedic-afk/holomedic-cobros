@@ -110,6 +110,37 @@ describe('TokenResolverRegistry — buildTokenResolverRegistry(area)', () => {
     expect(registry.resolveToken('doesNotExist', GOLDEN_CTX).html).toBe('');
   });
 
+  it('resolves {{destino}} with HTML-escaped body and raw subject (spec: Body interpolation escapes destination)', () => {
+    const registry = buildTokenResolverRegistry('consolidados');
+    const ctx = { ...GOLDEN_CTX, destino: 'A & B <C>' };
+    const out = registry.resolveToken('destino', ctx);
+    expect(out.html).toBe('A &amp; B &lt;C&gt;');
+    expect(out.html).not.toContain('<C>');
+    expect(out.subject).toBe('A & B <C>');
+    expect(out.subject).not.toContain('&amp;');
+  });
+
+  it('uses the first patient/ficha destination for a batch (spec: First selected patient wins in a batch)', () => {
+    const registry = buildTokenResolverRegistry('consolidados');
+    const batchCtx = {
+      ...GOLDEN_CTX,
+      patients: [
+        { ...GOLDEN_CTX.patients[0]!, name: 'Primero' },
+        { ...GOLDEN_CTX.patients[0]!, name: 'Segundo' },
+      ],
+      destino: 'Proyecto Primero',
+    };
+    // The batch value is the destination of the first selected patient/ficha.
+    expect(registry.resolveToken('destino', batchCtx).subject).toBe('Proyecto Primero');
+  });
+
+  it('resolves {{destino}} to empty { html: "", subject: "" } when the value is missing (spec: Missing destination removes its body block)', () => {
+    const registry = buildTokenResolverRegistry('consolidados');
+    const emptyCtx = { ...GOLDEN_CTX, destino: '' };
+    const out = registry.resolveToken('destino', emptyCtx);
+    expect(out).toEqual({ html: '', subject: '' });
+  });
+
   it('resolves {{firma}} to a visible placeholder when ctx.firma is empty (option B — no removal)', () => {
     const registry = buildTokenResolverRegistry('consolidados');
     const emptyCtx = { ...GOLDEN_CTX, firma: '' };

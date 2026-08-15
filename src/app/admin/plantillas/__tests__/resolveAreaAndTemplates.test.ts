@@ -50,6 +50,7 @@ const consolidadosConfig: AreaConfig = {
     today: '2026-01-01',
     pacienteDni: '12345678',
     pacienteNombre: 'Test Paciente',
+    destino: 'Proyecto Test',
   },
 };
 
