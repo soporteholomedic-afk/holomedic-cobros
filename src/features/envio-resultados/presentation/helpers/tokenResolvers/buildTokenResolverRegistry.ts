@@ -9,8 +9,8 @@
  * v1 areas:
  *   - `consolidados` — full set (empresa, fecha, fechaExamen, paciente,
  *                       nombrePaciente, dni, totalPacientes, totalExamenes,
- *                       listaPacientes, listaArchivos, firma + the two table
- *                       sub-resolvers).
+ *                       listaPacientes, listaArchivos, firma, destino + the
+ *                       two table sub-resolvers).
  *
  * Unknown areas return a registry whose `resolveToken` always returns
  * `''` and `resolveTable` always returns `''`. The orchestrator then
@@ -83,6 +83,10 @@ function buildTokenMap(area: string): Map<string, (ctx: InterpolationContext) =>
   map.set('firma', (ctx) => ({
     html: ctx.firma !== '' ? ctx.firma : '<em>[Falta configurar firma]</em>',
     subject: '',
+  }));
+  map.set('destino', (ctx) => ({
+    html: escapeHtml(ctx.destino),
+    subject: ctx.destino,
   }));
   return map;
 }

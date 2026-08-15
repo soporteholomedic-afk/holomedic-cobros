@@ -166,13 +166,14 @@ export function EmailEditor({
       firma: '',
       patients,
       files: selectedFiles,
+      destino,
     });
 
     setSubject(interpolated.subject);
     setBodyHtml(interpolated.html);
     setSignatureData(DEFAULT_SIGNATURE_DATA);
     editorRef.current?.loadHtml(interpolated.html);
-  }, [companyName, recipientNames, selectedFiles, patients]);
+  }, [companyName, recipientNames, selectedFiles, patients, destino]);
 
   const handleToggle = useCallback(() => {
     setTarget((prev) => (prev === 'company' ? 'patient' : 'company'));

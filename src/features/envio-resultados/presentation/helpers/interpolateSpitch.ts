@@ -27,6 +27,9 @@
  *   {{listaPacientes}} → <li> list of patient names
  *   {{listaArchivos}}  → <li> list of file names
  *   {{firma}}          → signature HTML (was not present before; new in PR 4)
+ *   {{destino}}        → first patient/ficha's Proyecto / Destino
+ *                        (HTML-escaped in the body, raw in the subject;
+ *                        empty removes its containing block)
  *   {{tabla:NAME:COL1,COL2}} → full HTML <table> for NAME with only the
  *                              selected columns. Names: documentosVencidos,
  *                              examenes. (was not present before; new in PR 4)
@@ -79,6 +82,13 @@ export interface InterpolateSpitchParams {
    * per-file tokens. When omitted, defaults to `[]`.
    */
   files?: PatientFile[];
+  /**
+   * Proyecto / Destino of the first selected patient/ficha. Mirrors the
+   * required `InterpolationContext.destino` field. When omitted,
+   * defaults to `''` — the `{{destino}}` resolver then returns empty
+   * and its containing body block is removed.
+   */
+  destino?: string;
 }
 
 export interface InterpolateSpitchResult {
@@ -114,6 +124,7 @@ export function interpolateSpitch(params: InterpolateSpitchParams): InterpolateS
     firma = '',
     patients,
     files,
+    destino = '',
   } = params;
 
   const registry = buildTokenResolverRegistry(area);
@@ -126,6 +137,7 @@ export function interpolateSpitch(params: InterpolateSpitchParams): InterpolateS
     files: files ?? [],
     area,
     today: today ?? defaultToday(),
+    destino,
   };
 
   return interpolateCore(html, subject, ctx, registry);

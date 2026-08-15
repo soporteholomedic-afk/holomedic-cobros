@@ -38,6 +38,13 @@ export interface InterpolationContext {
   area: string;
   /** Injectable ISO or localised date string. No `new Date()` inside the registry. */
   today: string;
+  /**
+   * Proyecto / Destino of the first selected patient/ficha
+   * (`ficha?.proyecto ?? person.proyecto ?? ''` upstream). The
+   * `{{destino}}` resolver returns it HTML-escaped for the body and
+   * raw for the subject. Empty string signals "missing destination".
+   */
+  destino: string;
 }
 
 /**

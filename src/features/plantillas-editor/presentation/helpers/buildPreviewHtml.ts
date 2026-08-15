@@ -107,6 +107,8 @@ function lookupMockValue(key: string, mock: MockPreviewData): string | undefined
       return mock.pacienteDni;
     case 'nombrePaciente':
       return mock.pacienteNombre;
+    case 'destino':
+      return mock.destino;
     case 'listaPacientes':
       return mock.patientNames.length > 0
         ? `<ol>${mock.patientNames.map((name) => `<li>${escapeHtml(name)}</li>`).join('')}</ol>`

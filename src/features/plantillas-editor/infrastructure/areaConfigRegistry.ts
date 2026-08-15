@@ -56,6 +56,8 @@ export interface MockPreviewData {
   today: string;
   pacienteDni: string;
   pacienteNombre: string;
+  /** Proyecto / Destino of the first patient/ficha (mirrors `InterpolationContext.destino`). */
+  destino: string;
 }
 
 /** The full configuration for one area. */
@@ -90,6 +92,7 @@ const CONSOLIDADOS_CONFIG: AreaConfig = {
         { key: 'dni', label: 'DNI' },
         { key: 'nombrePaciente', label: 'Nombre Paciente' },
         { key: 'listaPacientes', label: 'Lista de Pacientes' },
+        { key: 'destino', label: 'Proyecto / Destino' },
       ],
     },
     {
@@ -143,6 +146,7 @@ const CONSOLIDADOS_CONFIG: AreaConfig = {
     today: '2026-01-15',
     pacienteDni: '12345678',
     pacienteNombre: 'Juan Pérez',
+    destino: 'Proyecto Cardio — Centro Médico',
   },
 };
 
