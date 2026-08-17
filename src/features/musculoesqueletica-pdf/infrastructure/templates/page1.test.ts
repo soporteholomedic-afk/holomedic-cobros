@@ -5,10 +5,15 @@ import { sampleImageResolver, sampleSource } from '../../testing/sampleSource';
 import type { PdfTokenManifest } from '../../domain/entities';
 
 /**
- * Page-1 mapping proof: every manifest token must resolve the CORRECT
- * entrevista field. The expected values below are hand-derived from the
- * sample source so a mis-pointed path (e.g. atencion.empresa instead of
- * entrevista.datosGenerales.empresa) fails loudly.
+ * Page-1 mapping proof against the authoritative `__temp__/page1.html`
+ * design + `mapeo_datos-pg1.json` dictionary. Every manifest token must
+ * resolve the CORRECT field; expected values are hand-derived from the
+ * sample source so a mis-pointed path fails loudly.
+ *
+ * Unmapped-by-design dictionary fields (flagged in apply-progress):
+ * umbralPositivo.otrasVeces, molestiasLeves.detalle (×3 segments) and
+ * manoMuneca.areaDistribucionAnotaciones have no visible slot in this
+ * template — they are intentionally NOT mapped.
  */
 describe('PAGE_1_MANIFEST', () => {
   it('declares the page-1 template and only page 1', () => {
@@ -16,38 +21,37 @@ describe('PAGE_1_MANIFEST', () => {
     expect(PAGE_1_MANIFEST.template).toBe('musculoesqueletica-pdf/pages/page1.html');
   });
 
-  it('maps every token to the correct entrevista/atencion field', () => {
+  it('maps every token to the correct entrevista field', () => {
     const entries = Object.entries(PAGE_1_MANIFEST.tokens);
-    expect(entries.length).toBeGreaterThan(50);
+    expect(entries.length).toBeGreaterThan(80);
 
     // Hand-derived expected output per token name, from the sample source.
     const expected: Record<string, string> = {
-      atencion_id: '2024-MS-089',
-
-      // Datos generales
+      // ---- Datos generales ----
       fecha_entrevista: '17/08/2026',
       empresa: 'ACME &amp; Sons &lt;CIA&gt;',
       area: 'Producción',
       nombre_apellidos: 'Juan &quot;El&quot; Pérez',
       fecha_nacimiento: '15/03/1990',
       edad: '35',
-      antiguedad_puesto: '12',
-      antiguedad_empresa: '24',
       sexo_m: 'checked',
       sexo_f: '',
+      antiguedad_empresa: '24',
+      antiguedad_puesto: '12',
+      miembro_dominante_dx: 'checked',
+      miembro_dominante_ix: '',
       tipo_examen_ingreso: '',
       tipo_examen_periodico: 'checked',
       tipo_examen_retiro: '',
       tipo_examen_otro: '',
-      miembro_dominante_dx: 'checked',
-      miembro_dominante_ix: '',
 
-      // Hombro
-      hombro_tiene_dolor: 'checked',
+      // ---- Hombro ----
+      hombro_tiene_dolor_no: '',
+      hombro_tiene_dolor_si: 'checked',
       hombro_inicio_molestia: 'Hace 2 semanas',
       hombro_info_medicamentos: 'checked',
       hombro_info_fisioterapia: '',
-      hombro_info_traumatologia: '',
+      hombro_info_ortopedista: '',
       hombro_info_rx: '',
       hombro_info_eco_rmn: '',
       hombro_dolor_movimiento_dx: 'checked',
@@ -62,14 +66,14 @@ describe('PAGE_1_MANIFEST', () => {
       hombro_umbral_mes_ix: '',
       hombro_molestias_leves_dx: '',
       hombro_molestias_leves_ix: '',
-      hombro_observaciones: 'Dolor al levantar el brazo.',
 
-      // Codo
-      codo_tiene_dolor: '',
+      // ---- Codo ----
+      codo_tiene_dolor_no: 'checked',
+      codo_tiene_dolor_si: '',
       codo_inicio_molestia: '',
       codo_info_medicamentos: '',
       codo_info_fisioterapia: '',
-      codo_info_traumatologia: '',
+      codo_info_ortopedista: '',
       codo_info_rx: '',
       codo_info_eco_rmn: '',
       codo_info_emg: '',
@@ -85,14 +89,14 @@ describe('PAGE_1_MANIFEST', () => {
       codo_umbral_mes_ix: '',
       codo_molestias_leves_dx: '',
       codo_molestias_leves_ix: '',
-      codo_observaciones: '',
 
-      // Mano / muñeca
-      mano_tiene_dolor: '',
+      // ---- Mano / muñeca ----
+      mano_tiene_dolor_no: 'checked',
+      mano_tiene_dolor_si: '',
       mano_inicio_molestia: '',
       mano_info_medicamentos: '',
       mano_info_fisioterapia: '',
-      mano_info_traumatologia: '',
+      mano_info_ortopedista: '',
       mano_info_rx: '',
       mano_info_eco_rmn: '',
       mano_info_emg: '',
@@ -118,9 +122,8 @@ describe('PAGE_1_MANIFEST', () => {
       mano_umbral_mes_ix: '',
       mano_molestias_leves_dx: '',
       mano_molestias_leves_ix: '',
-      mano_observaciones: '',
 
-      // Figures
+      // ---- Figures ----
       figure_hombro: '<img src="data:image/png;base64,bXVzY3Vsb2VzcXVlbGV0aWNhLXBkZi9hc3NldHMvaG9tYnJvLnBuZw==" alt="" data-figure>',
       figure_codo: '<img src="data:image/svg+xml;base64,bXVzY3Vsb2VzcXVlbGV0aWNhLXBkZi9hc3NldHMvY29kby5zdmc=" alt="" data-figure>',
       figure_mano: '<img src="data:image/png;base64,bXVzY3Vsb2VzcXVlbGV0aWNhLXBkZi9hc3NldHMvbWFuby5wbmc=" alt="" data-figure>',

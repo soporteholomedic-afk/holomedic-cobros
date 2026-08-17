@@ -4,20 +4,21 @@ import type { PdfPageManifest } from '../../domain/entities';
 export const PAGE_1_TEMPLATE_PATH = 'musculoesqueletica-pdf/pages/page1.html';
 
 /**
- * Page-1 manifest: "Evaluación de Miembros Superiores".
+ * Page-1 manifest: "ENTREVISTA DE CUESTIONARIO ANAMNÉSICO OSTEMUSCULAR".
  *
- * Consumes `entrevista.datosGenerales` + `entrevista.miembrosSuperiores`
- * (hombro / codo / mano-muñeca) plus the atencion identifier. Figure tokens
- * resolve the local anatomical illustrations under
- * `musculoesqueletica-pdf/assets/`.
+ * Faithful to the authoritative design `src/app/areas/musculoesqueletica/
+ * __temp__/page1.html` and its field dictionary `mapeo_datos-pg1.json`.
+ * Token paths mirror that dictionary (dot paths under `datosGenerales` and
+ * `miembrosSuperiores.{hombro,codo,manoMuneca}`).
+ *
+ * Deliberately unmapped dictionary fields (no visible slot in this design):
+ * `umbralPositivo.otrasVeces`, `molestiasLeves.detalle` (×3 segments) and
+ * `manoMuneca.areaDistribucionAnotaciones` (X-marks are Slice 2 work).
  */
 export const PAGE_1_MANIFEST: PdfPageManifest = {
   page: 1,
   template: PAGE_1_TEMPLATE_PATH,
   tokens: {
-    // ---- Cabecera / atencion ----
-    atencion_id: { kind: 'text', path: 'atencion.idAtencion' },
-
     // ---- Datos generales ----
     fecha_entrevista: { kind: 'text', path: 'entrevista.datosGenerales.fechaEntrevista' },
     empresa: { kind: 'text', path: 'entrevista.datosGenerales.empresa' },
@@ -25,23 +26,24 @@ export const PAGE_1_MANIFEST: PdfPageManifest = {
     nombre_apellidos: { kind: 'text', path: 'entrevista.datosGenerales.nombreApellidos' },
     fecha_nacimiento: { kind: 'text', path: 'entrevista.datosGenerales.fechaNacimiento' },
     edad: { kind: 'text', path: 'entrevista.datosGenerales.edad' },
-    antiguedad_puesto: { kind: 'text', path: 'entrevista.datosGenerales.antiguedadPuesto' },
-    antiguedad_empresa: { kind: 'text', path: 'entrevista.datosGenerales.antiguedadEmpresa' },
     sexo_m: { kind: 'check', path: 'entrevista.datosGenerales.sexo', match: 'M' },
     sexo_f: { kind: 'check', path: 'entrevista.datosGenerales.sexo', match: 'F' },
+    antiguedad_empresa: { kind: 'text', path: 'entrevista.datosGenerales.antiguedadEmpresa' },
+    antiguedad_puesto: { kind: 'text', path: 'entrevista.datosGenerales.antiguedadPuesto' },
+    miembro_dominante_dx: { kind: 'check', path: 'entrevista.datosGenerales.miembroDominante.dx' },
+    miembro_dominante_ix: { kind: 'check', path: 'entrevista.datosGenerales.miembroDominante.ix' },
     tipo_examen_ingreso: { kind: 'check', path: 'entrevista.datosGenerales.tipoExamen.ingreso' },
     tipo_examen_periodico: { kind: 'check', path: 'entrevista.datosGenerales.tipoExamen.periodico' },
     tipo_examen_retiro: { kind: 'check', path: 'entrevista.datosGenerales.tipoExamen.retiro' },
     tipo_examen_otro: { kind: 'check', path: 'entrevista.datosGenerales.tipoExamen.otro' },
-    miembro_dominante_dx: { kind: 'check', path: 'entrevista.datosGenerales.miembroDominante.dx' },
-    miembro_dominante_ix: { kind: 'check', path: 'entrevista.datosGenerales.miembroDominante.ix' },
 
     // ---- Hombro ----
-    hombro_tiene_dolor: { kind: 'check', path: 'entrevista.miembrosSuperiores.hombro.tieneDolor' },
+    hombro_tiene_dolor_no: { kind: 'check', path: 'entrevista.miembrosSuperiores.hombro.tieneDolor', match: 'false' },
+    hombro_tiene_dolor_si: { kind: 'check', path: 'entrevista.miembrosSuperiores.hombro.tieneDolor', match: 'true' },
     hombro_inicio_molestia: { kind: 'text', path: 'entrevista.miembrosSuperiores.hombro.inicioMolestia' },
     hombro_info_medicamentos: { kind: 'check', path: 'entrevista.miembrosSuperiores.hombro.infoReportada.haTomadoMedicamentos' },
     hombro_info_fisioterapia: { kind: 'check', path: 'entrevista.miembrosSuperiores.hombro.infoReportada.fisioterapia' },
-    hombro_info_traumatologia: { kind: 'check', path: 'entrevista.miembrosSuperiores.hombro.infoReportada.visitaTraumatologiaMedicinaGeneral' },
+    hombro_info_ortopedista: { kind: 'check', path: 'entrevista.miembrosSuperiores.hombro.infoReportada.visitaTraumatologiaMedicinaGeneral' },
     hombro_info_rx: { kind: 'check', path: 'entrevista.miembrosSuperiores.hombro.infoReportada.rx' },
     hombro_info_eco_rmn: { kind: 'check', path: 'entrevista.miembrosSuperiores.hombro.infoReportada.ecografiaResonancia' },
     hombro_dolor_movimiento_dx: { kind: 'check', path: 'entrevista.miembrosSuperiores.hombro.sintomas.dolorMovimiento.dx' },
@@ -56,14 +58,14 @@ export const PAGE_1_MANIFEST: PdfPageManifest = {
     hombro_umbral_mes_ix: { kind: 'check', path: 'entrevista.miembrosSuperiores.hombro.sintomas.umbralPositivo.unaVezMes12Meses.ix' },
     hombro_molestias_leves_dx: { kind: 'check', path: 'entrevista.miembrosSuperiores.hombro.sintomas.molestiasLeves.dx' },
     hombro_molestias_leves_ix: { kind: 'check', path: 'entrevista.miembrosSuperiores.hombro.sintomas.molestiasLeves.ix' },
-    hombro_observaciones: { kind: 'text', path: 'entrevista.miembrosSuperiores.hombro.observaciones' },
 
     // ---- Codo ----
-    codo_tiene_dolor: { kind: 'check', path: 'entrevista.miembrosSuperiores.codo.tieneDolor' },
+    codo_tiene_dolor_no: { kind: 'check', path: 'entrevista.miembrosSuperiores.codo.tieneDolor', match: 'false' },
+    codo_tiene_dolor_si: { kind: 'check', path: 'entrevista.miembrosSuperiores.codo.tieneDolor', match: 'true' },
     codo_inicio_molestia: { kind: 'text', path: 'entrevista.miembrosSuperiores.codo.inicioMolestia' },
     codo_info_medicamentos: { kind: 'check', path: 'entrevista.miembrosSuperiores.codo.infoReportada.haTomadoMedicamentos' },
     codo_info_fisioterapia: { kind: 'check', path: 'entrevista.miembrosSuperiores.codo.infoReportada.fisioterapia' },
-    codo_info_traumatologia: { kind: 'check', path: 'entrevista.miembrosSuperiores.codo.infoReportada.visitaTraumatologiaMedicinaGeneral' },
+    codo_info_ortopedista: { kind: 'check', path: 'entrevista.miembrosSuperiores.codo.infoReportada.visitaTraumatologiaMedicinaGeneral' },
     codo_info_rx: { kind: 'check', path: 'entrevista.miembrosSuperiores.codo.infoReportada.rx' },
     codo_info_eco_rmn: { kind: 'check', path: 'entrevista.miembrosSuperiores.codo.infoReportada.ecografiaResonancia' },
     codo_info_emg: { kind: 'check', path: 'entrevista.miembrosSuperiores.codo.infoReportada.emg' },
@@ -79,14 +81,14 @@ export const PAGE_1_MANIFEST: PdfPageManifest = {
     codo_umbral_mes_ix: { kind: 'check', path: 'entrevista.miembrosSuperiores.codo.sintomas.umbralPositivo.unaVezMes12Meses.ix' },
     codo_molestias_leves_dx: { kind: 'check', path: 'entrevista.miembrosSuperiores.codo.sintomas.molestiasLeves.dx' },
     codo_molestias_leves_ix: { kind: 'check', path: 'entrevista.miembrosSuperiores.codo.sintomas.molestiasLeves.ix' },
-    codo_observaciones: { kind: 'text', path: 'entrevista.miembrosSuperiores.codo.observaciones' },
 
     // ---- Mano / muñeca ----
-    mano_tiene_dolor: { kind: 'check', path: 'entrevista.miembrosSuperiores.manoMuneca.tieneDolor' },
+    mano_tiene_dolor_no: { kind: 'check', path: 'entrevista.miembrosSuperiores.manoMuneca.tieneDolor', match: 'false' },
+    mano_tiene_dolor_si: { kind: 'check', path: 'entrevista.miembrosSuperiores.manoMuneca.tieneDolor', match: 'true' },
     mano_inicio_molestia: { kind: 'text', path: 'entrevista.miembrosSuperiores.manoMuneca.inicioMolestia' },
     mano_info_medicamentos: { kind: 'check', path: 'entrevista.miembrosSuperiores.manoMuneca.infoReportada.haTomadoMedicamentos' },
     mano_info_fisioterapia: { kind: 'check', path: 'entrevista.miembrosSuperiores.manoMuneca.infoReportada.fisioterapia' },
-    mano_info_traumatologia: { kind: 'check', path: 'entrevista.miembrosSuperiores.manoMuneca.infoReportada.visitaTraumatologiaMedicinaGeneral' },
+    mano_info_ortopedista: { kind: 'check', path: 'entrevista.miembrosSuperiores.manoMuneca.infoReportada.visitaTraumatologiaMedicinaGeneral' },
     mano_info_rx: { kind: 'check', path: 'entrevista.miembrosSuperiores.manoMuneca.infoReportada.rx' },
     mano_info_eco_rmn: { kind: 'check', path: 'entrevista.miembrosSuperiores.manoMuneca.infoReportada.ecografiaResonancia' },
     mano_info_emg: { kind: 'check', path: 'entrevista.miembrosSuperiores.manoMuneca.infoReportada.emg' },
@@ -112,9 +114,8 @@ export const PAGE_1_MANIFEST: PdfPageManifest = {
     mano_umbral_mes_ix: { kind: 'check', path: 'entrevista.miembrosSuperiores.manoMuneca.sintomas.umbralPositivo.unaVezMes12Meses.ix' },
     mano_molestias_leves_dx: { kind: 'check', path: 'entrevista.miembrosSuperiores.manoMuneca.sintomas.molestiasLeves.dx' },
     mano_molestias_leves_ix: { kind: 'check', path: 'entrevista.miembrosSuperiores.manoMuneca.sintomas.molestiasLeves.ix' },
-    mano_observaciones: { kind: 'text', path: 'entrevista.miembrosSuperiores.manoMuneca.observaciones' },
 
-    // ---- Figures ----
+    // ---- Figures (local offline assets) ----
     figure_hombro: { kind: 'figure', path: 'musculoesqueletica-pdf/assets/hombro.png' },
     figure_codo: { kind: 'figure', path: 'musculoesqueletica-pdf/assets/codo.svg' },
     figure_mano: { kind: 'figure', path: 'musculoesqueletica-pdf/assets/mano.png' },
