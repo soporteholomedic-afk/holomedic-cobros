@@ -285,7 +285,11 @@ export default function MusculoEsqueleticaJjcPage() {
                     </td>
                     <td className="px-4 py-3">
                       {row.idAtencion ? (
-                        <DownloadCell idAten={row.idAtencion} paciente={row.paciente} />
+                        <DownloadCell
+                          idAten={row.idAtencion}
+                          paciente={row.paciente}
+                          apiPath={`/api/areas/musculoesqueletica/jjc/${row.idAtencion}/pdf`}
+                        />
                       ) : (
                         <span className="text-slate-300 text-xs">{EM_DASH}</span>
                       )}

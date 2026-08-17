@@ -7,9 +7,42 @@ import { toast } from 'sonner';
 interface DownloadCellProps {
   idAten: string;
   paciente: string;
+  /** Override the PDF endpoint. Defaults to the medicina JJC route. */
+  apiPath?: string;
 }
 
-export function DownloadCell({ idAten, paciente }: DownloadCellProps) {
+const MEDICINA_PDF_API = (idAten: string) =>
+  `/api/areas/medicina/jjc/${idAten}/pdf`;
+
+function sanitizeSegment(value: string): string {
+  return value
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9._-]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+}
+
+/**
+ * Build the download filename for an API path.
+ *
+ * - Without `apiPath` (medicina default) the legacy `jjc-{idAten}.pdf`
+ *   filename is preserved byte-for-byte.
+ * - With a custom `apiPath` the area segment is extracted and sanitized:
+ *   `/api/areas/<area>/jjc/<idAten>/pdf` → `<area>-jjc-<idAten>.pdf`.
+ */
+export function buildDownloadFileName(
+  apiPath: string | undefined,
+  idAten: string,
+): string {
+  if (!apiPath) return `jjc-${idAten}.pdf`;
+  const match = apiPath.match(/\/api\/areas\/([^/]+)\/jjc\//);
+  const area = match ? sanitizeSegment(match[1]) : 'descarga';
+  const safeId = sanitizeSegment(idAten) || 'atencion';
+  return `${area}-jjc-${safeId}.pdf`;
+}
+
+export function DownloadCell({ idAten, paciente, apiPath }: DownloadCellProps) {
   const [isLoading, setIsLoading] = useState(false);
 
   const handleDownload = async () => {
@@ -17,7 +50,7 @@ export function DownloadCell({ idAten, paciente }: DownloadCellProps) {
     setIsLoading(true);
 
     try {
-      const res = await fetch(`/api/areas/medicina/jjc/${idAten}/pdf`);
+      const res = await fetch(apiPath ?? MEDICINA_PDF_API(idAten));
 
       if (!res.ok) {
         if (res.status === 404) {
@@ -43,7 +76,7 @@ export function DownloadCell({ idAten, paciente }: DownloadCellProps) {
 
       const anchor = document.createElement('a');
       anchor.href = objectUrl;
-      anchor.download = `jjc-${idAten}.pdf`;
+      anchor.download = buildDownloadFileName(apiPath, idAten);
       anchor.click();
 
       URL.revokeObjectURL(objectUrl);

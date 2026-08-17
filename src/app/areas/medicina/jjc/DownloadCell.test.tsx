@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { DownloadCell } from './DownloadCell';
+import { DownloadCell, buildDownloadFileName } from './DownloadCell';
 
 const { mockToastError } = vi.hoisted(() => ({
   mockToastError: vi.fn(),
@@ -230,5 +230,87 @@ describe('DownloadCell', () => {
       expect(button).not.toHaveAttribute('aria-busy', 'true');
     });
     expect(button).not.toBeDisabled();
+  });
+});
+
+describe('DownloadCell with custom apiPath', () => {
+  const MUSCULO_API = `/api/areas/musculoesqueletica/jjc/${ID_ATEN}/pdf`;
+
+  beforeEach(() => {
+    vi.spyOn(globalThis, 'fetch').mockReset();
+    vi.spyOn(URL, 'createObjectURL').mockReset();
+    vi.spyOn(URL, 'revokeObjectURL').mockReset();
+    mockToastError.mockReset();
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('calls the custom apiPath instead of the medicina default', async () => {
+    const user = userEvent.setup();
+    const mockFetch = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      createMockResponse(true, 200),
+    );
+    vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:http://localhost/fake');
+    const mockAnchor = createMockAnchor();
+    vi.spyOn(document, 'createElement').mockImplementation((tagName) => {
+      if (tagName === 'a') return mockAnchor as unknown as HTMLElement;
+      return originalCreateElement(tagName);
+    });
+    vi.spyOn(URL, 'revokeObjectURL');
+
+    render(<DownloadCell idAten={ID_ATEN} paciente={PACIENTE} apiPath={MUSCULO_API} />);
+    await user.click(screen.getByRole('button'));
+
+    await waitFor(() => {
+      expect(mockFetch).toHaveBeenCalledWith(MUSCULO_API);
+      expect(mockAnchor.download).toBe(`musculoesqueletica-jjc-${ID_ATEN}.pdf`);
+    });
+  });
+
+  it('keeps the medicina default when apiPath is omitted', async () => {
+    const user = userEvent.setup();
+    const mockFetch = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      createMockResponse(true, 200),
+    );
+    vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:http://localhost/fake');
+    const mockAnchor = createMockAnchor();
+    vi.spyOn(document, 'createElement').mockImplementation((tagName) => {
+      if (tagName === 'a') return mockAnchor as unknown as HTMLElement;
+      return originalCreateElement(tagName);
+    });
+    vi.spyOn(URL, 'revokeObjectURL');
+
+    render(<DownloadCell idAten={ID_ATEN} paciente={PACIENTE} />);
+    await user.click(screen.getByRole('button'));
+
+    await waitFor(() => {
+      expect(mockFetch).toHaveBeenCalledWith(
+        `/api/areas/medicina/jjc/${ID_ATEN}/pdf`,
+      );
+      expect(mockAnchor.download).toBe(`jjc-${ID_ATEN}.pdf`);
+    });
+  });
+});
+
+describe('buildDownloadFileName', () => {
+  it('keeps the medicina default filename byte-identical when no apiPath is given', () => {
+    expect(buildDownloadFileName(undefined, '01234567')).toBe('jjc-01234567.pdf');
+  });
+
+  it('derives an area-scoped filename from a custom apiPath', () => {
+    expect(
+      buildDownloadFileName('/api/areas/musculoesqueletica/jjc/01234567/pdf', '01234567'),
+    ).toBe('musculoesqueletica-jjc-01234567.pdf');
+  });
+
+  it('sanitizes the area and idAten into a safe filename', () => {
+    expect(
+      buildDownloadFileName('/api/areas/Musculo-Esqueletica/jjc/01234567/pdf', '01234567'),
+    ).toBe('musculo-esqueletica-jjc-01234567.pdf');
+    expect(
+      buildDownloadFileName('/api/areas/medicina/jjc/ABC 123-XYZ/pdf', 'ABC 123-XYZ'),
+    ).toBe('medicina-jjc-abc-123-xyz.pdf');
   });
 });
