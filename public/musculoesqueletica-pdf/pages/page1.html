@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <title>Evaluación de Miembros Superiores — Holomedic</title>
+  <link rel="stylesheet" href="../assets/page1.print.css">
+</head>
+<body>
+  <main class="pdf-page">
+
+    <header class="page-header">
+      <div>
+        <h2>Evaluación de Miembros Superiores</h2>
+        <p class="subtitle">Entrevista osteomuscular — Musculoesquelética · JJC</p>
+      </div>
+      <span class="badge-id">ID: {{text:atencion_id}}</span>
+    </header>
+
+    <!-- Datos Generales -->
+    <section class="clinical-card">
+      <div style="padding: 4mm 5mm; border-bottom: 1px solid #d3e4fe;">
+        <h3 class="section-title" style="margin: 0;">Datos Generales</h3>
+      </div>
+      <div style="padding: 4mm 5mm;">
+        <div class="grid-datos">
+          <div>
+            <label class="form-label">Fecha de entrevista</label>
+            <input class="form-input" type="text" value="{{text:fecha_entrevista}}">
+          </div>
+          <div>
+            <label class="form-label">Empresa</label>
+            <input class="form-input" type="text" value="{{text:empresa}}">
+          </div>
+          <div>
+            <label class="form-label">Área</label>
+            <input class="form-input" type="text" value="{{text:area}}">
+          </div>
+          <div>
+            <label class="form-label">Tipo de examen</label>
+            <div class="info-chips" style="grid-template-columns: repeat(4, auto); gap: 1mm 2mm; min-height: 7mm; align-items: center;">
+              <label><input type="checkbox" {{check:tipo_examen_ingreso}}> Ingreso</label>
+              <label><input type="checkbox" {{check:tipo_examen_periodico}}> Periódico</label>
+              <label><input type="checkbox" {{check:tipo_examen_retiro}}> Retiro</label>
+              <label><input type="checkbox" {{check:tipo_examen_otro}}> Otro</label>
+            </div>
+          </div>
+          <div class="col-span-2">
+            <label class="form-label">Nombre y apellidos</label>
+            <input class="form-input" type="text" value="{{text:nombre_apellidos}}">
+          </div>
+          <div>
+            <label class="form-label">Fecha de nacimiento</label>
+            <input class="form-input" type="text" value="{{text:fecha_nacimiento}}">
+          </div>
+          <div>
+            <label class="form-label">Edad</label>
+            <input class="form-input" type="text" value="{{text:edad}}">
+          </div>
+          <div>
+            <label class="form-label">Sexo</label>
+            <div class="radio-row">
+              <label><input type="radio" name="sexo" value="M" {{check:sexo_m}}> M</label>
+              <label><input type="radio" name="sexo" value="F" {{check:sexo_f}}> F</label>
+            </div>
+          </div>
+          <div>
+            <label class="form-label">Antigüedad puesto (meses)</label>
+            <input class="form-input" type="text" value="{{text:antiguedad_puesto}}">
+          </div>
+          <div>
+            <label class="form-label">Antigüedad empresa (meses)</label>
+            <input class="form-input" type="text" value="{{text:antiguedad_empresa}}">
+          </div>
+          <div>
+            <label class="form-label">Miembro dominante</label>
+            <div class="radio-row">
+              <label><input type="radio" name="dominante" value="Dx" {{check:miembro_dominante_dx}}> Dx</label>
+              <label><input type="radio" name="dominante" value="Ix" {{check:miembro_dominante_ix}}> Ix</label>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- HOMBRO -->
+    <section class="clinical-card section-card">
+      <div class="section-figure">
+        <h3 class="section-title">Hombro</h3>
+        <label class="form-label">¿Dolor?</label>
+        <div class="radio-row"><label><input type="checkbox" {{check:hombro_tiene_dolor}}> Presente</label></div>
+        <label class="form-label">Inicio de molestia</label>
+        <input class="form-input" type="text" value="{{text:hombro_inicio_molestia}}">
+        <label class="form-label">Información reportada</label>
+        <div class="info-chips">
+          <label><input type="checkbox" {{check:hombro_info_medicamentos}}> Medicamentos</label>
+          <label><input type="checkbox" {{check:hombro_info_fisioterapia}}> Fisioterapia</label>
+          <label><input type="checkbox" {{check:hombro_info_traumatologia}}> Visita traumatología</label>
+          <label><input type="checkbox" {{check:hombro_info_rx}}> Rx</label>
+          <label><input type="checkbox" {{check:hombro_info_eco_rmn}}> Ecografía / RMN</label>
+        </div>
+        <figure style="margin: 2mm 0 0;">
+          {{figure:figure_hombro}}
+        </figure>
+      </div>
+      <div class="section-body">
+        <table class="sintomas">
+          <thead>
+            <tr>
+              <th>Síntomas / signos</th>
+              <th class="c">DX</th>
+              <th class="c">IX</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><td>Dolor al movimiento</td><td class="c"><input type="checkbox" {{check:hombro_dolor_movimiento_dx}}></td><td class="c"><input type="checkbox" {{check:hombro_dolor_movimiento_ix}}></td></tr>
+            <tr><td>Dolor en reposo</td><td class="c"><input type="checkbox" {{check:hombro_dolor_reposo_dx}}></td><td class="c"><input type="checkbox" {{check:hombro_dolor_reposo_ix}}></td></tr>
+            <tr><td colspan="3" style="font-weight: 600; color: #404751;">Umbral doloroso positivo</td></tr>
+            <tr class="sub"><td>• Dolor continuo</td><td class="c"><input type="checkbox" {{check:hombro_umbral_continuo_dx}}></td><td class="c"><input type="checkbox" {{check:hombro_umbral_continuo_ix}}></td></tr>
+            <tr class="sub"><td>• Al menos 1 semana de dolor en los últimos 3 meses</td><td class="c"><input type="checkbox" {{check:hombro_umbral_semana_dx}}></td><td class="c"><input type="checkbox" {{check:hombro_umbral_semana_ix}}></td></tr>
+            <tr class="sub"><td>• Al menos 1 vez al mes en los últimos 12 meses</td><td class="c"><input type="checkbox" {{check:hombro_umbral_mes_dx}}></td><td class="c"><input type="checkbox" {{check:hombro_umbral_mes_ix}}></td></tr>
+            <tr><td>Molestias leves esporádicas</td><td class="c"><input type="checkbox" {{check:hombro_molestias_leves_dx}}></td><td class="c"><input type="checkbox" {{check:hombro_molestias_leves_ix}}></td></tr>
+          </tbody>
+        </table>
+        <div class="observaciones" style="margin-top: 3mm;">
+          <label class="form-label">Observaciones específicas — hombro</label>
+          <textarea>{{text:hombro_observaciones}}</textarea>
+        </div>
+      </div>
+    </section>
+
+    <!-- CODO -->
+    <section class="clinical-card section-card">
+      <div class="section-figure">
+        <h3 class="section-title">Codo</h3>
+        <label class="form-label">¿Dolor?</label>
+        <div class="radio-row"><label><input type="checkbox" {{check:codo_tiene_dolor}}> Presente</label></div>
+        <label class="form-label">Inicio de molestia</label>
+        <input class="form-input" type="text" value="{{text:codo_inicio_molestia}}">
+        <label class="form-label">Información reportada</label>
+        <div class="info-chips">
+          <label><input type="checkbox" {{check:codo_info_medicamentos}}> Medicamentos</label>
+          <label><input type="checkbox" {{check:codo_info_fisioterapia}}> Fisioterapia</label>
+          <label><input type="checkbox" {{check:codo_info_traumatologia}}> Visita traumatología</label>
+          <label><input type="checkbox" {{check:codo_info_rx}}> Rx</label>
+          <label><input type="checkbox" {{check:codo_info_eco_rmn}}> Ecografía / RMN</label>
+          <label><input type="checkbox" {{check:codo_info_emg}}> EMG</label>
+        </div>
+        <figure style="margin: 2mm 0 0;">
+          {{figure:figure_codo}}
+        </figure>
+      </div>
+      <div class="section-body">
+        <table class="sintomas">
+          <thead>
+            <tr>
+              <th>Síntomas / signos</th>
+              <th class="c">DX</th>
+              <th class="c">IX</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><td>Dolor al agarrar o pesar</td><td class="c"><input type="checkbox" {{check:codo_dolor_peso_dx}}></td><td class="c"><input type="checkbox" {{check:codo_dolor_peso_ix}}></td></tr>
+            <tr><td>Dolor en reposo</td><td class="c"><input type="checkbox" {{check:codo_dolor_reposo_dx}}></td><td class="c"><input type="checkbox" {{check:codo_dolor_reposo_ix}}></td></tr>
+            <tr><td colspan="3" style="font-weight: 600; color: #404751;">Umbral doloroso positivo</td></tr>
+            <tr class="sub"><td>• Dolor continuo</td><td class="c"><input type="checkbox" {{check:codo_umbral_continuo_dx}}></td><td class="c"><input type="checkbox" {{check:codo_umbral_continuo_ix}}></td></tr>
+            <tr class="sub"><td>• Al menos 1 semana de dolor en los últimos 3 meses</td><td class="c"><input type="checkbox" {{check:codo_umbral_semana_dx}}></td><td class="c"><input type="checkbox" {{check:codo_umbral_semana_ix}}></td></tr>
+            <tr class="sub"><td>• Al menos 1 vez al mes en los últimos 12 meses</td><td class="c"><input type="checkbox" {{check:codo_umbral_mes_dx}}></td><td class="c"><input type="checkbox" {{check:codo_umbral_mes_ix}}></td></tr>
+            <tr><td>Molestias leves esporádicas</td><td class="c"><input type="checkbox" {{check:codo_molestias_leves_dx}}></td><td class="c"><input type="checkbox" {{check:codo_molestias_leves_ix}}></td></tr>
+          </tbody>
+        </table>
+        <div class="observaciones" style="margin-top: 3mm;">
+          <label class="form-label">Observaciones específicas — codo</label>
+          <textarea>{{text:codo_observaciones}}</textarea>
+        </div>
+      </div>
+    </section>
+
+    <!-- MANO / MUÑECA -->
+    <section class="clinical-card section-card">
+      <div class="section-figure">
+        <h3 class="section-title">Mano / Muñeca</h3>
+        <label class="form-label">¿Dolor?</label>
+        <div class="radio-row"><label><input type="checkbox" {{check:mano_tiene_dolor}}> Presente</label></div>
+        <label class="form-label">Inicio de molestia</label>
+        <input class="form-input" type="text" value="{{text:mano_inicio_molestia}}">
+        <label class="form-label">Información reportada</label>
+        <div class="info-chips">
+          <label><input type="checkbox" {{check:mano_info_medicamentos}}> Medicamentos</label>
+          <label><input type="checkbox" {{check:mano_info_fisioterapia}}> Fisioterapia</label>
+          <label><input type="checkbox" {{check:mano_info_traumatologia}}> Visita traumatología</label>
+          <label><input type="checkbox" {{check:mano_info_rx}}> Rx</label>
+          <label><input type="checkbox" {{check:mano_info_eco_rmn}}> Ecografía / RMN</label>
+          <label><input type="checkbox" {{check:mano_info_emg}}> EMG</label>
+        </div>
+        <figure style="margin: 2mm 0 0;">
+          {{figure:figure_mano}}
+        </figure>
+      </div>
+      <div class="section-body">
+        <table class="sintomas">
+          <thead>
+            <tr>
+              <th>Síntomas / signos</th>
+              <th class="c">DX</th>
+              <th class="c">IX</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><td>Dolor al agarrar o presionar</td><td class="c"><input type="checkbox" {{check:mano_dolor_pinza_dx}}></td><td class="c"><input type="checkbox" {{check:mano_dolor_pinza_ix}}></td></tr>
+            <tr><td>Dolor al movimiento articular</td><td class="c"><input type="checkbox" {{check:mano_dolor_movimiento_dx}}></td><td class="c"><input type="checkbox" {{check:mano_dolor_movimiento_ix}}></td></tr>
+            <tr><td>Dolor en reposo</td><td class="c"><input type="checkbox" {{check:mano_dolor_reposo_dx}}></td><td class="c"><input type="checkbox" {{check:mano_dolor_reposo_ix}}></td></tr>
+            <tr><td>Molestia en 1er dedo</td><td class="c"><input type="checkbox" {{check:mano_dolor_1er_dedo_dx}}></td><td class="c"><input type="checkbox" {{check:mano_dolor_1er_dedo_ix}}></td></tr>
+            <tr><td>Molestia en 3 primeros dedos</td><td class="c"><input type="checkbox" {{check:mano_dolor_3_dedos_dx}}></td><td class="c"><input type="checkbox" {{check:mano_dolor_3_dedos_ix}}></td></tr>
+            <tr><td>Molestia en palma</td><td class="c"><input type="checkbox" {{check:mano_dolor_palma_dx}}></td><td class="c"><input type="checkbox" {{check:mano_dolor_palma_ix}}></td></tr>
+            <tr><td>Molestia en dorso</td><td class="c"><input type="checkbox" {{check:mano_dolor_dorso_dx}}></td><td class="c"><input type="checkbox" {{check:mano_dolor_dorso_ix}}></td></tr>
+            <tr><td colspan="3" style="font-weight: 600; color: #404751;">Umbral doloroso positivo</td></tr>
+            <tr class="sub"><td>• Dolor continuo</td><td class="c"><input type="checkbox" {{check:mano_umbral_continuo_dx}}></td><td class="c"><input type="checkbox" {{check:mano_umbral_continuo_ix}}></td></tr>
+            <tr class="sub"><td>• Al menos 1 semana de dolor en los últimos 3 meses</td><td class="c"><input type="checkbox" {{check:mano_umbral_semana_dx}}></td><td class="c"><input type="checkbox" {{check:mano_umbral_semana_ix}}></td></tr>
+            <tr class="sub"><td>• Al menos 1 vez al mes en los últimos 12 meses</td><td class="c"><input type="checkbox" {{check:mano_umbral_mes_dx}}></td><td class="c"><input type="checkbox" {{check:mano_umbral_mes_ix}}></td></tr>
+            <tr><td>Molestias leves esporádicas</td><td class="c"><input type="checkbox" {{check:mano_molestias_leves_dx}}></td><td class="c"><input type="checkbox" {{check:mano_molestias_leves_ix}}></td></tr>
+          </tbody>
+        </table>
+        <div class="observaciones" style="margin-top: 3mm;">
+          <label class="form-label">Observaciones específicas — mano / muñeca</label>
+          <textarea>{{text:mano_observaciones}}</textarea>
+        </div>
+      </div>
+    </section>
+
+  </main>
+</body>
+</html>

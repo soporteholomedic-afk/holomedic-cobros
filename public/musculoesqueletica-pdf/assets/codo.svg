@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="279" viewBox="0 0 512 279" role="img" aria-label="Figura de codo (pendiente)">
+  <rect width="512" height="279" fill="#eef4ff"/>
+  <rect x="16" y="16" width="480" height="247" rx="12" fill="none" stroke="#98cbff" stroke-width="3" stroke-dasharray="10 8"/>
+  <text x="256" y="120" text-anchor="middle" font-family="Inter, sans-serif" font-size="28" font-weight="600" fill="#006099">CODO</text>
+  <text x="256" y="156" text-anchor="middle" font-family="Inter, sans-serif" font-size="16" fill="#585d5e">Ilustración anatómica pendiente de reemplazo</text>
+  <path d="M 256 150 L 256 60 M 256 60 l -12 14 M 256 60 l 12 14" stroke="#007ac0" stroke-width="3" fill="none"/>
+  <path d="M 256 150 L 256 238 M 256 238 l -12 -14 M 256 238 l 12 -14" stroke="#007ac0" stroke-width="3" fill="none"/>
+</svg>
