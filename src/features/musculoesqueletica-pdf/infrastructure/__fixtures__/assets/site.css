@@ -1,0 +1,10 @@
+@font-face {
+  font-family: 'Fixture';
+  font-weight: 400;
+  src: url(../fonts/f.woff2) format('woff2');
+}
+
+.form-input {
+  font-family: 'Fixture', sans-serif;
+  border: 1px solid #e2e8f0;
+}
