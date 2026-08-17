@@ -25,12 +25,24 @@ export type PdfTokenKind = 'text' | 'check' | 'figure' | 'image';
  * Dot paths resolve only OWN properties (prototype-safe). `match` compares
  * the resolved value for `check` tokens (radio/select semantics); without it
  * a `check` token renders checked when the resolved value is exactly `true`.
+ *
+ * `figure` tokens may carry an optional marks overlay: `marks` is a dot path
+ * resolving to an array of `{x,y}` points (normalized 0..1) drawn as red X
+ * marks over the figure, with `imageWidth`/`imageHeight` the asset's intrinsic
+ * dimensions used as the SVG viewBox. This mirrors the selectable figures in
+ * the entrevista form (`FigureAreaMarking`).
  */
 export interface PdfTokenSpec {
   kind: PdfTokenKind;
   path: string;
   /** Optional expected value for `check` tokens (string comparison). */
   match?: string;
+  /** Optional dot path into source data resolving to `{x,y}[]` marks. */
+  marks?: string;
+  /** Intrinsic width of the figure asset (px), for the marks SVG viewBox. */
+  imageWidth?: number;
+  /** Intrinsic height of the figure asset (px), for the marks SVG viewBox. */
+  imageHeight?: number;
 }
 
 export type PdfTokenManifest = Record<string, PdfTokenSpec>;

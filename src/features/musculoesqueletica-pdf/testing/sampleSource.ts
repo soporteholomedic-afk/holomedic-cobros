@@ -112,7 +112,10 @@ export const sampleEntrevista: EntrevistaOsteomuscular = {
         molestiasLeves: { dx: false, ix: false, detalle: '' },
       },
       observaciones: '',
-      areaDistribucionAnotaciones: [],
+      areaDistribucionAnotaciones: [
+        { id: 'm1', x: 0.25, y: 0.5 },
+        { id: 'm2', x: 0.75, y: 0.3 },
+      ],
     },
   },
   parestesiaNocturna: {

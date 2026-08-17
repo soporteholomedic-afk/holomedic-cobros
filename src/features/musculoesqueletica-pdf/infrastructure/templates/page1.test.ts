@@ -126,7 +126,9 @@ describe('PAGE_1_MANIFEST', () => {
       // ---- Figures (canonical repo assets) ----
       figure_hombro: '<img src="data:image/png;base64,YXNzZXRzL2ltYWdlcy9tdXNjdWxvL2VudHJldmlzdGEvaG9tYnJvcy5wbmc=" alt="" data-figure>',
       figure_codo: '<img src="data:image/png;base64,YXNzZXRzL2ltYWdlcy9tdXNjdWxvL2VudHJldmlzdGEvY29kb3MucG5n" alt="" data-figure>',
-      figure_mano: '<img src="data:image/png;base64,YXNzZXRzL2ltYWdlcy9tdXNjdWxvL2VudHJldmlzdGEvbWFub3MucG5n" alt="" data-figure>',
+      // Mano figure carries the marks overlay (sample marks m1/m2 over 117×81).
+      figure_mano:
+        '<div style="position:relative"><img src="data:image/png;base64,YXNzZXRzL2ltYWdlcy9tdXNjdWxvL2VudHJldmlzdGEvbWFub3MucG5n" alt="" data-figure><svg viewBox="0 0 117 81" preserveAspectRatio="xMidYMid meet" style="position:absolute; inset:0; width:100%; height:100%; pointer-events:none"><line x1="24.25" y1="35.5" x2="34.25" y2="45.5" stroke="#cc0000" stroke-width="2"/><line x1="34.25" y1="35.5" x2="24.25" y2="45.5" stroke="#cc0000" stroke-width="2"/><line x1="82.75" y1="19.3" x2="92.75" y2="29.3" stroke="#cc0000" stroke-width="2"/><line x1="92.75" y1="19.3" x2="82.75" y2="29.3" stroke="#cc0000" stroke-width="2"/></svg></div>',
     };
 
     // Render one template containing every token, in manifest order.

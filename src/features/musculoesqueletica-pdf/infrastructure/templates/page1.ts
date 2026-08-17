@@ -118,6 +118,15 @@ export const PAGE_1_MANIFEST: PdfPageManifest = {
     // ---- Figures (canonical repo assets under public/assets/images/musculo/entrevista/) ----
     figure_hombro: { kind: 'figure', path: 'assets/images/musculo/entrevista/hombros.png' },
     figure_codo: { kind: 'figure', path: 'assets/images/musculo/entrevista/codos.png' },
-    figure_mano: { kind: 'figure', path: 'assets/images/musculo/entrevista/manos.png' },
+    // Mano/muñeca is the one markable figure in the entrevista form: its
+    // distribution marks are drawn over the image, mirroring FigureAreaMarking.
+    // Intrinsic dims of manos.png are 117 × 81.
+    figure_mano: {
+      kind: 'figure',
+      path: 'assets/images/musculo/entrevista/manos.png',
+      marks: 'entrevista.miembrosSuperiores.manoMuneca.areaDistribucionAnotaciones',
+      imageWidth: 117,
+      imageHeight: 81,
+    },
   },
 };
