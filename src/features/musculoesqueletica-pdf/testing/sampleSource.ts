@@ -147,7 +147,10 @@ export const sampleEntrevista: EntrevistaOsteomuscular = {
       },
       molestiasLeves: { dx: false, ix: false, detalle: '' },
     },
-    areaDistribucionAnotaciones: [],
+    areaDistribucionAnotaciones: [
+      { id: 'pn1', x: 0.2, y: 0.4 },
+      { id: 'pn2', x: 0.8, y: 0.6 },
+    ],
   },
   parestesiaDiurna: {
     tieneParestesia: false,
@@ -179,7 +182,9 @@ export const sampleEntrevista: EntrevistaOsteomuscular = {
       },
       molestiasLeves: { dx: false, ix: false, detalle: '' },
     },
-    areaDistribucionAnotaciones: [],
+    areaDistribucionAnotaciones: [
+      { id: 'pd1', x: 0.5, y: 0.3 },
+    ],
   },
   molestiaCervicalIrradiada: {
     tieneMolestia: false,
@@ -226,7 +231,10 @@ export const sampleEntrevista: EntrevistaOsteomuscular = {
       diasAusenciaTrabajo: null,
       irradiacion: { tieneIrradiacion: false, miembrosInferiores: false, dx: false, ix: false, detalleIrradiacion: '' },
     },
-    areaDistribucionAnotaciones: { cervical: [], dorsalLumboSacra: [] },
+    areaDistribucionAnotaciones: {
+      cervical: [{ id: 'cc1', x: 0.5, y: 0.5 }],
+      dorsalLumboSacra: [{ id: 'cd1', x: 0.3, y: 0.7 }, { id: 'cd2', x: 0.6, y: 0.2 }],
+    },
   },
   lumbalgiaAguda: {
     tieneLumbalgiaAguda: false,

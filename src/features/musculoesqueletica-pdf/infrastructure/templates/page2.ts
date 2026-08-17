@@ -113,5 +113,23 @@ export const PAGE_2_MANIFEST: PdfPageManifest = {
     diag_mano_tunel_false: { kind: 'check', path: 'entrevista.ausenciaYTrastornos.diagnosticos.manoMunecaTunelCarpiano.tiene', match: 'false' },
     diag_mano_tunel_cuando: { kind: 'text', path: 'entrevista.ausenciaYTrastornos.diagnosticos.manoMunecaTunelCarpiano.cuando' },
     total_dias_enfermedad: { kind: 'text', path: 'entrevista.ausenciaYTrastornos.totalDiasEnfermedad12Meses' },
+
+    // ---- FIGURES with marks overlay (canonical repo assets) ----
+    // Parestesia nocturna: manos.png (117×81) — same asset as page-1 figure_mano
+    figure_pn_manos: {
+      kind: 'figure',
+      path: 'assets/images/musculo/entrevista/manos.png',
+      marks: 'entrevista.parestesiaNocturna.areaDistribucionAnotaciones',
+      imageWidth: 117,
+      imageHeight: 81,
+    },
+    // Parestesia diurna: cuerpo_torso.png (110×136)
+    figure_pd_torso: {
+      kind: 'figure',
+      path: 'assets/images/musculo/entrevista/cuerpo_torso.png',
+      marks: 'entrevista.parestesiaDiurna.areaDistribucionAnotaciones',
+      imageWidth: 110,
+      imageHeight: 136,
+    },
   },
 };

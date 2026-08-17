@@ -63,5 +63,23 @@ export const PAGE_3_MANIFEST: PdfPageManifest = {
     cl_irradiacion_dx: { kind: 'check', path: 'entrevista.columna.lumboSacra.irradiacion.dx' },
     cl_irradiacion_ix: { kind: 'check', path: 'entrevista.columna.lumboSacra.irradiacion.ix' },
     cl_ausencia_dias: { kind: 'text', path: 'entrevista.columna.lumboSacra.diasAusenciaTrabajo' },
+
+    // ---- FIGURES with marks overlay (canonical repo assets) ----
+    // Columna cervical: columna-media.jpg (192×139)
+    figure_ccervical: {
+      kind: 'figure',
+      path: 'assets/images/musculo/entrevista/columna-media.jpg',
+      marks: 'entrevista.columna.areaDistribucionAnotaciones.cervical',
+      imageWidth: 192,
+      imageHeight: 139,
+    },
+    // Columna dorsal/lumbo-sacra: columna-completa.jpg (207×235)
+    figure_cdorsal: {
+      kind: 'figure',
+      path: 'assets/images/musculo/entrevista/columna-completa.jpg',
+      marks: 'entrevista.columna.areaDistribucionAnotaciones.dorsalLumboSacra',
+      imageWidth: 207,
+      imageHeight: 235,
+    },
   },
 };
