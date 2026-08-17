@@ -13,4 +13,9 @@ describe('permisoParaRuta — musculoskeletal JJC prefix', () => {
   it('returns null for the musculoskeletal area outside the JJC prefix', () => {
     expect(permisoParaRuta('/areas/musculoesqueletica')).toBeNull();
   });
+
+  it('returns "jjc" for the new PDF API prefix', () => {
+    expect(permisoParaRuta('/api/areas/musculoesqueletica/jjc/12345/pdf')).toBe('jjc');
+    expect(permisoParaRuta('/api/areas/musculoesqueletica/jjc')).toBe('jjc');
+  });
 });

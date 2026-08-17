@@ -13,6 +13,7 @@ export const RUTAS_PROTEGIDAS: RutaProtegida[] = [
   { path: '/generador-pdfs',      permiso: 'generar_pdfs',     label: 'Generador de PDFs' },
   { path: '/areas/medicina/jjc',  permiso: 'jjc',              label: 'JJC (Dermatología)' },
   { path: '/areas/musculoesqueletica/jjc', permiso: 'jjc', label: 'JJC (Musculoesquelética)' },
+  { path: '/api/areas/musculoesqueletica/jjc', permiso: 'jjc', label: 'API JJC (Musculoesquelética)' },
   { path: '/admin/plantillas',    permiso: 'plantillas',       label: 'Plantillas' },
   { path: '/admin/usuarios',      permiso: 'admin',            label: 'Gestión de Usuarios' },
   { path: '/api/usuarios',        permiso: 'admin',            label: 'API Usuarios' },
