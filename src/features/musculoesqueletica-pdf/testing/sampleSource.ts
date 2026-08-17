@@ -259,7 +259,7 @@ export const sampleSource: PdfSourceData = {
 
 /** Resolver that serves a fake data URI for any asset under the feature root. */
 export function sampleImageResolver(assetPath: string): string | null {
-  return assetPath.startsWith('musculoesqueletica-pdf/assets/')
-    ? `data:image/png;base64,${Buffer.from(assetPath).toString('base64')}`
-    : null;
+  if (!assetPath.startsWith('musculoesqueletica-pdf/assets/')) return null;
+  const mime = assetPath.endsWith('.svg') ? 'image/svg+xml' : 'image/png';
+  return `data:${mime};base64,${Buffer.from(assetPath).toString('base64')}`;
 }

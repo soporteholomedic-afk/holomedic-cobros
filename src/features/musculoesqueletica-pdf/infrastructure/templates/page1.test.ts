@@ -122,7 +122,7 @@ describe('PAGE_1_MANIFEST', () => {
 
       // Figures
       figure_hombro: '<img src="data:image/png;base64,bXVzY3Vsb2VzcXVlbGV0aWNhLXBkZi9hc3NldHMvaG9tYnJvLnBuZw==" alt="" data-figure>',
-      figure_codo: '<img src="data:image/png;base64,bXVzY3Vsb2VzcXVlbGV0aWNhLXBkZi9hc3NldHMvY29kby5wbmc=" alt="" data-figure>',
+      figure_codo: '<img src="data:image/svg+xml;base64,bXVzY3Vsb2VzcXVlbGV0aWNhLXBkZi9hc3NldHMvY29kby5zdmc=" alt="" data-figure>',
       figure_mano: '<img src="data:image/png;base64,bXVzY3Vsb2VzcXVlbGV0aWNhLXBkZi9hc3NldHMvbWFuby5wbmc=" alt="" data-figure>',
     };
 

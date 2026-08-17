@@ -116,7 +116,7 @@ export const PAGE_1_MANIFEST: PdfPageManifest = {
 
     // ---- Figures ----
     figure_hombro: { kind: 'figure', path: 'musculoesqueletica-pdf/assets/hombro.png' },
-    figure_codo: { kind: 'figure', path: 'musculoesqueletica-pdf/assets/codo.png' },
+    figure_codo: { kind: 'figure', path: 'musculoesqueletica-pdf/assets/codo.svg' },
     figure_mano: { kind: 'figure', path: 'musculoesqueletica-pdf/assets/mano.png' },
   },
 };
