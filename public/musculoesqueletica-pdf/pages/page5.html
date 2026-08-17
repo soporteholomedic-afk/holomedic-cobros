@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Evaluación Clínica - Miembros Superiores (Escápulo Humeral + Codo)</title>
+  <link rel="stylesheet" href="../assets/pages-shared.print.css">
+</head>
+<body>
+  <div class="pdf-page">
+    <div class="banner-blue">EVALUACION CLINICA OSTEMUSCULAR</div>
+    <div style="font-weight:700; font-size:11px; margin-bottom:1mm; text-transform:uppercase">I.- MIEMBROS SUPERIORES</div>
+
+    <div class="border">
+      <!-- ESCAPULO HUMERAL -->
+      <div>
+        <div class="sub-banner">
+          <div>a) ESCAPULO HUMERAL: REALIZA MANIOBRAS</div>
+          <div><label class="radio-label"><input type="checkbox" {{check:escapulo_realiza}}> SI</label></div>
+        </div>
+        <div class="border-b" style="display:flex; justify-content:space-around; font-size:9.5px; padding:1mm">
+          <div><strong>MOLESTIA DE HOMBRO Dx Desde</strong> <input type="number" value="{{text:escapulo_hombro_dx_desde}}" style="width:16mm; text-align:center; border-bottom:1px dotted #000"> (meses)</div>
+          <div><strong>MOLESTIA DE HOMBRO Ix desde</strong> <input type="number" value="{{text:escapulo_hombro_ix_desde}}" style="width:16mm; text-align:center; border-bottom:1px dotted #000"> (meses)</div>
+        </div>
+        <!-- PALPACION HOMBRO -->
+        <table style="width:100%; border-collapse:collapse; border-bottom:1px solid #000">
+          <thead>
+            <tr style="background:#e6e6e6; border-bottom:1px solid #000; font-weight:700; text-align:center">
+              <th colspan="6" style="padding:1mm; font-size:11px">PALPACIÓN HOMBRO</th>
+            </tr>
+            <tr style="border-bottom:1px solid #000">
+              <th colspan="2" style="border-right:1px solid #000; text-align:left; font-weight:400; font-size:9.5px">DOLOR ANTERIOR</th>
+              <th colspan="2" style="border-right:1px solid #000; text-align:left; font-weight:400; font-size:9.5px">DOLOR LATERAL</th>
+              <th colspan="2" style="text-align:left; font-weight:400; font-size:9.5px">DOLOR POSTERIOR</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr style="text-align:center">
+              <td style="width:16.66%; border-right:1px solid #000; padding:1mm"><label class="radio-label"><input type="checkbox" {{check:palp_hombro_ant_dx}}> Dx</label></td>
+              <td style="width:16.66%; border-right:1px solid #000; padding:1mm"><label class="radio-label"><input type="checkbox" {{check:palp_hombro_ant_ix}}> Ix</label></td>
+              <td style="width:16.66%; border-right:1px solid #000; padding:1mm"><label class="radio-label"><input type="checkbox" {{check:palp_hombro_lat_dx}}> Dx</label></td>
+              <td style="width:16.66%; border-right:1px solid #000; padding:1mm"><label class="radio-label"><input type="checkbox" {{check:palp_hombro_lat_ix}}> Ix</label></td>
+              <td style="width:16.66%; border-right:1px solid #000; padding:1mm"><label class="radio-label"><input type="checkbox" {{check:palp_hombro_post_dx}}> Dx</label></td>
+              <td style="width:16.66%; padding:1mm"><label class="radio-label"><input type="checkbox" {{check:palp_hombro_post_ix}}> Ix</label></td>
+            </tr>
+          </tbody>
+        </table>
+
+        <!-- MOVILIDAD CINTURA ESCAPULOHUMERAL -->
+        <table style="width:100%; border-collapse:collapse; border-bottom:1px solid #000">
+          <thead>
+            <tr style="background:#e6e6e6; border-bottom:1px solid #000; font-weight:700">
+              <th colspan="4" style="text-align:left; padding:1mm; font-size:11px">EVALUACIÓN DE LA MOVILIDAD DE LA CINTURA ESCAPULOHUMERAL</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr style="text-align:center">
+              <td style="border-right:1px solid #000; padding:1mm"><label class="radio-label"><input type="checkbox" {{check:mov_flex_dx}}> Dx</label> <label class="radio-label"><input type="checkbox" {{check:mov_flex_ix}}> Ix</label></td>
+              <td style="border-right:1px solid #000; padding:1mm"><label class="radio-label"><input type="checkbox" {{check:mov_abd_dx}}> Dx</label> <label class="radio-label"><input type="checkbox" {{check:mov_abd_ix}}> Ix</label></td>
+              <td style="border-right:1px solid #000; padding:1mm"><label class="radio-label"><input type="checkbox" {{check:mov_rot_int_dx}}> Dx</label> <label class="radio-label"><input type="checkbox" {{check:mov_rot_int_ix}}> Ix</label></td>
+              <td style="padding:1mm"><label class="radio-label"><input type="checkbox" {{check:mov_rot_ext_dx}}> Dx</label> <label class="radio-label"><input type="checkbox" {{check:mov_rot_ext_ix}}> Ix</label></td>
+            </tr>
+          </tbody>
+        </table>
+
+        <!-- ARCO DOLOROSO + TEST BICEPS -->
+        <table style="width:100%; border-collapse:collapse; border-bottom:1px solid #000">
+          <thead>
+            <tr style="background:#e6e6e6; border-bottom:1px solid #000; font-weight:700">
+              <th style="width:50%; border-right:1px solid #000; text-align:left; padding:1mm; font-size:11px">ARCO DOLOROSO</th>
+              <th style="width:50%; text-align:left; padding:1mm; font-size:11px">TEST TENDINITIS TENDÓN LARGO DE BÍCEPS</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td style="border-right:1px solid #000; padding:2mm; vertical-align:top">
+                <div><label class="radio-label"><input type="checkbox" {{check:arco_dx}}> PRESENTE Dx</label></div>
+                <div><label class="radio-label"><input type="checkbox" {{check:arco_ix}}> PRESENTE Ix</label></div>
+                <div><label class="radio-label"><input type="checkbox" {{check:arco_ausente}}> AUSENTE</label></div>
+              </td>
+              <td style="padding:2mm; vertical-align:top">
+                <div style="font-size:8px">
+                  <div><label class="radio-label"><input type="checkbox" {{check:biceps_ausente}}> DOLOR AUSENTE</label></div>
+                  <div><label class="radio-label"><input type="checkbox" {{check:biceps_dx}}> PRESENCIA DE DOLOR ANTERIOR HOMBRO DX</label></div>
+                  <div><label class="radio-label"><input type="checkbox" {{check:biceps_ix}}> PRESENCIA DE DOLOR ANTERIOR HOMBRO IX</label></div>
+                </div>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+
+        <!-- EXAMEN INSTRUMENTAL -->
+        <div class="border-b" style="display:flex; align-items:center; justify-content:space-between; font-size:9px; padding:1mm">
+          <div><strong>Examen instrumental:</strong></div>
+          <div><label class="radio-label"><input type="checkbox" {{check:exam_ins_no}}> NO</label></div>
+          <div><label class="radio-label"><input type="checkbox" {{check:exam_ins_eco}}> ECOGRAFÍA</label> (año <input type="text" value="{{text:exam_ins_eco_ano}}" style="width:12mm; text-align:center; border-bottom:1px dotted #000">)</div>
+          <div><label class="radio-label"><input type="checkbox" {{check:exam_ins_rx}}> RX</label> (año <input type="text" value="{{text:exam_ins_rx_ano}}" style="width:12mm; text-align:center; border-bottom:1px dotted #000">)</div>
+          <div><label class="radio-label"><input type="checkbox" {{check:exam_ins_rmn}}> RMN</label> (año <input type="text" value="{{text:exam_ins_rmn_ano}}" style="width:12mm; text-align:center; border-bottom:1px dotted #000">)</div>
+        </div>
+
+        <!-- GRAVEDAD PATOLOGIA HOMBRO -->
+        <div style="padding:1mm; display:flex; justify-content:space-between; font-size:9px; font-weight:700">
+          <div>GRAVEDAD PATOLOGÍA DE HOMBRO</div>
+          <div>
+            <label class="radio-label"><input type="radio" name="gravedadHombro" value="LEVE" {{match:'LEVE'}}> LEVE</label>
+            <label class="radio-label"><input type="radio" name="gravedadHombro" value="MEDIA" {{match:'MEDIA'}}> MEDIA</label>
+            <label class="radio-label"><input type="radio" name="gravedadHombro" value="GRAVE" {{match:'GRAVE'}}> GRAVE</label>
+          </div>
+        </div>
+      </div>
+
+      <!-- CODO -->
+      <div class="border-t">
+        <div class="sub-banner">
+          <div>b) CODO: REALIZA MANIOBRAS</div>
+          <div><label class="radio-label"><input type="checkbox" {{check:codo_realiza}}> SI</label></div>
+        </div>
+        <div class="border-b" style="display:flex; justify-content:space-around; font-size:9.5px; padding:1.5mm">
+          <div><strong>MOLESTIA CODO Dx desde</strong> <input type="number" value="{{text:codo_dx_desde}}" style="width:20mm; text-align:center; border-bottom:1px dotted #000"> (meses)</div>
+          <div><strong>MOLESTIA CODO Ix desde</strong> <input type="number" value="{{text:codo_ix_desde}}" style="width:20mm; text-align:center; border-bottom:1px dotted #000"> (meses)</div>
+        </div>
+        <!-- OBSERVACION / INSPECCION -->
+        <div class="border-b" style="text-align:center; font-weight:700; font-size:9.5px; text-transform:uppercase; padding:0.5mm; background:#e6e6e6">OBSERVACIÓN, INSPECCIÓN</div>
+        <div class="border-b" style="display:grid; grid-template-columns:60% 40%; font-size:9px">
+          <div style="border-right:1px solid #000; padding:1.5mm; display:flex; justify-content:space-between">
+            <div>EDEMA LOCALIZADO <label class="radio-label"><input type="checkbox" {{check:codo_edema_loc_dx}}> Dx</label> <label class="radio-label"><input type="checkbox" {{check:codo_edema_loc_ix}}> Ix</label></div>
+            <div><input type="text" value="{{text:codo_edema_sitio}}" style="border-bottom:1px dotted #000; text-align:center; width:30mm" placeholder="Sitio"></div>
+          </div>
+          <div style="padding:1.5mm">EDEMA NO LOCALIZADO <label class="radio-label"><input type="checkbox" {{check:codo_edema_noloc_dx}}> Dx</label> <label class="radio-label"><input type="checkbox" {{check:codo_edema_noloc_ix}}> Ix</label></div>
+        </div>
+        <!-- PALPACION -->
+        <div class="border-b" style="font-weight:700; font-size:9.5px; padding:1mm; background:#e6e6e6">PALPACIÓN EPICÓNDILO – EPITRÓCLEA - OLÉCRANON</div>
+        <table style="width:100%; border-collapse:collapse">
+          <tbody>
+            <tr class="border-b">
+              <td style="border-right:1px solid #000; padding:1.5mm">DOLOR EPICÓNDILO</td>
+              <td style="width:10%; text-align:center"><input type="checkbox" {{check:codo_palp_epic_dx}}></td>
+              <td style="width:10%; text-align:center"><input type="checkbox" {{check:codo_palp_epic_ix}}></td>
+            </tr>
+            <tr class="border-b">
+              <td style="border-right:1px solid #000; padding:1.5mm">DOLOR EPITRÓCLEA</td>
+              <td style="text-align:center"><input type="checkbox" {{check:codo_palp_epit_dx}}></td>
+              <td style="text-align:center"><input type="checkbox" {{check:codo_palp_epit_ix}}></td>
+            </tr>
+            <tr>
+              <td style="border-right:1px solid #000; padding:1.5mm">DOLOR OLÉCRANON</td>
+              <td style="text-align:center"><input type="checkbox" {{check:codo_palp_olec_dx}}></td>
+              <td style="text-align:center"><input type="checkbox" {{check:codo_palp_olec_ix}}></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div style="font-weight:700; font-size:9px; margin:2mm 0">Dx. = Derecho &nbsp;&nbsp;&nbsp;&nbsp; Ix. = Izquierdo</div>
+    <div class="foot">
+      <div>Fo. JJC-SIG-13-31 Cuestionario anamnesico y evaluación de extremidad superior y espalda. Rev. 0</div>
+      <div>4</div>
+    </div>
+  </div>
+</body>
+</html>

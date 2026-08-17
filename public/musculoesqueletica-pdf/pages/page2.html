@@ -1,0 +1,352 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Parestesia Nocturna / Diurna / Cervical Irradiada</title>
+  <link rel="stylesheet" href="../assets/pages-shared.print.css">
+</head>
+<body>
+  <div class="pdf-page">
+
+    <!-- LOGO -->
+    <div class="logo-row">
+      <div class="logo">
+        <span class="logo-title">JJC</span>
+        <span class="logo-sub">INGENIERIA Y CONSTRUCCIÓN</span>
+        <span class="triangles">
+          <span class="tri-teal"></span>
+          <span class="tri-navy"></span>
+        </span>
+      </div>
+    </div>
+
+    <!-- ================= TABLA 1: PARESTESIA NOCTURNA ================= -->
+    <table class="bordered">
+      <colgroup>
+        <col style="width:22%"><col style="width:28%"><col style="width:38%"><col style="width:6%"><col style="width:6%">
+      </colgroup>
+      <thead>
+        <tr class="seg-head">
+          <td colspan="2" class="seg-title">
+            PARESTESIA NOCTURNA
+            <span class="seg-dolor">
+              <label class="radio-label"><input type="radio" name="pnTiene" value="NO" {{check:parestesia_nocturna_no}}>NO</label>
+              <label class="radio-label"><input type="radio" name="pnTiene" value="SI" {{check:parestesia_nocturna_tiene}}>SI</label>
+            </span>
+          </td>
+          <td class="inicio-cell">
+            <strong>¿CUÁNDO SE INCIO LA MOLESTIA?:</strong>
+            <input type="text" value="{{text:parestesia_nocturna_inicio}}">
+          </td>
+          <td class="dxix-head">Dx</td>
+          <td class="dxix-head">Ix</td>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td class="figure-cell" rowspan="9" style="text-align:center; vertical-align:top">
+            <div class="dxix-labels"><span>Ix</span><span>Dx</span></div>
+            <div style="padding:2mm">
+              <!-- Inline SVG hands figure for parestesia nocturna marks -->
+              <svg viewBox="0 0 160 100" style="width:120px;height:75px" fill="none" stroke="currentColor" stroke-width="1">
+                <path d="M 20 80 L 20 60 C 15 55, 10 40, 10 35 C 10 30, 13 30, 15 35 L 22 50 C 20 35, 20 20, 23 15 C 25 12, 28 12, 29 17 L 33 45 C 33 30, 35 10, 40 10 C 43 10, 45 13, 44 25 L 43 45 C 45 30, 50 20, 53 22 C 55 24, 53 35, 50 48 L 48 55 C 55 58, 60 65, 55 80 Z"/>
+                <path d="M 140 80 L 140 60 C 145 55, 150 40, 150 35 C 150 30, 147 30, 145 35 L 138 50 C 140 35, 140 20, 137 15 C 135 12, 132 12, 131 17 L 127 45 C 127 30, 125 10, 120 10 C 117 10, 115 13, 116 25 L 117 45 C 115 30, 110 20, 107 22 C 105 24, 107 35, 110 48 L 112 55 C 105 58, 100 65, 105 80 Z"/>
+              </svg>
+            </div>
+            <div style="font-size:8px; text-align:left; font-weight:700; line-height:1.2">
+              N: Indicar sobre la figura el área de distribución de la molestia
+            </div>
+          </td>
+          <td class="info-cell" rowspan="9" style="vertical-align:top">
+            <div class="info-title">Información reportada sobre la molestia:</div>
+            <div><label class="radio-label"><input type="checkbox" {{check:pn_info_medicamentos}}> ha tomado medicamentos</label></div>
+            <div class="info-sub">ha realizado:</div>
+            <div><label class="radio-label"><input type="checkbox" {{check:pn_info_fisioterapia}}> fisioterapia</label></div>
+            <div><label class="radio-label"><input type="checkbox" {{check:pn_info_traumatologia}}> visita a traumatología / medicina general</label></div>
+            <div><label class="radio-label"><input type="checkbox" {{check:pn_info_rx}}> RX</label></div>
+            <div><label class="radio-label"><input type="checkbox" {{check:pn_info_eco}}> ECOGRAFÍA / RMN</label></div>
+            <div><label class="radio-label"><input type="checkbox" {{check:pn_info_emg}}> EMG (electromiografía)</label></div>
+          </td>
+          <td class="symp">brazo</td>
+          <td class="chk"><input type="checkbox" {{check:pn_sint_brazo_dx}}></td>
+          <td class="chk"><input type="checkbox" {{check:pn_sint_brazo_ix}}></td>
+        </tr>
+        <tr>
+          <td class="symp">antebrazo</td>
+          <td class="chk"><input type="checkbox" {{check:pn_sint_antebrazo_dx}}></td>
+          <td class="chk"><input type="checkbox" {{check:pn_sint_antebrazo_ix}}></td>
+        </tr>
+        <tr>
+          <td class="symp">mano</td>
+          <td class="chk"><input type="checkbox" {{check:pn_sint_mano_dx}}></td>
+          <td class="chk"><input type="checkbox" {{check:pn_sint_mano_ix}}></td>
+        </tr>
+        <tr>
+          <td class="symp">Duración menor a 10 minutos.</td>
+          <td class="chk"><input type="checkbox" {{check:pn_sint_duracion_menor10_dx}}></td>
+          <td class="chk"><input type="checkbox" {{check:pn_sint_duracion_menor10_ix}}></td>
+        </tr>
+        <tr>
+          <td class="symp">Duración mayor a 10 minutos.</td>
+          <td class="chk"><input type="checkbox" {{check:pn_sint_duracion_mayor10_dx}}></td>
+          <td class="chk"><input type="checkbox" {{check:pn_sint_duracion_mayor10_ix}}></td>
+        </tr>
+        <tr>
+          <td class="symp">Presencia durante el sueño</td>
+          <td class="chk"><input type="checkbox" {{check:pn_sint_presencia_sueno_dx}}></td>
+          <td class="chk"><input type="checkbox" {{check:pn_sint_presencia_sueno_ix}}></td>
+        </tr>
+        <tr>
+          <td class="symp">Aparición al despertar</td>
+          <td class="chk"><input type="checkbox" {{check:pn_sint_aparicion_despertar_dx}}></td>
+          <td class="chk"><input type="checkbox" {{check:pn_sint_aparicion_despertar_ix}}></td>
+        </tr>
+        <tr>
+          <td class="umbral-label" colspan="3">
+            UMBRAL POSITIVO <span>(marcar x)</span>
+          </td>
+        </tr>
+        <tr>
+          <td style="font-size:9px">
+            <div>• molestia durante el sueño casi toda la noche <input type="checkbox" {{check:pn_umbral_sueno_dx}}></div>
+            <div>• ocurrencia por lo menos en 1 semana en los últimos 3 meses <input type="checkbox" {{check:pn_umbral_semana_dx}}></div>
+            <div>• ocurrencia una vez al mes <input type="checkbox" {{check:pn_umbral_mes_dx}}></div>
+            <div>otras veces: <input type="text" value="{{text:pn_umbral_otras_veces}}"></div>
+          </td>
+          <td class="chk"><input type="checkbox" {{check:pn_umbral_dx}}></td>
+          <td class="chk"><input type="checkbox" {{check:pn_umbral_ix}}></td>
+        </tr>
+        <tr>
+          <td>
+            <div class="umbral-label">MOLESTIAS LEVES</div>
+            <div>episodios de molestias por debajo del umbral</div>
+            <div style="font-size:9px">detalle: <input type="text" value="{{text:pn_leves_detalle}}"></div>
+          </td>
+          <td class="chk"><input type="checkbox" {{check:pn_leves_dx}}></td>
+          <td class="chk"><input type="checkbox" {{check:pn_leves_ix}}></td>
+        </tr>
+      </tbody>
+    </table>
+
+    <!-- ================= TABLA 2: PARESTESIA DIURNA ================= -->
+    <table class="bordered">
+      <colgroup>
+        <col style="width:22%"><col style="width:28%"><col style="width:38%"><col style="width:6%"><col style="width:6%">
+      </colgroup>
+      <thead>
+        <tr class="seg-head">
+          <td colspan="2" class="seg-title">
+            PARESTESIA DIURNA
+            <span class="seg-dolor">
+              <label class="radio-label"><input type="radio" name="pdTiene" value="NO" {{check:parestesia_diurna_no}}>NO</label>
+              <label class="radio-label"><input type="radio" name="pdTiene" value="SI" {{check:parestesia_diurna_tiene}}>SI</label>
+            </span>
+          </td>
+          <td class="inicio-cell">
+            <strong>¿CUÁNDO SE INCIO LA MOLESTIA?:</strong>
+            <input type="text" value="{{text:parestesia_diurna_inicio}}">
+          </td>
+          <td class="dxix-head">Dx</td>
+          <td class="dxix-head">Ix</td>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td class="figure-cell" rowspan="10" style="text-align:center; vertical-align:top">
+            <div class="dxix-labels"><span>Dx</span><span>Ix</span></div>
+            <div style="padding:2mm">
+              <svg viewBox="0 0 100 120" style="width:90px;height:108px" fill="none" stroke="currentColor" stroke-width="1">
+                <path d="M50 10 C 45 10, 42 15, 42 22 C 42 26, 45 28, 50 28 C 55 28, 58 26, 58 22 C 58 15, 55 10, 50 10 Z" />
+                <path d="M42 25 L 35 32 L 20 38 L 15 65 L 20 85 L 25 85 L 22 65 L 32 60 L 32 95 L 48 95 L 48 60 L 52 60 L 52 95 L 68 95 L 68 60 L 78 65 L 75 85 L 80 85 L 85 65 L 80 38 L 65 32 L 58 25" />
+              </svg>
+            </div>
+            <div style="font-size:8px; text-align:left; font-weight:700; line-height:1.2">
+              N: Indicar sobre la figura el área de distribución de la molestia.
+            </div>
+          </td>
+          <td class="info-cell" rowspan="10" style="vertical-align:top">
+            <div class="info-title">Información reportada sobre la molestia:</div>
+            <div><label class="radio-label"><input type="checkbox" {{check:pd_info_medicamentos}}> ha tomado medicamentos</label></div>
+            <div class="info-sub">ha realizado:</div>
+            <div><label class="radio-label"><input type="checkbox" {{check:pd_info_fisioterapia}}> fisioterapia</label></div>
+            <div><label class="radio-label"><input type="checkbox" {{check:pd_info_traumatologia}}> visita a traumatología / medicina general</label></div>
+            <div><label class="radio-label"><input type="checkbox" {{check:pd_info_rx}}> RX</label></div>
+            <div><label class="radio-label"><input type="checkbox" {{check:pd_info_eco}}> ECOGRAFÍA / RMN</label></div>
+            <div><label class="radio-label"><input type="checkbox" {{check:pd_info_emg}}> EMG (electromiografía)</label></div>
+          </td>
+          <td class="symp">brazo</td>
+          <td class="chk"><input type="checkbox" {{check:pd_sint_brazo_dx}}></td>
+          <td class="chk"><input type="checkbox" {{check:pd_sint_brazo_ix}}></td>
+        </tr>
+        <tr>
+          <td class="symp">antebrazo</td>
+          <td class="chk"><input type="checkbox" {{check:pd_sint_antebrazo_dx}}></td>
+          <td class="chk"><input type="checkbox" {{check:pd_sint_antebrazo_ix}}></td>
+        </tr>
+        <tr>
+          <td class="symp">mano</td>
+          <td class="chk"><input type="checkbox" {{check:pd_sint_mano_dx}}></td>
+          <td class="chk"><input type="checkbox" {{check:pd_sint_mano_ix}}></td>
+        </tr>
+        <tr>
+          <td class="symp">Duración menor a 10 minutos.</td>
+          <td class="chk"><input type="checkbox" {{check:pd_sint_duracion_menor10_dx}}></td>
+          <td class="chk"><input type="checkbox" {{check:pd_sint_duracion_menor10_ix}}></td>
+        </tr>
+        <tr>
+          <td class="symp">Duración mayor a 10 minutos.</td>
+          <td class="chk"><input type="checkbox" {{check:pd_sint_duracion_mayor10_dx}}></td>
+          <td class="chk"><input type="checkbox" {{check:pd_sint_duracion_mayor10_ix}}></td>
+        </tr>
+        <tr>
+          <td class="symp">Aparecen con los brazos levantados</td>
+          <td class="chk"><input type="checkbox" {{check:pd_sint_brazos_levantados_dx}}></td>
+          <td class="chk"><input type="checkbox" {{check:pd_sint_brazos_levantados_ix}}></td>
+        </tr>
+        <tr>
+          <td class="symp">Aparecen cuando se apoya el codo</td>
+          <td class="chk"><input type="checkbox" {{check:pd_sint_apoya_codo_dx}}></td>
+          <td class="chk"><input type="checkbox" {{check:pd_sint_apoya_codo_ix}}></td>
+        </tr>
+        <tr>
+          <td class="symp">Aparición con la presencia de fuerza y/o durante la ejecución del trabajo.</td>
+          <td class="chk"><input type="checkbox" {{check:pd_sint_fuerza_trabajo_dx}}></td>
+          <td class="chk"><input type="checkbox" {{check:pd_sint_fuerza_trabajo_ix}}></td>
+        </tr>
+        <tr>
+          <td style="font-size:9px">
+            <div class="umbral-label">UMBRAL POSITIVO <span>(marcar x)</span></div>
+            <div>• molestia durante el sueño casi toda la noche <input type="checkbox" {{check:pd_umbral_sueno_dx}}></div>
+            <div>• ocurrencia por lo menos en 1 semana en los últimos 3 meses <input type="checkbox" {{check:pd_umbral_semana_dx}}></div>
+            <div>• ocurrencia una vez al mes <input type="checkbox" {{check:pd_umbral_mes_dx}}></div>
+            <div>otras veces: <input type="text" value="{{text:pd_umbral_otras_veces}}"></div>
+          </td>
+          <td class="chk"><input type="checkbox" {{check:pd_umbral_dx}}></td>
+          <td class="chk"><input type="checkbox" {{check:pd_umbral_ix}}></td>
+        </tr>
+        <tr>
+          <td>
+            <div class="umbral-label">MOLESTIAS LEVES</div>
+            <div>episodios de molestias por debajo del umbral</div>
+            <div style="font-size:9px">detalle: <input type="text" value="{{text:pd_leves_detalle}}"></div>
+          </td>
+          <td class="chk"><input type="checkbox" {{check:pd_leves_dx}}></td>
+          <td class="chk"><input type="checkbox" {{check:pd_leves_ix}}></td>
+        </tr>
+      </tbody>
+    </table>
+
+    <!-- ================= SECCIÓN 3: MOLESTIA CERVICAL IRRADIADA ================= -->
+    <div class="border" style="margin-bottom:3mm">
+      <div class="seg-head" style="padding:1mm">
+        <div class="seg-title">
+          MOLESTIA CERVICAL IRRADIADA A LA EXTREMIDAD SUPERIOR.
+          <span class="seg-dolor">
+            <label class="radio-label"><input type="radio" name="ciTiene" value="SI" {{check:cervical_irradiada_tiene}}> SI</label>
+            <label class="radio-label"><input type="radio" name="ciTiene" value="NO" {{check:cervical_irradiada_no}}> NO</label>
+          </span>
+        </div>
+        <div style="font-size:10px; margin-top:1mm">
+          <strong>¿CUÁNDO SE INCIO LA MOLESTIA?</strong>
+          <input type="text" value="{{text:cervical_irradiada_inicio}}" style="width:60mm">
+        </div>
+      </div>
+      <div style="display:grid; grid-template-columns:75% 25%; border-top:1px solid #000">
+        <div style="border-right:1px solid #000; padding:1mm; font-weight:700">
+          EXTREMIDAD SUPERIOR AFECTADA
+        </div>
+        <div style="padding:1mm; text-align:center">
+          <label class="radio-label"><input type="checkbox" {{check:ci_extremidad_dx}}> Dx</label>
+          <label class="radio-label"><input type="checkbox" {{check:ci_extremidad_ix}}> Ix</label>
+        </div>
+      </div>
+      <div style="display:grid; grid-template-columns:75% 25%; border-top:1px solid #000">
+        <div style="border-right:1px solid #000; padding:1mm; font-weight:700">
+          INICIAN O EMPEORAN ELEVANDO LAS EXTREMIDADES SUPERIORES
+          <div style="font-weight:400; font-size:10px; margin-top:1mm">
+            <div><label class="radio-label"><input type="checkbox" {{check:ci_frecuencia_todo_dia}}> se está presentando casi todo el día.</label></div>
+            <div><label class="radio-label"><input type="checkbox" {{check:ci_frecuencia_una_semana}}> presencia por lo menos en 1 semana en los últimos 12 meses</label></div>
+            <div><label class="radio-label"><input type="checkbox" {{check:ci_frecuencia_un_dia_mes}}> presencia por lo menos un día al mes</label></div>
+          </div>
+        </div>
+        <div style="padding:1mm">
+          <label class="radio-label"><input type="radio" name="ciElevando" value="SI" {{check:ci_inician_elevando_true}}> SI</label>
+          <label class="radio-label"><input type="radio" name="ciElevando" value="NO" {{check:ci_inician_elevando_false}}> NO</label>
+          <div style="font-size:9px; margin-top:1mm">
+            otros momentos: <textarea rows="2" style="width:100%; border:1px solid #9ca3af; font-size:9px">{{text:ci_otros_momentos}}</textarea>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ================= SECCIÓN 4: AUSENCIA DEL TRABAJO Y TRASTORNOS ================= -->
+    <div class="border" style="padding:1mm; font-weight:700; font-size:11px">
+      Ausencia del trabajo por trastornos/dolencias en extremidad superior
+      <input type="number" value="{{text:ausencia_dias}}" style="width:24mm; text-align:center; border-bottom:1px solid #000"> días
+    </div>
+
+    <table class="bordered">
+      <thead>
+        <tr class="seg-head">
+          <td colspan="3" class="seg-title">
+            TRASTORNO - DIAGNÓSTICO (ya conocido)
+            <span class="seg-dolor">
+              <label class="radio-label"><input type="radio" name="trastornoTiene" value="SI" {{check:trastorno_tiene_true}}> SI</label>
+              <label class="radio-label"><input type="radio" name="trastornoTiene" value="NO" {{check:trastorno_tiene_false}}> NO</label>
+            </span>
+          </td>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td style="font-weight:700; width:55%">HOMBRO <span style="font-weight:400">(tendinopatía del manguito rotador; tendinitis, etc.)</span></td>
+          <td style="text-align:center; width:20%">
+            <label class="radio-label"><input type="radio" name="diagHombro" value="SI" {{check:diag_hombro_true}}> SI</label>
+            <label class="radio-label"><input type="radio" name="diagHombro" value="NO" {{check:diag_hombro_false}}> NO</label>
+          </td>
+          <td style="font-weight:700; width:25%">
+            ¿CUÁNDO? <input type="text" value="{{text:diag_hombro_cuando}}" style="width:28mm">
+          </td>
+        </tr>
+        <tr>
+          <td style="font-weight:700">CODO <span style="font-weight:400">(epicondilitis; epitrocleitis; etc.)</span></td>
+          <td style="text-align:center">
+            <label class="radio-label"><input type="radio" name="diagCodo" value="SI" {{check:diag_codo_true}}> SI</label>
+            <label class="radio-label"><input type="radio" name="diagCodo" value="NO" {{check:diag_codo_false}}> NO</label>
+          </td>
+          <td style="font-weight:700">
+            ¿CUÁNDO? <input type="text" value="{{text:diag_codo_cuando}}" style="width:28mm">
+          </td>
+        </tr>
+        <tr>
+          <td style="font-weight:700">MANO/MUÑECA <span style="font-weight:400">(tendinitis; quiste en el tendón; etc.)</span></td>
+          <td style="text-align:center">
+            <label class="radio-label"><input type="radio" name="diagManoTendinitis" value="SI" {{check:diag_mano_tendinitis_true}}> SI</label>
+            <label class="radio-label"><input type="radio" name="diagManoTendinitis" value="NO" {{check:diag_mano_tendinitis_false}}> NO</label>
+          </td>
+          <td style="font-weight:700">
+            ¿CUÁNDO? <input type="text" value="{{text:diag_mano_tendinitis_cuando}}" style="width:28mm">
+          </td>
+        </tr>
+        <tr>
+          <td style="font-weight:700">MANO/MUÑECA: <span style="font-weight:400">(Síndrome del túnel carpiano, Síndrome del canal de Guyón)</span></td>
+          <td style="text-align:center">
+            <label class="radio-label"><input type="radio" name="diagManoTunel" value="SI" {{check:diag_mano_tunel_true}}> SI</label>
+            <label class="radio-label"><input type="radio" name="diagManoTunel" value="NO" {{check:diag_mano_tunel_false}}> NO</label>
+          </td>
+          <td style="font-weight:700">
+            ¿CUÁNDO? <input type="text" value="{{text:diag_mano_tunel_cuando}}" style="width:28mm">
+          </td>
+        </tr>
+        <tr>
+          <td colspan="3" style="font-weight:700; font-size:11px">
+            N° TOTAL DE DÍAS DE ENFERMEDAD EN LOS ÚLTIMOS 12 MESES:
+            <input type="number" value="{{text:total_dias_enfermedad}}" style="width:24mm; text-align:center; border-bottom:1px solid #000; margin-left:2mm">
+          </td>
+        </tr>
+      </tbody>
+    </table>
+
+  </div>
+</body>
+</html>

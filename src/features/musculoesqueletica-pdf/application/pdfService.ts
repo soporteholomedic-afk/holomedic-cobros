@@ -25,14 +25,18 @@ export interface PageRenderer {
 
 export interface PdfServiceDeps {
   loaders: PdfServiceLoaders;
-  renderPage1: PageRenderer;
+  /**
+   * Ordered array of page renderers for the complete document (pages 1-9).
+   * Each renderer produces one fully-offline HTML page from the source data.
+   */
+  pageRenderers: PageRenderer[];
   printer: PdfPrinter;
   merger: PdfMerger;
 }
 
 /**
  * Orchestrates the single-document PDF pipeline:
- * assemble source data → render page 1 → print with Edge → merge into one PDF.
+ * assemble source data → render all pages → print each with Edge → merge into one PDF.
  *
  * Failures are typed so the route can map them to 404/502/500 without ever
  * exposing clinical payloads.
@@ -42,9 +46,19 @@ export class PdfService {
 
   async generate(idAten: string): Promise<Uint8Array> {
     const source = await this.loadSource(idAten);
-    const html = await this.deps.renderPage1.render(source);
-    const pagePdf = await this.deps.printer.print(html);
-    return this.deps.merger.merge([pagePdf]);
+
+    // Render all pages in order.
+    const htmlPages = await Promise.all(
+      this.deps.pageRenderers.map((renderer) => renderer.render(source)),
+    );
+
+    // Print each page to a single-page PDF.
+    const pagePdfs = await Promise.all(
+      htmlPages.map((html) => this.deps.printer.print(html)),
+    );
+
+    // Merge all page PDFs into one document, preserving order.
+    return this.deps.merger.merge(pagePdfs);
   }
 
   private async loadSource(idAten: string): Promise<PdfSourceData> {

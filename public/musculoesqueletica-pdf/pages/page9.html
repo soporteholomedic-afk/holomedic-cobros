@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Motilidad y Maniobras Especiales</title>
+  <link rel="stylesheet" href="../assets/pages-shared.print.css">
+</head>
+<body>
+  <div class="pdf-page" style="display:flex; flex-direction:column; justify-content:space-between">
+    <div style="space-y:4">
+
+      <!-- SECCIÓN C: EVALUACION DE LA MOTILIDAD -->
+      <div class="border" style="margin-bottom:4mm">
+        <div style="background:#EAE6D9; font-weight:700; padding:1mm 2mm; border-bottom:1px solid #000; font-size:14px; letter-spacing:0.05em">C) EVALUACION DE LA MOTILIDAD</div>
+        <div style="display:grid; grid-template-columns:1fr 1fr; border-bottom:1px solid #000; font-weight:700; text-align:center; font-size:11px; padding:1mm; background:white">
+          <div style="border-right:1px solid #000">COLUMNA CERVICAL</div>
+          <div>COLUMNA DORSO LUMBAR</div>
+        </div>
+        <div style="display:grid; grid-template-columns:1fr 1fr; font-size:10.5px">
+          <!-- CERVICAL -->
+          <div style="border-right:1px solid #000; padding:3mm">
+            <p style="font-weight:700; font-size:10px; margin-bottom:2mm">PRESENCIA DE DOLOR AL MOVIMIENTO</p>
+            <div style="margin-bottom:1mm"><label class="radio-label"><input type="checkbox" {{check:motilidad_cerv_flexion}}> FLEXION</label></div>
+            <div style="margin-bottom:1mm"><label class="radio-label"><input type="checkbox" {{check:motilidad_cerv_extension}}> EXTENSION</label></div>
+            <div style="margin-bottom:1mm"><label class="radio-label"><input type="checkbox" {{check:motilidad_cerv_incl_dx}}> INCLINACION DX</label></div>
+            <div style="margin-bottom:1mm"><label class="radio-label"><input type="checkbox" {{check:motilidad_cerv_incl_ix}}> INCLINACION IX</label></div>
+            <div style="margin-bottom:1mm"><label class="radio-label"><input type="checkbox" {{check:motilidad_cerv_rot_dx}}> ROT. DX</label></div>
+            <div><label class="radio-label"><input type="checkbox" {{check:motilidad_cerv_rot_ix}}> ROT. IX</label></div>
+          </div>
+          <!-- DORSO LUMBAR -->
+          <div style="padding:3mm; padding-left:8mm">
+            <p style="font-weight:700; font-size:10px; margin-bottom:2mm">PRESENCIA DE DOLOR AL MOVIMIENTO</p>
+            <div style="margin-bottom:1mm"><label class="radio-label"><input type="checkbox" {{check:motilidad_dl_flexion}}> FLEXION</label></div>
+            <div style="margin-bottom:1mm"><label class="radio-label"><input type="checkbox" {{check:motilidad_dl_extension}}> EXTENSION</label></div>
+            <div style="margin-bottom:1mm"><label class="radio-label"><input type="checkbox" {{check:motilidad_dl_incl_dx}}> INCLINACION DX</label></div>
+            <div style="margin-bottom:1mm"><label class="radio-label"><input type="checkbox" {{check:motilidad_dl_incl_ix}}> INCLINACION IX</label></div>
+            <div style="margin-bottom:1mm"><label class="radio-label"><input type="checkbox" {{check:motilidad_dl_rot_dx}}> ROT. DX</label></div>
+            <div><label class="radio-label"><input type="checkbox" {{check:motilidad_dl_rot_ix}}> ROT. IX</label></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- SECCIÓN D: MANIOBRA DE LASEGUE -->
+      <div class="border" style="margin-bottom:4mm">
+        <div style="background:#EAE6D9; font-weight:700; padding:1mm 2mm; border-bottom:1px solid #000; font-size:14px; letter-spacing:0.05em">D) MANIOBRA DE LASEGUE / RETRACCION DE MUSCULO ISQUIO CRURAL</div>
+        <div style="display:grid; grid-template-columns:5fr 7fr; align-items:stretch">
+          <div style="border-right:1px solid #000; padding:2mm; text-align:center; font-size:10px; margin-top:auto; margin-bottom:auto">Lasegue / SLR (elevación de la pierna recta)</div>
+          <div style="padding:3mm; font-size:11px">
+            <div style="display:flex; align-items:center; gap:4mm">
+              <span style="font-weight:700">LASEGUE/SLR :</span>
+              <label class="radio-label"><input type="checkbox" {{check:lasegue_normal}}> NORMAL</label>
+              <label class="radio-label"><input type="checkbox" {{check:lasegue_dx}}> DX</label>
+              <label class="radio-label"><input type="checkbox" {{check:lasegue_ix}}> IX</label>
+            </div>
+            <div style="border-bottom:1px dotted #9ca3af; margin:2mm 0"></div>
+            <div><label class="radio-label"><input type="checkbox" {{check:lasegue_retraccion}}> <strong>PRESENCIA DE RETRACCION ISQUIO CRURAL</strong></label></div>
+            <div style="display:flex; align-items:center; gap:2mm; margin-top:1mm">
+              <span style="font-weight:700">OBSERVACION:</span>
+              <input type="text" value="{{text:lasegue_observacion}}" style="flex-grow:1; border-bottom:1px dotted #000; outline:none">
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- SECCIÓN E: MANIOBRA DE WASSERMAN -->
+      <div class="border" style="margin-bottom:4mm">
+        <div style="background:#EAE6D9; font-weight:700; padding:1mm 2mm; border-bottom:1px solid #000; font-size:14px; letter-spacing:0.05em">E) MANIOBRA DE WASSERMAN / RETRACCION DEL MUSCULO ILEOPSOAS</div>
+        <div style="display:grid; grid-template-columns:5fr 7fr; align-items:stretch">
+          <div style="border-right:1px solid #000; padding:2mm; text-align:center"></div>
+          <div style="padding:3mm; font-size:11px">
+            <div style="display:flex; align-items:center; gap:4mm">
+              <span style="font-weight:700">WASSERMAN <span style="font-weight:400; font-size:10px">(Lasegue invertido):</span></span>
+              <label class="radio-label"><input type="checkbox" {{check:wasserman_dx}}> DX</label>
+              <label class="radio-label"><input type="checkbox" {{check:wasserman_ix}}> IX</label>
+            </div>
+            <div style="border-bottom:1px dotted #9ca3af; margin:2mm 0"></div>
+            <div><label class="radio-label"><input type="checkbox" {{check:wasserman_retraccion}}> <strong>PRESENCIA DE RETRACCION ILEOPSOAS</strong></label></div>
+            <div style="display:flex; align-items:center; gap:2mm; margin-top:1mm">
+              <span style="font-weight:700">OBSERVACION:</span>
+              <input type="text" value="{{text:wasserman_observacion}}" style="flex-grow:1; border-bottom:1px dotted #000; outline:none">
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- APROXIMACION DIAGNOSTICA -->
+      <div class="border" style="min-height:90px">
+        <div style="background:#e5e7eb; font-weight:700; padding:1mm 2mm; border-bottom:1px solid #000; font-size:11px; letter-spacing:0.05em">APROXIMACION DIAGNOSTICA DE LA EVALUACION</div>
+        <div style="padding:2mm"><textarea rows="3" style="width:100%; height:16mm; resize:none; outline:none; font-size:11px">{{text:approx_diag}}</textarea></div>
+      </div>
+
+      <!-- FIRMA -->
+      <div style="padding-top:10mm; font-size:10.5px; line-height:1.625">
+        <div style="width:72mm; border-bottom:1px dotted #000; margin-bottom:1mm"></div>
+        <p style="font-weight:700">NOMBRE Y APELLIDOS</p>
+        <p style="font-weight:700">FIRMA-SELLO</p>
+        <p style="font-weight:700">MEDICO EVALUADOR / OCUPACIONAL</p>
+        <p style="font-weight:700">FECHA.</p>
+      </div>
+
+      <div style="font-size:10px; font-style:italic; padding:1mm 0">Dx. = Derecho(a) &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; Ix.= Izquierdo(a)</div>
+    </div>
+
+    <div class="foot" style="margin-top:4mm">
+      <div>Fo. JJC-SIG-13-31 Cuestionario anamnesico y evaluación de extremidad superior y espalda. Rev. 0</div>
+      <div style="font-weight:700; font-size:12px; color:#000">7</div>
+    </div>
+  </div>
+</body>
+</html>

@@ -106,7 +106,7 @@ describe('one-page A4 PDF proof (render → print → merge)', () => {
         loadEntrevista: async () => sampleSource.entrevista,
         loadEvaluacion: async () => sampleEvaluacionFull,
       },
-      renderPage1: { render: async () => renderRealPage1() },
+      pageRenderers: [{ render: async () => renderRealPage1() }],
       printer,
       merger: new PdfLibMerger(),
     });
@@ -140,12 +140,12 @@ describe('one-page A4 PDF proof (render → print → merge)', () => {
         loadEntrevista: async () => sampleSource.entrevista,
         loadEvaluacion: async () => sampleEvaluacionFull,
       },
-      renderPage1: {
+      pageRenderers: [{
         render: async () =>
           renderRealPage1((html) =>
             html.replace('{{text:empresa}}', '{{text:missing_token}}'),
           ),
-      },
+      }],
       printer,
       merger: new PdfLibMerger(),
     });
@@ -166,7 +166,7 @@ describe.skipIf(!edgeAvailable)('real Edge one-page proof', () => {
         loadEntrevista: async () => sampleSource.entrevista,
         loadEvaluacion: async () => sampleEvaluacionFull,
       },
-      renderPage1: { render: async () => renderRealPage1() },
+      pageRenderers: [{ render: async () => renderRealPage1() }],
       printer,
       merger: new PdfLibMerger(),
     });

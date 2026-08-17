@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Codo (tests) + Muñeca-Mano</title>
+  <link rel="stylesheet" href="../assets/pages-shared.print.css">
+</head>
+<body>
+  <div class="pdf-page">
+    <!-- PALPACION MUSCULO EPICONDILEO - EPITRÓCLEAR -->
+    <div class="border" style="margin-bottom:2mm">
+      <div class="sub-banner-gray" style="font-size:11px">PALPACION MUSCULO EPICÓNDILEO - EPITRÓCLEAR</div>
+      <div style="display:grid; grid-template-columns:10fr 2fr; border-top:1px solid #000">
+        <div style="display:grid; grid-template-columns:1fr 1fr; border-right:1px solid #000">
+          <div style="padding:2mm; font-size:9px; font-weight:600; text-transform:uppercase; line-height:1.2">SE EFECTÚA A 2 CM DEL EPICÓNDILO SOBRE LA INSERCIÓN DEL TENDÓN</div>
+          <div style="display:flex; flex-direction:column; justify-content:center; font-size:10px; font-weight:600">
+            <div style="padding:2mm; border-bottom:1px solid #000">DOLOR MUSCULO EPICÓNDILEO</div>
+            <div style="padding:2mm">DOLOR MUSCULO EPITRÓCLEAR</div>
+          </div>
+        </div>
+        <div style="display:grid; grid-template-columns:1fr 1fr; text-align:center">
+          <div style="background:#e5e7eb; font-weight:700; border-right:1px solid #000; border-bottom:1px solid #000; padding:1mm">Dx</div>
+          <div style="background:#e5e7eb; font-weight:700; border-bottom:1px solid #000; padding:1mm">Ix</div>
+          <div style="border-right:1px solid #000; border-bottom:1px solid #000; padding:1mm"><input type="checkbox" {{check:codo_palp_epi_dx}}></div>
+          <div style="border-bottom:1px solid #000; padding:1mm"><input type="checkbox" {{check:codo_palp_epi_ix}}></div>
+          <div style="border-right:1px solid #000; padding:1mm"><input type="checkbox" {{check:codo_palp_epit_dx}}></div>
+          <div style="padding:1mm"><input type="checkbox" {{check:codo_palp_epit_ix}}></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- TESTS CODO -->
+    <div class="border" style="display:grid; grid-template-columns:1fr 1fr; margin-bottom:2mm">
+      <div style="border-right:1px solid #000">
+        <div class="sub-banner-gray" style="font-size:11px">TEST PARA EPICONDILITIS</div>
+        <div style="padding:2mm; font-size:9px">
+          <div style="font-weight:600; text-transform:uppercase; margin-bottom:1mm">Presencia de dolor lateral en el codo.</div>
+          <div style="font-weight:700; font-size:11px">
+            <label class="radio-label"><input type="checkbox" {{check:codo_test_epic_dx}}> Dx</label>
+            <label class="radio-label"><input type="checkbox" {{check:codo_test_epic_ix}}> Ix</label>
+          </div>
+        </div>
+      </div>
+      <div>
+        <div class="sub-banner-gray" style="font-size:11px">TEST PARA ATRAPAMIENTO N. ULNAR</div>
+        <div style="padding:2mm">
+          <p style="font-size:9px; font-weight:600; text-transform:uppercase; line-height:1.2">PARESTESIAS IRRADIAN AL ANTEBRAZO Y/O AL 4° Y 5° DEDO:</p>
+          <div style="font-weight:700; font-size:11px">
+            <label class="radio-label"><input type="checkbox" {{check:codo_test_ulnar_dx}}> Dx</label>
+            <label class="radio-label"><input type="checkbox" {{check:codo_test_ulnar_ix}}> Ix</label>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- EXAMEN INSTRUMENTAL CODO -->
+    <div class="border" style="display:flex; align-items:center; justify-content:space-between; font-size:11px; padding:1.5mm; gap:2mm; margin-bottom:2mm">
+      <span style="font-weight:700">Examen instrumental:</span>
+      <label class="radio-label"><input type="checkbox" {{check:codo_exam_no}}> <strong>NO</strong></label>
+      <label class="radio-label"><input type="checkbox" {{check:codo_exam_eco}}> ECOGRAFÍA (año <input type="number" value="{{text:codo_exam_eco_ano}}" style="width:12mm; text-align:center; border-bottom:1px solid #000">)</label>
+      <label class="radio-label"><input type="checkbox" {{check:codo_exam_rx}}> RX (año <input type="number" value="{{text:codo_exam_rx_ano}}" style="width:12mm; text-align:center; border-bottom:1px solid #000">)</label>
+      <label class="radio-label"><input type="checkbox" {{check:codo_exam_emg}}> EMG (año <input type="number" value="{{text:codo_exam_emg_ano}}" style="width:12mm; text-align:center; border-bottom:1px solid #000">)</label>
+    </div>
+
+    <!-- GRAVEDAD CODO -->
+    <div class="border" style="background:#f3f4f6; display:flex; align-items:center; justify-content:space-between; font-size:11px; padding:1.5mm; margin-bottom:2mm">
+      <span style="font-weight:700; text-transform:uppercase">GRAVEDAD PATOLOGÍA DEL CODO</span>
+      <div style="font-weight:700">
+        <label class="radio-label"><input type="radio" name="gravedadCodo" value="LEVE"> LEVE</label>
+        <label class="radio-label"><input type="radio" name="gravedadCodo" value="MEDIA"> MEDIA</label>
+        <label class="radio-label"><input type="radio" name="gravedadCodo" value="GRAVE"> GRAVE</label>
+      </div>
+    </div>
+
+    <!-- MUNECA-MANO -->
+    <div class="border" style="margin-bottom:2mm">
+      <div class="sub-banner" style="font-size:12px">
+        <div>c) MUÑECA - MANO: <span style="font-weight:400">REALIZA MANIOBRAS</span></div>
+        <div><label class="radio-label"><input type="checkbox" {{check:muneca_realiza}}> SI</label></div>
+      </div>
+      <div class="border-b" style="display:flex; justify-content:space-around; font-size:11px; font-weight:700; padding:2mm">
+        <div>MOLESTIA MUÑECA Dx desde <input type="number" value="{{text:muneca_dx_desde}}" style="width:20mm; text-align:center; border-bottom:1px solid #000"> (meses)</div>
+        <div>MOLESTIA MUÑECA Ix desde <input type="number" value="{{text:muneca_ix_desde}}" style="width:20mm; text-align:center; border-bottom:1px solid #000"> (meses)</div>
+      </div>
+
+      <!-- OBSERVACION MANO/MUNECA -->
+      <div class="sub-banner-gray" style="font-size:11px">OBSERVACIÓN MANO/MUÑECA</div>
+      <div style="font-size:10px; font-weight:600">
+        <div style="display:grid; grid-template-columns:3fr 4fr 5fr; border-bottom:1px solid #000; padding:1mm; align-items:center">
+          <div style="font-weight:700; padding-left:2mm; text-transform:uppercase">QUISTE</div>
+          <div style="display:flex; justify-content:space-between; padding-right:2mm"><span>QUISTE DORSAL</span> <span><label class="radio-label"><input type="checkbox" {{check:muneca_quiste_dorsal_dx}}> Dx</label> <label class="radio-label"><input type="checkbox" {{check:muneca_quiste_dorsal_ix}}> Ix</label></span></div>
+          <div style="display:flex; justify-content:space-between; padding-right:2mm"><span>QUISTE VENTRAL</span> <span><label class="radio-label"><input type="checkbox" {{check:muneca_quiste_ventral_dx}}> Dx</label> <label class="radio-label"><input type="checkbox" {{check:muneca_quiste_ventral_ix}}> Ix</label></span></div>
+        </div>
+        <div style="display:grid; grid-template-columns:3fr 4fr 5fr; border-bottom:1px solid #000; padding:1mm; align-items:center">
+          <div style="font-weight:700; padding-left:2mm; text-transform:uppercase">EDEMA</div>
+          <div style="display:flex; justify-content:space-between; padding-right:2mm"><div><div>VENTRAL (muñeca)</div><div>ESTILOIDE RADIAL</div></div> <span><label class="radio-label"><input type="checkbox" {{check:muneca_edema_ventral_dx}}> Dx</label> <label class="radio-label"><input type="checkbox" {{check:muneca_edema_ventral_ix}}> Ix</label></span></div>
+          <div style="display:flex; justify-content:space-between; padding-right:2mm"><div><div>DORSAL (Muñeca)</div><div>ESTILOIDE ULNAR</div></div> <span><label class="radio-label"><input type="checkbox" {{check:muneca_edema_dorsal_dx}}> Dx</label> <label class="radio-label"><input type="checkbox" {{check:muneca_edema_dorsal_ix}}> Ix</label></span></div>
+        </div>
+        <div style="display:grid; grid-template-columns:3fr 4fr 5fr; border-bottom:1px solid #000; padding:1mm; align-items:center">
+          <div style="font-weight:700; padding-left:2mm; text-transform:uppercase">HIPOTROFIA</div>
+          <div><label class="radio-label"><input type="checkbox" {{check:muneca_hipotrofia_dx}}> Dx posterior:</label></div>
+          <div><label class="radio-label"><input type="checkbox" {{check:muneca_hipotrofia_ix}}> Ix posterior:</label></div>
+        </div>
+        <div style="display:grid; grid-template-columns:3fr 4fr 5fr; border-bottom:1px solid #000; padding:1mm; align-items:center">
+          <div style="font-weight:700; padding-left:2mm; text-transform:uppercase">DEFORM. ARTIC. TRAPECIO-METACARPAL</div>
+          <div><label class="radio-label"><input type="checkbox" {{check:muneca_deformidad_dx}}> Dx</label></div>
+          <div><label class="radio-label"><input type="checkbox" {{check:muneca_deformidad_ix}}> Ix</label></div>
+        </div>
+        <div style="display:grid; grid-template-columns:3fr 4fr 5fr; padding:1mm; align-items:center">
+          <div style="font-weight:700; padding-left:2mm; text-transform:uppercase">RETENCIONES PALMARES</div>
+          <div><label class="radio-label"><input type="checkbox" {{check:muneca_retenciones_dx}}> Dx</label></div>
+          <div><label class="radio-label"><input type="checkbox" {{check:muneca_retenciones_ix}}> Ix</label></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- PALPACION + GATILLO -->
+    <div class="border" style="display:grid; grid-template-columns:1fr 1fr; margin-bottom:2mm">
+      <div style="border-right:1px solid #000">
+        <div class="sub-banner-gray" style="font-size:11px">PALPACIÓN</div>
+        <div style="padding:2mm; font-size:9px; font-weight:600">
+          <div style="margin-bottom:1mm"><label class="radio-label"><input type="checkbox" {{check:muneca_palp_trapecio_dx}}> (A) DOLOR A LA PALPACIÓN ARTI. TRAPECIO – METACARPALE Dx.</label></div>
+          <div style="margin-bottom:1mm"><label class="radio-label"><input type="checkbox" {{check:muneca_palp_trapecio_ix}}> (A) DOLOR A LA PALPACIÓN ARTI. TRAPECIO – METACARPAL Ix.</label></div>
+          <div style="margin-bottom:1mm"><label class="radio-label"><input type="checkbox" {{check:muneca_palp_estiloide_dx}}> (B) DOLOR A LA PALPACIÓN ESTILOIDE RADIAL Dx.</label></div>
+          <div><label class="radio-label"><input type="checkbox" {{check:muneca_palp_estiloide_ix}}> (B) DOLOR A LA PALPACIÓN ESTILOIDE RADIAL Ix.</label></div>
+        </div>
+      </div>
+      <div>
+        <div class="sub-banner-gray" style="font-size:11px">MANIOBRA PARA CLIC (GATILLO)</div>
+        <div style="padding:2mm; font-size:9px; font-weight:600">
+          <div style="margin-bottom:2mm">
+            <div style="font-weight:700">CLIC DURANTE LA EXTENSIÓN DEDO Dx:</div>
+            <div style="display:flex; gap:1mm; padding-left:4mm; margin-top:1mm">
+              <label><input type="checkbox" {{check:gatillo_dx_d1}}> 1°</label>
+              <label><input type="checkbox" {{check:gatillo_dx_d2}}> 2°</label>
+              <label><input type="checkbox" {{check:gatillo_dx_d3}}> 3°</label>
+              <label><input type="checkbox" {{check:gatillo_dx_d4}}> 4°</label>
+              <label><input type="checkbox" {{check:gatillo_dx_d5}}> 5°</label>
+            </div>
+          </div>
+          <div>
+            <div style="font-weight:700">CLIC DURANTE LA EXTENSIÓN DEDO Ix:</div>
+            <div style="display:flex; gap:1mm; padding-left:4mm; margin-top:1mm">
+              <label><input type="checkbox" {{check:gatillo_ix_d1}}> 1°</label>
+              <label><input type="checkbox" {{check:gatillo_ix_d2}}> 2°</label>
+              <label><input type="checkbox" {{check:gatillo_ix_d3}}> 3°</label>
+              <label><input type="checkbox" {{check:gatillo_ix_d4}}> 4°</label>
+              <label><input type="checkbox" {{check:gatillo_ix_d5}}> 5°</label>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div style="font-weight:700; font-size:10px; padding:1mm 0">Dx.= Derecho &nbsp;&nbsp;&nbsp; Ix.= Izquierdo</div>
+    <div class="foot">
+      <div>Fo. JJC-SIG-13-31 Cuestionario anamnesico y evaluación de extremidad superior y espalda. Rev. 0</div>
+      <div>5</div>
+    </div>
+  </div>
+</body>
+</html>

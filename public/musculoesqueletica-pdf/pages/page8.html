@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Evaluación Columna - Observación + Maniobra Preso Palpación</title>
+  <link rel="stylesheet" href="../assets/pages-shared.print.css">
+</head>
+<body>
+  <div class="pdf-page" style="display:flex; flex-direction:column; justify-content:space-between">
+    <div>
+      <h2 style="font-size:14px; font-weight:700; margin-bottom:0.5mm">II.- COLUMNA</h2>
+      <p style="font-size:11px; margin-bottom:2mm; font-style:italic">Marcar "x" en los cuadraditos según corresponda.</p>
+
+      <!-- SECCIÓN A: OBSERVACION -->
+      <div class="border" style="margin-bottom:4mm">
+        <div style="background:#EAE6D9; font-weight:700; padding:1mm 2mm; border-bottom:1px solid #000; font-size:14px; letter-spacing:0.05em">A) OBSERVACION</div>
+        <!-- CIFOSIS / LORDOSIS / ESCOLIOSIS -->
+        <div style="display:grid; grid-template-columns:repeat(12, 1fr); border-bottom:1px solid #000">
+          <div style="grid-column:span 4; border-right:1px solid #000; padding:2mm; text-align:center; background:white">
+            <!-- Espalda SVG -->
+          </div>
+          <div style="grid-column:span 4; border-right:1px solid #000; padding:2mm; font-size:11px">
+            <p style="font-weight:700; margin-bottom:1mm">CIFOSIS DORSAL:</p>
+            <div style="padding-left:2mm; margin-bottom:3mm">
+              <div style="margin-bottom:1mm"><label class="radio-label"><input type="checkbox" {{check:cifosis_normal}}> NORMAL</label></div>
+              <div style="margin-bottom:1mm"><label class="radio-label"><input type="checkbox" {{check:cifosis_hipercifosis}}> HIPERCIFOSIS</label></div>
+              <div><label class="radio-label"><input type="checkbox" {{check:cifosis_aplanamiento}}> APLANAMIENTO CIFOSIS DORSAL</label></div>
+            </div>
+            <p style="font-weight:700; margin-bottom:1mm">LORDOSIS LUMBAR</p>
+            <div style="padding-left:2mm">
+              <div style="margin-bottom:1mm"><label class="radio-label"><input type="checkbox" {{check:lordosis_normal}}> NORMAL</label></div>
+              <div style="margin-bottom:1mm"><label class="radio-label"><input type="checkbox" {{check:lordosis_hipercifosis}}> HIPERCIFOSIS</label></div>
+              <div><label class="radio-label"><input type="checkbox" {{check:lordosis_aplanamiento}}> APLANAMIENTO LORDOSIS LUMBAR</label></div>
+            </div>
+          </div>
+          <div style="grid-column:span 4; padding:2mm; font-size:11px">
+            <p style="font-weight:700; margin-bottom:3mm">PRESENCIA DE ESCOLIOSIS <span style="font-weight:400; font-size:10px">(curva &gt; 1cm)</span></p>
+            <div style="padding-left:4mm">
+              <div style="margin-bottom:1.5mm"><label class="radio-label"><input type="checkbox" {{check:escoliosis_ausente}}> AUSENTE</label></div>
+              <div style="margin-bottom:1.5mm"><label class="radio-label"><input type="checkbox" {{check:escoliosis_dorsal_dx}}> DORSAL DX</label></div>
+              <div style="margin-bottom:1.5mm"><label class="radio-label"><input type="checkbox" {{check:escoliosis_dorsal_ix}}> DORSAL IX</label></div>
+              <div style="margin-bottom:1.5mm"><label class="radio-label"><input type="checkbox" {{check:escoliosis_lumbar_dx}}> LUMBAR DX</label></div>
+              <div><label class="radio-label"><input type="checkbox" {{check:escoliosis_lumbar_ix}}> LUMBAR IX</label></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- RITMO LUMBO PELVICO -->
+        <div style="background:#e5e7eb; text-align:center; font-weight:700; padding:0.5mm; border-bottom:1px solid #000; font-size:11px; letter-spacing:0.05em">OBSERVACION RITMO LUMBO PELVICO:</div>
+        <div style="display:grid; grid-template-columns:repeat(12, 1fr); border-bottom:1px solid #000">
+          <div style="grid-column:span 4; border-right:1px solid #000; padding:2mm; text-align:center"></div>
+          <div style="grid-column:span 8; padding:3mm; font-size:11px">
+            <div style="margin-bottom:2mm"><label class="radio-label"><input type="checkbox" {{check:ritmo_normal}}> NORMAL</label></div>
+            <div style="margin-bottom:2mm"><label class="radio-label"><input type="checkbox" {{check:ritmo_lordosis_inmod}}> LORDOSIS LUMBAR INMODIFICADA</label></div>
+            <div><label class="radio-label"><input type="checkbox" {{check:ritmo_dolor_lumbar}}> DOLOR LUMBAR</label></div>
+          </div>
+        </div>
+
+        <!-- DORSO CURVO ESTRUCTURADO -->
+        <div style="background:#e5e7eb; text-align:center; font-weight:700; padding:0.5mm; border-bottom:1px solid #000; font-size:11px; letter-spacing:0.05em">OBSERVACION DE PRESENCIA DE DORSO CURVO ESTRUCTURADO CIFO ESCOLIOSIS:</div>
+        <div style="display:grid; grid-template-columns:repeat(12, 1fr)">
+          <div style="grid-column:span 4; border-right:1px solid #000; padding:2mm; text-align:center"></div>
+          <div style="grid-column:span 8; padding:3mm; font-size:11px">
+            <div style="margin-bottom:2mm"><label class="radio-label"><input type="checkbox" {{check:dorso_normal}}> NORMAL</label></div>
+            <div style="margin-bottom:2mm"><label class="radio-label"><input type="checkbox" {{check:dorso_presencia}}> PRESENCIA DE DORSO CURVO ESTRUCTURADO</label></div>
+            <div><label class="radio-label"><input type="checkbox" {{check:dorso_dolor}}> DOLOR DORSAL</label></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- SECCIÓN B: MANIOBRA DE PRESO PALPACION -->
+      <div class="border">
+        <div style="padding:1mm 2mm; border-bottom:1px solid #000; font-size:14px">
+          <span style="font-weight:700">B) MANIOBRA DE PRESO PALPACION</span>
+          <span style="font-size:12px; margin-left:1mm">(Apófisis espinosa, espacio intervertebral y musculatura para vertebral)</span>
+        </div>
+        <div style="display:grid; grid-template-columns:1fr 1fr">
+          <!-- CERVICAL -->
+          <div style="border-right:1px solid #000; padding:3mm; font-size:10px">
+            <div style="margin-bottom:2mm"><label class="radio-label"><input type="checkbox" {{check:palp_cerv_dolor_ausente}}> DOLOR AUSENTE</label></div>
+            <div>
+              <label class="radio-label"><input type="checkbox" {{check:palp_cerv_dolor_presente}}> <strong>DOLOR PRESENTE:</strong></label>
+              <div style="padding-left:5mm; margin-top:2mm">
+                <div style="margin-bottom:2mm">
+                  <label class="radio-label"><input type="checkbox" {{check:palp_cerv_apofisis_aplica}}> APOFISIS Y/O ESPACIO INTERVERTEBR.</label>
+                  <div style="margin-top:1mm">n° apófisis/ espacio: <input type="text" value="{{text:palp_cerv_apofisis_numero}}" style="border-bottom:1px solid #000; width:16mm; padding:0 1mm"></div>
+                </div>
+                <div>
+                  <label class="radio-label"><input type="checkbox" {{check:palp_cerv_segmento_aplica}}> SEGMENTO MUSCULAR:</label>
+                  <input type="text" value="{{text:palp_cerv_segmento_detalle}}" style="border-bottom:1px solid #000; width:20mm; padding:0 1mm">
+                </div>
+              </div>
+            </div>
+            <div style="text-align:right; font-weight:700; font-size:11px; margin-top:2mm">CERVICAL</div>
+          </div>
+          <!-- DORSAL / LUMBAR -->
+          <div>
+            <!-- DORSAL -->
+            <div style="padding:2mm; border-bottom:1px solid #000; font-size:10px">
+              <div style="margin-bottom:2mm"><label class="radio-label"><input type="checkbox" {{check:palp_dors_dolor_ausente}}> DOLOR AUSENTE</label></div>
+              <div>
+                <label class="radio-label"><input type="checkbox" {{check:palp_dors_dolor_presente}}> <strong>DOLOR PRESENTE:</strong></label>
+                <div style="padding-left:4mm; margin-top:0.5mm; font-size:9.5px">
+                  <div><label class="radio-label"><input type="checkbox" {{check:palp_dors_apofisis}}> APOFISIS Y/O ESPACIO INTERVERTEBRAL</label></div>
+                  <div><label class="radio-label"><input type="checkbox" {{check:palp_dors_segmento}}> SEGMENTO MUSCULAR</label></div>
+                </div>
+              </div>
+              <div style="text-align:right; font-weight:700; font-size:11px; margin-top:1mm">DORSAL</div>
+            </div>
+            <!-- LUMBAR -->
+            <div style="padding:2mm; font-size:10px">
+              <div style="margin-bottom:1mm"><label class="radio-label"><input type="checkbox" {{check:palp_lumb_dolor_ausente}}> DOLOR AUSENTE</label></div>
+              <div>
+                <label class="radio-label"><input type="checkbox" {{check:palp_lumb_dolor_presente}}> <strong>DOLOR PRESENTE:</strong></label>
+                <div style="padding-left:4mm; margin-top:0.5mm; font-size:9.5px">
+                  <div><label class="radio-label"><input type="checkbox" {{check:palp_lumb_apofisis}}> APOFISIS Y/O ESPACIO INTERVERTEBRAL</label></div>
+                  <div><label class="radio-label"><input type="checkbox" {{check:palp_lumb_segmento}}> SEGMENTO MUSCULAR</label></div>
+                </div>
+              </div>
+              <div style="text-align:right; font-weight:700; font-size:11px; margin-top:2mm">LUMBAR</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="foot" style="margin-top:4mm">
+      <div>Fo. JJC-SIG-13-31 Cuestionario anamnesico y evaluación de extremidad superior y espalda. Rev. 0</div>
+      <div style="font-weight:700; font-size:12px; color:#000">6</div>
+    </div>
+  </div>
+</body>
+</html>

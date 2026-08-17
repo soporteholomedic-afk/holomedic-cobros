@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>COLUMNA - Disturbios últimos 12 meses</title>
+  <link rel="stylesheet" href="../assets/pages-shared.print.css">
+</head>
+<body>
+  <div class="pdf-page">
+    <div style="font-weight:700; font-size:12px; margin-bottom:2mm; text-transform:uppercase">
+      II.- COLUMNA <span style="font-weight:400; font-size:11px">(DISTURBIOS EN LA COLUMNA ULTIMOS 12 MESES)</span>
+    </div>
+
+    <div class="border" style="display:flex; margin-bottom:3mm">
+      <!-- ILUSTRACIONES -->
+      <div style="width:30%; border-right:1px solid #000; padding:2mm; text-align:center">
+        <div style="font-weight:700; font-size:9px; text-align:left; line-height:1.2; margin-bottom:2mm">
+          N: Señale en la figura el area del disturbio y la irradiación.
+        </div>
+        <svg viewBox="0 0 150 140" style="width:130px;height:120px">
+          <path d="M 50 40 C 50 15, 100 15, 100 40 C 100 50, 95 65, 88 70 C 95 72, 120 80, 135 110 L 140 135" fill="none" stroke="#000" stroke-width="1.2"/>
+          <path d="M 50 40 C 50 50, 55 65, 62 70 C 55 72, 30 80, 15 110 L 10 135" fill="none" stroke="#000" stroke-width="1.2"/>
+          <rect x="70" y="65" width="10" height="30" fill="#e5533c" opacity="0.85"/>
+        </svg>
+        <svg viewBox="0 0 150 200" style="width:130px;height:170px">
+          <path d="M 55 25 C 55 8, 95 8, 95 25 C 95 35, 90 45, 84 50 C 92 52, 115 60, 125 90 L 145 150 L 135 155 L 120 115 C 115 125, 112 140, 115 155 C 108 160, 95 160, 88 150 C 85 165, 82 180, 80 195 L 70 195 C 68 180, 65 165, 62 150 C 55 160, 42 160, 35 155 C 38 140, 35 125, 30 115 L 15 155 L 5 150 L 25 90 C 35 60, 58 52, 66 50 C 60 45, 55 35, 55 25 Z" fill="none" stroke="#000" stroke-width="1.2"/>
+          <rect x="71" y="75" width="8" height="80" fill="#e5533c" opacity="0.85"/>
+          <path d="M 60 148 C 60 140, 90 140, 90 148 C 95 158, 80 165, 75 165 C 70 165, 55 158, 60 148 Z" fill="#e5533c" opacity="0.85"/>
+        </svg>
+      </div>
+
+      <!-- EVALUACION -->
+      <div style="width:70%">
+        <!-- CERVICAL -->
+        <div>
+          <div class="seg-head" style="display:flex; justify-content:space-between; align-items:center; padding:1mm">
+            <div class="seg-title" style="font-size:11px">CERVICAL <span style="font-weight:400; font-size:10px">(molestia, sensación de peso, dolor)</span></div>
+            <div style="font-weight:700">
+              <label class="radio-label"><input type="radio" name="ccPresenta" value="SI" {{check:columna_cervical_presenta}}> SI</label>
+              <label class="radio-label"><input type="radio" name="ccPresenta" value="NO" {{check:columna_cervical_no}}> NO</label>
+            </div>
+          </div>
+          <table style="width:100%; border-collapse:collapse; text-align:center; font-size:9px">
+            <thead>
+              <tr style="font-weight:700; border-bottom:1px solid #000">
+                <td style="border-right:1px solid #000; padding:1mm; width:22%">RARAMENTE</td>
+                <td style="border-right:1px solid #000; padding:1mm; width:28%">AL MENOS 3-4 EPISODIOS DE 2-3 DIAS C/U</td>
+                <td style="border-right:1px solid #000; padding:1mm; width:28%">AL MENOS 3-4 EPISODIOS CON USO DE MEDICAMENTOS</td>
+                <td style="padding:1mm; width:22%">PRESENTE TODO EL DIA</td>
+              </tr>
+            </thead>
+            <tbody>
+              <tr style="border-bottom:1px solid #000; background:#f2f2f2">
+                <td style="border-right:1px solid #000; padding:1mm; text-align:left"><label class="radio-label"><input type="checkbox" {{check:cc_molestia_raramente}}> MOLESTIA</label></td>
+                <td style="border-right:1px solid #000; padding:1mm; text-align:left"><label class="radio-label"><input type="checkbox" {{check:cc_molestia_episodios}}> MOLESTIA</label></td>
+                <td style="border-right:1px solid #000; padding:1mm; text-align:left"><label class="radio-label"><input type="checkbox" {{check:cc_molestia_medicamentos}}> MOLESTIA</label></td>
+                <td style="padding:1mm; text-align:left"><label class="radio-label"><input type="checkbox" {{check:cc_molestia_todo_dia}}> MOLESTIA</label></td>
+              </tr>
+              <tr style="border-bottom:1px solid #000; background:#e6e6e6">
+                <td style="border-right:1px solid #000; padding:1mm; text-align:left"><label class="radio-label"><input type="checkbox" {{check:cc_dolor_raramente}}> DOLOR</label></td>
+                <td style="border-right:1px solid #000; padding:1mm; text-align:left"><label class="radio-label"><input type="checkbox" {{check:cc_dolor_episodios}}> DOLOR</label></td>
+                <td style="border-right:1px solid #000; padding:1mm; text-align:left"><label class="radio-label"><input type="checkbox" {{check:cc_dolor_medicamentos}}> DOLOR</label></td>
+                <td style="padding:1mm; text-align:left"><label class="radio-label"><input type="checkbox" {{check:cc_dolor_todo_dia}}> DOLOR</label></td>
+              </tr>
+              <tr style="border-bottom:1px solid #000; font-weight:700">
+                <td style="border-right:1px solid #000; padding:1mm; text-align:left">IRRADIACION</td>
+                <td style="border-right:1px solid #000; padding:1mm">
+                  <label class="radio-label"><input type="radio" name="ccIrrad" value="NO" {{check:cc_irradiacion_no}}> NO</label>
+                  <label class="radio-label"><input type="radio" name="ccIrrad" value="SI" {{check:cc_irradiacion_si}}> SI</label>
+                </td>
+                <td style="border-right:1px solid #000; padding:1mm">MIEMBRO SUPERIOR</td>
+                <td style="padding:1mm">
+                  <label class="radio-label"><input type="checkbox" {{check:cc_miembro_superior_dx}}> DX</label>
+                  <label class="radio-label"><input type="checkbox" {{check:cc_miembro_superior_ix}}> IX</label>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+          <div style="border-bottom:2px solid #000; padding:1mm; font-weight:700; font-size:10px">
+            AUSENCIA AL TRABAJO POR DISTURBIO CERVICAL <input type="number" value="{{text:cc_ausencia_dias}}" style="width:24mm; text-align:center; border-bottom:1px solid #000"> días
+          </div>
+        </div>
+
+        <!-- DORSAL -->
+        <div>
+          <div class="seg-head" style="display:flex; justify-content:space-between; align-items:center; padding:1mm">
+            <div class="seg-title" style="font-size:11px">DORSAL <span style="font-weight:400; font-size:10px">(molestia, sensación de peso, dolor)</span></div>
+            <div style="font-weight:700">
+              <label class="radio-label"><input type="radio" name="cdPresenta" value="SI" {{check:columna_dorsal_presenta}}> SI</label>
+              <label class="radio-label"><input type="radio" name="cdPresenta" value="NO" {{check:columna_dorsal_no}}> NO</label>
+            </div>
+          </div>
+          <table style="width:100%; border-collapse:collapse; text-align:center; font-size:9px">
+            <thead>
+              <tr style="font-weight:700; border-bottom:1px solid #000">
+                <td style="border-right:1px solid #000; padding:1mm; width:22%">RARAMENTE</td>
+                <td style="border-right:1px solid #000; padding:1mm; width:28%">AL MENOS 3-4 EPISODIOS DE 2-3 DIAS C/U</td>
+                <td style="border-right:1px solid #000; padding:1mm; width:28%">AL MENOS 3-4 EPISODIOS CON USO DE MEDICAMENTOS</td>
+                <td style="padding:1mm; width:22%">PRESENTE TODO EL DIA</td>
+              </tr>
+            </thead>
+            <tbody>
+              <tr style="border-bottom:1px solid #000; background:#f2f2f2">
+                <td style="border-right:1px solid #000; padding:1mm; text-align:left"><label class="radio-label"><input type="checkbox" {{check:cd_molestia_raramente}}> MOLESTIA</label></td>
+                <td style="border-right:1px solid #000; padding:1mm; text-align:left"><label class="radio-label"><input type="checkbox" {{check:cd_molestia_episodios}}> MOLESTIA</label></td>
+                <td style="border-right:1px solid #000; padding:1mm; text-align:left"><label class="radio-label"><input type="checkbox" {{check:cd_molestia_medicamentos}}> MOLESTIA</label></td>
+                <td style="padding:1mm; text-align:left"><label class="radio-label"><input type="checkbox" {{check:cd_molestia_todo_dia}}> MOLESTIA</label></td>
+              </tr>
+              <tr style="border-bottom:1px solid #000; background:#e6e6e6">
+                <td style="border-right:1px solid #000; padding:1mm; text-align:left"><label class="radio-label"><input type="checkbox" {{check:cd_dolor_raramente}}> DOLOR</label></td>
+                <td style="border-right:1px solid #000; padding:1mm; text-align:left"><label class="radio-label"><input type="checkbox" {{check:cd_dolor_episodios}}> DOLOR</label></td>
+                <td style="border-right:1px solid #000; padding:1mm; text-align:left"><label class="radio-label"><input type="checkbox" {{check:cd_dolor_medicamentos}}> DOLOR</label></td>
+                <td style="padding:1mm; text-align:left"><label class="radio-label"><input type="checkbox" {{check:cd_dolor_todo_dia}}> DOLOR</label></td>
+              </tr>
+              <tr style="border-bottom:1px solid #000; font-weight:700">
+                <td style="border-right:1px solid #000; padding:1mm; text-align:left">IRRADIACION</td>
+                <td style="border-right:1px solid #000; padding:1mm">
+                  <label class="radio-label"><input type="radio" name="cdIrrad" value="NO" {{check:cd_irradiacion_no}}> NO</label>
+                  <label class="radio-label"><input type="radio" name="cdIrrad" value="SI" {{check:cd_irradiacion_si}}> SI</label>
+                </td>
+                <td style="border-right:1px solid #000; padding:1mm"><label class="radio-label"><input type="checkbox" {{check:cd_emitorax}}> EMITORAX</label></td>
+                <td style="padding:1mm">
+                  <label class="radio-label"><input type="checkbox" {{check:cd_irradiacion_dx}}> DX</label>
+                  <label class="radio-label"><input type="checkbox" {{check:cd_irradiacion_ix}}> IX</label>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+          <div style="border-bottom:2px solid #000; padding:1mm; font-weight:700; font-size:10px">
+            AUSENCIA AL TRABAJO POR DISTURBIO DORSAL <input type="number" value="{{text:cd_ausencia_dias}}" style="width:24mm; text-align:center; border-bottom:1px solid #000"> días
+          </div>
+        </div>
+
+        <!-- LUMBO SACRA -->
+        <div>
+          <div class="seg-head" style="display:flex; justify-content:space-between; align-items:center; padding:1mm">
+            <div class="seg-title" style="font-size:11px">LUMBO SACRA <span style="font-weight:400; font-size:10px">(molestia, sensación de peso)</span></div>
+            <div style="font-weight:700">
+              <label class="radio-label"><input type="radio" name="clPresenta" value="SI" {{check:columna_lumbo_sacra_presenta}}> SI</label>
+              <label class="radio-label"><input type="radio" name="clPresenta" value="NO" {{check:columna_lumbo_sacra_no}}> NO</label>
+            </div>
+          </div>
+          <table style="width:100%; border-collapse:collapse; text-align:center; font-size:9px">
+            <thead>
+              <tr style="font-weight:700; border-bottom:1px solid #000">
+                <td style="border-right:1px solid #000; padding:1mm; width:22%">RARAMENTE</td>
+                <td style="border-right:1px solid #000; padding:1mm; width:28%">AL MENOS 3-4 EPISODIOS DE 2-3 DIAS C/U</td>
+                <td style="border-right:1px solid #000; padding:1mm; width:28%">AL MENOS 3-4 EPISODIOS CON USO DE MEDICAMENTOS</td>
+                <td style="padding:1mm; width:22%">PRESENTE TODO EL DIA</td>
+              </tr>
+            </thead>
+            <tbody>
+              <tr style="border-bottom:1px solid #000; background:#f2f2f2">
+                <td style="border-right:1px solid #000; padding:1mm; text-align:left"><label class="radio-label"><input type="checkbox" {{check:cl_molestia_raramente}}> MOLESTIA</label></td>
+                <td style="border-right:1px solid #000; padding:1mm; text-align:left"><label class="radio-label"><input type="checkbox" {{check:cl_molestia_episodios}}> MOLESTIA</label></td>
+                <td style="border-right:1px solid #000; padding:1mm; text-align:left"><label class="radio-label"><input type="checkbox" {{check:cl_molestia_medicamentos}}> MOLESTIA</label></td>
+                <td style="padding:1mm; text-align:left"><label class="radio-label"><input type="checkbox" {{check:cl_molestia_todo_dia}}> MOLESTIA</label></td>
+              </tr>
+              <tr style="border-bottom:1px solid #000; background:#e6e6e6">
+                <td style="border-right:1px solid #000; padding:1mm; text-align:left"><label class="radio-label"><input type="checkbox" {{check:cl_dolor_raramente}}> DOLOR</label></td>
+                <td style="border-right:1px solid #000; padding:1mm; text-align:left"><label class="radio-label"><input type="checkbox" {{check:cl_dolor_episodios}}> DOLOR</label></td>
+                <td style="border-right:1px solid #000; padding:1mm; text-align:left"><label class="radio-label"><input type="checkbox" {{check:cl_dolor_medicamentos}}> DOLOR</label></td>
+                <td style="padding:1mm; text-align:left"><label class="radio-label"><input type="checkbox" {{check:cl_dolor_todo_dia}}> DOLOR</label></td>
+              </tr>
+              <tr style="border-bottom:1px solid #000; font-weight:700">
+                <td style="border-right:1px solid #000; padding:1mm; text-align:left">IRRADIACION</td>
+                <td style="border-right:1px solid #000; padding:1mm">
+                  <label class="radio-label"><input type="radio" name="clIrrad" value="NO" {{check:cl_irradiacion_no}}> NO</label>
+                  <label class="radio-label"><input type="radio" name="clIrrad" value="SI" {{check:cl_irradiacion_si}}> SI</label>
+                </td>
+                <td style="border-right:1px solid #000; padding:1mm"><label class="radio-label"><input type="checkbox" {{check:cl_miembros_inferiores}}> MIEMBROS INFERIORES</label></td>
+                <td style="padding:1mm">
+                  <label class="radio-label"><input type="checkbox" {{check:cl_irradiacion_dx}}> DX</label>
+                  <label class="radio-label"><input type="checkbox" {{check:cl_irradiacion_ix}}> IX</label>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+          <div style="padding:1mm; font-weight:700; font-size:10px">
+            AUSENCIA AL TRABAJO POR DISTURBIO LUMBAR <input type="number" value="{{text:cl_ausencia_dias}}" style="width:24mm; text-align:center; border-bottom:1px solid #000"> días
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- NOTAS -->
+    <div style="font-size:9px; line-height:1.2; margin-bottom:6mm; text-align:justify">
+      <p><strong>NB*:</strong> umbral anamnésico positivo para la <strong>COLUMNA</strong> es la presencia de: dolor / malestar casi todos los días en los últimos 12 meses o episodios de dolor.</p>
+    </div>
+
+    <!-- PIE -->
+    <div class="foot">
+      <div>Fo. JJC-SIG-13-31 Cuestionario anamnesico y evaluación de extremidad superior y espalda. Rev. 0</div>
+      <div>2</div>
+    </div>
+  </div>
+</body>
+</html>

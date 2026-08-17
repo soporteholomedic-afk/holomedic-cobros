@@ -4,17 +4,72 @@ import { buildGetAtencionDetalle } from '@/features/jjc-mapper/composition/conta
 import { buildLoadEntrevistaOsteomuscular } from '@/features/entrevista-osteomuscular/composition/container';
 import { buildLoadEvaluacionOsteomuscular } from '@/features/evaluacion-osteomuscular/composition/container';
 import { PdfService } from '../application/pdfService';
+import type { PageRenderer } from '../application/pdfService';
 import { renderTemplate } from '../application/renderer';
-import { PAGE_1_MANIFEST } from '../infrastructure/templates/page1';
+import { ALL_PAGE_MANIFESTS } from '../infrastructure/templates';
 import { EdgePrinter } from '../infrastructure/printer/edgePrinter';
 import { PdfLibMerger } from '../infrastructure/merger';
 import { inlineAssets, loadImageAsDataUri } from '../infrastructure/assets';
 import { TemplateError } from '../domain/errors';
+import type { PdfSourceData } from '../domain/entities';
 
 const ASSET_ROOTS = ['musculoesqueletica-pdf', 'assets'] as const;
 const CANONICAL_FIGURE_ROOT = path.join('assets', 'images', 'musculo', 'entrevista');
 const MAX_IMAGE_BYTES = 512 * 1024;
 const ALLOWED_IMAGE_EXTENSIONS = ['.png', '.jpg', '.jpeg', '.webp', '.svg'] as const;
+
+/**
+ * Build a page renderer for a given page manifest. Each renderer reads
+ * its template, inlines assets, and resolves tokens against the source data.
+ */
+function buildPageRenderer(
+  manifest: (typeof ALL_PAGE_MANIFESTS)[number],
+  publicRoot: string,
+  assetsRoot: string,
+  firmaHuellaRoots: string[],
+): PageRenderer {
+  return {
+    render: async (source: PdfSourceData) => {
+      const templateAbsPath = path.join(publicRoot, manifest.template);
+      let templateHtml: string;
+      try {
+        templateHtml = fs.readFileSync(templateAbsPath, 'utf8');
+      } catch (err) {
+        throw new TemplateError(`Cannot read template ${manifest.template}`, { cause: err });
+      }
+      const offlineHtml = inlineAssets(templateHtml, path.dirname(templateAbsPath));
+
+      // Resolve image tokens: figures from canonical/feature roots,
+      // firma/huella from atencion.rutaFirma / rutaHuella.
+      return renderTemplate(offlineHtml, manifest.tokens, source, (assetPath) => {
+        // Special handling for firma/huella tokens (page 4).
+        if (assetPath === 'firma_paciente' && source.atencion.rutaFirma) {
+          return loadImageAsDataUri(source.atencion.rutaFirma, {
+            baseDir: publicRoot,
+            roots: firmaHuellaRoots,
+            allowedExtensions: [...ALLOWED_IMAGE_EXTENSIONS],
+            maxBytes: MAX_IMAGE_BYTES,
+          });
+        }
+        if (assetPath === 'huella_paciente' && source.atencion.rutaHuella) {
+          return loadImageAsDataUri(source.atencion.rutaHuella, {
+            baseDir: publicRoot,
+            roots: firmaHuellaRoots,
+            allowedExtensions: [...ALLOWED_IMAGE_EXTENSIONS],
+            maxBytes: MAX_IMAGE_BYTES,
+          });
+        }
+        // Standard figure/image resolution.
+        return loadImageAsDataUri(assetPath, {
+          baseDir: publicRoot,
+          roots: [assetsRoot, path.join(publicRoot, CANONICAL_FIGURE_ROOT)],
+          allowedExtensions: [...ALLOWED_IMAGE_EXTENSIONS],
+          maxBytes: MAX_IMAGE_BYTES,
+        });
+      });
+    },
+  };
+}
 
 /**
  * Composition root for the musculoesqueletica PDF pipeline. This is the only
@@ -24,10 +79,18 @@ const ALLOWED_IMAGE_EXTENSIONS = ['.png', '.jpg', '.jpeg', '.webp', '.svg'] as c
 export function buildPdfService(): PdfService {
   const publicRoot = path.join(process.cwd(), 'public');
   const assetsRoot = path.join(publicRoot, ...ASSET_ROOTS);
+  const firmaHuellaRoots = [
+    path.join(publicRoot, 'musculoesqueletica-pdf', 'assets'),
+    path.join(publicRoot, 'assets'),
+  ];
 
   const atencionUseCase = buildGetAtencionDetalle();
   const entrevistaUseCase = buildLoadEntrevistaOsteomuscular();
   const evaluacionUseCase = buildLoadEvaluacionOsteomuscular();
+
+  const pageRenderers = ALL_PAGE_MANIFESTS.map((manifest) =>
+    buildPageRenderer(manifest, publicRoot, assetsRoot, firmaHuellaRoots),
+  );
 
   return new PdfService({
     loaders: {
@@ -43,29 +106,7 @@ export function buildPdfService(): PdfService {
         return result.data;
       },
     },
-    renderPage1: {
-      render: async (source) => {
-        const templateAbsPath = path.join(publicRoot, PAGE_1_MANIFEST.template);
-        let templateHtml: string;
-        try {
-          templateHtml = fs.readFileSync(templateAbsPath, 'utf8');
-        } catch (err) {
-          throw new TemplateError(
-            `Cannot read template ${PAGE_1_MANIFEST.template}`,
-            { cause: err },
-          );
-        }
-        const offlineHtml = inlineAssets(templateHtml, path.dirname(templateAbsPath));
-        return renderTemplate(offlineHtml, PAGE_1_MANIFEST.tokens, source, (assetPath) =>
-          loadImageAsDataUri(assetPath, {
-            baseDir: publicRoot,
-            roots: [assetsRoot, path.join(publicRoot, CANONICAL_FIGURE_ROOT)],
-            allowedExtensions: [...ALLOWED_IMAGE_EXTENSIONS],
-            maxBytes: MAX_IMAGE_BYTES,
-          }),
-        );
-      },
-    },
+    pageRenderers,
     printer: new EdgePrinter(),
     merger: new PdfLibMerger(),
   });

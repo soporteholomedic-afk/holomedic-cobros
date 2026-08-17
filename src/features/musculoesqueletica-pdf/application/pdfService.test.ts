@@ -20,6 +20,7 @@ function makeFakes(overrides: Partial<{
   renderError: Error;
   printError: Error;
   mergeError: Error;
+  pageCount: number;
 }> = {}) {
   const loadAtencion = vi.fn().mockResolvedValue(
     overrides.atencion === undefined ? sampleSource.atencion : overrides.atencion,
@@ -30,21 +31,24 @@ function makeFakes(overrides: Partial<{
   const loadEvaluacion = vi.fn().mockResolvedValue(
     overrides.evaluacion === undefined ? sampleEvaluacionFull : overrides.evaluacion,
   );
-  const renderPage1 = { render: vi.fn().mockResolvedValue('<html>rendered</html>') };
+  const pageCount = overrides.pageCount ?? 1;
+  const pageRenderers = Array.from({ length: pageCount }, () => ({
+    render: vi.fn().mockResolvedValue('<html>rendered</html>'),
+  }));
   const printer: PdfPrinter = { print: vi.fn().mockResolvedValue(PDF_BYTES) };
   const merger: PdfMerger = { merge: vi.fn().mockResolvedValue(PDF_BYTES) };
   const service = new PdfService({
     loaders: { loadAtencion, loadEntrevista, loadEvaluacion },
-    renderPage1,
+    pageRenderers,
     printer,
     merger,
   });
-  return { service, loadAtencion, loadEntrevista, loadEvaluacion, renderPage1, printer, merger };
+  return { service, loadAtencion, loadEntrevista, loadEvaluacion, pageRenderers, printer, merger };
 }
 
 describe('PdfService', () => {
-  it('loads data, renders page 1, prints and merges in order', async () => {
-    const { service, loadAtencion, loadEntrevista, loadEvaluacion, renderPage1, printer, merger } =
+  it('loads data, renders pages, prints and merges in order', async () => {
+    const { service, loadAtencion, loadEntrevista, loadEvaluacion, pageRenderers, printer, merger } =
       makeFakes();
 
     const result = await service.generate('2024-MS-089');
@@ -53,14 +57,14 @@ describe('PdfService', () => {
     expect(loadAtencion).toHaveBeenCalledWith('2024-MS-089');
     expect(loadEntrevista).toHaveBeenCalledWith('2024-MS-089');
     expect(loadEvaluacion).toHaveBeenCalledWith('2024-MS-089');
-    expect(renderPage1.render).toHaveBeenCalledWith(
+    expect(pageRenderers[0].render).toHaveBeenCalledWith(
       expect.objectContaining({
         atencion: sampleSource.atencion,
         entrevista: sampleSource.entrevista,
         evaluacion: sampleEvaluacionFull,
       }),
     );
-    expect(printer.print).toHaveBeenCalledWith('<html>rendered</html>');
+    expect(printer.print).toHaveBeenCalledTimes(1);
     expect(merger.merge).toHaveBeenCalledWith([PDF_BYTES]);
   });
 
@@ -95,8 +99,8 @@ describe('PdfService', () => {
   });
 
   it('propagates TemplateError from the page renderer', async () => {
-    const { service, renderPage1 } = makeFakes();
-    renderPage1.render.mockRejectedValue(new TemplateError('bad token'));
+    const { service, pageRenderers } = makeFakes();
+    pageRenderers[0].render.mockRejectedValue(new TemplateError('bad token'));
     await expect(service.generate('X')).rejects.toThrow(TemplateError);
   });
 
