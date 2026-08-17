@@ -8,7 +8,6 @@ import { sampleSource } from '../testing/sampleSource';
 
 const PUBLIC_ROOT = path.join(process.cwd(), 'public');
 const ASSETS_ROOT = path.join(PUBLIC_ROOT, 'musculoesqueletica-pdf', 'assets');
-const PAGES_ROOT = path.join(PUBLIC_ROOT, 'musculoesqueletica-pdf', 'pages');
 
 const MAX_IMAGE_BYTES = 512 * 1024;
 const ALLOWED_EXTENSIONS = ['.png', '.jpg', '.jpeg', '.webp', '.svg'];

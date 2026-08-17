@@ -14,7 +14,6 @@ import type { PdfPrinter } from '../domain/entities';
 
 const PUBLIC_ROOT = path.join(process.cwd(), 'public');
 const ASSETS_ROOT = path.join(PUBLIC_ROOT, 'musculoesqueletica-pdf', 'assets');
-const PAGES_ROOT = path.join(PUBLIC_ROOT, 'musculoesqueletica-pdf', 'pages');
 
 const A4_POINTS = { width: 595.28, height: 841.89 };
 
