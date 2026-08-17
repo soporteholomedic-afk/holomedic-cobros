@@ -1,6 +1,7 @@
 import type { AtencionDetalle } from '@/types/jjc';
 import type { EntrevistaOsteomuscular } from '@/types/entrevista-osteomuscular';
 import type { EvaluacionOsteomuscular } from '@/types/evaluacion-osteomuscular';
+import { initialEvaluacionState } from '@/features/evaluacion-osteomuscular/presentation/hooks/useEvaluacionOsteomuscular';
 import type { PdfSourceData } from '../domain/entities';
 
 /** Shared sample data used by renderer and page-manifest tests. */
@@ -245,6 +246,10 @@ export const sampleEntrevista: EntrevistaOsteomuscular = {
 };
 
 export const sampleEvaluacion: EvaluacionOsteomuscular | null = null;
+
+/** A fully populated evaluation for pipeline tests that require the dataset. */
+export const sampleEvaluacionFull: EvaluacionOsteomuscular =
+  initialEvaluacionState(sampleAtencion);
 
 export const sampleSource: PdfSourceData = {
   atencion: sampleAtencion,
