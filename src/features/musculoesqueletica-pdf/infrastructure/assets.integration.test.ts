@@ -7,7 +7,8 @@ import { PAGE_1_MANIFEST } from './templates/page1';
 import { sampleSource } from '../testing/sampleSource';
 
 const PUBLIC_ROOT = path.join(process.cwd(), 'public');
-const ASSETS_ROOT = path.join(PUBLIC_ROOT, 'musculoesqueletica-pdf', 'assets');
+const FEATURE_ASSETS_ROOT = path.join(PUBLIC_ROOT, 'musculoesqueletica-pdf', 'assets');
+const CANONICAL_FIGURE_ROOT = path.join(PUBLIC_ROOT, 'assets', 'images', 'musculo', 'entrevista');
 
 const MAX_IMAGE_BYTES = 512 * 1024;
 const ALLOWED_EXTENSIONS = ['.png', '.jpg', '.jpeg', '.webp', '.svg'];
@@ -15,7 +16,7 @@ const ALLOWED_EXTENSIONS = ['.png', '.jpg', '.jpeg', '.webp', '.svg'];
 function realImageResolver(assetPath: string): string | null {
   return loadImageAsDataUri(assetPath, {
     baseDir: PUBLIC_ROOT,
-    roots: [ASSETS_ROOT],
+    roots: [FEATURE_ASSETS_ROOT, CANONICAL_FIGURE_ROOT],
     allowedExtensions: ALLOWED_EXTENSIONS,
     maxBytes: MAX_IMAGE_BYTES,
   });
@@ -58,17 +59,20 @@ describe('page-1 offline asset pipeline (real template)', () => {
     // Figures resolved to local data URIs (no remote src remains).
     expect(rendered).not.toContain('src="http');
     expect(rendered).toContain('data:image/png;base64,');
-    expect(rendered).toContain('data:image/svg+xml;base64,');
     expect(rendered).toContain('data-figure');
     // No token may remain unresolved.
     expect(rendered).not.toContain('{{');
   });
 
-  it('loads the shipped figure assets within the allowed limits', () => {
-    for (const asset of ['hombro.png', 'mano.png', 'codo.svg']) {
-      const uri = realImageResolver(`musculoesqueletica-pdf/assets/${asset}`);
+  it('loads the canonical figure assets within the allowed limits', () => {
+    for (const asset of [
+      'assets/images/musculo/entrevista/hombros.png',
+      'assets/images/musculo/entrevista/codos.png',
+      'assets/images/musculo/entrevista/manos.png',
+    ]) {
+      const uri = realImageResolver(asset);
       expect(uri, asset).not.toBeNull();
-      expect(uri!, asset).toMatch(/^data:image\/(png|svg\+xml);base64,/);
+      expect(uri!, asset).toMatch(/^data:image\/png;base64,/);
     }
   });
 });

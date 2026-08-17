@@ -115,9 +115,9 @@ export const PAGE_1_MANIFEST: PdfPageManifest = {
     mano_molestias_leves_dx: { kind: 'check', path: 'entrevista.miembrosSuperiores.manoMuneca.sintomas.molestiasLeves.dx' },
     mano_molestias_leves_ix: { kind: 'check', path: 'entrevista.miembrosSuperiores.manoMuneca.sintomas.molestiasLeves.ix' },
 
-    // ---- Figures (local offline assets) ----
-    figure_hombro: { kind: 'figure', path: 'musculoesqueletica-pdf/assets/hombro.png' },
-    figure_codo: { kind: 'figure', path: 'musculoesqueletica-pdf/assets/codo.svg' },
-    figure_mano: { kind: 'figure', path: 'musculoesqueletica-pdf/assets/mano.png' },
+    // ---- Figures (canonical repo assets under public/assets/images/musculo/entrevista/) ----
+    figure_hombro: { kind: 'figure', path: 'assets/images/musculo/entrevista/hombros.png' },
+    figure_codo: { kind: 'figure', path: 'assets/images/musculo/entrevista/codos.png' },
+    figure_mano: { kind: 'figure', path: 'assets/images/musculo/entrevista/manos.png' },
   },
 };

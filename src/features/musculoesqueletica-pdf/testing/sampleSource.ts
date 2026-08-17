@@ -257,9 +257,15 @@ export const sampleSource: PdfSourceData = {
   evaluacion: sampleEvaluacion,
 };
 
-/** Resolver that serves a fake data URI for any asset under the feature root. */
+/**
+ * Resolver that serves a fake data URI for assets under the allowed roots:
+ * the canonical repo figures (`assets/images/musculo/...`) and the feature's
+ * own offline root (`musculoesqueletica-pdf/assets/...`).
+ */
 export function sampleImageResolver(assetPath: string): string | null {
-  if (!assetPath.startsWith('musculoesqueletica-pdf/assets/')) return null;
+  const underCanonical = assetPath.startsWith('assets/images/');
+  const underFeatureRoot = assetPath.startsWith('musculoesqueletica-pdf/assets/');
+  if (!underCanonical && !underFeatureRoot) return null;
   const mime = assetPath.endsWith('.svg') ? 'image/svg+xml' : 'image/png';
   return `data:${mime};base64,${Buffer.from(assetPath).toString('base64')}`;
 }

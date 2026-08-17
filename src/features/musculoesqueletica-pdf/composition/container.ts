@@ -12,6 +12,7 @@ import { inlineAssets, loadImageAsDataUri } from '../infrastructure/assets';
 import { TemplateError } from '../domain/errors';
 
 const ASSET_ROOTS = ['musculoesqueletica-pdf', 'assets'] as const;
+const CANONICAL_FIGURE_ROOT = path.join('assets', 'images', 'musculo', 'entrevista');
 const MAX_IMAGE_BYTES = 512 * 1024;
 const ALLOWED_IMAGE_EXTENSIONS = ['.png', '.jpg', '.jpeg', '.webp', '.svg'] as const;
 
@@ -58,7 +59,7 @@ export function buildPdfService(): PdfService {
         return renderTemplate(offlineHtml, PAGE_1_MANIFEST.tokens, source, (assetPath) =>
           loadImageAsDataUri(assetPath, {
             baseDir: publicRoot,
-            roots: [assetsRoot],
+            roots: [assetsRoot, path.join(publicRoot, CANONICAL_FIGURE_ROOT)],
             allowedExtensions: [...ALLOWED_IMAGE_EXTENSIONS],
             maxBytes: MAX_IMAGE_BYTES,
           }),
