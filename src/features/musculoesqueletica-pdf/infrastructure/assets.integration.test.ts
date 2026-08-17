@@ -31,13 +31,12 @@ describe('page-1 offline asset pipeline (real template)', () => {
 
     const offlineHtml = inlineAssets(templateHtml, path.dirname(templatePath));
 
-    // No remote stylesheets or font references remain.
+    // No remote stylesheets, fonts, or image references remain.
     expect(offlineHtml).not.toMatch(/https?:\/\//);
     expect(offlineHtml).not.toContain('<link rel="stylesheet"');
-    // Self-hosted fonts are inlined as data URIs.
-    expect(offlineHtml).toContain('data:font/woff2;base64,');
-    expect(offlineHtml).toContain('Hanken Grotesk');
-    expect(offlineHtml).toContain('Inter');
+    expect(offlineHtml).not.toContain('url(http');
+    // System font stack (Arial/Helvetica) — no webfont dependencies.
+    expect(offlineHtml).toContain('Arial, Helvetica, sans-serif');
 
     const rendered = renderTemplate(
       offlineHtml,
@@ -49,10 +48,13 @@ describe('page-1 offline asset pipeline (real template)', () => {
     // Real mapped values appear escaped on the page.
     expect(rendered).toContain('ACME &amp; Sons &lt;CIA&gt;');
     expect(rendered).toContain('Juan &quot;El&quot; Pérez');
-    expect(rendered).toContain('2024-MS-089');
-    // Deterministic checks: hombro pain + male sexo radio are on.
+    // Deterministic checks: male sexo radio, periodic exam, dominant Dx on.
     expect(rendered).toContain('value="M" checked');
     expect(rendered).toContain('<input type="checkbox" checked> Periódico');
+    expect(rendered).toContain('<input type="checkbox" checked> Dx');
+    // NO/SI radio semantics: hombro pain true marks SI.
+    expect(rendered).toContain('value="SI" checked');
+    expect(rendered).toContain('name="dolorHombro" value="NO" ');
     // Figures resolved to local data URIs (no remote src remains).
     expect(rendered).not.toContain('src="http');
     expect(rendered).toContain('data:image/png;base64,');

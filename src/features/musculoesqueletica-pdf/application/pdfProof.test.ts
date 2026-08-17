@@ -142,7 +142,7 @@ describe('one-page A4 PDF proof (render → print → merge)', () => {
       renderPage1: {
         render: async () =>
           renderRealPage1((html) =>
-            html.replace('{{text:atencion_id}}', '{{text:missing_token}}'),
+            html.replace('{{text:empresa}}', '{{text:missing_token}}'),
           ),
       },
       printer,
