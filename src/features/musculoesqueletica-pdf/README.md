@@ -40,8 +40,10 @@ Pages with markable figures:
 pnpm dev
 
 # Generate PDF (requires system Edge or Chrome)
-# Set EDGE_EXECUTABLE_PATH if Edge is not at the default Windows location:
-#   EDGE_EXECUTABLE_PATH="/path/to/msedge" pnpm dev
+# Browser resolution order: EDGE_EXECUTABLE_PATH env override → known Windows
+# Edge paths → common Linux Chromium paths (/usr/bin/chromium, chromium-browser,
+# google-chrome, microsoft-edge). No env export needed when a browser is installed.
+#   EDGE_EXECUTABLE_PATH="/path/to/msedge" pnpm dev  # only for custom locations
 
 # Download from: /areas/musculoesqueletica/jjc/{idAtencion}
 ```

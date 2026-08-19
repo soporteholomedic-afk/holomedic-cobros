@@ -439,8 +439,8 @@ table.bordered td {
 
 /* ---- Signature / fingerprint image container ---- */
 .signature-slot {
-  width: 60mm;
-  height: 25mm;
+  width: 42mm;
+  height: 22mm;
   border: 1px solid #9ca3af;
   display: flex;
   align-items: center;

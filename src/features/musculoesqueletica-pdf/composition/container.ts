@@ -1,6 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import { buildGetAtencionDetalle } from '@/features/jjc-mapper/composition/container';
+import { buildFirmaHuellaRoots } from './assetRoots';
 import { buildLoadEntrevistaOsteomuscular } from '@/features/entrevista-osteomuscular/composition/container';
 import { buildLoadEvaluacionOsteomuscular } from '@/features/evaluacion-osteomuscular/composition/container';
 import { PdfService } from '../application/pdfService';
@@ -79,10 +80,9 @@ function buildPageRenderer(
 export function buildPdfService(): PdfService {
   const publicRoot = path.join(process.cwd(), 'public');
   const assetsRoot = path.join(publicRoot, ...ASSET_ROOTS);
-  const firmaHuellaRoots = [
-    path.join(publicRoot, 'musculoesqueletica-pdf', 'assets'),
-    path.join(publicRoot, 'assets'),
-  ];
+  // Patient firma/huella images live under the SIGLA file-server share
+  // (mapped by the SQL adapter), not under `public/` — see buildFirmaHuellaRoots.
+  const firmaHuellaRoots = buildFirmaHuellaRoots(publicRoot);
 
   const atencionUseCase = buildGetAtencionDetalle();
   const entrevistaUseCase = buildLoadEntrevistaOsteomuscular();

@@ -9,10 +9,20 @@ const KNOWN_WINDOWS_EDGE_PATHS: readonly string[] = [
   'C:\\Program Files\\Microsoft\\Edge\\Application\\msedge.exe',
 ];
 
+/** Common Chromium-based browser paths on Linux (dev fallback). */
+const KNOWN_LINUX_BROWSER_PATHS: readonly string[] = [
+  '/usr/bin/chromium',
+  '/usr/bin/chromium-browser',
+  '/usr/bin/google-chrome',
+  '/usr/bin/google-chrome-stable',
+  '/usr/bin/microsoft-edge',
+  '/usr/bin/microsoft-edge-stable',
+];
+
 /**
- * Resolve the Edge executable: `EDGE_EXECUTABLE_PATH` env override first,
- * then the known Windows installation paths. Returns `null` when no usable
- * browser exists — the caller maps that to a 502.
+ * Resolve the browser executable: `EDGE_EXECUTABLE_PATH` env override first,
+ * then the known Windows Edge paths, then common Linux Chromium paths.
+ * Returns `null` when no usable browser exists — the caller maps that to a 502.
  */
 export function resolveEdgeExecutablePath(
   env: Readonly<Record<string, string | undefined>> = process.env,
@@ -20,7 +30,11 @@ export function resolveEdgeExecutablePath(
 ): string | null {
   const override = env.EDGE_EXECUTABLE_PATH?.trim();
   if (override) return override;
-  return KNOWN_WINDOWS_EDGE_PATHS.find(exists) ?? null;
+  return (
+    KNOWN_WINDOWS_EDGE_PATHS.find(exists) ??
+    KNOWN_LINUX_BROWSER_PATHS.find(exists) ??
+    null
+  );
 }
 
 interface EdgePrinterOptions {

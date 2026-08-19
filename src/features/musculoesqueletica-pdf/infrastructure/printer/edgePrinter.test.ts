@@ -15,6 +15,11 @@ describe('resolveEdgeExecutablePath', () => {
     );
   });
 
+  it('falls back to known Linux browser paths when Windows Edge is absent', () => {
+    const exists = (p: string) => p === '/usr/bin/chromium';
+    expect(resolveEdgeExecutablePath({}, exists)).toBe('/usr/bin/chromium');
+  });
+
   it('returns null when no env override and no known path exists', () => {
     expect(resolveEdgeExecutablePath({}, () => false)).toBeNull();
   });
