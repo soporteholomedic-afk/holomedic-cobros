@@ -8,6 +8,7 @@ import { renameGeneratedCertificate } from '@/features/envio-resultados/domain/g
 import { normalizeTipoExamen } from '@/features/envio-resultados/domain/ready-files/normalizeTipoExamen';
 import type { SelectedFileRef } from '@/features/envio-resultados/domain/entities';
 import type { Archiver } from 'archiver';
+import { isSafeDocumentKey } from '@/lib/normalize-dni';
 
 const BASE_PATH = process.env.FILE_SERVER_BASE_PATH ?? '';
 
@@ -75,9 +76,9 @@ export async function GET(request: Request): Promise<Response> {
       { status: 400 },
     );
   }
-  if (!/^\d+$/.test(dni)) {
+  if (!isSafeDocumentKey(dni)) {
     return NextResponse.json(
-      { error: 'dni debe ser numérico.' },
+      { error: 'dni debe ser alfanumérico.' },
       { status: 400 },
     );
   }
@@ -177,9 +178,9 @@ export async function POST(request: Request): Promise<Response> {
       { status: 400 },
     );
   }
-  if (!/^\d+$/.test(dni)) {
+  if (!isSafeDocumentKey(dni)) {
     return NextResponse.json(
-      { error: 'dni debe ser numérico.' },
+      { error: 'dni debe ser alfanumérico.' },
       { status: 400 },
     );
   }
@@ -211,8 +212,8 @@ export async function POST(request: Request): Promise<Response> {
         { status: 400 },
       );
     }
-    if (!/^\d+$/.test(ref.dni)) {
-      return NextResponse.json({ error: `"dni" must be numeric: ${ref.dni}` }, { status: 400 });
+    if (!isSafeDocumentKey(ref.dni)) {
+      return NextResponse.json({ error: `"dni" must be alphanumeric: ${ref.dni}` }, { status: 400 });
     }
     if (ref.ruc !== ruc || ref.dni !== dni || ref.idAten !== idAten) {
       return NextResponse.json(

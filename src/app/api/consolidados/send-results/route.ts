@@ -4,6 +4,7 @@ import { getFileRepository } from '@/features/envio-resultados/infrastructure/fi
 import { makeEmailService } from '@/features/envio-resultados/infrastructure/email/emailService';
 import type { LocalAttachmentInput, SelectedFileRef } from '@/features/envio-resultados/domain/entities';
 import { sanitizeDownloadName } from '@/lib/sanitize-filename';
+import { isSafeDocumentKey } from '@/lib/normalize-dni';
 
 // ---- Constants ----
 
@@ -148,10 +149,10 @@ export async function POST(request: Request): Promise<NextResponse<ApiResponse>>
               400,
             );
           }
-          if (!/^\d+$/.test(ref.dni)) {
+          if (!isSafeDocumentKey(ref.dni)) {
             return buildError(
               'VALIDATION_ERROR',
-              `"dni" must be numeric: ${ref.dni}`,
+              `"dni" must be alphanumeric: ${ref.dni}`,
               400,
             );
           }

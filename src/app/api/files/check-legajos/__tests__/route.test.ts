@@ -145,12 +145,12 @@ describe('POST /api/files/check-legajos', () => {
     expect(res.status).toBe(400);
   });
 
-  it('returns 400 when dni is non-numeric', async () => {
+  it('returns 400 when dni is non-alphanumeric', async () => {
     const { POST } = await import('../route');
     const req = new Request('http://localhost/api/files/check-legajos', {
       method: 'POST',
       body: JSON.stringify([
-        { ruc: '20123456789', dni: '1234abc8', idAten: 'ATE-001' },
+        { ruc: '20123456789', dni: '1234abc.8', idAten: 'ATE-001' },
       ]),
     });
     const res = await POST(req);

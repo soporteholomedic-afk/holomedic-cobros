@@ -15,6 +15,7 @@ import {
 import { parseManifest, countManifest } from '@/features/envio-resultados/infrastructure/informes/parseManifest';
 import { isTransientAuthError } from '@/features/envio-resultados/infrastructure/informes/matchTransientAuthError';
 import type { GenerarPdfRequest, GenerarPdfResponse, ManifestRow } from '@/types/informe';
+import { isSafeDocumentKey } from '@/lib/normalize-dni';
 
 const execFileAsync = promisify(execFile);
 
@@ -175,10 +176,10 @@ export async function POST(
         { status: 400 },
       );
     }
-    if (typeof body.dni !== 'string' || !/^\d+$/.test(body.dni)) {
+    if (typeof body.dni !== 'string' || !isSafeDocumentKey(body.dni)) {
       console.error('[api/informes/generar] dni inválido:', { dni: body.dni });
       return NextResponse.json(
-        { code: 'VALIDATION_ERROR', message: 'dni debe ser numérico.' },
+        { code: 'VALIDATION_ERROR', message: 'dni debe ser alfanumérico.' },
         { status: 400 },
       );
     }

@@ -44,10 +44,10 @@ describe('GET /api/files/download', () => {
     expect(res.status).toBe(400);
   });
 
-  it('returns 400 when dni contains non-digit characters', async () => {
+  it('returns 400 when dni contains non-alphanumeric characters', async () => {
     const { GET } = await import('../route');
     const req = new Request(
-      'http://localhost/api/files/download?ruc=RUC&dni=12abc45678&idAten=AT-001&filename=informe.pdf',
+      'http://localhost/api/files/download?ruc=RUC&dni=12abc.456&idAten=AT-001&filename=informe.pdf',
     );
     const res = await GET(req);
     expect(res.status).toBe(400);

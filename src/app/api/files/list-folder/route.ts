@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getFileRepository } from '@/features/envio-resultados/infrastructure/files/getFileRepository';
 import { sanitizeFolderPath } from '@/lib/sanitize-filename';
+import { isSafeDocumentKey } from '@/lib/normalize-dni';
 
 /**
  * GET /api/files/list-folder?ruc&dni&idAten&path
@@ -22,7 +23,7 @@ import { sanitizeFolderPath } from '@/lib/sanitize-filename';
  * Status codes:
  * - 200: `{ nodes: FileSystemNode[] }` (possibly empty — empty folder
  *   or missing folder returns `{ nodes: [] }`, NOT 404)
- * - 400: missing `ruc` / `dni` / `idAten`, non-digit `dni`, or
+ * - 400: missing `ruc` / `dni` / `idAten`, non-alphanumeric `dni`, or
  *   path-traversal attempt
  * - 502: UNC share unreachable (the OS returned an I/O error)
  */
@@ -39,9 +40,9 @@ export async function GET(request: Request): Promise<NextResponse> {
       { status: 400 },
     );
   }
-  if (!/^\d+$/.test(dni)) {
+  if (!isSafeDocumentKey(dni)) {
     return NextResponse.json(
-      { error: 'dni debe ser numérico.' },
+      { error: 'dni debe ser alfanumérico.' },
       { status: 400 },
     );
   }

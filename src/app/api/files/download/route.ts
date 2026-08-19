@@ -4,6 +4,7 @@ import { sanitizeDownloadName, sanitizeFolderPath } from '@/lib/sanitize-filenam
 import { renameReadyFile } from '@/features/envio-resultados/domain/ready-files/renameReadyFile';
 import { renameGeneratedCertificate } from '@/features/envio-resultados/domain/generated-files/renameGeneratedCertificate';
 import { normalizeTipoExamen } from '@/features/envio-resultados/domain/ready-files/normalizeTipoExamen';
+import { isSafeDocumentKey } from '@/lib/normalize-dni';
 
 /** Minimal content-type lookup by extension. */
 function mimeFromExt(name: string): string {
@@ -47,7 +48,7 @@ function mimeFromExt(name: string): string {
  *
  * Status codes:
  * - 200: streams the file with `Content-Disposition: attachment`.
- * - 400: missing args, non-digit `dni`, path traversal attempt, or a
+ * - 400: missing args, non-alphanumeric `dni`, path traversal attempt, or a
  *   `tipoExamen` value outside `{CAMO, EMO, ADICIONAL}`.
  * - 404: file does not exist on the share.
  * - 502: share unreachable / I/O error.
@@ -70,9 +71,9 @@ export async function GET(request: Request): Promise<Response> {
       { status: 400 },
     );
   }
-  if (!/^\d+$/.test(dni)) {
+  if (!isSafeDocumentKey(dni)) {
     return NextResponse.json(
-      { error: 'dni debe ser numérico.' },
+      { error: 'dni debe ser alfanumérico.' },
       { status: 400 },
     );
   }

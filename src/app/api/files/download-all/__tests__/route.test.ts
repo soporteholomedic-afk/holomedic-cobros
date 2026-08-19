@@ -92,11 +92,11 @@ describe('GET /api/files/download-all (backward compat)', () => {
     expect(res.status).toBe(400);
   });
 
-  it('returns 400 when dni contains non-digit characters', async () => {
+  it('returns 400 when dni contains non-alphanumeric characters', async () => {
     __setFileRepositoryForTests(makeMockRepo());
     const { GET } = await import('../route');
     const req = new Request(
-      'http://localhost/api/files/download-all?ruc=RUC&dni=12abc45678&idAten=AT-001&nombrePaciente=Juan&empresa=Acme',
+      'http://localhost/api/files/download-all?ruc=RUC&dni=12abc.456&idAten=AT-001&nombrePaciente=Juan&empresa=Acme',
     );
     const res = await GET(req);
     expect(res.status).toBe(400);

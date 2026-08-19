@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getFileRepository } from '@/features/envio-resultados/infrastructure/files/getFileRepository';
 import { sanitizeDownloadName, sanitizeFolderPath } from '@/lib/sanitize-filename';
+import { isSafeDocumentKey } from '@/lib/normalize-dni';
 
 /** Minimal content-type lookup by extension. */
 function mimeFromExt(name: string): string {
@@ -45,7 +46,7 @@ function mimeFromExt(name: string): string {
  *
  * Status codes:
  * - 200: streams the file with `Content-Disposition: inline`.
- * - 400: missing args, non-digit `dni`, or path traversal attempt.
+ * - 400: missing args, non-alphanumeric `dni`, or path traversal attempt.
  * - 404: file does not exist on the share.
  * - 502: share unreachable / I/O error.
  */
@@ -63,9 +64,9 @@ export async function GET(request: Request): Promise<Response> {
       { status: 400 },
     );
   }
-  if (!/^\d+$/.test(dni)) {
+  if (!isSafeDocumentKey(dni)) {
     return NextResponse.json(
-      { error: 'dni debe ser numérico.' },
+      { error: 'dni debe ser alfanumérico.' },
       { status: 400 },
     );
   }

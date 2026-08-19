@@ -347,7 +347,7 @@ describe('POST /api/informes/[idAten]/generar', () => {
     expect(r1.status).toBe(400);
 
     const r2 = await POST(
-      buildRequest(validBody({ dni: 'abc' })),
+      buildRequest(validBody({ dni: 'ab.c' })),
       { params: Promise.resolve({ idAten: '012110021' }) },
     );
     expect(r2.status).toBe(400);

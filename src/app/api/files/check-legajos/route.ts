@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getFileRepository } from '@/features/envio-resultados/infrastructure/files/getFileRepository';
+import { isSafeDocumentKey } from '@/lib/normalize-dni';
 
 interface CheckLegajosItem {
   ruc: string;
@@ -43,9 +44,9 @@ export async function POST(request: Request): Promise<NextResponse> {
       );
     }
 
-    if (!/^\d+$/.test(dni)) {
+    if (!isSafeDocumentKey(dni)) {
       return NextResponse.json(
-        { error: 'dni debe ser numérico.' },
+        { error: 'dni debe ser alfanumérico.' },
         { status: 400 }
       );
     }

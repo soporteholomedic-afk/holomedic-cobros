@@ -109,18 +109,32 @@ describe('GET /api/files/list-folder', () => {
     expect(res.status).toBe(400);
   });
 
-  it('returns 400 when dni contains non-digit characters', async () => {
+  it('returns 400 when dni contains non-alphanumeric characters', async () => {
     __setFileRepositoryForTests(makeMockRepo());
 
     const { GET } = await import('../route');
     const req = new Request(
-      'http://localhost/api/files/list-folder?ruc=RUC&dni=12abc45678&idAten=AT-001',
+      'http://localhost/api/files/list-folder?ruc=RUC&dni=12abc.456&idAten=AT-001',
     );
     const res = await GET(req);
 
     expect(res.status).toBe(400);
     const body = (await res.json()) as { error: string };
     expect(body.error.toLowerCase()).toContain('dni');
+  });
+
+  it('accepts an alphanumeric foreign document (passport) as dni', async () => {
+    const mockListFolder = vi.fn().mockResolvedValue([]);
+    __setFileRepositoryForTests(makeMockRepo({ listFolder: mockListFolder }));
+
+    const { GET } = await import('../route');
+    const req = new Request(
+      'http://localhost/api/files/list-folder?ruc=20291398902&dni=EB7192642&idAten=012110926',
+    );
+    const res = await GET(req);
+
+    expect(res.status).toBe(200);
+    expect(mockListFolder).toHaveBeenCalledWith('20291398902', 'EB7192642', '012110926', '');
   });
 
   it('returns 400 on path traversal in ?path= (POSIX `../etc`)', async () => {

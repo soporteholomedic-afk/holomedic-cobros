@@ -264,8 +264,8 @@ describe('POST /api/consolidados/send-results (PR #2 — fileRefs flow)', () => 
     expect(body.code).toBe('VALIDATION_ERROR');
   });
 
-  it('returns 400 when dni is not numeric', async () => {
-    const badRef = { ...REF_ROOT, dni: '12abc' };
+  it('returns 400 when dni is not alphanumeric', async () => {
+    const badRef = { ...REF_ROOT, dni: '12.abc' };
     const fd = buildFileRefsFd([badRef]);
 
     const response = await POST(createMockRequest(fd));
