@@ -43,26 +43,15 @@ function formatBytes(sizeBytes: number): string {
 
 /** Status badge styles: enviado green · error red · pendiente grey. */
 const BADGE_STYLES: Record<EnvioSendStatus, { label: string; className: string }> = {
-  enviado: {
-    label: 'Enviado',
-    className: 'bg-emerald-50 text-emerald-700',
-  },
-  error: {
-    label: 'Error',
-    className: 'bg-rose-50 text-rose-700',
-  },
-  pendiente: {
-    label: 'Pendiente',
-    className: 'bg-slate-100 text-slate-600',
-  },
+  enviado: { label: 'Enviado', className: 'bg-emerald-50 text-emerald-700' },
+  error: { label: 'Error', className: 'bg-rose-50 text-rose-700' },
+  pendiente: { label: 'Pendiente', className: 'bg-slate-100 text-slate-600' },
 };
 
 function StatusBadge({ status }: { status: EnvioSendStatus }) {
   const badge = BADGE_STYLES[status];
   return (
-    <span
-      className={`px-2 py-0.5 rounded-full text-xs font-semibold ${badge.className}`}
-    >
+    <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${badge.className}`}>
       {badge.label}
     </span>
   );
@@ -177,19 +166,16 @@ export function HistoryList() {
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
   const { rows, total, page, pageSize, loading, error } = useEnviosHistory(
-    urlQ,
-    fechaInicio,
-    fechaFin,
-    urlPage,
-    retryNonce,
+    urlQ, fechaInicio, fechaFin, urlPage, retryNonce,
   );
 
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
   const isInvalidRange = fechaInicio.length > 0 && fechaFin.length > 0 && fechaInicio > fechaFin;
 
-  const buildUrl = (nextPage: number): string => {
+  /** Canonical URL for a history page — shared by buscador submit and pager. */
+  const buildHistoryUrl = (q: string, nextPage: number): string => {
     const params = new URLSearchParams();
-    if (urlQ) params.set('q', urlQ);
+    if (q) params.set('q', q);
     if (fechaInicio) params.set('fechaInicio', fechaInicio);
     if (fechaFin) params.set('fechaFin', fechaFin);
     if (nextPage > 1) params.set('page', String(nextPage));
@@ -200,13 +186,7 @@ export function HistoryList() {
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
     if (isInvalidRange) return;
-    const params = new URLSearchParams();
-    const trimmed = qInput.trim();
-    if (trimmed) params.set('q', trimmed);
-    if (fechaInicio) params.set('fechaInicio', fechaInicio);
-    if (fechaFin) params.set('fechaFin', fechaFin);
-    const query = params.toString();
-    router.push(query ? `/consolidados/historial-envios?${query}` : '/consolidados/historial-envios');
+    router.push(buildHistoryUrl(qInput.trim(), 1));
   };
 
   // The buscador renders in EVERY state: unlike PatientsList (client-side
@@ -373,7 +353,7 @@ export function HistoryList() {
           <button
             type="button"
             disabled={page <= 1}
-            onClick={() => router.push(buildUrl(page - 1))}
+            onClick={() => router.push(buildHistoryUrl(urlQ, page - 1))}
             className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-100 text-slate-700 hover:bg-slate-200 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             Anterior
@@ -384,7 +364,7 @@ export function HistoryList() {
           <button
             type="button"
             disabled={page >= totalPages}
-            onClick={() => router.push(buildUrl(page + 1))}
+            onClick={() => router.push(buildHistoryUrl(urlQ, page + 1))}
             className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-100 text-slate-700 hover:bg-slate-200 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             Siguiente
