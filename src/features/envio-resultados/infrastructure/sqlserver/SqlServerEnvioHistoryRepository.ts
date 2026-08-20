@@ -15,8 +15,21 @@ import type { IEnvioHistoryRepository } from '../../domain/ports';
 /** Hard cap matching the `NVARCHAR(4000)` search columns (see migrate.ts). */
 const MAX_SEARCH_COL_LENGTH = 4000;
 
+/** Fixed page size for the history buscador (design: OFFSET/FETCH 20). */
+export const ENVIO_HISTORY_PAGE_SIZE = 20;
+
 function clampSearchColumn(value: string): string {
   return value.length > MAX_SEARCH_COL_LENGTH ? value.slice(0, MAX_SEARCH_COL_LENGTH) : value;
+}
+
+/**
+ * Escape the T-SQL LIKE wildcards (`%`, `_`, `[`) plus the escape
+ * character itself so a user term matches literally inside a
+ * `LIKE @pattern ESCAPE '\'` predicate (SQL-injection safe: the term
+ * is bound as a parameter, never interpolated).
+ */
+export function escapeLikePattern(value: string): string {
+  return value.replace(/[\\%_[\[]/g, (ch) => `\\${ch}`);
 }
 
 type UncSnapshot = Extract<EnvioAttachmentSnapshot, { source: 'unc' }>;
@@ -97,10 +110,10 @@ export function rowToEnvioHistorySummary(row: Record<string, unknown>): EnvioHis
  * (parameterized `request.input`, `rowTo` mappers, no stored
  * procedures).
  *
- * PR1 ships the WRITE path (`insert` + `updateStatus`). The read path
- * (`search` + `getById`) lands in PR2 — the interim methods throw so
- * an accidental early caller fails loudly instead of silently
- * returning empty history.
+ * Write path (PR1): `insert` + `updateStatus` back the write-then-send
+ * recording. Read path (PR2): `search` + `getById` back the history
+ * buscador API — summaries never select `bodyHtml` (off-row LOB,
+ * PK-seek only).
  */
 export class SqlServerEnvioHistoryRepository implements IEnvioHistoryRepository {
   constructor(private readonly pool: mssql.ConnectionPool) {}
@@ -156,14 +169,72 @@ export class SqlServerEnvioHistoryRepository implements IEnvioHistoryRepository 
       );
   }
 
-  async search(_query: EnvioSearchQuery): Promise<EnvioSearchResult> {
-    void _query;
-    // Read path lands in PR2 (task 2.1) — write path ships first.
-    throw new Error('SqlServerEnvioHistoryRepository.search is not implemented until PR2 (read path)');
+  async search(query: EnvioSearchQuery): Promise<EnvioSearchResult> {
+    const page = Math.max(1, Math.floor(query.page));
+    // Identical WHERE for the page query and the twin COUNT — one
+    // builder so the two can never drift apart.
+    const where: string[] = ['1 = 1'];
+    const params: Record<string, unknown> = {
+      offset: (page - 1) * ENVIO_HISTORY_PAGE_SIZE,
+      pageSize: ENVIO_HISTORY_PAGE_SIZE,
+    };
+
+    const q = query.q?.trim();
+    if (q) {
+      // Both sides in the same canonical space: the stored columns are
+      // normalized at write time (computeSearchColumns), the term here.
+      params.pattern = `%${escapeLikePattern(normalizeSearchText(q))}%`;
+      const like = "LIKE @pattern ESCAPE '\\'";
+      where.push(
+        `(searchRecipients ${like} OR searchCompany ${like} OR searchSubject ${like} OR searchPatients ${like})`,
+      );
+    }
+    // Inclusive end day: everything before midnight of the NEXT day.
+    if (query.fechaInicio) {
+      params.fechaInicio = query.fechaInicio;
+      where.push('sentAt >= @fechaInicio');
+    }
+    if (query.fechaFin) {
+      params.fechaFin = query.fechaFin;
+      where.push('sentAt < DATEADD(DAY, 1, @fechaFin)');
+    }
+    const whereSql = where.join('\n      AND ');
+
+    const bind = (request: mssql.Request): mssql.Request => {
+      for (const [name, value] of Object.entries(params)) request.input(name, value);
+      return request;
+    };
+
+    const pageResult = await bind(this.pool.request()).query(`
+      SELECT id, sentAt, status, errorDetail, sentBy, destino, companyId, companyName,
+             nombreCompleto, toRecipients, ccRecipients, subject, attachmentsJson
+      FROM dbo.envios_consolidados
+      WHERE ${whereSql}
+      ORDER BY sentAt DESC, id DESC
+      OFFSET @offset ROWS FETCH NEXT @pageSize ROWS ONLY;`);
+
+    const countResult = await bind(this.pool.request()).query(`
+      SELECT COUNT(*) AS total
+      FROM dbo.envios_consolidados
+      WHERE ${whereSql};`);
+
+    return {
+      rows: (pageResult.recordset ?? []).map((row) => rowToEnvioHistorySummary(row as Record<string, unknown>)),
+      total: Number(countResult.recordset?.[0]?.total ?? 0),
+      page,
+    };
   }
 
-  async getById(_id: string): Promise<EnvioHistoryRow | null> {
-    void _id;
-    throw new Error('SqlServerEnvioHistoryRepository.getById is not implemented until PR2 (read path)');
+  async getById(id: string): Promise<EnvioHistoryRow | null> {
+    const result = await this.pool
+      .request()
+      .input('id', id)
+      .query(`
+        SELECT id, sentAt, status, errorDetail, sentBy, destino, companyId, companyName,
+               nombreCompleto, toRecipients, ccRecipients, subject, bodyHtml, attachmentsJson
+        FROM dbo.envios_consolidados
+        WHERE id = @id;`);
+    const row = result.recordset?.[0];
+    return row ? rowToEnvioHistoryRow(row as Record<string, unknown>) : null;
   }
 }
