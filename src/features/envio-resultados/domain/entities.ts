@@ -168,7 +168,7 @@ export interface EnvioHistoryRow {
 }
 
 /** List-view row: `EnvioHistoryRow` without `bodyHtml` (off-row LOB, PK-seek only). */
-export interface EnvioHistorySummary extends Omit<EnvioHistoryRow, 'bodyHtml'> {}
+export type EnvioHistorySummary = Omit<EnvioHistoryRow, 'bodyHtml'>;
 
 /** Paged search input; `fechaInicio`/`fechaFin` are `YYYY-MM-DD` strings. */
 export interface EnvioSearchQuery {
