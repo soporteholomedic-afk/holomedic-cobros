@@ -4,12 +4,11 @@ import { Suspense } from 'react';
 import { HistoryList } from '@/features/envio-resultados/presentation/components/HistoryList';
 
 /**
- * `/consolidados/historial-envios` (PR3). Mirrors `src/app/consolidados/
- * page.tsx`: a hook-free outer wrapper keeps the header outside the
- * `<Suspense>` boundary that `HistoryList` needs for `useSearchParams`.
- * Protection is inherited from the existing `/consolidados` entry in
- * `RUTAS_PROTEGIDAS` via `startsWith` (asserted in task 2.4 tests) —
- * no new permission. Wider container than `/consolidados` (max-w-6xl):
+ * `/consolidados/historial-envios` (PR3). Mirrors `consolidados/page.tsx`:
+ * a hook-free outer wrapper keeps the header outside the `<Suspense>`
+ * boundary `HistoryList` needs for `useSearchParams`. Protection is
+ * inherited from the `/consolidados` `RUTAS_PROTEGIDAS` entry via
+ * `startsWith` (asserted in task 2.4 tests). Wider container (max-w-6xl):
  * the history table carries 8 columns plus an expandable detail row.
  */
 export default function HistorialEnviosPage() {

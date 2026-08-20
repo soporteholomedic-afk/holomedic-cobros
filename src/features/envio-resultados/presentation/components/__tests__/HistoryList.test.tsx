@@ -152,44 +152,36 @@ describe('HistoryList', () => {
     expect(container.innerHTML).not.toContain('2026-06-15T15:30:00.000Z');
   });
 
-  it('expands a row to show the UNC durable address and renamed delivery name', async () => {
-    resolveRows([makeRow()]);
+  it('expands attachment detail: UNC durable address + deliveryName, local "ya no disponible", plain 0 when none', async () => {
+    resolveRows([
+      makeRow({ id: 'env-1', attachments: [uncAtt, localAtt] }),
+      makeRow({ id: 'env-2', attachments: [] }),
+    ]);
 
     await renderList();
 
-    fireEvent.click(screen.getByRole('button', { name: /1 adjunto/i }));
+    // Row 2 (no attachments): plain "0", no expand button.
+    expect(screen.getByText('0')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /0 adjunto/i })).not.toBeInTheDocument();
 
+    // Row 1: expand shows both attachment kinds.
+    fireEvent.click(screen.getByRole('button', { name: /2 adjuntos/i }));
+
+    // UNC: durable address (path/storedName), renamed deliveryName, ruc/dni/idAten.
     expect(screen.getByText(/LEGAJOS\/cert\.pdf/)).toBeInTheDocument();
     expect(screen.getByText('CERT - JUAN GARCIA.pdf')).toBeInTheDocument();
     expect(screen.getByText(/RUC 20123456789/)).toBeInTheDocument();
     expect(screen.getByText(/DNI 12345678/)).toBeInTheDocument();
     expect(screen.getByText(/AT-001/)).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: /1 adjunto/i }));
-    expect(screen.queryByText(/LEGAJOS\/cert\.pdf/)).not.toBeInTheDocument();
-  });
-
-  it('badges local attachments as "ya no disponible" with metadata only', async () => {
-    resolveRows([makeRow({ attachments: [localAtt] })]);
-
-    await renderList();
-
-    fireEvent.click(screen.getByRole('button', { name: /1 adjunto/i }));
-
+    // Local: metadata only + amber "ya no disponible" badge (BR11).
     expect(screen.getByText('informe-adicional.xlsx')).toBeInTheDocument();
     expect(screen.getByText('2 KB')).toBeInTheDocument();
     expect(screen.getByText(/ya no disponible/i)).toBeInTheDocument();
-    // No UNC reference fields are rendered for a local drop.
-    expect(screen.queryByText(/IdAten/)).not.toBeInTheDocument();
-  });
 
-  it('renders "0" (no expand button) for rows without attachments', async () => {
-    resolveRows([makeRow({ attachments: [] })]);
-
-    await renderList();
-
-    expect(screen.getByText('0')).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /adjunto/i })).not.toBeInTheDocument();
+    // Toggle collapses the detail row again.
+    fireEvent.click(screen.getByRole('button', { name: /2 adjuntos/i }));
+    expect(screen.queryByText(/LEGAJOS\/cert\.pdf/)).not.toBeInTheDocument();
   });
 
   it('pagers: shows "Página X de Y", disables prev on page 1, next pushes page 2', async () => {

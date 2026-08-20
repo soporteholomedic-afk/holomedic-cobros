@@ -26,15 +26,12 @@ const DEFAULT_PAGE_SIZE = 20;
 
 /**
  * Data hook for the `/consolidados/historial-envios` buscador (PR3).
- *
- * URL-param driven: the component parses `q`, `fechaInicio`, `fechaFin`
- * and `page` from the search params and passes them here; the hook
- * issues `GET /api/consolidados/envios` (PR2 contract — server-side
- * paged search) and exposes `{rows, total, page, pageSize, loading,
- * error}`. The optional `retryNonce` lets the error state's
- * "Reintentar" button force a re-fetch without changing the params.
- * In-flight requests are aborted on unmount or param change, mirroring
- * `useConsolidadosResults`.
+ * URL-param driven: the component passes `q`, `fechaInicio`, `fechaFin`
+ * and `page` here; the hook issues `GET /api/consolidados/envios` (PR2
+ * contract — server-side paged search). The optional `retryNonce` lets
+ * the error state's "Reintentar" button force a re-fetch. In-flight
+ * requests abort on unmount or param change (useConsolidadosResults
+ * precedent).
  *
  * Spec: historial-envios-consolidados / History Page (data states).
  */

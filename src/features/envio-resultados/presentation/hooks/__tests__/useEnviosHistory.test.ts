@@ -69,27 +69,27 @@ describe('useEnviosHistory', () => {
     expect(result.current.error).toBeNull();
   });
 
-  it('sets the error message when the API responds non-ok', async () => {
+  it('sets the same error message on API non-ok and on network failure', async () => {
+    // API non-ok response.
     mockFetch.mockResolvedValue({ ok: false, status: 500 });
-
-    const { result } = renderHook(() => useEnviosHistory('', '', '', 1));
-
+    const first = renderHook(() => useEnviosHistory('', '', '', 1));
     await waitFor(() => {
-      expect(result.current.error).toBe(
+      expect(first.result.current.error).toBe(
         'Error al cargar el historial de envíos. Intente nuevamente.',
       );
     });
-    expect(result.current.loading).toBe(false);
-    expect(result.current.rows).toEqual([]);
-  });
+    expect(first.result.current.loading).toBe(false);
+    expect(first.result.current.rows).toEqual([]);
+    first.unmount();
 
-  it('sets the error message on network failure', async () => {
+    // Network-level rejection.
+    mockFetch.mockReset();
     mockFetch.mockRejectedValue(new Error('Network down'));
-
-    const { result } = renderHook(() => useEnviosHistory('', '', '', 1));
-
+    const second = renderHook(() => useEnviosHistory('', '', '', 1));
     await waitFor(() => {
-      expect(result.current.error).not.toBeNull();
+      expect(second.result.current.error).toBe(
+        'Error al cargar el historial de envíos. Intente nuevamente.',
+      );
     });
   });
 
@@ -106,39 +106,27 @@ describe('useEnviosHistory', () => {
     expect(result.current.error).toBeNull();
   });
 
-  it('re-fetches when q changes', async () => {
+  it('re-fetches when q changes and when retryNonce changes (params untouched)', async () => {
     mockFetch.mockResolvedValue(okResponse({ success: true, rows: [], total: 0 }));
     const { rerender } = renderHook(
-      ({ q }) => useEnviosHistory(q, '', '', 1),
-      { initialProps: { q: '' } },
+      ({ q, nonce }) => useEnviosHistory(q, '', '', 1, nonce),
+      { initialProps: { q: '', nonce: 0 } },
     );
 
     await waitFor(() => {
       expect(mockFetch).toHaveBeenCalledTimes(1);
     });
-    rerender({ q: 'acme' });
-
+    rerender({ q: 'acme', nonce: 0 });
     await waitFor(() => {
       expect(mockFetch).toHaveBeenCalledTimes(2);
     });
     expect(mockFetch.mock.calls[1][0]).toBe('/api/consolidados/envios?q=acme');
-  });
 
-  it('re-fetches when retryNonce changes without altering the params', async () => {
-    mockFetch.mockResolvedValue(okResponse({ success: true, rows: [], total: 0 }));
-    const { rerender } = renderHook(
-      ({ nonce }) => useEnviosHistory('', '', '', 1, nonce),
-      { initialProps: { nonce: 0 } },
-    );
-
+    // Reintentar: nonce bump re-fetches WITHOUT altering the params.
+    rerender({ q: 'acme', nonce: 1 });
     await waitFor(() => {
-      expect(mockFetch).toHaveBeenCalledTimes(1);
+      expect(mockFetch).toHaveBeenCalledTimes(3);
     });
-    rerender({ nonce: 1 });
-
-    await waitFor(() => {
-      expect(mockFetch).toHaveBeenCalledTimes(2);
-    });
-    expect(mockFetch.mock.calls[1][0]).toBe('/api/consolidados/envios');
+    expect(mockFetch.mock.calls[2][0]).toBe('/api/consolidados/envios?q=acme');
   });
 });

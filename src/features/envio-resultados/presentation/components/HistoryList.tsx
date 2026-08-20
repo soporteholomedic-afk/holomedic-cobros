@@ -14,11 +14,10 @@ const EM_DASH = '\u2014';
 const TABLE_COLUMNS = 8;
 
 /**
- * Presentation timezone decision (PR3): `sentAt` is persisted as UTC
- * (`SYSUTCDATETIME` → ISO string). It is rendered in the browser's
- * local timezone using the repo's only locale precedent (`es-PE`,
- * `interpolateSpitch.ts`); Peru is UTC-5 with no DST so the conversion
- * is stable for clinic users. Invalid values fall back to the raw ISO.
+ * Presentation timezone decision (PR3): `sentAt` is stored UTC and
+ * rendered in the browser's local timezone (`es-PE`, the repo's only
+ * locale precedent — `interpolateSpitch.ts`; Peru is UTC-5, no DST).
+ * Invalid values fall back to the raw ISO.
  */
 export function formatSentAt(iso: string): string {
   const date = new Date(iso);
@@ -105,22 +104,46 @@ function AttachmentDetail({ attachments }: { attachments: EnvioAttachmentSnapsho
   );
 }
 
+function DateInput({
+  id,
+  label,
+  value,
+  onChange,
+}: {
+  id: string;
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+}) {
+  return (
+    <div className="w-full lg:w-40">
+      <label
+        htmlFor={id}
+        className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1"
+      >
+        {label}
+      </label>
+      <input
+        type="date"
+        id={id}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className="w-full px-3 py-2 rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-transparent text-sm text-slate-700"
+      />
+    </div>
+  );
+}
+
 /**
  * Buscador + results table for `/consolidados/historial-envios` (PR3).
- *
- * - Search is URL-param driven: submit pushes `q`/`fechaInicio`/
- *   `fechaFin` (page resets to 1); data comes from `useEnviosHistory`
- *   (server-side paged search, PR2 API).
- * - Status badges: enviado green · error red + visible errorDetail ·
- *   pendiente grey. sentAt renders in local time (`formatSentAt`).
- * - Expandable attachment detail: UNC refs show their durable address
- *   (+ deliveryName when renamed); local drops are metadata-only with
- *   an amber "ya no disponible" badge (reference-only, BR11).
- * - Reenviar pushes `/consolidados?reenvio=<id>` — an inert URL push;
- *   the hydration seam belongs to PR4.
- * - `bodyHtml` is NEVER rendered here (XSS guarantee D10).
- * - Loading / error+Reintentar / empty states per PatientsList
- *   conventions.
+ * URL-param driven search (submit pushes `q`/dates; data via
+ * `useEnviosHistory` — PR2 server-side paging). Badges: enviado green ·
+ * error red + visible errorDetail · pendiente grey. Expandable detail:
+ * UNC durable address (+ deliveryName when renamed); local metadata +
+ * amber "ya no disponible" (BR11). Reenviar pushes
+ * `/consolidados?reenvio=<id>` (inert; PR4 hydrates). `bodyHtml` is
+ * NEVER rendered (D10). Loading/error+Reintentar/empty states per
+ * PatientsList conventions.
  */
 export function HistoryList() {
   const router = useRouter();
@@ -191,36 +214,8 @@ export function HistoryList() {
             className="w-full pl-10 pr-4 py-2 rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-transparent text-sm text-slate-700"
           />
         </div>
-        <div className="w-full lg:w-40">
-          <label
-            htmlFor="fechaInicio"
-            className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1"
-          >
-            Fecha Inicio
-          </label>
-          <input
-            type="date"
-            id="fechaInicio"
-            value={fechaInicio}
-            onChange={(e) => setFechaInicio(e.target.value)}
-            className="w-full px-3 py-2 rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-transparent text-sm text-slate-700"
-          />
-        </div>
-        <div className="w-full lg:w-40">
-          <label
-            htmlFor="fechaFin"
-            className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1"
-          >
-            Fecha Fin
-          </label>
-          <input
-            type="date"
-            id="fechaFin"
-            value={fechaFin}
-            onChange={(e) => setFechaFin(e.target.value)}
-            className="w-full px-3 py-2 rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-transparent text-sm text-slate-700"
-          />
-        </div>
+        <DateInput id="fechaInicio" label="Fecha Inicio" value={fechaInicio} onChange={setFechaInicio} />
+        <DateInput id="fechaFin" label="Fecha Fin" value={fechaFin} onChange={setFechaFin} />
         <button
           type="submit"
           disabled={isInvalidRange}
