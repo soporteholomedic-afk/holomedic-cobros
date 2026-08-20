@@ -4,3 +4,4 @@
  * the storage backend stays swappable via this single import surface.
  */
 export { migrate } from './migrate';
+export { SqlServerEnvioHistoryRepository } from './SqlServerEnvioHistoryRepository';
