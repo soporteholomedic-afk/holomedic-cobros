@@ -1,4 +1,13 @@
-import type { Company, Patient, EmailAttachment } from './entities';
+import type {
+  Company,
+  Patient,
+  EmailAttachment,
+  EnvioHistoryInsert,
+  EnvioHistoryRow,
+  EnvioSearchQuery,
+  EnvioSearchResult,
+  EnvioSendStatus,
+} from './entities';
 import type { FileSystemNode } from './file-system/FileSystemNode';
 // Re-export the Composite types so consumers can `import { FileSystemNode, IFileRepository }`
 // from a single module surface (the domain port).
@@ -93,4 +102,28 @@ export interface IFileRepository {
     relativePath: string,
     name: string,
   ): Promise<NodeJS.ReadableStream>;
+}
+
+/**
+ * Hexagonal port for the consolidated-send history store
+ * (`dbo.envios_consolidados`, database `HOLOMEDIC`).
+ *
+ * Write side (PR1 — historial-envios-consolidados): `insert` +
+ * `updateStatus` back the write-then-send recording inside
+ * `SendResultsUseCase` (INSERT before dispatch, UPDATE status after).
+ * Read side (PR2): `search` + `getById` back the history buscador API.
+ */
+export interface IEnvioHistoryRepository {
+  /** Insert a row (typically with status `'pendiente'`); returns the generated id. */
+  insert(input: EnvioHistoryInsert): Promise<string>;
+  /** Set the final status (+ error detail) on an existing row. */
+  updateStatus(
+    id: string,
+    status: EnvioSendStatus,
+    errorDetail?: string | null,
+  ): Promise<void>;
+  /** Accent-insensitive paged search across the precomputed columns. */
+  search(query: EnvioSearchQuery): Promise<EnvioSearchResult>;
+  /** Full row (including `bodyHtml`) by primary key, or null when missing. */
+  getById(id: string): Promise<EnvioHistoryRow | null>;
 }
