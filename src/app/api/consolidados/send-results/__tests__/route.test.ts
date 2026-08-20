@@ -11,6 +11,21 @@ vi.mock('@/utils/sendEmail', () => ({
   sendEmail: mockSendEmail,
 }));
 
+// ---- Mock auth session + history repo (historial-envios-consolidados PR1) ----
+
+const mockGetSession = vi.hoisted(() => vi.fn());
+vi.mock('@/lib/auth', () => ({
+  getSession: mockGetSession,
+}));
+
+const mockHistoryInsert = vi.hoisted(() => vi.fn());
+const mockHistoryUpdate = vi.hoisted(() => vi.fn());
+const mockGetEnvioHistoryDb = vi.hoisted(() => vi.fn());
+vi.mock('@/features/envio-resultados/infrastructure/getEnvioHistoryDb', () => ({
+  getEnvioHistoryDb: mockGetEnvioHistoryDb,
+  __setEnvioHistoryDbForTests: vi.fn(),
+}));
+
 // ---- Import under test (after mocks) ----
 
 import { POST } from '../route';
@@ -69,6 +84,20 @@ beforeEach(() => {
   mockSendEmail.mockReset();
   mockSendEmail.mockResolvedValue({ success: true, messageId: '<test@mail.com>' });
   __setFileRepositoryForTests(makeMockRepo());
+  // Default: no session cookie; history repo available and succeeding.
+  mockGetSession.mockReset();
+  mockGetSession.mockResolvedValue(null);
+  mockHistoryInsert.mockReset();
+  mockHistoryInsert.mockResolvedValue('hist-001');
+  mockHistoryUpdate.mockReset();
+  mockHistoryUpdate.mockResolvedValue(undefined);
+  mockGetEnvioHistoryDb.mockReset();
+  mockGetEnvioHistoryDb.mockResolvedValue({
+    insert: mockHistoryInsert,
+    updateStatus: mockHistoryUpdate,
+    search: vi.fn(),
+    getById: vi.fn(),
+  });
 });
 
 afterEach(() => {
@@ -514,5 +543,75 @@ describe('POST /api/consolidados/send-results (PR #2 — fileRefs flow)', () => 
       attachments: { contentType: string }[];
     };
     expect(call.attachments[0]?.contentType).toBe('application/octet-stream');
+  });
+
+  // ================================================================
+  // historial-envios-consolidados PR1 — Identity and Context Capture
+  // (sentBy from the JWT session; companyId/companyName from FormData)
+  // ================================================================
+
+  it('records sentBy from the session nombre when the JWT cookie is present (trimmed)', async () => {
+    mockGetSession.mockResolvedValue({
+      sub: 'u-1',
+      nombre: '  Dra. House  ',
+      area: 'admin',
+      permisos: ['consolidados'],
+    });
+
+    const response = await POST(createMockRequest(buildFileRefsFd([REF_ROOT])));
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(mockHistoryInsert).toHaveBeenCalledTimes(1);
+    expect(mockHistoryInsert).toHaveBeenCalledWith(
+      expect.objectContaining({ sentBy: 'Dra. House', status: 'pendiente' }),
+    );
+    expect(mockHistoryUpdate).toHaveBeenCalledWith('hist-001', 'enviado', null);
+    void body;
+  });
+
+  it('falls back to sentBy "sistema" when the cookie is absent (row still created)', async () => {
+    mockGetSession.mockResolvedValue(null);
+
+    const response = await POST(createMockRequest(buildFileRefsFd([REF_ROOT])));
+
+    expect(response.status).toBe(200);
+    expect(mockHistoryInsert).toHaveBeenCalledWith(expect.objectContaining({ sentBy: 'sistema' }));
+  });
+
+  it('persists companyId and companyName threaded from the client FormData', async () => {
+    const fd = buildFileRefsFd([REF_ROOT]);
+    fd.append('companyId', 'c-009');
+    fd.append('companyName', 'Perú Contratas S.A.');
+
+    await POST(createMockRequest(fd));
+
+    expect(mockHistoryInsert).toHaveBeenCalledWith(
+      expect.objectContaining({ companyId: 'c-009', companyName: 'Perú Contratas S.A.' }),
+    );
+  });
+
+  it('sends successfully (unrecorded) when the history repo is unavailable', async () => {
+    mockGetEnvioHistoryDb.mockRejectedValue(new Error('db unreachable'));
+
+    const response = await POST(createMockRequest(buildFileRefsFd([REF_ROOT])));
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.success).toBe(true);
+    expect(mockHistoryInsert).not.toHaveBeenCalled();
+  });
+
+  it('creates no history row when the route rejects the payload before the pipeline (400)', async () => {
+    const fd = new FormData();
+    fd.append('subject', 'Test');
+    fd.append('html', '<p>Test</p>');
+    fd.append('fileRefs', JSON.stringify([REF_ROOT]));
+    // `to` missing → route-level 400 — never entered the pipeline.
+
+    const response = await POST(createMockRequest(fd));
+
+    expect(response.status).toBe(400);
+    expect(mockHistoryInsert).not.toHaveBeenCalled();
   });
 });

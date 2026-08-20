@@ -2,9 +2,12 @@ import { NextResponse } from 'next/server';
 import { SendResultsUseCase } from '@/features/envio-resultados/application/sendResults';
 import { getFileRepository } from '@/features/envio-resultados/infrastructure/files/getFileRepository';
 import { makeEmailService } from '@/features/envio-resultados/infrastructure/email/emailService';
+import { getEnvioHistoryDb } from '@/features/envio-resultados/infrastructure/getEnvioHistoryDb';
+import type { IEnvioHistoryRepository } from '@/features/envio-resultados/domain/ports';
 import type { LocalAttachmentInput, SelectedFileRef } from '@/features/envio-resultados/domain/entities';
 import { sanitizeDownloadName } from '@/lib/sanitize-filename';
 import { isSafeDocumentKey } from '@/lib/normalize-dni';
+import { getSession } from '@/lib/auth';
 
 // ---- Constants ----
 
@@ -209,8 +212,24 @@ export async function POST(request: Request): Promise<NextResponse<ApiResponse>>
       }
     }
 
-    // ---- 5. Delegate to the use case ----
-    const useCase = new SendResultsUseCase(getFileRepository(), makeEmailService());
+    // ---- 5. History context + delegate to the use case ----
+    // sentBy from the JWT session cookie; the row is ALWAYS created
+    // (spec SHALL) — absent cookie falls back to 'sistema' (OQ1/D1).
+    const session = await getSession();
+    const sentBy = session?.nombre?.trim() || 'sistema';
+    const companyId = (formData.get('companyId') as string | null) ?? '';
+    const companyName = (formData.get('companyName') as string | null) ?? '';
+
+    // History is best-effort (D4): a history outage must never block
+    // the send — the use case runs unrecorded in that case.
+    let historyRepo: IEnvioHistoryRepository | undefined;
+    try {
+      historyRepo = await getEnvioHistoryDb();
+    } catch (err) {
+      console.error('consolidados send-results: history repo unavailable', err);
+    }
+
+    const useCase = new SendResultsUseCase(getFileRepository(), makeEmailService(), historyRepo);
     const result = await useCase.execute({
       to,
       ...(cc ? { cc } : {}),
@@ -220,6 +239,7 @@ export async function POST(request: Request): Promise<NextResponse<ApiResponse>>
       localAttachments,
       nombreCompleto,
       destino,
+      context: { sentBy, companyId, companyName },
     });
 
     if (result.success) {
