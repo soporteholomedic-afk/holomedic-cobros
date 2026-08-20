@@ -7,11 +7,11 @@ import {
   CLI_EXE_PATH,
   CLI_TIMEOUT_MS,
   MANIFEST_FILENAME,
-  buildOutputDir,
   PDFCLI_RETRY_MAX_ATTEMPTS,
   PDFCLI_RETRY_BACKOFF_MS,
   isPdfcliRetryTransientAuthEnabled,
 } from '@/features/envio-resultados/infrastructure/informes/constants';
+import { resolveOutputDir } from '@/features/envio-resultados/infrastructure/informes/outputDirResolver';
 import { parseManifest, countManifest } from '@/features/envio-resultados/infrastructure/informes/parseManifest';
 import { isTransientAuthError } from '@/features/envio-resultados/infrastructure/informes/matchTransientAuthError';
 import type { GenerarPdfRequest, GenerarPdfResponse, ManifestRow } from '@/types/informe';
@@ -204,7 +204,7 @@ export async function POST(
     const strict: boolean = body.strict === true;
 
     // ---- OutputDir + parent pre-flight ----
-    const outputDir = buildOutputDir(body.ruc, body.dni, pathIdAten);
+    const outputDir = await resolveOutputDir(body.ruc, body.dni, pathIdAten);
     const parentDir = path.win32.dirname(outputDir);
     console.log('[api/informes/generar] outputDir:', { outputDir, parentDir });
 

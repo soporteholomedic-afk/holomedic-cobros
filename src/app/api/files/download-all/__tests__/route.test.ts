@@ -4,11 +4,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 // Mock `node:fs.createReadStream` so the route never tries to open a
 // real file in tests — archiver pulls from the stream asynchronously
 // and an ENOENT would leak as an uncaught exception after the test
-// completes.
+// completes. Also mock `promises.stat` because `resolveExistingFile`
+// (used by `buildFileSource`) stats the file path to decide between
+// the standard and particular fallback paths.
 const mockCreateReadStream = vi.hoisted(() => vi.fn());
+const mockStat = vi.hoisted(() => vi.fn());
 
 vi.mock('node:fs', () => {
-  const promises = {};
+  const promises = { stat: mockStat };
   return {
     promises,
     createReadStream: mockCreateReadStream,
@@ -66,6 +69,11 @@ function emptyReadable() {
 beforeEach(() => {
   mockCreateReadStream.mockReset();
   mockCreateReadStream.mockImplementation(() => emptyReadable());
+  // `resolveExistingFile` stats the standard file path first; resolve
+  // for everything so the standard branch is always taken (preserves
+  // existing path assertions).
+  mockStat.mockReset();
+  mockStat.mockResolvedValue({} as never);
 });
 
 // ---- Shared helpers ----

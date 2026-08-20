@@ -16,6 +16,7 @@ import {
   type EmailViewData,
 } from '../helpers/emailViewDataFromFiles';
 import { useLegajosStatus, type LegajosRowStatus, type CheckLegajosItem } from '../hooks/useLegajosStatus';
+import { resolveRucEfectivo } from '../utils/resolveRucEfectivo';
 
 interface WorkerDetailTableProps {
   companyName: string;
@@ -334,7 +335,7 @@ export function WorkerDetailTable({ companyName, fechaInicio, fechaFin }: Worker
           return (
             <FilesModal
               key={`${modalState.dni}-${modalState.fichaIndex}`}
-              ruc={ficha?.nroRuc ?? ''}
+              ruc={resolveRucEfectivo(ficha?.nroRuc, person.dni)}
               dni={person.dni}
               idAten={ficha?.idAten ?? ''}
               nombrePaciente={person.nombre}

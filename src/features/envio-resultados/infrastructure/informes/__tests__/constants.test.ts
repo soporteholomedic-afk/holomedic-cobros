@@ -1,8 +1,14 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+
+vi.hoisted(() => {
+  process.env.FILE_SERVER_BASE_PATH = '\\\\172.16.10.12\\sigla';
+});
+
 import {
   PDFCLI_RETRY_MAX_ATTEMPTS,
   PDFCLI_RETRY_BACKOFF_MS,
   isPdfcliRetryTransientAuthEnabled,
+  buildOutputDir,
 } from '../constants';
 
 describe('retry constants', () => {
@@ -51,5 +57,13 @@ describe('isPdfcliRetryTransientAuthEnabled', () => {
   it('returns true for any value other than "0"', () => {
     process.env[key] = 'true';
     expect(isPdfcliRetryTransientAuthEnabled()).toBe(true);
+  });
+});
+
+describe('buildOutputDir', () => {
+  it('joins the UNC base with ruc/dni/idAten/LEGAJOS using win32 semantics', () => {
+    expect(buildOutputDir('20123456789', '12345678', '012110021')).toBe(
+      '\\\\172.16.10.12\\sigla\\20123456789\\12345678\\012110021\\LEGAJOS',
+    );
   });
 });

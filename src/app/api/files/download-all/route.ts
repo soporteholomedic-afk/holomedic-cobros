@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server';
 import { sanitizeZipName } from '@/lib/sanitize-filename';
 import { UncFileRepository } from '@/features/envio-resultados/infrastructure/files/UncFileRepository';
 import { getFileRepository } from '@/features/envio-resultados/infrastructure/files/getFileRepository';
+import { resolveExistingFile } from '@/features/envio-resultados/infrastructure/files/patientPathResolver';
 import { renameReadyFile } from '@/features/envio-resultados/domain/ready-files/renameReadyFile';
 import { renameGeneratedCertificate } from '@/features/envio-resultados/domain/generated-files/renameGeneratedCertificate';
 import { normalizeTipoExamen } from '@/features/envio-resultados/domain/ready-files/normalizeTipoExamen';
@@ -10,21 +11,16 @@ import type { SelectedFileRef } from '@/features/envio-resultados/domain/entitie
 import type { Archiver } from 'archiver';
 import { isSafeDocumentKey } from '@/lib/normalize-dni';
 
-const BASE_PATH = process.env.FILE_SERVER_BASE_PATH ?? '';
-
-function buildFileSource(ruc: string, dni: string, idAten: string, path: string, name: string): string {
-  const parts = [BASE_PATH, ruc, dni, idAten];
-  if (path) parts.push(path);
-  parts.push(name);
-  return parts.join('\\');
+async function buildFileSource(ruc: string, dni: string, idAten: string, path: string, name: string): Promise<string> {
+  return resolveExistingFile(ruc, dni, idAten, path, name);
 }
 
-function buildArchive(ruc: string, dni: string, idAten: string, files: Array<{ sourcePath: string; entryName: string }>): Archiver {
+async function buildArchive(ruc: string, dni: string, idAten: string, files: Array<{ sourcePath: string; entryName: string }>): Promise<Archiver> {
   const repo = getFileRepository();
-  const archive =
+  const { archive } =
     typeof (repo as UncFileRepository).zipAll === 'function'
-      ? (repo as UncFileRepository).zipAll(ruc, dni, idAten).archive
-      : new UncFileRepository().zipAll(ruc, dni, idAten).archive;
+      ? await (repo as UncFileRepository).zipAll(ruc, dni, idAten)
+      : await new UncFileRepository().zipAll(ruc, dni, idAten);
 
   for (const { sourcePath, entryName } of files) {
     archive.append(createReadStream(sourcePath), { name: entryName });
@@ -108,8 +104,8 @@ export async function GET(request: Request): Promise<Response> {
   }
 
   const files: Array<{ sourcePath: string; entryName: string }> = [];
-  const addFile = (name: string, subPath: string): void => {
-    const sourcePath = buildFileSource(ruc, dni, idAten, subPath, name);
+  const addFile = async (name: string, subPath: string): Promise<void> => {
+    const sourcePath = await buildFileSource(ruc, dni, idAten, subPath, name);
     const readyName = renameReadyFile({ rawName: name, nombreCompleto: nombre, destino, tipoExamen });
     const entryName =
       readyName === name
@@ -119,14 +115,14 @@ export async function GET(request: Request): Promise<Response> {
   };
 
   for (const n of rootNodes ?? []) {
-    if (n.kind === 'file') addFile(n.name, '');
+    if (n.kind === 'file') await addFile(n.name, '');
   }
   for (const n of legajosNodes ?? []) {
-    if (n.kind === 'file') addFile(n.name, LEGAJOS_SUBFOLDER);
+    if (n.kind === 'file') await addFile(n.name, LEGAJOS_SUBFOLDER);
   }
 
   const zipName = sanitizeZipName(nombre, dni, empresa) + '.zip';
-  const archive = buildArchive(ruc, dni, idAten, files);
+  const archive = await buildArchive(ruc, dni, idAten, files);
 
   return new Response(archive as unknown as ReadableStream, {
     headers: {
@@ -230,7 +226,7 @@ export async function POST(request: Request): Promise<Response> {
     }
     // Per-ref signal wins over the request-level one (design decision).
     const tipoExamen = refTipoExamen ?? requestTipoExamen;
-    const sourcePath = buildFileSource(ruc, dni, idAten, ref.path, ref.name);
+    const sourcePath = await buildFileSource(ruc, dni, idAten, ref.path, ref.name);
     const readyName = renameReadyFile({ rawName: ref.name, nombreCompleto: nombre, destino, tipoExamen });
     const entryName =
       readyName === ref.name
@@ -241,7 +237,7 @@ export async function POST(request: Request): Promise<Response> {
 
   const zipName = sanitizeZipName(nombre, dni, empresa) + '.zip';
 
-  const archive = buildArchive(ruc, dni, idAten, files);
+  const archive = await buildArchive(ruc, dni, idAten, files);
 
   return new Response(archive as unknown as ReadableStream, {
     headers: {

@@ -75,7 +75,22 @@ beforeEach(() => {
   // manifest is well-formed, and the CLI exits 0. Tests that exercise
   // the partial-exit path call `queueExecError(3)` BEFORE `POST` to
   // override the next invocation.
-  mockStat.mockResolvedValue({} as never);
+  //
+  // `resolveOutputDir` stats the particular root
+  // (`<BASE>\<ruc>\<ruc>\<dni>`) first; reject it so the standard
+  // `buildOutputDir` path is used (preserving existing assertions that
+  // expect the standard path). Resolve everything else (parent
+  // pre-flight). Path-based (not call-order-based) so 400-validation
+  // tests that never call stat don't leak `Once` rejections forward.
+  mockStat.mockImplementation(async (p: string) => {
+    const segs = p.split('\\');
+    // Particular root: ['', '', host, 'sigla', ruc, ruc, dni] —
+    // segments 4 and 5 are equal (ruc duplicated).
+    if (segs.length >= 6 && segs[4] === segs[5]) {
+      throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' });
+    }
+    return {} as never;
+  });
   mockAccess.mockResolvedValue(undefined as never);
   mockReadFile.mockResolvedValue(
     JSON.stringify({
@@ -376,7 +391,11 @@ describe('POST /api/informes/[idAten]/generar', () => {
 
   it('should return 502 UNC_UNREACHABLE when fs.stat throws ENOENT on the parent dir', async () => {
     const err = Object.assign(new Error('ENOENT'), { code: 'ENOENT' });
-    mockStat.mockRejectedValueOnce(err);
+    // Reject ALL stat calls (particular root + parent) so the parent
+    // pre-flight fails. `resolveOutputDir` catches the particular-root
+    // rejection and falls back to the standard path; the parent stat
+    // then rejects → 502.
+    mockStat.mockImplementation(async () => { throw err; });
 
     const { POST } = await import('../route');
     const res = await POST(buildRequest(validBody()), {
@@ -391,7 +410,7 @@ describe('POST /api/informes/[idAten]/generar', () => {
 
   it('should return 502 UNC_UNREACHABLE when fs.stat throws EACCES on the parent dir', async () => {
     const err = Object.assign(new Error('EACCES'), { code: 'EACCES' });
-    mockStat.mockRejectedValueOnce(err);
+    mockStat.mockImplementation(async () => { throw err; });
 
     const { POST } = await import('../route');
     const res = await POST(buildRequest(validBody()), {
@@ -408,7 +427,9 @@ describe('POST /api/informes/[idAten]/generar', () => {
       params: Promise.resolve({ idAten: '012110021' }),
     });
 
-    const statArg = (mockStat.mock.calls[0] as [string])[0];
+    // `resolveOutputDir` stats the particular root first (calls[0]);
+    // the parent-dir pre-flight is the SECOND stat call.
+    const statArg = (mockStat.mock.calls[1] as [string])[0];
     // Parent = one segment above LEGAJOS
     expect(statArg).toBe('\\\\172.16.10.12\\sigla\\20123456789\\12345678\\012110021');
   });
@@ -488,7 +509,7 @@ describe('POST /api/informes/[idAten]/generar', () => {
 
   it('should return 502 UNC_UNREACHABLE for any fs.stat failure (not just ENOENT/EACCES)', async () => {
     const err = Object.assign(new Error('weird'), { code: 'ELOOP' });
-    mockStat.mockRejectedValueOnce(err);
+    mockStat.mockImplementation(async () => { throw err; });
 
     const { POST } = await import('../route');
     const res = await POST(buildRequest(validBody()), {

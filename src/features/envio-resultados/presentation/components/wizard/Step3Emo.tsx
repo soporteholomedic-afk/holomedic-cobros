@@ -29,6 +29,7 @@ import { useState, type ReactElement } from 'react';
 
 import { FilesModal } from '@/features/envio-resultados/presentation/components/FilesModal';
 import { normalizeTipoExamen } from '@/features/envio-resultados/domain/ready-files/normalizeTipoExamen';
+import { resolveRucEfectivo } from '@/features/envio-resultados/presentation/utils/resolveRucEfectivo';
 import type { WizardFilePick } from '@/features/envio-resultados/presentation/hooks/useEnvioWizard';
 import type { UnifiedPerson } from '@/types/sp-result';
 
@@ -192,7 +193,7 @@ export function Step3Emo({
 
       {activePerson && activePerson.fichas[0] ? (
         <FilesModal
-          ruc={activePerson.fichas[0].nroRuc}
+          ruc={resolveRucEfectivo(activePerson.fichas[0].nroRuc, activePerson.dni)}
           dni={activePerson.dni}
           idAten={activePerson.fichas[0].idAten}
           nombrePaciente={activePerson.nombre}

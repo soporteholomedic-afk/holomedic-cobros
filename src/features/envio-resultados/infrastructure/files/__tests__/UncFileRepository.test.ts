@@ -120,11 +120,36 @@ describe('UncFileRepository', () => {
 
     it('returns [] when the folder does not exist (ENOENT)', async () => {
       const err = Object.assign(new Error('ENOENT'), { code: 'ENOENT' });
-      mockReaddir.mockRejectedValueOnce(err);
+      // Standard path ENOENTs → fallback tries the particular path,
+      // which also ENOENTs → final result is [] (legacy "missing = empty").
+      mockReaddir.mockRejectedValueOnce(err); // std
+      mockReaddir.mockRejectedValueOnce(err); // particular fallback
 
       const result = await repo.listFolder('RUC1', '12345678', 'AT-001', '');
 
       expect(result).toEqual([]);
+    });
+
+    it('falls back to the particular path when the standard path ENOENTs', async () => {
+      // Standard path (`<BASE>\<ruc>\<dni>\<idAten>`) does not exist →
+      // fallback to the particular path (`<BASE>\<dni>\<dni>\<idAten>`),
+      // where the DNI is reused as RUC (cliente particular). The ruc
+      // value ("null" from the SP) is NOT part of the fallback key.
+      const enoent = Object.assign(new Error('ENOENT'), { code: 'ENOENT' });
+      mockReaddir.mockRejectedValueOnce(enoent); // std
+      mockReaddir.mockResolvedValueOnce(['a.pdf']); // particular
+      mockStat.mockResolvedValueOnce(makeStats({ size: 2048 }));
+
+      const result = await repo.listFolder('null', '70005854', '0112168', 'LEGAJOS');
+
+      expect(result).toHaveLength(1);
+      expect(result[0].kind).toBe('file');
+      expect(result[0].name).toBe('a.pdf');
+      // The stat for `a.pdf` must be called against the PARTICULAR folder
+      // (dni duplicated as the RUC level, idAten third), proving the
+      // fallback path was used for file resolution.
+      const partFolder = '\\\\172.16.10.12\\sigla\\70005854\\70005854\\0112168\\LEGAJOS';
+      expect(mockStat).toHaveBeenCalledWith(`${partFolder}\\a.pdf`);
     });
 
     it('skips a file when its stat fails and still returns the rest', async () => {
@@ -189,6 +214,10 @@ describe('UncFileRepository', () => {
 
   describe('read', () => {
     it('returns a NodeJS Readable stream from createReadStream at the full resolved path', async () => {
+      // `resolveExistingFile` stats the standard file path first; mock
+      // it to exist so the standard branch is taken (assertion stays on
+      // the standard path).
+      mockStat.mockResolvedValueOnce(makeStats());
       const stream = new Readable({ read() {} });
       mockCreateReadStream.mockReturnValueOnce(stream);
 
@@ -201,6 +230,7 @@ describe('UncFileRepository', () => {
     });
 
     it('joins the path at the patient root when relativePath is empty', async () => {
+      mockStat.mockResolvedValueOnce(makeStats());
       const stream = new Readable({ read() {} });
       mockCreateReadStream.mockReturnValueOnce(stream);
 
@@ -212,6 +242,7 @@ describe('UncFileRepository', () => {
     });
 
     it('joins nested paths correctly (multi-level subfolder)', async () => {
+      mockStat.mockResolvedValueOnce(makeStats());
       const stream = new Readable({ read() {} });
       mockCreateReadStream.mockReturnValueOnce(stream);
 
@@ -221,11 +252,29 @@ describe('UncFileRepository', () => {
         '\\\\172.16.10.12\\sigla\\RUC1\\12345678\\AT-001\\a\\b\\c\\informe.pdf',
       );
     });
+
+    it('falls back to the particular path when the standard file does not exist', async () => {
+      // Standard file does not exist (stat rejects) → `resolveExistingFile`
+      // falls back to the particular file path (`<BASE>\<dni>\<dni>\<idAten>`).
+      // The `createReadStream` is then called against the particular path.
+      mockStat.mockRejectedValueOnce(Object.assign(new Error('ENOENT'), { code: 'ENOENT' }));
+      const stream = new Readable({ read() {} });
+      mockCreateReadStream.mockReturnValueOnce(stream);
+
+      await repo.read('null', '70005854', '0112168', 'LEGAJOS', '0112168EXPED.pdf');
+
+      expect(mockCreateReadStream).toHaveBeenCalledWith(
+        '\\\\172.16.10.12\\sigla\\70005854\\70005854\\0112168\\LEGAJOS\\0112168EXPED.pdf',
+      );
+    });
   });
 
   describe('zipAll', () => {
-    it('returns an archiver-shaped object and the resolved folder', () => {
-      const { archive, folder } = repo.zipAll('RUC1', '12345678', 'AT-001');
+    it('returns an archiver-shaped object and the resolved folder', async () => {
+      // `resolveExistingFolder` stats the standard root first; mock it
+      // to exist (as a directory) so the standard path is chosen.
+      mockStat.mockResolvedValueOnce(makeStats({ isFile: () => false, isDirectory: () => true }));
+      const { archive, folder } = await repo.zipAll('RUC1', '12345678', 'AT-001');
 
       // archiver is a Duplex stream — verify it has the expected shape.
       // We use the structural type `{ append(): unknown; finalize(): unknown }`
@@ -239,6 +288,17 @@ describe('UncFileRepository', () => {
       expect(typeof arch.append).toBe('function');
       expect(typeof arch.finalize).toBe('function');
       expect(folder).toBe('\\\\172.16.10.12\\sigla\\RUC1\\12345678\\AT-001');
+    });
+
+    it('uses the particular folder when the standard root does not exist', async () => {
+      // Standard root does not exist (stat rejects) → fallback stats
+      // the particular root (`<BASE>\<dni>\<dni>\<idAten>`), which exists.
+      mockStat.mockRejectedValueOnce(Object.assign(new Error('ENOENT'), { code: 'ENOENT' }));
+      mockStat.mockResolvedValueOnce(makeStats({ isFile: () => false, isDirectory: () => true }));
+
+      const { folder } = await repo.zipAll('null', '70005854', '0112168');
+
+      expect(folder).toBe('\\\\172.16.10.12\\sigla\\70005854\\70005854\\0112168');
     });
   });
 
