@@ -104,11 +104,21 @@ export function buildEmailViewDataFromWizard(
 
     if (camo) {
       files.push(camo.displayName);
-      fileRefs.push({ ...camo.ref, tipoExamen: camo.ref.tipoExamen ?? 'CAMO' });
+      fileRefs.push({
+        ...camo.ref,
+        tipoExamen: camo.ref.tipoExamen ?? 'CAMO',
+        // Per-ref patient name (multi-patient fix): the use-case
+        // rename prefers this over the request-level scalar.
+        nombreCompleto: person.nombre,
+      });
     }
     if (emo) {
       files.push(emo.displayName);
-      fileRefs.push({ ...emo.ref, tipoExamen: emo.ref.tipoExamen ?? 'EMO' });
+      fileRefs.push({
+        ...emo.ref,
+        tipoExamen: emo.ref.tipoExamen ?? 'EMO',
+        nombreCompleto: person.nombre,
+      });
     }
 
     // The patient entry is always present — even when `files` is

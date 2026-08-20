@@ -577,6 +577,123 @@ describe('SendResultsUseCase (PR #2 — file resolver + byte-equal)', () => {
     expect(call.attachments[0]?.filename).toBe('CAMO-X-Y.pdf');
   });
 
+  // ================================================================
+  // fix-duplicate-attachment-names — per-ref `nombreCompleto`.
+  // Spec REQ-1: when 2+ refs carry their own patient names, the
+  // delivery name MUST use THAT ref's name, not the batch-wide
+  // request-level scalar. Fallback (REQ-2): absent or empty
+  // (post-trim) per-ref name → request-level scalar (today's
+  // behavior). The use case is the seam: it must forward
+  // `ref.nombreCompleto` (preferred) to `renameReadyFile`.
+  // ================================================================
+
+  it('uses each ref\'s own nombreCompleto — two patients produce distinct filenames (S-1)', async () => {
+    const mockRead = vi.fn<ReadFn>().mockResolvedValue(streamFromBuffer(PDF_BYTES));
+    const mockEmail = makeMockEmail();
+    const useCase = new SendResultsUseCase(makeMockRepo({ read: mockRead }), mockEmail);
+
+    const refs: SelectedFileRef[] = [
+      {
+        ruc: '20123456789',
+        dni: '11111111',
+        idAten: 'AT-001',
+        path: '',
+        name: '11111111CERT.pdf',
+        tipoExamen: 'CAMO',
+        nombreCompleto: 'JUAN PEREZ',
+      },
+      {
+        ruc: '20123456789',
+        dni: '22222222',
+        idAten: 'AT-002',
+        path: '',
+        name: '22222222CERT.pdf',
+        tipoExamen: 'CAMO',
+        nombreCompleto: 'MARIA LOPEZ',
+      },
+    ];
+
+    const result = await useCase.execute({
+      ...DEFAULT_PARAMS,
+      fileRefs: refs,
+      nombreCompleto: 'JUAN PEREZ',
+      destino: 'METRO LIMA',
+    });
+
+    expect(result.success).toBe(true);
+    const call = (mockEmail.sendWithAttachments as unknown as ReturnType<typeof vi.fn>).mock
+      .calls[0]?.[0] as { attachments: { filename: string }[] };
+    expect(call.attachments).toHaveLength(2);
+    expect(call.attachments[0]?.filename).toBe('CAMO-JUAN PEREZ-METRO LIMA.pdf');
+    expect(call.attachments[1]?.filename).toBe('CAMO-MARIA LOPEZ-METRO LIMA.pdf');
+    // THE bug regression: no two attachments share a filename.
+    const names = call.attachments.map((a) => a.filename);
+    expect(new Set(names).size).toBe(2);
+  });
+
+  it('ADICIONAL ref with per-ref name omits the destino segment (S-2)', async () => {
+    const mockRead = vi.fn<ReadFn>().mockResolvedValue(streamFromBuffer(PDF_BYTES));
+    const mockEmail = makeMockEmail();
+    const useCase = new SendResultsUseCase(makeMockRepo({ read: mockRead }), mockEmail);
+
+    const refs: SelectedFileRef[] = [
+      {
+        ruc: '20123456789',
+        dni: '22222222',
+        idAten: 'AT-002',
+        path: '',
+        name: '22222222CERT.pdf',
+        tipoExamen: 'ADICIONAL',
+        nombreCompleto: 'MARIA LOPEZ',
+      },
+    ];
+
+    await useCase.execute({
+      ...DEFAULT_PARAMS,
+      fileRefs: refs,
+      nombreCompleto: 'JUAN PEREZ',
+      destino: 'METRO LIMA',
+    });
+
+    const call = (mockEmail.sendWithAttachments as unknown as ReturnType<typeof vi.fn>).mock
+      .calls[0]?.[0] as { attachments: { filename: string }[] };
+    // ADICIONAL format: `{tipo}-{nombreCompleto}.pdf` — destino omitted
+    // per the existing renameReadyFile rule, now driven by the
+    // per-ref name.
+    expect(call.attachments[0]?.filename).toBe('ADICIONAL-MARIA LOPEZ.pdf');
+  });
+
+  it('falls back to the request-level nombreCompleto when the per-ref name is whitespace-only (S-3)', async () => {
+    const mockRead = vi.fn<ReadFn>().mockResolvedValue(streamFromBuffer(PDF_BYTES));
+    const mockEmail = makeMockEmail();
+    const useCase = new SendResultsUseCase(makeMockRepo({ read: mockRead }), mockEmail);
+
+    const refs: SelectedFileRef[] = [
+      {
+        ruc: '20123456789',
+        dni: '11111111',
+        idAten: 'AT-001',
+        path: '',
+        name: '11111111CERT.pdf',
+        tipoExamen: 'CAMO',
+        nombreCompleto: '  ',
+      },
+    ];
+
+    await useCase.execute({
+      ...DEFAULT_PARAMS,
+      fileRefs: refs,
+      nombreCompleto: 'JUAN PEREZ',
+      destino: 'METRO LIMA',
+    });
+
+    const call = (mockEmail.sendWithAttachments as unknown as ReturnType<typeof vi.fn>).mock
+      .calls[0]?.[0] as { attachments: { filename: string }[] };
+    // Empty (post-trim) per-ref name MUST NOT leak through — the
+    // request-level scalar renames the file (no `CAMO--METRO LIMA.pdf`).
+    expect(call.attachments[0]?.filename).toBe('CAMO-JUAN PEREZ-METRO LIMA.pdf');
+  });
+
   it('returns SMTP_ERROR when the email service resolves with success: false', async () => {
     const mockRead = vi.fn<ReadFn>().mockResolvedValue(streamFromBuffer(PDF_BYTES));
     const mockEmail = makeMockEmail({

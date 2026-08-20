@@ -54,6 +54,16 @@ export interface SelectedFileRef {
    * flow) omit it — the pipeline falls back to `parseReadyFile(ref.name)`.
    */
   tipoExamen?: ReadyFileTipo;
+  /**
+   * Optional per-ref patient full name. Stamped by the envio wizard
+   * bridge (`buildEmailViewDataFromWizard`) with the resolved
+   * patient's name so multi-patient batches produce per-patient
+   * attachment names; the send-pipeline rename (`renameReadyFile`)
+   * prefers this value over the request-level scalar. Absent or
+   * empty (post-trim) falls back to the request-level
+   * `nombreCompleto` (legacy callers unchanged).
+   */
+  nombreCompleto?: string;
 }
 
 export interface Spitch {

@@ -275,6 +275,34 @@ describe('POST /api/consolidados/send-results (PR #2 — fileRefs flow)', () => 
     expect(body.code).toBe('VALIDATION_ERROR');
   });
 
+  // ---- fix-duplicate-attachment-names: per-ref nombreCompleto guard ----
+
+  it('accepts a ref carrying a valid per-ref nombreCompleto (extended ref shape passes)', async () => {
+    // Pin: the optional per-ref patient name MUST NOT trip the
+    // guard — the wizard payload carries it from now on.
+    const fd = buildFileRefsFd([{ ...REF_ROOT, nombreCompleto: 'MARIA LOPEZ' }]);
+
+    const response = await POST(createMockRequest(fd));
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.success).toBe(true);
+  });
+
+  it('returns 400 when per-ref nombreCompleto is not a string', async () => {
+    // A non-string per-ref name would hit `.trim()` in the use
+    // case as a TypeError → 500 INTERNAL_ERROR. The guard must
+    // reject it as VALIDATION_ERROR instead.
+    const badRef = { ...REF_ROOT, nombreCompleto: 42 };
+    const fd = buildFileRefsFd([badRef]);
+
+    const response = await POST(createMockRequest(fd));
+    const body = await response.json();
+
+    expect(response.status).toBe(400);
+    expect(body.code).toBe('VALIDATION_ERROR');
+  });
+
   it('returns 400 when more than 10 refs are provided (existing MAX_FILES limit)', async () => {
     const refs = Array.from({ length: 11 }, (_, i) => ({ ...REF_ROOT, name: `file-${i}.pdf` }));
     const fd = buildFileRefsFd(refs);

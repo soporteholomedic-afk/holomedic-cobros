@@ -309,10 +309,16 @@ describe('EnvioResultadosWizard', () => {
     // `Step4Resumen`) with `companyId`/`companyName`/
     // `nombreCompleto`/`destino` and forwards the full
     // `EmailViewData` to the parent's `onContinueToEmail`.
+    //
+    // fix-duplicate-attachment-names: EXTENDED to a 2-patient
+    // fixture. The request-level `nombreCompleto`/`destino` STILL
+    // come from the FIRST selected patient (they are now the
+    // fallback scalar), while each fileRef carries its own
+    // patient's `nombreCompleto` (stamped by the bridge).
     const initialState: WizardState = {
       currentStep: 4,
       maxVisitedStep: 4,
-      selectedDnIs: new Set(['11111111']),
+      selectedDnIs: new Set(['11111111', '22222222']),
       camoByDni: {
         '11111111': {
           ref: {
@@ -324,6 +330,17 @@ describe('EnvioResultadosWizard', () => {
             tipoExamen: 'CAMO',
           },
           displayName: 'CERT.pdf',
+        },
+        '22222222': {
+          ref: {
+            ruc: '20123456789',
+            dni: '22222222',
+            idAten: 'AT-002',
+            path: 'LEGAJOS',
+            name: 'CERT-2222.pdf',
+            tipoExamen: 'CAMO',
+          },
+          displayName: 'CERT-2222.pdf',
         },
       },
       emoByDni: {
@@ -350,7 +367,7 @@ describe('EnvioResultadosWizard', () => {
       companyName: string;
       selectedPatients: Record<string, { patientName: string; files: string[] }>;
       patients: unknown[];
-      fileRefs: Array<{ dni: string; name: string; tipoExamen?: 'CAMO' | 'EMO' }>;
+      fileRefs: Array<{ dni: string; name: string; tipoExamen?: 'CAMO' | 'EMO'; nombreCompleto?: string }>;
       nombreCompleto: string;
       destino: string;
     };
@@ -359,16 +376,24 @@ describe('EnvioResultadosWizard', () => {
     // empresa 'Acme Corp' → companyId is 'uuid-acme'.
     expect(data.companyId).toBe('uuid-acme');
     expect(data.companyName).toBe('Acme Corp');
-    // nombreCompleto / destino come from the first selected patient.
+    // Request-level nombreCompleto / destino STILL come from the
+    // first selected patient — they are the FALLBACK scalar for
+    // unstamped refs (legacy + stray picks), per spec REQ-2.
     expect(data.nombreCompleto).toBe('Ana López');
     expect(data.destino).toBe('METRO LIMA');
     // selectedPatients + fileRefs flow through from the helper.
     expect(data.selectedPatients['11111111']?.patientName).toBe('Ana López');
     expect(data.selectedPatients['11111111']?.files).toEqual(['CERT.pdf', 'EXPED.pdf']);
-    // Each fileRef carries the correct tipoExamen (REQ-009).
-    expect(data.fileRefs).toHaveLength(2);
+    expect(data.selectedPatients['22222222']?.patientName).toBe('Beto Ruiz');
+    // Each fileRef carries the correct tipoExamen (REQ-009)…
+    expect(data.fileRefs).toHaveLength(3);
     expect(data.fileRefs.find((r) => r.name === 'CERT.pdf')?.tipoExamen).toBe('CAMO');
     expect(data.fileRefs.find((r) => r.name === 'EXPED.pdf')?.tipoExamen).toBe('EMO');
+    // …AND its own patient's nombreCompleto (per-ref stamp — the
+    // multi-patient fix; each ref renames with its patient's name).
+    expect(data.fileRefs.find((r) => r.name === 'CERT.pdf')?.nombreCompleto).toBe('Ana López');
+    expect(data.fileRefs.find((r) => r.name === 'EXPED.pdf')?.nombreCompleto).toBe('Ana López');
+    expect(data.fileRefs.find((r) => r.name === 'CERT-2222.pdf')?.nombreCompleto).toBe('Beto Ruiz');
     // Wizard path does not produce PatientFile[] (known limitation;
     // the AttachmentList is not exercised in the wizard path).
     expect(data.patients).toEqual([]);

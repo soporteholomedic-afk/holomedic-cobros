@@ -59,7 +59,12 @@ function isFileRefShape(v: unknown): v is SelectedFileRef {
     typeof obj.dni === 'string' &&
     typeof obj.idAten === 'string' &&
     typeof obj.path === 'string' &&
-    typeof obj.name === 'string'
+    typeof obj.name === 'string' &&
+    // Optional per-ref patient name (multi-patient wizard sends).
+    // String-when-present: a non-string value must 400 here —
+    // otherwise the use case's `.trim()` would throw and surface
+    // as 500 INTERNAL_ERROR.
+    (obj.nombreCompleto === undefined || typeof obj.nombreCompleto === 'string')
   );
 }
 

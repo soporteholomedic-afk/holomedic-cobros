@@ -164,9 +164,11 @@ export function EnvioResultadosWizard({
   //     selected patient's empresa drives the lookup.
   //   - `companyName` (page-level, already on this scope).
   //   - `nombreCompleto` — the first selected patient's
-  //     `nombre`. The use case rename uses this for ALL files in
-  //     a batch (a known single-name limitation of the current
-  //     pipeline). PR-3 wires the wizard path to a single value.
+  //     `nombre`. This is the REQUEST-LEVEL fallback scalar: the
+  //     wizard bridge stamps each fileRef with its OWN patient's
+  //     `nombreCompleto`, and the use-case rename prefers the
+  //     per-ref value (absent/empty → this scalar). Legacy and
+  //     stray-pick refs (no per-ref stamp) rename with it.
   //   - `destino` — the first selected patient's first ficha's
   //     `proyecto` (with a fall-through to the patient-level
   //     `proyecto`).

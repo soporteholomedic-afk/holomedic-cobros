@@ -98,6 +98,7 @@ describe('buildEmailViewDataFromWizard', () => {
       path: 'LEGAJOS',
       name: '75618561CERT.pdf',
       tipoExamen: 'CAMO',
+      nombreCompleto: 'JUAN PEREZ',
     });
   });
 
@@ -286,5 +287,58 @@ describe('buildEmailViewDataFromWizard', () => {
     expect(result.fileRefs).toHaveLength(1);
     expect(result.fileRefs[0]?.tipoExamen).toBe('ADICIONAL');
     expect(result.fileRefs[0]?.dni).toBe('12345678');
+  });
+
+  // ================================================================
+  // fix-duplicate-attachment-names — per-ref `nombreCompleto`
+  // stamping. The wizard is the ONLY multi-patient email path; the
+  // bridge must stamp every resolved-person ref with THAT patient's
+  // name so the use-case rename produces per-patient filenames.
+  // Stray picks (dni no longer in `people`) stay UNSTAMPED — the
+  // request-level name renames them (no fabrication).
+  // ================================================================
+
+  it('stamps each resolved-person ref with its own patient\'s nombreCompleto (S-1)', () => {
+    const people = [
+      makePerson({ dni: '11111111', nombre: 'JUAN PEREZ' }),
+      makePerson({ dni: '22222222', nombre: 'MARIA LOPEZ' }),
+    ];
+    const result = buildEmailViewDataFromWizard({
+      selectedDnIs: new Set(['11111111', '22222222']),
+      camoByDni: {
+        '11111111': makePick(camoRef('11111111', '11111111CERT.pdf')),
+        '22222222': makePick(camoRef('22222222', '22222222CERT.pdf')),
+      },
+      emoByDni: {
+        '11111111': makePick(emoRef('11111111', '11111111EXPED.pdf')),
+      },
+      people,
+    });
+    expect(result.fileRefs).toHaveLength(3);
+    const byName = (n: string) => result.fileRefs.find((r) => r.name === n);
+    // Each ref carries its OWN patient's name — the per-ref stamp
+    // the use-case rename prefers over the request-level scalar.
+    expect(byName('11111111CERT.pdf')?.nombreCompleto).toBe('JUAN PEREZ');
+    expect(byName('11111111EXPED.pdf')?.nombreCompleto).toBe('JUAN PEREZ');
+    expect(byName('22222222CERT.pdf')?.nombreCompleto).toBe('MARIA LOPEZ');
+  });
+
+  it('stray pick (dni not in people) pushes the ref WITHOUT nombreCompleto — no fabrication (S-6)', () => {
+    // Pin: a picked dni absent from `people` (table refetched
+    // mid-wizard) cannot be stamped. The ref is still attached
+    // (existing behavior) and the use-case rename falls back to the
+    // request-level name. The bridge MUST NOT fabricate a name.
+    const people = [makePerson({ dni: '99999999', nombre: 'OTHER PERSON' })];
+    const result = buildEmailViewDataFromWizard({
+      selectedDnIs: new Set(['12345678']),
+      camoByDni: {
+        '12345678': makePick(camoRef('12345678', '75618561CERT.pdf')),
+      },
+      emoByDni: {},
+      people,
+    });
+    expect(result.fileRefs).toHaveLength(1);
+    expect(result.fileRefs[0]?.dni).toBe('12345678');
+    expect(result.fileRefs[0]?.nombreCompleto).toBeUndefined();
   });
 });

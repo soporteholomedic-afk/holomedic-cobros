@@ -174,7 +174,12 @@ export class SendResultsUseCase {
         const buffer = await streamToBuffer(stream, MAX_FILE_BYTES);
         const deliveryName = renameReadyFile({
           rawName: safeName,
-          nombreCompleto: params.nombreCompleto,
+          // Per-ref patient name wins (multi-patient batches);
+          // absent/empty (post-trim) falls back to the request-level
+          // scalar (legacy callers unchanged). `||` (not `??`) so an
+          // empty string also falls back — `renameReadyFile`
+          // re-trims/sanitizes segments anyway.
+          nombreCompleto: ref.nombreCompleto?.trim() || params.nombreCompleto,
           destino: params.destino,
           tipoExamen: ref.tipoExamen,
         });
