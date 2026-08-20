@@ -12,6 +12,16 @@ import { useEnviosHistory } from '../hooks/useEnviosHistory';
 
 const EM_DASH = '\u2014';
 const TABLE_COLUMNS = 8;
+const TABLE_HEADERS = [
+  'Fecha',
+  'Estado',
+  'Empresa',
+  'Destinatarios',
+  'Asunto',
+  'Enviado por',
+  'Adjuntos',
+  'Acción',
+];
 
 /**
  * Presentation timezone decision (PR3): `sentAt` is stored UTC and
@@ -31,24 +41,29 @@ function formatBytes(sizeBytes: number): string {
   return `${sizeBytes} B`;
 }
 
+/** Status badge styles: enviado green · error red · pendiente grey. */
+const BADGE_STYLES: Record<EnvioSendStatus, { label: string; className: string }> = {
+  enviado: {
+    label: 'Enviado',
+    className: 'bg-emerald-50 text-emerald-700',
+  },
+  error: {
+    label: 'Error',
+    className: 'bg-rose-50 text-rose-700',
+  },
+  pendiente: {
+    label: 'Pendiente',
+    className: 'bg-slate-100 text-slate-600',
+  },
+};
+
 function StatusBadge({ status }: { status: EnvioSendStatus }) {
-  if (status === 'enviado') {
-    return (
-      <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700">
-        Enviado
-      </span>
-    );
-  }
-  if (status === 'error') {
-    return (
-      <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-rose-50 text-rose-700">
-        Error
-      </span>
-    );
-  }
+  const badge = BADGE_STYLES[status];
   return (
-    <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-slate-100 text-slate-600">
-      Pendiente
+    <span
+      className={`px-2 py-0.5 rounded-full text-xs font-semibold ${badge.className}`}
+    >
+      {badge.label}
     </span>
   );
 }
@@ -271,14 +286,11 @@ export function HistoryList() {
           <table className="w-full text-left text-sm">
             <thead className="bg-slate-50 border-b border-slate-200">
               <tr>
-                <th className="px-4 py-3 font-medium text-slate-600">Fecha</th>
-                <th className="px-4 py-3 font-medium text-slate-600">Estado</th>
-                <th className="px-4 py-3 font-medium text-slate-600">Empresa</th>
-                <th className="px-4 py-3 font-medium text-slate-600">Destinatarios</th>
-                <th className="px-4 py-3 font-medium text-slate-600">Asunto</th>
-                <th className="px-4 py-3 font-medium text-slate-600">Enviado por</th>
-                <th className="px-4 py-3 font-medium text-slate-600">Adjuntos</th>
-                <th className="px-4 py-3 font-medium text-slate-600">Acción</th>
+                {TABLE_HEADERS.map((header) => (
+                  <th key={header} className="px-4 py-3 font-medium text-slate-600">
+                    {header}
+                  </th>
+                ))}
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
