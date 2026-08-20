@@ -523,6 +523,26 @@ describe('EmailEditor', () => {
   });
 
   // ================================================================
+  // historial-envios-consolidados PR1 — company context threading:
+  // the editor forwards its existing companyId/companyName props to
+  // useSendResults so the route can persist them on the history row.
+  // ================================================================
+
+  it('should forward companyId and companyName to useSendResults', () => {
+    mockFetch.mockResolvedValue({ ok: true, json: () => Promise.resolve({ success: true }) });
+
+    render(<EmailEditor {...defaultProps} />);
+
+    expect(mockUseSendResults).toHaveBeenCalled();
+    const lastCall = mockUseSendResults.mock.calls[mockUseSendResults.mock.calls.length - 1]?.[0] as {
+      companyId?: string;
+      companyName?: string;
+    };
+    expect(lastCall.companyId).toBe('comp-001');
+    expect(lastCall.companyName).toBe('Holomedic S.A.C.');
+  });
+
+  // ================================================================
   // Local files (drag-and-drop from OS)
   // ================================================================
 

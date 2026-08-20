@@ -28,6 +28,13 @@ export interface UseSendResultsArgs {
   nombreCompleto: string;
   /** Destino (DesDes / proyecto) for ready-file rename in email attachment. */
   destino: string;
+  /**
+   * Company attribution for the send-history row
+   * (historial-envios-consolidados). Appended as FormData fields; the
+   * route persists them on `dbo.envios_consolidados`.
+   */
+  companyId?: string;
+  companyName?: string;
 }
 
 export interface UseSendResultsReturn {
@@ -62,6 +69,12 @@ export function useSendResults(args: UseSendResultsArgs): UseSendResultsReturn {
       formData.append('fileRefs', JSON.stringify(args.fileRefs));
       formData.append('nombreCompleto', args.nombreCompleto);
       formData.append('destino', args.destino);
+      if (args.companyId) {
+        formData.append('companyId', args.companyId);
+      }
+      if (args.companyName) {
+        formData.append('companyName', args.companyName);
+      }
       if (args.localFiles) {
         for (const file of args.localFiles) {
           formData.append('localFiles', file);
@@ -86,7 +99,7 @@ export function useSendResults(args: UseSendResultsArgs): UseSendResultsReturn {
     } finally {
       setIsSending(false);
     }
-  }, [args.to, args.cc, args.subject, args.html, args.fileRefs, args.localFiles]);
+  }, [args.to, args.cc, args.subject, args.html, args.fileRefs, args.localFiles, args.companyId, args.companyName]);
 
   return {
     send,

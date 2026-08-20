@@ -497,4 +497,47 @@ describe('useSendResults', () => {
     const parsed = JSON.parse(formData.get('fileRefs') as string) as SelectedFileRef[];
     expect(parsed[0]?.tipoExamen).toBe('EMO');
   });
+
+  // ================================================================
+  // historial-envios-consolidados PR1 — company context fields for
+  // the send-history row (persisted by the send-results route).
+  // ================================================================
+
+  it('should append companyId and companyName to FormData when provided', async () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ success: true }),
+    } as Response);
+
+    const { result } = renderHook(() =>
+      useSendResults({ ...defaultArgs, companyId: 'c-009', companyName: 'Perú Contratas S.A.' }),
+    );
+
+    await act(async () => {
+      await result.current.send();
+    });
+
+    const formData = fetchSpy.mock.calls[0][1]?.body as FormData;
+    expect(formData.get('companyId')).toBe('c-009');
+    expect(formData.get('companyName')).toBe('Perú Contratas S.A.');
+  });
+
+  it('should omit the company fields when not provided', async () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ success: true }),
+    } as Response);
+
+    const { result } = renderHook(() => useSendResults(defaultArgs));
+
+    await act(async () => {
+      await result.current.send();
+    });
+
+    const formData = fetchSpy.mock.calls[0][1]?.body as FormData;
+    expect(formData.get('companyId')).toBeNull();
+    expect(formData.get('companyName')).toBeNull();
+    // The rest of the payload is intact.
+    expect(formData.get('fileRefs')).toBeTruthy();
+  });
 });
