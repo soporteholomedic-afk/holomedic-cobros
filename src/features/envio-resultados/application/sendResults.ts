@@ -1,5 +1,15 @@
-import type { IEmailService, IFileRepository } from '../domain/ports';
-import type { EmailAttachment, LocalAttachmentInput, SelectedFileRef } from '../domain/entities';
+import type {
+  IEmailService,
+  IEnvioHistoryRepository,
+  IFileRepository,
+} from '../domain/ports';
+import type {
+  EmailAttachment,
+  EnvioAttachmentSnapshot,
+  EnvioHistoryInsert,
+  LocalAttachmentInput,
+  SelectedFileRef,
+} from '../domain/entities';
 import { sanitizeDownloadName, sanitizeFolderPath } from '@/lib/sanitize-filename';
 import { renameReadyFile } from '../domain/ready-files/renameReadyFile';
 
@@ -38,6 +48,20 @@ export interface SendResultsParams {
   localAttachments?: LocalAttachmentInput[];
   nombreCompleto: string;
   destino: string;
+  /**
+   * Attribution context persisted on the history row. The route always
+   * threads it (sentBy from the JWT session with the `'sistema'`
+   * fallback, companyId/companyName from the client). Absent → the
+   * documented defaults are recorded; the row is ALWAYS created.
+   */
+  context?: SendResultsContext;
+}
+
+/** History attribution carried from the send-results route. */
+export interface SendResultsContext {
+  sentBy: string;
+  companyId: string;
+  companyName: string;
 }
 
 // ---- streamToBuffer (exported for testability) ----
@@ -80,24 +104,51 @@ function sanitizeRef(ref: SelectedFileRef): { safePath: string; safeName: string
   };
 }
 
+/**
+ * Sanitize a ref name for the pre-INSERT delivery-name precompute.
+ * Pure and total: on a traversal-shaped name the raw value passes
+ * through and the send loop's own `sanitizeRef` fails later, AFTER the
+ * history row exists — so even that failure is recorded (spec: every
+ * use-case-level failure updates a row).
+ */
+function safeDisplayName(rawName: string): string {
+  try {
+    return sanitizeDownloadName(rawName);
+  } catch {
+    return rawName;
+  }
+}
+
 // ---- Use case ----
 
 /**
  * PR #2 — orchestrates the consolidated send pipeline:
  *
  * 1. Validate the `fileRefs` payload (limits, sanitisation).
- * 2. For each ref, ask the `IFileRepository` for a stream and
+ * 2. Insert a `pendiente` history row (write-then-send, BEFORE any
+ *    file read or dispatch) with the full attachment snapshot and
+ *    precomputed delivery names.
+ * 3. For each ref, ask the `IFileRepository` for a stream and
  *    collect the bytes into a `Buffer` (with a 30 MB cap).
- * 3. Hand the assembled `EmailAttachment[]` to the `IEmailService`
+ * 4. Hand the assembled `EmailAttachment[]` to the `IEmailService`
  *    with `cc`/`subject`/`html`.
+ * 5. UPDATE the history row to `enviado` / `error`(+detail).
  *
- * The use case never throws; every failure mode becomes a typed
- * `SendResultsResult` so the route maps cleanly to HTTP status.
+ * History is best-effort (design D4): an insert/update failure is
+ * logged and the send proceeds. A crash between INSERT and UPDATE
+ * leaves the honest `pendiente` orphan (D2).
+ *
+ * The use case never throws on typed failure paths; every failure mode
+ * becomes a typed `SendResultsResult` so the route maps cleanly to
+ * HTTP status (a throwing email service still propagates — that is
+ * the crash-between case, and the orphan row stays).
  */
 export class SendResultsUseCase {
   constructor(
     private readonly fileRepository: IFileRepository,
     private readonly emailService: IEmailService,
+    /** History recorder; when omitted the send runs unrecorded (tests/legacy). */
+    private readonly historyRepo?: IEnvioHistoryRepository,
   ) {}
 
   async execute(params: SendResultsParams): Promise<SendResultsResult> {
@@ -113,13 +164,84 @@ export class SendResultsUseCase {
       };
     }
 
+    // ---- 1b. History: precompute delivery names, snapshot, INSERT ----
+    // `renameReadyFile` is pure — the delivery names computed here are
+    // BOTH persisted in the snapshot AND reused by the dispatch loop,
+    // so the recorded history always matches what was attached (D5).
+    const deliveryNames = params.fileRefs.map((ref) =>
+      renameReadyFile({
+        rawName: safeDisplayName(ref.name),
+        nombreCompleto: ref.nombreCompleto?.trim() || params.nombreCompleto,
+        destino: params.destino,
+        tipoExamen: ref.tipoExamen,
+      }),
+    );
+    const snapshot: EnvioAttachmentSnapshot[] = [
+      ...params.fileRefs.map((ref, i): EnvioAttachmentSnapshot => ({
+        source: 'unc',
+        ruc: ref.ruc,
+        dni: ref.dni,
+        idAten: ref.idAten,
+        path: ref.path,
+        storedName: ref.name,
+        deliveryName: deliveryNames[i] ?? ref.name,
+        ...(ref.tipoExamen ? { tipoExamen: ref.tipoExamen } : {}),
+        ...(ref.nombreCompleto ? { nombreCompleto: ref.nombreCompleto } : {}),
+      })),
+      ...(params.localAttachments ?? []).map(
+        (local): EnvioAttachmentSnapshot => ({
+          source: 'local',
+          storedName: local.filename,
+          contentType: local.contentType,
+          sizeBytes: local.content.length,
+        }),
+      ),
+    ];
+    const ctx = params.context;
+    const insertPayload: EnvioHistoryInsert = {
+      status: 'pendiente',
+      sentBy: ctx?.sentBy?.trim() || 'sistema',
+      destino: params.destino,
+      companyId: ctx?.companyId ?? '',
+      companyName: ctx?.companyName ?? '',
+      nombreCompleto: params.nombreCompleto,
+      toRecipients: params.to,
+      ccRecipients: params.cc ?? [],
+      subject: params.subject,
+      bodyHtml: params.html,
+      attachments: snapshot,
+    };
+
+    let recordId: string | null = null;
+    if (this.historyRepo) {
+      try {
+        recordId = await this.historyRepo.insert(insertPayload);
+      } catch (err) {
+        // D4 best-effort: the send proceeds without history.
+        console.error('[SendResultsUseCase.execute] history insert failed', err);
+      }
+    }
+
+    /** Best-effort final status UPDATE; never masks the send outcome. */
+    const finishRecord = async (
+      status: 'enviado' | 'error',
+      errorDetail: string | null = null,
+    ): Promise<void> => {
+      if (!recordId || !this.historyRepo) return;
+      try {
+        await this.historyRepo.updateStatus(recordId, status, errorDetail);
+      } catch (err) {
+        console.error('[SendResultsUseCase.execute] history updateStatus failed', err);
+      }
+    };
+
     // ---- 2. Sanitise + read + collect ----
     const attachments: EmailAttachment[] = [];
     console.log('[SendResultsUseCase.execute] starting file resolution', {
       count: params.fileRefs.length,
       refs: params.fileRefs,
     });
-    for (const ref of params.fileRefs) {
+    for (const [i, ref] of params.fileRefs.entries()) {
       let safePath: string;
       let safeName: string;
       try {
@@ -131,11 +253,9 @@ export class SendResultsUseCase {
         });
       } catch (err) {
         console.error('[SendResultsUseCase.execute] sanitisation failed', { ref, err });
-        return {
-          success: false,
-          code: 'VALIDATION_ERROR',
-          error: `Invalid fileRef: ${err instanceof Error ? err.message : 'unknown'}`,
-        };
+        const error = `Invalid fileRef: ${err instanceof Error ? err.message : 'unknown'}`;
+        await finishRecord('error', error);
+        return { success: false, code: 'VALIDATION_ERROR', error };
       }
 
       let stream: NodeJS.ReadableStream;
@@ -157,39 +277,24 @@ export class SendResultsUseCase {
           error: err instanceof Error ? err.message : 'I/O error',
         });
         if (code === 'ENOENT') {
-          return {
-            success: false,
-            code: 'VALIDATION_ERROR',
-            error: `File not found: ${safeName}`,
-          };
+          const error = `File not found: ${safeName}`;
+          await finishRecord('error', error);
+          return { success: false, code: 'VALIDATION_ERROR', error };
         }
-        return {
-          success: false,
-          code: 'INTERNAL_ERROR',
-          error: err instanceof Error ? err.message : 'I/O error',
-        };
+        const error = err instanceof Error ? err.message : 'I/O error';
+        await finishRecord('error', error);
+        return { success: false, code: 'INTERNAL_ERROR', error };
       }
 
       try {
         const buffer = await streamToBuffer(stream, MAX_FILE_BYTES);
-        const deliveryName = renameReadyFile({
-          rawName: safeName,
-          // Per-ref patient name wins (multi-patient batches);
-          // absent/empty (post-trim) falls back to the request-level
-          // scalar (legacy callers unchanged). `||` (not `??`) so an
-          // empty string also falls back — `renameReadyFile`
-          // re-trims/sanitizes segments anyway.
-          nombreCompleto: ref.nombreCompleto?.trim() || params.nombreCompleto,
-          destino: params.destino,
-          tipoExamen: ref.tipoExamen,
-        });
-        attachments.push({ filename: deliveryName, content: buffer });
+        // Reuse the precomputed delivery name so the dispatched
+        // attachment name is byte-identical to the persisted snapshot.
+        attachments.push({ filename: deliveryNames[i] ?? safeName, content: buffer });
       } catch (err) {
-        return {
-          success: false,
-          code: 'INTERNAL_ERROR',
-          error: err instanceof Error ? err.message : 'Stream error',
-        };
+        const error = err instanceof Error ? err.message : 'Stream error';
+        await finishRecord('error', error);
+        return { success: false, code: 'INTERNAL_ERROR', error };
       }
     }
 
@@ -199,11 +304,9 @@ export class SendResultsUseCase {
       try {
         safeName = sanitizeDownloadName(local.filename);
       } catch (err) {
-        return {
-          success: false,
-          code: 'VALIDATION_ERROR',
-          error: `Invalid local filename: ${err instanceof Error ? err.message : 'unknown'}`,
-        };
+        const error = `Invalid local filename: ${err instanceof Error ? err.message : 'unknown'}`;
+        await finishRecord('error', error);
+        return { success: false, code: 'VALIDATION_ERROR', error };
       }
       attachments.push({
         filename: safeName,
@@ -221,13 +324,17 @@ export class SendResultsUseCase {
       attachments,
     });
 
+    // ---- 5. Final history status ----
     if (result.success) {
+      await finishRecord('enviado');
       return { success: true, messageId: result.messageId ?? '<unknown>' };
     }
+    const smtpError = result.error ?? 'Unknown SMTP error';
+    await finishRecord('error', smtpError);
     return {
       success: false,
       code: 'SMTP_ERROR',
-      error: result.error ?? 'Unknown SMTP error',
+      error: smtpError,
     };
   }
 }
