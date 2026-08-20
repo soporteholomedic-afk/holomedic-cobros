@@ -3,9 +3,9 @@ import type { EnvioHistoryRow } from '@/features/envio-resultados/domain/entitie
 import type { IEnvioHistoryRepository } from '@/features/envio-resultados/domain/ports';
 
 /**
- * GET /api/consolidados/envios/[id] — route-level contract tests
- * (task 2.3): full row (including bodyHtml) for a known id, 404 for
- * an unknown id, 500 when the repository fails. Consumed by the PR4
+ * GET /api/consolidados/envios/[id] — route contract tests (task 2.3):
+ * full row (including bodyHtml) for a known id, 404 for an unknown
+ * id, 500 when the repository fails. Consumed by the PR4
  * `?reenvio=<id>` hydration flow.
  */
 
@@ -72,7 +72,6 @@ describe('GET /api/consolidados/envios/[id]', () => {
 
     expect(res.status).toBe(200);
     expect(body).toEqual({ success: true, row: FULL_ROW });
-    expect(body.row.bodyHtml).toBe('<p>Adjuntos Perú</p>');
   });
 
   it('returns 404 NOT_FOUND for an unknown id', async () => {

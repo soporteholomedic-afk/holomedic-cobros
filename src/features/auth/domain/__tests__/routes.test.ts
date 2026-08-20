@@ -3,15 +3,11 @@ import type { NextRequest } from 'next/server';
 
 /**
  * Route Protection Inheritance (task 2.4 — historial-envios-consolidados):
- * the new history read API `/api/consolidados/envios` (and its `[id]`
- * subpath) is protected under the EXISTING `consolidados` permiso, and
- * the future page `/consolidados/historial-envios` inherits protection
- * from the `/consolidados` entry via `startsWith` matching. `PERMISOS`
- * stays untouched (design D9).
- *
- * Proxy-level behavior (401 JSON / login redirect / 403 JSON / denegado
- * redirect / pass) is asserted through the real `proxy` with a mocked
- * `jsonwebtoken`.
+ * `/api/consolidados/envios` (and its `[id]` subpath) is protected under
+ * the EXISTING `consolidados` permiso; the future page
+ * `/consolidados/historial-envios` inherits from `/consolidados` via
+ * `startsWith`. `PERMISOS` untouched (D9). Proxy outcomes are asserted
+ * through the real `proxy` with a mocked `jsonwebtoken`.
  */
 
 const mockVerify = vi.hoisted(() => vi.fn());
@@ -25,13 +21,10 @@ import { buscarRutaProtegida, permisoParaRuta } from '../routes';
 // ---- Domain level: the registration itself ----
 
 describe('RUTAS_PROTEGIDAS — envios history entries', () => {
-  it('protects the search API and its [id] subpath under consolidados', () => {
+  it('protects the search API + [id] subpath; the page inherits from /consolidados', () => {
     expect(permisoParaRuta('/api/consolidados/envios')).toBe('consolidados');
     expect(permisoParaRuta('/api/consolidados/envios/0b1f...-uuid')).toBe('consolidados');
-  });
-
-  it('the future history page inherits protection from /consolidados (startsWith)', () => {
-    // No dedicated entry exists for the page — inheritance only.
+    // No dedicated page entry exists — inheritance only (startsWith).
     expect(buscarRutaProtegida('/consolidados/historial-envios')!.path).toBe('/consolidados');
     expect(permisoParaRuta('/consolidados/historial-envios')).toBe('consolidados');
   });

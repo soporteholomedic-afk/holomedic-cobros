@@ -5,23 +5,14 @@ import { ENVIO_HISTORY_PAGE_SIZE } from '@/features/envio-resultados/infrastruct
 
 /**
  * GET /api/consolidados/envios — server-side paged search over the
- * consolidated-send history (historial-envios-consolidados PR2).
+ * consolidated-send history (PR2 read path). Params (validation owned
+ * by `SearchEnviosUseCase`): `q?` (accent-insensitive OR across the 4
+ * precomputed search columns), `fechaInicio`/`fechaFin` (`YYYY-MM-DD`,
+ * inclusive), `page` (int ≥ 1, default 1).
  *
- * Query params (validation owned by `SearchEnviosUseCase`):
- * - `q`           — optional free text; OR'd across the precomputed
- *                   accent-stripped search columns (recipients,
- *                   company, subject, patients).
- * - `fechaInicio` / `fechaFin` — optional `YYYY-MM-DD`; inclusive range.
- * - `page`        — optional integer ≥ 1 (default 1).
- *
- * Responses (send-results conventions):
- * - 200 `{ success: true, rows, total, page, pageSize }` — `rows` are
- *   summaries WITHOUT `bodyHtml` (off-row LOB, PK-seek only).
- * - 400 `{ success: false, error, code: 'VALIDATION_ERROR' }`
- * - 500 `{ success: false, error, code: 'INTERNAL_ERROR' }`
- *
- * Protected by the proxy via `RUTAS_PROTEGIDAS` (permiso
- * `consolidados`) — see `src/features/auth/domain/routes.ts`.
+ * 200 `{success, rows, total, page, pageSize}` (summaries, no bodyHtml)
+ * · 400 `VALIDATION_ERROR` · 500 `INTERNAL_ERROR` — send-results
+ * conventions. Protected via `RUTAS_PROTEGIDAS` (permiso `consolidados`).
  */
 export async function GET(request: Request): Promise<NextResponse> {
   try {

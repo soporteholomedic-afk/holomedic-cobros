@@ -2,18 +2,12 @@ import { NextResponse } from 'next/server';
 import { getEnvioHistoryDb } from '@/features/envio-resultados/infrastructure/getEnvioHistoryDb';
 
 /**
- * GET /api/consolidados/envios/[id] — full history row by primary key
- * (historial-envios-consolidados PR2). This is the reenvío hydration
- * endpoint: the ONLY read path that returns `bodyHtml` (PK seek, no
- * scan). PR4's `?reenvio=<id>` flow consumes it.
- *
- * Responses:
- * - 200 `{ success: true, row }` — full `EnvioHistoryRow`.
- * - 404 `{ success: false, error, code: 'NOT_FOUND' }`
- * - 500 `{ success: false, error, code: 'INTERNAL_ERROR' }`
- *
- * Protected by the proxy via the `/api/consolidados/envios`
- * `RUTAS_PROTEGIDAS` entry (`startsWith` covers this subpath).
+ * GET /api/consolidados/envios/[id] — full history row by PK (PR2).
+ * The reenvío hydration endpoint: the ONLY read path returning
+ * `bodyHtml` (PK seek, no scan); PR4's `?reenvio=<id>` flow consumes
+ * it. 200 `{success, row}` · 404 `NOT_FOUND` · 500 `INTERNAL_ERROR`.
+ * Protected via the `/api/consolidados/envios` `RUTAS_PROTEGIDAS` entry
+ * (`startsWith` covers this subpath).
  */
 export async function GET(
   _request: Request,

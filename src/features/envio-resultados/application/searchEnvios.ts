@@ -5,15 +5,10 @@ import type { EnvioSearchQuery, EnvioSearchResult } from '../domain/entities';
 /**
  * Use case for the consolidated-send history buscador (PR2 read path).
  * Owns ALL query-param validation; the API route stays a thin
- * URL → use-case → JSON adapter.
- *
- * Validation rules (spec: Server-Side Paged Search):
- * - `q`           — optional; trimmed; whitespace-only treated as absent.
- * - `fechaInicio` / `fechaFin` — optional; `YYYY-MM-DD` (DATE_PATTERN
- *   from `src/lib/dates.ts`) when present; whitespace-only treated as
- *   absent.
- * - `page`        — optional; integer ≥ 1 (default 1). Accepts the raw
- *   string from the URL or an already-parsed number.
+ * URL → use-case → JSON adapter. `q` is trimmed (whitespace-only =
+ * absent); `fechaInicio`/`fechaFin` must be `YYYY-MM-DD`
+ * (`DATE_PATTERN` from `src/lib/dates.ts`); `page` an integer ≥ 1
+ * (default 1, accepts the raw URL string or a parsed number).
  */
 
 /** Raw input straight from the URL search params (all optional/nullable). */

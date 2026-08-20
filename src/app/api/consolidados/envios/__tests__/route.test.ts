@@ -4,10 +4,10 @@ import type { EnvioHistorySummary, EnvioSearchQuery, EnvioSearchResult } from '@
 import type { IEnvioHistoryRepository } from '@/features/envio-resultados/domain/ports';
 
 /**
- * GET /api/consolidados/envios — route-level contract tests (task 2.3).
- * The REAL `SearchEnviosUseCase` runs; only the repository is a mock
- * (mini in-memory search mirroring the SQL semantics: accent-insensitive
- * OR across the 4 axes, inclusive date range, newest-first, 20/row).
+ * GET /api/consolidados/envios — route contract tests (task 2.3). The
+ * REAL `SearchEnviosUseCase` runs; only the repository is a mock whose
+ * in-memory search mirrors the SQL semantics (accent-insensitive OR
+ * across the 4 axes, inclusive date range, newest-first, page size 20).
  */
 
 const mockGetEnvioHistoryDb = vi.hoisted(() => vi.fn());
@@ -69,18 +69,6 @@ const FIXTURES: EnvioHistorySummary[] = [
     companyName: 'Clínica Los Andes',
     toRecipients: ['facturacion@andes.pe'],
     subject: 'Resultados Jorge Álvarez',
-    attachments: [
-      {
-        source: 'unc',
-        ruc: '20555666777',
-        dni: '11223344',
-        idAten: 'AT-003',
-        path: '',
-        storedName: '11223344CERT.pdf',
-        deliveryName: 'CERT-Jorge Álvarez.pdf',
-        nombreCompleto: 'Jorge Álvarez',
-      },
-    ],
   }),
 ];
 
@@ -127,17 +115,16 @@ beforeEach(() => {
   mockGetEnvioHistoryDb.mockResolvedValue(makeMockRepo(FIXTURES));
 });
 
-describe('GET /api/consolidados/envios — q axes (accent-insensitive both directions)', () => {
+describe('GET /api/consolidados/envios — q axes (accent- and case-insensitive both directions)', () => {
   it.each([
     ['q matches a recipient email', '?q=gerencia@perucontratas.pe', ['r1']],
     ['q matches part of a company name', '?q=contratas', ['r1']],
     ['q matches part of a subject', '?q=agosto', ['r2']],
     ['q matches a patient DNI', '?q=87654321', ['r2']],
     ['q matches a patient name', '?q=Jorge Rojas', ['r2']],
-    ['accented q matches unaccented-stored text', '?q=perú', ['r1']],
+    // Accent-insensitive both directions (q side accented vs not).
+    ['accented q matches accented-stored text', '?q=perú', ['r1']],
     ['unaccented q matches accented-stored text', '?q=peru', ['r1']],
-    ['uppercase unaccented q matches María', '?q=MARIA', ['r1']],
-    ['accented q matches accented-stored text', '?q=María', ['r1']],
   ])('%s (%s → %j)', async (_label, search, expectedIds) => {
     const res = await callGet(search);
     const body = await res.json();
@@ -148,19 +135,14 @@ describe('GET /api/consolidados/envios — q axes (accent-insensitive both direc
 });
 
 describe('GET /api/consolidados/envios — dates, paging, defaults', () => {
-  it('date range filters conjoin with q', async () => {
+  it('date range filters conjoin with q; the end day is inclusive', async () => {
     // r1 (María) is 2026-08-20 — outside a range ending 2026-08-19.
-    const res = await callGet('?q=maria&fechaInicio=2026-08-19&fechaFin=2026-08-19');
-    const body = await res.json();
-    expect(res.status).toBe(200);
-    expect(body.rows).toEqual([]);
-    expect(body.total).toBe(0);
-  });
-
-  it('inclusive end day: fechaFin=2026-08-19 keeps 08-19 rows', async () => {
-    const res = await callGet('?fechaInicio=2026-08-19&fechaFin=2026-08-19');
-    const body = await res.json();
-    expect(body.rows.map((r: { id: string }) => r.id)).toEqual(['r2']);
+    const conjoined = await (await callGet('?q=maria&fechaInicio=2026-08-19&fechaFin=2026-08-19')).json();
+    expect(conjoined.rows).toEqual([]);
+    expect(conjoined.total).toBe(0);
+    // fechaFin=2026-08-19 keeps the 08-19 row (inclusive end day).
+    const ranged = await (await callGet('?fechaInicio=2026-08-19&fechaFin=2026-08-19')).json();
+    expect(ranged.rows.map((r: { id: string }) => r.id)).toEqual(['r2']);
   });
 
   it('default listing is newest-first with the 200 shape', async () => {

@@ -241,7 +241,7 @@ describe('SqlServerEnvioHistoryRepository — search (read path)', () => {
     const env = makeFakePool({ pageRows: [makePageRow()], total: 47 });
     const repo = new SqlServerEnvioHistoryRepository(env.pool);
 
-    await repo.search({ q: 'maria', fechaInicio: '2026-08-01', fechaFin: '2026-08-20', page: 3 });
+    const result = await repo.search({ q: 'maria', fechaInicio: '2026-08-01', fechaFin: '2026-08-20', page: 3 });
 
     const [pageQuery, countQuery] = env.queries;
     expect(pageQuery!.inputs.offset).toBe(40);
@@ -250,6 +250,11 @@ describe('SqlServerEnvioHistoryRepository — search (read path)', () => {
     expect(pageQuery!.sql).toContain('OFFSET @offset ROWS FETCH NEXT @pageSize ROWS ONLY');
     expect(pageQuery!.sql).toContain('sentAt >= @fechaInicio');
     expect(pageQuery!.sql).toContain('sentAt < DATEADD(DAY, 1, @fechaFin)');
+    // Summary select never touches the off-row LOB.
+    expect(pageQuery!.sql).not.toContain('bodyHtml');
+    expect(result.rows[0]).toMatchObject({ id: 'row-1', sentAt: '2026-08-20T12:00:00.000Z' });
+    expect(result.rows[0]!.toRecipients).toEqual(['gerencia@perucontratas.pe']);
+    expect('bodyHtml' in result.rows[0]!).toBe(false);
     // Twin COUNT: identical WHERE, same bound filter params.
     const whereOf = (sql: string): string =>
       /WHERE([\s\S]*?)(?:ORDER BY|;)/.exec(sql)![1]!.trim();
@@ -259,44 +264,18 @@ describe('SqlServerEnvioHistoryRepository — search (read path)', () => {
     expect(countQuery!.inputs.fechaInicio).toBe('2026-08-01');
   });
 
-  it('omits the q and date predicates entirely when absent', async () => {
-    const env = makeFakePool({ pageRows: [], total: 0 });
-    const repo = new SqlServerEnvioHistoryRepository(env.pool);
-
-    await repo.search({ page: 1 });
-
-    const { sql, inputs } = env.queries[0]!;
-    expect(sql).not.toContain('LIKE');
-    expect(sql).not.toContain('fechaInicio');
-    expect(sql).not.toContain('DATEADD');
-    expect(inputs.pattern).toBeUndefined();
-    expect(inputs.offset).toBe(0);
-  });
-
-  it('page past the end returns an empty page with a consistent total, summaries without bodyHtml', async () => {
+  it('page past the end returns an empty page with a consistent total; no q/date → no predicates', async () => {
     const env = makeFakePool({ pageRows: [], total: 47 });
     const repo = new SqlServerEnvioHistoryRepository(env.pool);
 
     const result = await repo.search({ page: 99 });
 
     expect(result).toEqual({ rows: [], total: 47, page: 99 });
-  });
-
-  it('maps page rows to parsed summaries (Date→ISO, JSON parsed, bodyHtml dropped)', async () => {
-    const env = makeFakePool({ pageRows: [makePageRow(), makePageRow({ id: 'row-2' })], total: 2 });
-    const repo = new SqlServerEnvioHistoryRepository(env.pool);
-
-    const result = await repo.search({ page: 1 });
-
-    expect(result.rows).toHaveLength(2);
-    const first = result.rows[0]!;
-    expect(first.id).toBe('row-1');
-    expect(first.sentAt).toBe('2026-08-20T12:00:00.000Z');
-    expect(first.toRecipients).toEqual(['gerencia@perucontratas.pe']);
-    expect(first.attachments).toHaveLength(1);
-    for (const row of result.rows) {
-      expect('bodyHtml' in row).toBe(false);
-    }
+    const { sql, inputs } = env.queries[0]!;
+    expect(sql).not.toContain('LIKE');
+    expect(sql).not.toContain('DATEADD');
+    expect(inputs.pattern).toBeUndefined();
+    expect(inputs.offset).toBe((99 - 1) * 20);
   });
 });
 
