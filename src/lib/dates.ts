@@ -8,7 +8,13 @@
  * Spec: R-PG-2 (date filter lifted to page.tsx).
  */
 
-const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
+/**
+ * Shape every query-string date param must match (`YYYY-MM-DD`).
+ * Exported so server-side validators (e.g. the envios-history search
+ * use case) can reject malformed dates with the same rule the page
+ * filters use.
+ */
+export const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 
 /**
  * Return today's date in `YYYY-MM-DD` using the local timezone.
