@@ -25,6 +25,30 @@ function escapeHtml(str: string): string {
     .replace(/'/g, '&#039;');
 }
 
+/**
+ * Sentinel pair wrapping the built signature (historial-envios-consolidados
+ * D8). The persisted history `bodyHtml` is the dispatched `body + signature`,
+ * so reenvío seeding strips the signature through `stripSignatureHtml` before
+ * the editor re-appends it — the signature is never duplicated on re-send.
+ * HTML comments are invisible in every renderer that consumes this markup.
+ */
+const SIGNATURE_SENTINEL = '<!--holomedic-firma-->';
+
+/**
+ * Remove the sentinel-wrapped signature block from a persisted body.
+ * Exact (no regex over HTML): everything from the first sentinel to the
+ * second is dropped; content before and after is preserved verbatim.
+ * Defensive on malformed input — a lone sentinel strips to its start;
+ * input without sentinels is returned unchanged.
+ */
+export function stripSignatureHtml(html: string): string {
+  const start = html.indexOf(SIGNATURE_SENTINEL);
+  if (start < 0) return html;
+  const end = html.indexOf(SIGNATURE_SENTINEL, start + SIGNATURE_SENTINEL.length);
+  if (end < 0) return html.slice(0, start);
+  return html.slice(0, start) + html.slice(end + SIGNATURE_SENTINEL.length);
+}
+
 export function buildSignatureHtml(data: SignatureData): string {
   const name = escapeHtml(data.name);
   const role = escapeHtml(data.role);
@@ -33,7 +57,7 @@ export function buildSignatureHtml(data: SignatureData): string {
   const phoneAlt = escapeHtml(data.phoneAlt);
   const address = escapeHtml(data.address);
 
-  return `<table cellpadding="0" cellspacing="0" style="border-collapse: collapse; font-family: Arial, sans-serif; font-size: 12px; color: rgb(51, 51, 51); line-height: 1.5; margin-top: 15px;">
+  return `${SIGNATURE_SENTINEL}<table cellpadding="0" cellspacing="0" style="border-collapse: collapse; font-family: Arial, sans-serif; font-size: 12px; color: rgb(51, 51, 51); line-height: 1.5; margin-top: 15px;">
   <tr>
     <td valign="middle" style="padding-right: 20px; text-align: center; width: 160px;">
       <img src="https://holomedic.com.pe/w2/wp-content/uploads/2023/06/logo.png" alt="Holomedic" style="display: block; width: 140px; height: auto; margin: 0 auto 8px auto;" />
@@ -68,5 +92,5 @@ export function buildSignatureHtml(data: SignatureData): string {
       </div>
     </td>
   </tr>
-</table>`;
+</table>${SIGNATURE_SENTINEL}`;
 }
