@@ -6,8 +6,10 @@ import type { UsuarioRow } from '@/features/auth/domain/entities';
 // ---- Mock auth session + JWT re-sign (send-results precedent) ----
 
 const mockGetSession = vi.hoisted(() => vi.fn());
+// The claims parameter types the mock's call signature so tests can
+// read `mock.calls[0][0]` as the JWT claims payload.
 const mockSignJwt = vi.hoisted(() =>
-  vi.fn((_claims: Record<string, unknown>) => 'signed-token'),
+  vi.fn((claims: Record<string, unknown>) => JSON.stringify(claims)),
 );
 vi.mock('@/lib/auth', () => ({
   getSession: mockGetSession,
