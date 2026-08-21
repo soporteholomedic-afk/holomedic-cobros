@@ -51,6 +51,12 @@ export async function PUT(
     }
 
     const input: Record<string, unknown> = {};
+    if (body.usuario !== undefined) {
+      if (typeof body.usuario !== 'string' || body.usuario.trim().length === 0) {
+        return buildError('"usuario" inválido', 400);
+      }
+      input.usuario = body.usuario.trim();
+    }
     if (body.nombre !== undefined) {
       if (typeof body.nombre !== 'string' || body.nombre.trim().length === 0) {
         return buildError('"nombre" inválido', 400);
@@ -102,6 +108,7 @@ export async function PUT(
       success: true,
       usuario: {
         idUsuario: actualizado.idUsuario,
+        usuario: actualizado.usuario,
         nombre: actualizado.nombre,
         area: actualizado.area,
         permisos: actualizado.permisos,

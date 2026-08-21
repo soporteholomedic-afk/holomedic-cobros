@@ -9,6 +9,7 @@ interface LoginResponse {
   success: boolean;
   usuario?: {
     idUsuario: string;
+    usuario: string;
     nombre: string;
     area: string;
     permisos: string[];
@@ -54,6 +55,7 @@ export async function POST(request: Request): Promise<NextResponse<LoginResponse
       success: true,
       usuario: {
         idUsuario: result.usuario.idUsuario,
+        usuario: result.usuario.usuario,
         nombre: result.usuario.nombre,
         area: result.usuario.area,
         permisos: result.usuario.permisos,

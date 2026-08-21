@@ -1,7 +1,7 @@
 import type { UsuarioRow, CreateUsuarioInput, UpdateUsuarioInput } from './entities';
 
 export interface IUsuarioRepository {
-  findByUsuario(nombre: string): Promise<UsuarioRow | null>;
+  findByUsuario(usuario: string): Promise<UsuarioRow | null>;
   getById(id: string): Promise<UsuarioRow | null>;
   list(): Promise<UsuarioRow[]>;
   create(input: CreateUsuarioInput): Promise<UsuarioRow>;

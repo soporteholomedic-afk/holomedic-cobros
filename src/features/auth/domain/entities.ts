@@ -15,6 +15,9 @@ export type Permiso = (typeof PERMISOS)[number];
 
 export interface Usuario {
   idUsuario: string;
+  /** Login identifier (e.g. "jdoe") — what the user types to log in. */
+  usuario: string;
+  /** Display full name (e.g. "John Doe") — what the UI shows. */
   nombre: string;
   area: string;
   permisos: Permiso[];
@@ -39,6 +42,7 @@ export interface LoginResult {
 }
 
 export interface CreateUsuarioInput {
+  usuario: string;
   nombre: string;
   area: string;
   permisos: Permiso[];
@@ -46,6 +50,7 @@ export interface CreateUsuarioInput {
 }
 
 export interface UpdateUsuarioInput {
+  usuario?: string;
   nombre?: string;
   area?: string;
   permisos?: Permiso[];

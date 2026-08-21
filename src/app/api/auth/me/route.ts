@@ -26,6 +26,7 @@ export async function GET(): Promise<NextResponse> {
       success: true,
       usuario: {
         idUsuario: usuario.idUsuario,
+        usuario: usuario.usuario,
         nombre: usuario.nombre,
         area: usuario.area,
         permisos: usuario.permisos,

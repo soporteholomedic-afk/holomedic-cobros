@@ -20,6 +20,7 @@ function isPermiso(v: unknown): v is Permiso {
 }
 
 function isCreateBody(v: unknown): v is {
+  usuario: string;
   nombre: string;
   area: string;
   permisos: Permiso[];
@@ -27,6 +28,7 @@ function isCreateBody(v: unknown): v is {
 } {
   if (typeof v !== 'object' || v === null) return false;
   const obj = v as Record<string, unknown>;
+  if (typeof obj.usuario !== 'string' || obj.usuario.trim().length === 0) return false;
   if (typeof obj.nombre !== 'string' || obj.nombre.trim().length === 0) return false;
   if (typeof obj.area !== 'string' || obj.area.trim().length === 0) return false;
   if (typeof obj.contrasena !== 'string' || obj.contrasena.length < 4) return false;
@@ -48,6 +50,7 @@ export async function GET(): Promise<NextResponse> {
 
     const sinHash = usuarios.map((u) => ({
       idUsuario: u.idUsuario,
+      usuario: u.usuario,
       nombre: u.nombre,
       area: u.area,
       permisos: u.permisos,
@@ -80,7 +83,7 @@ export async function POST(request: Request): Promise<NextResponse> {
 
     if (!isCreateBody(body)) {
       return buildError(
-        'Cuerpo inválido. Requiere: {nombre, area, permisos, contrasena}',
+        'Cuerpo inválido. Requiere: {usuario, nombre, area, permisos, contrasena}',
         400,
       );
     }
@@ -88,6 +91,7 @@ export async function POST(request: Request): Promise<NextResponse> {
     const repo = await getUsuarioDb();
     const useCase = new CreateUsuarioUseCase(repo);
     const creado = await useCase.execute({
+      usuario: body.usuario.trim(),
       nombre: body.nombre.trim(),
       area: body.area.trim(),
       permisos: body.permisos,
@@ -99,6 +103,7 @@ export async function POST(request: Request): Promise<NextResponse> {
         success: true,
         usuario: {
           idUsuario: creado.idUsuario,
+          usuario: creado.usuario,
           nombre: creado.nombre,
           area: creado.area,
           permisos: creado.permisos,

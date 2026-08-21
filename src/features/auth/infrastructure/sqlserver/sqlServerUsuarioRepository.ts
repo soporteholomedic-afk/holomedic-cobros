@@ -8,6 +8,7 @@ import { UsuarioNotFoundError } from './errors';
 
 interface UsuarioDbRow {
   idUsuario: string;
+  usuario: string;
   nombre: string;
   area: string;
   permisos: string;
@@ -21,6 +22,7 @@ interface UsuarioDbRow {
 function rowToRow(row: UsuarioDbRow): UsuarioRow {
   return {
     idUsuario: row.idUsuario,
+    usuario: row.usuario,
     nombre: row.nombre,
     area: row.area,
     permisos: JSON.parse(row.permisos) as Permiso[],
@@ -35,11 +37,11 @@ function rowToRow(row: UsuarioDbRow): UsuarioRow {
 export class SqlServerUsuarioRepository implements IUsuarioRepository {
   constructor(private readonly pool: mssql.ConnectionPool) {}
 
-  async findByUsuario(nombre: string): Promise<UsuarioRow | null> {
+  async findByUsuario(usuario: string): Promise<UsuarioRow | null> {
     const result = await this.pool
       .request()
-      .input('nombre', mssql.NVarChar(200), nombre)
-      .query(`SELECT * FROM dbo.usuarios WHERE nombre = @nombre`);
+      .input('usuario', mssql.NVarChar(200), usuario)
+      .query(`SELECT * FROM dbo.usuarios WHERE usuario = @usuario`);
 
     return result.recordset.length > 0 ? rowToRow(result.recordset[0]) : null;
   }
@@ -68,13 +70,14 @@ export class SqlServerUsuarioRepository implements IUsuarioRepository {
     const result = await this.pool
       .request()
       .input('idUsuario', mssql.NVarChar(50), id)
+      .input('usuario', mssql.NVarChar(200), input.usuario)
       .input('nombre', mssql.NVarChar(200), input.nombre)
       .input('area', mssql.NVarChar(50), input.area)
       .input('permisos', mssql.NVarChar(mssql.MAX), permisosJson)
       .input('contrasenaHash', mssql.NVarChar(255), hash).query(`
-        INSERT INTO dbo.usuarios (idUsuario, nombre, area, permisos, contrasenaHash)
+        INSERT INTO dbo.usuarios (idUsuario, usuario, nombre, area, permisos, contrasenaHash)
         OUTPUT INSERTED.*
-        VALUES (@idUsuario, @nombre, @area, @permisos, @contrasenaHash)
+        VALUES (@idUsuario, @usuario, @nombre, @area, @permisos, @contrasenaHash)
       `);
 
     return rowToRow(result.recordset[0]);
@@ -87,6 +90,10 @@ export class SqlServerUsuarioRepository implements IUsuarioRepository {
     const sets: string[] = [];
     const request = this.pool.request().input('id', mssql.NVarChar(50), id);
 
+    if (input.usuario !== undefined) {
+      sets.push('usuario = @usuario');
+      request.input('usuario', mssql.NVarChar(200), input.usuario);
+    }
     if (input.nombre !== undefined) {
       sets.push('nombre = @nombre');
       request.input('nombre', mssql.NVarChar(200), input.nombre);
