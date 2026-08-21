@@ -848,7 +848,7 @@ describe('WorkerDetailTable — Unified Table', () => {
     expect(lastProps['ruc']).toBe('20000000002');
   });
 
-  it('should open the FilesModal for a worker-only row (no idAten, no nroRuc) with empty args', async () => {
+  it('should open the FilesModal for a worker-only row (no idAten, no nroRuc) with empty idAten and the dni as fallback ruc', async () => {
     const workerOnly: UnifiedPerson = {
       dni: '99999999',
       nombre: 'WORKER SOLO',
@@ -873,7 +873,10 @@ describe('WorkerDetailTable — Unified Table', () => {
     const lastProps = mockFilesModalProps.mock.calls[mockFilesModalProps.mock.calls.length - 1][0];
     expect(lastProps['dni']).toBe('99999999');
     expect(lastProps['idAten']).toBe('');
-    expect(lastProps['ruc']).toBe('');
+    // resolveRucEfectivo (dni-as-ruc fix): a missing nroRuc falls back to
+    // the person's dni — "cliente particular" folders live under
+    // sigla\<dni>\<dni>\<idAten> on the LAN share.
+    expect(lastProps['ruc']).toBe('99999999');
   });
 
   // ================================================================
