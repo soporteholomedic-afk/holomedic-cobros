@@ -145,6 +145,33 @@ interface SpitchLike {
 const mockFetch = vi.hoisted(() => vi.fn());
 vi.stubGlobal('fetch', mockFetch);
 
+// usuarios-nombre-firma — mock useAuth so the session-seeded
+// signature is driven by a deterministic user. The holder is mutable
+// so individual tests can simulate late-auth (null → user).
+const mockAuthUser = vi.hoisted(() => ({
+  user: null as
+    | null
+    | { idUsuario: string; usuario: string; nombre: string; area: string; permisos: string[]; activo: boolean },
+}));
+vi.mock('@/features/auth/presentation/hooks/useAuth', () => ({
+  useAuth: () => ({
+    user: mockAuthUser.user,
+    loading: mockAuthUser.user === null,
+    login: vi.fn(),
+    logout: vi.fn(),
+    refresh: vi.fn(),
+  }),
+}));
+
+const sessionUser = {
+  idUsuario: 'u-1',
+  usuario: 'mperez',
+  nombre: 'María Pérez',
+  area: 'consolidados',
+  permisos: ['consolidados'],
+  activo: true,
+};
+
 // PR #3 — capture the args useSendResults is called with so we can
 // assert the EmailEditor forwards `fileRefs` correctly. The mock
 // returns a stable object so the rest of the EmailEditor render path
@@ -198,6 +225,8 @@ const defaultProps = {
 beforeEach(() => {
   vi.clearAllMocks();
   mockFetch.mockReset();
+  // Default session: María Pérez is logged in (signature seeding).
+  mockAuthUser.user = sessionUser;
   // Default return — a stable object so the EmailEditor render path
   // stays green. PR #3 tests override this per-test to assert hook args.
   mockUseSendResults.mockReturnValue({
@@ -617,8 +646,9 @@ describe('EmailEditor', () => {
       // defaultProps.patients[0] = María Elena García López / dni=12345678
       expect(preview.textContent).toContain('12345678');
       expect(preview.textContent).toContain('María Elena García López');
-      // default signature is resolved by default
-      expect(preview.textContent).toContain('Blanca Chirinos');
+      // default signature is resolved by default — seeded from the
+      // mocked session user (usuarios-nombre-firma).
+      expect(preview.textContent).toContain('María Pérez');
     } finally {
       Object.assign(mockSpitchOverride, previous);
     }
@@ -751,8 +781,11 @@ describe('EmailEditor', () => {
   it('seeds to/cc/subject/body from initialEmail; the signature is re-appended exactly once (no duplication)', () => {
     mockFetch.mockResolvedValue({ ok: true, json: () => Promise.resolve({ success: true }) });
 
+    // The persisted row was sent by the mocked session user — the
+    // fixture signature carries her name (no hardcoded default).
     const persistedBody =
-      '<p>Cuerpo del envío original</p>' + buildSignatureHtml(DEFAULT_SIGNATURE_DATA);
+      '<p>Cuerpo del envío original</p>' +
+      buildSignatureHtml({ ...DEFAULT_SIGNATURE_DATA, name: 'María Pérez' });
 
     render(
       <EmailEditor
@@ -774,7 +807,7 @@ describe('EmailEditor', () => {
     // htmlBody memo — the persisted signature must NOT appear twice.
     const preview = screen.getByTestId('email-preview');
     expect(preview.textContent).toContain('Cuerpo del envío original');
-    expect(preview.textContent?.match(/Blanca Chirinos/g)).toHaveLength(1);
+    expect(preview.textContent?.match(/María Pérez/g)).toHaveLength(1);
   });
 
   it('applies a manual spitch change after a seeded mount (the swallow latch releases)', () => {
@@ -887,5 +920,106 @@ describe('EmailEditor', () => {
       localFiles: File[];
     };
     expect(lastCall.localFiles).toHaveLength(1);
+  });
+
+  // ================================================================
+  // usuarios-nombre-firma — session-seeded editable signature:
+  // the editor seeds the signature name from useAuth(), stays
+  // editable before sending, re-seeds when auth resolves late, and
+  // re-seeds on a fresh spitch selection.
+  // ================================================================
+
+  it('seeds the signature name from the authenticated user (María Pérez)', async () => {
+    mockFetch.mockResolvedValue({ ok: true, json: () => Promise.resolve({ success: true }) });
+
+    render(<EmailEditor {...defaultProps} />);
+
+    const preview = await screen.findByTestId('email-preview');
+    expect(preview.textContent).toContain('María Pérez');
+    expect(preview.textContent).not.toContain('Blanca Chirinos');
+  });
+
+  it('keeps the signature editable — changing the name field updates only the outgoing email', async () => {
+    mockFetch.mockResolvedValue({ ok: true, json: () => Promise.resolve({ success: true }) });
+
+    render(<EmailEditor {...defaultProps} />);
+
+    // Open the body/signature editor.
+    fireEvent.click(screen.getByText('Editar'));
+
+    // The signature "Nombre" input is seeded with the session name.
+    const nameInput = screen.getByDisplayValue('María Pérez');
+    fireEvent.change(nameInput, { target: { value: 'María E. Pérez' } });
+
+    // The rebuilt signature (preview) carries the edited name.
+    await waitFor(() => {
+      expect(screen.getByTestId('email-preview').textContent).toContain('María E. Pérez');
+    });
+  });
+
+  it('re-seeds from the session user when auth resolves after mount (late auth, pristine signature)', async () => {
+    mockFetch.mockResolvedValue({ ok: true, json: () => Promise.resolve({ success: true }) });
+
+    // Session still loading at mount → default-name signature first.
+    mockAuthUser.user = null;
+    const { rerender } = render(<EmailEditor {...defaultProps} />);
+
+    const previewBefore = await screen.findByTestId('email-preview');
+    expect(previewBefore.textContent).toContain('Blanca Chirinos');
+
+    // Auth resolves → pristine-ref effect re-seeds.
+    mockAuthUser.user = sessionUser;
+    rerender(<EmailEditor {...defaultProps} />);
+
+    await waitFor(() => {
+      expect(screen.getByTestId('email-preview').textContent).toContain('María Pérez');
+    });
+    expect(screen.getByTestId('email-preview').textContent).not.toContain('Blanca Chirinos');
+  });
+
+  it('does NOT clobber a manually edited signature when auth resolves late (pristine latch)', async () => {
+    mockFetch.mockResolvedValue({ ok: true, json: () => Promise.resolve({ success: true }) });
+
+    mockAuthUser.user = null;
+    const { rerender } = render(<EmailEditor {...defaultProps} />);
+
+    // Operator edits the signature name while auth is loading.
+    fireEvent.click(screen.getByText('Editar'));
+    const nameInput = screen.getByDisplayValue(DEFAULT_SIGNATURE_DATA.name);
+    fireEvent.change(nameInput, { target: { value: 'Firma Manual' } });
+    await waitFor(() => {
+      expect(screen.getByTestId('email-preview').textContent).toContain('Firma Manual');
+    });
+
+    // Auth resolves — the manual edit must survive.
+    mockAuthUser.user = sessionUser;
+    rerender(<EmailEditor {...defaultProps} />);
+
+    await waitFor(() => {
+      expect(screen.getByTestId('email-preview').textContent).toContain('Firma Manual');
+    });
+    expect(screen.getByTestId('email-preview').textContent).not.toContain('María Pérez');
+  });
+
+  it('re-seeds the signature from the session user when a new spitch is selected', async () => {
+    mockFetch.mockResolvedValue({ ok: true, json: () => Promise.resolve({ success: true }) });
+
+    render(<EmailEditor {...defaultProps} />);
+    fireEvent.click(screen.getByText('Editar'));
+
+    // Manual edit (non-pristine from now on).
+    const nameInput = screen.getByDisplayValue('María Pérez');
+    fireEvent.change(nameInput, { target: { value: 'Nombre Editado' } });
+    await waitFor(() => {
+      expect(screen.getByTestId('email-preview').textContent).toContain('Nombre Editado');
+    });
+
+    // A fresh spitch selection resets the signature to the session user.
+    fireEvent.change(screen.getByTestId('spitch-selector'), { target: { value: 'spitch-002' } });
+
+    await waitFor(() => {
+      expect(screen.getByDisplayValue('María Pérez')).toBeInTheDocument();
+    });
+    expect(screen.getByTestId('email-preview').textContent).toContain('María Pérez');
   });
 });

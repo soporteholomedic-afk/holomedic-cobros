@@ -6,7 +6,8 @@ import { AttachmentList } from './AttachmentList';
 import { LocalFileDropZone } from './LocalFileDropZone';
 import { useSendResults } from '../hooks/useSendResults';
 import { interpolateSpitch } from '../helpers/interpolateSpitch';
-import { buildSignatureHtml, DEFAULT_SIGNATURE_DATA, stripSignatureHtml } from '../helpers/signatureData';
+import { buildSignatureDataFromUser, buildSignatureHtml, stripSignatureHtml } from '../helpers/signatureData';
+import { useAuth } from '@/features/auth/presentation/hooks/useAuth';
 import { showSendLoading, showSendSuccess, showSendError } from '../helpers/sendToasts';
 import type { SignatureData } from '../helpers/signatureData';
 import type { InitialEmail, UnavailableAttachment } from '../helpers/buildReenvioViewData';
@@ -99,6 +100,10 @@ export function EmailEditor({
   initialEmail,
   unavailableAttachments = [],
 }: EmailEditorProps) {
+  // usuarios-nombre-firma — the signature is seeded from the session
+  // user (`/api/auth/me` via useAuth) instead of a hardcoded default.
+  const { user } = useAuth();
+
   // Internal state
   const [target, setTarget] = useState<'company' | 'patient'>('company');
   const [selectedSpitch, setSelectedSpitch] = useState<Spitch | null>(null);
@@ -109,7 +114,22 @@ export function EmailEditor({
   const [bodyHtml, setBodyHtml] = useState(() =>
     initialEmail ? stripSignatureHtml(initialEmail.bodyHtml) : '',
   );
-  const [signatureData, setSignatureData] = useState<SignatureData>(DEFAULT_SIGNATURE_DATA);
+  // Session-seeded signature (lazy initializer — falls back to the
+  // default name while auth is still loading).
+  const [signatureData, setSignatureData] = useState<SignatureData>(() =>
+    buildSignatureDataFromUser(user),
+  );
+
+  // Late-auth re-seed: when the session user resolves AFTER mount
+  // (AuthProvider still fetching), re-seed the signature from it — but
+  // only while pristine, so a signature the operator already edited by
+  // hand is never clobbered by a late response.
+  const signaturePristineRef = useRef(true);
+  useEffect(() => {
+    if (!user) return;
+    if (!signaturePristineRef.current) return;
+    setSignatureData(buildSignatureDataFromUser(user));
+  }, [user]);
 
   const htmlBody = useMemo(
     () => (bodyHtml ? bodyHtml + buildSignatureHtml(signatureData) : ''),
@@ -200,9 +220,11 @@ export function EmailEditor({
 
     setSubject(interpolated.subject);
     setBodyHtml(interpolated.html);
-    setSignatureData(DEFAULT_SIGNATURE_DATA);
+    // usuarios-nombre-firma — a fresh spitch re-seeds the signature
+    // from the session user (previously: hardcoded default).
+    setSignatureData(buildSignatureDataFromUser(user));
     editorRef.current?.loadHtml(interpolated.html);
-  }, [companyName, recipientNames, selectedFiles, patients, destino]);
+  }, [companyName, recipientNames, selectedFiles, patients, destino, user]);
 
   const handleToggle = useCallback(() => {
     setTarget((prev) => (prev === 'company' ? 'patient' : 'company'));
@@ -216,6 +238,8 @@ export function EmailEditor({
   }, []);
 
   const handleSignatureChange = useCallback((field: keyof SignatureData, value: string) => {
+    // Manual edit releases the late-auth re-seed latch (pristine → false).
+    signaturePristineRef.current = false;
     setSignatureData((prev) => ({ ...prev, [field]: value }));
   }, []);
 
