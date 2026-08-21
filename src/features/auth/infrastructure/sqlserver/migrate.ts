@@ -21,6 +21,14 @@ import bcrypt from 'bcryptjs';
  * Partial-failure self-heal: if the process dies between steps, the
  * next startup re-enters only the unfinished gate. Idempotency is
  * structural (`sys.columns` gates) — no version table.
+ *
+ * The backfill UPDATE runs via `sp_executesql` ON PURPOSE: SQL Server
+ * compiles the whole batch against the pre-migration schema before any
+ * statement executes, so a bare `UPDATE ... SET nombre = usuario` fails
+ * at compile time with "Invalid column name 'usuario'" (error 207) and
+ * NOTHING in the batch runs — the rename never happens, and every
+ * startup re-fails the same way. Dynamic SQL defers that statement's
+ * compilation to runtime, after the `ALTER TABLE` has committed.
  */
 const SCHEMA_SQL = /* sql */ `
 IF NOT EXISTS (SELECT 1 FROM sys.tables WHERE name = 'usuarios' AND schema_id = SCHEMA_ID('dbo'))
@@ -47,7 +55,7 @@ END;
 IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('dbo.usuarios') AND name = 'nombre')
 BEGIN
   ALTER TABLE dbo.usuarios ADD nombre NVARCHAR(200) NOT NULL DEFAULT '';
-  UPDATE dbo.usuarios SET nombre = usuario;
+  EXEC sp_executesql N'UPDATE dbo.usuarios SET nombre = usuario';
 END;
 `;
 
