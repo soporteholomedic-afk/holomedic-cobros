@@ -1,7 +1,9 @@
 'use client';
 
-import { Suspense, useState, useCallback } from 'react';
+import { Suspense, useState, useCallback, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
+import Link from 'next/link';
+import { History } from 'lucide-react';
 import { CompanySelector } from '@/features/envio-resultados/presentation/components/CompanySelector';
 import {
   ConsolidadosViewSwitch,
@@ -25,6 +27,12 @@ import {
   normalizeFecAte,
   resolveMatchingOrder,
 } from '@/features/envio-resultados/presentation/helpers/resolveMatchingOrder';
+import {
+  buildReenvioViewData,
+  type InitialEmail,
+  type UnavailableAttachment,
+} from '@/features/envio-resultados/presentation/helpers/buildReenvioViewData';
+import type { EnvioHistoryRow } from '@/features/envio-resultados/domain/entities';
 import type { FileNode } from '@/features/envio-resultados/domain/ports';
 
 function ConsolidadosContent() {
@@ -63,6 +71,59 @@ function ConsolidadosContent() {
   const { companies } = useCompanies();
   const { sedes } = useSedes();
   const [emailViewData, setEmailViewData] = useState<EmailViewData | null>(null);
+
+  // ---- Reenvío hydration (historial-envios-consolidados PR4, OQ4) ----
+  // `/consolidados?reenvio=<id>` (pushed by the history page's Reenviar
+  // button) fetches the row by id and hydrates the EXISTING editor
+  // overlay pre-populated. The param stays in the URL so a refresh
+  // re-hydrates; the date Filtrar submit rebuilds params without it —
+  // the intentional exit from reenvío mode.
+  const reenvioId = searchParams.get('reenvio');
+  const [reenvioSeed, setReenvioSeed] = useState<{
+    initialEmail: InitialEmail;
+    unavailableAttachments: UnavailableAttachment[];
+  } | null>(null);
+  const [hydratingReenvio, setHydratingReenvio] = useState(false);
+
+  useEffect(() => {
+    if (!reenvioId) return;
+    let cancelled = false;
+    // Deferred to a microtask to avoid set-state-in-effect warnings
+    // (useEnviosHistory / useConsolidadosResults precedent).
+    Promise.resolve().then(() => {
+      if (cancelled) return;
+      setHydratingReenvio(true);
+    });
+    const hydrate = async (): Promise<void> => {
+      try {
+        const res = await fetch(`/api/consolidados/envios/${encodeURIComponent(reenvioId)}`);
+        const payload = (await res.json().catch(() => null)) as
+          | { success?: boolean; row?: EnvioHistoryRow; error?: string }
+          | null;
+        if (!res.ok || !payload?.success || !payload.row) {
+          throw new Error(payload?.error ?? `HTTP ${res.status}`);
+        }
+        const built = buildReenvioViewData(payload.row);
+        if (cancelled) return;
+        setEmailViewData(built.emailViewData);
+        setReenvioSeed({
+          initialEmail: built.initialEmail,
+          unavailableAttachments: built.unavailableAttachments,
+        });
+      } catch {
+        if (cancelled) return;
+        setErrorMessage(
+          'No se pudo cargar el envío para reenvío. Regrese al historial e intente nuevamente.',
+        );
+      } finally {
+        if (!cancelled) setHydratingReenvio(false);
+      }
+    };
+    void hydrate();
+    return () => {
+      cancelled = true;
+    };
+  }, [reenvioId]);
 
   const isInvalidRange =
     fechaInicio.length > 0 &&
@@ -184,6 +245,9 @@ function ConsolidadosContent() {
           modalState.empresa,
         ),
       );
+      // Normal compose path — drop any reenvío seed so the editor
+      // mounts fresh (the seed only belongs to reenvío mode).
+      setReenvioSeed(null);
       setModalState(null);
     },
     [modalState, companies],
@@ -191,6 +255,7 @@ function ConsolidadosContent() {
 
   const returnToTable = useCallback((): void => {
     setEmailViewData(null);
+    setReenvioSeed(null);
   }, []);
 
 
@@ -302,12 +367,12 @@ function ConsolidadosContent() {
         />
       )}
 
-      {loadingPatientId && (
+      {(loadingPatientId || hydratingReenvio) && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-xs">
           <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 px-6 py-5 rounded-2xl shadow-xl flex flex-col items-center gap-3">
             <div className="w-8 h-8 border-4 border-sky-600 border-t-transparent rounded-full animate-spin" />
             <p className="text-sm font-semibold text-slate-700 dark:text-slate-200">
-              Buscando datos del paciente...
+              {hydratingReenvio ? 'Cargando envío para reenvío...' : 'Buscando datos del paciente...'}
             </p>
           </div>
         </div>
@@ -352,7 +417,11 @@ function ConsolidadosContent() {
                 Volver a la tabla
               </button>
             </div>
+            {/* Keyed so a reenvío mount (whose initialEmail seeds the
+                editor's useState initializers) always starts from a
+                fresh editor instance, never from a stale compose. */}
             <EmailEditor
+              key={reenvioSeed ? `reenvio-${reenvioId ?? ''}` : 'compose'}
               companyId={emailViewData.companyId}
               companyName={emailViewData.companyName}
               selectedPatients={emailViewData.selectedPatients}
@@ -360,6 +429,8 @@ function ConsolidadosContent() {
               fileRefs={emailViewData.fileRefs}
               nombreCompleto={emailViewData.nombreCompleto}
               destino={emailViewData.destino}
+              initialEmail={reenvioSeed?.initialEmail}
+              unavailableAttachments={reenvioSeed?.unavailableAttachments}
             />
           </div>
         </section>
@@ -372,11 +443,27 @@ export default function ConsolidadosPage() {
   return (
     <main className="min-h-screen bg-slate-50 py-12 px-4">
       <div className="max-w-4xl mx-auto">
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold text-slate-800">Consolidados</h1>
-          <p className="text-slate-500 mt-1">
-            Lista de pacientes o empresas según el rango de fechas seleccionado
-          </p>
+        {/* Header — the HISTORIAL Link (historial-envios-consolidados
+            PR4, OQ2) lives in this hook-free outer wrapper, outside the
+            Suspense boundary, so it stays mounted and visible through
+            any ConsolidadosContent suspense or URL-param churn. Styling
+            follows the JJC detail-page header Link precedent. */}
+        <div className="mb-8 flex items-center">
+          <div>
+            <h1 className="text-3xl font-bold text-slate-800">Consolidados</h1>
+            <p className="text-slate-500 mt-1">
+              Lista de pacientes o empresas según el rango de fechas seleccionado
+            </p>
+          </div>
+          <div className="ml-auto">
+            <Link
+              href="/consolidados/historial-envios"
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-sky-600 text-white text-sm font-medium hover:bg-sky-700 transition-colors"
+            >
+              <History className="w-4 h-4" />
+              HISTORIAL
+            </Link>
+          </div>
         </div>
         <Suspense
           fallback={
