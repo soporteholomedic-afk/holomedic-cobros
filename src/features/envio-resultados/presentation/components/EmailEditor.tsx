@@ -6,9 +6,10 @@ import { AttachmentList } from './AttachmentList';
 import { LocalFileDropZone } from './LocalFileDropZone';
 import { useSendResults } from '../hooks/useSendResults';
 import { interpolateSpitch } from '../helpers/interpolateSpitch';
-import { buildSignatureHtml, DEFAULT_SIGNATURE_DATA } from '../helpers/signatureData';
+import { buildSignatureHtml, DEFAULT_SIGNATURE_DATA, stripSignatureHtml } from '../helpers/signatureData';
 import { showSendLoading, showSendSuccess, showSendError } from '../helpers/sendToasts';
 import type { SignatureData } from '../helpers/signatureData';
+import type { InitialEmail, UnavailableAttachment } from '../helpers/buildReenvioViewData';
 import type { Patient, PatientFile, SelectedFileRef, Spitch } from '../../domain/entities';
 import type { EmailBodyEditorHandle } from './EmailBodyEditor';
 
@@ -60,6 +61,19 @@ interface EmailEditorProps {
    */
   backContext?: 'table' | 'wizard';
   onBack?: () => void;
+  /**
+   * historial-envios-consolidados PR4 (OQ5) — optional reenvío seed.
+   * Seeds the existing useState initializers once at mount: to/cc/
+   * subject verbatim, bodyHtml through `stripSignatureHtml` so the
+   * appended signature is never duplicated on re-send (D8). No effects.
+   */
+  initialEmail?: InitialEmail;
+  /**
+   * Metadata-only local attachments from the original send (BR11) —
+   * rendered as a grey reference-only list near the drop zone; they
+   * never re-enter the send pipeline.
+   */
+  unavailableAttachments?: UnavailableAttachment[];
 }
 
 export function EmailEditor({
@@ -82,12 +96,19 @@ export function EmailEditor({
   // wrapper button).
   backContext = 'table',
   onBack,
+  initialEmail,
+  unavailableAttachments = [],
 }: EmailEditorProps) {
   // Internal state
   const [target, setTarget] = useState<'company' | 'patient'>('company');
   const [selectedSpitch, setSelectedSpitch] = useState<Spitch | null>(null);
-  const [subject, setSubject] = useState('');
-  const [bodyHtml, setBodyHtml] = useState('');
+  // PR4 (OQ5) — reenvío seeds the initializers directly (no effects):
+  // the persisted signature is stripped so the htmlBody memo re-appends
+  // it exactly once on re-send (D8).
+  const [subject, setSubject] = useState(initialEmail?.subject ?? '');
+  const [bodyHtml, setBodyHtml] = useState(() =>
+    initialEmail ? stripSignatureHtml(initialEmail.bodyHtml) : '',
+  );
   const [signatureData, setSignatureData] = useState<SignatureData>(DEFAULT_SIGNATURE_DATA);
 
   const htmlBody = useMemo(
@@ -100,6 +121,9 @@ export function EmailEditor({
   const [isEditingBody, setIsEditingBody] = useState(false);
   const editorRef = useRef<EmailBodyEditorHandle>(null);
   const hasSent = useRef(false);
+  // PR4 — true only when mounted with an `initialEmail` seed; released
+  // after the first (auto-)select is swallowed. See handleSpitchSelect.
+  const swallowAutoSelectRef = useRef(Boolean(initialEmail));
 
   const isClient = useSyncExternalStore(
     () => () => {},
@@ -110,9 +134,10 @@ export function EmailEditor({
   // Determine recipients based on selected patients
   const recipientNames = Object.values(selectedPatients).map((s) => s.patientName);
 
-  // Editable email fields — pre-filled with patient names as a starting hint
-  const [toEmail, setToEmail] = useState('');
-  const [ccEmail, setCcEmail] = useState('');
+  // Editable email fields — pre-filled with patient names as a starting hint.
+  // PR4 (OQ5) — reenvío seeds recipients from the persisted row.
+  const [toEmail, setToEmail] = useState(initialEmail?.to ?? '');
+  const [ccEmail, setCcEmail] = useState(initialEmail?.cc ?? '');
 
   const toList = toEmail.split(',').map((s) => s.trim()).filter(Boolean);
   const ccList = ccEmail.split(',').map((s) => s.trim()).filter(Boolean);
@@ -146,6 +171,15 @@ export function EmailEditor({
   });
 
   const handleSpitchSelect = useCallback((spitch: Spitch) => {
+    // PR4 (reenvío seeding guard): SpitchSelector auto-selects the first
+    // spitch once its list arrives, which would clobber the seeded
+    // subject/body moments after mount. In seeded mode, swallow exactly
+    // that first auto-select; explicit user changes and post-toggle
+    // remounts still apply (the latch releases after one swallow).
+    if (swallowAutoSelectRef.current) {
+      swallowAutoSelectRef.current = false;
+      return;
+    }
     setSelectedSpitch(spitch);
 
     // Strip {{firma}} from the spitch body — signature is stored separately
@@ -262,6 +296,39 @@ export function EmailEditor({
 
         {/* Attachments preview */}
         <AttachmentList selectedPatients={selectedPatients} patients={patients} />
+
+        {/* PR4 (reenvío) — metadata-only local attachments from the
+            original send: greyed, reference-only, never re-attachable
+            (BR11). Displayed near the drop zone so the operator sees
+            what must be re-attached manually. */}
+        {unavailableAttachments.length > 0 && (
+          <div
+            data-testid="unavailable-attachments"
+            className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50 p-4"
+          >
+            <p className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-2">
+              Adjuntos ya no disponibles
+            </p>
+            <ul className="space-y-1.5">
+              {unavailableAttachments.map((attachment) => (
+                <li
+                  key={attachment.filename}
+                  className="flex items-center justify-between gap-2 text-sm"
+                >
+                  <span className="text-slate-400 dark:text-slate-500 truncate">
+                    {attachment.filename}
+                  </span>
+                  <span className="shrink-0 inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium bg-amber-100 text-amber-700">
+                    ya no disponible
+                  </span>
+                </li>
+              ))}
+            </ul>
+            <p className="mt-2 text-xs text-slate-400 dark:text-slate-500">
+              Se adjuntaron localmente en el envío original; vuelva a adjuntarlos si aún los necesita.
+            </p>
+          </div>
+        )}
 
         {/* Local file drop zone */}
         <LocalFileDropZone
@@ -454,10 +521,19 @@ export function EmailEditor({
           )}
         </div>
 
-        {/* Send button */}
+        {/* Send button — PR4: disable relaxed from "selectedPatients
+            empty" to "no context at all" (selectedPatients AND fileRefs
+            AND localFiles all empty) so a reenvío derived from
+            attachmentsJson stays sendable — a local-only row becomes
+            sendable once its files are re-added via the drop zone. */}
         <button
           onClick={handleRequestSend}
-          disabled={isSending || Object.keys(selectedPatients).length === 0}
+          disabled={
+            isSending ||
+            (Object.keys(selectedPatients).length === 0 &&
+              fileRefs.length === 0 &&
+              localFiles.length === 0)
+          }
           className="w-full py-2.5 bg-sky-600 text-white rounded-lg hover:bg-sky-700 transition-colors font-medium text-sm cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center justify-center gap-2"
         >
           {isSending && (

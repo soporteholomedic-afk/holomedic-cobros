@@ -85,11 +85,17 @@ vi.mock('../SpitchSelector', () => ({
 // Mock LocalFileDropZone
 vi.mock('../LocalFileDropZone', () => ({
   LocalFileDropZone: vi.fn().mockImplementation(
-    ({ files }: { files: File[] }) => {
+    ({ files, onAdd }: { files: File[]; onAdd?: (files: File[]) => void }) => {
+      // PR4 — the mock exposes `onAdd` through a test button so the
+      // reenvío suite can simulate re-attaching a local file.
       return React.createElement('div', {
         'data-testid': 'local-file-drop-zone',
         'data-file-count': files.length,
-      }, `${files.length} archivos locales`);
+      }, React.createElement('button', {
+        type: 'button',
+        'data-testid': 'local-file-add-mock',
+        onClick: () => onAdd?.([new File(['bytes'], 'reenviado.pdf', { type: 'application/pdf' })]),
+      }, `${files.length} archivos locales`));
     },
   ),
 }));
@@ -152,6 +158,7 @@ vi.mock('../../hooks/useSendResults', () => ({
 // ---- Import under test ----
 import { EmailEditor } from '../EmailEditor';
 import type { Patient, SelectedFileRef } from '../../../domain/entities';
+import { buildSignatureHtml, DEFAULT_SIGNATURE_DATA } from '../../helpers/signatureData';
 
 const mockPatients: Patient[] = [
   {
@@ -731,5 +738,154 @@ describe('EmailEditor', () => {
 
     // Default `backContext` is 'table' — the label is "Volver a la tabla".
     expect(screen.getByTestId('email-editor-back')).toHaveTextContent('Volver a la tabla');
+  });
+
+  // ================================================================
+  // historial-envios-consolidados PR4 — reenvío seeding (OQ5):
+  // initialEmail seeds the existing useState initializers; the
+  // SpitchSelector auto-select must NOT clobber the seeded values;
+  // unavailableAttachments render reference-only (BR11); the Send
+  // disable relaxes to "selectedPatients AND fileRefs empty".
+  // ================================================================
+
+  it('seeds to/cc/subject/body from initialEmail; the signature is re-appended exactly once (no duplication)', () => {
+    mockFetch.mockResolvedValue({ ok: true, json: () => Promise.resolve({ success: true }) });
+
+    const persistedBody =
+      '<p>Cuerpo del envío original</p>' + buildSignatureHtml(DEFAULT_SIGNATURE_DATA);
+
+    render(
+      <EmailEditor
+        {...defaultProps}
+        initialEmail={{
+          to: 'destino@empresa.com, segundo@empresa.com',
+          cc: 'copia@empresa.com',
+          subject: 'Resultados consolidados (reenvío)',
+          bodyHtml: persistedBody,
+        }}
+      />,
+    );
+
+    expect(screen.getByLabelText('Destinatario')).toHaveValue('destino@empresa.com, segundo@empresa.com');
+    expect(screen.getByLabelText('CC')).toHaveValue('copia@empresa.com');
+    expect(screen.getByLabelText('Asunto')).toHaveValue('Resultados consolidados (reenvío)');
+
+    // Preview = seeded body (stripped) + signature re-appended by the
+    // htmlBody memo — the persisted signature must NOT appear twice.
+    const preview = screen.getByTestId('email-preview');
+    expect(preview.textContent).toContain('Cuerpo del envío original');
+    expect(preview.textContent?.match(/Blanca Chirinos/g)).toHaveLength(1);
+  });
+
+  it('applies a manual spitch change after a seeded mount (the swallow latch releases)', () => {
+    mockFetch.mockResolvedValue({ ok: true, json: () => Promise.resolve({ success: true }) });
+
+    render(
+      <EmailEditor
+        {...defaultProps}
+        initialEmail={{ to: 'a@b.com', subject: 'Asunto original', bodyHtml: '<p>Original</p>' }}
+      />,
+    );
+
+    // Seeded mount: the mock's auto-select was swallowed.
+    expect(screen.getByLabelText('Asunto')).toHaveValue('Asunto original');
+
+    // An explicit user selection replaces the seeded content.
+    fireEvent.change(screen.getByTestId('spitch-selector'), { target: { value: 'spitch-002' } });
+
+    expect(screen.getByLabelText('Asunto')).toHaveValue('Asunto de prueba');
+  });
+
+  it('renders unavailableAttachments as a grey reference-only list with the "ya no disponible" badge', () => {
+    mockFetch.mockResolvedValue({ ok: true, json: () => Promise.resolve({ success: true }) });
+
+    render(
+      <EmailEditor
+        {...defaultProps}
+        unavailableAttachments={[
+          { filename: 'informe-local.pdf', contentType: 'application/pdf', sizeBytes: 2048 },
+        ]}
+      />,
+    );
+
+    const list = screen.getByTestId('unavailable-attachments');
+    expect(list).toHaveTextContent('informe-local.pdf');
+    expect(screen.getAllByText('ya no disponible').length).toBeGreaterThanOrEqual(1);
+
+    // Reference-only (BR11): the metadata never enters the send pipeline.
+    const lastCall = mockUseSendResults.mock.calls[mockUseSendResults.mock.calls.length - 1]?.[0] as {
+      localFiles: File[];
+    };
+    expect(lastCall.localFiles).toEqual([]);
+  });
+
+  it('keeps Enviar enabled when selectedPatients is empty but fileRefs are present (relaxed disable)', () => {
+    mockFetch.mockResolvedValue({ ok: true, json: () => Promise.resolve({ success: true }) });
+
+    render(
+      <EmailEditor
+        {...defaultProps}
+        selectedPatients={{}}
+        patients={[]}
+        fileRefs={[
+          { ruc: '20123456789', dni: '12345678', idAten: 'AT-001', path: 'LEGAJOS', name: 'cert.pdf' },
+        ]}
+      />,
+    );
+
+    expect(screen.getByText('Enviar')).not.toBeDisabled();
+  });
+
+  it('still disables Enviar when both selectedPatients and fileRefs are empty', () => {
+    mockFetch.mockResolvedValue({ ok: true, json: () => Promise.resolve({ success: true }) });
+
+    render(<EmailEditor {...defaultProps} selectedPatients={{}} patients={[]} fileRefs={[]} />);
+
+    expect(screen.getByText('Enviar')).toBeDisabled();
+  });
+
+  it('lets a local-only reenvío send after re-adding files (relaxed disable)', async () => {
+    const mockSend = vi.fn();
+    mockUseSendResults.mockReturnValue({
+      send: mockSend,
+      isSending: false,
+      result: null,
+      error: null,
+    });
+    mockFetch.mockResolvedValue({ ok: true, json: () => Promise.resolve({ success: true }) });
+
+    // A local-only history row reconstructs to empty selectedPatients
+    // AND empty fileRefs — nothing is sendable until files are
+    // re-attached (the original local bytes were never persisted, BR11).
+    render(
+      <EmailEditor
+        {...defaultProps}
+        selectedPatients={{}}
+        patients={[]}
+        fileRefs={[]}
+        unavailableAttachments={[{ filename: 'informe-local.pdf' }]}
+      />,
+    );
+
+    // Disabled while there is no context at all.
+    expect(screen.getByText('Enviar')).toBeDisabled();
+
+    // Re-attach the file through the drop zone.
+    fireEvent.click(screen.getByTestId('local-file-add-mock'));
+    expect(await screen.findByTestId('local-file-drop-zone')).toHaveAttribute('data-file-count', '1');
+
+    // The relaxed disable now allows the re-send — and the local file
+    // flows into the send pipeline (no no-files warning needed).
+    const sendButton = screen.getByText('Enviar');
+    expect(sendButton).not.toBeDisabled();
+    fireEvent.click(sendButton);
+
+    await waitFor(() => {
+      expect(mockSend).toHaveBeenCalledTimes(1);
+    });
+    const lastCall = mockUseSendResults.mock.calls[mockUseSendResults.mock.calls.length - 1]?.[0] as {
+      localFiles: File[];
+    };
+    expect(lastCall.localFiles).toHaveLength(1);
   });
 });
