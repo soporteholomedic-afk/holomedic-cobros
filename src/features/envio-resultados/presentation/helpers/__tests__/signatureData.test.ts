@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
+  buildSignatureDataFromUser,
   buildSignatureHtml,
   DEFAULT_SIGNATURE_DATA,
   stripSignatureHtml,
@@ -56,5 +57,53 @@ describe('stripSignatureHtml', () => {
 
   it('defends against a lone sentinel (malformed persisted body)', () => {
     expect(stripSignatureHtml(`<p>x</p>${SENTINEL}<p>y</p>`)).toBe('<p>x</p>');
+  });
+});
+
+// usuarios-nombre-firma — session-seeded signature mapper: the single
+// extension point wiring ONLY nombre → name (role/email/phone/phoneAlt
+// stay defaults; fallback chain nombre → usuario → default name).
+describe('buildSignatureDataFromUser', () => {
+  it('wires the session nombre into name', () => {
+    const data = buildSignatureDataFromUser({ nombre: 'María Pérez', usuario: 'mperez' });
+    expect(data.name).toBe('María Pérez');
+  });
+
+  it('falls back to usuario when nombre is empty', () => {
+    const data = buildSignatureDataFromUser({ nombre: '   ', usuario: 'mperez' });
+    expect(data.name).toBe('mperez');
+  });
+
+  it('falls back to usuario when nombre is absent', () => {
+    const data = buildSignatureDataFromUser({ usuario: 'mperez' });
+    expect(data.name).toBe('mperez');
+  });
+
+  it('falls back to the default name for a null user (pre-login safety)', () => {
+    const data = buildSignatureDataFromUser(null);
+    expect(data.name).toBe(DEFAULT_SIGNATURE_DATA.name);
+  });
+
+  it('falls back to the default name when both fields are empty', () => {
+    const data = buildSignatureDataFromUser({ nombre: '', usuario: '' });
+    expect(data.name).toBe(DEFAULT_SIGNATURE_DATA.name);
+  });
+
+  it('keeps every non-name field at its default (future extension points untouched)', () => {
+    const data = buildSignatureDataFromUser({ nombre: 'María Pérez', usuario: 'mperez' });
+    expect(data.role).toBe(DEFAULT_SIGNATURE_DATA.role);
+    expect(data.email).toBe(DEFAULT_SIGNATURE_DATA.email);
+    expect(data.phone).toBe(DEFAULT_SIGNATURE_DATA.phone);
+    expect(data.phoneAlt).toBe(DEFAULT_SIGNATURE_DATA.phoneAlt);
+    expect(data.address).toBe(DEFAULT_SIGNATURE_DATA.address);
+  });
+
+  it('returns a mutable copy — editing it never affects the defaults', () => {
+    const before = { ...DEFAULT_SIGNATURE_DATA };
+    const data = buildSignatureDataFromUser({ nombre: 'María Pérez' });
+    data.name = 'Edited Name';
+    data.role = 'Edited Role';
+    expect(DEFAULT_SIGNATURE_DATA.name).toBe(before.name);
+    expect(DEFAULT_SIGNATURE_DATA.role).toBe(before.role);
   });
 });
