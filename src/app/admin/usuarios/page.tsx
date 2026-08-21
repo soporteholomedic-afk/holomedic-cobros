@@ -4,9 +4,11 @@ import { useState, useEffect, type FormEvent } from 'react';
 import { Plus, Pencil, Trash2, Upload, X, Search, Eye, EyeOff } from 'lucide-react';
 import { useAuth } from '@/features/auth/presentation/hooks/useAuth';
 import { PERMISOS, type Permiso } from '@/features/auth/domain/entities';
+import { filterUsuarios } from './filterUsuarios';
 
 interface Usuario {
   idUsuario: string;
+  usuario: string;
   nombre: string;
   area: string;
   permisos: string[];
@@ -15,7 +17,7 @@ interface Usuario {
   updatedAt: string;
 }
 
-const initialForm = { nombre: '', area: '', contrasena: '', permisos: [] as Permiso[] };
+const initialForm = { usuario: '', nombre: '', area: '', contrasena: '', permisos: [] as Permiso[] };
 
 export default function UsuariosPage() {
   const { user, loading: authLoading } = useAuth();
@@ -79,6 +81,7 @@ export default function UsuariosPage() {
   function openEdit(u: Usuario) {
     setEditingId(u.idUsuario);
     setForm({
+      usuario: u.usuario,
       nombre: u.nombre,
       area: u.area,
       contrasena: '',
@@ -103,6 +106,7 @@ export default function UsuariosPage() {
     try {
       if (editingId) {
         const body: Record<string, unknown> = {
+          usuario: form.usuario,
           nombre: form.nombre,
           area: form.area,
           permisos: form.permisos,
@@ -163,9 +167,9 @@ export default function UsuariosPage() {
     }
   }
 
-  const filtered = usuarios.filter((u) =>
-    !searchTerm || u.nombre.toLowerCase().includes(searchTerm.toLowerCase()) || u.area.toLowerCase().includes(searchTerm.toLowerCase()),
-  );
+  // usuarios-nombre-firma — search matches usuario, nombre OR area
+  // (extracted pure helper, unit-tested in filterUsuarios.test.ts).
+  const filtered = filterUsuarios(usuarios, searchTerm);
 
   if (authLoading) {
     return <LoadingSkeleton />;
@@ -221,6 +225,7 @@ export default function UsuariosPage() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50">
+                  <Th>Usuario</Th>
                   <Th>Nombre</Th>
                   <Th>Área</Th>
                   <Th>Permisos</Th>
@@ -232,6 +237,7 @@ export default function UsuariosPage() {
               <tbody>
                 {filtered.map((u) => (
                   <tr key={u.idUsuario} className="border-b border-slate-100 dark:border-slate-700/50 hover:bg-slate-50 dark:hover:bg-slate-700/30">
+                    <Td className="text-slate-500">{u.usuario}</Td>
                     <Td className="font-medium">{u.nombre}</Td>
                     <Td className="capitalize text-slate-500">{u.area}</Td>
                     <Td>
@@ -279,13 +285,13 @@ export default function UsuariosPage() {
                     </Td>
                   </tr>
                 ))}
-                {filtered.length === 0 && (
-                  <tr>
-                    <td colSpan={6} className="px-4 py-8 text-center text-slate-400 text-sm">
-                      No se encontraron usuarios
-                    </td>
-                  </tr>
-                )}
+             {filtered.length === 0 && (
+               <tr>
+                 <td colSpan={7} className="px-4 py-8 text-center text-slate-400 text-sm">
+                   No se encontraron usuarios
+                 </td>
+               </tr>
+             )}
               </tbody>
             </table>
           </div>
@@ -306,12 +312,25 @@ export default function UsuariosPage() {
 
             <form onSubmit={handleSubmit} className="p-6 space-y-4">
               <div>
+                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Usuario</label>
+                <input
+                  type="text"
+                  value={form.usuario}
+                  onChange={(e) => setForm((p) => ({ ...p, usuario: e.target.value }))}
+                  required
+                  placeholder="Identificador para iniciar sesión (ej: jdoe)"
+                  className="w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-white text-sm focus:ring-2 focus:ring-sky-500 focus:border-transparent outline-none"
+                />
+              </div>
+
+              <div>
                 <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Nombre</label>
                 <input
                   type="text"
                   value={form.nombre}
                   onChange={(e) => setForm((p) => ({ ...p, nombre: e.target.value }))}
                   required
+                  placeholder="Nombre completo (ej: John Doe)"
                   className="w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-white text-sm focus:ring-2 focus:ring-sky-500 focus:border-transparent outline-none"
                 />
               </div>

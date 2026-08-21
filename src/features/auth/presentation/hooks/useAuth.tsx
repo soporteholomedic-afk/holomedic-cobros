@@ -4,6 +4,9 @@ import { createContext, useContext, useState, useEffect, type ReactNode } from '
 
 export interface AuthUser {
   idUsuario: string;
+  /** Login identifier (e.g. "jdoe"). */
+  usuario: string;
+  /** Display full name (e.g. "John Doe"). */
   nombre: string;
   area: string;
   permisos: string[];

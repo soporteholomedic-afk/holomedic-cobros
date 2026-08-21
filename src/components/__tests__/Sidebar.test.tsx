@@ -19,6 +19,7 @@ import { AuthProvider, type AuthUser } from '@/features/auth/presentation/hooks/
 
 const nonAdminUser: AuthUser = {
   idUsuario: 'u-cobranza',
+  usuario: 'acobranza',
   nombre: 'Ana Cobranza',
   area: 'Cobranza',
   permisos: ['cobranza'],
@@ -27,6 +28,7 @@ const nonAdminUser: AuthUser = {
 
 const adminUser: AuthUser = {
   idUsuario: 'u-admin',
+  usuario: 'aadmin',
   nombre: 'Admin General',
   area: 'Sistemas',
   permisos: ['admin'],
