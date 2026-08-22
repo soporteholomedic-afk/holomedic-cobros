@@ -1,16 +1,51 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { afterEach, beforeEach, describe, it, expect, vi, type Mock } from 'vitest';
+
+import type {
+  ICobranzaEnviosHistorialRepository,
+} from '@/features/cobranza/domain/ports';
+import type { RegistroEnvioCobranzaInput } from '@/features/cobranza/domain/entities';
+import { __setCobranzaHistorialForTests } from '@/features/cobranza/infrastructure/getCobranzaHistorialDb';
 
 const mockSendEmail = vi.hoisted(() => vi.fn());
+const mockGetSession = vi.hoisted(() => vi.fn());
 
 vi.mock('@/utils/sendEmail', () => ({
   sendEmail: mockSendEmail,
 }));
 
+// REQ-02: the audit context resolves enviadoPor from the session
+// nombre; getSession reads next/headers cookies which do not exist
+// in the unit-test runtime (contactos route test precedent).
+vi.mock('@/lib/auth', () => ({
+  getSession: mockGetSession,
+}));
+
 import { POST } from '../route';
+
+// ---- Cobranza audit mock plumbing ----
+
+function makeMockRepo(
+  repo: Partial<ICobranzaEnviosHistorialRepository> = {},
+): ICobranzaEnviosHistorialRepository {
+  return {
+    insert: vi.fn().mockResolvedValue(undefined),
+    getByRuc: vi.fn().mockResolvedValue([]),
+    ...repo,
+  };
+}
+
+let mockInsert: Mock<(input: RegistroEnvioCobranzaInput) => Promise<void>>;
 
 beforeEach(() => {
   vi.clearAllMocks();
   mockSendEmail.mockReset();
+  mockGetSession.mockReset().mockResolvedValue({ nombre: 'Dra. House', permisos: ['cobranza'] });
+  mockInsert = vi.fn().mockResolvedValue(undefined);
+  __setCobranzaHistorialForTests(makeMockRepo({ insert: mockInsert }));
+});
+
+afterEach(() => {
+  __setCobranzaHistorialForTests(null);
 });
 
 function makeRequest(body: unknown): Request {
@@ -422,7 +457,7 @@ describe('POST /api/send-email', () => {
     );
   });
 
-  it('passes purpose cobranza through to sendEmail (DIR-07/DIR-08)', async () => {
+  it('passes purpose cobranza through to sendEmail (DIR-07/DIR-08, REQ-02 ruc present)', async () => {
     mockSendEmail.mockResolvedValue({
       success: true,
       messageId: '<cob@outlook.com>',
@@ -433,6 +468,7 @@ describe('POST /api/send-email', () => {
       subject: 'Cobranza',
       html: '<p>Test</p>',
       purpose: 'cobranza',
+      ruc: '20123456789',
     });
 
     const response = await POST(request);
@@ -492,5 +528,233 @@ describe('POST /api/send-email', () => {
     const response = await POST(request);
     expect(response.status).toBe(400);
     expect(mockSendEmail).not.toHaveBeenCalled();
+  });
+});
+
+// ---- Cobranza audit integration (REQ-02, tasks 4.3/4.4) ----
+
+function makeCobranzaBody(overrides: Record<string, unknown> = {}): Record<string, unknown> {
+  return {
+    to: ['cobranza@empresa.com'],
+    cc: ['gerencia@empresa.com'],
+    subject: 'Estado de cuenta — requerimiento',
+    html: '<p>Requerimiento de pago</p>',
+    purpose: 'cobranza',
+    ruc: '20123456789',
+    razonSocial: 'EMPRESA SAC',
+    montoReclamado: 1500.5,
+    moneda: 'S/',
+    comprobantesCount: 3,
+    ...overrides,
+  };
+}
+
+function sentInput(): RegistroEnvioCobranzaInput {
+  return mockInsert.mock.calls[0]?.[0] as RegistroEnvioCobranzaInput;
+}
+
+describe('POST /api/send-email — cobranza audit registration (REQ-02)', () => {
+  it('audits a successful send: exactly one insert, SUCCESS, session user, full HTML body', async () => {
+    mockSendEmail.mockResolvedValue({ success: true, messageId: '<ok@outlook.com>' });
+
+    const response = await POST(makeRequest(makeCobranzaBody()));
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(mockInsert).toHaveBeenCalledTimes(1);
+    expect(sentInput()).toEqual({
+      ruc: '20123456789',
+      razonSocial: 'EMPRESA SAC',
+      destinatarios: ['cobranza@empresa.com'],
+      copias: ['gerencia@empresa.com'],
+      asunto: 'Estado de cuenta — requerimiento',
+      cuerpoResumen: '<p>Requerimiento de pago</p>',
+      montoReclamado: 1500.5,
+      moneda: 'S/',
+      comprobantesCount: 3,
+      estadoEnvio: 'SUCCESS',
+      errorDetalle: null,
+      enviadoPor: 'Dra. House',
+    } satisfies RegistroEnvioCobranzaInput);
+    expect(body.success).toBe(true);
+  });
+
+  it('audits an SMTP/network failure: FAILED row carrying the transport error', async () => {
+    mockSendEmail.mockResolvedValue({
+      success: false,
+      code: 'SMTP_TIMEOUT',
+      error: 'SMTP connection timed out',
+    });
+
+    const response = await POST(makeRequest(makeCobranzaBody()));
+    const body = await response.json();
+
+    // The operator-visible outcome is unchanged (503 SMTP_TIMEOUT).
+    expect(response.status).toBe(503);
+    expect(body.code).toBe('SMTP_TIMEOUT');
+    expect(mockInsert).toHaveBeenCalledTimes(1);
+    expect(sentInput()).toMatchObject({
+      estadoEnvio: 'FAILED',
+      errorDetalle: 'SMTP connection timed out',
+      enviadoPor: 'Dra. House',
+    });
+  });
+
+  it('audits an unexpected exception: FAILED row from the outer catch (R1.3)', async () => {
+    mockSendEmail.mockRejectedValue(new Error('Something unexpected'));
+
+    const response = await POST(makeRequest(makeCobranzaBody()));
+    const body = await response.json();
+
+    expect(response.status).toBe(500);
+    expect(body.code).toBe('INTERNAL_ERROR');
+    expect(mockInsert).toHaveBeenCalledTimes(1);
+    expect(sentInput()).toMatchObject({
+      estadoEnvio: 'FAILED',
+      errorDetalle: 'Something unexpected',
+    });
+  });
+
+  it('audit outage leaves the send response unchanged (D2 best-effort, R1.4)', async () => {
+    mockSendEmail.mockResolvedValue({ success: true, messageId: '<ok@outlook.com>' });
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    mockInsert.mockRejectedValue(new Error('audit DB unreachable'));
+
+    try {
+      const response = await POST(makeRequest(makeCobranzaBody()));
+      const body = await response.json();
+
+      expect(response.status).toBe(200);
+      expect(body).toEqual({ success: true, messageId: '<ok@outlook.com>' });
+      expect(warnSpy).toHaveBeenCalled();
+    } finally {
+      warnSpy.mockRestore();
+    }
+  });
+
+  it('falls back to enviadoPor "sistema" when the session is absent (R1.5)', async () => {
+    mockGetSession.mockResolvedValue(null);
+    mockSendEmail.mockResolvedValue({ success: true, messageId: '<ok@outlook.com>' });
+
+    await POST(makeRequest(makeCobranzaBody()));
+
+    expect(sentInput()).toMatchObject({ enviadoPor: 'sistema' });
+  });
+
+  it('falls back to enviadoPor "sistema" for a whitespace-only session nombre (R1.5)', async () => {
+    mockGetSession.mockResolvedValue({ nombre: '   ', permisos: ['cobranza'] });
+    mockSendEmail.mockResolvedValue({ success: true, messageId: '<ok@outlook.com>' });
+
+    await POST(makeRequest(makeCobranzaBody()));
+
+    expect(sentInput()).toMatchObject({ enviadoPor: 'sistema' });
+  });
+
+  it('does NOT audit non-cobranza purposes (R2.1)', async () => {
+    mockSendEmail.mockResolvedValue({ success: true, messageId: '<fb@outlook.com>' });
+
+    const response = await POST(
+      makeRequest(makeCobranzaBody({ purpose: 'facturacion' })),
+    );
+
+    expect(response.status).toBe(200);
+    expect(mockInsert).not.toHaveBeenCalled();
+  });
+
+  it('audits a junk key (non-digit, ≤11 chars) trimmed and as-is (R6.2)', async () => {
+    mockSendEmail.mockResolvedValue({ success: true, messageId: '<ok@outlook.com>' });
+
+    const response = await POST(makeRequest(makeCobranzaBody({ ruc: ' SINKEY123 ' })));
+
+    expect(response.status).toBe(200);
+    expect(mockInsert).toHaveBeenCalledTimes(1);
+    expect(sentInput()).toMatchObject({ ruc: 'SINKEY123' });
+  });
+
+  it('accepts an over-length junk key without blocking the send (documented residual risk)', async () => {
+    mockSendEmail.mockResolvedValue({ success: true, messageId: '<ok@outlook.com>' });
+
+    const response = await POST(
+      makeRequest(makeCobranzaBody({ ruc: 'CLIENTE-CON-RUC-MUY-LARGO-9999' })),
+    );
+
+    // Never block the send; the INSERT will fail server-side and the
+    // audit helper swallows it per D2.
+    expect(response.status).toBe(200);
+    expect(mockInsert).toHaveBeenCalledTimes(1);
+    expect(sentInput()).toMatchObject({ ruc: 'CLIENTE-CON-RUC-MUY-LARGO-9999' });
+  });
+
+  it('stores null optional metadata when the payload omits it (back-compat)', async () => {
+    mockSendEmail.mockResolvedValue({ success: true, messageId: '<ok@outlook.com>' });
+
+    const { razonSocial: _r, montoReclamado: _m, moneda: _mo, comprobantesCount: _c, ...minimal } =
+      makeCobranzaBody();
+    void _r; void _m; void _mo; void _c;
+
+    const response = await POST(makeRequest(minimal));
+
+    expect(response.status).toBe(200);
+    expect(sentInput()).toMatchObject({
+      razonSocial: null,
+      montoReclamado: null,
+      moneda: null,
+      comprobantesCount: null,
+    });
+  });
+
+  it('accepts boundary metadata values (0 amount, 0 count) and trims razonSocial', async () => {
+    mockSendEmail.mockResolvedValue({ success: true, messageId: '<ok@outlook.com>' });
+
+    const response = await POST(
+      makeRequest(
+        makeCobranzaBody({
+          montoReclamado: 0,
+          comprobantesCount: 0,
+          razonSocial: '  EMPRESA SAC  ',
+        }),
+      ),
+    );
+
+    expect(response.status).toBe(200);
+    expect(sentInput()).toMatchObject({
+      montoReclamado: 0,
+      comprobantesCount: 0,
+      razonSocial: 'EMPRESA SAC',
+    });
+  });
+
+  it.each([
+    ['missing ruc', (b: Record<string, unknown>) => ({ ...b, ruc: undefined })],
+    ['empty ruc', (b: Record<string, unknown>) => ({ ...b, ruc: '   ' })],
+    ['non-string ruc', (b: Record<string, unknown>) => ({ ...b, ruc: 20123456789 })],
+    ['non-string comprobantesCount', (b: Record<string, unknown>) => ({ ...b, comprobantesCount: 'abc' })],
+    ['negative comprobantesCount', (b: Record<string, unknown>) => ({ ...b, comprobantesCount: -1 })],
+    ['non-integer comprobantesCount', (b: Record<string, unknown>) => ({ ...b, comprobantesCount: 1.5 })],
+    ['non-number montoReclamado', (b: Record<string, unknown>) => ({ ...b, montoReclamado: '1500' })],
+    ['negative montoReclamado', (b: Record<string, unknown>) => ({ ...b, montoReclamado: -0.01 })],
+    ['non-string moneda', (b: Record<string, unknown>) => ({ ...b, moneda: 42 })],
+    ['over-length moneda', (b: Record<string, unknown>) => ({ ...b, moneda: 'MONEDA-LARGA' })],
+    ['non-string razonSocial', (b: Record<string, unknown>) => ({ ...b, razonSocial: 42 })],
+  ])('returns 400 VALIDATION_ERROR for %s — no send, no audit row (R6.3)', async (_label, mutate) => {
+    const response = await POST(makeRequest(mutate(makeCobranzaBody())));
+    const body = await response.json();
+
+    expect(response.status).toBe(400);
+    expect(body.success).toBe(false);
+    expect(body.code).toBe('VALIDATION_ERROR');
+    expect(mockSendEmail).not.toHaveBeenCalled();
+    expect(mockInsert).not.toHaveBeenCalled();
+  });
+
+  it('rejects an over-precision montoReclamado beyond DECIMAL(18,2) bounds (R6.3)', async () => {
+    const response = await POST(
+      makeRequest(makeCobranzaBody({ montoReclamado: 1e17 })),
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(400);
+    expect(body.code).toBe('VALIDATION_ERROR');
+    expect(mockInsert).not.toHaveBeenCalled();
   });
 });
