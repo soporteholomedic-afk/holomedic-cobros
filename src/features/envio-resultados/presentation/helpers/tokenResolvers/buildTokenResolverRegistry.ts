@@ -6,22 +6,27 @@
  * area. The implementation is a thin closure-based dispatcher — no
  * external state, fully testable, server/client agnostic.
  *
- * v1 areas:
+ * Areas with a resolver branch:
  *   - `consolidados` — full set (empresa, fecha, fechaExamen, paciente,
- *                       nombrePaciente, dni, totalPacientes, totalExamenes,
- *                       listaPacientes, listaArchivos, firma, destino + the
- *                       two table sub-resolvers).
+ *                      nombrePaciente, dni, totalPacientes, totalExamenes,
+ *                      listaPacientes, listaArchivos, firma, destino + the
+ *                      two table sub-resolvers).
+ *   - `cobranza`     — REQ-01 DIR-06 (empresa, ruc, fecha, montoTotal,
+ *                      moneda, diasVencidos, cuentasBancarias, firma +
+ *                      the documentosPendientes table sub-resolver).
  *
  * Unknown areas return a registry whose `resolveToken` always returns
  * `''` and `resolveTable` always returns `''`. The orchestrator then
  * removes every token-bearing block. This is the documented failure
  * mode and matches the prior behaviour (unknown `{{token}}` was left
- * as `''` after the string-replace loop).
+ * as `''` after the string-replace loop). The areaRegistryConsistency
+ * test guards against a registered area silently hitting this path.
  *
  * Spec delta `envio-resultados` MODIFIED: "TokenResolverRegistry and
  * InterpolationContext" + "New tokens firma and tabla".
  */
 import { documentosVencidosResolver } from './documentosVencidosResolver';
+import { documentosPendientesResolver } from './documentosPendientesResolver';
 import { examenesResolver } from './examenesResolver';
 import type { InterpolationContext, ResolveResult, TokenResolverRegistry } from './types';
 import { escapeHtml } from './escapeHtml';
@@ -35,70 +40,105 @@ import { escapeHtml } from './escapeHtml';
  * - `html` — HTML-escaped, safe for `dangerouslySetInnerHTML`.
  * - `subject` — raw text (never appears inside HTML markup).
  *
- * Tokens that produce HTML (listas, firma) return `subject: ''` so
- * the placeholder is cleanly removed from the subject line.
+ * Tokens that produce HTML (listas, firma, cuentasBancarias) return
+ * `subject: ''` so the placeholder is cleanly removed from the subject line.
  */
 function buildTokenMap(area: string): Map<string, (ctx: InterpolationContext) => ResolveResult> {
   const map = new Map<string, (ctx: InterpolationContext) => ResolveResult>();
-  if (area !== 'consolidados') {
-    return map; // Unknown area → every token resolves to ''.
+  if (area === 'consolidados') {
+    map.set('empresa', (ctx) => ({
+      html: escapeHtml(ctx.companyName),
+      subject: ctx.companyName,
+    }));
+    map.set('fecha', (ctx) => ({ html: ctx.today, subject: ctx.today }));
+    map.set('fechaExamen', (ctx) => ({ html: ctx.today, subject: ctx.today }));
+    map.set('paciente', (ctx) => ({
+      html: escapeHtml(ctx.patientNames[0] ?? ''),
+      subject: ctx.patientNames[0] ?? '',
+    }));
+    map.set('nombrePaciente', (ctx) => ({
+      html: escapeHtml(ctx.patients[0]?.name ?? ''),
+      subject: ctx.patients[0]?.name ?? '',
+    }));
+    map.set('dni', (ctx) => ({
+      html: ctx.patients[0]?.dni ?? '',
+      subject: ctx.patients[0]?.dni ?? '',
+    }));
+    map.set('totalPacientes', (ctx) => ({
+      html: String(ctx.patientNames.length),
+      subject: String(ctx.patientNames.length),
+    }));
+    map.set('totalExamenes', (ctx) => ({
+      html: String(ctx.fileNames.length),
+      subject: String(ctx.fileNames.length),
+    }));
+    map.set('listaPacientes', (ctx) => ({
+      html:
+        ctx.patientNames.length === 0
+          ? '<em>[Lista vacía]</em>'
+          : `<ol>${ctx.patientNames.map((name) => `<li>${escapeHtml(name)}</li>`).join('')}</ol>`,
+      subject: '',
+    }));
+    map.set('listaArchivos', (ctx) => ({
+      html: ctx.fileNames.map((name) => `    <li>${escapeHtml(name)}</li>`).join('\n'),
+      subject: '',
+    }));
+    map.set('firma', (ctx) => ({
+      html: ctx.firma !== '' ? ctx.firma : '<em>[Falta configurar firma]</em>',
+      subject: '',
+    }));
+    map.set('destino', (ctx) => ({
+      html: escapeHtml(ctx.destino),
+      subject: ctx.destino,
+    }));
+    return map;
   }
-  map.set('empresa', (ctx) => ({
-    html: escapeHtml(ctx.companyName),
-    subject: ctx.companyName,
-  }));
-  map.set('fecha', (ctx) => ({ html: ctx.today, subject: ctx.today }));
-  map.set('fechaExamen', (ctx) => ({ html: ctx.today, subject: ctx.today }));
-  map.set('paciente', (ctx) => ({
-    html: escapeHtml(ctx.patientNames[0] ?? ''),
-    subject: ctx.patientNames[0] ?? '',
-  }));
-  map.set('nombrePaciente', (ctx) => ({
-    html: escapeHtml(ctx.patients[0]?.name ?? ''),
-    subject: ctx.patients[0]?.name ?? '',
-  }));
-  map.set('dni', (ctx) => ({
-    html: ctx.patients[0]?.dni ?? '',
-    subject: ctx.patients[0]?.dni ?? '',
-  }));
-  map.set('totalPacientes', (ctx) => ({
-    html: String(ctx.patientNames.length),
-    subject: String(ctx.patientNames.length),
-  }));
-  map.set('totalExamenes', (ctx) => ({
-    html: String(ctx.fileNames.length),
-    subject: String(ctx.fileNames.length),
-  }));
-  map.set('listaPacientes', (ctx) => ({
-    html:
-      ctx.patientNames.length === 0
-        ? '<em>[Lista vacía]</em>'
-        : `<ol>${ctx.patientNames.map((name) => `<li>${escapeHtml(name)}</li>`).join('')}</ol>`,
-    subject: '',
-  }));
-  map.set('listaArchivos', (ctx) => ({
-    html: ctx.fileNames.map((name) => `    <li>${escapeHtml(name)}</li>`).join('\n'),
-    subject: '',
-  }));
-  map.set('firma', (ctx) => ({
-    html: ctx.firma !== '' ? ctx.firma : '<em>[Falta configurar firma]</em>',
-    subject: '',
-  }));
-  map.set('destino', (ctx) => ({
-    html: escapeHtml(ctx.destino),
-    subject: ctx.destino,
-  }));
+  if (area === 'cobranza') {
+    map.set('empresa', (ctx) => ({
+      html: escapeHtml(ctx.companyName),
+      subject: ctx.companyName,
+    }));
+    map.set('fecha', (ctx) => ({ html: ctx.today, subject: ctx.today }));
+    // Plain pre-formatted debt fields — identical html/subject; missing
+    // optional fields resolve to '' (signals block removal).
+    map.set('ruc', (ctx) => ({ html: ctx.ruc ?? '', subject: ctx.ruc ?? '' }));
+    map.set('montoTotal', (ctx) => ({
+      html: ctx.montoTotal ?? '',
+      subject: ctx.montoTotal ?? '',
+    }));
+    map.set('moneda', (ctx) => ({ html: ctx.moneda ?? '', subject: ctx.moneda ?? '' }));
+    map.set('diasVencidos', (ctx) => ({
+      html: ctx.diasVencidos ?? '',
+      subject: ctx.diasVencidos ?? '',
+    }));
+    // HTML producer (buildCuentasBancariasHtml source) — body only.
+    map.set('cuentasBancarias', (ctx) => ({
+      html: ctx.cuentasBancariasHtml ?? '',
+      subject: '',
+    }));
+    map.set('firma', (ctx) => ({
+      html: ctx.firma !== '' ? ctx.firma : '<em>[Falta configurar firma]</em>',
+      subject: '',
+    }));
+    return map;
+  }
+  // Unknown area → every token resolves to ''.
   return map;
 }
 
 /** Build the table sub-resolver map for the given area. */
 function buildTableMap(area: string): Map<string, (cols: string[], ctx: InterpolationContext) => string> {
   const map = new Map<string, (cols: string[], ctx: InterpolationContext) => string>();
-  if (area !== 'consolidados') {
-    return map; // Unknown area → every table resolves to ''.
+  if (area === 'consolidados') {
+    map.set(documentosVencidosResolver.name, documentosVencidosResolver.resolve);
+    map.set(examenesResolver.name, examenesResolver.resolve);
+    return map;
   }
-  map.set(documentosVencidosResolver.name, documentosVencidosResolver.resolve);
-  map.set(examenesResolver.name, examenesResolver.resolve);
+  if (area === 'cobranza') {
+    map.set(documentosPendientesResolver.name, documentosPendientesResolver.resolve);
+    return map;
+  }
+  // Unknown area → every table resolves to ''.
   return map;
 }
 
