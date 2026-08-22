@@ -3,8 +3,9 @@ import { describe, it, expect } from 'vitest';
 import { migrate } from '../migrate';
 
 /**
- * Schema migration tests for the SQL Server contact directory
- * (T1a.3), modeled on the plantillas-editor `migrate.test.ts`.
+ * Schema migration tests for the SQL Server cobranza schema
+ * (EmpresaContactos REQ-01 + CobranzaEnviosHistorial REQ-02),
+ * modeled on the plantillas-editor `migrate.test.ts`.
  *
  * The fake pool's `request().batch(sql)` captures the SQL so the suite
  * pins the exact statements that ship in `migrate.ts`. Table creation
@@ -43,16 +44,23 @@ describe('sqlserver contact migrate()', () => {
     expect(sql).toMatch(/updatedBy\s+NVARCHAR\(200\)\s+NULL/i);
   });
 
-  it('guards the CREATE with IF NOT EXISTS on sys.tables (idempotent)', async () => {
+  it('guards every CREATE with IF NOT EXISTS on sys.tables (idempotent)', async () => {
     const calls: string[] = [];
     await migrate(makePool(calls));
     const sql = calls[0] ?? '';
     expect(sql).toMatch(/IF\s+NOT\s+EXISTS\s*\(\s*SELECT\s+1\s+FROM\s+sys\.tables/i);
     expect(sql).toMatch(/WHERE\s+name\s*=\s*'EmpresaContactos'/i);
+    expect(sql).toMatch(/WHERE\s+name\s*=\s*'CobranzaEnviosHistorial'/i);
     expect(sql).toMatch(/SCHEMA_ID\s*\(\s*'dbo'\s*\)/i);
-    // Exactly one CREATE statement ships in the batch.
+    // Every CREATE TABLE ships inside its own sys.tables guard: one guarded
+    // block per table (EmpresaContactos REQ-01, CobranzaEnviosHistorial REQ-02).
     const creates = sql.match(/CREATE\s+TABLE/gi) ?? [];
-    expect(creates).toHaveLength(1);
+    const guards = sql.match(/IF\s+NOT\s+EXISTS\s*\(\s*SELECT\s+1\s+FROM\s+sys\.tables/gi) ?? [];
+    expect(creates).toHaveLength(2);
+    expect(guards).toHaveLength(creates.length);
+    // The history index is guarded on sys.indexes the same way.
+    expect(sql).toMatch(/IF\s+NOT\s+EXISTS\s*\(\s*SELECT\s+1\s+FROM\s+sys\.indexes/i);
+    expect(sql).toMatch(/name\s*=\s*'idx_cobranza_hist_ruc'/i);
   });
 
   it('is idempotent — calling migrate() twice sends the same guarded batch', async () => {
