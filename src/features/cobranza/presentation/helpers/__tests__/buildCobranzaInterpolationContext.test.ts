@@ -12,7 +12,10 @@
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { buildCobranzaInterpolationContext } from '../buildCobranzaInterpolationContext';
+import {
+  buildCobranzaInterpolationContext,
+  selectMainCurrency,
+} from '../buildCobranzaInterpolationContext';
 import type { ClienteGroup } from '../../../../../types';
 import { buildCuentasBancariasHtml } from '../../../../../utils/paymentInfo';
 
@@ -210,5 +213,35 @@ describe('buildCobranzaInterpolationContext', () => {
     const ctx = buildCobranzaInterpolationContext(buildClient(), '');
 
     expect(ctx.today).toBe('15 de junio de 2026');
+  });
+});
+
+describe('selectMainCurrency (exported for REQ-02 audit metadata reuse)', () => {
+  it('returns the max-saldo currency', () => {
+    expect(
+      selectMainCurrency({
+        'S/': { debe: 100, haber: 0, saldo: 100 },
+        $: { debe: 900, haber: 0, saldo: 900 },
+      }),
+    ).toBe('$');
+  });
+
+  it('breaks a saldo tie in favor of PEN (S/) regardless of key order', () => {
+    expect(
+      selectMainCurrency({
+        $: { debe: 500, haber: 0, saldo: 500 },
+        'S/': { debe: 500, haber: 0, saldo: 500 },
+      }),
+    ).toBe('S/');
+    expect(
+      selectMainCurrency({
+        'S/': { debe: 500, haber: 0, saldo: 500 },
+        $: { debe: 500, haber: 0, saldo: 500 },
+      }),
+    ).toBe('S/');
+  });
+
+  it('returns an empty string when there are no currencies (empty-debt client)', () => {
+    expect(selectMainCurrency({})).toBe('');
   });
 });

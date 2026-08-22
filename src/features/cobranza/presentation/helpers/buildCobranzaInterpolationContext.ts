@@ -64,8 +64,12 @@ const MONEDA_PEN = 'S/';
  * Returns `''` when there are no currencies (empty-debt client — the
  * `montoTotal`/`moneda` tokens then resolve empty and their blocks are
  * removed by the orchestrator).
+ *
+ * Exported (REQ-02): the audit metadata helper reuses this same
+ * definition so "main currency = max saldo, tie → 'S/'" has ONE
+ * source (design §4.4).
  */
-function selectMainCurrency(saldosPorMoneda: Record<string, MonedaResumen>): string {
+export function selectMainCurrency(saldosPorMoneda: Record<string, MonedaResumen>): string {
   let best = '';
   let bestSaldo = Number.NEGATIVE_INFINITY;
   for (const [moneda, resumen] of Object.entries(saldosPorMoneda)) {
