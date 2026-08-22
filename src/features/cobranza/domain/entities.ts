@@ -60,6 +60,67 @@ export interface SaveContactInput {
 }
 
 /**
+ * Send outcome of a cobranza attempt (REQ-02). Exactly one row per
+ * attempt — `SUCCESS` when the SMTP transport accepted the message,
+ * `FAILED` otherwise (transport error or unexpected exception).
+ */
+export type EstadoEnvioCobranza = 'SUCCESS' | 'FAILED';
+
+/**
+ * An immutable audit row for one cobranza send attempt, as read back
+ * from `dbo.CobranzaEnviosHistorial` (REQ-02).
+ *
+ * `destinatarios`/`copias` are decoded from the stored JSON array
+ * strings at the adapter boundary. `fechaEnvio` is an ISO-8601 UTC
+ * string — the SQL Server adapter converts the `DATETIME2(3)` `Date`
+ * at the boundary so this contract stays string-based
+ * (EmpresaContacto contract precedent). The read model NEVER carries
+ * the email body: `cuerpoResumen` (full HTML, NVARCHAR(MAX) off-row)
+ * is excluded from `getByRuc` results to keep the history API light.
+ */
+export interface CobranzaEnvioHistorial {
+  id: number;
+  ruc: string;
+  razonSocial: string | null;
+  destinatarios: string[];
+  copias: string[] | null;
+  asunto: string;
+  montoReclamado: number | null;
+  moneda: string | null;
+  comprobantesCount: number | null;
+  estadoEnvio: EstadoEnvioCobranza;
+  errorDetalle: string | null;
+  enviadoPor: string;
+  fechaEnvio: string;
+}
+
+/**
+ * Write input for one audit row. Same shape as `CobranzaEnvioHistorial`
+ * minus `id` (identity, DB-assigned) and `fechaEnvio` (DB-stamped via
+ * the `SYSUTCDATETIME()` column default — R7 storage convention).
+ *
+ * `destinatarios`/`copias` travel as arrays and are JSON-encoded by
+ * the adapter; `copias` is `null` when the operator sent no cc list.
+ * Optional metadata (`razonSocial`, `montoReclamado`, `moneda`,
+ * `comprobantesCount`) is `null` when the payload omitted it
+ * (back-compat) — never defaulted or inferred server-side.
+ */
+export interface RegistroEnvioCobranzaInput {
+  ruc: string;
+  razonSocial: string | null;
+  destinatarios: string[];
+  copias: string[] | null;
+  asunto: string;
+  cuerpoResumen: string | null;
+  montoReclamado: number | null;
+  moneda: string | null;
+  comprobantesCount: number | null;
+  estadoEnvio: EstadoEnvioCobranza;
+  errorDetalle: string | null;
+  enviadoPor: string;
+}
+
+/**
  * Whether the `(ruc, razonSocial)` pair may be memorized in the
  * contact directory (REQ-01-DIR-01):
  *  - `ruc.trim()` matches `RUC_PATTERN` (8 or 11 digits), AND

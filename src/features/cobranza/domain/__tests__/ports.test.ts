@@ -3,22 +3,23 @@ import { describe, expect, it } from 'vitest';
 import type { EmpresaContacto, SaveContactInput } from '../entities';
 import { COMPANY_CONTACT_REPOSITORY_METHODS } from '../ports';
 import type { ICompanyContactRepository } from '../ports';
+import { COBRANZA_HISTORIAL_REPOSITORY_METHODS } from '../ports';
+import type { ICobranzaEnviosHistorialRepository } from '../ports';
 
 /**
- * Contract test for the `ICompanyContactRepository` port.
+ * Contract tests for the cobranza domain ports.
  *
- * `COMPANY_CONTACT_REPOSITORY_METHODS` is a RUNTIME import — if
- * `ports.ts` does not exist or does not export it, this file fails to
- * load (real RED).
+ * The `*_REPOSITORY_METHODS` constants are RUNTIME imports — if
+ * `ports.ts` does not exist or does not export them, this file fails
+ * to load (real RED).
  *
- * The value of this test is twofold:
- *  - COMPILE-TIME: the `repo` objects below must satisfy
- *    `ICompanyContactRepository`; a renamed/removed/re-typed method
- *    breaks compilation.
- *  - RUNTIME: `COMPANY_CONTACT_REPOSITORY_METHODS` pins the exact
- *    method set so an accidental extra or missing operation is caught,
- *    and the per-method `typeof === 'function'` checks confirm every
- *    operation is callable.
+ * The value of these tests is twofold:
+ *  - COMPILE-TIME: the `repo` objects below must satisfy their port
+ *    interface; a renamed/removed/re-typed method breaks compilation.
+ *  - RUNTIME: each registry pins the exact method set so an accidental
+ *    extra or missing operation is caught, and the per-method
+ *    `typeof === 'function'` checks confirm every operation is
+ *    callable.
  */
 describe('ICompanyContactRepository port', () => {
   function makeContacto(overrides: Partial<EmpresaContacto> = {}): EmpresaContacto {
@@ -93,5 +94,22 @@ describe('ICompanyContactRepository port', () => {
     };
 
     await expect(repo.upsert(makeInput())).resolves.toBe(saved);
+  });
+});
+
+describe('ICobranzaEnviosHistorialRepository port (REQ-02)', () => {
+  it('declares exactly the historial port operations', () => {
+    expect(COBRANZA_HISTORIAL_REPOSITORY_METHODS).toEqual(['insert', 'getByRuc']);
+  });
+
+  it('a conforming implementation exposes every operation as a function', () => {
+    const repo: ICobranzaEnviosHistorialRepository = {
+      insert: () => Promise.resolve(),
+      getByRuc: () => Promise.resolve([]),
+    };
+
+    for (const method of COBRANZA_HISTORIAL_REPOSITORY_METHODS) {
+      expect(typeof repo[method]).toBe('function');
+    }
   });
 });
