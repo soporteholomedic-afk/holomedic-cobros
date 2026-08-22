@@ -1,8 +1,19 @@
 "use client";
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { X, Send, Mail, CheckCircle2, Landmark, AlertTriangle } from 'lucide-react';
 import { ClienteGroup } from '../types';
-import { buildEmailHtml } from '../utils/buildEmailHtml';
+import { SpitchSelector } from '@/features/envio-resultados/presentation/components/SpitchSelector';
+import { interpolate } from '@/features/envio-resultados/presentation/helpers/interpolate';
+import { buildTokenResolverRegistry } from '@/features/envio-resultados/presentation/helpers/tokenResolvers/buildTokenResolverRegistry';
+import {
+  buildSignatureDataFromUser,
+  buildSignatureHtml,
+} from '@/features/envio-resultados/presentation/helpers/signatureData';
+import { useAuth } from '@/features/auth/presentation/hooks/useAuth';
+import { useCompanyContact } from '@/features/cobranza/presentation/hooks/useCompanyContact';
+import { esClaveDirectorioValida } from '@/features/cobranza/domain/entities';
+import { buildCobranzaInterpolationContext } from '@/features/cobranza/presentation/helpers/buildCobranzaInterpolationContext';
+import type { Spitch } from '@/features/envio-resultados/domain/entities';
 
 interface EmailComposerModalProps {
   client: ClienteGroup;
@@ -19,16 +30,58 @@ function parseEmailList(value: string): string[] {
 }
 
 export function EmailComposerModal({ client, onClose, onSuccess }: EmailComposerModalProps) {
-  const [to, setTo] = useState(`administracion@${client.razonSocial.toLowerCase().replace(/[^a-z0-9]/g, '') || 'cliente'}.com`);
-  const [cc, setCc] = useState('');
-  const [subject, setSubject] = useState(`RECORDATORIO DE PAGO - HOLOMEDIC - ${client.razonSocial}`);
+  // Session-seeded signature ({{firma}} source) — DEFAULT_SIGNATURE_DATA
+  // fallback while auth is loading (EmailEditor precedent).
+  const { user } = useAuth();
+  const firmaHtml = useMemo(() => buildSignatureHtml(buildSignatureDataFromUser(user)), [user]);
 
-  // body is purely derived from client — no side effects needed
-  const body = useMemo(() => buildEmailHtml(client), [client]);
+  // Contact directory (REQ-01-DIR-01/03): prefills to/cc from the stored
+  // pair; junk keys never hit the API ('skipped' — sending never blocked).
+  const { contacto, status, saveContact } = useCompanyContact(
+    client.clienteId,
+    client.razonSocial,
+  );
+
+  const [to, setTo] = useState('');
+  const [cc, setCc] = useState('');
+  const [subject, setSubject] = useState('');
+  const [bodyHtml, setBodyHtml] = useState('');
   const [isSending, setIsSending] = useState(false);
   const [sentSuccess, setSentSuccess] = useState(false);
   const [sendError, setSendError] = useState<string | null>(null);
   const [showConfirm, setShowConfirm] = useState(false);
+
+  // Async seed of the operator-editable to/cc fields from the directory
+  // (REQ-01-DIR-03). Legitimate effect: the fields are editable state
+  // (not derivable at render) seeded by a network response — the
+  // EmailEditor initialEmail seeding precedent. Junk/empty/error states
+  // leave them empty with the descriptive placeholder.
+  useEffect(() => {
+    if (status !== 'populated' || !contacto) return;
+    /* eslint-disable react-hooks/set-state-in-effect -- async seed of editable fields from the directory GET; cannot be derived at render */
+    setTo(contacto.emailPrincipal);
+    setCc(contacto.emailCopia ?? '');
+    /* eslint-enable react-hooks/set-state-in-effect */
+  }, [status, contacto]);
+
+  // Template selection → real-time interpolation via the interpolate()
+  // CORE with the cobranza registry (design D3 — the patient-shaped
+  // interpolateSpitch wrapper stays untouched, zero consolidados
+  // regression). Event-driven: bodyHtml/subject are edit-transient
+  // state, re-interpolated only when a template is selected.
+  const handleSpitchSelect = useCallback(
+    (spitch: Spitch) => {
+      const interpolated = interpolate(
+        spitch.bodyHtml,
+        spitch.subject,
+        buildCobranzaInterpolationContext(client, firmaHtml),
+        buildTokenResolverRegistry('cobranza'),
+      );
+      setBodyHtml(interpolated.html);
+      setSubject(interpolated.subject);
+    },
+    [client, firmaHtml],
+  );
 
   const doSend = async () => {
     setIsSending(true);
@@ -36,10 +89,32 @@ export function EmailComposerModal({ client, onClose, onSuccess }: EmailComposer
     try {
       const toArray = parseEmailList(to);
       const ccArray = parseEmailList(cc);
+
+      // REQ-01-DIR-07 (persist-before-dispatch) + DIR-01/D10: memorize
+      // the confirmed pair BEFORE the send, and only for memorizable
+      // keys — junk keys skip the PUT but never block the send.
+      if (esClaveDirectorioValida(client.clienteId, client.razonSocial)) {
+        try {
+          await saveContact({
+            ruc: client.clienteId,
+            razonSocial: client.razonSocial,
+            emailPrincipal: toArray[0] ?? '',
+            emailCopia: ccArray.length > 0 ? ccArray.join(', ') : null,
+          });
+        } catch (persistError) {
+          // Persist failed → surface the error and DO NOT send. The
+          // operator can retry once the directory is available.
+          const message = persistError instanceof Error ? persistError.message : 'error desconocido';
+          setSendError(`No se pudo guardar el contacto: ${message}`);
+          return;
+        }
+      }
+
       const payload: Record<string, unknown> = {
         to: toArray,
         subject,
-        html: body,
+        html: bodyHtml,
+        purpose: 'cobranza', // REQ-01-DIR-08
       };
       if (ccArray.length > 0) {
         payload.cc = ccArray;
@@ -51,8 +126,14 @@ export function EmailComposerModal({ client, onClose, onSuccess }: EmailComposer
       });
       if (!res.ok) {
         // HTTP error — extract API error message
-        const data = await res.json().catch(() => ({}));
-        setSendError(data.error || 'Error al enviar el correo');
+        const data: unknown = await res.json().catch(() => ({}));
+        const apiError =
+          typeof data === 'object' &&
+          data !== null &&
+          typeof (data as { error?: unknown }).error === 'string'
+            ? (data as { error: string }).error
+            : 'Error al enviar el correo';
+        setSendError(apiError);
         return;
       }
       setSentSuccess(true);
@@ -70,6 +151,9 @@ export function EmailComposerModal({ client, onClose, onSuccess }: EmailComposer
 
   const handleSendEmail = (e: React.FormEvent) => {
     e.preventDefault();
+    // A template is REQUIRED to send (design D8) — the submit button is
+    // disabled while bodyHtml is empty; this guard is belt-and-braces.
+    if (!bodyHtml) return;
     setShowConfirm(true);
   };
 
@@ -80,7 +164,7 @@ export function EmailComposerModal({ client, onClose, onSuccess }: EmailComposer
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-fade-in">
-      <div 
+      <div
         className="w-full max-w-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl overflow-hidden shadow-2xl animate-scale-in flex flex-col max-h-[90vh]"
         onClick={(e) => e.stopPropagation()}
       >
@@ -164,7 +248,7 @@ export function EmailComposerModal({ client, onClose, onSuccess }: EmailComposer
         ) : (
           <form onSubmit={handleSendEmail} className="flex flex-col flex-1 overflow-hidden">
             <div className="p-6 space-y-4 overflow-y-auto flex-1">
-              
+
               {/* Recipient Email */}
               <div className="space-y-1.5">
                 <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
@@ -194,6 +278,14 @@ export function EmailComposerModal({ client, onClose, onSuccess }: EmailComposer
                 />
               </div>
 
+              {/* Template selector (REQ-01-DIR-06) */}
+              <div className="space-y-1.5">
+                <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                  Plantilla de Cobranza
+                </label>
+                <SpitchSelector area="cobranza" target="company" onSelect={handleSpitchSelect} />
+              </div>
+
               {/* Email Subject */}
               <div className="space-y-1.5">
                 <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
@@ -215,7 +307,7 @@ export function EmailComposerModal({ client, onClose, onSuccess }: EmailComposer
                 </label>
                 {/* Sandboxed iframe: scripts/forms/popups are blocked; avoids dangerouslySetInnerHTML entirely */}
                 <iframe
-                  srcDoc={body}
+                  srcDoc={bodyHtml}
                   title="Vista previa del correo HTML"
                   className="w-full flex-1 rounded-xl border border-slate-200 dark:border-slate-800 min-h-[180px]"
                   sandbox=""
@@ -249,7 +341,7 @@ export function EmailComposerModal({ client, onClose, onSuccess }: EmailComposer
                 <Landmark className="w-4 h-4 mt-0.5 shrink-0" />
                 <div className="text-[11px] leading-normal">
                   <span className="font-bold block">Cuentas Bancarias Incluidas</span>
-                  El cuerpo del correo contiene los datos de transferencia para el BCP (Soles/Dólares) correspondientes a <strong>HOLOMEDIC S.A.C.</strong> para facilitar la regularización de deuda.
+                  La plantilla seleccionada puede incluir los datos de transferencia para el BCP (Soles/Dólares) correspondientes a <strong>HOLOMEDIC S.A.C.</strong> mediante el token <code>{'{{cuentasBancarias}}'}</code>.
                 </div>
               </div>
 
@@ -265,11 +357,11 @@ export function EmailComposerModal({ client, onClose, onSuccess }: EmailComposer
               >
                 Cancelar
               </button>
-              
+
               <div className="w-full sm:w-auto flex flex-col sm:flex-row gap-2 order-1 sm:order-2">
                 <button
                   type="submit"
-                  disabled={isSending}
+                  disabled={isSending || !bodyHtml}
                   className="w-full sm:w-auto inline-flex items-center justify-center space-x-2 px-6 py-2.5 rounded-xl bg-gradient-to-tr from-sky-500 to-blue-600 hover:from-sky-600 hover:to-blue-700 text-sm font-bold text-white shadow-md shadow-sky-500/10 hover:shadow-sky-500/20 hover:scale-[1.02] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {isSending ? (
