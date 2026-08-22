@@ -8,6 +8,7 @@ export interface RutaProtegida {
 
 export const RUTAS_PROTEGIDAS: RutaProtegida[] = [
   { path: '/cobranza',            permiso: 'cobranza',         label: 'Cobranza' },
+  { path: '/api/cobranza/contactos', permiso: 'cobranza',      label: 'API Directorio de Contactos' },
   { path: '/consolidados',        permiso: 'consolidados',     label: 'Consolidados' },
   { path: '/api/consolidados/envios', permiso: 'consolidados',  label: 'API Historial de Envíos' },
   { path: '/valoraciones',        permiso: 'valoraciones',     label: 'Valoraciones' },
