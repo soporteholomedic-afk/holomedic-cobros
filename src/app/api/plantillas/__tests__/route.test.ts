@@ -119,7 +119,9 @@ describe('GET /api/plantillas (list active)', () => {
 
   it('returns 400 VALIDATION_ERROR "Unknown area" for an unregistered area', async () => {
     // Spec: area-template-config / "API rejects unknown area".
-    const response = await GET(makeGetRequest({ area: 'cobranza' }));
+    // 'cobranza' became a registered area in REQ-01 (DIR-04); use a
+    // never-registered area to keep testing the rejection path.
+    const response = await GET(makeGetRequest({ area: 'unknown-area' }));
     const body = await response.json();
 
     expect(response.status).toBe(400);
@@ -239,7 +241,7 @@ describe('POST /api/plantillas (save)', () => {
   });
 
   it('returns 400 VALIDATION_ERROR when area is unknown', async () => {
-    const response = await POST(makePostRequest(validBody({ area: 'cobranza' })));
+    const response = await POST(makePostRequest(validBody({ area: 'unknown-area' })));
     const body = await response.json();
 
     expect(response.status).toBe(400);

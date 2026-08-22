@@ -95,7 +95,9 @@ describe('GET /api/plantillas/trash', () => {
   });
 
   it('returns 400 VALIDATION_ERROR "Unknown area" for an unregistered area', async () => {
-    const response = await GET(makeGetRequest({ area: 'cobranza' }));
+    // 'cobranza' became a registered area in REQ-01 (DIR-04); use a
+    // never-registered area to keep testing the rejection path.
+    const response = await GET(makeGetRequest({ area: 'unknown-area' }));
     const body = await response.json();
 
     expect(response.status).toBe(400);
