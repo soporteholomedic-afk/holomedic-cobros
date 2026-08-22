@@ -25,6 +25,15 @@ type ApiResponse = SuccessResponse | ErrorResponse;
 
 const MAX_BODY_SIZE = 1_000_000; // 1MB
 
+/**
+ * Accepted `purpose` values (REQ-01 DIR-08). Mirrors the `Purpose` union
+ * in `@/utils/sendEmail` — single source of truth is that union; this
+ * const exists so the route can validate without importing the type at
+ * runtime. Absent/undefined purpose defaults to `'facturacion'`
+ * (total back-compat for current consumers); an unknown value is a 400.
+ */
+const PURPOSES = ['consolidados', 'facturacion', 'cobranza'] as const;
+
 /** Simple email regex — checks for user@domain.tld structure */
 function isValidEmail(email: string): boolean {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
@@ -143,13 +152,31 @@ export async function POST(request: Request): Promise<NextResponse<ApiResponse>>
       );
     }
 
+    // Validate optional purpose against the whitelist (REQ-01 DIR-08).
+    // Absent/undefined → 'facturacion' (back-compat default for the shape
+    // used today); present but not whitelisted → 400.
+    let purpose: (typeof PURPOSES)[number] = 'facturacion';
+    if (body.purpose !== undefined) {
+      if (
+        typeof body.purpose !== 'string' ||
+        !(PURPOSES as readonly string[]).includes(body.purpose)
+      ) {
+        return buildError(
+          'VALIDATION_ERROR',
+          `Invalid purpose: ${typeof body.purpose === 'string' ? body.purpose : 'must be a string'}`,
+          400
+        );
+      }
+      purpose = body.purpose;
+    }
+
     // Send email
     const result = await sendEmail({
       to,
       ...(cc ? { cc } : {}),
       subject: body.subject as string,
       html: body.html as string,
-      purpose: 'facturacion',
+      purpose,
     });
 
     if (!result.success) {

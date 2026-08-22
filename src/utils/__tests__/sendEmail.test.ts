@@ -623,3 +623,114 @@ describe('parameterized scalability (REQ-9)', () => {
     });
   }
 });
+
+// ---- Cobranza purpose + facturacion fallback (REQ-01 DIR-10, T1b.7/T4.5) ----
+
+describe('cobranza purpose (REQ-01 DIR-10)', () => {
+  afterEach(() => {
+    delete process.env.SMTP_USER_COBRANZA;
+    delete process.env.SMTP_PASS_COBRANZA;
+  });
+
+  it('uses the dedicated cobranza creds when SMTP_USER_COBRANZA/SMTP_PASS_COBRANZA are defined', async () => {
+    process.env.SMTP_USER_COBRANZA = 'cobranza@example.com';
+    process.env.SMTP_PASS_COBRANZA = 'cobranza-secret';
+    mockSendMail.mockResolvedValue({ messageId: '<cob@x.com>' });
+
+    const result = await sendEmail({
+      to: ['a@b.com'],
+      subject: 'Cobranza',
+      html: '<p>1</p>',
+      purpose: 'cobranza',
+    });
+
+    expect(result.success).toBe(true);
+    const auth = (await lastTransportAuth()).auth;
+    expect(auth.user).toBe('cobranza@example.com');
+    expect(auth.pass).toBe('cobranza-secret');
+    expect(mockSendMail.mock.calls[0]?.[0]?.from).toBe('cobranza@example.com');
+  });
+
+  it('falls back to the facturacion creds when only facturacion vars exist — no MissingSmtpCredsError surfaces', async () => {
+    // beforeEach seeds facturacion; cobranza vars are intentionally absent.
+    mockSendMail.mockResolvedValue({ messageId: '<fb@x.com>' });
+
+    const result = await sendEmail({
+      to: ['a@b.com'],
+      subject: 'Cobranza',
+      html: '<p>1</p>',
+      purpose: 'cobranza',
+    });
+
+    // The whole point of DIR-10: while facturacion creds exist, a cobranza
+    // send MUST succeed (not fail with SMTP_ERROR / MissingSmtpCredsError).
+    expect(result).toEqual({ success: true, messageId: '<fb@x.com>' });
+    const auth = (await lastTransportAuth()).auth;
+    expect(auth.user).toBe('facturacion@example.com');
+    expect(auth.pass).toBe('facturacion-secret');
+    expect(mockSendMail.mock.calls[0]?.[0]?.from).toBe('facturacion@example.com');
+  });
+
+  it('keys the transport cache by purpose even under cred fallback (no cache aliasing)', async () => {
+    mockSendMail.mockResolvedValue({ messageId: '<cache@x.com>' });
+
+    await sendEmail({ to: ['a@b.com'], subject: 'F', html: '<p>1</p>', purpose: 'facturacion' });
+    await sendEmail({ to: ['c@d.com'], subject: 'C', html: '<p>2</p>', purpose: 'cobranza' });
+
+    // Two purposes → two distinct transports, even though cobranza rides
+    // the facturacion creds. Aliasing them to one cache entry would poison
+    // cross-purpose from/log identity (design D6).
+    const nodemailer = await import('nodemailer');
+    expect(nodemailer.default.createTransport).toHaveBeenCalledTimes(2);
+  });
+
+  it('reuses the cached cobranza transport on the second cobranza send', async () => {
+    mockSendMail.mockResolvedValue({ messageId: '<reuse@x.com>' });
+
+    await sendEmail({ to: ['a@b.com'], subject: 'C1', html: '<p>1</p>', purpose: 'cobranza' });
+    await sendEmail({ to: ['c@d.com'], subject: 'C2', html: '<p>2</p>', purpose: 'cobranza' });
+
+    const nodemailer = await import('nodemailer');
+    expect(nodemailer.default.createTransport).toHaveBeenCalledTimes(1);
+  });
+
+  it('fails fast listing the facturacion vars when BOTH cobranza and facturacion creds are missing', async () => {
+    delete process.env.SMTP_USER_FACTURACION;
+    delete process.env.SMTP_PASS_FACTURACION;
+
+    const result = await sendEmail({
+      to: ['a@b.com'],
+      subject: 'C',
+      html: '<p>1</p>',
+      purpose: 'cobranza',
+    });
+
+    // Fallback also fails → the facturacion resolution error surfaces as
+    // SMTP_ERROR (shared SMTP_HOST/SMTP_PORT still set in beforeEach).
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.code).toBe('SMTP_ERROR');
+      expect(result.error).toContain('SMTP_USER_FACTURACION');
+      expect(result.error).toContain('SMTP_PASS_FACTURACION');
+    }
+  });
+
+  it('fallback never applies to consolidados: missing consolidados creds still fail with their own names', async () => {
+    // Guard the guard: only cobranza falls back. Consolidados keeps the
+    // no-silent-cross-purpose-fallback contract (S-CONSCRED-011).
+    delete process.env.SMTP_USER_CONSOLIDADOS;
+    delete process.env.SMTP_PASS_CONSOLIDADOS;
+
+    const result = await sendEmail({
+      to: ['a@b.com'],
+      subject: 'S',
+      html: '<p>1</p>',
+      purpose: 'consolidados',
+    });
+
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error).toContain('SMTP_USER_CONSOLIDADOS');
+    }
+  });
+});

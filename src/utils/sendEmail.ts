@@ -8,7 +8,7 @@ export interface EmailAttachment {
   contentType?: string;
 }
 
-export type Purpose = 'consolidados' | 'facturacion';
+export type Purpose = 'consolidados' | 'facturacion' | 'cobranza';
 
 export interface SendEmailParams {
   to: string[];
@@ -80,9 +80,36 @@ function resolveCreds(purpose: Purpose): {
   return { host, port: parseInt(port, 10), user, pass };
 }
 
+/**
+ * Resolve the SMTP config for a purpose, with the cobranza fallback
+ * (REQ-01 DIR-10, design D6): when `cobranza` creds are missing BUT the
+ * facturacion creds exist, cobranza dispatches through facturacion.
+ * Every other purpose (and every other error type) propagates untouched —
+ * only the cobranza + MissingSmtpCredsError combination falls back. If the
+ * facturacion resolution also throws, that error surfaces (so a totally
+ * unconfigured environment still fails fast, naming the facturacion vars).
+ */
+function resolveCredsWithFallback(purpose: Purpose): {
+  host: string;
+  port: number;
+  user: string;
+  pass: string;
+} {
+  try {
+    return resolveCreds(purpose);
+  } catch (err) {
+    if (purpose === 'cobranza' && err instanceof MissingSmtpCredsError) {
+      return resolveCreds('facturacion');
+    }
+    throw err;
+  }
+}
+
 /** Return the cached transport for `purpose`, or create one from `creds` on a
  *  cache miss. `creds` is resolved by the caller so the same values feed both
- *  the transport and the `from` field / log lines. */
+ *  the transport and the `from` field / log lines. The cache key stays the
+ *  purpose — a cobranza send under facturacion creds still gets its OWN
+ *  transport entry (no cross-purpose cache aliasing). */
 function getTransport(
   purpose: Purpose,
   creds: { host: string; port: number; user: string; pass: string },
@@ -112,7 +139,7 @@ export async function sendEmail(
   let resolvedPort: number | undefined;
   let resolvedUser: string | undefined;
   try {
-    const creds = resolveCreds(purpose);
+    const creds = resolveCredsWithFallback(purpose);
     resolvedHost = creds.host;
     resolvedPort = creds.port;
     resolvedUser = creds.user;

@@ -399,4 +399,98 @@ describe('POST /api/send-email', () => {
     const response = await POST(request);
     expect(response.status).toBe(400);
   });
+
+  // ---- Purpose whitelist (REQ-01 DIR-08, T1b.8) ----
+
+  it('defaults purpose to facturacion when absent (back-compat regression, DIR-08)', async () => {
+    mockSendEmail.mockResolvedValue({
+      success: true,
+      messageId: '<nopurpose@outlook.com>',
+    });
+
+    // Shape used today by every current consumer (modal, valoraciones).
+    const request = makeRequest({
+      to: ['cliente@example.com'],
+      subject: 'Estado de cuenta',
+      html: '<p>Test</p>',
+    });
+
+    const response = await POST(request);
+    expect(response.status).toBe(200);
+    expect(mockSendEmail).toHaveBeenCalledWith(
+      expect.objectContaining({ purpose: 'facturacion' }),
+    );
+  });
+
+  it('passes purpose cobranza through to sendEmail (DIR-07/DIR-08)', async () => {
+    mockSendEmail.mockResolvedValue({
+      success: true,
+      messageId: '<cob@outlook.com>',
+    });
+
+    const request = makeRequest({
+      to: ['cliente@example.com'],
+      subject: 'Cobranza',
+      html: '<p>Test</p>',
+      purpose: 'cobranza',
+    });
+
+    const response = await POST(request);
+    expect(response.status).toBe(200);
+    expect(mockSendEmail).toHaveBeenCalledWith(
+      expect.objectContaining({ purpose: 'cobranza' }),
+    );
+  });
+
+  it('passes purpose consolidados through to sendEmail', async () => {
+    mockSendEmail.mockResolvedValue({
+      success: true,
+      messageId: '<cons@outlook.com>',
+    });
+
+    const request = makeRequest({
+      to: ['cliente@example.com'],
+      subject: 'Consolidado',
+      html: '<p>Test</p>',
+      purpose: 'consolidados',
+    });
+
+    const response = await POST(request);
+    expect(response.status).toBe(200);
+    expect(mockSendEmail).toHaveBeenCalledWith(
+      expect.objectContaining({ purpose: 'consolidados' }),
+    );
+  });
+
+  it('returns 400 VALIDATION_ERROR for an unknown purpose value (DIR-08)', async () => {
+    const request = makeRequest({
+      to: ['cliente@example.com'],
+      subject: 'Test',
+      html: '<p>Test</p>',
+      purpose: 'spam',
+    });
+
+    const response = await POST(request);
+    const body = await response.json();
+
+    expect(response.status).toBe(400);
+    expect(body.success).toBe(false);
+    expect(body.code).toBe('VALIDATION_ERROR');
+    expect(body.error).toContain('purpose');
+    // Rejected before dispatch — sendEmail is never called.
+    expect(mockSendEmail).not.toHaveBeenCalled();
+  });
+
+  it('rejects a non-string purpose value with 400 (type safety on the whitelist)', async () => {
+    const request = makeRequest({
+      to: ['cliente@example.com'],
+      subject: 'Test',
+      html: '<p>Test</p>',
+      purpose: 123,
+    });
+
+    const response = await POST(request);
+    expect(response.status).toBe(400);
+    expect(mockSendEmail).not.toHaveBeenCalled();
+  });
 });
