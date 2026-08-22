@@ -1,5 +1,6 @@
 import { ClienteGroup, Documento } from '../types';
 import { formatNumber } from './excelParser';
+import { buildCuentasBancariasHtml } from './paymentInfo';
 
 // ============================================================
 // File-local date utilities — mirror ClientDetailModal's
@@ -70,12 +71,6 @@ const STYLES = {
     'padding: 6px 10px; border: 1px solid #dddddd; text-align: right; font-weight: bold;',
   noDocs:
     'font-style: italic; color: #888888; margin: 10px 0 15px 0; padding: 10px; background-color: #f9f9f9; border: 1px solid #eeeeee; border-radius: 3px;',
-  paymentBlock:
-    'margin-top: 15px; padding: 12px 15px; background-color: #f5f5f5; border-left: 3px solid #003366; font-size: 12px; line-height: 1.7;',
-  paymentTitle:
-    'font-size: 14px; font-weight: bold; color: #003366; margin-bottom: 8px;',
-  paymentLine: 'margin: 2px 0;',
-  paymentBullet: 'margin: 2px 0; padding-left: 10px;',
   totalRow: 'background-color: #f5f5f5; font-weight: bold;',
   estadoChipVencido: 'background-color: #fee2e2; color: #b91c1c; padding: 2px 6px; border-radius: 4px; font-size: 11px; font-weight: 600;',
   estadoChipCredito: 'background-color: #fef3c7; color: #92400e; padding: 2px 6px; border-radius: 4px; font-size: 11px; font-weight: 600;',
@@ -189,22 +184,8 @@ function buildNoDocs(): string {
     <p style="${STYLES.noDocs}">No hay documentos pendientes</p>`;
 }
 
-// ============================================================
-// Helper: build payment information block
-// Task 1.3 — payment info section
-// ============================================================
-function buildPaymentInfo(): string {
-  return `
-    <div style="${STYLES.paymentBlock}">
-      <p style="${STYLES.paymentTitle}">DATOS PARA EL PAGO</p>
-      <p style="${STYLES.paymentLine}"><strong>HOLOMEDIC SERVICIOS INTEGRALES S.A.C.</strong></p>
-      <p style="${STYLES.paymentLine}">RUC: 20556200328</p>
-      <p style="${STYLES.paymentLine}">&nbsp;</p>
-      <p style="${STYLES.paymentBullet}">&bull; Banco Scotiabank &ndash; Cuenta Corriente (Soles): 000-1771370</p>
-      <p style="${STYLES.paymentBullet}">&bull; Banco Scotiabank &ndash; CCI: 009-107-00000177137042</p>
-      <p style="${STYLES.paymentBullet}">&bull; Banco de la Nación &ndash; Cuenta de Detracciones: 00076059551</p>
-    </div>`;
-}
+// The payment information block now lives in `./paymentInfo`
+// (`buildCuentasBancariasHtml`, REQ-01 D4) — imported above.
 
 // ============================================================
 // Main export
@@ -276,7 +257,7 @@ export function buildEmailHtml(client: ClienteGroup): string {
     <p style="${STYLES.paragraph}">Para su referencia, adjuntamos el detalle de los documentos vencidos a la fecha, donde podrá visualizar el detalle de los documentos pendientes.</p>
     ${docsSection}
     <p style="${STYLES.paragraph}">Una vez efectuado el pago, le agradeceremos remitirnos el comprobante de la transferencia a fin de proceder con la validación correspondiente.</p>
-    ${buildPaymentInfo()}
+    ${buildCuentasBancariasHtml()}
     <p style="${STYLES.paragraph}">En caso el pago haya sido realizado recientemente, agradeceremos omitir el presente mensaje.</p>
     <p style="${STYLES.paragraph}">Quedamos atentos a su confirmación y agradecemos de antemano su pronta atención.</p>
     <p style="${STYLES.paragraph}">Saludos cordiales.</p>`;
