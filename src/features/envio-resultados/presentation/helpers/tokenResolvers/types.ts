@@ -18,6 +18,19 @@
 import type { Patient, PatientFile } from '../../../domain/entities';
 
 /**
+ * One row of the cobranza `documentosPendientes` table. All fields are
+ * PRE-FORMATTED strings — the client formats numbers with their own
+ * currency (multi-currency per row, REQ-01-DIR-06); the resolvers stay
+ * dumb escape-and-emit.
+ */
+export interface DocumentoPendienteRow {
+  fecha: string;
+  factura: string;
+  monto: string;
+  saldo: string;
+}
+
+/**
  * The interpolation data passed by the send flow (`EmailEditor.handleSpitchSelect`).
  *
  * `today` is injectable — fixes the module-level `TODAY` gotcha the
@@ -45,6 +58,22 @@ export interface InterpolationContext {
    * raw for the subject. Empty string signals "missing destination".
    */
   destino: string;
+  // ---- OPTIONAL cobranza fields (REQ-01 D12 widening, back-compat) ----
+  // Only the cobranza flow fills these. All values are pre-formatted
+  // strings; consolidados callers keep constructing the context without
+  // them, exactly as before the widening.
+  /** Cobranza: client RUC / DNI key. */
+  ruc?: string;
+  /** Cobranza: pre-formatted main-currency total (e.g. 'S/ 12,345.67'). */
+  montoTotal?: string;
+  /** Cobranza: main currency code (e.g. 'PEN'). */
+  moneda?: string;
+  /** Cobranza: days of the oldest overdue document. */
+  diasVencidos?: string;
+  /** Cobranza: institutional bank-accounts HTML ({{cuentasBancarias}} source). */
+  cuentasBancariasHtml?: string;
+  /** Cobranza: pending-document rows for the `documentosPendientes` table. */
+  documentosPendientes?: DocumentoPendienteRow[];
 }
 
 /**

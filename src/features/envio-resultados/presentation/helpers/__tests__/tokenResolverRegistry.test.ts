@@ -222,3 +222,51 @@ describe('TokenResolverRegistry — does NOT touch the global module-level TODAY
     expect(registry.resolveToken('fecha', ctx2).subject).toBe('2026-02-02');
   });
 });
+
+describe('InterpolationContext optional cobranza widening (REQ-01 D12 — back-compat pins)', () => {
+  // The widening adds OPTIONAL fields only. These pins prove the two
+  // back-compat properties at runtime: (1) a context WITH cobranza fields
+  // resolves identically through the consolidados registry, and (2) the
+  // consolidados registry does not accidentally start resolving cobranza
+  // tokens — they stay unknown ('' → block removal) there.
+  const WIDENED_CTX = {
+    ...GOLDEN_CTX,
+    ruc: '20123456789',
+    montoTotal: 'S/ 12,345.67',
+    moneda: 'PEN',
+    diasVencidos: '45',
+    cuentasBancariasHtml: '<div>DATOS PARA EL PAGO</div>',
+    documentosPendientes: [
+      { fecha: '15/11/2025', factura: 'FE F001-101', monto: 'S/ 1,200.00', saldo: 'S/ 1,000.00' },
+    ],
+  };
+
+  it('a context carrying cobranza fields resolves consolidados tokens identically', () => {
+    const registry = buildTokenResolverRegistry('consolidados');
+    // Spot-check the same pins as the consolidados suite above.
+    expect(registry.resolveToken('empresa', WIDENED_CTX).subject).toBe('Clínica Demo S.A.');
+    expect(registry.resolveToken('fecha', WIDENED_CTX).subject).toBe('15 de enero de 2026');
+    expect(registry.resolveToken('firma', WIDENED_CTX).html).toBe(
+      '<p>Dr. Pérez — Clínica Demo S.A.</p>',
+    );
+  });
+
+  it('consolidados registry leaves cobranza tokens unknown (no cross-area leakage from the widening)', () => {
+    const registry = buildTokenResolverRegistry('consolidados');
+    expect(registry.resolveToken('ruc', WIDENED_CTX)).toEqual({ html: '', subject: '' });
+    expect(registry.resolveToken('montoTotal', WIDENED_CTX)).toEqual({ html: '', subject: '' });
+    expect(registry.resolveTable('documentosPendientes', ['fecha'], WIDENED_CTX)).toEqual({
+      html: '',
+      subject: '',
+    });
+  });
+
+  it('the widened fields survive on the context object (data path for the cobranza resolvers)', () => {
+    // Runtime proof that a ctx constructed with the optional fields carries
+    // them through — the documentosPendientes rows keep their pre-formatted
+    // per-row currency strings for the cobranza table resolver.
+    expect(WIDENED_CTX.ruc).toBe('20123456789');
+    expect(WIDENED_CTX.documentosPendientes?.[0]?.saldo).toBe('S/ 1,000.00');
+    expect(WIDENED_CTX.cuentasBancariasHtml).toContain('DATOS PARA EL PAGO');
+  });
+});
