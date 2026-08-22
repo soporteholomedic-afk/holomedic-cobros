@@ -16,7 +16,7 @@
  *  - the `error:` segment appears only on FAILED rows that carry an
  *    `errorDetalle`.
  */
-import type { CobranzaEnvioHistorial } from '../../../domain/entities';
+import type { CobranzaEnvioHistorial } from '../../domain/entities';
 import { formatNumber } from '../../../../utils/excelParser';
 
 const LIMA_TIMEZONE = 'America/Lima';
