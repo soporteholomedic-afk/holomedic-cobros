@@ -13,6 +13,7 @@ import { useAuth } from '@/features/auth/presentation/hooks/useAuth';
 import { useCompanyContact } from '@/features/cobranza/presentation/hooks/useCompanyContact';
 import { esClaveDirectorioValida } from '@/features/cobranza/domain/entities';
 import { buildCobranzaInterpolationContext } from '@/features/cobranza/presentation/helpers/buildCobranzaInterpolationContext';
+import { buildCobranzaAuditMetadata } from '@/features/cobranza/presentation/helpers/buildCobranzaAuditMetadata';
 import type { Spitch } from '@/features/envio-resultados/domain/entities';
 
 interface EmailComposerModalProps {
@@ -110,11 +111,19 @@ export function EmailComposerModal({ client, onClose, onSuccess }: EmailComposer
         }
       }
 
+      // REQ-02 R6/D3: audit metadata travels on every cobranza send —
+      // trimmed ruc/razonSocial (junk keys audited as-is, writes are
+      // unfiltered), main-currency raw amount and the >0.01 pending
+      // count. The route only audits purpose='cobranza', which is the
+      // only purpose this composer emits.
+      const auditMeta = buildCobranzaAuditMetadata(client);
+
       const payload: Record<string, unknown> = {
         to: toArray,
         subject,
         html: bodyHtml,
         purpose: 'cobranza', // REQ-01-DIR-08
+        ...auditMeta,
       };
       if (ccArray.length > 0) {
         payload.cc = ccArray;

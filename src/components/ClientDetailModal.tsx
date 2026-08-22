@@ -2,6 +2,7 @@ import React from 'react';
 import { X, Mail, Calendar, FileText, CheckCircle2, AlertCircle } from 'lucide-react';
 import { ClienteGroup, Documento } from '../types';
 import { formatNumber } from '../utils/excelParser';
+import { HistorialNotificaciones } from '@/features/cobranza/presentation/components/HistorialNotificaciones';
 
 interface ClientDetailModalProps {
   client: ClienteGroup;
@@ -317,6 +318,10 @@ export default function ClientDetailModal({ client, onClose, onOpenEmailComposer
               </table>
             </div>
           </div>
+
+          {/* Notification history (REQ-02 R4): per-client audit of cobranza
+              communications, self-contained (own data + states). */}
+          <HistorialNotificaciones ruc={client.clienteId} razonSocial={client.razonSocial} />
 
         </div>
 

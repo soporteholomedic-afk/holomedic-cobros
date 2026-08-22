@@ -402,6 +402,50 @@ describe('EmailComposerModal Component', () => {
     expect(postBody.purpose).toBe('cobranza');
   });
 
+  // ---- REQ-02 R6: audit metadata transport (D3) ----
+
+  it('debe enviar los metadatos de auditoría (ruc, razonSocial, moneda, montoReclamado, comprobantesCount) en el POST', async () => {
+    const fetchMock = stubFetchRouter();
+
+    renderModal(); // mockClients[0]: S/ 1000 main saldo, 1 doc with saldo > 0.01
+    selectTemplate();
+    fillTo('cobranzas@cliente.com');
+    submitAndConfirm();
+
+    await waitFor(() => {
+      expect(screen.getByText('¡Correo Enviado!')).toBeInTheDocument();
+    });
+
+    const postIndexes = callsTo(fetchMock, '/api/send-email', 'POST');
+    const postBody = JSON.parse(fetchMock.mock.calls[postIndexes[0]]?.[1]?.body as string);
+    // RAW amount (number, not the formatted string) + main-currency rule.
+    expect(postBody.ruc).toBe('20601234567');
+    expect(postBody.razonSocial).toBe('HOLOMEDIC S.A.C.');
+    expect(postBody.moneda).toBe('S/');
+    expect(postBody.montoReclamado).toBe(1000);
+    expect(postBody.comprobantesCount).toBe(1);
+  });
+
+  it('clave basura: audita el razonSocial tal cual (sin filtrar) junto al ruc', async () => {
+    const fetchMock = stubFetchRouter();
+
+    renderModal(JUNK_CLIENT); // razonSocial 'CLIENTE SIN NOMBRE', ruc intact
+    selectTemplate();
+    fillTo('cobranzas@cliente.com');
+    submitAndConfirm();
+
+    await waitFor(() => {
+      expect(screen.getByText('¡Correo Enviado!')).toBeInTheDocument();
+    });
+
+    const postIndexes = callsTo(fetchMock, '/api/send-email', 'POST');
+    const postBody = JSON.parse(fetchMock.mock.calls[postIndexes[0]]?.[1]?.body as string);
+    // Writes are NOT filtered by key validity (R6.2 — junk audited as-is).
+    expect(postBody.ruc).toBe('20601234567');
+    expect(postBody.razonSocial).toBe('CLIENTE SIN NOMBRE');
+    expect(postBody.moneda).toBe('S/');
+  });
+
   // ---- UX flow (preserved from the previous modal) ----
 
   it('debe mostrar spinner mientras se envía el correo', () => {

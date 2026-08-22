@@ -1,11 +1,54 @@
 import React from 'react';
-import { render, screen, fireEvent } from '@testing-library/react';
-import { describe, it, expect, vi } from 'vitest';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import ClientDetailModal from '../ClientDetailModal';
 import { mockClients } from '../../utils/__tests__/mockData';
 import { ClienteGroup } from '../../types';
 
+// ---------------------------------------------------------------------------
+// Fetch stub (REQ-02 R4): the embedded HistorialNotificaciones section
+// GETs /api/cobranza/historial/{ruc} on mount — stubbed at the global
+// boundary with an empty history by default (the module-boundary mock
+// convention; per-test overrides via stubHistorial).
+// ---------------------------------------------------------------------------
+
+const HISTORIAL_ROW = {
+  id: 2,
+  ruc: '20601234567',
+  razonSocial: 'HOLOMEDIC S.A.C.',
+  destinatarios: ['contacto@empresa.com'],
+  copias: null,
+  asunto: 'Recordatorio de pago',
+  montoReclamado: 1234.56,
+  moneda: 'S/',
+  comprobantesCount: 1,
+  estadoEnvio: 'SUCCESS',
+  errorDetalle: null,
+  enviadoPor: 'María Pérez',
+  fechaEnvio: '2026-08-22T14:30:00.000Z',
+};
+
+function stubHistorial(envios: unknown[] = []): ReturnType<typeof vi.fn> {
+  const fetchMock = vi.fn(() =>
+    Promise.resolve({
+      ok: true,
+      status: 200,
+      json: () => Promise.resolve({ success: true, envios }),
+    } as unknown as Response),
+  );
+  vi.stubGlobal('fetch', fetchMock);
+  return fetchMock;
+}
+
 describe('ClientDetailModal Component', () => {
+  beforeEach(() => {
+    stubHistorial();
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
   it('debe renderizar el detalle del cliente, RUC, estado consolidado y lista de documentos', () => {
     const onClose = vi.fn();
     const onOpenEmailComposer = vi.fn();
@@ -256,5 +299,63 @@ describe('ClientDetailModal Component', () => {
     // New columns still render regardless of Cuenta
     expect(screen.getByText('Días Vencido')).toBeInTheDocument();
     expect(screen.getByText('Estado', { selector: 'th' })).toBeInTheDocument();
+  });
+
+  // ============================================================
+  // REQ-02 R4 — Historial de Notificaciones section
+  // ============================================================
+
+  it('renders the HistorialNotificaciones section after the documents table with the client key', async () => {
+    const fetchMock = stubHistorial([HISTORIAL_ROW]);
+    const onClose = vi.fn();
+    const onOpenEmailComposer = vi.fn();
+
+    render(
+      <ClientDetailModal
+        client={mockClients[0]}
+        onClose={onClose}
+        onOpenEmailComposer={onOpenEmailComposer}
+      />
+    );
+
+    // The section appears with its heading and fetches by the client's clienteId.
+    await waitFor(() => {
+      expect(screen.getByText('Historial de Notificaciones')).toBeInTheDocument();
+    });
+    expect(fetchMock).toHaveBeenCalledWith('/api/cobranza/historial/20601234567', {
+      method: 'GET',
+    });
+
+    // Documents table still present — the section is ADDITIVE (R4 order:
+    // after "Documentos en Cuenta Corriente").
+    expect(screen.getByText('Documentos en Cuenta Corriente')).toBeInTheDocument();
+
+    // The audited row renders (badge + amount + sender). 1234.56 is
+    // distinct from the documents-table saldo amounts on purpose.
+    await waitFor(() => {
+      expect(screen.getByText('Enviado')).toBeInTheDocument();
+    });
+    expect(screen.getByText('S/ 1,234.56')).toBeInTheDocument();
+    expect(screen.getByText('María Pérez')).toBeInTheDocument();
+  });
+
+  it('shows the empty history state when the client has no audited sends (R4.2)', async () => {
+    stubHistorial([]);
+    const onClose = vi.fn();
+    const onOpenEmailComposer = vi.fn();
+
+    render(
+      <ClientDetailModal
+        client={mockClients[0]}
+        onClose={onClose}
+        onOpenEmailComposer={onOpenEmailComposer}
+      />
+    );
+
+    await waitFor(() => {
+      expect(
+        screen.getByText('Aún no hay envíos de cobranza registrados para este cliente'),
+      ).toBeInTheDocument();
+    });
   });
 });
