@@ -9,6 +9,13 @@ export interface RutaProtegida {
 export const RUTAS_PROTEGIDAS: RutaProtegida[] = [
   { path: '/cobranza',            permiso: 'cobranza',         label: 'Cobranza' },
   { path: '/api/cobranza/contactos', permiso: 'cobranza',      label: 'API Directorio de Contactos' },
+  // REQ-02 (D1): both audit endpoints require the cobranza permiso.
+  // `buscarRutaProtegida` matches longest-first `startsWith`, so the
+  // historial prefix entry covers the `[ruc]` subpath. Breaking
+  // change: unauthenticated/scripted callers of /api/send-email now
+  // get 401 (single authenticated consumer verified; deploy note).
+  { path: '/api/send-email',         permiso: 'cobranza',      label: 'API Envío de Correos' },
+  { path: '/api/cobranza/historial', permiso: 'cobranza',      label: 'API Historial de Cobranza' },
   { path: '/consolidados',        permiso: 'consolidados',     label: 'Consolidados' },
   { path: '/api/consolidados/envios', permiso: 'consolidados',  label: 'API Historial de Envíos' },
   { path: '/valoraciones',        permiso: 'valoraciones',     label: 'Valoraciones' },
