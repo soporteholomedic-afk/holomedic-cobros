@@ -103,10 +103,10 @@ export function useCompanyContact(ruc: string, razonSocial: string): UseCompanyC
         if (id !== requestIdRef.current || !mountedRef.current) return;
 
         if (!response.ok) {
-          const message =
-            typeof (json as ApiError).error === 'string'
-              ? (json as ApiError).error
-              : `HTTP ${response.status}`;
+          // Extract once so the typeof guard narrows the const (a cast
+          // expression is a new value on every read and never narrows).
+          const apiError = (json as ApiError).error;
+          const message = typeof apiError === 'string' ? apiError : `HTTP ${response.status}`;
           setStatus('error');
           setError(message);
           setContacto(null);

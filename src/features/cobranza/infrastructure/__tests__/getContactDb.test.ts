@@ -17,7 +17,7 @@ import type { ICompanyContactRepository } from '../../domain/ports';
  * boundary so the suite runs without a real SQL Server connection.
  */
 describe('getContactDb', () => {
-  const mockPool = { connect: vi.fn().mockResolvedValue(undefined) } as unknown;
+  const mockPool = { connect: vi.fn().mockResolvedValue(undefined) };
   const mockRepo: ICompanyContactRepository = {
     getByRuc: vi.fn(),
     upsert: vi.fn(),

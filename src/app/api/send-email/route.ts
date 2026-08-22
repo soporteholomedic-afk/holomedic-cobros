@@ -167,7 +167,9 @@ export async function POST(request: Request): Promise<NextResponse<ApiResponse>>
           400
         );
       }
-      purpose = body.purpose;
+      // Membership in PURPOSES is checked above; the cast only refines
+      // the narrowed `string` to the literal union (no runtime effect).
+      purpose = body.purpose as (typeof PURPOSES)[number];
     }
 
     // Send email
