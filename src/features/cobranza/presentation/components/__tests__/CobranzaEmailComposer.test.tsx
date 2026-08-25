@@ -319,7 +319,7 @@ describe('CobranzaEmailComposer', () => {
       expect(screen.getByText('¡Correo Enviado!')).toBeInTheDocument();
     });
     const postIndexes = callsTo(fetchMock, '/api/send-email', 'POST');
-    const dispatchedHtml = postFormOf(fetchMock, postIndexes[0]).get('html') ?? '';
+    const dispatchedHtml = String(postFormOf(fetchMock, postIndexes[0]).get('html') ?? '');
     // Dispatched html = body + CURRENT signature only (edited name, exactly once).
     expect(dispatchedHtml).toContain('Juan Firmado');
     expect(dispatchedHtml.match(/Juan Firmado/g)).toHaveLength(1);
@@ -423,7 +423,7 @@ describe('CobranzaEmailComposer', () => {
     expect(form.get('purpose')).toBe('cobranza');
     expect(form.get('to')).toBe('cobranzas@cliente.com');
     expect(form.get('subject')).toBe('Recordatorio HOLOMEDIC S.A.C. — deuda S/ 1,000.00');
-    const dispatchedHtml = form.get('html') ?? '';
+    const dispatchedHtml = String(form.get('html') ?? '');
     expect(dispatchedHtml).toContain('Estimados HOLOMEDIC S.A.C.');
     // Signature appended exactly once at dispatch (firma stripped from body).
     expect(dispatchedHtml.match(/María Pérez/g)).toHaveLength(1);

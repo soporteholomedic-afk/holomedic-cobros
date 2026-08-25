@@ -18,7 +18,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { useSendCobranzaEmail } from '../useSendCobranzaEmail';
 import type { CobranzaDirectoryPort, SendCobranzaEmailInput } from '../useSendCobranzaEmail';
-import type { CobranzaAuditMetadata } from '../../../helpers/buildCobranzaAuditMetadata';
+import type { CobranzaAuditMetadata } from '../../helpers/buildCobranzaAuditMetadata';
 
 const AUDIT_META: CobranzaAuditMetadata = {
   ruc: '20601234567',

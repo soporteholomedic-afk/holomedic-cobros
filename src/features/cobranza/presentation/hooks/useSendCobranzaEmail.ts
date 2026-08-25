@@ -22,7 +22,7 @@
 
 import { useCallback, useState } from 'react';
 
-import type { CobranzaAuditMetadata } from '../../helpers/buildCobranzaAuditMetadata';
+import type { CobranzaAuditMetadata } from '../helpers/buildCobranzaAuditMetadata';
 
 /** Persist-before-dispatch boundary implemented by the composer. */
 export interface CobranzaDirectoryPort {
