@@ -6,7 +6,7 @@ import FileUpload from '@/components/FileUpload';
 import DashboardStats from '@/components/DashboardStats';
 import ClientList from '@/components/ClientList';
 import ClientDetailModal from '@/components/ClientDetailModal';
-import { EmailComposerModal } from '@/components/EmailComposerModal';
+import { CobranzaEmailComposer } from '@/features/cobranza/presentation/components/CobranzaEmailComposer';
 import { ClienteGroup } from '@/types';
 import { ShieldCheck, CheckCircle2 } from 'lucide-react';
 
@@ -97,9 +97,9 @@ export default function CobranzaPage() {
         />
       )}
 
-      {/* Email Composer Modal */}
+      {/* Email Composer */}
       {selectedClient && isEmailComposerOpen && (
-        <EmailComposerModal
+        <CobranzaEmailComposer
           client={selectedClient}
           onClose={() => setIsEmailComposerOpen(false)}
           onSuccess={(msg) => {

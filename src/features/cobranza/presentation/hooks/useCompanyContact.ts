@@ -14,7 +14,8 @@
  *
  * `saveContact(input)` PUTs the idempotent upsert and resolves with the
  * persisted contact, or throws with the API error message so the caller
- * (EmailComposerModal.doSend) can surface the failure and abort the send
+ * (CobranzaEmailComposer via useSendCobranzaEmail) can surface the
+ * failure and abort the send
  * (REQ-01-DIR-07 persist-before-dispatch).
  *
  * Design contract: fetch-only — the API route is the boundary; no

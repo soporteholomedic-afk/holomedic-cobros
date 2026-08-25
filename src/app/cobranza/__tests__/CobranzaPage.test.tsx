@@ -32,8 +32,8 @@ vi.mock('@/components/ClientDetailModal', () => ({
   default: () => <div data-testid="client-detail-mock">ClientDetailModal</div>,
 }));
 
-vi.mock('@/components/EmailComposerModal', () => ({
-  EmailComposerModal: () => <div data-testid="email-composer-mock">EmailComposerModal</div>,
+vi.mock('@/features/cobranza/presentation/components/CobranzaEmailComposer', () => ({
+  CobranzaEmailComposer: () => <div data-testid="email-composer-mock">CobranzaEmailComposer</div>,
 }));
 
 import CobranzaPage from '../page';
