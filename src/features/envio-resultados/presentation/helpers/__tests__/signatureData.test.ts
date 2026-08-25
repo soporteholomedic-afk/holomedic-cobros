@@ -107,3 +107,44 @@ describe('buildSignatureDataFromUser', () => {
     expect(DEFAULT_SIGNATURE_DATA.role).toBe(before.role);
   });
 });
+
+// usuarios-correo — signature email seeding: the session user's correo
+// maps into the signature email with DEFAULT_SIGNATURE_DATA.email as
+// the fallback (adjudicated design: identical rendering for
+// correo-less users, never undefined artifacts).
+describe('buildSignatureDataFromUser — correo seeding', () => {
+  it('seeds the signature email from the session correo', () => {
+    const data = buildSignatureDataFromUser({
+      nombre: 'María Pérez',
+      usuario: 'mperez',
+      correo: 'u@holomedic.com',
+    });
+    expect(data.email).toBe('u@holomedic.com');
+    expect(data.name).toBe('María Pérez'); // name chain untouched
+  });
+
+  it('trims the correo before seeding', () => {
+    const data = buildSignatureDataFromUser({ correo: '  u@holomedic.com  ' });
+    expect(data.email).toBe('u@holomedic.com');
+  });
+
+  it('falls back to the default email when correo is null', () => {
+    const data = buildSignatureDataFromUser({ nombre: 'María Pérez', correo: null });
+    expect(data.email).toBe(DEFAULT_SIGNATURE_DATA.email);
+  });
+
+  it('falls back to the default email when correo is an empty string', () => {
+    const data = buildSignatureDataFromUser({ correo: '' });
+    expect(data.email).toBe(DEFAULT_SIGNATURE_DATA.email);
+  });
+
+  it('falls back to the default email when correo is whitespace-only', () => {
+    const data = buildSignatureDataFromUser({ correo: '   ' });
+    expect(data.email).toBe(DEFAULT_SIGNATURE_DATA.email);
+  });
+
+  it('falls back to the default email for a null user (auth/me unavailable)', () => {
+    const data = buildSignatureDataFromUser(null);
+    expect(data.email).toBe(DEFAULT_SIGNATURE_DATA.email);
+  });
+});

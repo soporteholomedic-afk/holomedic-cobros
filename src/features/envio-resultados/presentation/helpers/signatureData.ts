@@ -18,21 +18,24 @@ export const DEFAULT_SIGNATURE_DATA: SignatureData = {
 
 /**
  * Structural slice of the authenticated user needed to seed a
- * signature (usuarios-nombre-firma). Defined LOCALLY on purpose so
- * envio-resultados never imports auth internals — the editor wires
- * the session user into this shape.
+ * signature (usuarios-nombre-firma, usuarios-correo). Defined LOCALLY
+ * on purpose so envio-resultados never imports auth internals — the
+ * editors wire the session user into this shape.
  */
 export interface SignatureUser {
   nombre?: string | null;
   usuario?: string | null;
+  correo?: string | null;
 }
 
 /**
  * Session-seeded signature (single mapper, the ONLY extension point):
  * wires `nombre → name` with the fallback chain
- * `nombre → usuario → DEFAULT_SIGNATURE_DATA.name`. Role, email,
- * phone, phoneAlt and address stay at their defaults — future fields
- * are added here (plus their DB columns), never in the editor.
+ * `nombre → usuario → DEFAULT_SIGNATURE_DATA.name`, and
+ * `correo → email` falling back to `DEFAULT_SIGNATURE_DATA.email`
+ * (identical rendering for correo-less users). Role, phone, phoneAlt
+ * and address stay at their defaults — future fields are added here
+ * (plus their DB columns), never in the editors.
  *
  * Returns a fresh mutable object: mutating the result never affects
  * `DEFAULT_SIGNATURE_DATA`.
@@ -40,8 +43,10 @@ export interface SignatureUser {
 export function buildSignatureDataFromUser(user: SignatureUser | null): SignatureData {
   const nombre = user?.nombre?.trim();
   const usuario = user?.usuario?.trim();
+  const correo = user?.correo?.trim();
   const name = nombre || usuario || DEFAULT_SIGNATURE_DATA.name;
-  return { ...DEFAULT_SIGNATURE_DATA, name };
+  const email = correo || DEFAULT_SIGNATURE_DATA.email;
+  return { ...DEFAULT_SIGNATURE_DATA, name, email };
 }
 
 function escapeHtml(str: string): string {
