@@ -59,6 +59,7 @@ export interface DocumentoPendienteMockRow {
 export interface TablaCobranzaMockRow {
   cliente: string; razonSocial: string; tipoDoc: string; serie: string; numero: string;
   fechaDoc: string; fechaVen: string; moneda: string; debe: string; haber: string; saldo: string;
+  diasVencidos: string;
 }
 
 /**
@@ -92,7 +93,7 @@ export interface MockPreviewData {
   cuentasBancariasHtml?: string;
   /** Cobranza: pending-documents table rows (pre-formatted monto/saldo with currency). */
   documentosPendientes?: DocumentoPendienteMockRow[];
-  /** Cobranza: full cobranza-table rows for `tabla-cobranza` (11 pre-formatted fields). */
+  /** Cobranza: full cobranza-table rows for `tabla-cobranza` (12 pre-formatted fields). */
   tablaCobranza?: TablaCobranzaMockRow[];
 }
 
@@ -255,6 +256,7 @@ const COBRANZA_CONFIG: AreaConfig = {
         { key: 'tipoDoc', label: 'Tipo Doc' }, { key: 'serie', label: 'Serie' }, { key: 'numero', label: 'Numero' },
         { key: 'fechaDoc', label: 'Fec. Doc.' }, { key: 'fechaVen', label: 'Fec. Ven' }, { key: 'moneda', label: 'Mon' },
         { key: 'debe', label: 'Debe' }, { key: 'haber', label: 'Haber' }, { key: 'saldo', label: 'Saldo' },
+        { key: 'diasVencidos', label: 'Días Venc.' },
       ],
     },
   ],
@@ -282,10 +284,12 @@ const COBRANZA_CONFIG: AreaConfig = {
       { fecha: '02/12/2025', factura: 'BO B001-50', monto: 'S/ 450.00', saldo: 'S/ 250.00' },
     ],
     // tabla-cobranza mocks: reuse the mock doc identities + one USD row; 'S/' mirrors Documento.moneda (not 'PEN').
+    // diasVencidos story as of ~15/12/2025: F001-101 (ven 15/11) a month
+    // overdue, B001-50 (ven 02/12) ~two weeks, F002-77 (ven 20/12) not yet due.
     tablaCobranza: [
-      { cliente: '20123456789', razonSocial: 'EMPRESA DEMO S.A.C.', tipoDoc: 'FE', serie: 'F001', numero: '101', fechaDoc: '01/11/2025', fechaVen: '15/11/2025', moneda: 'S/', debe: 'S/ 1,200.00', haber: 'S/ 0.00', saldo: 'S/ 1,000.00' },
-      { cliente: '20123456789', razonSocial: 'EMPRESA DEMO S.A.C.', tipoDoc: 'BO', serie: 'B001', numero: '50', fechaDoc: '20/11/2025', fechaVen: '02/12/2025', moneda: 'S/', debe: 'S/ 450.00', haber: 'S/ 0.00', saldo: 'S/ 250.00' },
-      { cliente: '20123456789', razonSocial: 'EMPRESA DEMO S.A.C.', tipoDoc: 'FE', serie: 'F002', numero: '77', fechaDoc: '05/12/2025', fechaVen: '20/12/2025', moneda: 'US$', debe: 'US$ 60.00', haber: 'US$ 0.00', saldo: 'US$ 50.00' },
+      { cliente: '20123456789', razonSocial: 'EMPRESA DEMO S.A.C.', tipoDoc: 'FE', serie: 'F001', numero: '101', fechaDoc: '01/11/2025', fechaVen: '15/11/2025', moneda: 'S/', debe: 'S/ 1,200.00', haber: 'S/ 0.00', saldo: 'S/ 1,000.00', diasVencidos: '30' },
+      { cliente: '20123456789', razonSocial: 'EMPRESA DEMO S.A.C.', tipoDoc: 'BO', serie: 'B001', numero: '50', fechaDoc: '20/11/2025', fechaVen: '02/12/2025', moneda: 'S/', debe: 'S/ 450.00', haber: 'S/ 0.00', saldo: 'S/ 250.00', diasVencidos: '13' },
+      { cliente: '20123456789', razonSocial: 'EMPRESA DEMO S.A.C.', tipoDoc: 'FE', serie: 'F002', numero: '77', fechaDoc: '05/12/2025', fechaVen: '20/12/2025', moneda: 'US$', debe: 'US$ 60.00', haber: 'US$ 0.00', saldo: 'US$ 50.00', diasVencidos: '0' },
     ],
   },
 };

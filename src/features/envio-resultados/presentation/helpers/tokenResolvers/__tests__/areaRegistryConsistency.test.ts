@@ -32,7 +32,7 @@ const SUPERSET_CTX: InterpolationContext = {
     { fecha: '15/11/2025', factura: 'FE F001-101', monto: 'S/ 1,200.00', saldo: 'S/ 1,000.00' },
     { fecha: '02/12/2025', factura: 'BO B001-50', monto: 'USD 60.00', saldo: 'USD 50.00' },
   ],
-  tablaCobranza: [{ cliente: '20601234567', razonSocial: 'COMERCIAL ABC S.A.C.', tipoDoc: 'FE', serie: 'F001', numero: '101', fechaDoc: '01/11/2025', fechaVen: '15/11/2025', moneda: 'S/', debe: 'S/ 1,200.00', haber: 'S/ 0.00', saldo: 'S/ 1,000.00' }],
+  tablaCobranza: [{ cliente: '20601234567', razonSocial: 'COMERCIAL ABC S.A.C.', tipoDoc: 'FE', serie: 'F001', numero: '101', fechaDoc: '01/11/2025', fechaVen: '15/11/2025', moneda: 'S/', debe: 'S/ 1,200.00', haber: 'S/ 0.00', saldo: 'S/ 1,000.00', diasVencidos: '45' }],
 };
 
 describe('areaRegistryConsistency (REQ-01 DIR-05)', () => {
@@ -114,7 +114,7 @@ describe('areaRegistryConsistency (REQ-01 DIR-05)', () => {
 
   it('cobranza template with the tabla-cobranza token interpolates fully non-empty (token-tabla-cobranza, REQ-TC-05)', () => {
     const out = interpolate(
-      '<div>{{tabla:tabla-cobranza:cliente,razonSocial,tipoDoc,serie,numero,fechaDoc,fechaVen,moneda,debe,haber,saldo}}</div>',
+      '<div>{{tabla:tabla-cobranza:cliente,razonSocial,tipoDoc,serie,numero,fechaDoc,fechaVen,moneda,debe,haber,saldo,diasVencidos}}</div>',
       'Cuenta {{empresa}}',
       SUPERSET_CTX,
       buildTokenResolverRegistry('cobranza'),
@@ -124,6 +124,9 @@ describe('areaRegistryConsistency (REQ-01 DIR-05)', () => {
     expect(out.html).not.toContain('{{');
     expect(out.html).toMatch(/<table[\s>]/);
     expect(out.html).toContain('COMERCIAL ABC S.A.C.');
+    // The 12th column renders its header and the row's overdue-days value.
+    expect(out.html).toContain('Días Venc.');
+    expect(out.html).toContain('>45</td>');
     expect(out.subject).toBe('Cuenta Clínica Demo S.A.');
   });
 });

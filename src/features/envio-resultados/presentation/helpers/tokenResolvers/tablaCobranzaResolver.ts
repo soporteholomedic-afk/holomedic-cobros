@@ -14,12 +14,19 @@
  *   - `debe` / `haber` / `saldo` — amounts, pre-formatted WITH the row's
  *     own currency (zeros render as e.g. 'S/ 0.00'; no debe/haber
  *     coalescing)
+ *   - `diasVencidos` — the row's overdue-day count ('0' when not past
+ *     due), pre-formatted upstream
  *
  * D9: every rendered column carries an explicit inline `width:X%` on its
  * `<th>` (never on `<td>`), renormalized per selection so any subset
  * still sums to exactly 100% — the last selected column absorbs the
  * rounding residual. Unknown columns join via an even-share base width,
  * mirroring the `COLUMN_LABELS[c] ?? c` precedent (columns NOT dropped).
+ *
+ * Styling (email/Outlook-safe: every style inline per cell, no CSS
+ * classes / `<style>` blocks / colgroup): header cells render blue
+ * (`#1e40af` background, white text) and EVERY cell carries a light-blue
+ * `1px solid #bfdbfe` border; data rows keep the white background.
  *
  * Rows come pre-formatted from `ctx.tablaCobranza` (the caller filters
  * to documents with saldo > 0.01 and formats numbers) — the resolver
@@ -43,21 +50,23 @@ const COLUMN_LABELS: Record<string, string> = {
   debe: 'Debe',
   haber: 'Haber',
   saldo: 'Saldo',
+  diasVencidos: 'Días Venc.',
 };
 
 /** D9 — approved proportional column widths (percent). Σ = 100. Resolver-local. */
 const COLUMN_WIDTHS: Record<string, number> = {
   cliente: 9,
-  razonSocial: 18,
+  razonSocial: 16,
   tipoDoc: 8,
   serie: 7,
   numero: 8,
-  fechaDoc: 9,
-  fechaVen: 9,
+  fechaDoc: 8,
+  fechaVen: 8,
   moneda: 5,
-  debe: 9,
-  haber: 9,
-  saldo: 9,
+  debe: 8,
+  haber: 8,
+  saldo: 8,
+  diasVencidos: 7,
 };
 
 /** Round to 2 decimals (D9 percent precision; also cleans FP noise). */
@@ -70,7 +79,7 @@ function round2(n: number): number {
  * `COLUMN_WIDTHS[c] ?? 100 / cols.length` (even-share fallback for
  * unknown keys). Bases are scaled ×100/Σ and rounded to 2 decimals; the
  * LAST selected column absorbs the residual `100 − Σ(rounded)` so the
- * emitted widths sum to exactly 100. The full 11-column selection is the
+ * emitted widths sum to exactly 100. The full 12-column selection is the
  * identity case (the map already sums to 100).
  *
  * Caller guarantees `cols.length > 0`.
@@ -96,7 +105,7 @@ export const tablaCobranzaResolver: TableResolver = {
     const headers = cols
       .map(
         (c, i) =>
-          `<th style="text-align:left;padding:4px 8px;width:${widths[i]}%;">${escapeHtml(COLUMN_LABELS[c] ?? c)}</th>`,
+          `<th style="text-align:left;padding:4px 8px;width:${widths[i]}%;background-color:#1e40af;color:#ffffff;border:1px solid #bfdbfe;">${escapeHtml(COLUMN_LABELS[c] ?? c)}</th>`,
       )
       .join('');
     const body = rows
@@ -104,7 +113,7 @@ export const tablaCobranzaResolver: TableResolver = {
         const cells = cols
           .map((c) => {
             const v = r[c as keyof typeof r] ?? '';
-            return `<td style="padding:4px 8px;">${escapeHtml(v)}</td>`;
+            return `<td style="padding:4px 8px;border:1px solid #bfdbfe;">${escapeHtml(v)}</td>`;
           })
           .join('');
         return `<tr>${cells}</tr>`;

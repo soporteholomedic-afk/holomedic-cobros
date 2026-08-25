@@ -231,6 +231,7 @@ describe('buildCobranzaInterpolationContext', () => {
         debe: 'S/ 1,200.00',
         haber: 'S/ 200.00',
         saldo: 'S/ 1,000.00',
+        diasVencidos: '26', // 20/05 → 26 days overdue at FAKE_NOW (2026-06-15)
       },
       {
         cliente: '20601234567',
@@ -244,9 +245,58 @@ describe('buildCobranzaInterpolationContext', () => {
         debe: '$ 0.00', // zero debe renders '0.00', never blank (D5; no coalescing)
         haber: '$ 300.00',
         saldo: '$ 500.00',
+        diasVencidos: '5', // 10/06 → 5 days overdue at FAKE_NOW
       },
       // B001-77 (saldo 0) is excluded — pending-only filter.
     ]);
+  });
+
+  it('computes per-row diasVencidos with the maxOverdue helpers: past-due → days, future → "0", due today → "0"', () => {
+    const client = buildClient({
+      documentos: [
+        {
+          tipoDoc: 'FE',
+          serie: 'F001',
+          numero: '301',
+          fechaDoc: '01/05/2026',
+          fechaVen: '26/05/2026', // 20 days overdue at FAKE_NOW (2026-06-15)
+          cuenta: '121201',
+          moneda: 'S/',
+          debe: 100,
+          haber: 0,
+          saldo: 100,
+        },
+        {
+          tipoDoc: 'FE',
+          serie: 'F002',
+          numero: '302',
+          fechaDoc: '10/06/2026',
+          fechaVen: '15/08/2026', // future — not past due
+          cuenta: '121201',
+          moneda: 'S/',
+          debe: 100,
+          haber: 0,
+          saldo: 100,
+        },
+        {
+          tipoDoc: 'BO',
+          serie: 'B002',
+          numero: '303',
+          fechaDoc: '14/06/2026',
+          fechaVen: '15/06/2026', // due TODAY — boundary, not past due
+          cuenta: '121201',
+          moneda: 'S/',
+          debe: 100,
+          haber: 0,
+          saldo: 100,
+        },
+      ],
+      saldosPorMoneda: { 'S/': { debe: 300, haber: 0, saldo: 300 } },
+    });
+
+    const ctx = buildCobranzaInterpolationContext(client, '');
+
+    expect(ctx.tablaCobranza?.map((r) => r.diasVencidos)).toEqual(['20', '0', '0']);
   });
 
   it('filters tablaCobranza at the saldo > 0.01 boundary (50 / 0.01 / 0 → only the saldo-50 row)', () => {
@@ -274,6 +324,7 @@ describe('buildCobranzaInterpolationContext', () => {
         debe: 'S/ 0.00', // S/ zero-debe pin: '0.00', no blank, no haber coalescing
         haber: 'S/ 50.00',
         saldo: 'S/ 50.00',
+        diasVencidos: '0', // fechaVen 20/06/2026 is future at FAKE_NOW (2026-06-15)
       },
     ]);
   });

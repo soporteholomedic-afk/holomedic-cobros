@@ -16,6 +16,11 @@ import { GOLDEN_CTX } from '../../__tests__/goldenFixtures';
  * to exactly 100% (last column absorbs the rounding residual). Unknown
  * columns join via an even-share base width — mirroring the
  * `COLUMN_LABELS[c] ?? c` precedent, unknown columns are NOT dropped.
+ *
+ * Styling: every `<th>` renders the blue header (background #1e40af,
+ * white text) and every cell (`<th>` + `<td>`) carries the light-blue
+ * `1px solid #bfdbfe` border — all inline (email/Outlook-safe), data
+ * rows keep no background (white).
  */
 
 function cobranzaCtx(rows: TablaCobranzaRow[]): InterpolationContext {
@@ -39,6 +44,7 @@ const ROWS: TablaCobranzaRow[] = [
     debe: 'S/ 1,200.00',
     haber: 'S/ 0.00',
     saldo: 'S/ 1,000.00',
+    diasVencidos: '30',
   },
   {
     cliente: '20601234567',
@@ -52,6 +58,7 @@ const ROWS: TablaCobranzaRow[] = [
     debe: 'S/ 450.00',
     haber: 'S/ 0.00',
     saldo: 'S/ 250.00',
+    diasVencidos: '13',
   },
   {
     cliente: '20987654321',
@@ -65,6 +72,7 @@ const ROWS: TablaCobranzaRow[] = [
     debe: 'US$ 60.00',
     haber: 'US$ 0.00',
     saldo: 'US$ 50.00',
+    diasVencidos: '0',
   },
 ];
 
@@ -80,6 +88,7 @@ const ALL_COLS = [
   'debe',
   'haber',
   'saldo',
+  'diasVencidos',
 ];
 
 const ALL_LABELS = [
@@ -94,6 +103,7 @@ const ALL_LABELS = [
   'Debe',
   'Haber',
   'Saldo',
+  'Días Venc.',
 ];
 
 /** Header labels of a rendered table, in render order. */
@@ -113,7 +123,7 @@ describe('tablaCobranzaResolver', () => {
     expect(tablaCobranzaResolver.name).toBe('tabla-cobranza');
   });
 
-  it('renders a full HTML table: 11 headers in canonical order, one row per document', () => {
+  it('renders a full HTML table: 12 headers in canonical order, one row per document', () => {
     const out = tablaCobranzaResolver.resolve(ALL_COLS, cobranzaCtx(ROWS));
     expect(out).toMatch(/^<table[\s>]/);
     expect(thLabels(out)).toEqual(ALL_LABELS);
@@ -179,23 +189,33 @@ describe('tablaCobranzaResolver', () => {
     const out = tablaCobranzaResolver.resolve(['cliente', 'customCol'], cobranzaCtx(ROWS));
     expect(thLabels(out)).toEqual(['Cliente', 'customCol']);
     // Unknown col renders an empty cell, not a dropped column.
-    expect(out).toContain('<td style="padding:4px 8px;"></td>');
+    expect(out).toContain('<td style="padding:4px 8px;border:1px solid #bfdbfe;"></td>');
     expect(out).toContain('20601234567');
   });
 
-  // ---- D9: proportional column widths (REQ-TC-07) ----
+  // ---- D9: proportional column widths (REQ-TC-07, v2 12-column map) ----
 
-  it('full 11-column render pins the approved width map on each th (canonical order)', () => {
+  it('full 12-column render pins the approved width map on each th (canonical order)', () => {
     const out = tablaCobranzaResolver.resolve(ALL_COLS, cobranzaCtx(ROWS));
-    expect(thWidths(out)).toEqual([9, 18, 8, 7, 8, 9, 9, 5, 9, 9, 9]);
+    expect(thWidths(out)).toEqual([9, 16, 8, 7, 8, 8, 8, 5, 8, 8, 8, 7]);
     // The widths are inline on the th style, appended to the existing convention.
-    expect(out).toContain('<th style="text-align:left;padding:4px 8px;width:18%;">Razón Social</th>');
-    expect(out).toContain('<th style="text-align:left;padding:4px 8px;width:5%;">Mon</th>');
+    expect(out).toContain(
+      '<th style="text-align:left;padding:4px 8px;width:16%;background-color:#1e40af;color:#ffffff;border:1px solid #bfdbfe;">Razón Social</th>',
+    );
+    expect(out).toContain(
+      '<th style="text-align:left;padding:4px 8px;width:5%;background-color:#1e40af;color:#ffffff;border:1px solid #bfdbfe;">Mon</th>',
+    );
+    expect(out).toContain(
+      '<th style="text-align:left;padding:4px 8px;width:7%;background-color:#1e40af;color:#ffffff;border:1px solid #bfdbfe;">Días Venc.</th>',
+    );
   });
 
-  it('D9 subset cliente,razonSocial,saldo renormalizes to 25/50/25', () => {
+  it('D9 subset cliente,razonSocial,saldo renormalizes to 27.27/48.48/24.25 — last absorbs residual, Σ=100', () => {
     const out = tablaCobranzaResolver.resolve(['cliente', 'razonSocial', 'saldo'], cobranzaCtx(ROWS));
-    expect(thWidths(out)).toEqual([25, 50, 25]);
+    const widths = thWidths(out);
+    // Bases 9+16+8=33 → 27.27/48.48/24.24, last absorbs the 0.01 residual.
+    expect(widths).toEqual([27.27, 48.48, 24.25]);
+    expect(widths.reduce((s, w) => s + w, 0)).toBe(100);
   });
 
   it('D9 subset debe,haber,saldo renormalizes to 33.33/33.33/33.34 — last absorbs residual, Σ=100', () => {
@@ -206,9 +226,9 @@ describe('tablaCobranzaResolver', () => {
     expect(sum).toBe(100);
   });
 
-  it('D9 spec scenario: debe,serie → 56.25/43.75; single column saldo → 100', () => {
+  it('D9 spec scenario: debe,serie → 53.33/46.67; single column saldo → 100', () => {
     const duo = thWidths(tablaCobranzaResolver.resolve(['debe', 'serie'], cobranzaCtx(ROWS)));
-    expect(duo).toEqual([56.25, 43.75]);
+    expect(duo).toEqual([53.33, 46.67]);
     expect(duo.reduce((s, w) => s + w, 0)).toBe(100);
 
     const single = thWidths(tablaCobranzaResolver.resolve(['saldo'], cobranzaCtx(ROWS)));
@@ -226,10 +246,43 @@ describe('tablaCobranzaResolver', () => {
     expect(thLabels(out)).toEqual(['Cliente', 'noExiste']);
   });
 
-  it('D9: no width appears on any td — body cells keep the plain padding style', () => {
+  it('D9: no width appears on any td — body cells keep the plain padding+border style', () => {
     const out = tablaCobranzaResolver.resolve(ALL_COLS, cobranzaCtx(ROWS));
     const tbody = out.match(/<tbody>([\s\S]*)<\/tbody>/)?.[1] ?? '';
     expect(tbody).not.toContain('width:');
-    expect(tbody).toContain('<td style="padding:4px 8px;">20601234567</td>');
+    expect(tbody).toContain('<td style="padding:4px 8px;border:1px solid #bfdbfe;">20601234567</td>');
+  });
+
+  // ---- Blue header + borders (inline, email/Outlook-safe) ----
+
+  it('styles every th with the blue background, white text and light-blue border', () => {
+    const out = tablaCobranzaResolver.resolve(ALL_COLS, cobranzaCtx(ROWS));
+    const thStyles = [...out.matchAll(/<th style="([^"]*)"/g)].map((m) => m[1] ?? '');
+    expect(thStyles).toHaveLength(12);
+    for (const style of thStyles) {
+      expect(style).toContain('background-color:#1e40af');
+      expect(style).toContain('color:#ffffff');
+      expect(style).toContain('border:1px solid #bfdbfe');
+    }
+  });
+
+  it('styles every td with the light-blue border but NO background (data rows stay white)', () => {
+    const out = tablaCobranzaResolver.resolve(ALL_COLS, cobranzaCtx(ROWS));
+    const tdStyles = [...out.matchAll(/<td style="([^"]*)"/g)].map((m) => m[1] ?? '');
+    expect(tdStyles).toHaveLength(36); // 12 columns × 3 rows
+    for (const style of tdStyles) {
+      expect(style).toContain('border:1px solid #bfdbfe');
+      expect(style).not.toContain('background-color');
+    }
+  });
+
+  it('renders the 12th column "Días Venc." with each row’s overdue-days value', () => {
+    const out = tablaCobranzaResolver.resolve(ALL_COLS, cobranzaCtx(ROWS));
+    expect(thLabels(out)).toContain('Días Venc.');
+    expect([...out.matchAll(/<th[\s>]/g)]).toHaveLength(12);
+    // diasVencidos cells render the pre-formatted row values verbatim.
+    expect(out).toContain('>30</td>');
+    expect(out).toContain('>13</td>');
+    expect(out).toContain('>0</td>');
   });
 });

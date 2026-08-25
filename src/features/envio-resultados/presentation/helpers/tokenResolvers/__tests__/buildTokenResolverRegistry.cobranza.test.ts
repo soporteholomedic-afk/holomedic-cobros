@@ -29,7 +29,7 @@ const COBRANZA_CTX: InterpolationContext = {
   documentosPendientes: [
     { fecha: '15/11/2025', factura: 'FE F001-101', monto: 'S/ 1,200.00', saldo: 'S/ 1,000.00' },
   ],
-  tablaCobranza: [{ cliente: '20123456789', razonSocial: 'EMPRESA DEMO S.A.C.', tipoDoc: 'FE', serie: 'F001', numero: '101', fechaDoc: '01/11/2025', fechaVen: '15/11/2025', moneda: 'S/', debe: 'S/ 1,200.00', haber: 'S/ 0.00', saldo: 'S/ 1,000.00' }],
+  tablaCobranza: [{ cliente: '20123456789', razonSocial: 'EMPRESA DEMO S.A.C.', tipoDoc: 'FE', serie: 'F001', numero: '101', fechaDoc: '01/11/2025', fechaVen: '15/11/2025', moneda: 'S/', debe: 'S/ 1,200.00', haber: 'S/ 0.00', saldo: 'S/ 1,000.00', diasVencidos: '45' }],
 };
 
 describe('buildTokenResolverRegistry — cobranza branch (T1b.5)', () => {

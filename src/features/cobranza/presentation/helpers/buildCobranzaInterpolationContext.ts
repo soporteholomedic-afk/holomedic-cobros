@@ -105,9 +105,13 @@ function toDocumentoPendienteRow(doc: Documento): DocumentoPendienteRow {
  * (saldo > 0.01, REQ-TC-04). Amounts via `formatWithCurrency` with the
  * ROW's own currency — zeros render as e.g. 'S/ 0.00'; NO debe/haber
  * coalescing (unlike `toDocumentoPendienteRow.monto`). Client identity
- * repeats on every row; dates are verbatim DD/MM/YYYY.
+ * repeats on every row; dates are verbatim DD/MM/YYYY. `diasVencidos`
+ * reuses the SAME past-due helpers as the client-level `maxOverdue`
+ * (`isPastDue`/`computeOverdueDays`): overdue → String(days), otherwise
+ * '0' (future, due today, or invalid date).
  */
 function toTablaCobranzaRow(client: ClienteGroup, doc: Documento): TablaCobranzaRow {
+  const overdueDays = isPastDue(doc.fechaVen) ? computeOverdueDays(doc.fechaVen) : null;
   return {
     cliente: client.clienteId,
     razonSocial: client.razonSocial,
@@ -120,6 +124,7 @@ function toTablaCobranzaRow(client: ClienteGroup, doc: Documento): TablaCobranza
     debe: formatWithCurrency(doc.moneda, doc.debe),
     haber: formatWithCurrency(doc.moneda, doc.haber),
     saldo: formatWithCurrency(doc.moneda, doc.saldo),
+    diasVencidos: overdueDays !== null ? String(overdueDays) : '0',
   };
 }
 

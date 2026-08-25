@@ -31,11 +31,12 @@ export interface DocumentoPendienteRow {
 }
 
 /**
- * One row of the cobranza `tabla-cobranza` table. All 11 fields are
+ * One row of the cobranza `tabla-cobranza` table. All 12 fields are
  * PRE-FORMATTED strings — amounts carry their own row currency
  * (`formatWithCurrency(doc.moneda, v)` upstream, es-PE 2-decimals; zero
  * renders as e.g. `'S/ 0.00'`, never blank), dates are verbatim
- * DD/MM/YYYY; the resolver stays a dumb escape-and-emit renderer.
+ * DD/MM/YYYY, `diasVencidos` is the row's overdue-day count (`'0'` when
+ * not past due); the resolver stays a dumb escape-and-emit renderer.
  */
 export interface TablaCobranzaRow {
   cliente: string;
@@ -49,6 +50,7 @@ export interface TablaCobranzaRow {
   debe: string;
   haber: string;
   saldo: string;
+  diasVencidos: string;
 }
 
 /**
@@ -95,7 +97,7 @@ export interface InterpolationContext {
   cuentasBancariasHtml?: string;
   /** Cobranza: pending-document rows for the `documentosPendientes` table. */
   documentosPendientes?: DocumentoPendienteRow[];
-  /** Cobranza: full rows for the `tabla-cobranza` table (11 pre-formatted fields). */
+  /** Cobranza: full rows for the `tabla-cobranza` table (12 pre-formatted fields). */
   tablaCobranza?: TablaCobranzaRow[];
 }
 

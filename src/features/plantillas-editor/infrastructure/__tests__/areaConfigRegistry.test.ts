@@ -193,16 +193,16 @@ describe('areaConfigRegistry', () => {
       expect(cfg!.mockPreviewData.documentosPendientes).toBeUndefined();
     });
 
-    it('registers tabla-cobranza: 11 canonical columns, chip wiring, realistic mocks, no width leak (token-tabla-cobranza, REQ-TC-01)', () => {
+    it('registers tabla-cobranza: 12 canonical columns, chip wiring, realistic mocks, no width leak (token-tabla-cobranza, REQ-TC-01)', () => {
       const cfg = getAreaConfig('cobranza');
       expect(cfg).toBeDefined();
       const table = cfg!.predefinedTables.find((t) => t.name === 'tabla-cobranza');
       expect(table).toBeDefined();
       expect(table!.columns.map((c) => c.key)).toEqual([
-        'cliente', 'razonSocial', 'tipoDoc', 'serie', 'numero', 'fechaDoc', 'fechaVen', 'moneda', 'debe', 'haber', 'saldo',
+        'cliente', 'razonSocial', 'tipoDoc', 'serie', 'numero', 'fechaDoc', 'fechaVen', 'moneda', 'debe', 'haber', 'saldo', 'diasVencidos',
       ]);
       expect(table!.columns.map((c) => c.label)).toEqual([
-        'Cliente', 'Razón Social', 'Tipo Doc', 'Serie', 'Numero', 'Fec. Doc.', 'Fec. Ven', 'Mon', 'Debe', 'Haber', 'Saldo',
+        'Cliente', 'Razón Social', 'Tipo Doc', 'Serie', 'Numero', 'Fec. Doc.', 'Fec. Ven', 'Mon', 'Debe', 'Haber', 'Saldo', 'Días Venc.',
       ]);
       // D9 widths are resolver-local — no width data may leak into the editor config.
       expect(JSON.stringify(table)).not.toContain('width');
@@ -216,6 +216,9 @@ describe('areaConfigRegistry', () => {
       expect(rows![0]!.moneda).toBe('S/');
       expect(rows!.some((r) => r.moneda === 'US$')).toBe(true);
       expect(rows!.every((row) => Object.values(row).every((v) => v.length > 0))).toBe(true);
+      // Per-row overdue-days story (as of ~15/12/2025): month overdue, ~two
+      // weeks, and a not-yet-due row rendering '0'.
+      expect(rows!.map((r) => r.diasVencidos)).toEqual(['30', '13', '0']);
     });
   });
 });
