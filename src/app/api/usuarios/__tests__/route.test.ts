@@ -48,12 +48,18 @@ const row: UsuarioRow = {
   usuario: 'jdoe',
   nombre: 'John Doe',
   area: 'cobranza',
+  correo: null,
   permisos: ['admin'],
   contrasenaHash: 'hash',
   firma: null,
   activo: true,
   createdAt: '2026-01-01T00:00:00.000Z',
   updatedAt: '2026-01-01T00:00:00.000Z',
+};
+
+const rowWithCorreo: UsuarioRow = {
+  ...row,
+  correo: 'jdoe@holomedic.com',
 };
 
 const validCreateBody = {
@@ -86,6 +92,20 @@ describe('GET /api/usuarios', () => {
     expect(body.usuarios[0].usuario).toBe('jdoe');
     expect(body.usuarios[0].nombre).toBe('John Doe');
     expect(body.usuarios[0].contrasenaHash).toBeUndefined();
+  });
+
+  it('includes correo in the list projection (null when unset)', async () => {
+    __setUsuarioDbForTests(
+      makeMockRepo({ list: vi.fn().mockResolvedValue([row, rowWithCorreo]) }),
+    );
+
+    const response = await GET();
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.usuarios).toHaveLength(2);
+    expect(body.usuarios[0].correo).toBeNull();
+    expect(body.usuarios[1].correo).toBe('jdoe@holomedic.com');
   });
 });
 
@@ -126,10 +146,78 @@ describe('POST /api/usuarios', () => {
       usuario: 'asmith',
       nombre: 'Alice Smith',
       area: 'consolidados',
+      correo: null,
       permisos: ['consolidados'],
       contrasena: 'secreta',
     });
     expect(body.usuario.usuario).toBe('jdoe');
     expect(body.usuario.nombre).toBe('John Doe');
+    expect(body.usuario.correo).toBeNull();
+  });
+
+  it('creates a user with a valid correo and returns it (201)', async () => {
+    const create = vi.fn().mockResolvedValue(rowWithCorreo);
+    __setUsuarioDbForTests(makeMockRepo({ create }));
+
+    const response = await POST(
+      createJsonRequest({ ...validCreateBody, correo: '  alice@holomedic.com  ' }),
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(201);
+    expect(create).toHaveBeenCalledWith({
+      usuario: 'asmith',
+      nombre: 'Alice Smith',
+      area: 'consolidados',
+      correo: 'alice@holomedic.com',
+      permisos: ['consolidados'],
+      contrasena: 'secreta',
+    });
+    expect(body.usuario.correo).toBe('jdoe@holomedic.com');
+  });
+
+  it('rejects an invalid correo with a 400 naming the field, without echoing the value', async () => {
+    const create = vi.fn();
+    __setUsuarioDbForTests(makeMockRepo({ create }));
+
+    const response = await POST(
+      createJsonRequest({ ...validCreateBody, correo: 'no-es-mail' }),
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(400);
+    expect(body.success).toBe(false);
+    expect(body.error).toContain('correo');
+    expect(body.error).not.toContain('no-es-mail');
+    expect(create).not.toHaveBeenCalled();
+  });
+
+  it('rejects a non-string correo with a 400', async () => {
+    const create = vi.fn();
+    __setUsuarioDbForTests(makeMockRepo({ create }));
+
+    const response = await POST(
+      createJsonRequest({ ...validCreateBody, correo: 123 }),
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(400);
+    expect(body.success).toBe(false);
+    expect(body.error).toContain('correo');
+    expect(create).not.toHaveBeenCalled();
+  });
+
+  it('treats an empty-string correo as unset (null)', async () => {
+    const create = vi.fn().mockResolvedValue(row);
+    __setUsuarioDbForTests(makeMockRepo({ create }));
+
+    const response = await POST(
+      createJsonRequest({ ...validCreateBody, correo: '   ' }),
+    );
+
+    expect(response.status).toBe(201);
+    expect(create).toHaveBeenCalledWith(
+      expect.objectContaining({ correo: null }),
+    );
   });
 });
