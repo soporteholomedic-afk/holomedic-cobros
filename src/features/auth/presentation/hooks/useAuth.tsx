@@ -9,6 +9,8 @@ export interface AuthUser {
   /** Display full name (e.g. "John Doe"). */
   nombre: string;
   area: string;
+  /** Optional email seeded into the sending modules' signatures. */
+  correo?: string | null;
   permisos: string[];
   activo: boolean;
 }

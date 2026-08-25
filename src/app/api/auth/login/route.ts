@@ -12,6 +12,7 @@ interface LoginResponse {
     usuario: string;
     nombre: string;
     area: string;
+    correo: string | null;
     permisos: string[];
     activo: boolean;
   };
@@ -58,6 +59,7 @@ export async function POST(request: Request): Promise<NextResponse<LoginResponse
         usuario: result.usuario.usuario,
         nombre: result.usuario.nombre,
         area: result.usuario.area,
+        correo: result.usuario.correo ?? null,
         permisos: result.usuario.permisos,
         activo: result.usuario.activo,
       },
