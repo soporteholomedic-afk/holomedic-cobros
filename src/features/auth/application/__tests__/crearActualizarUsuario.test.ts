@@ -19,6 +19,7 @@ describe('crear/actualizar usuario use cases — whole-input pass-through', () =
     usuario: 'jdoe',
     nombre: 'John Doe',
     area: 'cobranza',
+    correo: null,
     permisos: ['cobranza'],
     contrasenaHash: 'hash',
     firma: null,

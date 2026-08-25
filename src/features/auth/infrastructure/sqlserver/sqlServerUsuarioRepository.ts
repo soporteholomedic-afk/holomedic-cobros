@@ -11,6 +11,8 @@ interface UsuarioDbRow {
   usuario: string;
   nombre: string;
   area: string;
+  /** Optional post-migration column — absent on pre-migration rows (deploy skew). */
+  correo?: string | null;
   permisos: string;
   contrasenaHash: string;
   firma: Buffer | null;
@@ -25,6 +27,7 @@ function rowToRow(row: UsuarioDbRow): UsuarioRow {
     usuario: row.usuario,
     nombre: row.nombre,
     area: row.area,
+    correo: row.correo ?? null,
     permisos: JSON.parse(row.permisos) as Permiso[],
     contrasenaHash: row.contrasenaHash,
     firma: row.firma,
@@ -73,11 +76,12 @@ export class SqlServerUsuarioRepository implements IUsuarioRepository {
       .input('usuario', mssql.NVarChar(200), input.usuario)
       .input('nombre', mssql.NVarChar(200), input.nombre)
       .input('area', mssql.NVarChar(50), input.area)
+      .input('correo', mssql.NVarChar(200), input.correo ?? null)
       .input('permisos', mssql.NVarChar(mssql.MAX), permisosJson)
       .input('contrasenaHash', mssql.NVarChar(255), hash).query(`
-        INSERT INTO dbo.usuarios (idUsuario, usuario, nombre, area, permisos, contrasenaHash)
+        INSERT INTO dbo.usuarios (idUsuario, usuario, nombre, area, correo, permisos, contrasenaHash)
         OUTPUT INSERTED.*
-        VALUES (@idUsuario, @usuario, @nombre, @area, @permisos, @contrasenaHash)
+        VALUES (@idUsuario, @usuario, @nombre, @area, @correo, @permisos, @contrasenaHash)
       `);
 
     return rowToRow(result.recordset[0]);
@@ -101,6 +105,10 @@ export class SqlServerUsuarioRepository implements IUsuarioRepository {
     if (input.area !== undefined) {
       sets.push('area = @area');
       request.input('area', mssql.NVarChar(50), input.area);
+    }
+    if (input.correo !== undefined) {
+      sets.push('correo = @correo');
+      request.input('correo', mssql.NVarChar(200), input.correo);
     }
     if (input.permisos !== undefined) {
       sets.push('permisos = @permisos');
