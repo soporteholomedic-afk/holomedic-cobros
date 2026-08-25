@@ -96,12 +96,12 @@ export async function POST(request: Request): Promise<NextResponse> {
     const rawCorreo = (body as { correo?: unknown }).correo;
     if (rawCorreo !== undefined && rawCorreo !== null) {
       if (typeof rawCorreo !== 'string') {
-        return buildError('Campo correo inválido: debe ser texto', 400);
+        return buildError('"correo" inválido: debe ser texto', 400);
       }
       const trimmedCorreo = rawCorreo.trim();
       if (trimmedCorreo !== '' && !isValidCorreo(trimmedCorreo)) {
         return buildError(
-          'Campo correo inválido: debe ser un correo electrónico válido',
+          '"correo" inválido: debe ser un correo electrónico válido',
           400,
         );
       }

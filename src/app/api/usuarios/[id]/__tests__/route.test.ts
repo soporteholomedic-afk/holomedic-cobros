@@ -215,7 +215,7 @@ describe('PUT /api/usuarios/[id] — correo', () => {
 
     expect(response.status).toBe(400);
     expect(body.success).toBe(false);
-    expect(body.error).toContain('correo');
+    expect(body.error).toBe('"correo" inválido: debe ser un correo electrónico válido');
     expect(body.error).not.toContain('a@');
     expect(update).not.toHaveBeenCalled();
   });
@@ -232,7 +232,7 @@ describe('PUT /api/usuarios/[id] — correo', () => {
 
     expect(response.status).toBe(400);
     expect(body.success).toBe(false);
-    expect(body.error).toContain('correo');
+    expect(body.error).toBe('"correo" inválido: debe ser texto');
     expect(update).not.toHaveBeenCalled();
   });
 

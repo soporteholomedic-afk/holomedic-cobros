@@ -187,7 +187,7 @@ describe('POST /api/usuarios', () => {
 
     expect(response.status).toBe(400);
     expect(body.success).toBe(false);
-    expect(body.error).toContain('correo');
+    expect(body.error).toBe('"correo" inválido: debe ser un correo electrónico válido');
     expect(body.error).not.toContain('no-es-mail');
     expect(create).not.toHaveBeenCalled();
   });
@@ -203,7 +203,7 @@ describe('POST /api/usuarios', () => {
 
     expect(response.status).toBe(400);
     expect(body.success).toBe(false);
-    expect(body.error).toContain('correo');
+    expect(body.error).toBe('"correo" inválido: debe ser texto');
     expect(create).not.toHaveBeenCalled();
   });
 
