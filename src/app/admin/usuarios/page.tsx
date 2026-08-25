@@ -11,13 +11,14 @@ interface Usuario {
   usuario: string;
   nombre: string;
   area: string;
+  correo: string | null;
   permisos: string[];
   activo: boolean;
   createdAt: string;
   updatedAt: string;
 }
 
-const initialForm = { usuario: '', nombre: '', area: '', contrasena: '', permisos: [] as Permiso[] };
+const initialForm = { usuario: '', nombre: '', area: '', correo: '', contrasena: '', permisos: [] as Permiso[] };
 
 export default function UsuariosPage() {
   const { user, loading: authLoading } = useAuth();
@@ -84,6 +85,7 @@ export default function UsuariosPage() {
       usuario: u.usuario,
       nombre: u.nombre,
       area: u.area,
+      correo: u.correo ?? '',
       contrasena: '',
       permisos: u.permisos as Permiso[],
     });
@@ -109,6 +111,8 @@ export default function UsuariosPage() {
           usuario: form.usuario,
           nombre: form.nombre,
           area: form.area,
+          // Empty string clears the correo server-side ('' → NULL).
+          correo: form.correo,
           permisos: form.permisos,
         };
         if (form.contrasena) body.contrasena = form.contrasena;
@@ -228,6 +232,7 @@ export default function UsuariosPage() {
                   <Th>Usuario</Th>
                   <Th>Nombre</Th>
                   <Th>Área</Th>
+                  <Th>Correo</Th>
                   <Th>Permisos</Th>
                   <Th>Estado</Th>
                   <Th>Firma</Th>
@@ -240,6 +245,7 @@ export default function UsuariosPage() {
                     <Td className="text-slate-500">{u.usuario}</Td>
                     <Td className="font-medium">{u.nombre}</Td>
                     <Td className="capitalize text-slate-500">{u.area}</Td>
+                    <Td className="text-slate-500">{u.correo || '—'}</Td>
                     <Td>
                       <PermisosCell permisos={u.permisos} />
                     </Td>
@@ -285,13 +291,13 @@ export default function UsuariosPage() {
                     </Td>
                   </tr>
                 ))}
-             {filtered.length === 0 && (
-               <tr>
-                 <td colSpan={7} className="px-4 py-8 text-center text-slate-400 text-sm">
-                   No se encontraron usuarios
-                 </td>
-               </tr>
-             )}
+              {filtered.length === 0 && (
+                <tr>
+                  <td colSpan={8} className="px-4 py-8 text-center text-slate-400 text-sm">
+                    No se encontraron usuarios
+                  </td>
+                </tr>
+              )}
               </tbody>
             </table>
           </div>
@@ -342,6 +348,20 @@ export default function UsuariosPage() {
                   value={form.area}
                   onChange={(e) => setForm((p) => ({ ...p, area: e.target.value }))}
                   required
+                  className="w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-white text-sm focus:ring-2 focus:ring-sky-500 focus:border-transparent outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+                  Correo <span className="text-slate-400 font-normal">(opcional)</span>
+                </label>
+                <input
+                  type="email"
+                  value={form.correo}
+                  onChange={(e) => setForm((p) => ({ ...p, correo: e.target.value }))}
+                  maxLength={200}
+                  placeholder="Correo asociado al usuario (ej: jdoe@holomedic.com)"
                   className="w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-white text-sm focus:ring-2 focus:ring-sky-500 focus:border-transparent outline-none"
                 />
               </div>
