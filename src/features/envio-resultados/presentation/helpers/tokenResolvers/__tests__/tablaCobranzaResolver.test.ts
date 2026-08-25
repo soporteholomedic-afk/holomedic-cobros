@@ -2,6 +2,8 @@ import { describe, it, expect } from 'vitest';
 import { tablaCobranzaResolver } from '../tablaCobranzaResolver';
 import type { InterpolationContext, TablaCobranzaRow } from '../types';
 import { GOLDEN_CTX } from '../../__tests__/goldenFixtures';
+import { interpolate } from '../../interpolate';
+import { buildTokenResolverRegistry } from '../buildTokenResolverRegistry';
 
 /**
  * token-tabla-cobranza (REQ-TC-02/03/07) — the `tabla-cobranza` table
@@ -200,13 +202,13 @@ describe('tablaCobranzaResolver', () => {
     expect(thWidths(out)).toEqual([9, 16, 8, 7, 8, 8, 8, 5, 8, 8, 8, 7]);
     // The widths are inline on the th style, appended to the existing convention.
     expect(out).toContain(
-      '<th style="text-align:left;padding:4px 8px;width:16%;background-color:#1e40af;color:#ffffff;border:1px solid #bfdbfe;">Razón Social</th>',
+      '<th style="text-align:left;padding:4px 8px;width:16%;background:#1e40af;color:white;border:1px solid #bfdbfe;">Razón Social</th>',
     );
     expect(out).toContain(
-      '<th style="text-align:left;padding:4px 8px;width:5%;background-color:#1e40af;color:#ffffff;border:1px solid #bfdbfe;">Mon</th>',
+      '<th style="text-align:left;padding:4px 8px;width:5%;background:#1e40af;color:white;border:1px solid #bfdbfe;">Mon</th>',
     );
     expect(out).toContain(
-      '<th style="text-align:left;padding:4px 8px;width:7%;background-color:#1e40af;color:#ffffff;border:1px solid #bfdbfe;">Días Venc.</th>',
+      '<th style="text-align:left;padding:4px 8px;width:7%;background:#1e40af;color:white;border:1px solid #bfdbfe;">Días Venc.</th>',
     );
   });
 
@@ -260,8 +262,8 @@ describe('tablaCobranzaResolver', () => {
     const thStyles = [...out.matchAll(/<th style="([^"]*)"/g)].map((m) => m[1] ?? '');
     expect(thStyles).toHaveLength(12);
     for (const style of thStyles) {
-      expect(style).toContain('background-color:#1e40af');
-      expect(style).toContain('color:#ffffff');
+      expect(style).toContain('background:#1e40af');
+      expect(style).toContain('color:white');
       expect(style).toContain('border:1px solid #bfdbfe');
     }
   });
@@ -284,5 +286,26 @@ describe('tablaCobranzaResolver', () => {
     expect(out).toContain('>30</td>');
     expect(out).toContain('>13</td>');
     expect(out).toContain('>0</td>');
+  });
+
+  it('header styling SURVIVES the full interpolate() pipeline (color-stripper regression)', () => {
+    // interpolate() strips `color:#hex` inline declarations (theme-aware
+    // rendering). A `background-color:#1e40af` would be mangled to a bogus
+    // `background-` property and `color:#ffffff` removed entirely — this
+    // test pins the stripper-safe syntax (`background:` shorthand, named
+    // `white`) end-to-end so the blue header renders in the final email.
+    const registry = buildTokenResolverRegistry('cobranza');
+    const out = interpolate(
+      '<p>{{tabla:tabla-cobranza:cliente,saldo}}</p>',
+      'Asunto',
+      cobranzaCtx(ROWS),
+      registry,
+    );
+    expect(out.html).toContain('background:#1e40af');
+    expect(out.html).toContain('color:white');
+    expect(out.html).toContain('border:1px solid #bfdbfe');
+    // The mangled forms must NOT appear in the final HTML.
+    expect(out.html).not.toContain('background-border');
+    expect(out.html).not.toContain('background-color');
   });
 });

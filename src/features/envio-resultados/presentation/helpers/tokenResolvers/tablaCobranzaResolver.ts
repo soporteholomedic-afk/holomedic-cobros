@@ -27,6 +27,12 @@
  * classes / `<style>` blocks / colgroup): header cells render blue
  * (`#1e40af` background, white text) and EVERY cell carries a light-blue
  * `1px solid #bfdbfe` border; data rows keep the white background.
+ * The background uses the `background:` shorthand and the text color a
+ * named color (`white`) — `interpolate()` strips `color:#hex`
+ * declarations (theme-aware rendering), and `background-color:#1e40af`
+ * would be mangled to a bogus `background-` property by that filter.
+ * Pipes must survive the full interpolate() pipeline, not just this
+ * resolver's raw output.
  *
  * Rows come pre-formatted from `ctx.tablaCobranza` (the caller filters
  * to documents with saldo > 0.01 and formats numbers) — the resolver
@@ -105,7 +111,7 @@ export const tablaCobranzaResolver: TableResolver = {
     const headers = cols
       .map(
         (c, i) =>
-          `<th style="text-align:left;padding:4px 8px;width:${widths[i]}%;background-color:#1e40af;color:#ffffff;border:1px solid #bfdbfe;">${escapeHtml(COLUMN_LABELS[c] ?? c)}</th>`,
+          `<th style="text-align:left;padding:4px 8px;width:${widths[i]}%;background:#1e40af;color:white;border:1px solid #bfdbfe;">${escapeHtml(COLUMN_LABELS[c] ?? c)}</th>`,
       )
       .join('');
     const body = rows
