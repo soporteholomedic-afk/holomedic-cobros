@@ -44,7 +44,7 @@ export const EmailBodyEditor = forwardRef<
         editor.replaceBlocks(editor.document.map((b) => b.id), blocks);
       }
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- run once on mount by design; the parent remounts via key when initialHtml changes
   }, []);
 
   useImperativeHandle(
