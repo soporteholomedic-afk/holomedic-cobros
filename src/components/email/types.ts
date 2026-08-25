@@ -53,3 +53,23 @@ export interface SignatureEditorProps<K extends string = string> {
   values: Record<K, string>;
   onChange: (key: K, value: string) => void;
 }
+
+/**
+ * Controlled preview/edit body field. The consumer owns the editing
+ * state and the lazy WYSIWYG editor element (injected through
+ * `editorSlot` so each consumer keeps its own lazy import seam),
+ * plus the structured signature composition (`signatureSlot`).
+ */
+export interface EmailBodyFieldProps {
+  html: string;
+  isEditing: boolean;
+  onEditingChange: (editing: boolean) => void;
+  editorSlot?: ReactNode;
+  signatureSlot?: ReactNode;
+  emptyHint: string;
+}
+
+/** Full-screen overlay shell for the two-panel composition. */
+export interface EmailComposerShellProps {
+  children: ReactNode;
+}
