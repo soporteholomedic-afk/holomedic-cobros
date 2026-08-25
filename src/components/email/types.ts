@@ -50,7 +50,8 @@ export interface EmailControlsPanelProps {
  */
 export interface SignatureEditorProps<K extends string = string> {
   fields: { key: K; label: string }[];
-  values: Record<K, string>;
+  /** Nullable/absent values render as empty inputs (callers with optional fields). */
+  values: Readonly<Record<K, string | null | undefined>>;
   onChange: (key: K, value: string) => void;
 }
 
