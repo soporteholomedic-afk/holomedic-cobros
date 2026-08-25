@@ -20,6 +20,8 @@ export interface Usuario {
   /** Display full name (e.g. "John Doe") — what the UI shows. */
   nombre: string;
   area: string;
+  /** Optional email used by the sending modules' signatures. */
+  correo: string | null;
   permisos: Permiso[];
   activo: boolean;
   createdAt: string;
@@ -45,6 +47,7 @@ export interface CreateUsuarioInput {
   usuario: string;
   nombre: string;
   area: string;
+  correo?: string | null;
   permisos: Permiso[];
   contrasena: string;
 }
@@ -53,6 +56,7 @@ export interface UpdateUsuarioInput {
   usuario?: string;
   nombre?: string;
   area?: string;
+  correo?: string | null;
   permisos?: Permiso[];
   contrasena?: string;
   activo?: boolean;
