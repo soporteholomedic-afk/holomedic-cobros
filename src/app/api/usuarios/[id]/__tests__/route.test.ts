@@ -66,6 +66,7 @@ const row: UsuarioRow = {
   usuario: 'jdoe',
   nombre: 'John D. Doe',
   area: 'cobranza',
+  correo: null,
   permisos: ['admin'],
   contrasenaHash: 'hash',
   firma: null,
@@ -154,5 +155,125 @@ describe('PUT /api/usuarios/[id]', () => {
     expect(claims.nombre).toBe('Soporte Renamed');
     expect('usuario' in claims).toBe(false); // design decision 2: no usuario claim
     expect(mockCookieSet).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('PUT /api/usuarios/[id] — correo', () => {
+  it('sets a valid correo (trimmed) and returns it in the projection', async () => {
+    const updatedRow: UsuarioRow = { ...row, correo: 'nueva@holomedic.com' };
+    const update = vi.fn().mockResolvedValue(updatedRow);
+    __setUsuarioDbForTests(makeMockRepo({ update }));
+
+    const response = await PUT(
+      createJsonRequest({ correo: '  nueva@holomedic.com  ' }),
+      routeParams('u-9'),
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(update).toHaveBeenCalledWith('u-9', { correo: 'nueva@holomedic.com' });
+    expect(body.usuario.correo).toBe('nueva@holomedic.com');
+  });
+
+  it('clears the correo when the body carries an empty string', async () => {
+    const update = vi.fn().mockResolvedValue(row);
+    __setUsuarioDbForTests(makeMockRepo({ update }));
+
+    const response = await PUT(
+      createJsonRequest({ correo: '' }),
+      routeParams('u-9'),
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(update).toHaveBeenCalledWith('u-9', { correo: null });
+    expect(body.usuario.correo).toBeNull();
+  });
+
+  it('clears the correo when the body carries an explicit null', async () => {
+    const update = vi.fn().mockResolvedValue(row);
+    __setUsuarioDbForTests(makeMockRepo({ update }));
+
+    const response = await PUT(
+      createJsonRequest({ correo: null }),
+      routeParams('u-9'),
+    );
+
+    expect(response.status).toBe(200);
+    expect(update).toHaveBeenCalledWith('u-9', { correo: null });
+  });
+
+  it('rejects an invalid correo with a 400 naming the field, without echoing the value', async () => {
+    const update = vi.fn();
+    __setUsuarioDbForTests(makeMockRepo({ update }));
+
+    const response = await PUT(
+      createJsonRequest({ correo: 'a@' }),
+      routeParams('u-9'),
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(400);
+    expect(body.success).toBe(false);
+    expect(body.error).toContain('correo');
+    expect(body.error).not.toContain('a@');
+    expect(update).not.toHaveBeenCalled();
+  });
+
+  it('rejects a non-string correo with a 400', async () => {
+    const update = vi.fn();
+    __setUsuarioDbForTests(makeMockRepo({ update }));
+
+    const response = await PUT(
+      createJsonRequest({ correo: 42 }),
+      routeParams('u-9'),
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(400);
+    expect(body.success).toBe(false);
+    expect(body.error).toContain('correo');
+    expect(update).not.toHaveBeenCalled();
+  });
+
+  it('leaves the correo untouched when the key is omitted', async () => {
+    const update = vi.fn().mockResolvedValue(row);
+    __setUsuarioDbForTests(makeMockRepo({ update }));
+
+    const response = await PUT(
+      createJsonRequest({ nombre: 'Solo Nombre' }),
+      routeParams('u-9'),
+    );
+
+    expect(response.status).toBe(200);
+    const forwarded = update.mock.calls[0]?.[1] as Record<string, unknown>;
+    expect(forwarded).toEqual({ nombre: 'Solo Nombre' });
+    expect('correo' in forwarded).toBe(false);
+  });
+
+  it('self-edit including correo re-signs a token with NO correo claim', async () => {
+    const selfRow: UsuarioRow = {
+      ...row,
+      idUsuario: 'admin-001',
+      nombre: 'Soporte Renamed',
+      correo: 'soporte@holomedic.com',
+    };
+    __setUsuarioDbForTests(
+      makeMockRepo({ update: vi.fn().mockResolvedValue(selfRow) }),
+    );
+
+    const response = await PUT(
+      createJsonRequest({ nombre: 'Soporte Renamed', correo: 'soporte@holomedic.com' }),
+      routeParams('admin-001'),
+    );
+
+    expect(response.status).toBe(200);
+    expect(mockSignJwt).toHaveBeenCalledTimes(1);
+    const claims = mockSignJwt.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect(claims.sub).toBe('admin-001');
+    expect(claims.nombre).toBe('Soporte Renamed');
+    expect(claims.area).toBe('cobranza');
+    expect(claims.permisos).toEqual(['admin']);
+    expect('correo' in claims).toBe(false); // JWT carries no correo claim
   });
 });

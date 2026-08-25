@@ -4,6 +4,7 @@ import { getSession, signJwt, COOKIE_NAME, getAuthCookieOptions } from '@/lib/au
 import { getUsuarioDb } from '@/features/auth/infrastructure/getUsuarioDb';
 import type { Permiso } from '@/features/auth/domain/entities';
 import { PERMISOS } from '@/features/auth/domain/entities';
+import { isValidCorreo } from '@/features/auth/domain/correo';
 import { UpdateUsuarioUseCase } from '@/features/auth/application/actualizarUsuario';
 import { DeleteUsuarioUseCase } from '@/features/auth/application/eliminarUsuario';
 import { UsuarioNotFoundError } from '@/features/auth/infrastructure/sqlserver';
@@ -69,6 +70,27 @@ export async function PUT(
       }
       input.area = body.area.trim();
     }
+    if (body.correo !== undefined) {
+      // undefined = leave untouched; null/'' = clear to NULL; string =
+      // trim + validate. The submitted value is never echoed (PII).
+      if (body.correo === null) {
+        input.correo = null;
+      } else if (typeof body.correo === 'string') {
+        const trimmedCorreo = body.correo.trim();
+        if (trimmedCorreo === '') {
+          input.correo = null;
+        } else if (isValidCorreo(trimmedCorreo)) {
+          input.correo = trimmedCorreo;
+        } else {
+          return buildError(
+            '"correo" inválido: debe ser un correo electrónico válido',
+            400,
+          );
+        }
+      } else {
+        return buildError('"correo" inválido: debe ser texto', 400);
+      }
+    }
     if (body.permisos !== undefined) {
       if (!validatePermisos(body.permisos)) {
         return buildError('"permisos" inválidos', 400);
@@ -111,6 +133,7 @@ export async function PUT(
         usuario: actualizado.usuario,
         nombre: actualizado.nombre,
         area: actualizado.area,
+        correo: actualizado.correo,
         permisos: actualizado.permisos,
         activo: actualizado.activo,
         createdAt: actualizado.createdAt,
