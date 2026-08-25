@@ -1,7 +1,9 @@
 import { NextResponse } from 'next/server';
 import { sendEmail } from '@/utils/sendEmail';
+import type { EmailAttachment } from '@/utils/sendEmail';
 import { getSession } from '@/lib/auth';
 import { registrarAuditoriaCobranza } from '@/features/cobranza/infrastructure/registrarAuditoriaCobranza';
+import { sanitizeComponent } from '@/lib/sanitize-filename';
 
 // ---- Request / Response types ----
 
@@ -26,6 +28,21 @@ type ApiResponse = SuccessResponse | ErrorResponse;
 // ---- Helpers ----
 
 const MAX_BODY_SIZE = 1_000_000; // 1MB
+
+// ---- FormData attachment limits (cobranza composer contract) ----
+
+/** REQ cap: at most 10 attachment files per send. */
+const MAX_ATTACHMENT_COUNT = 10;
+/** REQ cap: at most 25MB of attachment bytes per send. */
+const MAX_ATTACHMENT_TOTAL_BYTES = 25 * 1024 * 1024;
+/**
+ * Pre-parse request-size gate for multipart bodies: the attachment
+ * budget plus 1MB of multipart envelope slack (boundaries + part
+ * headers). Exact per-file enforcement happens after parsing via
+ * `File.size`; this gate only bounds how many bytes get buffered.
+ */
+const MAX_MULTIPART_REQUEST_BYTES =
+  MAX_ATTACHMENT_TOTAL_BYTES + MAX_BODY_SIZE;
 
 /**
  * Accepted `purpose` values (REQ-01 DIR-08). Mirrors the `Purpose` union
@@ -165,6 +182,134 @@ function buildError(
   return NextResponse.json({ success: false, error, code }, { status });
 }
 
+/**
+ * Split a comma-joined recipient list ("a@b.com, c@d.com") into
+ * trimmed, non-empty entries — the array shape the shared pipeline
+ * validates (the hook joins with commas; browsers never send arrays).
+ */
+function splitRecipientList(value: string): string[] {
+  return value
+    .split(',')
+    .map((entry) => entry.trim())
+    .filter((entry) => entry.length > 0);
+}
+
+interface ParsedFormDataRequest {
+  body: Record<string, unknown>;
+  attachments?: EmailAttachment[];
+}
+
+/**
+ * Parse a multipart/form-data request (the `useSendCobranzaEmail`
+ * hook contract) into the SAME `Record<string, unknown>` shape the
+ * legacy JSON path produces, so both converge on one validated
+ * pipeline: recipients ≤10, html ≤1MB, purpose whitelist and the
+ * REQ-02 audit branches all run unchanged on the normalized body.
+ *
+ * Boundary hardening before any SMTP dispatch: count (≤10 files),
+ * total size (≤25MB) and filenames (sanitized) are validated here,
+ * with the count/size checks running BEFORE file bytes are buffered.
+ * Optional fields the hook omits (cc, moneda, montoReclamado) stay
+ * undefined so the shared validation stores NULL exactly as for JSON.
+ */
+async function parseFormDataRequest(
+  request: Request,
+): Promise<ParsedFormDataRequest | NextResponse<ErrorResponse>> {
+  let formData: FormData;
+  try {
+    formData = await request.formData();
+  } catch {
+    return buildError('VALIDATION_ERROR', 'Invalid FormData body', 400);
+  }
+
+  const entries = formData.getAll('attachments');
+  const files: File[] = [];
+  for (const entry of entries) {
+    // Realm-safe file check: undici (server runtime) and jsdom (tests)
+    // expose different File constructors, so `instanceof` cannot be
+    // used across them. A FormData entry is either a string value or a
+    // File part — anything string-typed under `attachments` is invalid.
+    if (typeof entry === 'string') {
+      return buildError(
+        'VALIDATION_ERROR',
+        'Invalid attachments: file parts required',
+        400,
+      );
+    }
+    files.push(entry);
+  }
+  if (files.length > MAX_ATTACHMENT_COUNT) {
+    return buildError(
+      'VALIDATION_ERROR',
+      `Too many attachments — maximum ${MAX_ATTACHMENT_COUNT} files`,
+      400,
+    );
+  }
+  const totalAttachmentBytes = files.reduce((sum, file) => sum + file.size, 0);
+  if (totalAttachmentBytes > MAX_ATTACHMENT_TOTAL_BYTES) {
+    return buildError(
+      'VALIDATION_ERROR',
+      'Attachments too large — maximum 25MB total',
+      413,
+    );
+  }
+
+  const attachments: EmailAttachment[] = [];
+  for (const [index, file] of files.entries()) {
+    // Windows-illegal characters in uploaded filenames are replaced by
+    // the existing sanitizer; a name that sanitizes to nothing (e.g.
+    // whitespace-only) falls back to a deterministic placeholder.
+    const filename = sanitizeComponent(file.name) || `attachment-${index + 1}`;
+    attachments.push({
+      filename,
+      content: Buffer.from(await file.arrayBuffer()),
+      ...(file.type ? { contentType: file.type } : {}),
+    });
+  }
+
+  const body: Record<string, unknown> = {};
+
+  const toRaw = formData.get('to');
+  if (typeof toRaw === 'string') {
+    const to = splitRecipientList(toRaw);
+    if (to.length > 0) body.to = to;
+  }
+
+  const ccRaw = formData.get('cc');
+  if (typeof ccRaw === 'string') {
+    const cc = splitRecipientList(ccRaw);
+    if (cc.length > 0) body.cc = cc;
+  }
+
+  const setStringField = (name: string): void => {
+    const value = formData.get(name);
+    if (typeof value === 'string') body[name] = value;
+  };
+  setStringField('subject');
+  setStringField('html');
+  setStringField('purpose');
+  setStringField('ruc');
+  setStringField('razonSocial');
+  setStringField('moneda');
+
+  // Numeric audit fields travel as strings in FormData; convert so the
+  // shared JSON validation (typeof number / finite / integer) applies
+  // unchanged. Non-numeric strings become NaN and are rejected there.
+  const setNumberField = (name: string): void => {
+    const value = formData.get(name);
+    if (typeof value === 'string' && value.trim() !== '') {
+      body[name] = Number(value);
+    }
+  };
+  setNumberField('montoReclamado');
+  setNumberField('comprobantesCount');
+
+  return {
+    body,
+    attachments: attachments.length > 0 ? attachments : undefined,
+  };
+}
+
 // ---- POST handler ----
 
 export async function POST(request: Request): Promise<NextResponse<ApiResponse>> {
@@ -173,38 +318,66 @@ export async function POST(request: Request): Promise<NextResponse<ApiResponse>>
   // non-cobranza purposes and until validation completes.
   let auditContext: CobranzaAuditContext | null = null;
   try {
-    // Check body size before parsing
+    // Content-type sniff: multipart/form-data requests (cobranza hook)
+    // take the FormData branch; everything else keeps the legacy JSON
+    // path byte-identical (non-goal: no breaking existing consumers).
+    const contentType = request.headers.get('content-type') ?? '';
+    const isFormData = contentType.toLowerCase().includes('multipart/form-data');
+
+    // Check body size before parsing. Multipart bodies are bounded by
+    // the 25MB attachment budget (+ envelope slack; the exact per-file
+    // check runs after parsing); other bodies keep the 1MB JSON limit.
     const contentLength = request.headers.get('content-length');
-    if (contentLength && parseInt(contentLength, 10) > MAX_BODY_SIZE) {
-      return buildError(
-        'VALIDATION_ERROR',
-        'Body too large — maximum 1MB',
-        413
-      );
+    if (contentLength) {
+      const length = parseInt(contentLength, 10);
+      if (isFormData && length > MAX_MULTIPART_REQUEST_BYTES) {
+        return buildError(
+          'VALIDATION_ERROR',
+          'Attachments too large — maximum 25MB total',
+          413
+        );
+      }
+      if (!isFormData && length > MAX_BODY_SIZE) {
+        return buildError(
+          'VALIDATION_ERROR',
+          'Body too large — maximum 1MB',
+          413
+        );
+      }
     }
 
-    // Parse JSON body
-    let raw: unknown;
-    try {
-      raw = await request.json();
-    } catch {
-      return buildError(
-        'VALIDATION_ERROR',
-        'Invalid JSON body',
-        400
-      );
-    }
+    let body: Record<string, unknown>;
+    let attachments: EmailAttachment[] | undefined;
+    if (isFormData) {
+      const parsed = await parseFormDataRequest(request);
+      if (parsed instanceof NextResponse) {
+        return parsed;
+      }
+      body = parsed.body;
+      attachments = parsed.attachments;
+    } else {
+      // Parse JSON body (legacy path — unchanged)
+      let raw: unknown;
+      try {
+        raw = await request.json();
+      } catch {
+        return buildError(
+          'VALIDATION_ERROR',
+          'Invalid JSON body',
+          400
+        );
+      }
 
-    // Validate required fields
-    if (typeof raw !== 'object' || raw === null) {
-      return buildError(
-        'VALIDATION_ERROR',
-        'Request body must be a JSON object',
-        400
-      );
-    }
+      if (typeof raw !== 'object' || raw === null) {
+        return buildError(
+          'VALIDATION_ERROR',
+          'Request body must be a JSON object',
+          400
+        );
+      }
 
-    const body = raw as Record<string, unknown>;
+      body = raw as Record<string, unknown>;
+    }
 
     const missingFields: string[] = [];
     if (typeof body.subject !== 'string' || !body.subject) missingFields.push('subject');
@@ -312,6 +485,7 @@ export async function POST(request: Request): Promise<NextResponse<ApiResponse>>
       ...(cc ? { cc } : {}),
       subject: body.subject as string,
       html: body.html as string,
+      ...(attachments ? { attachments } : {}),
       purpose,
     });
 
