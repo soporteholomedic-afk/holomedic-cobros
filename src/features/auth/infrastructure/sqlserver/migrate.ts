@@ -29,6 +29,11 @@ import bcrypt from 'bcryptjs';
  * NOTHING in the batch runs — the rename never happens, and every
  * startup re-fails the same way. Dynamic SQL defers that statement's
  * compilation to runtime, after the `ALTER TABLE` has committed.
+ *
+ * `correo` (optional user email for the sending modules) is additive:
+ * carried by the CREATE block for fresh installs and added by its own
+ * sys.columns gate for existing databases. Nullable, no backfill —
+ * existing rows keep NULL until edited.
  */
 const SCHEMA_SQL = /* sql */ `
 IF NOT EXISTS (SELECT 1 FROM sys.tables WHERE name = 'usuarios' AND schema_id = SCHEMA_ID('dbo'))
@@ -41,6 +46,7 @@ BEGIN
     permisos        NVARCHAR(MAX)  NOT NULL,
     contrasenaHash  NVARCHAR(255)  NOT NULL,
     firma           VARBINARY(MAX) NULL,
+    correo          NVARCHAR(200)  NULL,
     activo          BIT            NOT NULL DEFAULT 1,
     createdAt       DATETIME2(3)   NOT NULL DEFAULT SYSUTCDATETIME(),
     updatedAt       DATETIME2(3)   NOT NULL DEFAULT SYSUTCDATETIME()
@@ -56,6 +62,11 @@ IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('dbo.usuari
 BEGIN
   ALTER TABLE dbo.usuarios ADD nombre NVARCHAR(200) NOT NULL DEFAULT '';
   EXEC sp_executesql N'UPDATE dbo.usuarios SET nombre = usuario';
+END;
+
+IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('dbo.usuarios') AND name = 'correo')
+BEGIN
+  ALTER TABLE dbo.usuarios ADD correo NVARCHAR(200) NULL;
 END;
 `;
 
