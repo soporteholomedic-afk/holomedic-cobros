@@ -498,7 +498,7 @@ export function EmailEditor({
                     </label>
                     <input
                       type="text"
-                      value={signatureData[key]}
+                      value={signatureData[key] ?? ''}
                       onChange={(e) => handleSignatureChange(key, e.target.value)}
                       className="w-full rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-950 px-2.5 py-1.5 text-xs text-slate-800 dark:text-slate-200 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:border-sky-500 focus:ring-2 focus:ring-sky-200 dark:focus:ring-sky-900 outline-none transition-colors"
                     />

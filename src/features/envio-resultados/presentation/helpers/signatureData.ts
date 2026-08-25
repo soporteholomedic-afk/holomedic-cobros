@@ -1,6 +1,7 @@
 export interface SignatureData {
   name: string;
-  role: string;
+  /** firma-correos: null = render a name-only first line (no separator). */
+  role: string | null;
   email: string;
   phone: string;
   phoneAlt: string;
@@ -9,7 +10,10 @@ export interface SignatureData {
 
 export const DEFAULT_SIGNATURE_DATA: SignatureData = {
   name: 'Blanca Chirinos',
-  role: 'Área Consolidados',
+  // firma-correos: the role is session-only (seeded from the user's
+  // area) — the degraded path renders a name-only line, never a
+  // resurfaced hardcoded role.
+  role: null,
   email: 'consolidados@holomedic.com.pe',
   phone: '(051) 989211757',
   phoneAlt: '480-0217 Anexo: 303',
@@ -26,6 +30,7 @@ export interface SignatureUser {
   nombre?: string | null;
   usuario?: string | null;
   correo?: string | null;
+  area?: string | null;
 }
 
 /**
@@ -33,8 +38,10 @@ export interface SignatureUser {
  * wires `nombre → name` with the fallback chain
  * `nombre → usuario → DEFAULT_SIGNATURE_DATA.name`, and
  * `correo → email` falling back to `DEFAULT_SIGNATURE_DATA.email`
- * (identical rendering for correo-less users). Role, phone, phoneAlt
- * and address stay at their defaults — future fields are added here
+ * (identical rendering for correo-less users), and `area → role`
+ * (firma-correos): the trimmed area, or null when the user has none —
+ * the role never falls back to a default. Phone, phoneAlt and address
+ * stay at their defaults — future fields are added here
  * (plus their DB columns), never in the editors.
  *
  * Returns a fresh mutable object: mutating the result never affects
@@ -44,9 +51,11 @@ export function buildSignatureDataFromUser(user: SignatureUser | null): Signatur
   const nombre = user?.nombre?.trim();
   const usuario = user?.usuario?.trim();
   const correo = user?.correo?.trim();
+  const area = user?.area?.trim();
   const name = nombre || usuario || DEFAULT_SIGNATURE_DATA.name;
   const email = correo || DEFAULT_SIGNATURE_DATA.email;
-  return { ...DEFAULT_SIGNATURE_DATA, name, email };
+  const role = area || null;
+  return { ...DEFAULT_SIGNATURE_DATA, name, email, role };
 }
 
 function escapeHtml(str: string): string {
@@ -84,7 +93,13 @@ export function stripSignatureHtml(html: string): string {
 
 export function buildSignatureHtml(data: SignatureData): string {
   const name = escapeHtml(data.name);
-  const role = escapeHtml(data.role);
+  // firma-correos: escaping lives INSIDE the ternary — escapeHtml
+  // throws on null, and a null role must render no segment at all.
+  // Role present → byte-identical to the previous output (leading
+  // space preserved); role null → name-only first line.
+  const roleSegment = data.role
+    ? ` <span style="color: rgb(0, 86, 179); font-weight: bold; margin: 0 4px;">|</span> ${escapeHtml(data.role)}`
+    : '';
   const email = escapeHtml(data.email);
   const phone = escapeHtml(data.phone);
   const phoneAlt = escapeHtml(data.phoneAlt);
@@ -98,7 +113,7 @@ export function buildSignatureHtml(data: SignatureData): string {
     </td>
     <td valign="top" style="border-left: 2px solid rgb(0, 86, 179); padding-left: 20px; padding-top: 2px; padding-bottom: 2px;">
       <div style="font-size: 14px; font-weight: bold; color: rgb(0, 0, 0); margin-bottom: 4px; font-family: Arial, sans-serif;">
-        ${name} <span style="color: rgb(0, 86, 179); font-weight: bold; margin: 0 4px;">|</span> ${role}
+        ${name}${roleSegment}
       </div>
       <div style="margin-bottom: 4px; font-family: Arial, sans-serif;">
         <a href="mailto:${email}" style="color: rgb(0, 86, 179); text-decoration: underline;">${email}</a>

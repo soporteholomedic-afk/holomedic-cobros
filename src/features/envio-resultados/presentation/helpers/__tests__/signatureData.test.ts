@@ -36,6 +36,22 @@ describe('stripSignatureHtml', () => {
     expect(stripped + buildSignatureHtml(DEFAULT_SIGNATURE_DATA)).toBe(persisted);
   });
 
+  // firma-correos regression: persisted history may carry ANY signature
+  // variant (with or without a role first line) — the sentinel strip is
+  // content-agnostic and must remove the block byte-for-byte.
+  it('round-trips a role-bearing signature variant: strip is content-agnostic', () => {
+    const body = '<p>Hola</p>';
+    const signature = buildSignatureHtml({
+      ...DEFAULT_SIGNATURE_DATA,
+      name: 'María Pérez',
+      role: 'Cobranzas',
+    });
+    const persisted = body + signature;
+
+    expect(signature).toContain('Cobranzas');
+    expect(stripSignatureHtml(persisted)).toBe(body);
+  });
+
   it('returns input unchanged when no sentinel is present (strip exactness)', () => {
     const html = '<p>Sin firma persistida</p>';
     expect(stripSignatureHtml(html)).toBe(html);
@@ -61,8 +77,9 @@ describe('stripSignatureHtml', () => {
 });
 
 // usuarios-nombre-firma — session-seeded signature mapper: the single
-// extension point wiring ONLY nombre → name (role/email/phone/phoneAlt
-// stay defaults; fallback chain nombre → usuario → default name).
+// extension point wiring nombre → name and correo → email (fallback
+// chains nombre → usuario → default name, correo → default email).
+// firma-correos adds area → role (session-only, nullable).
 describe('buildSignatureDataFromUser', () => {
   it('wires the session nombre into name', () => {
     const data = buildSignatureDataFromUser({ nombre: 'María Pérez', usuario: 'mperez' });
@@ -89,9 +106,11 @@ describe('buildSignatureDataFromUser', () => {
     expect(data.name).toBe(DEFAULT_SIGNATURE_DATA.name);
   });
 
-  it('keeps every non-name field at its default (future extension points untouched)', () => {
+  it('keeps non-name defaults; role is session-only (firma-correos)', () => {
     const data = buildSignatureDataFromUser({ nombre: 'María Pérez', usuario: 'mperez' });
-    expect(data.role).toBe(DEFAULT_SIGNATURE_DATA.role);
+    // firma-correos: the role comes only from the session area — a
+    // user without one gets null, never a resurfaced default role.
+    expect(data.role).toBeNull();
     expect(data.email).toBe(DEFAULT_SIGNATURE_DATA.email);
     expect(data.phone).toBe(DEFAULT_SIGNATURE_DATA.phone);
     expect(data.phoneAlt).toBe(DEFAULT_SIGNATURE_DATA.phoneAlt);
@@ -146,5 +165,97 @@ describe('buildSignatureDataFromUser — correo seeding', () => {
   it('falls back to the default email for a null user (auth/me unavailable)', () => {
     const data = buildSignatureDataFromUser(null);
     expect(data.email).toBe(DEFAULT_SIGNATURE_DATA.email);
+  });
+});
+
+// firma-correos — role seeding: the session user's area maps into the
+// signature role. Trim first; null/empty/whitespace area → null role
+// (the effective role comes ONLY from the session — no hardcoded
+// fallback remains).
+describe('buildSignatureDataFromUser — area/role seeding', () => {
+  it('seeds the signature role from the session area', () => {
+    const data = buildSignatureDataFromUser({ nombre: 'María Pérez', area: 'Cobranzas' });
+    expect(data.role).toBe('Cobranzas');
+  });
+
+  it('trims the area before seeding', () => {
+    const data = buildSignatureDataFromUser({ area: '  Cobranzas ' });
+    expect(data.role).toBe('Cobranzas');
+  });
+
+  it('maps a null area to a null role', () => {
+    const data = buildSignatureDataFromUser({ nombre: 'María Pérez', area: null });
+    expect(data.role).toBeNull();
+  });
+
+  it('maps an empty area to a null role', () => {
+    const data = buildSignatureDataFromUser({ area: '' });
+    expect(data.role).toBeNull();
+  });
+
+  it('maps a whitespace-only area to a null role', () => {
+    const data = buildSignatureDataFromUser({ area: '   ' });
+    expect(data.role).toBeNull();
+  });
+
+  it('maps an absent area to a null role', () => {
+    const data = buildSignatureDataFromUser({ nombre: 'María Pérez' });
+    expect(data.role).toBeNull();
+  });
+
+  it('leaves the name/email fallback chains untouched alongside role seeding', () => {
+    const data = buildSignatureDataFromUser({
+      nombre: '   ',
+      usuario: 'mperez',
+      correo: '  u@holomedic.com  ',
+      area: 'Cobranzas',
+    });
+    expect(data.name).toBe('mperez');
+    expect(data.email).toBe('u@holomedic.com');
+    expect(data.role).toBe('Cobranzas');
+  });
+});
+
+// firma-correos — conditional role segment: `| role` renders only when
+// a role exists; a null role renders a name-only first line.
+describe('buildSignatureHtml — conditional role segment', () => {
+  it('renders the separator and role byte-identically when a role exists', () => {
+    const html = buildSignatureHtml({
+      ...DEFAULT_SIGNATURE_DATA,
+      name: 'María Pérez',
+      role: 'Cobranzas',
+    });
+
+    expect(html).toContain(
+      'María Pérez <span style="color: rgb(0, 86, 179); font-weight: bold; margin: 0 4px;">|</span> Cobranzas',
+    );
+    expect(html).toContain('|</span> Cobranzas');
+  });
+
+  it('escapes a role containing HTML metacharacters', () => {
+    const html = buildSignatureHtml({ ...DEFAULT_SIGNATURE_DATA, role: `<&"'> z` });
+
+    expect(html).toContain('&lt;&amp;&quot;&#039;&gt; z');
+  });
+
+  it('renders a name-only first line for a null role: no separator, no span, no role text', () => {
+    const html = buildSignatureHtml({ ...DEFAULT_SIGNATURE_DATA, name: 'María Pérez', role: null });
+
+    expect(html).toContain('María Pérez');
+    expect(html).not.toContain('|');
+    expect(html).not.toContain('margin: 0 4px');
+    expect(html).not.toContain('Cobranzas');
+    // The rest of the signature table still renders.
+    expect(html).toContain(DEFAULT_SIGNATURE_DATA.email);
+  });
+
+  it('degrades to a name-only signature when the user transport fails (null user)', () => {
+    const data = buildSignatureDataFromUser(null);
+    const html = buildSignatureHtml(data);
+
+    expect(data.role).toBeNull();
+    expect(data.email).toBe(DEFAULT_SIGNATURE_DATA.email);
+    expect(html).toContain(DEFAULT_SIGNATURE_DATA.name);
+    expect(html).not.toContain('|');
   });
 });
