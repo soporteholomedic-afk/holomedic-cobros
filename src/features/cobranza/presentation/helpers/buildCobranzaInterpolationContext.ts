@@ -21,6 +21,7 @@ import { buildCuentasBancariasHtml } from '../../../../utils/paymentInfo';
 import type {
   DocumentoPendienteRow,
   InterpolationContext,
+  TablaCobranzaRow,
 } from '../../../envio-resultados/presentation/helpers/tokenResolvers/types';
 
 // ============================================================
@@ -100,6 +101,34 @@ function toDocumentoPendienteRow(doc: Documento): DocumentoPendienteRow {
 }
 
 /**
+ * Pre-formatted full cobranza-table row for one pending document
+ * (saldo > 0.01, REQ-TC-04). Amounts via `formatWithCurrency` with the
+ * ROW's own currency — zeros render as e.g. 'S/ 0.00'; NO debe/haber
+ * coalescing (unlike `toDocumentoPendienteRow.monto`). Client identity
+ * repeats on every row; dates are verbatim DD/MM/YYYY. `diasVencidos`
+ * reuses the SAME past-due helpers as the client-level `maxOverdue`
+ * (`isPastDue`/`computeOverdueDays`): overdue → String(days), otherwise
+ * '0' (future, due today, or invalid date).
+ */
+function toTablaCobranzaRow(client: ClienteGroup, doc: Documento): TablaCobranzaRow {
+  const overdueDays = isPastDue(doc.fechaVen) ? computeOverdueDays(doc.fechaVen) : null;
+  return {
+    cliente: client.clienteId,
+    razonSocial: client.razonSocial,
+    tipoDoc: doc.tipoDoc,
+    serie: doc.serie,
+    numero: doc.numero,
+    fechaDoc: doc.fechaDoc,
+    fechaVen: doc.fechaVen,
+    moneda: doc.moneda,
+    debe: formatWithCurrency(doc.moneda, doc.debe),
+    haber: formatWithCurrency(doc.moneda, doc.haber),
+    saldo: formatWithCurrency(doc.moneda, doc.saldo),
+    diasVencidos: overdueDays !== null ? String(overdueDays) : '0',
+  };
+}
+
+/**
  * Build the cobranza `InterpolationContext` for one client group.
  * Pure: no I/O, no React — `new Date()` is the only ambient input
  * (today + overdue-day math, same as buildEmailHtml).
@@ -143,5 +172,6 @@ export function buildCobranzaInterpolationContext(
     diasVencidos: String(maxOverdue),
     cuentasBancariasHtml: buildCuentasBancariasHtml(),
     documentosPendientes: pendingDocs.map(toDocumentoPendienteRow),
+    tablaCobranza: pendingDocs.map((doc) => toTablaCobranzaRow(client, doc)),
   };
 }

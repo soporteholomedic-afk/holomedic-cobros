@@ -31,6 +31,29 @@ export interface DocumentoPendienteRow {
 }
 
 /**
+ * One row of the cobranza `tabla-cobranza` table. All 12 fields are
+ * PRE-FORMATTED strings — amounts carry their own row currency
+ * (`formatWithCurrency(doc.moneda, v)` upstream, es-PE 2-decimals; zero
+ * renders as e.g. `'S/ 0.00'`, never blank), dates are verbatim
+ * DD/MM/YYYY, `diasVencidos` is the row's overdue-day count (`'0'` when
+ * not past due); the resolver stays a dumb escape-and-emit renderer.
+ */
+export interface TablaCobranzaRow {
+  cliente: string;
+  razonSocial: string;
+  tipoDoc: string;
+  serie: string;
+  numero: string;
+  fechaDoc: string;
+  fechaVen: string;
+  moneda: string;
+  debe: string;
+  haber: string;
+  saldo: string;
+  diasVencidos: string;
+}
+
+/**
  * The interpolation data passed by the send flow (`EmailEditor.handleSpitchSelect`).
  *
  * `today` is injectable — fixes the module-level `TODAY` gotcha the
@@ -74,6 +97,8 @@ export interface InterpolationContext {
   cuentasBancariasHtml?: string;
   /** Cobranza: pending-document rows for the `documentosPendientes` table. */
   documentosPendientes?: DocumentoPendienteRow[];
+  /** Cobranza: full rows for the `tabla-cobranza` table (12 pre-formatted fields). */
+  tablaCobranza?: TablaCobranzaRow[];
 }
 
 /**

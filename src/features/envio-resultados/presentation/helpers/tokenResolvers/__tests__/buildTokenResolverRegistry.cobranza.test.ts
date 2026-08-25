@@ -29,6 +29,7 @@ const COBRANZA_CTX: InterpolationContext = {
   documentosPendientes: [
     { fecha: '15/11/2025', factura: 'FE F001-101', monto: 'S/ 1,200.00', saldo: 'S/ 1,000.00' },
   ],
+  tablaCobranza: [{ cliente: '20123456789', razonSocial: 'EMPRESA DEMO S.A.C.', tipoDoc: 'FE', serie: 'F001', numero: '101', fechaDoc: '01/11/2025', fechaVen: '15/11/2025', moneda: 'S/', debe: 'S/ 1,200.00', haber: 'S/ 0.00', saldo: 'S/ 1,000.00', diasVencidos: '45' }],
 };
 
 describe('buildTokenResolverRegistry — cobranza branch (T1b.5)', () => {
@@ -117,6 +118,20 @@ describe('buildTokenResolverRegistry — cobranza branch (T1b.5)', () => {
     expect(out.html).toContain('FE F001-101');
     expect(out.html).toContain('S/ 1,000.00');
     expect(out.subject).toBe('');
+  });
+
+  it('delegates {{tabla:tabla-cobranza:cols}} to the table resolver (token-tabla-cobranza, REQ-TC-05)', () => {
+    const registry = buildTokenResolverRegistry('cobranza');
+    const cols = ['cliente', 'razonSocial', 'tipoDoc', 'serie', 'numero', 'fechaDoc', 'fechaVen', 'moneda', 'debe', 'haber', 'saldo'];
+    const out = registry.resolveTable('tabla-cobranza', cols, COBRANZA_CTX);
+    expect(out.html).toMatch(/^<table[\s>]/);
+    expect(out.html).toContain('EMPRESA DEMO S.A.C.');
+    expect(out.html).toContain('S/ 1,000.00');
+    expect(out.subject).toBe('');
+  });
+
+  it('does NOT leak tabla-cobranza into the consolidados registry (REQ-TC-06)', () => {
+    expect(buildTokenResolverRegistry('consolidados').resolveTable('tabla-cobranza', ['cliente'], COBRANZA_CTX)).toEqual({ html: '', subject: '' });
   });
 
   it('resolves unknown simple keys to "" within the cobranza registry', () => {

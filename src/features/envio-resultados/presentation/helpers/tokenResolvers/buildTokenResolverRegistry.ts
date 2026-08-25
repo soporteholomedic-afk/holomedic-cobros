@@ -27,6 +27,7 @@
  */
 import { documentosVencidosResolver } from './documentosVencidosResolver';
 import { documentosPendientesResolver } from './documentosPendientesResolver';
+import { tablaCobranzaResolver } from './tablaCobranzaResolver';
 import { examenesResolver } from './examenesResolver';
 import type { InterpolationContext, ResolveResult, TokenResolverRegistry } from './types';
 import { escapeHtml } from './escapeHtml';
@@ -136,6 +137,7 @@ function buildTableMap(area: string): Map<string, (cols: string[], ctx: Interpol
   }
   if (area === 'cobranza') {
     map.set(documentosPendientesResolver.name, documentosPendientesResolver.resolve);
+    map.set(tablaCobranzaResolver.name, tablaCobranzaResolver.resolve);
     return map;
   }
   // Unknown area → every table resolves to ''.
