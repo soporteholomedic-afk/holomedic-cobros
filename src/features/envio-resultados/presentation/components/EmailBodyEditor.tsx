@@ -6,4 +6,4 @@
  * import seam goes through it. Do not inline new logic here.
  */
 export { EmailBodyEditor } from '@/components/email/EmailBodyEditor';
-export type { EmailBodyEditorHandle, EmailBodyEditorProps } from '@/components/email/EmailBodyEditor';
+export type { EmailBodyEditorHandle } from '@/components/email/EmailBodyEditor';

@@ -38,9 +38,13 @@ describe('SignatureEditor', () => {
     expect(onChange).toHaveBeenCalledWith('email', 'otra@holomedic.com.pe');
   });
 
-  it('renders an empty input when a field key has no value yet', () => {
+  it('renders an empty input for a field whose value is empty', () => {
     render(
-      <SignatureEditor fields={[...fields]} values={{ name: 'María Pérez' }} onChange={vi.fn()} />,
+      <SignatureEditor
+        fields={[...fields]}
+        values={{ name: 'María Pérez', email: '' }}
+        onChange={vi.fn()}
+      />,
     );
     expect(screen.getByLabelText('Email')).toHaveValue('');
   });

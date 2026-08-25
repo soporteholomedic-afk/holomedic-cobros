@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { render, screen, fireEvent } from '@testing-library/react';
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { EmailPreviewPanel } from '../EmailPreviewPanel';
 import { EmailControlsPanel } from '../EmailControlsPanel';
 import type { EmailControlsPanelProps } from '../types';

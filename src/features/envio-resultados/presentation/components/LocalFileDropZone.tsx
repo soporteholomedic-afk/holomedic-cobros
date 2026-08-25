@@ -6,4 +6,3 @@
  * logic here.
  */
 export { LocalFileDropZone } from '@/components/email/LocalFileDropZone';
-export type { LocalFileDropZoneProps } from '@/components/email/LocalFileDropZone';
