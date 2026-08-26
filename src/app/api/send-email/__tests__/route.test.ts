@@ -1,3 +1,10 @@
+// @vitest-environment node
+// API-route test: no DOM. The node environment is REQUIRED for the
+// FormData suites — jsdom replaces globalThis.File with its own class,
+// which breaks undici's request.formData() multipart parser on Node 24
+// (parser asserts entries against its internal File class). In
+// production the route runs under plain Node globals where undici's
+// File IS the global File.
 import { afterEach, beforeEach, describe, it, expect, vi, type Mock } from 'vitest';
 
 import type {
@@ -756,5 +763,272 @@ describe('POST /api/send-email — cobranza audit registration (REQ-02)', () => 
     expect(response.status).toBe(400);
     expect(body.code).toBe('VALIDATION_ERROR');
     expect(mockInsert).not.toHaveBeenCalled();
+  });
+});
+
+// ---- FormData attachments — cobranza composer contract (Unit 3) ----
+
+/**
+ * These tests exercise the multipart wire format the browser produces
+ * for `useSendCobranzaEmail` (src/features/cobranza/presentation/hooks/
+ * useSendCobranzaEmail.ts). The body is built by hand as raw multipart
+ * bytes with an explicit boundary — jsdom's FormData is not serialized
+ * by undici's Request — matching what `fetch(url, { body: formData })`
+ * puts on the wire. Field names, comma-joining and omissions mirror the
+ * hook exactly (task 3.3 field alignment: composer → hook → route).
+ */
+const FORM_BOUNDARY = '----sdd-unit3-boundary';
+
+interface MultipartFileSpec {
+  name: string;
+  content: string;
+  type?: string;
+}
+
+function makeMultipartRequest(
+  fields: Record<string, string>,
+  files: MultipartFileSpec[] = [],
+): Request {
+  const chunks: string[] = [];
+  for (const [name, value] of Object.entries(fields)) {
+    chunks.push(
+      `--${FORM_BOUNDARY}\r\nContent-Disposition: form-data; name="${name}"\r\n\r\n${value}\r\n`,
+    );
+  }
+  for (const file of files) {
+    const type = file.type ?? 'application/octet-stream';
+    chunks.push(
+      `--${FORM_BOUNDARY}\r\nContent-Disposition: form-data; name="attachments"; filename="${file.name}"\r\nContent-Type: ${type}\r\n\r\n${file.content}\r\n`,
+    );
+  }
+  chunks.push(`--${FORM_BOUNDARY}--\r\n`);
+  return new Request('http://localhost:3000/api/send-email', {
+    method: 'POST',
+    headers: { 'content-type': `multipart/form-data; boundary=${FORM_BOUNDARY}` },
+    body: chunks.join(''),
+  });
+}
+
+const COBRANZA_FORM_FIELDS: Record<string, string> = {
+  to: 'cobranza@empresa.com',
+  subject: 'Estado de cuenta — requerimiento',
+  html: '<p>Requerimiento de pago</p>',
+  purpose: 'cobranza',
+  ruc: '20123456789',
+  razonSocial: 'EMPRESA SAC',
+  moneda: 'S/',
+  montoReclamado: '1500.5',
+  comprobantesCount: '3',
+};
+
+/**
+ * Build a cobranza FormData request. A `null` override OMITS the field —
+ * the hook omits cc/moneda/montoReclamado when they have no value.
+ */
+function makeCobranzaFormRequest(
+  overrides: Record<string, string | null> = {},
+  files: MultipartFileSpec[] = [],
+): Request {
+  const merged: Record<string, string | null> = { ...COBRANZA_FORM_FIELDS, ...overrides };
+  const fields: Record<string, string> = {};
+  for (const [key, value] of Object.entries(merged)) {
+    if (value !== null) fields[key] = value;
+  }
+  return makeMultipartRequest(fields, files);
+}
+
+interface SentSendEmailParams {
+  to?: string[];
+  cc?: string[];
+  attachments?: { filename: string; content: Buffer; contentType?: string }[];
+}
+
+function sentParams(call = 0): SentSendEmailParams {
+  return mockSendEmail.mock.calls[call]?.[0] as SentSendEmailParams;
+}
+
+const TWENTY_FIVE_MB = 25 * 1024 * 1024;
+
+describe('POST /api/send-email — FormData attachments (cobranza hook contract)', () => {
+  it('delivers two attachments and writes the SUCCESS audit row (spec: send with attachments)', async () => {
+    mockSendEmail.mockResolvedValue({ success: true, messageId: '<form@outlook.com>' });
+
+    const response = await POST(
+      makeCobranzaFormRequest({}, [
+        { name: 'factura-001.pdf', content: 'AAA', type: 'application/pdf' },
+        { name: 'factura-002.pdf', content: 'BBB', type: 'application/pdf' },
+      ]),
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.success).toBe(true);
+    expect(mockSendEmail).toHaveBeenCalledTimes(1);
+    expect(sentParams().attachments).toEqual([
+      { filename: 'factura-001.pdf', content: Buffer.from('AAA'), contentType: 'application/pdf' },
+      { filename: 'factura-002.pdf', content: Buffer.from('BBB'), contentType: 'application/pdf' },
+    ]);
+    // REQ-02 audit: purpose 'cobranza' → SUCCESS row, numeric metadata.
+    expect(mockInsert).toHaveBeenCalledTimes(1);
+    expect(sentInput()).toMatchObject({
+      destinatarios: ['cobranza@empresa.com'],
+      estadoEnvio: 'SUCCESS',
+      montoReclamado: 1500.5,
+      comprobantesCount: 3,
+      moneda: 'S/',
+    });
+  });
+
+  it('maps the hook field contract: comma-joined to split, omitted cc/moneda/montoReclamado stored as null', async () => {
+    mockSendEmail.mockResolvedValue({ success: true, messageId: '<map@outlook.com>' });
+
+    const response = await POST(
+      makeCobranzaFormRequest({ to: 'a@b.com, c@d.com', moneda: null, montoReclamado: null }),
+    );
+
+    expect(response.status).toBe(200);
+    expect(sentParams().to).toEqual(['a@b.com', 'c@d.com']);
+    expect(sentParams()).not.toHaveProperty('cc');
+    // No attachment parts → sendEmail called without an attachments key.
+    expect(sentParams()).not.toHaveProperty('attachments');
+    expect(mockSendEmail).toHaveBeenCalledWith(
+      expect.objectContaining({ purpose: 'cobranza' }),
+    );
+    expect(sentInput()).toMatchObject({
+      destinatarios: ['a@b.com', 'c@d.com'],
+      copias: null,
+      moneda: null,
+      montoReclamado: null,
+      comprobantesCount: 3,
+    });
+  });
+
+  it('splits a comma-joined cc into the cc array and audits it as copias', async () => {
+    mockSendEmail.mockResolvedValue({ success: true, messageId: '<cc@outlook.com>' });
+
+    const response = await POST(makeCobranzaFormRequest({ cc: 'x@y.com, z@w.com' }));
+
+    expect(response.status).toBe(200);
+    expect(sentParams().cc).toEqual(['x@y.com', 'z@w.com']);
+    expect(sentInput()).toMatchObject({ copias: ['x@y.com', 'z@w.com'] });
+  });
+
+  it('rejects more than 10 attachment files with 400 — no send, no audit (REQ cap)', async () => {
+    const files = Array.from({ length: 11 }, (_, i) => ({ name: `f${i}.pdf`, content: 'x' }));
+
+    const response = await POST(makeCobranzaFormRequest({}, files));
+    const body = await response.json();
+
+    expect(response.status).toBe(400);
+    expect(body.code).toBe('VALIDATION_ERROR');
+    expect(body.error).toContain('10');
+    expect(mockSendEmail).not.toHaveBeenCalled();
+    expect(mockInsert).not.toHaveBeenCalled();
+  });
+
+  it('accepts exactly 10 attachment files (cap boundary)', async () => {
+    mockSendEmail.mockResolvedValue({ success: true, messageId: '<ten@outlook.com>' });
+    const files = Array.from({ length: 10 }, (_, i) => ({ name: `f${i}.pdf`, content: 'x' }));
+
+    const response = await POST(makeCobranzaFormRequest({}, files));
+
+    expect(response.status).toBe(200);
+    expect(sentParams().attachments).toHaveLength(10);
+  });
+
+  it('rejects attachments over 25MB total with 413 — no send, no audit (REQ cap)', async () => {
+    const response = await POST(
+      makeCobranzaFormRequest({}, [
+        { name: 'big.bin', content: 'x'.repeat(TWENTY_FIVE_MB + 1) },
+      ]),
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(413);
+    expect(body.code).toBe('VALIDATION_ERROR');
+    expect(body.error).toContain('25MB');
+    expect(mockSendEmail).not.toHaveBeenCalled();
+    expect(mockInsert).not.toHaveBeenCalled();
+  });
+
+  it('accepts attachments totaling exactly 25MB (cap boundary)', async () => {
+    mockSendEmail.mockResolvedValue({ success: true, messageId: '<exact@outlook.com>' });
+
+    const response = await POST(
+      makeCobranzaFormRequest({}, [{ name: 'exact.bin', content: 'x'.repeat(TWENTY_FIVE_MB) }]),
+    );
+
+    expect(response.status).toBe(200);
+  });
+
+  it('returns 400 for an invalid email inside the FormData to list', async () => {
+    const response = await POST(makeCobranzaFormRequest({ to: 'not-an-email' }));
+    const body = await response.json();
+
+    expect(response.status).toBe(400);
+    expect(body.code).toBe('VALIDATION_ERROR');
+    expect(body.error).toContain('email');
+    expect(mockSendEmail).not.toHaveBeenCalled();
+  });
+
+  it('sanitizes attachment filenames (Windows-illegal chars replaced)', async () => {
+    mockSendEmail.mockResolvedValue({ success: true, messageId: '<san@outlook.com>' });
+
+    const response = await POST(
+      makeCobranzaFormRequest({}, [
+        { name: 'factura:<2026>.pdf', content: 'x', type: 'application/pdf' },
+      ]),
+    );
+
+    expect(response.status).toBe(200);
+    expect(sentParams().attachments?.[0]?.filename).toBe('factura__2026_.pdf');
+  });
+
+  it('falls back to a generated filename when the sanitized name is empty', async () => {
+    mockSendEmail.mockResolvedValue({ success: true, messageId: '<fb@outlook.com>' });
+
+    const response = await POST(
+      makeCobranzaFormRequest({}, [{ name: '   ', content: 'x' }]),
+    );
+
+    expect(response.status).toBe(200);
+    expect(sentParams().attachments?.[0]?.filename).toBe('attachment-1');
+  });
+
+  it('audits a transport failure on the FormData path (REQ-02 branches shared)', async () => {
+    mockSendEmail.mockResolvedValue({
+      success: false,
+      code: 'SMTP_TIMEOUT',
+      error: 'SMTP connection timed out',
+    });
+
+    const response = await POST(
+      makeCobranzaFormRequest({}, [{ name: 'f.pdf', content: 'x' }]),
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(503);
+    expect(body.code).toBe('SMTP_TIMEOUT');
+    expect(mockInsert).toHaveBeenCalledTimes(1);
+    expect(sentInput()).toMatchObject({
+      estadoEnvio: 'FAILED',
+      errorDetalle: 'SMTP connection timed out',
+    });
+  });
+
+  it('returns 400 for a malformed multipart body', async () => {
+    const request = new Request('http://localhost:3000/api/send-email', {
+      method: 'POST',
+      headers: { 'content-type': `multipart/form-data; boundary=${FORM_BOUNDARY}` },
+      body: 'this-is-not-multipart',
+    });
+
+    const response = await POST(request);
+    const body = await response.json();
+
+    expect(response.status).toBe(400);
+    expect(body.code).toBe('VALIDATION_ERROR');
+    expect(body.error).toContain('FormData');
+    expect(mockSendEmail).not.toHaveBeenCalled();
   });
 });

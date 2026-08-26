@@ -19,6 +19,7 @@
     "@pdf-lib/fontkit": "^1.1.1",
     "archiver": "^7.0.1",
     "bcryptjs": "^3.0.3",
+    "dompurify": "^3.4.14",
     "jsonwebtoken": "^9.0.3",
     "lucide-react": "^1.16.0",
     "mssql": "^12.5.5",

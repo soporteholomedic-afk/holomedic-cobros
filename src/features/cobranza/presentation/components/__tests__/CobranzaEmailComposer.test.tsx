@@ -1,17 +1,28 @@
+/**
+ * CobranzaEmailComposer behavioral suite (envio-correos-facturacion
+ * Unit 2, tasks 2.2/2.3) — ports the EmailComposerModal cases (guards,
+ * confirm, retry, directory persist, success animation) onto the shared
+ * two-panel module, and pins the NEW spec behaviors: structured
+ * signature re-append (firma never baked into interpolation), local
+ * attachments dispatched as repeated FormData parts, and the ≤10
+ * recipients guard (cobranza-envio MODIFIED scenarios).
+ *
+ * Mocks: SpitchSelector + useAuth at the module boundary; the lazy
+ * BlockNote editor stubbed (module behavior covered in Unit 1); fetch
+ * routed per-endpoint so call ORDER and payloads are assertable.
+ */
 import React from 'react';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { EmailComposerModal } from '../EmailComposerModal';
-import { mockClients } from '../../utils/__tests__/mockData';
-import type { ClienteGroup } from '../../types';
+import { CobranzaEmailComposer } from '../CobranzaEmailComposer';
+import { mockClients } from '@/utils/__tests__/mockData';
+import type { ClienteGroup } from '@/types';
 
-// ---------------------------------------------------------------------------
-// Mocks (REQ-01 DIR-03/06/07): SpitchSelector + useAuth are mocked at the
-// module boundary; fetch is routed per-endpoint (GET/PUT contactos, POST
-// send-email) so call ORDER and payloads are assertable.
-// ---------------------------------------------------------------------------
-
-const { SAMPLE_SPITCH } = vi.hoisted(() => ({
+// MOCK_USER identity is held stable across renders via vi.hoisted — the
+// real AuthProvider returns a stable user reference, and the composer's
+// late-auth re-seed effect depends on [user] (EmailEditor precedent); a
+// fresh object per render would loop the effect forever.
+const { SAMPLE_SPITCH, MOCK_USER } = vi.hoisted(() => ({
   SAMPLE_SPITCH: {
     id: 'tpl-cob-1',
     area: 'cobranza',
@@ -24,6 +35,14 @@ const { SAMPLE_SPITCH } = vi.hoisted(() => ({
       '{{tabla:documentosPendientes:fecha,factura,monto,saldo}}' +
       '<div>{{cuentasBancarias}}</div>' +
       '<div>{{firma}}</div>',
+  },
+  MOCK_USER: {
+    idUsuario: '1',
+    usuario: 'mperez',
+    nombre: 'María Pérez',
+    area: 'consolidados',
+    permisos: ['cobranza'],
+    activo: true,
   },
 }));
 
@@ -47,14 +66,7 @@ vi.mock('@/features/envio-resultados/presentation/components/SpitchSelector', ()
 
 vi.mock('@/features/auth/presentation/hooks/useAuth', () => ({
   useAuth: () => ({
-    user: {
-      idUsuario: '1',
-      usuario: 'mperez',
-      nombre: 'María Pérez',
-      area: 'consolidados',
-      permisos: ['cobranza'],
-      activo: true,
-    },
+    user: MOCK_USER,
     loading: false,
     login: async () => {},
     logout: async () => {},
@@ -62,8 +74,14 @@ vi.mock('@/features/auth/presentation/hooks/useAuth', () => ({
   }),
 }));
 
+vi.mock('@/components/email/EmailBodyEditor', () => ({
+  EmailBodyEditor: React.forwardRef(function EmailBodyEditor() {
+    return <div data-testid="email-body-editor" />;
+  }),
+}));
+
 // ---------------------------------------------------------------------------
-// Fetch router
+// Fetch router (GET/PUT contactos, POST send-email)
 // ---------------------------------------------------------------------------
 
 interface RouteResponse {
@@ -138,30 +156,33 @@ function callsTo(fetchMock: FetchRouter, prefix: string, method: string): number
     .map((c) => c.index);
 }
 
+function postFormOf(fetchMock: FetchRouter, index: number): FormData {
+  return fetchMock.mock.calls[index]?.[1]?.body as FormData;
+}
+
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
 const JUNK_CLIENT: ClienteGroup = { ...mockClients[0], razonSocial: 'CLIENTE SIN NOMBRE' };
 
-function renderModal(client: ClienteGroup = mockClients[0]) {
+function renderComposer(client: ClienteGroup = mockClients[0]) {
   const onClose = vi.fn();
   const onSuccess = vi.fn();
-  render(<EmailComposerModal client={client} onClose={onClose} onSuccess={onSuccess} />);
+  render(<CobranzaEmailComposer client={client} onClose={onClose} onSuccess={onSuccess} />);
   return { onClose, onSuccess };
 }
 
 function getToField() {
-  return screen.getByPlaceholderText('correo1@dominio.com, correo2@dominio.com');
+  return screen.getByLabelText('Destinatario');
 }
 
 function getCcField() {
-  return screen.getByPlaceholderText('cc@dominio.com, cc2@dominio.com (opcional)');
+  return screen.getByLabelText('CC');
 }
 
-function getIframeSrcDoc(): string {
-  const iframe = document.querySelector('iframe[title="Vista previa del correo HTML"]');
-  return iframe?.getAttribute('srcdoc') ?? '';
+function getPreviewHtml() {
+  return screen.getByTestId('email-preview').innerHTML;
 }
 
 function selectTemplate() {
@@ -172,16 +193,26 @@ function fillTo(value: string) {
   fireEvent.change(getToField(), { target: { value } });
 }
 
+function getSendButton() {
+  return screen.getByRole('button', { name: /^Enviar$/ });
+}
+
 function submitAndConfirm() {
-  fireEvent.click(screen.getByRole('button', { name: /^Enviar correo$/i }));
+  fireEvent.click(getSendButton());
   fireEvent.click(screen.getByRole('button', { name: /^Confirmar envío$/i }));
+}
+
+function dropFiles(files: File[]) {
+  fireEvent.drop(screen.getByTestId('local-file-drop-zone'), {
+    dataTransfer: { files },
+  });
 }
 
 // ---------------------------------------------------------------------------
 // Suite
 // ---------------------------------------------------------------------------
 
-describe('EmailComposerModal Component', () => {
+describe('CobranzaEmailComposer', () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
@@ -192,21 +223,20 @@ describe('EmailComposerModal Component', () => {
 
   // ---- DIR-03: prefill ----
 
-  it('debe dejar los campos vacíos con placeholder cuando no hay contacto guardado (sin correo inventado)', () => {
+  it('deja los campos vacíos cuando no hay contacto guardado (sin correo inventado)', () => {
     stubFetchRouter(); // GET → contacto: null
 
-    renderModal();
+    renderComposer();
 
     expect(getToField()).toHaveValue('');
     expect(getCcField()).toHaveValue('');
-    // The fabricated administracion@<razonSocial>.com default is gone.
     expect(document.body.textContent).not.toMatch(/administracion@/);
   });
 
-  it('debe pre-poblar to/cc desde el contacto guardado por RUC', async () => {
+  it('pre-puebla to/cc desde el contacto guardado por RUC', async () => {
     stubFetchRouter({ get: { body: { success: true, contacto: STORED_CONTACT } } });
 
-    renderModal();
+    renderComposer();
 
     await waitFor(() => {
       expect(getToField()).toHaveValue('contacto@empresa.com');
@@ -217,73 +247,152 @@ describe('EmailComposerModal Component', () => {
   it('clave basura (CLIENTE SIN NOMBRE): no hace GET y los campos quedan vacíos', () => {
     const fetchMock = stubFetchRouter();
 
-    renderModal(JUNK_CLIENT);
+    renderComposer(JUNK_CLIENT);
 
     expect(getToField()).toHaveValue('');
     expect(getCcField()).toHaveValue('');
     expect(callsTo(fetchMock, '/api/cobranza/contactos', 'GET')).toHaveLength(0);
   });
 
-  it('GET falla: el modal sigue operativo con campos vacíos (degradación elegante)', () => {
+  it('GET falla: el compositor sigue operativo con campos vacíos (degradación elegante)', () => {
     stubFetchRouter({
       get: { body: { success: false, error: 'INTERNAL_ERROR' }, ok: false, status: 500 },
     });
 
-    renderModal();
+    renderComposer();
 
     expect(getToField()).toHaveValue('');
-    expect(screen.getByRole('button', { name: /^Enviar correo$/i })).toBeInTheDocument();
+    expect(getSendButton()).toBeInTheDocument();
   });
 
-  // ---- DIR-06/D8: template flow ----
+  // ---- DIR-06/D8: template flow + structured signature ----
 
-  it('debe renderizar SpitchSelector para el área cobranza (target company)', () => {
+  it('renderiza SpitchSelector para el área cobranza (target company)', () => {
     stubFetchRouter();
 
-    renderModal();
+    renderComposer();
 
     const selector = screen.getByTestId('spitch-selector-mock');
     expect(selector.getAttribute('data-area')).toBe('cobranza');
     expect(selector.getAttribute('data-target')).toBe('company');
   });
 
-  it('al seleccionar plantilla interpola en tiempo real (iframe srcDoc + asunto)', () => {
+  it('al seleccionar plantilla interpola en tiempo real (preview + asunto) con la firma estructurada', () => {
     stubFetchRouter();
 
-    renderModal();
-
+    renderComposer();
     selectTemplate();
 
-    const srcDoc = getIframeSrcDoc();
-    expect(srcDoc).toContain('Estimados HOLOMEDIC S.A.C.');
-    expect(srcDoc).toContain('RUC 20601234567');
-    expect(srcDoc).toContain('S/ 1,000.00');
-    expect(srcDoc).toContain('FE F001-101'); // documentosPendientes table row
-    expect(srcDoc).toContain('DATOS PARA EL PAGO'); // cuentasBancarias
-    expect(srcDoc).toContain('María Pérez'); // firma from session user
+    const preview = getPreviewHtml();
+    expect(preview).toContain('Estimados HOLOMEDIC S.A.C.');
+    expect(preview).toContain('RUC 20601234567');
+    expect(preview).toContain('S/ 1,000.00');
+    expect(preview).toContain('FE F001-101'); // documentosPendientes table row
+    expect(preview).toContain('DATOS PARA EL PAGO'); // cuentasBancarias
+    // Structured signature appended to the preview body (session-seeded).
+    expect(preview).toContain('María Pérez');
+    // {{firma}} is stripped from the template — never interpolated inline.
+    expect(preview).not.toContain('{{firma}}');
     expect(
       screen.getByDisplayValue('Recordatorio HOLOMEDIC S.A.C. — deuda S/ 1,000.00')
     ).toBeInTheDocument();
   });
 
+  it('permite editar la firma en modo edición y la re-agrega al cuerpo al enviar', async () => {
+    stubFetchRouter();
+    const fetchMock = stubFetchRouter();
+
+    renderComposer();
+    selectTemplate();
+    fillTo('cobranzas@cliente.com');
+
+    // Enter edit mode → structured SignatureEditor visible, session-seeded.
+    fireEvent.click(screen.getByRole('button', { name: /editar/i }));
+    const nameField = await screen.findByTestId('signature-editor');
+    expect(nameField).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText('Nombre'), { target: { value: 'Juan Firmado' } });
+    fireEvent.click(screen.getByRole('button', { name: /^Hecho$/i }));
+
+    submitAndConfirm();
+
+    await waitFor(() => {
+      expect(screen.getByText('¡Correo Enviado!')).toBeInTheDocument();
+    });
+    const postIndexes = callsTo(fetchMock, '/api/send-email', 'POST');
+    const dispatchedHtml = String(postFormOf(fetchMock, postIndexes[0]).get('html') ?? '');
+    // Dispatched html = body + CURRENT signature only (edited name, exactly once).
+    expect(dispatchedHtml).toContain('Juan Firmado');
+    expect(dispatchedHtml.match(/Juan Firmado/g)).toHaveLength(1);
+    expect(dispatchedHtml).toContain('Estimados HOLOMEDIC S.A.C.');
+  });
+
   it('botón Enviar deshabilitado hasta seleccionar una plantilla (plantilla obligatoria)', () => {
     stubFetchRouter();
 
-    renderModal();
+    renderComposer();
+    fillTo('cobranzas@cliente.com');
 
-    expect(screen.getByRole('button', { name: /^Enviar correo$/i })).toBeDisabled();
+    expect(getSendButton()).toBeDisabled();
 
     selectTemplate();
 
-    expect(screen.getByRole('button', { name: /^Enviar correo$/i })).not.toBeDisabled();
+    expect(getSendButton()).not.toBeDisabled();
   });
 
-  // ---- DIR-07: persist-before-dispatch ----
+  it('bloquea el envío con más de 10 destinatarios en el campo Para', () => {
+    stubFetchRouter();
 
-  it('debe hacer PUT (memorizar contacto) ANTES del POST y enviar purpose cobranza', async () => {
+    renderComposer();
+    selectTemplate();
+    const elevenEmails = Array.from({ length: 11 }, (_, i) => `dest${i}@cliente.com`).join(', ');
+    fillTo(elevenEmails);
+
+    expect(getSendButton()).toBeDisabled();
+    expect(screen.getByText(/máximo 10 destinatarios/i)).toBeInTheDocument();
+    // No confirm dialog can appear from a disabled send.
+    expect(screen.queryByText(/¿Confirmar envío?/i)).not.toBeInTheDocument();
+  });
+
+  it('bloquea el envío sin destinatarios (campo Para vacío)', () => {
+    stubFetchRouter();
+
+    renderComposer();
+    selectTemplate();
+
+    expect(getSendButton()).toBeDisabled();
+    expect(screen.queryByText(/¿Confirmar envío?/i)).not.toBeInTheDocument();
+  });
+
+  // ---- Attachments (drop zone → FormData) ----
+
+  it('muestra el drop zone de archivos locales en el panel izquierdo', () => {
+    stubFetchRouter();
+
+    renderComposer();
+
+    expect(screen.getByTestId('local-file-drop-zone')).toBeInTheDocument();
+  });
+
+  it('limita los adjuntos locales a 10 archivos con aviso visible', () => {
+    stubFetchRouter();
+
+    renderComposer();
+
+    const elevenFiles = Array.from({ length: 11 }, (_, i) =>
+      new File([new Uint8Array(4)], `adjunto-${i}.pdf`, { type: 'application/pdf' })
+    );
+    dropFiles(elevenFiles);
+
+    expect(screen.getAllByLabelText(/^Quitar /)).toHaveLength(10);
+    expect(screen.getByText(/máximo 10 archivos adjuntos/i)).toBeInTheDocument();
+  });
+
+  // ---- DIR-07: persist-before-dispatch + FormData payload ----
+
+  it('hace PUT (memorizar contacto) ANTES del POST y envía purpose cobranza vía FormData', async () => {
     const fetchMock = stubFetchRouter();
 
-    renderModal();
+    renderComposer();
     selectTemplate();
     fillTo('cobranzas@cliente.com');
     submitAndConfirm();
@@ -309,20 +418,23 @@ describe('EmailComposerModal Component', () => {
       emailCopia: null,
     });
 
-    // POST body: purpose 'cobranza' + interpolated html + recipients.
-    const postCall = fetchMock.mock.calls[postIndexes[0]];
-    const postBody = JSON.parse(postCall?.[1]?.body as string);
-    expect(postBody.purpose).toBe('cobranza');
-    expect(postBody.to).toEqual(['cobranzas@cliente.com']);
-    expect(postBody.subject).toBe('Recordatorio HOLOMEDIC S.A.C. — deuda S/ 1,000.00');
-    expect(postBody.html).toContain('Estimados HOLOMEDIC S.A.C.');
-    expect(postBody).not.toHaveProperty('cc');
+    // POST FormData: purpose 'cobranza' + interpolated body + recipients.
+    const form = postFormOf(fetchMock, postIndexes[0]);
+    expect(form.get('purpose')).toBe('cobranza');
+    expect(form.get('to')).toBe('cobranzas@cliente.com');
+    expect(form.get('subject')).toBe('Recordatorio HOLOMEDIC S.A.C. — deuda S/ 1,000.00');
+    const dispatchedHtml = String(form.get('html') ?? '');
+    expect(dispatchedHtml).toContain('Estimados HOLOMEDIC S.A.C.');
+    // Signature appended exactly once at dispatch (firma stripped from body).
+    expect(dispatchedHtml.match(/María Pérez/g)).toHaveLength(1);
+    expect(dispatchedHtml).not.toContain('{{firma}}');
+    expect(form.get('cc')).toBeNull();
   });
 
-  it('debe enviar cc en el payload y memorizarlo como emailCopia (unido por coma)', async () => {
+  it('envía cc en el FormData y lo memoriza como emailCopia (unido por coma)', async () => {
     const fetchMock = stubFetchRouter();
 
-    renderModal();
+    renderComposer();
     selectTemplate();
     fillTo('cobranzas@cliente.com');
     fireEvent.change(getCcField(), {
@@ -339,8 +451,33 @@ describe('EmailComposerModal Component', () => {
     expect(putBody.emailCopia).toBe('gerencia@cliente.com, contabilidad@cliente.com');
 
     const postIndexes = callsTo(fetchMock, '/api/send-email', 'POST');
-    const postBody = JSON.parse(fetchMock.mock.calls[postIndexes[0]]?.[1]?.body as string);
-    expect(postBody.cc).toEqual(['gerencia@cliente.com', 'contabilidad@cliente.com']);
+    expect(postFormOf(fetchMock, postIndexes[0]).get('cc')).toBe(
+      'gerencia@cliente.com,contabilidad@cliente.com'
+    );
+  });
+
+  it('despacha los archivos locales como entradas attachments repetidas del FormData', async () => {
+    const fetchMock = stubFetchRouter();
+
+    renderComposer();
+    selectTemplate();
+    fillTo('cobranzas@cliente.com');
+    const fileA = new File([new Uint8Array(8)], 'factura.pdf', { type: 'application/pdf' });
+    const fileB = new File([new Uint8Array(8)], 'estado-cuenta.xlsx', {
+      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    });
+    dropFiles([fileA, fileB]);
+    submitAndConfirm();
+
+    await waitFor(() => {
+      expect(screen.getByText('¡Correo Enviado!')).toBeInTheDocument();
+    });
+
+    const postIndexes = callsTo(fetchMock, '/api/send-email', 'POST');
+    const attachments = postFormOf(fetchMock, postIndexes[0]).getAll('attachments');
+    expect(attachments).toHaveLength(2);
+    expect((attachments[0] as File).name).toBe('factura.pdf');
+    expect((attachments[1] as File).name).toBe('estado-cuenta.xlsx');
   });
 
   it('fallo de persistencia: NO se hace POST y el error se muestra', async () => {
@@ -348,7 +485,7 @@ describe('EmailComposerModal Component', () => {
       put: { body: { success: false, error: 'CONFLICT', code: 'CONFLICT_ERROR' }, ok: false, status: 409 },
     });
 
-    renderModal();
+    renderComposer();
     selectTemplate();
     fillTo('cobranzas@cliente.com');
     submitAndConfirm();
@@ -366,7 +503,7 @@ describe('EmailComposerModal Component', () => {
       ],
     });
 
-    renderModal();
+    renderComposer();
     selectTemplate();
     fillTo('cobranzas@cliente.com');
     submitAndConfirm();
@@ -384,7 +521,7 @@ describe('EmailComposerModal Component', () => {
   it('clave basura: no memoriza (sin PUT) pero el correo sale igual con purpose cobranza', async () => {
     const fetchMock = stubFetchRouter();
 
-    renderModal(JUNK_CLIENT);
+    renderComposer(JUNK_CLIENT);
     selectTemplate();
     fillTo('cobranzas@cliente.com');
     submitAndConfirm();
@@ -394,20 +531,20 @@ describe('EmailComposerModal Component', () => {
     });
 
     // No directory traffic at all (no GET at mount, no PUT at confirm).
-    expect(fetchMock.mock.calls.filter(([url]) => String(url).startsWith('/api/cobranza/contactos'))).toHaveLength(0);
+    expect(
+      fetchMock.mock.calls.filter(([url]) => String(url).startsWith('/api/cobranza/contactos'))
+    ).toHaveLength(0);
 
     const postIndexes = callsTo(fetchMock, '/api/send-email', 'POST');
-    expect(postIndexes).toHaveLength(1);
-    const postBody = JSON.parse(fetchMock.mock.calls[postIndexes[0]]?.[1]?.body as string);
-    expect(postBody.purpose).toBe('cobranza');
+    expect(postFormOf(fetchMock, postIndexes[0]).get('purpose')).toBe('cobranza');
   });
 
   // ---- REQ-02 R6: audit metadata transport (D3) ----
 
-  it('debe enviar los metadatos de auditoría (ruc, razonSocial, moneda, montoReclamado, comprobantesCount) en el POST', async () => {
+  it('envía los metadatos de auditoría (ruc, razonSocial, moneda, montoReclamado, comprobantesCount)', async () => {
     const fetchMock = stubFetchRouter();
 
-    renderModal(); // mockClients[0]: S/ 1000 main saldo, 1 doc with saldo > 0.01
+    renderComposer(); // mockClients[0]: S/ 1000 main saldo, 1 doc with saldo > 0.01
     selectTemplate();
     fillTo('cobranzas@cliente.com');
     submitAndConfirm();
@@ -417,19 +554,19 @@ describe('EmailComposerModal Component', () => {
     });
 
     const postIndexes = callsTo(fetchMock, '/api/send-email', 'POST');
-    const postBody = JSON.parse(fetchMock.mock.calls[postIndexes[0]]?.[1]?.body as string);
+    const form = postFormOf(fetchMock, postIndexes[0]);
     // RAW amount (number, not the formatted string) + main-currency rule.
-    expect(postBody.ruc).toBe('20601234567');
-    expect(postBody.razonSocial).toBe('HOLOMEDIC S.A.C.');
-    expect(postBody.moneda).toBe('S/');
-    expect(postBody.montoReclamado).toBe(1000);
-    expect(postBody.comprobantesCount).toBe(1);
+    expect(form.get('ruc')).toBe('20601234567');
+    expect(form.get('razonSocial')).toBe('HOLOMEDIC S.A.C.');
+    expect(form.get('moneda')).toBe('S/');
+    expect(form.get('montoReclamado')).toBe('1000');
+    expect(form.get('comprobantesCount')).toBe('1');
   });
 
   it('clave basura: audita el razonSocial tal cual (sin filtrar) junto al ruc', async () => {
     const fetchMock = stubFetchRouter();
 
-    renderModal(JUNK_CLIENT); // razonSocial 'CLIENTE SIN NOMBRE', ruc intact
+    renderComposer(JUNK_CLIENT); // razonSocial 'CLIENTE SIN NOMBRE', ruc intact
     selectTemplate();
     fillTo('cobranzas@cliente.com');
     submitAndConfirm();
@@ -439,27 +576,28 @@ describe('EmailComposerModal Component', () => {
     });
 
     const postIndexes = callsTo(fetchMock, '/api/send-email', 'POST');
-    const postBody = JSON.parse(fetchMock.mock.calls[postIndexes[0]]?.[1]?.body as string);
+    const form = postFormOf(fetchMock, postIndexes[0]);
     // Writes are NOT filtered by key validity (R6.2 — junk audited as-is).
-    expect(postBody.ruc).toBe('20601234567');
-    expect(postBody.razonSocial).toBe('CLIENTE SIN NOMBRE');
-    expect(postBody.moneda).toBe('S/');
+    expect(form.get('ruc')).toBe('20601234567');
+    expect(form.get('razonSocial')).toBe('CLIENTE SIN NOMBRE');
+    expect(form.get('moneda')).toBe('S/');
   });
 
-  // ---- UX flow (preserved from the previous modal) ----
+  // ---- UX flow (preserved from the modal) ----
 
-  it('debe mostrar spinner mientras se envía el correo', () => {
+  it('muestra el indicador de envío y deshabilita el cierre mientras se envía', () => {
     stubFetchRouter({ postPending: true });
 
-    renderModal();
+    renderComposer();
     selectTemplate();
     fillTo('cobranzas@cliente.com');
     submitAndConfirm();
 
-    expect(screen.getByText('Enviando...')).toBeInTheDocument();
+    expect(screen.getByTestId('sending-indicator')).toHaveTextContent(/enviando/i);
+    expect(screen.getByRole('button', { name: /cerrar/i })).toBeDisabled();
   });
 
-  it('debe mostrar botón Reintentar al fallar y permitir re-envío exitoso', async () => {
+  it('muestra botón Reintentar al fallar y permite re-envío exitoso', async () => {
     stubFetchRouter({
       postResults: [
         { body: { success: false, error: 'Error SMTP', code: 'SMTP_ERROR' }, ok: false, status: 500 },
@@ -467,7 +605,7 @@ describe('EmailComposerModal Component', () => {
       ],
     });
 
-    renderModal();
+    renderComposer();
     selectTemplate();
     fillTo('cobranzas@cliente.com');
     submitAndConfirm();
@@ -485,14 +623,14 @@ describe('EmailComposerModal Component', () => {
     });
   });
 
-  it('debe mostrar pantalla de confirmación antes de enviar con datos del destinatario', () => {
+  it('muestra pantalla de confirmación antes de enviar con datos del destinatario', () => {
     stubFetchRouter();
 
-    renderModal();
+    renderComposer();
     selectTemplate();
     fillTo('cobranzas@cliente.com');
 
-    fireEvent.click(screen.getByRole('button', { name: /^Enviar correo$/i }));
+    fireEvent.click(getSendButton());
 
     expect(screen.getByText(/¿Confirmar envío?/i)).toBeInTheDocument();
     expect(screen.getByText(/cobranzas@cliente.com/)).toBeInTheDocument();
@@ -501,50 +639,54 @@ describe('EmailComposerModal Component', () => {
     expect(screen.getByRole('button', { name: /^Confirmar envío$/i })).toBeInTheDocument();
   });
 
-  it('debe volver al formulario al cancelar la confirmación', () => {
+  it('vuelve al formulario al cancelar la confirmación', () => {
     stubFetchRouter();
 
-    renderModal();
+    renderComposer();
     selectTemplate();
     fillTo('cobranzas@cliente.com');
 
-    fireEvent.click(screen.getByRole('button', { name: /^Enviar correo$/i }));
+    fireEvent.click(getSendButton());
     expect(screen.getByText(/¿Confirmar envío?/i)).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: /^Cancelar$/i }));
     expect(screen.queryByText(/¿Confirmar envío?/i)).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /^Enviar correo$/i })).toBeInTheDocument();
+    expect(getSendButton()).toBeInTheDocument();
   });
 
-  it('debe permitir múltiples destinatarios en el campo Para', () => {
+  it('permite múltiples destinatarios en el campo Para (visibles en la confirmación)', () => {
     stubFetchRouter();
 
-    renderModal();
+    renderComposer();
     selectTemplate();
     fillTo('cobranzas@cliente.com, pagos@cliente.com');
 
-    fireEvent.click(screen.getByRole('button', { name: /^Enviar correo$/i }));
+    fireEvent.click(getSendButton());
 
     expect(screen.getByText(/cobranzas@cliente.com/)).toBeInTheDocument();
     expect(screen.getByText(/pagos@cliente.com/)).toBeInTheDocument();
   });
 
-  it('debe deshabilitar el botón Cancelar mientras se está enviando', () => {
-    stubFetchRouter({ postPending: true });
+  it('muestra el conteo de adjuntos en la confirmación', () => {
+    stubFetchRouter();
 
-    renderModal();
+    renderComposer();
     selectTemplate();
     fillTo('cobranzas@cliente.com');
-    submitAndConfirm();
+    dropFiles([
+      new File([new Uint8Array(4)], 'a.pdf', { type: 'application/pdf' }),
+      new File([new Uint8Array(4)], 'b.pdf', { type: 'application/pdf' }),
+    ]);
 
-    expect(screen.getByText('Enviando...')).toBeInTheDocument();
-    expect(screen.getByText('Cancelar')).toBeDisabled();
+    fireEvent.click(getSendButton());
+
+    expect(screen.getByText(/2 archivos adjuntos/i)).toBeInTheDocument();
   });
 
-  it('debe mostrar mensaje de error de conexión cuando el servidor no responde', async () => {
+  it('muestra mensaje de error de conexión cuando el servidor no responde', async () => {
     stubFetchRouter({ postRejects: true });
 
-    renderModal();
+    renderComposer();
     selectTemplate();
     fillTo('cobranzas@cliente.com');
     submitAndConfirm();
@@ -555,10 +697,10 @@ describe('EmailComposerModal Component', () => {
     expect(getToField()).toHaveValue('cobranzas@cliente.com');
   });
 
-  it('debe mostrar pantalla de éxito cuando la API responde 200', async () => {
+  it('muestra pantalla de éxito cuando la API responde 200', async () => {
     stubFetchRouter();
 
-    renderModal();
+    renderComposer();
     selectTemplate();
     fillTo('cobranzas@cliente.com');
     submitAndConfirm();
@@ -566,14 +708,25 @@ describe('EmailComposerModal Component', () => {
     await waitFor(() => {
       expect(screen.getByText('¡Correo Enviado!')).toBeInTheDocument();
     });
+    expect(
+      screen.getByText(/El correo de cobranza se ha enviado correctamente a HOLOMEDIC S.A.C./i)
+    ).toBeInTheDocument();
   });
 
-  it('NO debe contener enlace mailto ni el texto "Abrir en Outlook/Gmail"', () => {
+  it('NO contiene enlace mailto ni el texto "Abrir en Outlook/Gmail"', () => {
     stubFetchRouter();
 
-    renderModal();
+    renderComposer();
 
     expect(screen.queryByText('Abrir en Outlook/Gmail')).not.toBeInTheDocument();
     expect(screen.queryByRole('link', { name: /outlook/i })).not.toBeInTheDocument();
+  });
+
+  it('mantiene la nota informativa de cuentas bancarias', () => {
+    stubFetchRouter();
+
+    renderComposer();
+
+    expect(screen.getByText(/Cuentas Bancarias Incluidas/i)).toBeInTheDocument();
   });
 });
