@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import mssql from 'mssql';
 
-import { SiglaValoracionesRepository, REPFACTURACION_BINDS } from '../SiglaValoracionesRepository';
+import { SiglaValoracionesRepository, REPFACTURACION_BINDS, CONSOLIDADO_BINDS } from '../SiglaValoracionesRepository';
 import type { ValoracionesFilter } from '../../../domain/entities';
 
 interface RecordedInput {
@@ -335,5 +335,164 @@ describe('SiglaValoracionesRepository lookups', () => {
     expect(sql).toContain('IndReg = 1');
     expect(fake.request.execute).not.toHaveBeenCalled();
     expect(sedes).toEqual([{ codSed: 1, nomSed: 'SEDE SURQUILLO' }]);
+  });
+});
+
+// ---- Consolidado (REQ-03 slice 2, task 2.3) ----
+// NOTE: the live SIGLA DB does NOT contain SP_RPT_CONSOLIDADOFACTURACION(_ADICIONALES)
+// (probe 2026-08-27: "Could not find stored procedure" — see apply-progress).
+// The contract below is frozen from the SIGLA C# caller
+// (`InformesD.ConsolidadoFacturacionD` / `...AdicionalesD`); unit tests use
+// fake rows until ops deploys the SPs.
+
+describe('CONSOLIDADO_BINDS — derived from the SIGLA caller (drops CodCFa/CodMon/InFSTA)', () => {
+  it('freezes the 8 consolidado parameter names and types', () => {
+    expect(Object.keys(CONSOLIDADO_BINDS).sort()).toEqual(
+      ['codCli', 'codDes', 'codPac', 'codSed', 'fecFin', 'fecIni', 'indFac', 'tipTra'].sort(),
+    );
+    expect(CONSOLIDADO_BINDS.fecIni.param).toBe('FecIni');
+    expect(CONSOLIDADO_BINDS.fecFin.param).toBe('FecFin');
+    expect(CONSOLIDADO_BINDS.codCli.param).toBe('CodCli');
+    expect(CONSOLIDADO_BINDS.codDes.param).toBe('CodDes');
+    expect(CONSOLIDADO_BINDS.codPac.param).toBe('CodPac');
+    expect(CONSOLIDADO_BINDS.codSed.param).toBe('CodSed');
+    expect(CONSOLIDADO_BINDS.indFac.param).toBe('IndFac');
+    expect(CONSOLIDADO_BINDS.tipTra.param).toBe('TipTra');
+
+    expect(CONSOLIDADO_BINDS.fecIni.type).toBe(mssql.DateTime);
+    expect(CONSOLIDADO_BINDS.fecFin.type).toBe(mssql.DateTime);
+    expect(CONSOLIDADO_BINDS.indFac.type).toBe(mssql.Bit);
+    expect(CONSOLIDADO_BINDS.codCli.type).toBe(mssql.Int);
+    expect(CONSOLIDADO_BINDS.tipTra.type).toBe(mssql.Int);
+  });
+});
+
+/** Fake pool serving one fresh request per `pool.request()` call, with queued recordsets. */
+function createMultiRequestPool(recordsets: unknown[][]): {
+  pool: { request: () => unknown };
+  requests: Array<ReturnType<typeof makeRecordingRequest>>;
+} {
+  const requests = recordsets.map((rows) =>
+    makeRecordingRequest(rows),
+  );
+  let next = 0;
+  return {
+    pool: {
+      request: () => {
+        const req = requests[next];
+        next += 1;
+        return req.request;
+      },
+    },
+    requests,
+  };
+}
+
+function makeRecordingRequest(recordset: unknown[]) {
+  const inputs: RecordedInput[] = [];
+  const request = {
+    input: vi.fn((name: string, type: unknown, value: unknown) => {
+      inputs.push({ name, type, value });
+      return request;
+    }),
+    execute: vi.fn().mockResolvedValue({ recordset }),
+    query: vi.fn().mockResolvedValue({ recordset }),
+  };
+  return { request, inputs };
+}
+
+describe('SiglaValoracionesRepository.buscarConsolidado', () => {
+  it('executes both consolidado SPs with the 8 typed binds and time bounds', async () => {
+    const { pool, requests } = createMultiRequestPool([
+      [{ CodCli: 55, NomCom: 'EMPRESA DEMO', CodDes: 101, DesDes: 'SEDE NORTE', IdeTCh: 510001, DesTCh: 'PREOCUPACIONAL', CanEva: 5, VImpMN: 590, VImpMO: 0, VVtaMN: 500, VVtaMO: 0 }],
+      [{ CodCli: 55, NomCom: 'EMPRESA DEMO', CodDes: 101, DesDes: 'SEDE NORTE', NomSer: 'ADI', CanEva: 1, ValImp: 118, ValVta: 100 }],
+    ]);
+    const repo = new SiglaValoracionesRepository(pool as unknown as mssql.ConnectionPool);
+
+    const resultado = await repo.buscarConsolidado({
+      ...baseFilter,
+      codCli: 55,
+      codDes: 101,
+      tipTra: 620002,
+    });
+
+    // Both SPs executed, each on its own request, with identical binds.
+    expect(requests[0].request.execute).toHaveBeenCalledWith('SP_RPT_CONSOLIDADOFACTURACION');
+    expect(requests[1].request.execute).toHaveBeenCalledWith('SP_RPT_CONSOLIDADOFACTURACION_ADICIONALES');
+    for (const { inputs } of requests) {
+      const names = inputs.map((i) => i.name).sort();
+      expect(names).toEqual(['CodCli', 'CodDes', 'CodPac', 'CodSed', 'FecFin', 'FecIni', 'IndFac', 'TipTra']);
+      const fecIni = inputs.find((i) => i.name === 'FecIni');
+      const fecFin = inputs.find((i) => i.name === 'FecFin');
+      expect(fecIni?.value).toEqual(new Date('2026-01-01T00:00:00'));
+      expect(fecFin?.value).toEqual(new Date('2026-01-31T23:59:59'));
+      const indFac = inputs.find((i) => i.name === 'IndFac');
+      expect(indFac?.type).toBe(mssql.Bit);
+      expect(indFac?.value).toBe(false); // tri-state 0 → BIT false
+      const codCli = inputs.find((i) => i.name === 'CodCli');
+      expect(codCli?.value).toBe(55);
+      const codPac = inputs.find((i) => i.name === 'CodPac');
+      expect(codPac?.value).toBeNull();
+    }
+
+    // Mappers: exact casing, tolerable NULLs.
+    expect(resultado.principales).toEqual([
+      {
+        CodCli: 55,
+        NomCom: 'EMPRESA DEMO',
+        CodDes: 101,
+        DesDes: 'SEDE NORTE',
+        IdeTCh: 510001,
+        DesTCh: 'PREOCUPACIONAL',
+        CanEva: 5,
+        VImpMN: 590,
+        VImpMO: 0,
+        VVtaMN: 500,
+        VVtaMO: 0,
+      },
+    ]);
+    expect(resultado.adicionales).toEqual([
+      {
+        CodCli: 55,
+        NomCom: 'EMPRESA DEMO',
+        CodDes: 101,
+        DesDes: 'SEDE NORTE',
+        NomSer: 'ADI',
+        CanEva: 1,
+        ValImp: 118,
+        ValVta: 100,
+      },
+    ]);
+  });
+
+  it('maps NULL CodDes/IdeTCh cleanly and ignores codCfa/codMon/inFsta', async () => {
+    const { pool, requests } = createMultiRequestPool([
+      [{ CodCli: 9, NomCom: ' X ', CodDes: null, DesDes: null, IdeTCh: null, DesTCh: 'PERIODICO', CanEva: 2, VImpMN: 0, VImpMO: 1.5, VVtaMN: 0, VVtaMO: 2.5 }],
+      [],
+    ]);
+    const repo = new SiglaValoracionesRepository(pool as unknown as mssql.ConnectionPool);
+
+    const resultado = await repo.buscarConsolidado({
+      ...baseFilter,
+      codCli: 9,
+      codCfa: 4, // must be DROPPED (not bound)
+      codMon: 2, // must be DROPPED
+      inFsta: true, // must be DROPPED
+      indFac: null, // Todos → NULL bind
+    });
+
+    const names = requests[0].inputs.map((i) => i.name);
+    expect(names).not.toContain('CodCFa');
+    expect(names).not.toContain('CodMon');
+    expect(names).not.toContain('InFSTA');
+    expect(requests[0].inputs.find((i) => i.name === 'IndFac')?.value).toBeNull();
+
+    expect(resultado.principales[0]).toMatchObject({
+      CodDes: null,
+      DesDes: '',
+      IdeTCh: null,
+      NomCom: 'X',
+    });
+    expect(resultado.adicionales).toEqual([]);
   });
 });

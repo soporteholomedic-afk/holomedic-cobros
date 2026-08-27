@@ -7,6 +7,7 @@ import type {
   TipoTrabajadorItem,
   ValoracionesFilter,
 } from './entities';
+import type { ConsolidadoAdicional, ConsolidadoRow } from './consolidado';
 
 /**
  * Port for the read-only SIGLA valoraciones data source. Implemented by
@@ -16,6 +17,16 @@ import type {
 export interface ISiglaValoracionesRepository {
   /** Execute `SP_RPT_REPFACTURACION` with the validated filter. */
   buscarValoraciones(filtro: ValoracionesFilter): Promise<RepFacturacion[]>;
+
+  /**
+   * Execute the consolidado SP pair (`SP_RPT_CONSOLIDADOFACTURACION` +
+   * `_ADICIONALES`) with the 8-filter subset. Raw lists — the SIGLA
+   * adjustment lives in the domain (`aplicarAjusteAdicionales`).
+   */
+  buscarConsolidado(filtro: ValoracionesFilter): Promise<{
+    principales: ConsolidadoRow[];
+    adicionales: ConsolidadoAdicional[];
+  }>;
 
   /** Cliente / facturar-a autocomplete by name or RUC (active clients). */
   buscarClientes(q: string): Promise<ClienteLookupItem[]>;

@@ -1,6 +1,10 @@
 import mssql from 'mssql';
 
 import type {
+  ConsolidadoAdicional,
+  ConsolidadoRow,
+} from '../../domain/consolidado';
+import type {
   ClienteLookupItem,
   DestinoLookupItem,
   PacienteLookupItem,
@@ -31,6 +35,87 @@ export const REPFACTURACION_BINDS = {
   codMon: { param: 'CodMon', type: mssql.Int },
   inFsta: { param: 'InFSTA', type: mssql.Bit },
 } as const;
+
+/**
+ * Bind table for `SP_RPT_CONSOLIDADOFACTURACION` (and `_ADICIONALES` — both
+ * take the same 8 parameters). Drops `CodCFa`/`CodMon`/`InFSTA` per SIGLA's
+ * consolidado branch (`RptFacturacionForm.Reportar`).
+ *
+ * ⚠️ CONTRACT SOURCE: the live SIGLA DB does NOT contain these SPs (probe
+ * 2026-08-27: "Could not find stored procedure"). Names follow the sibling
+ * `SP_RPT_REPFACTURACION` convention (no prefix) and the result shape is
+ * frozen from the SIGLA C# reader (`InformesD.ConsolidadoFacturacionD` /
+ * `...AdicionalesD`). Re-verify against `sys.parameters` once ops deploys
+ * the SPs — see apply-progress U3.
+ */
+export const CONSOLIDADO_BINDS = {
+  fecIni: { param: 'FecIni', type: mssql.DateTime },
+  fecFin: { param: 'FecFin', type: mssql.DateTime },
+  codCli: { param: 'CodCli', type: mssql.Int },
+  codDes: { param: 'CodDes', type: mssql.Int },
+  codPac: { param: 'CodPac', type: mssql.Int },
+  codSed: { param: 'CodSed', type: mssql.Int },
+  indFac: { param: 'IndFac', type: mssql.Bit },
+  tipTra: { param: 'TipTra', type: mssql.Int },
+} as const;
+
+/** Raw row shape returned by `SP_RPT_CONSOLIDADOFACTURACION` (C#-reader verified). */
+interface ConsolidadoSpRow {
+  CodCli: number;
+  NomCom: string | null;
+  CodDes: number | null;
+  DesDes: string | null;
+  IdeTCh: number | null;
+  DesTCh: string | null;
+  CanEva: number;
+  VImpMN: number | null;
+  VImpMO: number | null;
+  VVtaMN: number | null;
+  VVtaMO: number | null;
+}
+
+/** Raw row shape returned by `SP_RPT_CONSOLIDADOFACTURACION_ADICIONALES`. */
+interface ConsolidadoAdicionalSpRow {
+  CodCli: number;
+  NomCom: string | null;
+  CodDes: number | null;
+  DesDes: string | null;
+  NomSer: string | null;
+  CanEva: number;
+  ValImp: number | null;
+  ValVta: number | null;
+}
+
+/** Map a consolidado SP row to the domain entity (trimmed names, NULL-safe amounts). */
+export function rowToConsolidado(row: ConsolidadoSpRow): ConsolidadoRow {
+  return {
+    CodCli: row.CodCli,
+    NomCom: row.NomCom?.trim() ?? '',
+    CodDes: row.CodDes,
+    DesDes: row.DesDes?.trim() ?? '',
+    IdeTCh: row.IdeTCh,
+    DesTCh: row.DesTCh?.trim() ?? '',
+    CanEva: row.CanEva,
+    VImpMN: row.VImpMN ?? 0,
+    VImpMO: row.VImpMO ?? 0,
+    VVtaMN: row.VVtaMN ?? 0,
+    VVtaMO: row.VVtaMO ?? 0,
+  };
+}
+
+/** Map an adicionales SP row to the domain entity. */
+export function rowToConsolidadoAdicional(row: ConsolidadoAdicionalSpRow): ConsolidadoAdicional {
+  return {
+    CodCli: row.CodCli,
+    NomCom: row.NomCom?.trim() ?? '',
+    CodDes: row.CodDes,
+    DesDes: row.DesDes?.trim() ?? '',
+    NomSer: row.NomSer?.trim() ?? '',
+    CanEva: row.CanEva,
+    ValImp: row.ValImp ?? 0,
+    ValVta: row.ValVta ?? 0,
+  };
+}
 
 /**
  * Hardcoded tipo-trabajador fallback (design D7): verified live values
@@ -187,6 +272,55 @@ export class SiglaValoracionesRepository implements ISiglaValoracionesRepository
     const result = await request.execute('SP_RPT_REPFACTURACION');
     const rows = result.recordset as unknown as RepFacturacionRow[];
     return rows.map(rowToRepFacturacion);
+  }
+
+  /**
+   * Execute the consolidado SP pair (main + adicionales) with the 8-filter
+   * subset SIGLA's consolidado branch uses (`codCfa`/`codMon`/`inFsta` are
+   * deliberately dropped). The domain layer (`aplicarAjusteAdicionales`)
+   * owns the SIGLA adjustment arithmetic — this method only fetches.
+   */
+  async buscarConsolidado(
+    filtro: ValoracionesFilter,
+  ): Promise<{ principales: ConsolidadoRow[]; adicionales: ConsolidadoAdicional[] }> {
+    const bindConsolidado = (request: mssql.Request): void => {
+      request.input(
+        CONSOLIDADO_BINDS.fecIni.param,
+        CONSOLIDADO_BINDS.fecIni.type,
+        new Date(`${filtro.fecIni}T00:00:00`),
+      );
+      request.input(
+        CONSOLIDADO_BINDS.fecFin.param,
+        CONSOLIDADO_BINDS.fecFin.type,
+        new Date(`${filtro.fecFin}T23:59:59`),
+      );
+      request.input(CONSOLIDADO_BINDS.codCli.param, CONSOLIDADO_BINDS.codCli.type, nullableId(filtro.codCli));
+      request.input(CONSOLIDADO_BINDS.codDes.param, CONSOLIDADO_BINDS.codDes.type, nullableId(filtro.codDes));
+      request.input(CONSOLIDADO_BINDS.codPac.param, CONSOLIDADO_BINDS.codPac.type, nullableId(filtro.codPac));
+      request.input(CONSOLIDADO_BINDS.codSed.param, CONSOLIDADO_BINDS.codSed.type, nullableId(filtro.codSed));
+      // BIT binds travel as true/false/null (tri-state: null = Todos).
+      request.input(
+        CONSOLIDADO_BINDS.indFac.param,
+        CONSOLIDADO_BINDS.indFac.type,
+        filtro.indFac === null ? null : filtro.indFac === 1,
+      );
+      request.input(CONSOLIDADO_BINDS.tipTra.param, CONSOLIDADO_BINDS.tipTra.type, nullableId(filtro.tipTra));
+    };
+
+    const mainRequest = this.pool.request();
+    bindConsolidado(mainRequest);
+    const mainResult = await mainRequest.execute('SP_RPT_CONSOLIDADOFACTURACION');
+
+    const adiRequest = this.pool.request();
+    bindConsolidado(adiRequest);
+    const adiResult = await adiRequest.execute('SP_RPT_CONSOLIDADOFACTURACION_ADICIONALES');
+
+    return {
+      principales: (mainResult.recordset as unknown as ConsolidadoSpRow[]).map(rowToConsolidado),
+      adicionales: (adiResult.recordset as unknown as ConsolidadoAdicionalSpRow[]).map(
+        rowToConsolidadoAdicional,
+      ),
+    };
   }
 
   async buscarClientes(q: string): Promise<ClienteLookupItem[]> {
