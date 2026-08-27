@@ -149,7 +149,7 @@ export function PatientsList({
                 <th className="px-4 py-3 font-medium text-slate-600">DNI</th>
                 <th className="px-4 py-3 font-medium text-slate-600">Nombre</th>
                 <th className="px-4 py-3 font-medium text-slate-600">Empresa</th>
-                <th className="px-4 py-3 font-medium text-slate-600">Proyecto</th>
+                <th className="px-4 py-3 font-semibold text-slate-600">Proyecto</th>
                 <th className="px-4 py-3 font-medium text-slate-600">Tipo de Examen</th>
                 <th className="px-4 py-3 font-medium text-slate-600">Fecha</th>
                 <th className="px-4 py-3 font-medium text-slate-600">Aptitud</th>
@@ -165,7 +165,7 @@ export function PatientsList({
                   <td className="px-4 py-3 text-slate-600">{cellValue(row.NroDId)}</td>
                   <td className="px-4 py-3 text-slate-800">{cellValue(row.Pacien)}</td>
                   <td className="px-4 py-3 text-slate-600">{cellValue(row.NomCom)}</td>
-                  <td className="px-4 py-3 text-slate-600">{cellValue(row.DesDes)}</td>
+                  <td className="px-4 py-3 font-semibold text-slate-600">{cellValue(row.DesDes)}</td>
                   <td className="px-4 py-3 text-slate-600">{cellValue(row.DesTCh)}</td>
                   <td className="px-4 py-3 text-slate-600">{cellValue(row.FecAte)}</td>
                   <td className="px-4 py-3 text-slate-600">{cellValue(row.Condic)}</td>
