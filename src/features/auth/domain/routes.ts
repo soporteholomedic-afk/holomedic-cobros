@@ -24,6 +24,17 @@ export const RUTAS_PROTEGIDAS: RutaProtegida[] = [
   { path: '/areas/musculoesqueletica/jjc', permiso: 'jjc', label: 'JJC (Musculoesquelética)' },
   { path: '/api/areas/musculoesqueletica/jjc', permiso: 'jjc', label: 'API JJC (Musculoesquelética)' },
   { path: '/admin/plantillas',    permiso: 'plantillas',       label: 'Plantillas' },
+  // editor-firmas (PR2 task 2.5): the self-service email signature has
+  // its OWN permiso — every entry below is a LONGER prefix than
+  // `/admin/plantillas`, so `buscarRutaProtegida`'s longest-first
+  // `startsWith` match lets a firma_correo-only session reach the
+  // signature surface without holding `plantillas` (threat TM3). The
+  // canonical `/admin/plantillas/firma` (PR3 redirect page) gets its
+  // own entry — otherwise it would inherit the generic plantillas gate.
+  { path: '/admin/plantillas/consolidados/firma', permiso: 'firma_correo', label: 'Mi Firma (Consolidados)' },
+  { path: '/admin/plantillas/cobranza/firma',     permiso: 'firma_correo', label: 'Mi Firma (Cobranza)' },
+  { path: '/admin/plantillas/firma',              permiso: 'firma_correo', label: 'Mi Firma' },
+  { path: '/api/plantillas/firma',                permiso: 'firma_correo', label: 'API Mi Firma' },
   { path: '/admin/usuarios',      permiso: 'admin',            label: 'Gestión de Usuarios' },
   { path: '/api/usuarios',        permiso: 'admin',            label: 'API Usuarios' },
 ];
