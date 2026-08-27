@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useState } from 'react';
-import { ClipboardList, FileDown, FileSpreadsheet, Loader2 } from 'lucide-react';
+import { ClipboardList, FileDown, FileSpreadsheet, Loader2, Send } from 'lucide-react';
 
 import type {
   DestinoLookupItem,
@@ -12,6 +12,7 @@ import type {
 import { ConsolidadoTable } from '@/features/valoraciones/presentation/components/ConsolidadoTable';
 import { EmpresaDetailModal } from '@/features/valoraciones/presentation/components/EmpresaDetailModal';
 import { EmpresaList } from '@/features/valoraciones/presentation/components/EmpresaList';
+import { EnviarValoracionesModal } from '@/features/valoraciones/presentation/components/EnviarValoracionesModal';
 import { FiltersPanel } from '@/features/valoraciones/presentation/components/FiltersPanel';
 import { useConsolidado } from '@/features/valoraciones/presentation/hooks/useConsolidado';
 import { useExportarValoraciones } from '@/features/valoraciones/presentation/hooks/useExportarValoraciones';
@@ -26,9 +27,11 @@ import {
  * Valorizaciones page (REQ-03): realtime SIGLA query with the 11-filter
  * panel replacing the legacy CSV upload flow. Slice 2 adds the
  * client-gated consolidado mode (per-destino totals) next to the detail
- * mode, plus the server-side PDF export. All fetching lives in hooks
- * (`useLookup`, `useValoraciones`, `useConsolidado`,
- * `useExportarValoraciones`) — the page only wires state.
+ * mode, plus the server-side PDF export. Slice 3 adds the email modal
+ * (`EnviarValoracionesModal` — plantillas + REQ-01 prefill + regenerated
+ * attachments). All fetching lives in hooks (`useLookup`,
+ * `useValoraciones`, `useConsolidado`, `useExportarValoraciones`) — the
+ * page only wires state.
  *
  * The rendered table follows the mode of the LAST executed query
  * (`modoConsulta`), so toggling the checkbox does not flip the view away
@@ -44,6 +47,7 @@ export default function ValoracionesPage() {
     useExportarValoraciones('excel');
   const [grupoSeleccionado, setGrupoSeleccionado] = useState<EmpresaGrupo | null>(null);
   const [modoConsulta, setModoConsulta] = useState<'detalle' | 'consolidado'>('detalle');
+  const [enviarAbierto, setEnviarAbierto] = useState(false);
 
   // Panel lookups: sedes and tipos trabajador load once; destinos are
   // gated by the selected client (spec Q-R4/Q-R5 — no client, no fetch).
@@ -100,6 +104,14 @@ export default function ValoracionesPage() {
           {hayResultados && (
             <div className="ml-auto flex flex-col items-end gap-1">
               <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setEnviarAbierto(true)}
+                  className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-sky-600 text-white text-sm font-semibold shadow-lg shadow-sky-600/20 hover:bg-sky-700 transition-colors"
+                >
+                  <Send className="w-4 h-4" />
+                  Enviar Documentos
+                </button>
                 <button
                   type="button"
                   onClick={descargarExcel}
@@ -171,6 +183,16 @@ export default function ValoracionesPage() {
           grupo={grupoSeleccionado}
           codMon={moneda}
           onClose={() => setGrupoSeleccionado(null)}
+        />
+      )}
+
+      {enviarAbierto && (
+        <EnviarValoracionesModal
+          filtro={toFiltro(filtros)}
+          codCli={filtros.codCli}
+          cliNombre={filtros.cliNombre}
+          grupos={modoConsulta === 'detalle' ? grupos : []}
+          onClose={() => setEnviarAbierto(false)}
         />
       )}
     </main>
