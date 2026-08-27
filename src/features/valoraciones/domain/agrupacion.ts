@@ -19,6 +19,7 @@ export function importePorMoneda(row: RepFacturacion, codMon: CodigoMoneda): num
 }
 
 const SIN_EMPRESA = 'SIN EMPRESA';
+const SIN_DESTINO = 'SIN DESTINO';
 
 /**
  * Group key for a row: facturar-a (`NomCFa`) first, falling back to the
@@ -32,6 +33,29 @@ export function nombreEmpresa(row: RepFacturacion): string {
   return cliente !== '' ? cliente : SIN_EMPRESA;
 }
 
+/** Common moneda-aware totals over a group of rows (round2 everywhere). */
+interface GrupoTotales {
+  rows: RepFacturacion[];
+  cantidad: number;
+  subtotal: number;
+  igv: number;
+  total: number;
+  simbol: string;
+}
+
+function totalesDe(rows: RepFacturacion[], codMon: CodigoMoneda): GrupoTotales {
+  const subtotal = round2(rows.reduce((acc, row) => acc + ventaPorMoneda(row, codMon), 0));
+  const igv = round2((subtotal * IGV_PORCENTAJE) / 100);
+  return {
+    rows,
+    cantidad: rows.length,
+    subtotal,
+    igv,
+    total: round2(subtotal + igv),
+    simbol: rows[0]?.Simbol ?? '',
+  };
+}
+
 /**
  * Group rows by facturar-a with moneda-aware totals. Pure: no IO, no
  * mutation of the input rows. Groups come out alphabetically sorted so
@@ -42,33 +66,51 @@ export function agruparPorEmpresa(
   rows: RepFacturacion[],
   codMon: CodigoMoneda,
 ): EmpresaGrupo[] {
-  const groups = new Map<string, { rows: RepFacturacion[]; simbol: string }>();
+  const groups = new Map<string, RepFacturacion[]>();
 
   for (const row of rows) {
     const key = nombreEmpresa(row);
     const existing = groups.get(key);
     if (existing) {
-      existing.rows.push(row);
+      existing.push(row);
     } else {
-      groups.set(key, { rows: [row], simbol: row.Simbol ?? '' });
+      groups.set(key, [row]);
     }
   }
 
   return [...groups.entries()]
     .sort(([a], [b]) => a.localeCompare(b, 'es'))
-    .map(([empresa, { rows: groupRows, simbol }]) => {
-      const subtotal = round2(
-        groupRows.reduce((acc, row) => acc + ventaPorMoneda(row, codMon), 0),
-      );
-      const igv = round2((subtotal * IGV_PORCENTAJE) / 100);
-      return {
-        empresa,
-        rows: groupRows,
-        cantidad: groupRows.length,
-        subtotal,
-        igv,
-        total: round2(subtotal + igv),
-        simbol,
-      };
-    });
+    .map(([empresa, groupRows]) => ({ empresa, ...totalesDe(groupRows, codMon) }));
+}
+
+/** A destino group (PDF export, spec E-R2): key + moneda-aware totals. */
+export interface DestinoGrupo extends GrupoTotales {
+  destino: string;
+}
+
+/**
+ * Group rows by destino (`DesDes`) with moneda-aware totals — the PDF
+ * export's grouping (spec E-R2). Pure; groups keep first-appearance
+ * order; blank destinos collapse into `SIN DESTINO`.
+ */
+export function agruparPorDestino(
+  rows: RepFacturacion[],
+  codMon: CodigoMoneda,
+): DestinoGrupo[] {
+  const groups = new Map<string, RepFacturacion[]>();
+
+  for (const row of rows) {
+    const key = row.DesDes?.trim() || SIN_DESTINO;
+    const existing = groups.get(key);
+    if (existing) {
+      existing.push(row);
+    } else {
+      groups.set(key, [row]);
+    }
+  }
+
+  return [...groups.entries()].map(([destino, groupRows]) => ({
+    destino,
+    ...totalesDe(groupRows, codMon),
+  }));
 }

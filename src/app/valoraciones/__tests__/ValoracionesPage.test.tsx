@@ -185,4 +185,47 @@ describe('ValoracionesPage', () => {
     expect(params.get('consolidado')).toBe('true');
     expect(params.get('codCli')).toBe('55');
   });
+
+  it('shows Descargar PDF after a ready query and POSTs the filter on click', async () => {
+    const fetchMock = mockFetchRouteBy((url) => {
+      if (url.includes('/api/valoraciones/sigla')) {
+        return jsonResponse({ resultados: [makeRepFacturacion()] });
+      }
+      if (url.includes('/api/valoraciones/pdf')) {
+        return jsonResponse({ error: 'should not be json' }, false, 200);
+      }
+      return jsonResponse({ resultados: [] });
+    });
+    // The PDF button streams a blob — stub the download machinery.
+    const clickMock = vi.fn();
+    vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:pdf');
+    vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => undefined);
+    vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(clickMock);
+
+    render(<ValoracionesPage />);
+
+    // Hidden before a query.
+    expect(screen.queryByRole('button', { name: /Descargar PDF/ })).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /Consultar/ }));
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: /Descargar PDF/ })).toBeInTheDocument(),
+    );
+
+    // Clicking POSTs the current filter DTO to the pdf route.
+    const pdfFetch = vi.fn().mockResolvedValue(
+      new Response(new Uint8Array([1, 2, 3]), {
+        status: 200,
+        headers: { 'content-type': 'application/pdf', 'content-disposition': 'inline; filename="valoraciones_x.pdf"' },
+      }),
+    );
+    fetchMock.mockImplementation(pdfFetch);
+    fireEvent.click(screen.getByRole('button', { name: /Descargar PDF/ }));
+
+    await waitFor(() => expect(clickMock).toHaveBeenCalled());
+    const [pdfUrl, init] = pdfFetch.mock.calls[0];
+    expect(pdfUrl).toBe('/api/valoraciones/pdf');
+    expect(init.method).toBe('POST');
+    expect(JSON.parse(init.body)).toMatchObject({ codMon: 1, indFac: 0 });
+  });
 });

@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 
-import { agruparPorEmpresa, round2, ventaPorMoneda, IGV_PORCENTAJE } from '../agrupacion';
+import { agruparPorDestino, agruparPorEmpresa, round2, ventaPorMoneda, IGV_PORCENTAJE } from '../agrupacion';
 import { makeRepFacturacion } from '../fixtures';
 
 describe('round2', () => {
@@ -102,5 +102,35 @@ describe('agruparPorEmpresa', () => {
     ];
 
     expect(agruparPorEmpresa(rows, 1).map((g) => g.empresa)).toEqual(['ALFA', 'MEDIO', 'ZETA']);
+  });
+});
+
+// ---- agruparPorDestino (slice 2: PDF groups by destino — spec E-R2) ----
+
+describe('agruparPorDestino', () => {
+  it('groups rows by DesDes with moneda-aware totals and first-seen order', () => {
+    const rows = [
+      makeRepFacturacion({ DesDes: 'SEDE SUR', VVtaMN: 10, VVtaMO: 3, Simbol: 's/.' }),
+      makeRepFacturacion({ DesDes: 'SEDE NORTE', VVtaMN: 100, VVtaMO: 30, Simbol: 's/.' }),
+      makeRepFacturacion({ DesDes: 'SEDE SUR', VVtaMN: 5.5, VVtaMO: 1.5, Simbol: 's/.' }),
+    ];
+
+    const grupos = agruparPorDestino(rows, 1);
+
+    expect(grupos.map((g) => g.destino)).toEqual(['SEDE SUR', 'SEDE NORTE']);
+    const sur = grupos[0];
+    expect(sur.cantidad).toBe(2);
+    expect(sur.subtotal).toBe(15.5);
+    expect(sur.igv).toBe(2.79); // round2(15.5 * 0.18)
+    expect(sur.total).toBe(18.29);
+    expect(sur.simbol).toBe('s/.');
+    // DOLARES sums *MO instead.
+    const gruposMo = agruparPorDestino(rows, 2);
+    expect(gruposMo[0].subtotal).toBe(4.5);
+  });
+
+  it('falls back to SIN DESTINO for blank DesDes', () => {
+    const grupos = agruparPorDestino([makeRepFacturacion({ DesDes: '' })], 1);
+    expect(grupos[0].destino).toBe('SIN DESTINO');
   });
 });

@@ -347,6 +347,29 @@ export class SiglaValoracionesRepository implements ISiglaValoracionesRepository
     }));
   }
 
+  /** Single client by code (PDF header client/RUC — spec E-R2, OQ-3). */
+  async buscarClientePorCodigo(codCli: number): Promise<ClienteLookupItem | null> {
+    const result = await this.pool
+      .request()
+      .input('codCli', mssql.Int, codCli)
+      .query(
+        `SELECT CodCli, LTRIM(RTRIM(NomCom)) AS NomCom, NroRuc
+           FROM Cliente
+          WHERE CodCli = @codCli`,
+      );
+    const row = (result.recordset as unknown as Array<{
+      CodCli: number;
+      NomCom: string | null;
+      NroRuc: string | null;
+    }>)[0];
+    if (!row) return null;
+    return {
+      codCli: row.CodCli,
+      nomCom: row.NomCom?.trim() ?? '',
+      nroRuc: row.NroRuc?.trim() ? row.NroRuc.trim() : null,
+    };
+  }
+
   async buscarPacientes(q: string): Promise<PacienteLookupItem[]> {
     const pat = `%${escapeLike(q)}%`;
     const result = await this.pool

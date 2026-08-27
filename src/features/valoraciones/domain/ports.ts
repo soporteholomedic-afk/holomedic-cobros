@@ -31,6 +31,9 @@ export interface ISiglaValoracionesRepository {
   /** Cliente / facturar-a autocomplete by name or RUC (active clients). */
   buscarClientes(q: string): Promise<ClienteLookupItem[]>;
 
+  /** Single client by code — PDF header (name + RUC), null on miss. */
+  buscarClientePorCodigo(codCli: number): Promise<ClienteLookupItem | null>;
+
   /** Paciente autocomplete by DNI or apellidos/nombres (Persona table). */
   buscarPacientes(q: string): Promise<PacienteLookupItem[]>;
 

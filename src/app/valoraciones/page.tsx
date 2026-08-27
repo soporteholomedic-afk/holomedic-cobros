@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useState } from 'react';
-import { ClipboardList } from 'lucide-react';
+import { ClipboardList, FileDown, Loader2 } from 'lucide-react';
 
 import type {
   DestinoLookupItem,
@@ -14,6 +14,7 @@ import { EmpresaDetailModal } from '@/features/valoraciones/presentation/compone
 import { EmpresaList } from '@/features/valoraciones/presentation/components/EmpresaList';
 import { FiltersPanel } from '@/features/valoraciones/presentation/components/FiltersPanel';
 import { useConsolidado } from '@/features/valoraciones/presentation/hooks/useConsolidado';
+import { useExportarValoraciones } from '@/features/valoraciones/presentation/hooks/useExportarValoraciones';
 import { useLookup } from '@/features/valoraciones/presentation/hooks/useLookup';
 import { useValoraciones } from '@/features/valoraciones/presentation/hooks/useValoraciones';
 import {
@@ -25,8 +26,9 @@ import {
  * Valorizaciones page (REQ-03): realtime SIGLA query with the 11-filter
  * panel replacing the legacy CSV upload flow. Slice 2 adds the
  * client-gated consolidado mode (per-destino totals) next to the detail
- * mode. All fetching lives in hooks (`useLookup`, `useValoraciones`,
- * `useConsolidado`) — the page only wires state.
+ * mode, plus the server-side PDF export. All fetching lives in hooks
+ * (`useLookup`, `useValoraciones`, `useConsolidado`,
+ * `useExportarValoraciones`) — the page only wires state.
  *
  * The rendered table follows the mode of the LAST executed query
  * (`modoConsulta`), so toggling the checkbox does not flip the view away
@@ -36,6 +38,8 @@ export default function ValoracionesPage() {
   const { filtros, dispatch, limpiar } = useValoracionesFilters();
   const { grupos, status, error, moneda, totalRegistros, buscar } = useValoraciones();
   const consolidadoQuery = useConsolidado();
+  const { exportar: exportarPdf, exportando: exportandoPdf, error: errorPdf } =
+    useExportarValoraciones('pdf');
   const [grupoSeleccionado, setGrupoSeleccionado] = useState<EmpresaGrupo | null>(null);
   const [modoConsulta, setModoConsulta] = useState<'detalle' | 'consolidado'>('detalle');
 
@@ -61,6 +65,15 @@ export default function ValoracionesPage() {
     buscar(filtro);
   }, [buscar, consolidadoQuery, filtros]);
 
+  const hayResultados =
+    modoConsulta === 'consolidado'
+      ? consolidadoQuery.status === 'ready' && consolidadoQuery.filas.length > 0
+      : status === 'ready' && totalRegistros > 0;
+
+  const descargarPdf = useCallback(() => {
+    exportarPdf(toFiltro(filtros));
+  }, [exportarPdf, filtros]);
+
   return (
     <main className="min-h-screen bg-slate-100 dark:bg-slate-950 p-4 sm:p-6 lg:p-8">
       <div className="max-w-7xl mx-auto space-y-6">
@@ -76,6 +89,28 @@ export default function ValoracionesPage() {
               Consulta en tiempo real desde SIGLA
             </p>
           </div>
+          {hayResultados && (
+            <div className="ml-auto flex flex-col items-end gap-1">
+              <button
+                type="button"
+                onClick={descargarPdf}
+                disabled={exportandoPdf}
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-rose-600 text-white text-sm font-semibold shadow-lg shadow-rose-600/20 hover:bg-rose-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              >
+                {exportandoPdf ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <FileDown className="w-4 h-4" />
+                )}
+                Descargar PDF
+              </button>
+              {errorPdf && (
+                <p role="alert" className="text-xs text-rose-500 max-w-xs text-right">
+                  {errorPdf}
+                </p>
+              )}
+            </div>
+          )}
         </header>
 
         <FiltersPanel
