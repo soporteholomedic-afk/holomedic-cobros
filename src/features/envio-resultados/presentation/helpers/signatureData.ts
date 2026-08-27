@@ -1,12 +1,11 @@
 /**
  * Legacy-signature strip helper (editor-firmas PR4, task 4.4).
  *
- * The client-side signature builder (`SignatureData`,
- * `DEFAULT_SIGNATURE_DATA`, `buildSignatureDataFromUser`,
- * `buildSignatureHtml`) is REMOVED: the signature is now composed
- * SERVER-SIDE from each user's stored fields (firma-correo feature,
- * GET /api/plantillas/firma) and interpolated inline at `{{firma}}` by
- * the token resolver.
+ * The client-side signature builder (structured entity, hardcoded
+ * defaults, session-seeding mapper and HTML builder) is REMOVED: the
+ * signature is now composed SERVER-SIDE from each user's stored fields
+ * (firma-correo feature, GET /api/plantillas/firma) and interpolated
+ * inline at `{{firma}}` by the token resolver.
  *
  * What survives is the sentinel + strip pair (historial-envios-
  * consolidados D8): rows sent by the LEGACY path persisted their body

@@ -903,7 +903,7 @@ describe('EmailEditor', () => {
   // firmaHtml is fetched from GET /api/plantillas/firma and inlined at
   // {{firma}} by the UNTOUCHED token resolver (verbatim non-empty /
   // `[Falta configurar firma]` fallback when empty). The legacy inline
-  // SignatureEditor and client-side signature append are gone.
+  // signature editor and client-side signature append are gone.
   // ================================================================
 
   function firmaFetchResponse(firmaHtml: string) {
@@ -967,7 +967,7 @@ describe('EmailEditor', () => {
     }
   });
 
-  it('no longer renders the inline SignatureEditor nor per-email signature inputs', async () => {
+  it('no longer renders an inline signature editor nor per-email signature inputs', async () => {
     mockFetch.mockResolvedValue({ ok: true, json: () => Promise.resolve({ success: true }) });
 
     render(<EmailEditor {...defaultProps} />);
