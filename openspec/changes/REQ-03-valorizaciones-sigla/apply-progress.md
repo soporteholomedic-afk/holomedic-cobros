@@ -278,4 +278,4 @@ U4:
 ### PR 3 note (filled at S3 wrap-up)
 
 - Branch `feature/valoraciones-sigla-s3` pushed to origin; PR 3 head `feature/valoraciones-sigla-s3` → base `feature/valoraciones-sigla-s2` per the feature-branch-chain strategy (child PR targets the immediate parent branch, never `main`/`develop` directly).
-- Status of the `gh` attempt and the saved body path (if unauthenticated): recorded in the session result contract — mirror here on success: __PR_URL_PLACEHOLDER__
+- `gh` still unauthenticated at S3 wrap-up (same as S1/S2) — PR body prepared and saved at `C:\Users\soporte\AppData\Local\Temp\opencode\req03-pr3-body.md`; open all three PRs once `gh auth login` succeeds (PR 1: s1 → req03 tracker; PR 2: s2 → s1; PR 3: s3 → s2).
