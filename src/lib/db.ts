@@ -10,7 +10,7 @@ import mssql from 'mssql';
  * SQL Server instances in the future, even though v1 shares the same
  * host/user/password and only differs by database name.
  */
-export type DbEnvPrefix = 'DB_' | 'HOLOMEDIC_DB_';
+export type DbEnvPrefix = 'DB_' | 'HOLOMEDIC_DB_' | 'SIGLA_RO_';
 
 /**
  * Build an `mssql.config` for a target database by reading host / port /
@@ -100,4 +100,74 @@ function hasHolomedicConnectionEnv(): boolean {
       process.env.HOLOMEDIC_DB_USER ||
       process.env.HOLOMEDIC_DB_PASSWORD,
   );
+}
+
+// ---- SIGLA read-only pool (REQ-03 D1) ----
+
+/**
+ * Raised before a connection pool is ever constructed when the resolved
+ * SIGLA read-only login is `sa` — the administrative account must never
+ * back the valoraciones query path (read-only BY CONSTRUCTION, not by
+ * trust in the caller).
+ */
+export class SiglaRoSaError extends Error {
+  constructor(user: string) {
+    super(
+      `SIGLA read-only pool misconfiguration: resolved user "${user}" is the ` +
+        'administrative `sa` account. Set SIGLA_RO_USER (or DB_USER) to a ' +
+        'read-only login such as explorar_datos.',
+    );
+    this.name = 'SiglaRoSaError';
+  }
+}
+
+let siglaRoPool: mssql.ConnectionPool | null = null;
+
+/**
+ * `true` when at least one `SIGLA_RO_*` connection env var is set, so the
+ * dedicated read-only overrides win over the shared `DB_*` vars. HOST is
+ * the canonical signal (same convention as `hasHolomedicConnectionEnv`).
+ */
+function hasSiglaRoConnectionEnv(): boolean {
+  return Boolean(
+    process.env.SIGLA_RO_HOST ||
+      process.env.SIGLA_RO_USER ||
+      process.env.SIGLA_RO_PASSWORD,
+  );
+}
+
+/**
+ * Get the process-wide SIGLA read-only connection pool used by the
+ * valoraciones feature (REQ-03). Read-only by construction:
+ *
+ *  - Connection vars come from `SIGLA_RO_*`, falling back to the shared
+ *    `DB_*` vars when no read-only override is present.
+ *  - Database resolves as `SIGLA_RO_NAME ?? DB_NAME ?? 'ICCGSA'`.
+ *  - A pre-construction guard throws `SiglaRoSaError` when the resolved
+ *    user is `sa` — no pool object is created in that case.
+ *
+ * Lazy singleton: the first call builds the pool; later calls return it.
+ */
+export async function getSiglaReadOnlyPool(): Promise<mssql.ConnectionPool> {
+  if (siglaRoPool) return siglaRoPool;
+
+  const envPrefix: DbEnvPrefix = hasSiglaRoConnectionEnv() ? 'SIGLA_RO_' : 'DB_';
+  const user = process.env[`${envPrefix}USER`];
+  if (user && user.trim().toLowerCase() === 'sa') {
+    throw new SiglaRoSaError(user);
+  }
+
+  const database = process.env.SIGLA_RO_NAME ?? process.env.DB_NAME ?? 'ICCGSA';
+  const config = buildConfig(database, envPrefix);
+  siglaRoPool = new mssql.ConnectionPool(config);
+  return siglaRoPool;
+}
+
+/**
+ * Test seam — replaces (or clears) the cached read-only pool so unit
+ * tests can inject a fake without opening a real SQL Server connection.
+ * Pass `null` to clear so the next call rebuilds a real pool.
+ */
+export function __setSiglaRoPoolForTests(pool: mssql.ConnectionPool | null): void {
+  siglaRoPool = pool;
 }
