@@ -55,8 +55,8 @@ Legend: `[Q-Rn]` = valoraciones-sigla-query req n · `[E-Rn]` = valoraciones-exp
 
 ## Slice 3 (PR 3): Email & Plantillas
 
-- [ ] 3.1 `plantillas-editor/infrastructure/areaConfigRegistry.ts`: add `VALORIZACIONES_CONFIG` — tokens (empresa, ruc, periodo, moneda, total, fecha, firma), table `tablaValoraciones`, mock data; RED: `areaRegistryConsistency` extended `[M-R2]`
-- [ ] 3.2 `envio-resultados/presentation/helpers/tokenResolvers/`: widen `types.ts` optional fields, add valoraciones branch in `buildTokenResolverRegistry.ts`, create `tablaValoracionesResolver.ts` (cobranza D12 precedent); RED: consistency + unknown areas unchanged `[M-R2]`
-- [ ] 3.3 Create `GET /api/valoraciones/contactos`: thin route → `getContactDb().getByRuc()`; RED: RUC passthrough, empty on miss `[M-R3|D5]`
-- [ ] 3.4 Create `POST /api/valoraciones/send`: re-query from filter DTO → PDF/Excel attachments (no operator uploads), `sendEmail` purpose `facturacion`, user-safe errors (no credential/internal leakage), zero HOLOMEDIC writes; RED: mocked `sendEmail` success/failure mapping `[M-R1|M-R4|D4|D5]`
-- [ ] 3.5 Create `valoraciones/presentation/components/EnviarValoracionesModal.tsx` + `hooks/useEnviarValoraciones.ts`: plantillas picker (area `valoraciones`) with token interpolation, RUC prefill via contactos, graceful manual entry when no RUC, attachment toggles; RED: prefill + manual-degrade scenarios `[M-R3|M-R4]`
+- [x] 3.1 `plantillas-editor/infrastructure/areaConfigRegistry.ts`: add `VALORIZACIONES_CONFIG` — tokens (empresa, ruc, periodo, moneda, total, fecha, firma), table `tablaValoraciones`, mock data; RED: `areaRegistryConsistency` extended `[M-R2]`
+- [x] 3.2 `envio-resultados/presentation/helpers/tokenResolvers/`: widen `types.ts` optional fields, add valoraciones branch in `buildTokenResolverRegistry.ts`, create `tablaValoracionesResolver.ts` (cobranza D12 precedent); RED: consistency + unknown areas unchanged `[M-R2]`
+- [x] 3.3 Create `GET /api/valoraciones/contactos`: thin route → `getContactDb().getByRuc()`; RED: RUC passthrough, empty on miss `[M-R3|D5]`
+- [x] 3.4 Create `POST /api/valoraciones/send`: re-query from filter DTO → PDF/Excel attachments (no operator uploads), `sendEmail` purpose `facturacion`, user-safe errors (no credential/internal leakage), zero HOLOMEDIC writes; RED: mocked `sendEmail` success/failure mapping `[M-R1|M-R4|D4|D5]`
+- [x] 3.5 Create `valoraciones/presentation/components/EnviarValoracionesModal.tsx` + `hooks/useEnviarValoraciones.ts`: plantillas picker (area `valoraciones`) with token interpolation, RUC prefill via contactos, graceful manual entry when no RUC, attachment toggles; RED: prefill + manual-degrade scenarios `[M-R3|M-R4]`
