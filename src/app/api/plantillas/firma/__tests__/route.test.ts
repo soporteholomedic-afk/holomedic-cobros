@@ -89,7 +89,7 @@ describe('/api/plantillas/firma — auth guard (in-route defense-in-depth)', () 
   it('TM1 — unauthenticated GET → 401 JSON (no redirect)', async () => {
     mockGetSession.mockResolvedValue(null);
 
-    const res = await GET(new Request('http://localhost:3000/api/plantillas/firma'));
+    const res = await GET();
 
     expect(res.status).toBe(401);
     const body = await getJson(res);
@@ -109,7 +109,7 @@ describe('/api/plantillas/firma — auth guard (in-route defense-in-depth)', () 
   it('TM2 — session WITHOUT firma_correo → 403 JSON on GET and PUT', async () => {
     mockGetSession.mockResolvedValue({ ...SESSION, permisos: ['consolidados'] });
 
-    const getRes = await GET(new Request('http://localhost:3000/api/plantillas/firma'));
+    const getRes = await GET();
     expect(getRes.status).toBe(403);
     expect(await getJson(getRes)).toMatchObject({ success: false });
 
@@ -134,7 +134,7 @@ describe('/api/plantillas/firma — GET', () => {
     const firma = makeFirma();
     __setFirmaDbForTests(fakeRepo({ getOwnFirma: vi.fn().mockResolvedValue(firma) }));
 
-    const res = await GET(new Request('http://localhost:3000/api/plantillas/firma'));
+    const res = await GET();
 
     expect(res.status).toBe(200);
     const body = await getJson(res);
@@ -147,7 +147,7 @@ describe('/api/plantillas/firma — GET', () => {
   it('returns firmaHtml as an EMPTY string when no signature exists (no fallback here)', async () => {
     __setFirmaDbForTests(fakeRepo({ getOwnFirma: vi.fn().mockResolvedValue(null) }));
 
-    const res = await GET(new Request('http://localhost:3000/api/plantillas/firma'));
+    const res = await GET();
 
     expect(res.status).toBe(200);
     const body = await getJson(res);
@@ -158,7 +158,7 @@ describe('/api/plantillas/firma — GET', () => {
     const repo = fakeRepo();
     __setFirmaDbForTests(repo);
 
-    await GET(new Request('http://localhost:3000/api/plantillas/firma'));
+    await GET();
 
     expect(repo.getOwnFirma).toHaveBeenCalledTimes(1);
     expect(repo.getOwnFirma).toHaveBeenCalledWith('user-owner-1');
@@ -168,7 +168,7 @@ describe('/api/plantillas/firma — GET', () => {
     const firma = makeFirma({ nombre: '<b>X</b>' });
     __setFirmaDbForTests(fakeRepo({ getOwnFirma: vi.fn().mockResolvedValue(firma) }));
 
-    const res = await GET(new Request('http://localhost:3000/api/plantillas/firma'));
+    const res = await GET();
 
     const body = await getJson(res);
     const html = body.firmaHtml as string;
@@ -181,7 +181,7 @@ describe('/api/plantillas/firma — GET', () => {
       fakeRepo({ getOwnFirma: vi.fn().mockRejectedValue(new Error('db down')) }),
     );
 
-    const res = await GET(new Request('http://localhost:3000/api/plantillas/firma'));
+    const res = await GET();
 
     expect(res.status).toBe(500);
     const body = await getJson(res);

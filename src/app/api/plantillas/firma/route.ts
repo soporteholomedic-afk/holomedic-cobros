@@ -121,7 +121,7 @@ async function requireFirmaSession(): Promise<
  * contract is resolved downstream by the send-path token resolver
  * fallback; this route adds no fallback markup itself.
  */
-export async function GET(_request: Request): Promise<NextResponse<GetResponse>> {
+export async function GET(): Promise<NextResponse<GetResponse>> {
   try {
     const auth = await requireFirmaSession();
     if (auth.error) return auth.error;
