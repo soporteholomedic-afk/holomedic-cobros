@@ -1,427 +1,116 @@
-import React from 'react';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
-import userEvent from '@testing-library/user-event';
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
-// Mock parseValoracionesCsvContent — it depends on xlsx which is heavy for tests
-// NOTE: vi.hoisted is REQUIRED because vi.mock is hoisted to the top of the file
-const mockParseCsv = vi.hoisted(() => vi.fn());
-vi.mock('@/utils/valoracionesCore', () => ({
-  parseValoracionesCsvContent: mockParseCsv,
-}));
+import { makeRepFacturacion } from '@/features/valoraciones/domain/fixtures';
 
 import ValoracionesPage from '../page';
 
-const mockGroupedData = {
-  companies: [
-    {
-      company: 'EMPRESA A',
-      rows: [
-        {
-          facturar_a: 'EMPRESA A',
-          contratades: '',
-          proyectodes: '',
-          cr_proy: '',
-          dociden: 'DNI 12345678',
-          nombre: 'JUAN PEREZ',
-          edad: 30,
-          'Fecha de Nacimiento': '15/05/1996',
-          ocupacion: 'EMPLEADO',
-          tipotrab: 'EMPLEADO',
-          feorden: '',
-          tipo_examen: 'PREOCUPACIONAL',
-          perfil: 'PUESTO ADMINISTRATIVO',
-          solicitado: '',
-          costo: 141,
-        },
-      ],
-      subtotal: 141,
-      igv: 25.38,
-      total: 166.38,
-    },
-    {
-      company: 'EMPRESA B',
-      rows: [
-        {
-          facturar_a: 'EMPRESA B',
-          contratades: '',
-          proyectodes: '',
-          cr_proy: '',
-          dociden: 'RUC 20123456789',
-          nombre: 'MARIA GONZALES',
-          edad: 28,
-          'Fecha de Nacimiento': '10/03/1998',
-          ocupacion: 'TECNICO',
-          tipotrab: 'EMPLEADO',
-          feorden: '',
-          tipo_examen: 'OCUPACIONAL',
-          perfil: 'PUESTO OPERATIVO',
-          solicitado: '',
-          costo: 200,
-        },
-      ],
-      subtotal: 200,
-      igv: 36,
-      total: 236,
-    },
-  ],
-};
+/**
+ * Page-level integration test (also the U2 runtime-harness proxy — the
+ * dev server is not started in apply mode). Mocks `fetch` at the module
+ * boundary and drives the real page: lookups on mount, Consultar →
+ * `/api/valoraciones/sigla`, grouped rows rendered.
+ */
 
-function createMockFile(name = 'archivos-crudos.csv'): File {
-  return new File(
-    ['facturar a,total\nEMPRESA A,141.00\nEMPRESA B,200.00'],
-    name,
-    { type: 'text/csv' },
-  );
+function jsonResponse(body: unknown, ok = true, status = 200): Response {
+  return {
+    ok,
+    status,
+    json: () => Promise.resolve(body),
+  } as Response;
 }
 
-describe('ValoracionesPage — Upload → List → Detail', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:mock');
-    vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => { });
-  });
+function mockFetchRouteBy(handler: (url: string) => Response): ReturnType<typeof vi.fn> {
+  const fetchMock = vi.fn((input: RequestInfo | URL) =>
+    Promise.resolve(handler(input.toString())),
+  );
+  vi.stubGlobal('fetch', fetchMock);
+  return fetchMock;
+}
 
-  // ---- Upload View ----
+afterEach(() => {
+  vi.unstubAllGlobals();
+});
 
-  it('debe mostrar la vista de carga inicialmente con el título', () => {
-    render(<ValoracionesPage />);
-    expect(screen.getByText('Generación de Valoraciones')).toBeInTheDocument();
-    expect(screen.getByText('Arrastra tu archivo CSV')).toBeInTheDocument();
-  });
-
-  it('debe mostrar error si se selecciona un archivo que no es CSV', async () => {
-    const user = userEvent.setup();
-    render(<ValoracionesPage />);
-
-    const input = screen.getByTestId('csv-input') as HTMLInputElement;
-    const file = new File(['data'], 'datos.txt', { type: 'text/plain' });
-
-    // The accept=".csv" should prevent non-matching files from being applied
-    // But for robustness, also test drag-and-drop which doesn't respect accept
-    await user.upload(input, file);
-
-    // Since input has accept=".csv", non-CSV files should not trigger the change event
-    expect(screen.getByText('Arrastra tu archivo CSV')).toBeInTheDocument();
-  });
-
-  it('debe mostrar error por drag-and-drop de archivo no-CSV', () => {
-    render(<ValoracionesPage />);
-
-    const input = screen.getByTestId('csv-input') as HTMLInputElement;
-    const dropZone = input.parentElement!;
-    const file = new File(['data'], 'datos.txt', { type: 'text/plain' });
-
-    fireEvent.drop(dropZone, {
-      dataTransfer: {
-        files: [file],
-        items: [file],
-        types: ['Files'],
-      },
-    });
-
-    expect(screen.getByText('Solo se aceptan archivos CSV')).toBeInTheDocument();
-  });
-
-  // ---- Upload → List transition ----
-
-  it('debe cambiar a vista de lista después de cargar un CSV válido', async () => {
-    const user = userEvent.setup();
-    mockParseCsv.mockReturnValue(mockGroupedData);
-
-    render(<ValoracionesPage />);
-
-    const input = screen.getByTestId('csv-input') as HTMLInputElement;
-    await user.upload(input, createMockFile());
-
-    // Wait for FileReader + state update
-    await waitFor(() => {
-      expect(screen.getByText('EMPRESA A')).toBeInTheDocument();
-      expect(screen.getByText('EMPRESA B')).toBeInTheDocument();
-    });
-
-    // Upload view should no longer be visible
-    expect(
-      screen.queryByText('Arrastra tu archivo CSV'),
-    ).not.toBeInTheDocument();
-
-    // List view should show the "Descargar todo" button
-    expect(screen.getByText('Descargar todo')).toBeInTheDocument();
-
-    // Should show "Nuevo archivo" button to go back
-    expect(screen.getByText('Nuevo archivo')).toBeInTheDocument();
-  });
-
-  it('debe llamar a parseValoracionesCsvContent con el contenido del CSV', async () => {
-    const user = userEvent.setup();
-    mockParseCsv.mockReturnValue(mockGroupedData);
-
-    render(<ValoracionesPage />);
-
-    const input = screen.getByTestId('csv-input') as HTMLInputElement;
-    await user.upload(input, createMockFile());
-
-    await waitFor(() => {
-      expect(mockParseCsv).toHaveBeenCalledTimes(1);
-      // Should be called with the file content read by FileReader
-      expect(mockParseCsv).toHaveBeenCalledWith(
-        expect.stringContaining('EMPRESA A'),
-      );
-    });
-  });
-
-  it('debe mostrar error si parseValoracionesCsvContent falla', async () => {
-    const user = userEvent.setup();
-    mockParseCsv.mockImplementation(() => {
-      throw new Error('Error de parseo');
+describe('ValoracionesPage', () => {
+  it('renders the filter panel and loads the mount-time lookups', async () => {
+    const fetchMock = mockFetchRouteBy((url) => {
+      if (url.includes('/lookups/sedes')) {
+        return jsonResponse({ resultados: [{ codSed: 1, nomSed: 'SEDE SURQUILLO' }] });
+      }
+      if (url.includes('/lookups/tipos-trabajador')) {
+        return jsonResponse({
+          resultados: [
+            { codTip: 620001, desTip: 'OBRERO' },
+            { codTip: 620002, desTip: 'EMPLEADO' },
+          ],
+        });
+      }
+      return jsonResponse({ resultados: [] });
     });
 
     render(<ValoracionesPage />);
 
-    const input = screen.getByTestId('csv-input') as HTMLInputElement;
-    await user.upload(input, createMockFile());
+    // Page shell + the 11-filter panel render immediately.
+    expect(screen.getByRole('heading', { name: 'Valorizaciones' })).toBeInTheDocument();
+    expect(screen.getByLabelText('Fecha inicio')).toBeInTheDocument();
+    expect(screen.getByLabelText('Cliente')).toBeInTheDocument();
+    expect(screen.getByLabelText('Consolidado (próximamente)')).toBeDisabled();
 
-    await waitFor(() => {
-      expect(screen.getByText('Error de parseo')).toBeInTheDocument();
-    });
-
-    // Should still be in upload view
-    expect(screen.getByText('Arrastra tu archivo CSV')).toBeInTheDocument();
-  });
-
-  // ---- List → Detail transition ----
-
-  it('debe abrir el modal de detalle al hacer clic en una empresa', async () => {
-    const user = userEvent.setup();
-    mockParseCsv.mockReturnValue(mockGroupedData);
-
-    render(<ValoracionesPage />);
-
-    const input = screen.getByTestId('csv-input') as HTMLInputElement;
-    await user.upload(input, createMockFile());
-
-    await waitFor(() => {
-      expect(screen.getByText('EMPRESA A')).toBeInTheDocument();
-    });
-
-    // Click on company (use getAllByText since "EMPRESA A" may appear in both list and modal)
-    fireEvent.click(screen.getAllByText('EMPRESA A')[0]);
-
-    // Modal should open
-    expect(screen.getByText('Detalle de Valoraciones')).toBeInTheDocument();
-    expect(screen.getByText('Descargar Excel')).toBeInTheDocument();
-
-    // Company name appears in both list and modal — at least once
-    expect(screen.getAllByText('EMPRESA A').length).toBeGreaterThanOrEqual(1);
-
-    // Summary cards (labels appear in both list table header and modal summary)
-    expect(screen.getAllByText('Subtotal').length).toBeGreaterThanOrEqual(1);
-    expect(screen.getAllByText('IGV 18%').length).toBeGreaterThanOrEqual(1);
-    expect(screen.getAllByText('Total').length).toBeGreaterThanOrEqual(1);
-  });
-
-  it('debe cerrar el modal al hacer clic en Cerrar', async () => {
-    const user = userEvent.setup();
-    mockParseCsv.mockReturnValue(mockGroupedData);
-
-    render(<ValoracionesPage />);
-
-    const input = screen.getByTestId('csv-input') as HTMLInputElement;
-    await user.upload(input, createMockFile());
-
-    await waitFor(() => {
-      expect(screen.getByText('EMPRESA A')).toBeInTheDocument();
-    });
-
-    fireEvent.click(screen.getByText('EMPRESA A'));
-    expect(screen.getByText('Detalle de Valoraciones')).toBeInTheDocument();
-
-    // Close modal
-    fireEvent.click(screen.getByText('Cerrar'));
-
-    await waitFor(() => {
-      expect(
-        screen.queryByText('Detalle de Valoraciones'),
-      ).not.toBeInTheDocument();
-    });
-
-    // List view still visible
-    expect(screen.getByText('EMPRESA A')).toBeInTheDocument();
-  });
-
-  // ---- Download flows ----
-
-  it('debe enviar POST sin company al hacer clic en Descargar todo', async () => {
-    const user = userEvent.setup();
-    mockParseCsv.mockReturnValue(mockGroupedData);
-
-    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue({
-      ok: true,
-      blob: () =>
-        Promise.resolve(
-          new Blob(['fake-xlsx'], {
-            type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-          }),
-        ),
-      headers: new Headers({
-        'Content-Disposition':
-          'attachment; filename="valoraciones_por_empresa_2026-06-04.xlsx"',
-      }),
-    } as Response);
-
-    render(<ValoracionesPage />);
-
-    const input = screen.getByTestId('csv-input') as HTMLInputElement;
-    await user.upload(input, createMockFile());
-
-    await waitFor(() => {
-      expect(screen.getByText('Descargar todo')).toBeInTheDocument();
-    });
-
-    await user.click(screen.getByText('Descargar todo'));
-
-    await waitFor(() => {
-      expect(fetchMock).toHaveBeenCalledTimes(1);
-      expect(fetchMock).toHaveBeenCalledWith(
-        '/api/valoraciones/generate',
-        expect.objectContaining({
-          method: 'POST',
-          body: expect.any(FormData),
-        }),
-      );
-    });
-
-    // Verify company is NOT in the FormData
-    const callArgs = fetchMock.mock.calls[0];
-    const formData = callArgs[1]?.body as FormData;
-    expect(formData.has('company')).toBe(false);
-    expect(formData.has('file')).toBe(true);
-  });
-
-  it('debe enviar POST con company al hacer clic en Descargar Excel en el modal', async () => {
-    const user = userEvent.setup();
-    mockParseCsv.mockReturnValue(mockGroupedData);
-
-    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue({
-      ok: true,
-      blob: () =>
-        Promise.resolve(
-          new Blob(['fake-xlsx'], {
-            type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-          }),
-        ),
-      headers: new Headers({
-        'Content-Disposition':
-          'attachment; filename="valoraciones_EMPRESA A_2026-06-04.xlsx"',
-      }),
-    } as Response);
-
-    render(<ValoracionesPage />);
-
-    const input = screen.getByTestId('csv-input') as HTMLInputElement;
-    await user.upload(input, createMockFile());
-
-    await waitFor(() => {
-      expect(screen.getByText('EMPRESA A')).toBeInTheDocument();
-    });
-
-    // Open company detail
-    fireEvent.click(screen.getByText('EMPRESA A'));
-
-    await waitFor(() => {
-      expect(screen.getByText('Descargar Excel')).toBeInTheDocument();
-    });
-
-    // Click Descargar Excel
-    await user.click(screen.getByText('Descargar Excel'));
-
-    await waitFor(() => {
-      expect(fetchMock).toHaveBeenCalledTimes(1);
-    });
-
-    // Verify company IS in the FormData
-    const callArgs = fetchMock.mock.calls[0];
-    const formData = callArgs[1]?.body as FormData;
-    expect(formData.has('company')).toBe(true);
-    expect(formData.get('company')).toBe('EMPRESA A');
-    expect(formData.has('file')).toBe(true);
-  });
-
-  it('debe mostrar error de descarga en el modal cuando falla', async () => {
-    const user = userEvent.setup();
-    mockParseCsv.mockReturnValue(mockGroupedData);
-
-    vi.spyOn(globalThis, 'fetch').mockRejectedValue(
-      new Error('Error de red'),
+    // Mount-time lookups resolve after the debounce.
+    await waitFor(() =>
+      expect(fetchMock).toHaveBeenCalledWith('/api/valoraciones/lookups/sedes'),
     );
-
-    render(<ValoracionesPage />);
-
-    const input = screen.getByTestId('csv-input') as HTMLInputElement;
-    await user.upload(input, createMockFile());
-
-    await waitFor(() => {
-      expect(screen.getByText('EMPRESA A')).toBeInTheDocument();
-    });
-
-    fireEvent.click(screen.getByText('EMPRESA A'));
-
-    await waitFor(() => {
-      expect(screen.getByText('Descargar Excel')).toBeInTheDocument();
-    });
-
-    await user.click(screen.getByText('Descargar Excel'));
-
-    await waitFor(() => {
-      expect(screen.getByText('Error de red')).toBeInTheDocument();
-    });
-  });
-
-  it('debe mostrar error de descarga general en el banner de error', async () => {
-    const user = userEvent.setup();
-    mockParseCsv.mockReturnValue(mockGroupedData);
-
-    vi.spyOn(globalThis, 'fetch').mockRejectedValue(
-      new Error('Error de red'),
+    await waitFor(() =>
+      expect(screen.getByRole('option', { name: 'SEDE SURQUILLO' })).toBeInTheDocument(),
     );
-
-    render(<ValoracionesPage />);
-
-    const input = screen.getByTestId('csv-input') as HTMLInputElement;
-    await user.upload(input, createMockFile());
-
-    await waitFor(() => {
-      expect(screen.getByText('Descargar todo')).toBeInTheDocument();
-    });
-
-    await user.click(screen.getByText('Descargar todo'));
-
-    await waitFor(() => {
-      expect(screen.getByText('Error de red')).toBeInTheDocument();
-    });
+    await waitFor(() =>
+      expect(screen.getByRole('option', { name: 'OBRERO' })).toBeInTheDocument(),
+    );
   });
 
-  it('debe permitir volver a la vista de carga desde la lista', async () => {
-    const user = userEvent.setup();
-    mockParseCsv.mockReturnValue(mockGroupedData);
+  it('queries SIGLA on Consultar and renders the grouped results', async () => {
+    const fetchMock = mockFetchRouteBy((url) => {
+      if (url.includes('/api/valoraciones/sigla')) {
+        return jsonResponse({ resultados: [makeRepFacturacion()] });
+      }
+      return jsonResponse({ resultados: [] });
+    });
 
     render(<ValoracionesPage />);
 
-    const input = screen.getByTestId('csv-input') as HTMLInputElement;
-    await user.upload(input, createMockFile());
+    fireEvent.click(screen.getByRole('button', { name: /Consultar/ }));
 
-    await waitFor(() => {
-      expect(screen.getByText('EMPRESA A')).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByText('EMPRESA DEMO S.A.C.')).toBeInTheDocument());
+    expect(screen.getByText('1 registros · 1 empresas')).toBeInTheDocument();
+
+    const siglaCall = fetchMock.mock.calls
+      .map((call) => call[0] as string)
+      .find((url) => url.includes('/api/valoraciones/sigla'));
+    expect(siglaCall).toBeDefined();
+    const params = new URLSearchParams((siglaCall ?? '').split('?')[1]);
+    expect(params.get('codMon')).toBe('1'); // SOLES default
+    expect(params.get('indFac')).toBe('0'); // No Facturados default
+  });
+
+  it('opens the detail modal for a group and closes it', async () => {
+    mockFetchRouteBy((url) => {
+      if (url.includes('/api/valoraciones/sigla')) {
+        return jsonResponse({ resultados: [makeRepFacturacion()] });
+      }
+      return jsonResponse({ resultados: [] });
     });
 
-    // Click "Nuevo archivo" to go back
-    fireEvent.click(screen.getByText('Nuevo archivo'));
+    render(<ValoracionesPage />);
+    fireEvent.click(screen.getByRole('button', { name: /Consultar/ }));
 
-    await waitFor(() => {
-      expect(screen.getByText('Arrastra tu archivo CSV')).toBeInTheDocument();
-    });
+    const empresaRow = await screen.findByText('EMPRESA DEMO S.A.C.');
+    fireEvent.click(empresaRow);
 
-    // Companies no longer visible
-    expect(screen.queryByText('EMPRESA A')).not.toBeInTheDocument();
+    expect(await screen.findByRole('dialog')).toBeInTheDocument();
+    expect(screen.getByText('Detalle de Valorizaciones')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Cerrar' }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
   });
 });
