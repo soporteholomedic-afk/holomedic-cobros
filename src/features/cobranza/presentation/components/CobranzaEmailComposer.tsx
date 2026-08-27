@@ -16,23 +16,17 @@ import { EmailComposerShell } from '@/components/email/EmailComposerShell';
 import { EmailPreviewPanel } from '@/components/email/EmailPreviewPanel';
 import { EmailControlsPanel } from '@/components/email/EmailControlsPanel';
 import { EmailBodyField } from '@/components/email/EmailBodyField';
-import { SignatureEditor } from '@/components/email/SignatureEditor';
 import { LocalFileDropZone } from '@/components/email/LocalFileDropZone';
 import type { EmailBodyEditorHandle } from '@/components/email/EmailBodyEditor';
 import { SpitchSelector } from '@/features/envio-resultados/presentation/components/SpitchSelector';
 import { interpolate } from '@/features/envio-resultados/presentation/helpers/interpolate';
 import { buildTokenResolverRegistry } from '@/features/envio-resultados/presentation/helpers/tokenResolvers/buildTokenResolverRegistry';
-import {
-  buildSignatureDataFromUser,
-  buildSignatureHtml,
-} from '@/features/envio-resultados/presentation/helpers/signatureData';
 import type { Spitch } from '@/features/envio-resultados/domain/entities';
-import type { SignatureData } from '@/features/envio-resultados/presentation/helpers/signatureData';
-import { useAuth } from '@/features/auth/presentation/hooks/useAuth';
 import { useCompanyContact } from '@/features/cobranza/presentation/hooks/useCompanyContact';
 import { esClaveDirectorioValida } from '@/features/cobranza/domain/entities';
 import { buildCobranzaInterpolationContext } from '@/features/cobranza/presentation/helpers/buildCobranzaInterpolationContext';
 import { buildCobranzaAuditMetadata } from '@/features/cobranza/presentation/helpers/buildCobranzaAuditMetadata';
+import { useFirmaCorreo } from '@/features/firma-correo/presentation/hooks/useFirmaCorreo';
 import type { ClienteGroup } from '@/types';
 
 import { useSendCobranzaEmail } from '../hooks/useSendCobranzaEmail';
@@ -40,17 +34,6 @@ import { useSendCobranzaEmail } from '../hooks/useSendCobranzaEmail';
 const EmailBodyEditorLazy = lazy(() =>
   import('@/components/email/EmailBodyEditor').then((m) => ({ default: m.EmailBodyEditor })),
 );
-
-// Signature fields — structured data edited outside the WYSIWYG body and
-// re-appended at dispatch (EmailEditor precedent).
-const signatureFields: { key: keyof SignatureData; label: string }[] = [
-  { key: 'name', label: 'Nombre' },
-  { key: 'role', label: 'Cargo' },
-  { key: 'email', label: 'Email' },
-  { key: 'phone', label: 'Teléfono' },
-  { key: 'phoneAlt', label: 'Teléfono 2' },
-  { key: 'address', label: 'Dirección' },
-];
 
 /** Guard + route/config caps (requirements; the route re-validates). */
 const MAX_RECIPIENTS = 10;
@@ -84,21 +67,11 @@ function parseEmailList(value: string): string[] {
  * success animation.
  */
 export function CobranzaEmailComposer({ client, onClose, onSuccess }: CobranzaEmailComposerProps) {
-  // Session-seeded signature — DEFAULT_SIGNATURE_DATA fallback while
-  // auth is loading (EmailEditor precedent).
-  const { user } = useAuth();
-  const [signatureData, setSignatureData] = useState<SignatureData>(() =>
-    buildSignatureDataFromUser(user),
-  );
-
-  // Late-auth re-seed while pristine: a signature the operator already
-  // edited by hand is never clobbered by a late session response.
-  const signaturePristineRef = useRef(true);
-  useEffect(() => {
-    if (!user) return;
-    if (!signaturePristineRef.current) return;
-    setSignatureData(buildSignatureDataFromUser(user));
-  }, [user]);
+  // editor-firmas PR4 — the signature is composed SERVER-SIDE from the
+  // sender's stored fields (GET /api/plantillas/firma) and inlined at
+  // {{firma}} by the token resolver. Empty firmaHtml → the resolver's
+  // `[Falta configurar firma]` fallback (contract unchanged).
+  const { firmaHtml } = useFirmaCorreo();
 
   // Contact directory (REQ-01-DIR-01/03): prefills to/cc from the stored
   // pair; junk keys never hit the API ('skipped' — sending never blocked).
@@ -138,14 +111,6 @@ export function CobranzaEmailComposer({ client, onClose, onSuccess }: CobranzaEm
     /* eslint-enable react-hooks/set-state-in-effect */
   }, [status, contacto]);
 
-  // Dispatched html = body + current structured signature. The {{firma}}
-  // token is stripped from templates BEFORE interpolation — firmaHtml is
-  // never baked into the body (spec "Structured Signature for Cobranza").
-  const htmlBody = useMemo(
-    () => (bodyHtml ? bodyHtml + buildSignatureHtml(signatureData) : ''),
-    [bodyHtml, signatureData],
-  );
-
   const toList = useMemo(() => parseEmailList(to), [to]);
   const ccList = useMemo(() => parseEmailList(cc), [cc]);
   const tooManyRecipients = toList.length > MAX_RECIPIENTS;
@@ -159,20 +124,21 @@ export function CobranzaEmailComposer({ client, onClose, onSuccess }: CobranzaEm
   const handleSpitchSelect = useCallback(
     (spitch: Spitch) => {
       setSelectedSpitch(spitch);
-      // Structured signature: {{firma}} never resolves inline — strip it
-      // and interpolate with an empty firma context.
-      const bodyWithoutFirma = spitch.bodyHtml.replace(/\{\{firma\}\}/g, '');
+      // editor-firmas PR4 — {{firma}} interpolates the server-composed
+      // signature (fetched on mount); NO stripping, NO client-side
+      // rebuild. Accepted race: selecting a template before the firma
+      // fetch resolves bakes the fallback placeholder until reselect.
       const interpolated = interpolate(
-        bodyWithoutFirma,
+        spitch.bodyHtml,
         spitch.subject,
-        buildCobranzaInterpolationContext(client, ''),
+        buildCobranzaInterpolationContext(client, firmaHtml),
         buildTokenResolverRegistry('cobranza'),
       );
       setSubject(interpolated.subject);
       setBodyHtml(interpolated.html);
       editorRef.current?.loadHtml(interpolated.html);
     },
-    [client],
+    [client, firmaHtml],
   );
 
   const handleLocalAdd = useCallback(
@@ -193,12 +159,6 @@ export function CobranzaEmailComposer({ client, onClose, onSuccess }: CobranzaEm
 
   const handleLocalRemove = useCallback((index: number) => {
     setLocalFiles((prev) => prev.filter((_, i) => i !== index));
-  }, []);
-
-  const handleSignatureChange = useCallback((field: keyof SignatureData, value: string) => {
-    // Manual edit releases the late-auth re-seed latch (pristine → false).
-    signaturePristineRef.current = false;
-    setSignatureData((prev) => ({ ...prev, [field]: value }));
   }, []);
 
   const handleRequestSend = useCallback(() => {
@@ -228,7 +188,7 @@ export function CobranzaEmailComposer({ client, onClose, onSuccess }: CobranzaEm
       to: toList,
       cc: ccList.length > 0 ? ccList : undefined,
       subject,
-      html: htmlBody,
+      html: bodyHtml,
       attachments: localFiles,
       // REQ-02 R6/D3: audit metadata travels on every cobranza send.
       auditMeta: buildCobranzaAuditMetadata(client),
@@ -242,7 +202,7 @@ export function CobranzaEmailComposer({ client, onClose, onSuccess }: CobranzaEm
         onClose();
       }, SUCCESS_TIMEOUT_MS);
     }
-  }, [ccList, client, htmlBody, localFiles, onClose, onSuccess, saveContact, send, subject, toList]);
+  }, [ccList, client, bodyHtml, localFiles, onClose, onSuccess, saveContact, send, subject, toList]);
 
   const handleConfirmSend = useCallback(() => {
     setShowConfirm(false);
@@ -269,7 +229,7 @@ export function CobranzaEmailComposer({ client, onClose, onSuccess }: CobranzaEm
             {/* ===== LEFT PANEL: Preview + attachments (shared module) ===== */}
             <EmailPreviewPanel
               subject={subject}
-              html={htmlBody}
+              html={bodyHtml}
               emptyHint="Seleccione una plantilla de cobranza para previsualizar"
               templateName={selectedSpitch?.name}
               dropZoneSlot={
@@ -358,13 +318,6 @@ export function CobranzaEmailComposer({ client, onClose, onSuccess }: CobranzaEm
                       />
                     </Suspense>
                   ) : null}
-                  signatureSlot={
-                    <SignatureEditor
-                      fields={signatureFields}
-                      values={signatureData}
-                      onChange={handleSignatureChange}
-                    />
-                  }
                 />
               }
               onSend={handleRequestSend}
