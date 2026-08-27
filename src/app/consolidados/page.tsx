@@ -442,7 +442,7 @@ function ConsolidadosContent() {
 export default function ConsolidadosPage() {
   return (
     <main className="min-h-screen bg-slate-50 py-12 px-4">
-      <div className="max-w-4xl mx-auto">
+      <div className="w-full">
         {/* Header — the HISTORIAL Link (historial-envios-consolidados
             PR4, OQ2) lives in this hook-free outer wrapper, outside the
             Suspense boundary, so it stays mounted and visible through
