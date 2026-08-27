@@ -1,14 +1,17 @@
 /**
- * PR envio-resultados CAMO/EMO wizard — WU-1.3.
+ * Envio-resultados CAMO/EMO wizard state machine.
  *
- * Pure state machine for the 4-step envio wizard. The reducer and
- * selectors are exported as pure functions so PR3 can test the
- * wizard → EmailEditor round-trip without React. The
- * `useEnvioWizard` hook below is a thin `useReducer` wrapper.
+ * Multi-proyecto change (WU-2): picks are keyed by the composite
+ * `pickKey(dni, idAten)` (format `'<dni>::<idAten>'`, mirroring the
+ * FilesModal `'<folderPath>::<name>'` convention) so every atención
+ * (ficha) of a patient owns its own CAMO/EMO slot. The reducer is
+ * exported as a pure function; the hook is a thin `useReducer`
+ * wrapper.
  *
- * Spec coverage (from `sdd/envio-resultados-camo-emo/spec`):
- *  - REQ-003 — state machine, canAdvance, actions.
- *  - Scenarios S-003, S-004, S-005, S-009, S-020, S-021.
+ * Spec coverage (envio-resultados-multi-proyecto):
+ *  - REQ-102 — per-ficha pick state, deselect prunes the DNI's slots.
+ *  - REQ-103 — `SET_PICKS_BATCH` one-atomic-transition batch.
+ *  - Legacy REQ-003 — steps, guards, round-trip `initialState`.
  */
 import { useReducer } from 'react';
 import type { SelectedFileRef } from '@/features/envio-resultados/domain/entities';
@@ -19,12 +22,25 @@ import type { SelectedFileRef } from '@/features/envio-resultados/domain/entitie
 export type WizardStep = 1 | 2 | 3 | 4;
 
 /**
- * One CAMO/EMO pick per (dni). `null` means "Saltar" (the user
- * explicitly skipped the exam for that patient).
+ * One CAMO/EMO pick per (dni, idAten) atención. `null` means "Saltar"
+ * (the user explicitly skipped the exam for that slot).
  *
  * `displayName` is the file basename shown in the summary row.
  */
 export type WizardFilePick = { ref: SelectedFileRef; displayName: string } | null;
+
+/**
+ * One element of a `SET_PICKS_BATCH` action: the slot kind, the
+ * atención it targets, and the pick (or `null` = skip).
+ */
+export type WizardBatchPick = {
+  slotKind: 'camo' | 'emo';
+  idAten: string;
+  pick: WizardFilePick;
+};
+
+/** Composite key for a per-ficha pick: `'<dni>::<idAten>'`. */
+export const pickKey = (dni: string, idAten: string): string => `${dni}::${idAten}`;
 
 export interface WizardState {
   currentStep: WizardStep;
@@ -35,14 +51,17 @@ export interface WizardState {
    */
   maxVisitedStep: WizardStep;
   selectedDnIs: Set<string>;
-  camoByDni: Record<string, WizardFilePick>;
-  emoByDni: Record<string, WizardFilePick>;
+  /** CAMO picks keyed by `pickKey(dni, idAten)`. `null` = Saltar. */
+  camoPicks: Record<string, WizardFilePick>;
+  /** EMO picks keyed by `pickKey(dni, idAten)`. `null` = Saltar. */
+  emoPicks: Record<string, WizardFilePick>;
 }
 
 export type WizardAction =
   | { type: 'TOGGLE_PATIENT'; dni: string }
-  | { type: 'SET_CAMO'; dni: string; pick: WizardFilePick }
-  | { type: 'SET_EMO'; dni: string; pick: WizardFilePick }
+  | { type: 'SET_CAMO'; dni: string; idAten: string; pick: WizardFilePick }
+  | { type: 'SET_EMO'; dni: string; idAten: string; pick: WizardFilePick }
+  | { type: 'SET_PICKS_BATCH'; dni: string; picks: ReadonlyArray<WizardBatchPick> }
   | { type: 'NEXT' }
   | { type: 'PREV' }
   | { type: 'GO_TO_STEP'; step: WizardStep }
@@ -58,7 +77,7 @@ export interface UseEnvioWizardOptions {
    */
   people: ReadonlyArray<{ dni: string }>;
   /**
-   * Optional restored state (used by the PR3 wizard → email round-trip
+   * Optional restored state (used by the wizard → email round-trip
    * to remount the wizard at step 4 with the previous picks intact).
    */
   initialState?: WizardState;
@@ -68,8 +87,9 @@ export interface UseEnvioWizardResult {
   state: WizardState;
   canAdvance: boolean;
   togglePatient: (dni: string) => void;
-  setCamo: (dni: string, pick: WizardFilePick) => void;
-  setEmo: (dni: string, pick: WizardFilePick) => void;
+  setCamo: (dni: string, idAten: string, pick: WizardFilePick) => void;
+  setEmo: (dni: string, idAten: string, pick: WizardFilePick) => void;
+  setPicksBatch: (dni: string, picks: ReadonlyArray<WizardBatchPick>) => void;
   next: () => void;
   prev: () => void;
   goToStep: (step: WizardStep) => void;
@@ -87,19 +107,24 @@ export function initialWizardState(): WizardState {
     currentStep: 1,
     maxVisitedStep: 1,
     selectedDnIs: new Set<string>(),
-    camoByDni: {},
-    emoByDni: {},
+    camoPicks: {},
+    emoPicks: {},
   };
 }
 
-/** Return a shallow copy of `record` with `key` removed. */
-function omitKey<T>(record: Record<string, T>, key: string): Record<string, T> {
-  if (!(key in record)) return record;
+/** Return a shallow copy of `record` without every key starting
+ *  with `prefix`; returns the same reference when nothing matches. */
+function omitPrefix<T>(record: Record<string, T>, prefix: string): Record<string, T> {
   const next: Record<string, T> = {};
+  let changed = false;
   for (const k of Object.keys(record)) {
-    if (k !== key) next[k] = record[k];
+    if (k.startsWith(prefix)) {
+      changed = true;
+      continue;
+    }
+    next[k] = record[k];
   }
-  return next;
+  return changed ? next : record;
 }
 
 // ---- Selectors ----
@@ -124,12 +149,13 @@ export function canAdvance(state: WizardState): boolean {
  * Pure reducer for the wizard state machine.
  *
  * Guard policies:
- *  - `SET_CAMO` / `SET_EMO` are NO-OPs when the dni is not in
- *    `selectedDnIs` (the wizard cannot record a pick for a patient
- *    that has not been selected at step 1). The reducer does NOT
- *    throw — the step-2/3 components always have a `selectedDnIs`
- *    guarantee by construction, so a guard hit indicates a logic
- *    bug in the calling code.
+ *  - `SET_CAMO` / `SET_EMO` / `SET_PICKS_BATCH` are NO-OPs when the
+ *    dni is not in `selectedDnIs` (the wizard cannot record a pick
+ *    for a patient that has not been selected at step 1). This also
+ *    makes a late batch dispatch after deselect a safe no-op. The
+ *    reducer does NOT throw — the step-2/3 components always have a
+ *    `selectedDnIs` guarantee by construction, so a guard hit
+ *    indicates a logic bug in the calling code.
  *  - `GO_TO_STEP` is a no-op for steps > `maxVisitedStep` (the
  *    user can only jump back to previously visited steps).
  *  - `PREV` at step 1 is a no-op.
@@ -146,15 +172,20 @@ export function envioWizardReducer(state: WizardState, action: WizardAction): Wi
       } else {
         next.add(action.dni);
       }
-      // Prune per-patient picks on deselect so re-selecting starts
-      // from a clean slate. On add, the maps are unchanged.
-      const camoByDni = isSelected ? omitKey(state.camoByDni, action.dni) : state.camoByDni;
-      const emoByDni = isSelected ? omitKey(state.emoByDni, action.dni) : state.emoByDni;
+      // Prune all of the DNI's per-ficha picks on deselect so
+      // re-selecting starts from a clean slate. On add, the maps
+      // are unchanged.
+      const camoPicks = isSelected
+        ? omitPrefix(state.camoPicks, `${action.dni}::`)
+        : state.camoPicks;
+      const emoPicks = isSelected
+        ? omitPrefix(state.emoPicks, `${action.dni}::`)
+        : state.emoPicks;
       return {
         ...state,
         selectedDnIs: next,
-        camoByDni,
-        emoByDni,
+        camoPicks,
+        emoPicks,
       };
     }
 
@@ -162,7 +193,7 @@ export function envioWizardReducer(state: WizardState, action: WizardAction): Wi
       if (!state.selectedDnIs.has(action.dni)) return state;
       return {
         ...state,
-        camoByDni: { ...state.camoByDni, [action.dni]: action.pick },
+        camoPicks: { ...state.camoPicks, [pickKey(action.dni, action.idAten)]: action.pick },
       };
     }
 
@@ -170,8 +201,25 @@ export function envioWizardReducer(state: WizardState, action: WizardAction): Wi
       if (!state.selectedDnIs.has(action.dni)) return state;
       return {
         ...state,
-        emoByDni: { ...state.emoByDni, [action.dni]: action.pick },
+        emoPicks: { ...state.emoPicks, [pickKey(action.dni, action.idAten)]: action.pick },
       };
+    }
+
+    case 'SET_PICKS_BATCH': {
+      if (!state.selectedDnIs.has(action.dni)) return state;
+      // One atomic transition: the whole batch merges into the pick
+      // maps here so `onStateChange` observers see a single snapshot.
+      const camoPicks = { ...state.camoPicks };
+      const emoPicks = { ...state.emoPicks };
+      for (const entry of action.picks) {
+        const key = pickKey(action.dni, entry.idAten);
+        if (entry.slotKind === 'camo') {
+          camoPicks[key] = entry.pick;
+        } else {
+          emoPicks[key] = entry.pick;
+        }
+      }
+      return { ...state, camoPicks, emoPicks };
     }
 
     case 'NEXT': {
@@ -218,8 +266,9 @@ export function useEnvioWizard(
     state,
     canAdvance: canAdvance(state),
     togglePatient: (dni) => dispatch({ type: 'TOGGLE_PATIENT', dni }),
-    setCamo: (dni, pick) => dispatch({ type: 'SET_CAMO', dni, pick }),
-    setEmo: (dni, pick) => dispatch({ type: 'SET_EMO', dni, pick }),
+    setCamo: (dni, idAten, pick) => dispatch({ type: 'SET_CAMO', dni, idAten, pick }),
+    setEmo: (dni, idAten, pick) => dispatch({ type: 'SET_EMO', dni, idAten, pick }),
+    setPicksBatch: (dni, picks) => dispatch({ type: 'SET_PICKS_BATCH', dni, picks }),
     next: () => dispatch({ type: 'NEXT' }),
     prev: () => dispatch({ type: 'PREV' }),
     goToStep: (step) => dispatch({ type: 'GO_TO_STEP', step }),

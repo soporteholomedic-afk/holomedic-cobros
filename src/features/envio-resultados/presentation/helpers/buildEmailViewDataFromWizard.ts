@@ -1,26 +1,25 @@
 /**
- * PR envio-resultados CAMO/EMO wizard — WU-3.1.
- *
  * `buildEmailViewDataFromWizard` is the pure helper that maps the
- * wizard's per-patient picks (CAMO + EMO maps) into the
- * `{ selectedPatients, fileRefs }` shape `EmailEditor` expects.
+ * wizard's per-ficha picks (CAMO + EMO maps keyed `dni::idAten`)
+ * into the `{ selectedPatients, fileRefs }` shape `EmailEditor`
+ * expects.
  *
- * The wizard is the multi-patient counterpart of the per-row
- * `emailViewDataFromFiles` bridge. The legacy bridge carries
- * `patients: Patient[]` for the AttachmentList; the wizard path
- * carries only `{ selectedPatients, fileRefs }` (the AttachmentList
- * is not exercised in the wizard flow — that is a known scope
- * limitation, not a bug). The wizard shell composes the full
- * `EmailViewData` for `onContinueToEmail` by enriching this partial
- * with `companyId`/`companyName`/`nombreCompleto`/`destino`.
+ * Multi-proyecto change (REQ-108, design D6): for every resolved
+ * person the helper iterates that person's `fichas` (stable order —
+ * the first-appearance order the rest of the pipeline relies on)
+ * and looks up `pickKey(dni, ficha.idAten)` in both maps. One
+ * patient with picks on N fichas flattens into N fileRefs with
+ * distinct idAten. Stray picks (the dni disappeared from `people`,
+ * e.g. a mid-wizard refetch) still attach, passing through
+ * UNSTAMPED — no fabrication. Proyecto stamping lands in WU-3.
  *
- * Spec coverage (from `sdd/envio-resultados-camo-emo/spec`):
- *  - REQ-007 — Step 4 Resumen handoff.
- *  - REQ-009 — SelectedFileRef.tipoExamen populated on every ref.
- *  - Scenario S-011 (summary row), S-012 (handoff payload).
+ * Spec coverage:
+ *  - REQ-108 — S-108.1 multi-ref flattening, legacy flow unchanged.
+ *  - Legacy REQ-007 — handoff payload (S-012), REQ-009 tipoExamen,
+ *    ADICIONAL stamp preservation (S-13).
  */
 import type { SelectedFileRef } from '../../domain/entities';
-import type { WizardFilePick } from '../hooks/useEnvioWizard';
+import { pickKey, type WizardFilePick } from '../hooks/useEnvioWizard';
 import type { UnifiedPerson } from '@/types/sp-result';
 
 /**
@@ -35,7 +34,7 @@ export interface WizardEmailViewData {
    * attachment panel. `files` is the basename array (e.g.
    * `['75618561CERT.pdf', '75618561EXPED.pdf']`) — the fileRef
    * entries (with the LAN-share location triple) live in `fileRefs`.
-   * Always present for every dni in `selectedDnIs` (even when both
+   * Always present for every dni in `selectedDnIs` (even when all
    * picks are null/undefined — the EmailEditor surfaces a "no
    * files" warning for those patients).
    */
@@ -54,12 +53,25 @@ export interface WizardEmailViewData {
 export interface BuildEmailViewDataInput {
   /** DNIs the operator picked at Step 1. Drives the iteration order. */
   selectedDnIs: ReadonlySet<string>;
-  /** Per-dni CAMO pick; `null` = Saltar; `undefined` = not yet picked. */
-  camoByDni: Readonly<Record<string, WizardFilePick>>;
-  /** Per-dni EMO pick; `null` = Saltar; `undefined` = not yet picked. */
-  emoByDni: Readonly<Record<string, WizardFilePick>>;
+  /** CAMO picks keyed by `pickKey(dni, idAten)`; `null` = Saltar. */
+  camoPicks: Readonly<Record<string, WizardFilePick>>;
+  /** EMO picks keyed by `pickKey(dni, idAten)`; `null` = Saltar. */
+  emoPicks: Readonly<Record<string, WizardFilePick>>;
   /** The full people list (used to resolve `patientName` per dni). */
   people: ReadonlyArray<UnifiedPerson>;
+}
+
+/** All non-null picks under `dni::` (stray-branch prefix scan). */
+function strayPicks(
+  record: Readonly<Record<string, WizardFilePick>>,
+  dni: string,
+): NonNullable<WizardFilePick>[] {
+  const picks: NonNullable<WizardFilePick>[] = [];
+  const prefix = `${dni}::`;
+  for (const [key, value] of Object.entries(record)) {
+    if (key.startsWith(prefix) && value !== null) picks.push(value);
+  }
+  return picks;
 }
 
 /**
@@ -80,50 +92,54 @@ export function buildEmailViewDataFromWizard(
     if (!person) {
       // Defensive: a dni in `selectedDnIs` that is no longer in
       // `people` (e.g. the table refetched mid-wizard) is dropped
-      // from `selectedPatients`. The pick map may still carry refs
+      // from `selectedPatients`. The pick maps may still carry refs
       // for it — push them to `fileRefs` so the LAN-share file
       // is still attached (the ref shape is self-describing).
       // PR-2 (REQ-8): preserve an existing stamp (`ref.tipoExamen ?? 'CAMO'`)
       // — a pick already stamped 'ADICIONAL' by the wizard step must
       // survive the email build (S-13), never overwritten by a hardcoded
-      // 'CAMO'/'EMO'.
-      const strayCamo = input.camoByDni[dni];
-      const strayEmo = input.emoByDni[dni];
-      if (strayCamo) {
-        fileRefs.push({ ...strayCamo.ref, tipoExamen: strayCamo.ref.tipoExamen ?? 'CAMO' });
+      // 'CAMO'/'EMO'. Strays are NOT stamped with `nombreCompleto`.
+      for (const pick of strayPicks(input.camoPicks, dni)) {
+        fileRefs.push({ ...pick.ref, tipoExamen: pick.ref.tipoExamen ?? 'CAMO' });
       }
-      if (strayEmo) {
-        fileRefs.push({ ...strayEmo.ref, tipoExamen: strayEmo.ref.tipoExamen ?? 'EMO' });
+      for (const pick of strayPicks(input.emoPicks, dni)) {
+        fileRefs.push({ ...pick.ref, tipoExamen: pick.ref.tipoExamen ?? 'EMO' });
       }
       continue;
     }
 
-    const camo = input.camoByDni[dni];
-    const emo = input.emoByDni[dni];
+    // Per-ficha flattening (D6): iterate the person's fichas in
+    // stable order; each ficha contributes its CAMO pick then its
+    // EMO pick (parallel to the legacy per-patient order).
     const files: string[] = [];
+    for (const ficha of person.fichas) {
+      const key = pickKey(dni, ficha.idAten);
+      const camo = input.camoPicks[key];
+      const emo = input.emoPicks[key];
 
-    if (camo) {
-      files.push(camo.displayName);
-      fileRefs.push({
-        ...camo.ref,
-        tipoExamen: camo.ref.tipoExamen ?? 'CAMO',
-        // Per-ref patient name (multi-patient fix): the use-case
-        // rename prefers this over the request-level scalar.
-        nombreCompleto: person.nombre,
-      });
-    }
-    if (emo) {
-      files.push(emo.displayName);
-      fileRefs.push({
-        ...emo.ref,
-        tipoExamen: emo.ref.tipoExamen ?? 'EMO',
-        nombreCompleto: person.nombre,
-      });
+      if (camo) {
+        files.push(camo.displayName);
+        fileRefs.push({
+          ...camo.ref,
+          tipoExamen: camo.ref.tipoExamen ?? 'CAMO',
+          // Per-ref patient name (multi-patient fix): the use-case
+          // rename prefers this over the request-level scalar.
+          nombreCompleto: person.nombre,
+        });
+      }
+      if (emo) {
+        files.push(emo.displayName);
+        fileRefs.push({
+          ...emo.ref,
+          tipoExamen: emo.ref.tipoExamen ?? 'EMO',
+          nombreCompleto: person.nombre,
+        });
+      }
     }
 
     // The patient entry is always present — even when `files` is
     // empty — so the EmailEditor can show the recipient + render
-    // the "no files" warning when both picks are null.
+    // the "no files" warning when all picks are null.
     selectedPatients[dni] = { patientName: person.nombre, files };
   }
 

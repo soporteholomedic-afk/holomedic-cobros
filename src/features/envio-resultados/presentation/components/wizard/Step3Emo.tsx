@@ -1,26 +1,22 @@
 /**
- * PR envio-resultados CAMO/EMO wizard — WU-2b.1.
+ * Envio-resultados EMO wizard — Step 3.
  *
- * `Step3Emo` is the per-patient EMO picker. It is the mechanical
- * mirror of `Step2Camo` with `pickType='EMO'` (regex `\d+EXPED\.pdf$`)
- * instead of `pickType='CAMO'`. The component renders one card per
- * `dni` in `selectedDnIs` and, on demand, opens a
- * `FilesModal mode='pick-single' pickType='EMO'` overlay so the
- * operator can pick (or skip) the EMO file for that patient.
+ * Mechanical mirror of `Step2Camo` with `tipoExamen: 'EMO'`
+ * (repo mirror convention). Multi-proyecto change (REQ-102,
+ * design D7): a patient with ≥2 idAten-bearing fichas renders one
+ * EMO slot row per ficha — each with its proyecto label and its own
+ * FilesModal binding (ruc/idAten/fecAte/tipoExamen from THAT ficha).
+ * A patient with ≤1 slot renders byte-identical to the legacy
+ * per-patient card (same testids, no proyecto label row).
  *
- * The card state (filename or "Saltado") is derived from the
- * `emoByDni` map owned by `useEnvioWizard`. The component is a
- * thin orchestrator: it never owns the picks — only the local
- * "which patient's modal is open" flag.
+ * The "Siguiente" button is renamed to "Continuar" because step 3 is
+ * the last step before the final summary (step 4). The callback
+ * itself stays imperative (`onContinue`); the wizard shell wires it
+ * to the same `NEXT` action as step 2.
  *
- * The "Siguiente" footer button is renamed to "Continuar" (and
- * its callback to `onContinue`) because step 3 is the last
- * editable step before the final summary (step 4). The wizard
- * shell wires the same `NEXT` action behind it.
- *
- * Spec coverage (from `sdd/envio-resultados-camo-emo/spec`):
- *  - REQ-006 — Step 3 EMO.
- *  - Scenarios S-010.
+ * Spec coverage:
+ *  - REQ-102 — per-ficha slots (S-102.1), legacy single-ficha (S-102.2).
+ *  - Legacy REQ-006 — Step 3 EMO (S-010).
  */
 'use client';
 
@@ -30,7 +26,8 @@ import { useState, type ReactElement } from 'react';
 import { FilesModal } from '@/features/envio-resultados/presentation/components/FilesModal';
 import { normalizeTipoExamen } from '@/features/envio-resultados/domain/ready-files/normalizeTipoExamen';
 import { resolveRucEfectivo } from '@/features/envio-resultados/presentation/utils/resolveRucEfectivo';
-import type { WizardFilePick } from '@/features/envio-resultados/presentation/hooks/useEnvioWizard';
+import { pickKey, type WizardFilePick } from '@/features/envio-resultados/presentation/hooks/useEnvioWizard';
+import { derivePickSlots } from '@/features/envio-resultados/presentation/helpers/derivePickSlots';
 import type { UnifiedPerson } from '@/types/sp-result';
 
 export interface Step3EmoProps {
@@ -38,45 +35,61 @@ export interface Step3EmoProps {
   people: ReadonlyArray<UnifiedPerson>;
   /** DNIs the operator picked at Step 1 — drives the card list. */
   selectedDnIs: ReadonlySet<string>;
-  /** Per-dni pick state, owned by `useEnvioWizard`. `null` = skipped. */
-  emoByDni: Readonly<Record<string, WizardFilePick>>;
+  /** EMO picks keyed by `pickKey(dni, idAten)`. `null` = skipped. */
+  emoPicks: Readonly<Record<string, WizardFilePick>>;
   /**
-   * Fired when the operator picks or skips a file. The parent
-   * (wizard shell) dispatches the corresponding `SET_EMO`
+   * Fired when the operator picks or skips a file for one atención.
+   * The parent (wizard shell) dispatches the corresponding `SET_EMO`
    * action. `null` for skip; `{ ref, displayName }` for pick.
    */
-  onPickFile: (dni: string, pick: WizardFilePick) => void;
+  onPickFile: (dni: string, idAten: string, pick: WizardFilePick) => void;
   /** Fired by the "Volver" footer button (returns to step 2). */
   onBack: () => void;
   /**
-   * Fired by the "Continuar" footer button. The label changes
-   * from "Siguiente" because step 3 is the last editable step
-   * before the summary (step 4). The wizard shell wires this
-   * to the same `NEXT` action.
+   * Fired by the "Continuar" footer button. The wizard shell wires
+   * this to the same `NEXT` action as step 2.
    */
   onContinue: () => void;
+}
+
+/** Slot-row pick state text: undefined = not yet picked. */
+function pickLabel(pick: WizardFilePick | undefined): string {
+  if (pick === undefined) return 'Sin seleccionar';
+  if (pick === null) return 'Saltado';
+  return pick.displayName;
+}
+
+/** Text color class for a pick label (semantic state, not styling test surface). */
+function pickLabelClass(pick: WizardFilePick | undefined): string {
+  if (pick === undefined) return 'text-slate-400 italic';
+  if (pick === null) return 'text-slate-500';
+  return 'text-slate-700 font-medium';
 }
 
 export function Step3Emo({
   people,
   selectedDnIs,
-  emoByDni,
+  emoPicks,
   onPickFile,
   onBack,
   onContinue,
 }: Step3EmoProps): ReactElement {
-  // The FilesModal is per-patient. The component only allows one
-  // modal open at a time; `activePickDni` identifies which patient's
+  // The FilesModal is per-slot. The component only allows one modal
+  // open at a time; `activePick` identifies which patient's atención
   // modal is on screen (`null` = no modal).
-  const [activePickDni, setActivePickDni] = useState<string | null>(null);
+  const [activePick, setActivePick] = useState<{ dni: string; idAten: string } | null>(null);
   const activePerson =
-    activePickDni === null ? null : people.find((p) => p.dni === activePickDni) ?? null;
-  // PR-2 (nomenclatura-adicionales, REQ-7) — the pick's tipoExamen is
-  // derived from `fichas[0].tipoExamen`: ADICIONALES orders pick
-  // `'ADICIONAL'`, everything else keeps `'EMO'` as today. Limited to
-  // `fichas[0]` (pre-existing multi-ficha limitation, documented).
+    activePick === null ? null : people.find((p) => p.dni === activePick.dni) ?? null;
+  const activeFicha =
+    activePerson && activePick
+      ? activePerson.fichas.find((f) => f.idAten === activePick.idAten) ?? null
+      : null;
+  // The pick's tipoExamen is derived from THE ACTIVE FICHA's
+  // tipoExamen: ADICIONALES orders pick `'ADICIONAL'`, everything
+  // else keeps `'EMO'`. Per-ficha derivation also fixes the legacy
+  // `fichas[0]`-only ADICIONAL limitation.
   const pickTipoExamen: 'EMO' | 'ADICIONAL' =
-    normalizeTipoExamen(activePerson?.fichas[0]?.tipoExamen) === 'ADICIONAL' ? 'ADICIONAL' : 'EMO';
+    normalizeTipoExamen(activeFicha?.tipoExamen) === 'ADICIONAL' ? 'ADICIONAL' : 'EMO';
 
   const selectedPeople = people.filter((p) => selectedDnIs.has(p.dni));
 
@@ -109,62 +122,127 @@ export function Step3Emo({
           </li>
         ) : (
           selectedPeople.map((person) => {
-            const pick = emoByDni[person.dni];
-            const pickLabel =
-              pick === undefined
-                ? 'Sin seleccionar'
-                : pick === null
-                  ? 'Saltado'
-                  : pick.displayName;
+            const slots = derivePickSlots(person);
+            // Legacy render: ≤1 selectable atención keeps today's
+            // card markup byte-identical (testids, no label row).
+            const boundFicha = slots[0]?.ficha ?? person.fichas[0];
+            const legacyPick = boundFicha
+              ? emoPicks[pickKey(person.dni, boundFicha.idAten)]
+              : undefined;
+            if (slots.length < 2) {
+              return (
+                <li
+                  key={person.dni}
+                  data-testid={`step3-card-${person.dni}`}
+                  className="rounded-2xl border border-slate-200 bg-white p-4 flex items-center justify-between gap-3"
+                >
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-semibold text-slate-800 truncate">
+                      {person.nombre}
+                    </p>
+                    <p className="text-xs text-slate-500">DNI {person.dni}</p>
+                    <div className="mt-2 flex items-center gap-1.5 text-xs text-slate-600">
+                      {legacyPick && legacyPick !== null ? (
+                        <FileText className="w-3.5 h-3.5 text-sky-500 flex-shrink-0" />
+                      ) : legacyPick === null ? (
+                        <X className="w-3.5 h-3.5 text-slate-400 flex-shrink-0" />
+                      ) : null}
+                      <span
+                        data-testid={`step3-pick-label-${person.dni}`}
+                        className={pickLabelClass(legacyPick)}
+                      >
+                        EMO: {pickLabel(legacyPick)}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 flex-shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => onPickFile(person.dni, boundFicha?.idAten ?? '', null)}
+                      data-testid={`step3-saltar-emo`}
+                      className="px-3 py-1.5 rounded-lg text-xs font-semibold border border-slate-200 text-slate-600 hover:bg-slate-50 transition-colors"
+                    >
+                      Saltar EMO
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setActivePick({ dni: person.dni, idAten: boundFicha?.idAten ?? '' })}
+                      data-testid={`step3-elegir-emo`}
+                      className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-sky-500 text-white hover:bg-sky-600 transition-colors"
+                    >
+                      Elegir EMO
+                    </button>
+                  </div>
+                </li>
+              );
+            }
+            // Slot render: one row per idAten-bearing ficha.
             return (
               <li
                 key={person.dni}
                 data-testid={`step3-card-${person.dni}`}
-                className="rounded-2xl border border-slate-200 bg-white p-4 flex items-center justify-between gap-3"
+                className="rounded-2xl border border-slate-200 bg-white p-4"
               >
-                <div className="min-w-0 flex-1">
-                  <p className="text-sm font-semibold text-slate-800 truncate">
-                    {person.nombre}
-                  </p>
-                  <p className="text-xs text-slate-500">DNI {person.dni}</p>
-                  <div className="mt-2 flex items-center gap-1.5 text-xs text-slate-600">
-                    {pick && pick !== null ? (
-                      <FileText className="w-3.5 h-3.5 text-sky-500 flex-shrink-0" />
-                    ) : pick === null ? (
-                      <X className="w-3.5 h-3.5 text-slate-400 flex-shrink-0" />
-                    ) : null}
-                    <span
-                      data-testid={`step3-pick-label-${person.dni}`}
-                      className={
-                        pick === undefined
-                          ? 'text-slate-400 italic'
-                          : pick === null
-                            ? 'text-slate-500'
-                            : 'text-slate-700 font-medium'
-                      }
-                    >
-                      EMO: {pickLabel}
-                    </span>
+                <div className="flex items-center justify-between gap-3">
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-semibold text-slate-800 truncate">
+                      {person.nombre}
+                    </p>
+                    <p className="text-xs text-slate-500">DNI {person.dni}</p>
                   </div>
                 </div>
-                <div className="flex items-center gap-2 flex-shrink-0">
-                  <button
-                    type="button"
-                    onClick={() => onPickFile(person.dni, null)}
-                    data-testid={`step3-saltar-emo`}
-                    className="px-3 py-1.5 rounded-lg text-xs font-semibold border border-slate-200 text-slate-600 hover:bg-slate-50 transition-colors"
-                  >
-                    Saltar EMO
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setActivePickDni(person.dni)}
-                    data-testid={`step3-elegir-emo`}
-                    className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-sky-500 text-white hover:bg-sky-600 transition-colors"
-                  >
-                    Elegir EMO
-                  </button>
-                </div>
+                <ul className="mt-3 space-y-1.5">
+                  {slots.map((slot, i) => {
+                    const slotPick = emoPicks[slot.key];
+                    return (
+                      <li
+                        key={slot.key}
+                        data-testid={`step3-slot-${person.dni}-${i}`}
+                        className="flex items-center justify-between gap-2 rounded-xl border border-slate-100 px-2.5 py-1.5"
+                      >
+                        <div className="min-w-0 flex-1">
+                          <p
+                            data-testid={`step3-slot-label-${person.dni}-${i}`}
+                            className="text-xs font-semibold text-slate-600 truncate"
+                          >
+                            {slot.label}
+                          </p>
+                          <div className="mt-1 flex items-center gap-1.5 text-xs text-slate-600">
+                            {slotPick && slotPick !== null ? (
+                              <FileText className="w-3.5 h-3.5 text-sky-500 flex-shrink-0" />
+                            ) : slotPick === null ? (
+                              <X className="w-3.5 h-3.5 text-slate-400 flex-shrink-0" />
+                            ) : null}
+                            <span
+                              data-testid={`step3-slot-pick-label-${person.dni}-${i}`}
+                              className={pickLabelClass(slotPick)}
+                            >
+                              EMO: {pickLabel(slotPick)}
+                            </span>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2 flex-shrink-0">
+                          <button
+                            type="button"
+                            onClick={() => onPickFile(person.dni, slot.ficha.idAten, null)}
+                            data-testid={`step3-slot-saltar-${person.dni}-${i}`}
+                            className="px-3 py-1.5 rounded-lg text-xs font-semibold border border-slate-200 text-slate-600 hover:bg-slate-50 transition-colors"
+                          >
+                            Saltar EMO
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setActivePick({ dni: person.dni, idAten: slot.ficha.idAten })}
+                            data-testid={`step3-slot-elegir-${person.dni}-${i}`}
+                            className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-sky-500 text-white hover:bg-sky-600 transition-colors"
+                          >
+                            Elegir EMO
+                          </button>
+                        </div>
+                      </li>
+                    );
+                  })}
+                </ul>
               </li>
             );
           })
@@ -191,33 +269,35 @@ export function Step3Emo({
         </button>
       </footer>
 
-      {activePerson && activePerson.fichas[0] ? (
+      {activePerson && activeFicha ? (
         <FilesModal
-          ruc={resolveRucEfectivo(activePerson.fichas[0].nroRuc, activePerson.dni)}
+          ruc={resolveRucEfectivo(activeFicha.nroRuc, activePerson.dni)}
           dni={activePerson.dni}
-          idAten={activePerson.fichas[0].idAten}
+          idAten={activeFicha.idAten}
           nombrePaciente={activePerson.nombre}
           empresa={activePerson.empresa}
           destino=""
           // Forward the attendance date so the "Generar archivos" tab
           // can resolve the order (empty fecAte would render the
           // "sin orden asociada" guard). Mirrors WorkerDetailTable.
-          fecAte={activePerson.fichas[0]?.fecAte ?? ''}
+          fecAte={activeFicha.fecAte ?? ''}
           onPickSingle={(file, folderPath) => {
-            onPickFile(activePerson.dni, {
+            onPickFile(activePerson.dni, activeFicha.idAten, {
               ref: {
-                ruc: activePerson.fichas[0]?.nroRuc ?? '',
+                // The ref keeps the RAW ficha nroRuc; only the modal
+                // view resolves the effective RUC.
+                ruc: activeFicha.nroRuc ?? '',
                 dni: activePerson.dni,
-                idAten: activePerson.fichas[0]?.idAten ?? '',
+                idAten: activeFicha.idAten,
                 path: folderPath,
                 name: file.name,
                 tipoExamen: pickTipoExamen,
               },
               displayName: file.name,
             });
-            setActivePickDni(null);
+            setActivePick(null);
           }}
-          onClose={() => setActivePickDni(null)}
+          onClose={() => setActivePick(null)}
         />
       ) : null}
     </div>

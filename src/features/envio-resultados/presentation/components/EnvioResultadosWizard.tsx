@@ -259,7 +259,7 @@ export function EnvioResultadosWizard({
             <Step2Camo
               people={people}
               selectedDnIs={state.selectedDnIs}
-              camoByDni={state.camoByDni}
+              camoPicks={state.camoPicks}
               onPickFile={setCamo}
               onBack={prev}
               onNext={next}
@@ -268,7 +268,7 @@ export function EnvioResultadosWizard({
             <Step3Emo
               people={people}
               selectedDnIs={state.selectedDnIs}
-              emoByDni={state.emoByDni}
+              emoPicks={state.emoPicks}
               onPickFile={setEmo}
               onBack={prev}
               onContinue={next}
@@ -277,8 +277,8 @@ export function EnvioResultadosWizard({
             <Step4Resumen
               people={people}
               selectedDnIs={state.selectedDnIs}
-              camoByDni={state.camoByDni}
-              emoByDni={state.emoByDni}
+              camoPicks={state.camoPicks}
+              emoPicks={state.emoPicks}
               onContinueToEmail={handleStep4Continue}
             />
           )}
