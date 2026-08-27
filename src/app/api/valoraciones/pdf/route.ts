@@ -5,7 +5,7 @@ import { NextResponse } from 'next/server';
 
 import { EdgeUnavailableError } from '@/features/musculoesqueletica-pdf/domain/errors';
 import { agruparPorDestino } from '@/features/valoraciones/domain/agrupacion';
-import type { ValoracionesFilter } from '@/features/valoraciones/domain/entities';
+import { parseFiltroDto } from '@/features/valoraciones/domain/parseFiltroDto';
 import { getValoracionesDb } from '@/features/valoraciones/infrastructure/getValoracionesDb';
 import {
   getValoracionesPdfPrinter,
@@ -28,78 +28,6 @@ import {
  * Body: the `ValoracionesFilter` JSON (fecIni/fecFin/codMon required).
  * Edge unavailable → 502 (user-safe, no stack); other failures → 500.
  */
-
-const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
-
-interface ValidationError {
-  error: string;
-}
-
-/** Parse + validate the JSON filter body; returns a 400 response on error. */
-function parseFiltro(body: unknown): { filtro?: ValoracionesFilter; error?: NextResponse } {
-  if (typeof body !== 'object' || body === null) {
-    return { error: NextResponse.json({ error: 'Cuerpo de la solicitud inválido' } satisfies ValidationError, { status: 400 }) };
-  }
-  const raw = body as Record<string, unknown>;
-
-  const fecIni = typeof raw.fecIni === 'string' ? raw.fecIni : '';
-  const fecFin = typeof raw.fecFin === 'string' ? raw.fecFin : '';
-  if (!DATE_PATTERN.test(fecIni) || !DATE_PATTERN.test(fecFin) || fecIni > fecFin) {
-    return {
-      error: NextResponse.json(
-        { error: '"fecIni" y "fecFin" son obligatorios (YYYY-MM-DD) y fecIni no puede ser posterior a fecFin' } satisfies ValidationError,
-        { status: 400 },
-      ),
-    };
-  }
-
-  if (raw.codMon !== 1 && raw.codMon !== 2) {
-    return {
-      error: NextResponse.json(
-        { error: '"codMon" es obligatorio y debe ser 1 (SOLES) o 2 (DOLARES)' } satisfies ValidationError,
-        { status: 400 },
-      ),
-    };
-  }
-
-  let indFac: 0 | 1 | null = 0;
-  if (raw.indFac !== undefined) {
-    if (raw.indFac === 0 || raw.indFac === 1 || raw.indFac === null) indFac = raw.indFac;
-    else {
-      return {
-        error: NextResponse.json({ error: '"indFac" debe ser 0, 1 o null' } satisfies ValidationError, { status: 400 }),
-      };
-    }
-  }
-
-  if (raw.inFsta !== undefined && typeof raw.inFsta !== 'boolean') {
-    return {
-      error: NextResponse.json({ error: '"inFsta" debe ser true o false' } satisfies ValidationError, { status: 400 }),
-    };
-  }
-
-  const idOpcional = (nombre: string): number | undefined => {
-    const valor = raw[nombre];
-    if (valor === undefined || valor === null) return undefined;
-    return typeof valor === 'number' && Number.isInteger(valor) && valor > 0 ? valor : undefined;
-  };
-
-  return {
-    filtro: {
-      fecIni,
-      fecFin,
-      codMon: raw.codMon,
-      indFac,
-      inFsta: raw.inFsta === true,
-      codCli: idOpcional('codCli'),
-      codCfa: idOpcional('codCfa'),
-      codDes: idOpcional('codDes'),
-      codPac: idOpcional('codPac'),
-      codSed: idOpcional('codSed'),
-      tipTra: idOpcional('tipTra'),
-    },
-  };
-}
 
 let logoCache: string | null = null;
 
@@ -130,8 +58,10 @@ function fechaEmisionHoy(): string {
 export async function POST(request: Request): Promise<NextResponse> {
   try {
     const body: unknown = await request.json().catch(() => null);
-    const { filtro, error } = parseFiltro(body);
-    if (error || !filtro) return error ?? NextResponse.json({ error: 'Solicitud inválida' }, { status: 400 });
+    const { filtro, error } = parseFiltroDto(body);
+    if (error || !filtro) {
+      return NextResponse.json({ error: error ?? 'Solicitud inválida' }, { status: 400 });
+    }
 
     // D4: re-execute the query from the posted filter — never trust rows.
     const repo = await getValoracionesDb();

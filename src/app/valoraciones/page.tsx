@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useState } from 'react';
-import { ClipboardList, FileDown, Loader2 } from 'lucide-react';
+import { ClipboardList, FileDown, FileSpreadsheet, Loader2 } from 'lucide-react';
 
 import type {
   DestinoLookupItem,
@@ -40,6 +40,8 @@ export default function ValoracionesPage() {
   const consolidadoQuery = useConsolidado();
   const { exportar: exportarPdf, exportando: exportandoPdf, error: errorPdf } =
     useExportarValoraciones('pdf');
+  const { exportar: exportarExcel, exportando: exportandoExcel, error: errorExcel } =
+    useExportarValoraciones('excel');
   const [grupoSeleccionado, setGrupoSeleccionado] = useState<EmpresaGrupo | null>(null);
   const [modoConsulta, setModoConsulta] = useState<'detalle' | 'consolidado'>('detalle');
 
@@ -74,6 +76,12 @@ export default function ValoracionesPage() {
     exportarPdf(toFiltro(filtros));
   }, [exportarPdf, filtros]);
 
+  const descargarExcel = useCallback(() => {
+    exportarExcel(toFiltro(filtros));
+  }, [exportarExcel, filtros]);
+
+  const errorExportar = errorPdf ?? errorExcel;
+
   return (
     <main className="min-h-screen bg-slate-100 dark:bg-slate-950 p-4 sm:p-6 lg:p-8">
       <div className="max-w-7xl mx-auto space-y-6">
@@ -91,22 +99,37 @@ export default function ValoracionesPage() {
           </div>
           {hayResultados && (
             <div className="ml-auto flex flex-col items-end gap-1">
-              <button
-                type="button"
-                onClick={descargarPdf}
-                disabled={exportandoPdf}
-                className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-rose-600 text-white text-sm font-semibold shadow-lg shadow-rose-600/20 hover:bg-rose-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-              >
-                {exportandoPdf ? (
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                ) : (
-                  <FileDown className="w-4 h-4" />
-                )}
-                Descargar PDF
-              </button>
-              {errorPdf && (
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={descargarExcel}
+                  disabled={exportandoExcel}
+                  className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-emerald-600 text-white text-sm font-semibold shadow-lg shadow-emerald-600/20 hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                >
+                  {exportandoExcel ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <FileSpreadsheet className="w-4 h-4" />
+                  )}
+                  Descargar Excel
+                </button>
+                <button
+                  type="button"
+                  onClick={descargarPdf}
+                  disabled={exportandoPdf}
+                  className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-rose-600 text-white text-sm font-semibold shadow-lg shadow-rose-600/20 hover:bg-rose-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                >
+                  {exportandoPdf ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <FileDown className="w-4 h-4" />
+                  )}
+                  Descargar PDF
+                </button>
+              </div>
+              {errorExportar && (
                 <p role="alert" className="text-xs text-rose-500 max-w-xs text-right">
-                  {errorPdf}
+                  {errorExportar}
                 </p>
               )}
             </div>

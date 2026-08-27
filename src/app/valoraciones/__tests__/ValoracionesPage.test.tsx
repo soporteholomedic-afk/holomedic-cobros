@@ -228,4 +228,41 @@ describe('ValoracionesPage', () => {
     expect(init.method).toBe('POST');
     expect(JSON.parse(init.body)).toMatchObject({ codMon: 1, indFac: 0 });
   });
+
+  it('offers Descargar Excel which POSTs the filter to the excel route', async () => {
+    mockFetchRouteBy((url) => {
+      if (url.includes('/api/valoraciones/sigla')) {
+        return jsonResponse({ resultados: [makeRepFacturacion()] });
+      }
+      return jsonResponse({ resultados: [] });
+    });
+    const clickMock = vi.fn();
+    vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:xlsx');
+    vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => undefined);
+    vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(clickMock);
+
+    render(<ValoracionesPage />);
+    fireEvent.click(screen.getByRole('button', { name: /Consultar/ }));
+
+    const botonExcel = await screen.findByRole('button', { name: /Descargar Excel/ });
+    expect(screen.getByRole('button', { name: /Descargar PDF/ })).toBeInTheDocument();
+
+    const excelFetch = vi.fn().mockResolvedValue(
+      new Response(new Uint8Array([1]), {
+        status: 200,
+        headers: {
+          'content-type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+          'content-disposition': 'attachment; filename="valoraciones_x.xlsx"',
+        },
+      }),
+    );
+    (globalThis.fetch as unknown as ReturnType<typeof vi.fn>).mockImplementation(excelFetch);
+    fireEvent.click(botonExcel);
+
+    await waitFor(() => expect(clickMock).toHaveBeenCalled());
+    const [url, init] = excelFetch.mock.calls[0];
+    expect(url).toBe('/api/valoraciones/excel');
+    expect(init.method).toBe('POST');
+    expect(JSON.parse(init.body)).toMatchObject({ fecIni: expect.any(String), codMon: 1 });
+  });
 });
