@@ -39,13 +39,15 @@ export type ValoracionesFilterAction =
   | { type: 'SET_MONEDA'; codMon: CodigoMoneda }
   | { type: 'SET_IND_FAC'; indFac: 0 | 1 | null }
   | { type: 'SET_MODO_FECHA'; inFsta: boolean }
-  /** `codCli` undefined clears the client — both reset the destino (spec Q-R5). */
+  /** `codCli` undefined clears the client — resets destino AND consolidado (spec Q-R5). */
   | { type: 'SET_CLIENTE'; codCli?: number; nombre?: string }
   | { type: 'SET_FACTURAR_A'; codCfa?: number; nombre?: string }
   | { type: 'SET_DESTINO'; codDes?: number }
   | { type: 'SET_PACIENTE'; codPac?: number; nombre?: string }
   | { type: 'SET_SEDE'; codSed?: number }
   | { type: 'SET_TIPO_TRABAJADOR'; tipTra?: number }
+  /** Slice 2: consolidado toggles only while a client is selected. */
+  | { type: 'SET_CONSOLIDADO'; consolidado: boolean }
   | { type: 'LIMPIAR' };
 
 function defaults(): ValoracionesFilterState {
@@ -80,11 +82,14 @@ function reducer(
     case 'SET_CLIENTE':
       // Selecting or clearing a client invalidates the current destino
       // (destinos are per-client) — reset it in the same transition.
+      // Clearing ALSO resets consolidado (spec Q-R5); switching clients
+      // keeps the flag (SIGLA only disables the checkbox on clear).
       return {
         ...state,
         codCli: action.codCli,
         cliNombre: action.codCli === undefined ? undefined : (action.nombre ?? ''),
         codDes: undefined,
+        consolidado: action.codCli === undefined ? false : state.consolidado,
       };
     case 'SET_FACTURAR_A':
       return {
@@ -104,6 +109,11 @@ function reducer(
       return { ...state, codSed: action.codSed };
     case 'SET_TIPO_TRABAJADOR':
       return { ...state, tipTra: action.tipTra };
+    case 'SET_CONSOLIDADO':
+      // Gated like SIGLA: only meaningful while a client is selected.
+      return state.codCli === undefined
+        ? state
+        : { ...state, consolidado: action.consolidado };
     case 'LIMPIAR':
       return defaults();
     default:

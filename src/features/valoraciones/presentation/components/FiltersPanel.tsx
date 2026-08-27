@@ -272,7 +272,7 @@ export function FiltersPanel({
           </select>
         </div>
 
-        {/* 11. Fecha de estado (FecSTA date mode) + Consolidado (slice 2) */}
+        {/* 11. Fecha de estado (FecSTA date mode) + Consolidado (client-gated) */}
         <div className="flex flex-col gap-2 pt-6">
           <label
             htmlFor="val-modo-fecha"
@@ -289,17 +289,24 @@ export function FiltersPanel({
           </label>
           <label
             htmlFor="val-consolidado"
-            title="Disponible en una próxima etapa"
-            className="inline-flex items-center gap-2 text-sm text-slate-400 dark:text-slate-500 cursor-not-allowed"
+            title={hayCliente ? 'Consolidado por destino' : 'Seleccione un cliente para consolidar'}
+            className={
+              hayCliente
+                ? 'inline-flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300 cursor-pointer'
+                : 'inline-flex items-center gap-2 text-sm text-slate-400 dark:text-slate-500 cursor-not-allowed'
+            }
           >
             <input
               id="val-consolidado"
               type="checkbox"
               checked={filtros.consolidado}
-              disabled
-              className="w-4 h-4 rounded border-slate-300 text-sky-600"
+              disabled={!hayCliente}
+              onChange={(e) =>
+                onCambio({ type: 'SET_CONSOLIDADO', consolidado: e.target.checked })
+              }
+              className="w-4 h-4 rounded border-slate-300 text-sky-600 focus:ring-sky-500/20 disabled:opacity-50"
             />
-            Consolidado (próximamente)
+            Consolidado
           </label>
         </div>
       </div>

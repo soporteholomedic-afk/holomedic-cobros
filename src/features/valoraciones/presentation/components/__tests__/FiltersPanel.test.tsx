@@ -61,11 +61,22 @@ describe('FiltersPanel', () => {
     expect(screen.getByLabelText('Usar fecha de estado (FecSTA)')).toBeInTheDocument();
   });
 
-  it('renders consolidado DISABLED in slice 1', () => {
-    renderPanel();
-    const consolidado = screen.getByLabelText('Consolidado (próximamente)');
-    expect(consolidado).toBeDisabled();
-    expect((consolidado as HTMLInputElement).checked).toBe(false);
+  it('renders consolidado DISABLED without a client and ENABLED with one (slice 2)', () => {
+    const onCambio = vi.fn();
+    const sinCliente = renderPanel(makeFiltros(), onCambio);
+
+    // No client selected → gated (spec Q-R5).
+    const consolidadoOff = screen.getByLabelText('Consolidado');
+    expect(consolidadoOff).toBeDisabled();
+    expect((consolidadoOff as HTMLInputElement).checked).toBe(false);
+    sinCliente.unmount();
+
+    // With a client → enabled and dispatching SET_CONSOLIDADO.
+    renderPanel(makeFiltros({ codCli: 10, cliNombre: 'CLIENTE A' }), onCambio);
+    const consolidadoOn = screen.getByLabelText('Consolidado');
+    expect(consolidadoOn).toBeEnabled();
+    fireEvent.click(consolidadoOn);
+    expect(onCambio).toHaveBeenCalledWith({ type: 'SET_CONSOLIDADO', consolidado: true });
   });
 
   it('defaults the panel: today, SOLES, No Facturados', () => {

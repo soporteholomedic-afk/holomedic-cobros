@@ -100,4 +100,47 @@ describe('useValoracionesFilters', () => {
     expect('cliNombre' in filtro).toBe(false);
     expect('consolidado' in filtro).toBe(false);
   });
+
+  // ---- Slice 2: consolidado enablement (spec Q-R5/Q-R6) ----
+
+  it('toggles consolidado only while a client is selected', () => {
+    const { result } = renderHook(() => useValoracionesFilters());
+
+    // Without a client the toggle is a no-op (gated like SIGLA's checkbox).
+    act(() => result.current.dispatch({ type: 'SET_CONSOLIDADO', consolidado: true }));
+    expect(result.current.filtros.consolidado).toBe(false);
+
+    act(() => result.current.dispatch({ type: 'SET_CLIENTE', codCli: 10, nombre: 'CLIENTE A' }));
+    act(() => result.current.dispatch({ type: 'SET_CONSOLIDADO', consolidado: true }));
+    expect(result.current.filtros.consolidado).toBe(true);
+
+    act(() => result.current.dispatch({ type: 'SET_CONSOLIDADO', consolidado: false }));
+    expect(result.current.filtros.consolidado).toBe(false);
+  });
+
+  it('clearing the client resets consolidado along with the destino', () => {
+    const { result } = renderHook(() => useValoracionesFilters());
+
+    act(() => result.current.dispatch({ type: 'SET_CLIENTE', codCli: 10, nombre: 'CLIENTE A' }));
+    act(() => result.current.dispatch({ type: 'SET_DESTINO', codDes: 3 }));
+    act(() => result.current.dispatch({ type: 'SET_CONSOLIDADO', consolidado: true }));
+    act(() => result.current.dispatch({ type: 'SET_CLIENTE' }));
+
+    expect(result.current.filtros.codDes).toBeUndefined();
+    expect(result.current.filtros.consolidado).toBe(false);
+  });
+
+  it('switching to another client keeps consolidado (only clearing resets it)', () => {
+    const { result } = renderHook(() => useValoracionesFilters());
+
+    act(() => result.current.dispatch({ type: 'SET_CLIENTE', codCli: 10, nombre: 'CLIENTE A' }));
+    act(() => result.current.dispatch({ type: 'SET_CONSOLIDADO', consolidado: true }));
+    act(() => result.current.dispatch({ type: 'SET_CLIENTE', codCli: 20, nombre: 'CLIENTE B' }));
+
+    // SIGLA disables the checkbox only on clear; a pick keeps the flag.
+    expect(result.current.filtros.consolidado).toBe(true);
+
+    act(() => result.current.dispatch({ type: 'SET_CLIENTE' }));
+    expect(result.current.filtros.consolidado).toBe(false);
+  });
 });

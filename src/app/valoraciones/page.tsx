@@ -9,9 +9,11 @@ import type {
   SedeLookupItem,
   TipoTrabajadorItem,
 } from '@/features/valoraciones/domain/entities';
+import { ConsolidadoTable } from '@/features/valoraciones/presentation/components/ConsolidadoTable';
 import { EmpresaDetailModal } from '@/features/valoraciones/presentation/components/EmpresaDetailModal';
 import { EmpresaList } from '@/features/valoraciones/presentation/components/EmpresaList';
 import { FiltersPanel } from '@/features/valoraciones/presentation/components/FiltersPanel';
+import { useConsolidado } from '@/features/valoraciones/presentation/hooks/useConsolidado';
 import { useLookup } from '@/features/valoraciones/presentation/hooks/useLookup';
 import { useValoraciones } from '@/features/valoraciones/presentation/hooks/useValoraciones';
 import {
@@ -20,15 +22,22 @@ import {
 } from '@/features/valoraciones/presentation/hooks/useValoracionesFilters';
 
 /**
- * Valorizaciones page (REQ-03, slice 1): realtime SIGLA query with the
- * 11-filter panel replacing the legacy CSV upload flow. All fetching
- * lives in hooks (`useLookup`, `useValoraciones`) — the page only wires
- * state: filters → query, client → destinos gating, group selection.
+ * Valorizaciones page (REQ-03): realtime SIGLA query with the 11-filter
+ * panel replacing the legacy CSV upload flow. Slice 2 adds the
+ * client-gated consolidado mode (per-destino totals) next to the detail
+ * mode. All fetching lives in hooks (`useLookup`, `useValoraciones`,
+ * `useConsolidado`) — the page only wires state.
+ *
+ * The rendered table follows the mode of the LAST executed query
+ * (`modoConsulta`), so toggling the checkbox does not flip the view away
+ * from results already on screen.
  */
 export default function ValoracionesPage() {
   const { filtros, dispatch, limpiar } = useValoracionesFilters();
   const { grupos, status, error, moneda, totalRegistros, buscar } = useValoraciones();
+  const consolidadoQuery = useConsolidado();
   const [grupoSeleccionado, setGrupoSeleccionado] = useState<EmpresaGrupo | null>(null);
+  const [modoConsulta, setModoConsulta] = useState<'detalle' | 'consolidado'>('detalle');
 
   // Panel lookups: sedes and tipos trabajador load once; destinos are
   // gated by the selected client (spec Q-R4/Q-R5 — no client, no fetch).
@@ -42,8 +51,15 @@ export default function ValoracionesPage() {
 
   const consultar = useCallback(() => {
     setGrupoSeleccionado(null);
-    buscar(toFiltro(filtros));
-  }, [buscar, filtros]);
+    const filtro = toFiltro(filtros);
+    if (filtros.consolidado && filtros.codCli !== undefined) {
+      setModoConsulta('consolidado');
+      consolidadoQuery.buscar(filtro);
+      return;
+    }
+    setModoConsulta('detalle');
+    buscar(filtro);
+  }, [buscar, consolidadoQuery, filtros]);
 
   return (
     <main className="min-h-screen bg-slate-100 dark:bg-slate-950 p-4 sm:p-6 lg:p-8">
@@ -67,23 +83,32 @@ export default function ValoracionesPage() {
           onCambio={dispatch}
           onConsultar={consultar}
           onLimpiar={limpiar}
-          consultando={status === 'loading'}
+          consultando={status === 'loading' || consolidadoQuery.status === 'loading'}
           destinos={destinos.items}
           destinosCargando={destinos.cargando}
           sedes={sedes.items}
           tiposTrabajador={tiposTrabajador.items}
         />
 
-        <EmpresaList
-          grupos={grupos}
-          status={status}
-          error={error}
-          totalRegistros={totalRegistros}
-          onSelectEmpresa={setGrupoSeleccionado}
-        />
+        {modoConsulta === 'consolidado' ? (
+          <ConsolidadoTable
+            filas={consolidadoQuery.filas}
+            totales={consolidadoQuery.totales}
+            status={consolidadoQuery.status}
+            error={consolidadoQuery.error}
+          />
+        ) : (
+          <EmpresaList
+            grupos={grupos}
+            status={status}
+            error={error}
+            totalRegistros={totalRegistros}
+            onSelectEmpresa={setGrupoSeleccionado}
+          />
+        )}
       </div>
 
-      {grupoSeleccionado && moneda !== null && (
+      {modoConsulta === 'detalle' && grupoSeleccionado && moneda !== null && (
         <EmpresaDetailModal
           grupo={grupoSeleccionado}
           codMon={moneda}

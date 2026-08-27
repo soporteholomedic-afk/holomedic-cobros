@@ -236,3 +236,97 @@ describe('GET /api/valoraciones/sigla', () => {
     expect(body.error).not.toContain('sa');
   });
 });
+
+// ---- Consolidado branch (slice 2, task 2.4/Q-R6) ----
+
+describe('GET /api/valoraciones/sigla?consolidado=true', () => {
+  beforeEach(async () => {
+    vi.clearAllMocks();
+    const { __setValoracionesDbForTests } = await import(
+      '@/features/valoraciones/infrastructure/getValoracionesDb'
+    );
+    __setValoracionesDbForTests(null);
+  });
+
+  it('rejects consolidado without a client with 400 and no SP call', async () => {
+    const { GET } = await import('../route');
+    const res = await GET(makeUrl(`${OK_QUERY}&consolidado=true`));
+
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    expect(body.error).toContain('cliente');
+    expect(mockGetSiglaReadOnlyPool).not.toHaveBeenCalled();
+    expect(mockRequestExecute).not.toHaveBeenCalled();
+  });
+
+  it('executes both consolidado SPs, applies the ajuste and returns filas+totales', async () => {
+    const mockPool = createMockPool();
+    // Main SP: one preocupacional row + one PERIODICO row on another destino.
+    mockRequestExecute.mockResolvedValueOnce({
+      recordset: [
+        { CodCli: 55, NomCom: 'EMPRESA DEMO', CodDes: 101, DesDes: 'SEDE NORTE', IdeTCh: 510001, DesTCh: 'PREOCUPACIONAL', CanEva: 5, VImpMN: 1180, VImpMO: 0, VVtaMN: 1000, VVtaMO: 0 },
+        { CodCli: 55, NomCom: 'EMPRESA DEMO', CodDes: 102, DesDes: 'SEDE SUR', IdeTCh: 510008, DesTCh: 'PERIODICO', CanEva: 2, VImpMN: 236, VImpMO: 0, VVtaMN: 200, VVtaMO: 0 },
+      ],
+    });
+    // Adicionales SP: one adicional on SEDE NORTE (ValVta 100 / ValImp 118).
+    mockRequestExecute.mockResolvedValueOnce({
+      recordset: [
+        { CodCli: 55, NomCom: 'EMPRESA DEMO', CodDes: 101, DesDes: 'SEDE NORTE', NomSer: 'ADI UNO', CanEva: 1, ValImp: 118, ValVta: 100 },
+      ],
+    });
+    mockGetSiglaReadOnlyPool.mockResolvedValueOnce(mockPool);
+
+    const { GET } = await import('../route');
+    const res = await GET(makeUrl(`${OK_QUERY}&consolidado=true&codCli=55`));
+
+    expect(res.status).toBe(200);
+    expect(mockRequestExecute).toHaveBeenNthCalledWith(1, 'SP_RPT_CONSOLIDADOFACTURACION');
+    expect(mockRequestExecute).toHaveBeenNthCalledWith(2, 'SP_RPT_CONSOLIDADOFACTURACION_ADICIONALES');
+    // Consolidado drops CodMon/CodCFa/InFSTA binds entirely.
+    expect(mockRequestInput.mock.calls.some((c) => c[0] === 'CodMon')).toBe(false);
+    expect(mockRequestInput.mock.calls.some((c) => c[0] === 'CodCFa')).toBe(false);
+    expect(mockRequestInput.mock.calls.some((c) => c[0] === 'InFSTA')).toBe(false);
+    expect(bindValue('CodCli')).toBe(55);
+
+    const body = await res.json();
+    // Ajuste applied server-side: preocupacional 1000 - 100 = 900 (+ appended adicional row).
+    expect(body.filas).toHaveLength(3);
+    expect(body.filas[0]).toMatchObject({ desTCh: 'PREOCUPACIONAL', venta: 900, importe: 1062 });
+    expect(body.filas[1]).toMatchObject({ desTCh: 'PERIODICO', venta: 200, importe: 236 });
+    expect(body.filas[2]).toMatchObject({ desTCh: 'ADI UNO', venta: 100, importe: 118 });
+    // Per-destino totals: SEDE NORTE 900+100=1000 → IGV 180 → 1180; SEDE SUR 200 → 36 → 236.
+    expect(body.totales).toEqual([
+      { nomCom: 'EMPRESA DEMO', desDes: 'SEDE NORTE', codDes: 101, subtotal: 1000, igv: 180, total: 1180 },
+      { nomCom: 'EMPRESA DEMO', desDes: 'SEDE SUR', codDes: 102, subtotal: 200, igv: 36, total: 236 },
+    ]);
+  });
+
+  it('treats consolidado=1 the same as consolidado=true', async () => {
+    const mockPool = createMockPool();
+    mockRequestExecute.mockResolvedValue({ recordset: [] });
+    mockGetSiglaReadOnlyPool.mockResolvedValueOnce(mockPool);
+
+    const { GET } = await import('../route');
+    const res = await GET(makeUrl(`${OK_QUERY}&consolidado=1&codCli=9`));
+
+    expect(res.status).toBe(200);
+    expect(mockRequestExecute).toHaveBeenCalledWith('SP_RPT_CONSOLIDADOFACTURACION');
+    const body = await res.json();
+    expect(body.filas).toEqual([]);
+    expect(body.totales).toEqual([]);
+  });
+
+  it('returns a user-safe 500 when the consolidado SP is missing (live-DB reality)', async () => {
+    const mockPool = createMockPool();
+    mockRequestExecute.mockRejectedValueOnce(new Error("Could not find stored procedure 'SP_RPT_CONSOLIDADOFACTURACION'."));
+    mockGetSiglaReadOnlyPool.mockResolvedValueOnce(mockPool);
+
+    const { GET } = await import('../route');
+    const res = await GET(makeUrl(`${OK_QUERY}&consolidado=true&codCli=55`));
+
+    expect(res.status).toBe(500);
+    const body = await res.json();
+    expect(body.error).not.toContain('SP_RPT');
+    expect(body.error).not.toContain('stored procedure');
+  });
+});

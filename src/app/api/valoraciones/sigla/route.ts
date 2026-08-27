@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 
 import type { ValoracionesFilter } from '@/features/valoraciones/domain/entities';
+import { aplicarAjusteAdicionales, consolidarPorDestino } from '@/features/valoraciones/domain/consolidado';
 import { getValoracionesDb } from '@/features/valoraciones/infrastructure/getValoracionesDb';
 
 /**
@@ -8,13 +9,17 @@ import { getValoracionesDb } from '@/features/valoraciones/infrastructure/getVal
  *
  * Executes `SP_RPT_REPFACTURACION` through the SIGLA read-only pool with
  * the 11 REQ-03 §2 filters (validated here; the repository owns the typed
- * binds and the `00:00:00`/`23:59:59` period bounds).
+ * binds and the `00:00:00`/`23:59:59` period bounds). With
+ * `consolidado=true` (requires `codCli`) it executes the consolidado SP
+ * pair instead and returns the SIGLA-adjusted `filas` + per-destino
+ * `totales` (slice 2, Q-R6).
  *
  * Query params:
  *  - fecIni, fecFin (required, YYYY-MM-DD, fecIni <= fecFin)
  *  - codMon (required, 1 = SOLES | 2 = DOLARES)
  *  - indFac (tri-state: 0 | 1 | null; DEFAULT 0 = No Facturados)
  *  - inFsta (boolean; true switches the date mode to FecSTA)
+ *  - consolidado (boolean; true requires codCli)
  *  - codCli, codCfa, codDes, codPac, codSed, tipTra (optional; absent or
  *    <= 0 are sent to the SP as NULL)
  *
@@ -108,6 +113,16 @@ export async function GET(request: Request): Promise<NextResponse> {
     }
     const inFsta = inFstaRaw === 'true' || inFstaRaw === '1';
 
+    // ---- Consolidado toggle (slice 2: requires a client, like SIGLA) ----
+    const consolidadoRaw = (url.searchParams.get('consolidado') ?? 'false').trim().toLowerCase();
+    if (!['true', 'false', '1', '0'].includes(consolidadoRaw)) {
+      return NextResponse.json(
+        { error: '"consolidado" debe ser true o false' } satisfies ValidationError,
+        { status: 400 },
+      );
+    }
+    const consolidado = consolidadoRaw === 'true' || consolidadoRaw === '1';
+
     // ---- Optional numeric filters ----
     const numericErrors: string[] = [];
     const codCli = parseOptionalId(url.searchParams, 'codCli', numericErrors);
@@ -134,7 +149,24 @@ export async function GET(request: Request): Promise<NextResponse> {
       tipTra,
     };
 
+    // ---- Consolidado mode: client gate BEFORE any pool/SP work ----
+    if (consolidado && codCli === undefined) {
+      return NextResponse.json(
+        { error: 'El consolidado requiere seleccionar un cliente' } satisfies ValidationError,
+        { status: 400 },
+      );
+    }
+
     const repo = await getValoracionesDb();
+
+    // ---- Consolidado mode: SP pair + SIGLA ajuste + per-destino totals ----
+    if (consolidado) {
+      const { principales, adicionales } = await repo.buscarConsolidado(filtro);
+      const filas = aplicarAjusteAdicionales(principales, adicionales);
+      const totales = consolidarPorDestino(filas);
+      return NextResponse.json({ filas, totales });
+    }
+
     const resultados = await repo.buscarValoraciones(filtro);
 
     return NextResponse.json({ resultados });
