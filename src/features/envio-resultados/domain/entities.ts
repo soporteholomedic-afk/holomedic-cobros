@@ -64,6 +64,16 @@ export interface SelectedFileRef {
    * `nombreCompleto` (legacy callers unchanged).
    */
   nombreCompleto?: string;
+  /**
+   * Optional per-ref project. Stamped by the envio wizard bridge
+   * (`buildEmailViewDataFromWizard`) with the picked ficha's
+   * `proyecto` so multi-proyecto batches rename each attachment with
+   * ITS OWN project; the send-pipeline rename (`renameReadyFile`)
+   * prefers this value over the request-level `destino` scalar
+   * (absent/empty post-trim → request-level `destino`, legacy
+   * callers unchanged).
+   */
+  proyecto?: string;
 }
 
 export interface Spitch {
@@ -121,6 +131,13 @@ export type EnvioAttachmentSnapshot =
       deliveryName: string;
       tipoExamen?: ReadyFileTipo;
       nombreCompleto?: string;
+      /**
+       * Optional per-ref project mirrored from the sent
+       * `SelectedFileRef`. Conditionally spread at write time — the
+       * key is OMITTED when the ref carried no `proyecto`, keeping
+       * legacy rows byte-compatible (S-107.2).
+       */
+      proyecto?: string;
     }
   | {
       source: 'local';

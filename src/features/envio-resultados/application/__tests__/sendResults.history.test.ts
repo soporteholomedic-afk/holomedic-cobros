@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { Readable } from 'node:stream';
 import { SendResultsUseCase } from '../sendResults';
 import type { IEnvioHistoryRepository, IFileRepository, IEmailService } from '../../domain/ports';
-import type { EnvioHistoryInsert } from '../../domain/entities';
+import type { EnvioHistoryInsert, SelectedFileRef } from '../../domain/entities';
 
 /**
  * historial-envios-consolidados PR1 — spec "Record Every Send Attempt":
@@ -222,5 +222,96 @@ describe('SendResultsUseCase — history recording (write-then-send)', () => {
     const result = await useCase.execute({ ...BASE_PARAMS, context: CONTEXT });
 
     expect(result.success).toBe(true);
+  });
+});
+
+// ================================================================
+// REQ-107 — history snapshot with proyecto. The 'unc' snapshot
+// entries MUST carry the ref's `proyecto` when present; the row
+// `destino` is the REQ-105 joined value. Legacy sends (refs without
+// proyecto) omit the key entirely — byte-compatible rows (S-107.2).
+// ================================================================
+
+describe('SendResultsUseCase — history snapshot proyecto (REQ-107)', () => {
+  /** The 3-proyecto reference patient's refs (NEXA / UNACEM / MINSUR). */
+  function multiRefs(): SelectedFileRef[] {
+    return [
+      {
+        ruc: '20123456789',
+        dni: '00250391',
+        idAten: 'AT-1',
+        path: 'LEGAJOS',
+        name: '00250391CERT.pdf',
+        tipoExamen: 'CAMO',
+        nombreCompleto: 'MONTAÑEZ VINO JULIO',
+        proyecto: 'NEXA RESOURCES CAJAMARQUILLA',
+      },
+      {
+        ruc: '20123456789',
+        dni: '00250391',
+        idAten: 'AT-2',
+        path: 'LEGAJOS',
+        name: '00250391EXPED.pdf',
+        tipoExamen: 'EMO',
+        nombreCompleto: 'MONTAÑEZ VINO JULIO',
+        proyecto: 'UNACEM',
+      },
+      {
+        ruc: '20123456789',
+        dni: '00250391',
+        idAten: 'AT-3',
+        path: 'LEGAJOS',
+        name: '75618561CERT.pdf',
+        tipoExamen: 'CAMO',
+        nombreCompleto: 'MONTAÑEZ VINO JULIO',
+        proyecto: 'MINSUR',
+      },
+    ];
+  }
+
+  it('multi-proyecto send: ONE row, every unc entry carries its proyecto, joined row destino (S-107.1)', async () => {
+    const insert = vi.fn<InsertFn>().mockResolvedValue('row-001');
+    const useCase = new SendResultsUseCase(makeMockRepo(), makeMockEmail(), makeMockHistory({ insert }));
+
+    await useCase.execute({
+      ...BASE_PARAMS,
+      fileRefs: multiRefs(),
+      nombreCompleto: 'MONTAÑEZ VINO JULIO',
+      // The REQ-105 joined value the shell computed.
+      destino: 'NEXA RESOURCES CAJAMARQUILLA, UNACEM, MINSUR',
+      context: CONTEXT,
+    });
+
+    expect(insert).toHaveBeenCalledTimes(1);
+    const payload = insert.mock.calls[0]?.[0] as EnvioHistoryInsert;
+    expect(payload.destino).toBe('NEXA RESOURCES CAJAMARQUILLA, UNACEM, MINSUR');
+    const unc = payload.attachments.filter((a) => a.source === 'unc');
+    expect(unc.length).toBeGreaterThanOrEqual(3);
+    expect(unc.map((a) => (a.source === 'unc' ? a.proyecto : undefined))).toEqual([
+      'NEXA RESOURCES CAJAMARQUILLA',
+      'UNACEM',
+      'MINSUR',
+    ]);
+    expect(
+      unc.map((a) => (a.source === 'unc' ? a.deliveryName : '')),
+    ).toEqual([
+      'CAMO-MONTAÑEZ VINO JULIO-NEXA RESOURCES CAJAMARQUILLA.pdf',
+      'EMO-MONTAÑEZ VINO JULIO-UNACEM.pdf',
+      'CAMO-MONTAÑEZ VINO JULIO-MINSUR.pdf',
+    ]);
+  });
+
+  it('legacy send: snapshots omit the proyecto key entirely (S-107.2 byte-compat)', async () => {
+    const insert = vi.fn<InsertFn>().mockResolvedValue('row-001');
+    const useCase = new SendResultsUseCase(makeMockRepo(), makeMockEmail(), makeMockHistory({ insert }));
+
+    await useCase.execute(BASE_PARAMS); // ref carries NO proyecto
+
+    const payload = insert.mock.calls[0]?.[0] as EnvioHistoryInsert;
+    const unc = payload.attachments[0];
+    expect(unc?.source).toBe('unc');
+    if (unc?.source === 'unc') {
+      expect('proyecto' in unc).toBe(false);
+    }
   });
 });

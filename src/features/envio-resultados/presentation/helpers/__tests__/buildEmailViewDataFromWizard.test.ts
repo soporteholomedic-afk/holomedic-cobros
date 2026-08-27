@@ -101,6 +101,8 @@ describe('buildEmailViewDataFromWizard — legacy single-ficha characterization'
       name: '75618561CERT.pdf',
       tipoExamen: 'CAMO',
       nombreCompleto: 'JUAN PEREZ',
+      // REQ-104 (D6): the ficha's proyecto is stamped per ref.
+      proyecto: 'METRO LIMA',
     });
   });
 
@@ -311,8 +313,82 @@ describe('buildEmailViewDataFromWizard — per-ficha flattening (S-108.1)', () =
     expect(result.fileRefs).toHaveLength(3);
     for (const ref of result.fileRefs) {
       expect(ref.nombreCompleto).toBeUndefined();
+      // Unstamped strays: no fabricated proyecto either.
+      expect(ref.proyecto).toBeUndefined();
     }
     // Camo strays first, then emo strays (parallel to the resolved flow).
     expect(result.fileRefs.map((r) => r.name)).toEqual(['C1.pdf', 'C2.pdf', 'E1.pdf']);
+  });
+});
+
+// ================================================================
+// REQ-104 — proyecto stamping (D6)
+// ================================================================
+
+describe('buildEmailViewDataFromWizard — proyecto stamping (REQ-104, D6)', () => {
+  /** Reference-case patient: 3 idAten-bearing fichas. */
+  function multiPerson(): UnifiedPerson {
+    return makePerson({
+      dni: '00250391',
+      nombre: 'MONTAÑEZ VINO JULIO',
+      fichas: [
+        makeFicha({ idAten: 'AT-1', proyecto: 'NEXA RESOURCES CAJAMARQUILLA' }),
+        makeFicha({ idAten: 'AT-2', proyecto: 'UNACEM' }),
+        makeFicha({ idAten: 'AT-3', proyecto: 'MINSUR' }),
+      ],
+    });
+  }
+
+  it('stamps each ref with ITS OWN ficha proyecto (multi-proyecto)', () => {
+    const person = multiPerson();
+    const result = buildEmailViewDataFromWizard({
+      selectedDnIs: new Set(['00250391']),
+      camoPicks: {
+        [pickKey('00250391', 'AT-1')]: makePick(camoRef('00250391', 'AT-1', 'CERT-NEXA.pdf')),
+        [pickKey('00250391', 'AT-2')]: makePick(camoRef('00250391', 'AT-2', 'CERT-UNACEM.pdf')),
+        [pickKey('00250391', 'AT-3')]: makePick(camoRef('00250391', 'AT-3', 'CERT-MINSUR.pdf')),
+      },
+      emoPicks: {},
+      people: [person],
+    });
+    const byName = (n: string) => result.fileRefs.find((r) => r.name === n);
+    expect(byName('CERT-NEXA.pdf')?.proyecto).toBe('NEXA RESOURCES CAJAMARQUILLA');
+    expect(byName('CERT-UNACEM.pdf')?.proyecto).toBe('UNACEM');
+    expect(byName('CERT-MINSUR.pdf')?.proyecto).toBe('MINSUR');
+  });
+
+  it('stamps the EMO pick with its ficha proyecto too', () => {
+    const person = multiPerson();
+    const result = buildEmailViewDataFromWizard({
+      selectedDnIs: new Set(['00250391']),
+      camoPicks: {},
+      emoPicks: {
+        [pickKey('00250391', 'AT-2')]: makePick(emoRef('00250391', 'AT-2', 'EXPED-UNACEM.pdf')),
+      },
+      people: [person],
+    });
+    expect(result.fileRefs[0]?.proyecto).toBe('UNACEM');
+  });
+
+  it('single-proyecto send: per-ref proyecto equals the request-level value (S-104.3 — names identical to today)', () => {
+    const people = [makePerson()]; // ficha proyecto = person proyecto = 'METRO LIMA'
+    const result = buildEmailViewDataFromWizard({
+      selectedDnIs: new Set(['12345678']),
+      camoPicks: { [pickKey('12345678', 'AT-001')]: makePick(camoRef('12345678', 'AT-001', 'CERT.pdf')) },
+      emoPicks: {},
+      people,
+    });
+    expect(result.fileRefs[0]?.proyecto).toBe('METRO LIMA');
+  });
+
+  it('empty-proyecto ficha stamps undefined (request-level destino applies downstream)', () => {
+    const people = [makePerson({ fichas: [makeFicha({ proyecto: '' })] })];
+    const result = buildEmailViewDataFromWizard({
+      selectedDnIs: new Set(['12345678']),
+      camoPicks: { [pickKey('12345678', 'AT-001')]: makePick(camoRef('12345678', 'AT-001', 'CERT.pdf')) },
+      emoPicks: {},
+      people,
+    });
+    expect(result.fileRefs[0]?.proyecto).toBeUndefined();
   });
 });

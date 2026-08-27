@@ -47,6 +47,7 @@ import { Step3Emo } from '@/features/envio-resultados/presentation/components/wi
 import { Step4Resumen } from '@/features/envio-resultados/presentation/components/wizard/Step4Resumen';
 import { WizardStepper } from '@/features/envio-resultados/presentation/components/wizard/WizardStepper';
 import type { WizardEmailViewData } from '@/features/envio-resultados/presentation/helpers/buildEmailViewDataFromWizard';
+import { joinDestino } from '@/features/envio-resultados/presentation/helpers/joinDestino';
 import type { EmailViewData } from '@/features/envio-resultados/presentation/helpers/emailViewDataFromFiles';
 import type { Company } from '@/features/envio-resultados/domain/entities';
 import type { UnifiedPerson } from '@/types/sp-result';
@@ -169,9 +170,12 @@ export function EnvioResultadosWizard({
   //     `nombreCompleto`, and the use-case rename prefers the
   //     per-ref value (absent/empty → this scalar). Legacy and
   //     stray-pick refs (no per-ref stamp) rename with it.
-  //   - `destino` — the first selected patient's first ficha's
-  //     `proyecto` (with a fall-through to the patient-level
-  //     `proyecto`).
+  //   - `destino` — REQ-105 join (D5): the distinct proyectos of
+  //     the included `partial.fileRefs`, first-appearance order,
+  //     joined ", " and capped at 200 chars. The first selected
+  //     patient's ficha[0]/person-level proyecto remains as the
+  //     FALLBACK when no included ref carries a proyecto (legacy
+  //     flow — identical to the previous scalar behavior).
   //   - `patients: []` — the wizard path does not produce
   //     `PatientFile[]` for the AttachmentList (the EmailEditor
   //     shows the names from `selectedPatients` and the files
@@ -193,7 +197,10 @@ export function EnvioResultadosWizard({
         patients: [],
         fileRefs: partial.fileRefs,
         nombreCompleto: firstPerson?.nombre ?? '',
-        destino: firstFicha?.proyecto ?? firstPerson?.proyecto ?? '',
+        destino: joinDestino(
+          partial.fileRefs,
+          firstFicha?.proyecto ?? firstPerson?.proyecto ?? '',
+        ),
       };
       onContinueToEmail(full);
     },

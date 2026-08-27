@@ -67,7 +67,10 @@ function isFileRefShape(v: unknown): v is SelectedFileRef {
     // String-when-present: a non-string value must 400 here —
     // otherwise the use case's `.trim()` would throw and surface
     // as 500 INTERNAL_ERROR.
-    (obj.nombreCompleto === undefined || typeof obj.nombreCompleto === 'string')
+    (obj.nombreCompleto === undefined || typeof obj.nombreCompleto === 'string') &&
+    // Optional per-ref project (multi-proyecto wizard sends) —
+    // same string-when-present rationale (D10, REQ-106 backstop).
+    (obj.proyecto === undefined || typeof obj.proyecto === 'string')
   );
 }
 

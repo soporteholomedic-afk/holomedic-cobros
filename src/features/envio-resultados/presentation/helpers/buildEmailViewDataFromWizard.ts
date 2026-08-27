@@ -9,9 +9,11 @@
  * the first-appearance order the rest of the pipeline relies on)
  * and looks up `pickKey(dni, ficha.idAten)` in both maps. One
  * patient with picks on N fichas flattens into N fileRefs with
- * distinct idAten. Stray picks (the dni disappeared from `people`,
+ * distinct idAten. Each resolved ref is stamped with its ficha's
+ * `proyecto` (REQ-104, D6 — empty → undefined, request-level
+ * destino applies). Stray picks (the dni disappeared from `people`,
  * e.g. a mid-wizard refetch) still attach, passing through
- * UNSTAMPED — no fabrication. Proyecto stamping lands in WU-3.
+ * UNSTAMPED — no fabrication.
  *
  * Spec coverage:
  *  - REQ-108 — S-108.1 multi-ref flattening, legacy flow unchanged.
@@ -125,6 +127,10 @@ export function buildEmailViewDataFromWizard(
           // Per-ref patient name (multi-patient fix): the use-case
           // rename prefers this over the request-level scalar.
           nombreCompleto: person.nombre,
+          // Per-ref project (REQ-104, D6): the use-case rename
+          // prefers this over the request-level `destino`. Empty
+          // ficha proyecto → undefined (request-level applies).
+          proyecto: ficha.proyecto || undefined,
         });
       }
       if (emo) {
@@ -133,6 +139,7 @@ export function buildEmailViewDataFromWizard(
           ...emo.ref,
           tipoExamen: emo.ref.tipoExamen ?? 'EMO',
           nombreCompleto: person.nombre,
+          proyecto: ficha.proyecto || undefined,
         });
       }
     }

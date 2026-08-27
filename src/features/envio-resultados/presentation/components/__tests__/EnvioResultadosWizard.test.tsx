@@ -336,6 +336,78 @@ describe('EnvioResultadosWizard — Step 4 handoff', () => {
     expect(data.fileRefs.find((r) => r.name === 'CERT-2222.pdf')?.nombreCompleto).toBe('Beto Ruiz');
     expect(data.patients).toEqual([]);
   });
+
+  // REQ-105 (D5): the handoff destino is the DISTINCT proyectos of
+  // the included refs, first-appearance order, joined ", " — not the
+  // first ficha's proyecto scalar. The picks below carry their
+  // per-ficha proyecto stamps directly (as the wizard bridge leaves
+  // them); the AT-2 EMO pick duplicates UNACEM (S-105.1's "UNACEM
+  // twice").
+  it('Step 4 handoff destino joins the distinct proyectos of the included refs (S-105.1)', () => {
+    const wizardPick = (idAten: string, proyecto: string, tipoExamen: 'CAMO' | 'EMO') => ({
+      ref: {
+        ruc: '20123456789',
+        dni: '11111111',
+        idAten,
+        path: 'LEGAJOS',
+        name: `00250391${tipoExamen === 'CAMO' ? 'CERT' : 'EXPED'}.pdf`,
+        tipoExamen,
+        proyecto,
+      },
+      displayName: `00250391${tipoExamen === 'CAMO' ? 'CERT' : 'EXPED'}.pdf`,
+    });
+    const initialState: WizardState = {
+      currentStep: 4,
+      maxVisitedStep: 4,
+      selectedDnIs: new Set(['11111111']),
+      camoPicks: {
+        [pickKey('11111111', 'AT-1')]: wizardPick('AT-1', 'NEXA RESOURCES CAJAMARQUILLA', 'CAMO'),
+        [pickKey('11111111', 'AT-2')]: wizardPick('AT-2', 'UNACEM', 'CAMO'),
+        [pickKey('11111111', 'AT-3')]: wizardPick('AT-3', 'MINSUR', 'CAMO'),
+      },
+      emoPicks: {
+        [pickKey('11111111', 'AT-2')]: wizardPick('AT-2', 'UNACEM', 'EMO'),
+      },
+    };
+    const { onContinueToEmail } = renderWizard({
+      people: multiPeople,
+      initialState,
+    });
+
+    fireEvent.click(screen.getByTestId('step4-continuar'));
+
+    expect(onContinueToEmail).toHaveBeenCalledTimes(1);
+    const data = onContinueToEmail.mock.calls[0]?.[0] as { destino: string };
+    expect(data.destino).toBe('NEXA RESOURCES CAJAMARQUILLA, UNACEM, MINSUR');
+  });
+
+  // REQ-104→REQ-105 integration (D6+D5): slot picks made through the
+  // FilesModal stub are stamped per ficha by the bridge and the shell
+  // joins their distinct proyectos into the handoff destino.
+  it('slot picks through the modal produce the joined destino at handoff (bridge stamping → join)', () => {
+    const { onContinueToEmail } = renderWizard({ people: multiPeople });
+    fireEvent.click(screen.getByTestId('step1-row-11111111'));
+    fireEvent.click(screen.getByTestId('step1-siguiente'));
+    for (const i of [0, 1, 2]) {
+      fireEvent.click(screen.getByTestId(`step2-slot-elegir-11111111-${i}`));
+      fireEvent.click(screen.getByTestId('wizard-pick-modal-trigger-pick-11111111'));
+    }
+    fireEvent.click(screen.getByTestId('step2-siguiente'));
+    fireEvent.click(screen.getByTestId('step3-continuar'));
+    fireEvent.click(screen.getByTestId('step4-continuar'));
+
+    expect(onContinueToEmail).toHaveBeenCalledTimes(1);
+    const data = onContinueToEmail.mock.calls[0]?.[0] as {
+      destino: string;
+      fileRefs: Array<{ proyecto?: string }>;
+    };
+    expect(data.fileRefs.map((r) => r.proyecto)).toEqual([
+      'NEXA RESOURCES CAJAMARQUILLA',
+      'UNACEM',
+      'MINSUR',
+    ]);
+    expect(data.destino).toBe('NEXA RESOURCES CAJAMARQUILLA, UNACEM, MINSUR');
+  });
 });
 
 // ================================================================

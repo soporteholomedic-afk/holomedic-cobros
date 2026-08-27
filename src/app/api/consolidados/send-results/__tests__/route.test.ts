@@ -615,3 +615,43 @@ describe('POST /api/consolidados/send-results (PR #2 — fileRefs flow)', () => 
     expect(mockHistoryInsert).not.toHaveBeenCalled();
   });
 });
+
+// ================================================================
+// REQ-106 backstop (D10) — `isFileRefShape` guards the optional
+// `proyecto` field. A non-string proyecto must 400 HERE — otherwise
+// the use case's `.trim()` would throw and surface as a 500.
+// ================================================================
+
+describe('POST /api/consolidados/send-results — proyecto guard (D10)', () => {
+  it('returns 400 when a ref carries a non-string proyecto', async () => {
+    const bad = { ...REF_ROOT, proyecto: 42 };
+
+    const response = await POST(createMockRequest(buildFileRefsFd([bad])));
+    const body = await response.json();
+
+    expect(response.status).toBe(400);
+    expect(body.code).toBe('VALIDATION_ERROR');
+    expect(mockSendEmail).not.toHaveBeenCalled();
+  });
+
+  it('returns 400 when a ref carries a null proyecto', async () => {
+    const bad = { ...REF_ROOT, proyecto: null };
+
+    const response = await POST(createMockRequest(buildFileRefsFd([bad])));
+    const body = await response.json();
+
+    expect(response.status).toBe(400);
+    expect(body.code).toBe('VALIDATION_ERROR');
+  });
+
+  it('accepts a ref with a string proyecto (passes through to the pipeline)', async () => {
+    const good = { ...REF_ROOT, proyecto: 'UNACEM' };
+
+    const response = await POST(createMockRequest(buildFileRefsFd([good])));
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.success).toBe(true);
+    expect(mockSendEmail).toHaveBeenCalledTimes(1);
+  });
+});
