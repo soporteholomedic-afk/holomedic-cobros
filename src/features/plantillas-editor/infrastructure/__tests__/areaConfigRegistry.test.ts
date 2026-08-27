@@ -19,16 +19,22 @@ import { AREA_CONFIGS, getAreaConfig } from '../areaConfigRegistry';
  *  - mockPreviewData carries realistic optional cobranza fields (back-compat:
  *    the fields are optional so consolidados mocks are unaffected).
  *
+ * REQ-03 M-R2 adds the valoraciones registration (previously reserved
+ * per product decision #5):
+ *  - VALORIZACIONES_CONFIG present with the token palette
+ *    (empresa/ruc/periodo/moneda/total/fecha/firma) and the
+ *    tablaValoraciones table [empresa, registros, subtotal, igv, total].
+ *
  * `AREA_CONFIGS` is a RUNTIME import (a Map value) so this file fails to
  * load if the registry module is absent — a real RED, not a trivial pass.
  */
 describe('areaConfigRegistry', () => {
   describe('AREA_CONFIGS', () => {
-    it('registers consolidados and cobranza', () => {
-      expect(AREA_CONFIGS.size).toBe(2);
+    it('registers consolidados, cobranza and valoraciones', () => {
+      expect(AREA_CONFIGS.size).toBe(3);
       expect(AREA_CONFIGS.has('consolidados')).toBe(true);
       expect(AREA_CONFIGS.has('cobranza')).toBe(true);
-      expect(AREA_CONFIGS.has('valoraciones')).toBe(false);
+      expect(AREA_CONFIGS.has('valoraciones')).toBe(true);
     });
   });
 
@@ -68,10 +74,6 @@ describe('areaConfigRegistry', () => {
       expect(cfg).toBeDefined();
       expect(cfg?.area).toBe('cobranza');
       expect(cfg?.label).toBe('Cobranza');
-    });
-
-    it('returns undefined for the reserved-but-unpopulated area (valoraciones)', () => {
-      expect(getAreaConfig('valoraciones')).toBeUndefined();
     });
 
     it('returns undefined for a totally unknown area', () => {
@@ -219,6 +221,70 @@ describe('areaConfigRegistry', () => {
       // Per-row overdue-days story (as of ~15/12/2025): month overdue, ~two
       // weeks, and a not-yet-due row rendering '0'.
       expect(rows!.map((r) => r.diasVencidos)).toEqual(['30', '13', '0']);
+    });
+  });
+
+  describe('valoraciones config shape (REQ-03 M-R2)', () => {
+    it('returns the valoraciones AreaConfig with its label', () => {
+      const cfg = getAreaConfig('valoraciones');
+      expect(cfg).toBeDefined();
+      expect(cfg?.area).toBe('valoraciones');
+      expect(cfg?.label).toBe('Valorizaciones');
+    });
+
+    it('exposes the valoraciones token palette: empresa, ruc, periodo, moneda, total, fecha, firma', () => {
+      const cfg = getAreaConfig('valoraciones');
+      expect(cfg).toBeDefined();
+      const keys = cfg!.availableTokens.flatMap((c) => c.tokens).filter((t) => t.isTable !== true).map((t) => t.key);
+      for (const key of ['empresa', 'ruc', 'periodo', 'moneda', 'total', 'fecha', 'firma']) {
+        expect(keys, `token ${key} must be in the valoraciones palette`).toContain(key);
+      }
+    });
+
+    it('registers the tablaValoraciones table with columns empresa/registros/subtotal/igv/total', () => {
+      const cfg = getAreaConfig('valoraciones');
+      expect(cfg).toBeDefined();
+      const table = cfg!.predefinedTables.find((t) => t.name === 'tablaValoraciones');
+      expect(table).toBeDefined();
+      expect(table!.label).toBe('Tabla de valorizaciones');
+      expect(table!.columns.map((c) => c.key)).toEqual([
+        'empresa', 'registros', 'subtotal', 'igv', 'total',
+      ]);
+      expect(table!.columns.map((c) => c.label)).toEqual([
+        'Empresa', 'Registros', 'Subtotal', 'IGV', 'Total',
+      ]);
+      // A Tablas chip is wired to the table via tableRef.
+      expect(
+        cfg!.availableTokens.flatMap((c) => c.tokens).find((t) => t.isTable === true && t.tableRef === 'tablaValoraciones'),
+      ).toBeDefined();
+      // D9 widths are resolver-local — no width data may leak into the config.
+      expect(JSON.stringify(table)).not.toContain('width');
+    });
+
+    it('mockPreviewData carries realistic valoraciones values (ruc, periodo, moneda, montoTotal, tablaValoraciones)', () => {
+      const cfg = getAreaConfig('valoraciones');
+      expect(cfg).toBeDefined();
+      const mock = cfg!.mockPreviewData;
+      expect(mock.area).toBe('valoraciones');
+      expect(mock.ruc).toBe('20123456789');
+      expect(mock.periodo).toBe('02/01/2026 al 31/01/2026');
+      expect(mock.moneda).toBe('SOLES');
+      expect(mock.montoTotal).toBe('S/ 12,345.67');
+      expect(mock.tablaValoraciones).toHaveLength(2);
+      for (const row of mock.tablaValoraciones ?? []) {
+        expect(Object.values(row).every((v) => v.length > 0)).toBe(true);
+      }
+      // Base MockPreviewData fields stay present (back-compat contract).
+      expect(typeof mock.companyName).toBe('string');
+      expect(mock.companyName.length).toBeGreaterThan(0);
+      expect(mock.firma.length).toBeGreaterThan(0);
+    });
+
+    it('consolidados mockPreviewData is unaffected by the optional valoraciones widening', () => {
+      const cfg = getAreaConfig('consolidados');
+      expect(cfg).toBeDefined();
+      expect(cfg!.mockPreviewData.periodo).toBeUndefined();
+      expect(cfg!.mockPreviewData.tablaValoraciones).toBeUndefined();
     });
   });
 });

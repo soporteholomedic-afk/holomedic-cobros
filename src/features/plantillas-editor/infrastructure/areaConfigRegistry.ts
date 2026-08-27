@@ -2,14 +2,14 @@
  * Area configuration registry for the plantillas editor (code registry).
  *
  * Each `AreaConfig` declares the token palette, predefined tables, and mock
- * preview data for one area. `consolidados` (v1) and `cobranza` (REQ-01
- * DIR-04) are registered; `valoraciones` remains reserved (product
- * decision #5) but NOT populated — `getAreaConfig` returns `undefined`
- * for it.
+ * preview data for one area. `consolidados` (v1), `cobranza` (REQ-01
+ * DIR-04) and `valoraciones` (REQ-03 M-R2 — previously reserved by product
+ * decision #5, now populated) are registered.
  *
  * The `mockPreviewData` shape mirrors the fields the interpolation context
- * consumes; the cobranza-specific fields are OPTIONAL so consolidados
- * mocks stay assignable without them (back-compat widening, REQ-01 D12).
+ * consumes; the cobranza/valoraciones-specific fields are OPTIONAL so
+ * consolidados mocks stay assignable without them (back-compat widening,
+ * REQ-01 D12 / REQ-03 M-R2).
  */
 
 /** A column of a predefined table that a `{{tabla:name:cols}}` token can select. */
@@ -63,6 +63,20 @@ export interface TablaCobranzaMockRow {
 }
 
 /**
+ * One row of the valoraciones `tablaValoraciones` mock table (REQ-03 M-R2;
+ * deliberate mirror of the interpolation-context row shape — no
+ * cross-feature import, same approach as `TablaCobranzaMockRow`). Amounts
+ * are pre-formatted with the row's own currency symbol.
+ */
+export interface TablaValoracionesMockRow {
+  empresa: string;
+  registros: string;
+  subtotal: string;
+  igv: string;
+  total: string;
+}
+
+/**
  * Mock data for the editor's live preview. Field names mirror the
  * interpolation context so the preview renders identically to the send flow.
  *
@@ -95,6 +109,13 @@ export interface MockPreviewData {
   documentosPendientes?: DocumentoPendienteMockRow[];
   /** Cobranza: full cobranza-table rows for `tabla-cobranza` (12 pre-formatted fields). */
   tablaCobranza?: TablaCobranzaMockRow[];
+  // ---- OPTIONAL valoraciones fields (REQ-03 M-R2 widening, back-compat) ----
+  // Only the valoraciones flow fills these. Values are pre-formatted
+  // strings; other areas' mocks stay assignable without them.
+  /** Valoraciones: query period, pre-formatted `dd/MM/yyyy al dd/MM/yyyy`. */
+  periodo?: string;
+  /** Valoraciones: per-empresa summary rows for the `tablaValoraciones` table. */
+  tablaValoraciones?: TablaValoracionesMockRow[];
 }
 
 /** The full configuration for one area. */
@@ -295,13 +316,95 @@ const COBRANZA_CONFIG: AreaConfig = {
 };
 
 /**
- * The area registry. `consolidados` (v1) and `cobranza` (REQ-01 DIR-04)
- * are populated; `valoraciones` is reserved (decision #5) but intentionally
- * absent.
+ * The valoraciones area config (REQ-03 M-R2 — the previously reserved
+ * area, now populated). Tokens: company identity + RUC, the query period,
+ * currency, the pre-formatted grand total, date and signature, plus the
+ * per-empresa summary table. Mock preview data fills the optional
+ * valoraciones fields with realistic values so the editor preview and the
+ * send modal render without hitting any real data source.
+ */
+const VALORIZACIONES_CONFIG: AreaConfig = {
+  area: 'valoraciones',
+  label: 'Valorizaciones',
+  availableTokens: [
+    {
+      category: 'Empresa',
+      tokens: [
+        { key: 'empresa', label: 'Empresa' },
+        { key: 'ruc', label: 'RUC' },
+        { key: 'fecha', label: 'Fecha' },
+      ],
+    },
+    {
+      category: 'Valorización',
+      tokens: [
+        { key: 'periodo', label: 'Periodo' },
+        { key: 'moneda', label: 'Moneda' },
+        { key: 'total', label: 'Total' },
+      ],
+    },
+    {
+      category: 'Firma',
+      tokens: [{ key: 'firma', label: 'Firma' }],
+    },
+    {
+      category: 'Tablas',
+      tokens: [
+        {
+          key: 'tabla',
+          label: 'Tabla de valorizaciones',
+          isTable: true,
+          tableRef: 'tablaValoraciones',
+        },
+      ],
+    },
+  ],
+  predefinedTables: [
+    {
+      name: 'tablaValoraciones',
+      label: 'Tabla de valorizaciones',
+      columns: [
+        { key: 'empresa', label: 'Empresa' },
+        { key: 'registros', label: 'Registros' },
+        { key: 'subtotal', label: 'Subtotal' },
+        { key: 'igv', label: 'IGV' },
+        { key: 'total', label: 'Total' },
+      ],
+    },
+  ],
+  mockPreviewData: {
+    // Patient-shaped base fields kept per the MockPreviewData contract —
+    // valoraciones templates never use them, so they carry empty/neutral values.
+    companyName: 'EMPRESA DEMO S.A.C.',
+    patientNames: [],
+    fileNames: [],
+    firma: '<p>Departamento de Facturación — HOLOMEDIC SERVICIOS INTEGRALES S.A.C.</p>',
+    area: 'valoraciones',
+    today: '2026-01-15',
+    pacienteDni: '',
+    pacienteNombre: '',
+    destino: '',
+    // Valoraciones preview fields (optional on MockPreviewData).
+    ruc: '20123456789',
+    periodo: '02/01/2026 al 31/01/2026',
+    moneda: 'SOLES',
+    montoTotal: 'S/ 12,345.67',
+    // Rows consistent with montoTotal: subtotals + 18% IGV sum to the total.
+    tablaValoraciones: [
+      { empresa: 'EMPRESA DEMO S.A.C.', registros: '12', subtotal: 'S/ 10,169.49', igv: 'S/ 1,830.51', total: 'S/ 12,000.00' },
+      { empresa: 'COMERCIAL ABC S.A.C.', registros: '3', subtotal: 'S/ 1,694.92', igv: 'S/ 305.08', total: 'S/ 2,000.00' },
+    ],
+  },
+};
+
+/**
+ * The area registry. `consolidados` (v1), `cobranza` (REQ-01 DIR-04) and
+ * `valoraciones` (REQ-03 M-R2) are populated.
  */
 export const AREA_CONFIGS: ReadonlyMap<string, AreaConfig> = new Map([
   ['consolidados', CONSOLIDADOS_CONFIG],
   ['cobranza', COBRANZA_CONFIG],
+  ['valoraciones', VALORIZACIONES_CONFIG],
 ]);
 
 /**

@@ -33,6 +33,14 @@ const SUPERSET_CTX: InterpolationContext = {
     { fecha: '02/12/2025', factura: 'BO B001-50', monto: 'USD 60.00', saldo: 'USD 50.00' },
   ],
   tablaCobranza: [{ cliente: '20601234567', razonSocial: 'COMERCIAL ABC S.A.C.', tipoDoc: 'FE', serie: 'F001', numero: '101', fechaDoc: '01/11/2025', fechaVen: '15/11/2025', moneda: 'S/', debe: 'S/ 1,200.00', haber: 'S/ 0.00', saldo: 'S/ 1,000.00', diasVencidos: '45' }],
+  // Valoraciones side of the superset (REQ-03 M-R2). `ruc`/`montoTotal`/
+  // `moneda` are shared with cobranza; `periodo` + `tablaValoraciones` are
+  // the valoraciones-specific fields.
+  periodo: '02/01/2026 al 31/01/2026',
+  tablaValoraciones: [
+    { empresa: 'EMPRESA DEMO S.A.C.', registros: '12', subtotal: 'S/ 10,169.49', igv: 'S/ 1,830.51', total: 'S/ 12,000.00' },
+    { empresa: 'COMERCIAL ABC S.A.C.', registros: '3', subtotal: 'S/ 1,694.92', igv: 'S/ 305.08', total: 'S/ 2,000.00' },
+  ],
 };
 
 describe('areaRegistryConsistency (REQ-01 DIR-05)', () => {
@@ -77,8 +85,10 @@ describe('areaRegistryConsistency (REQ-01 DIR-05)', () => {
     // Simulated divergence: an area present in AREA_CONFIGS with NO
     // resolver branch resolves everything to ''. The loop assertions above
     // embed the area name in the message; here we pin the mechanism itself
-    // against the real unknown-area behavior of the factory.
-    const registry = buildTokenResolverRegistry('valoraciones');
+    // against the real unknown-area behavior of the factory (any area that
+    // is genuinely not registered — `valoraciones` itself was this example
+    // until REQ-03 registered it).
+    const registry = buildTokenResolverRegistry('area-fantasma');
     const divergentToken = registry.resolveToken('empresa', SUPERSET_CTX);
     expect(divergentToken.html).toBe('');
     // This is exactly what a branchless registered area would produce —
@@ -128,5 +138,41 @@ describe('areaRegistryConsistency (REQ-01 DIR-05)', () => {
     expect(out.html).toContain('Días Venc.');
     expect(out.html).toContain('>45</td>');
     expect(out.subject).toBe('Cuenta Clínica Demo S.A.');
+  });
+
+  it('valoraciones template with all registered tokens interpolates fully non-empty (REQ-03 M-R2, template selection and interpolation)', () => {
+    const registry = buildTokenResolverRegistry('valoraciones');
+    const template =
+      '<p>Estimados {{empresa}} (RUC {{ruc}}),</p>' +
+      '<p>Periodo: {{periodo}} — Moneda: {{moneda}}</p>' +
+      '<p>Fecha: {{fecha}}</p>' +
+      '<p>Total valorizado: {{total}}</p>' +
+      '<div>{{tabla:tablaValoraciones:empresa,registros,subtotal,igv,total}}</div>' +
+      '<p>{{firma}}</p>';
+    const out = interpolate(template, 'Valorización {{empresa}} {{periodo}}', SUPERSET_CTX, registry);
+    // No placeholder survives.
+    expect(out.html).not.toContain('{{');
+    // Every token's data is present. `moneda` is a SHARED optional field
+    // (cobranza fills 'PEN', valoraciones fills 'SOLES'/'DOLARES') — the
+    // superset carries cobranza's 'PEN', which is what must render here.
+    expect(out.html).toContain('Clínica Demo S.A.');
+    expect(out.html).toContain('20123456789');
+    expect(out.html).toContain('02/01/2026 al 31/01/2026');
+    expect(out.html).toContain('PEN');
+    expect(out.html).toContain('15 de enero de 2026');
+    expect(out.html).toContain('S/ 12,345.67');
+    expect(out.html).toMatch(/<table[\s>]/);
+    expect(out.html).toContain('EMPRESA DEMO S.A.C.');
+    expect(out.html).toContain('>12</td>');
+    expect(out.subject).toContain('02/01/2026 al 31/01/2026');
+  });
+
+  it('valoraciones tokens resolve empty (block removal) when the optional fields are absent', () => {
+    // A consolidados-shaped context (no valoraciones fields) must make the
+    // valoraciones-only tokens resolve to '' — never leak another area's data.
+    const registry = buildTokenResolverRegistry('valoraciones');
+    expect(registry.resolveToken('periodo', GOLDEN_CTX).html).toBe('');
+    expect(registry.resolveToken('total', { ...GOLDEN_CTX, montoTotal: undefined }).html).toBe('');
+    expect(registry.resolveTable('tablaValoraciones', ['empresa', 'total'], GOLDEN_CTX).html).toBe('');
   });
 });
