@@ -207,6 +207,6 @@ U3:
 
 ## Remaining
 
-- S1 (U1+U2) **complete** → PR 1 open (head `feature/valoraciones-sigla-s1` → base `feature/valoraciones-sigla-req03`). Do NOT merge until reviewed.
-- S2 (U3) **complete** → PR 2 (head `feature/valoraciones-sigla-s2` → base `feature/valoraciones-sigla-s1`).
+- S1 (U1+U2) **complete** → PR 1 open (head `feature/valoraciones-sigla-s1` → base `feature/valoraciones-sigla-req03`). Do NOT merge until reviewed. Prepared body: `C:\Users\soporte\AppData\Local\Temp\opencode\req03-pr1-body.md` (gh unauthenticated at wrap-up).
+- S2 (U3) **complete** → PR 2 (head `feature/valoraciones-sigla-s2` → base `feature/valoraciones-sigla-s1`). Prepared body: `C:\Users\soporte\AppData\Local\Temp\opencode\req03-pr2-body.md` (gh unauthenticated at wrap-up). Note: the root `.pr-1-body.md` / `.pr-2-body.md` dotfiles belong to an older change (worker-table-aptitud-archivos, commit 007a487) — do not reuse them for REQ-03.
 - [ ] U4 (S3, PR 3): tasks 3.1–3.5 — email + plantillas integration (`VALORIZACIONES_CONFIG`, token resolvers, contactos route, send route, EnviarValoracionesModal)
