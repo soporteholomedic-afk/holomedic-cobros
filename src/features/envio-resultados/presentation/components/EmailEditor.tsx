@@ -7,13 +7,11 @@ import { LocalFileDropZone } from './LocalFileDropZone';
 import { EmailPreviewPanel } from '@/components/email/EmailPreviewPanel';
 import { EmailControlsPanel } from '@/components/email/EmailControlsPanel';
 import { EmailBodyField } from '@/components/email/EmailBodyField';
-import { SignatureEditor } from '@/components/email/SignatureEditor';
 import { useSendResults } from '../hooks/useSendResults';
 import { interpolateSpitch } from '../helpers/interpolateSpitch';
-import { buildSignatureDataFromUser, buildSignatureHtml, stripSignatureHtml } from '../helpers/signatureData';
-import { useAuth } from '@/features/auth/presentation/hooks/useAuth';
+import { stripSignatureHtml } from '../helpers/signatureData';
+import { useFirmaCorreo } from '@/features/firma-correo/presentation/hooks/useFirmaCorreo';
 import { showSendLoading, showSendSuccess, showSendError } from '../helpers/sendToasts';
-import type { SignatureData } from '../helpers/signatureData';
 import type { InitialEmail, UnavailableAttachment } from '../helpers/buildReenvioViewData';
 import type { Patient, PatientFile, SelectedFileRef, Spitch } from '../../domain/entities';
 import type { EmailBodyEditorHandle } from './EmailBodyEditor';
@@ -21,17 +19,6 @@ import type { EmailBodyEditorHandle } from './EmailBodyEditor';
 const EmailBodyEditorLazy = lazy(() =>
   import('./EmailBodyEditor').then((m) => ({ default: m.EmailBodyEditor })),
 );
-
-// Signature fields — kept out of BlockNote to avoid lossy round-trip on the
-// complex table structure. Edited via simple inputs; rebuilt on "Hecho".
-const signatureFields: { key: keyof SignatureData; label: string }[] = [
-  { key: 'name', label: 'Nombre' },
-  { key: 'role', label: 'Cargo' },
-  { key: 'email', label: 'Email' },
-  { key: 'phone', label: 'Teléfono' },
-  { key: 'phoneAlt', label: 'Teléfono 2' },
-  { key: 'address', label: 'Dirección' },
-];
 
 interface EmailEditorProps {
   companyId: string;
@@ -104,40 +91,22 @@ export function EmailEditor({
   initialEmail,
   unavailableAttachments = [],
 }: EmailEditorProps) {
-  // usuarios-nombre-firma — the signature is seeded from the session
-  // user (`/api/auth/me` via useAuth) instead of a hardcoded default.
-  const { user } = useAuth();
+  // editor-firmas PR4 — the signature is composed SERVER-SIDE from the
+  // sender's stored fields (GET /api/plantillas/firma) and inlined at
+  // {{firma}} by the token resolver. Empty firmaHtml → the resolver's
+  // `[Falta configurar firma]` fallback (contract unchanged).
+  const { firmaHtml } = useFirmaCorreo();
 
   // Internal state
   const [target, setTarget] = useState<'company' | 'patient'>('company');
   const [selectedSpitch, setSelectedSpitch] = useState<Spitch | null>(null);
   // PR4 (OQ5) — reenvío seeds the initializers directly (no effects):
-  // the persisted signature is stripped so the htmlBody memo re-appends
-  // it exactly once on re-send (D8).
+  // the legacy appended signature is stripped so historical rows never
+  // resurface it (stripSignatureHtml keeps working on old persisted
+  // bodies only).
   const [subject, setSubject] = useState(initialEmail?.subject ?? '');
   const [bodyHtml, setBodyHtml] = useState(() =>
     initialEmail ? stripSignatureHtml(initialEmail.bodyHtml) : '',
-  );
-  // Session-seeded signature (lazy initializer — falls back to the
-  // default name while auth is still loading).
-  const [signatureData, setSignatureData] = useState<SignatureData>(() =>
-    buildSignatureDataFromUser(user),
-  );
-
-  // Late-auth re-seed: when the session user resolves AFTER mount
-  // (AuthProvider still fetching), re-seed the signature from it — but
-  // only while pristine, so a signature the operator already edited by
-  // hand is never clobbered by a late response.
-  const signaturePristineRef = useRef(true);
-  useEffect(() => {
-    if (!user) return;
-    if (!signaturePristineRef.current) return;
-    setSignatureData(buildSignatureDataFromUser(user));
-  }, [user]);
-
-  const htmlBody = useMemo(
-    () => (bodyHtml ? bodyHtml + buildSignatureHtml(signatureData) : ''),
-    [bodyHtml, signatureData],
   );
 
   const [showNoFilesWarning, setShowNoFilesWarning] = useState(false);
@@ -185,7 +154,7 @@ export function EmailEditor({
     to: recipients,
     cc: ccList.length > 0 ? ccList : undefined,
     subject,
-    html: htmlBody,
+    html: bodyHtml,
     fileRefs,
     localFiles,
     nombreCompleto,
@@ -206,17 +175,17 @@ export function EmailEditor({
     }
     setSelectedSpitch(spitch);
 
-    // Strip {{firma}} from the spitch body — signature is stored separately
-    // as structured data and rebuilt via buildSignatureHtml.
-    const bodyWithoutFirma = spitch.bodyHtml.replace(/\{\{firma\}\}/g, '');
-
+    // editor-firmas PR4 — {{firma}} now interpolates the server-composed
+    // signature (fetched on mount); NO stripping, NO client-side rebuild.
+    // Accepted race: selecting a template before the firma fetch resolves
+    // bakes the fallback placeholder until the template is reselected.
     const interpolated = interpolateSpitch({
-      html: bodyWithoutFirma,
+      html: spitch.bodyHtml,
       subject: spitch.subject,
       companyName,
       patientNames: recipientNames,
       fileNames: selectedFiles.map((f) => f.name),
-      firma: '',
+      firma: firmaHtml,
       patients,
       files: selectedFiles,
       destino,
@@ -224,11 +193,8 @@ export function EmailEditor({
 
     setSubject(interpolated.subject);
     setBodyHtml(interpolated.html);
-    // usuarios-nombre-firma — a fresh spitch re-seeds the signature
-    // from the session user (previously: hardcoded default).
-    setSignatureData(buildSignatureDataFromUser(user));
     editorRef.current?.loadHtml(interpolated.html);
-  }, [companyName, recipientNames, selectedFiles, patients, destino, user]);
+  }, [companyName, recipientNames, selectedFiles, patients, destino, firmaHtml]);
 
   const handleToggle = useCallback(() => {
     setTarget((prev) => (prev === 'company' ? 'patient' : 'company'));
@@ -239,12 +205,6 @@ export function EmailEditor({
 
   const handleLocalAdd = useCallback((files: File[]) => {
     setLocalFiles((prev) => [...prev, ...files]);
-  }, []);
-
-  const handleSignatureChange = useCallback((field: keyof SignatureData, value: string) => {
-    // Manual edit releases the late-auth re-seed latch (pristine → false).
-    signaturePristineRef.current = false;
-    setSignatureData((prev) => ({ ...prev, [field]: value }));
   }, []);
 
   const handleLocalRemove = useCallback((index: number) => {
@@ -289,7 +249,7 @@ export function EmailEditor({
           </h2>
           <EmailPreviewPanel
             subject={subject}
-            html={htmlBody}
+            html={bodyHtml}
             emptyHint="Seleccione un spitch para previsualizar"
             templateName={selectedSpitch?.name}
             attachmentsSlot={
@@ -422,13 +382,6 @@ export function EmailEditor({
                 />
               </Suspense>
             ) : null}
-            signatureSlot={
-              <SignatureEditor
-                fields={signatureFields}
-                values={signatureData}
-                onChange={handleSignatureChange}
-              />
-            }
           />
         }
         onSend={handleRequestSend}
