@@ -61,6 +61,18 @@ vi.mock('../../FilesModal', () => ({
   },
 }));
 
+// ---- useAttachAllProyectos stub ----
+// The quick-action hook is stubbed at the module boundary so these
+// tests stay focused on Step2Camo's WIRING: button visibility
+// (S-103.3), click pass-through and per-slot status render. The
+// hook's own behavior — listing fan-out, candidate rule, batching —
+// is covered by `useAttachAllProyectos.test.ts`.
+const mockAttachAll = vi.hoisted(() => vi.fn());
+const mockUseAttachAllProyectos = vi.hoisted(() => vi.fn());
+vi.mock('../../../hooks/useAttachAllProyectos', () => ({
+  useAttachAllProyectos: mockUseAttachAllProyectos,
+}));
+
 // ---- Fixtures ----
 
 function makeFicha(overrides: Partial<UnifiedFicha> = {}): UnifiedFicha {
@@ -124,16 +136,18 @@ function renderStep2({
   const onPickFile = vi.fn();
   const onBack = vi.fn();
   const onNext = vi.fn();
+  const onBatch = vi.fn();
   const props = {
     people: thePeople,
     selectedDnIs,
     camoPicks,
     onPickFile,
+    onBatch,
     onBack,
     onNext,
   };
   const utils = render(<Step2Camo {...props} />);
-  return { ...utils, onPickFile, onBack, onNext };
+  return { ...utils, onPickFile, onBatch, onBack, onNext };
 }
 
 // Stateful variant — updates `camoPicks` whenever `onPickFile` is
@@ -150,12 +164,14 @@ function renderStep2Stateful(
   });
   const onBack = vi.fn();
   const onNext = vi.fn();
+  const onBatch = vi.fn();
   const utils = render(
     <Step2Camo
       people={args.people ?? people}
       selectedDnIs={args.selectedDnIs ?? new Set(['11111111', '22222222'])}
       camoPicks={camoPicks}
       onPickFile={onPickFile}
+      onBatch={onBatch}
       onBack={onBack}
       onNext={onNext}
     />,
@@ -167,16 +183,24 @@ function renderStep2Stateful(
         selectedDnIs={args.selectedDnIs ?? new Set(['11111111', '22222222'])}
         camoPicks={camoPicks}
         onPickFile={onPickFile}
+        onBatch={onBatch}
         onBack={onBack}
         onNext={onNext}
       />,
     );
   }
-  return { ...utils, onPickFile, onBack, onNext };
+  return { ...utils, onPickFile, onBatch, onBack, onNext };
 }
 
 beforeEach(() => {
   mockFilesModalProps.mockReset();
+  mockAttachAll.mockReset();
+  mockUseAttachAllProyectos.mockReset();
+  mockUseAttachAllProyectos.mockReturnValue({
+    attachAll: mockAttachAll,
+    slotStatus: {},
+    isRunning: false,
+  });
 });
 
 // ================================================================
@@ -355,5 +379,74 @@ describe('Step2Camo — per-ficha slots (S-102.1)', () => {
     renderStep2Stateful({ people: [multi], selectedDnIs: new Set(['11111111']) });
     fireEvent.click(screen.getByTestId('step2-slot-saltar-11111111-0'));
     expect(screen.getByTestId('step2-slot-pick-label-11111111-0')).toHaveTextContent(/Saltado/);
+  });
+});
+
+// ================================================================
+
+describe('Step2Camo — attach-all quick action (REQ-103)', () => {
+  it('renders the quick action only for multi-ficha patients (S-103.3: hidden for single-ficha)', () => {
+    const multi = makeMultiProyectoPerson();
+    renderStep2({
+      people: [multi, people[1] as UnifiedPerson],
+      selectedDnIs: new Set(['11111111', '22222222']),
+    });
+    // Multi-ficha patient: the per-patient quick action exists.
+    expect(screen.getByTestId('step2-attach-all-11111111')).toBeInTheDocument();
+    // Single-ficha patient: NO quick action (per-patient only, no global action).
+    expect(screen.queryByTestId('step2-attach-all-22222222')).not.toBeInTheDocument();
+  });
+
+  it('clicking the quick action runs attachAll for THAT patient only', () => {
+    const multi = makeMultiProyectoPerson();
+    renderStep2({ people: [multi], selectedDnIs: new Set(['11111111']) });
+    fireEvent.click(screen.getByTestId('step2-attach-all-11111111'));
+    expect(mockAttachAll).toHaveBeenCalledTimes(1);
+    expect(mockAttachAll).toHaveBeenCalledWith(
+      expect.objectContaining({ dni: '11111111', nombre: 'Ana López' }),
+    );
+  });
+
+  it('renders per-slot quick-action statuses: pending, applied, ambiguous', () => {
+    mockUseAttachAllProyectos.mockReturnValue({
+      attachAll: mockAttachAll,
+      slotStatus: {
+        '11111111::AT-1': { kind: 'pending' },
+        '11111111::AT-2': { kind: 'applied' },
+        '11111111::AT-3': { kind: 'ambiguous' },
+      },
+      isRunning: false,
+    });
+    const multi = makeMultiProyectoPerson();
+    renderStep2({ people: [multi], selectedDnIs: new Set(['11111111']) });
+    expect(screen.getByTestId('step2-slot-status-11111111-0')).toHaveTextContent('Buscando');
+    expect(screen.getByTestId('step2-slot-status-11111111-1')).toHaveTextContent('Adjuntado');
+    expect(screen.getByTestId('step2-slot-status-11111111-2')).toHaveTextContent('Ambiguo');
+  });
+
+  it('renders a slot error status with its message', () => {
+    mockUseAttachAllProyectos.mockReturnValue({
+      attachAll: mockAttachAll,
+      slotStatus: {
+        '11111111::AT-1': { kind: 'error', message: 'HTTP 500' },
+      },
+      isRunning: false,
+    });
+    const multi = makeMultiProyectoPerson();
+    renderStep2({ people: [multi], selectedDnIs: new Set(['11111111']) });
+    expect(screen.getByTestId('step2-slot-status-11111111-0')).toHaveTextContent('HTTP 500');
+    // Slots without a status render none.
+    expect(screen.queryByTestId('step2-slot-status-11111111-1')).not.toBeInTheDocument();
+  });
+
+  it('disables the quick action while a quick-action run is in flight', () => {
+    mockUseAttachAllProyectos.mockReturnValue({
+      attachAll: mockAttachAll,
+      slotStatus: {},
+      isRunning: true,
+    });
+    const multi = makeMultiProyectoPerson();
+    renderStep2({ people: [multi], selectedDnIs: new Set(['11111111']) });
+    expect(screen.getByTestId('step2-attach-all-11111111')).toBeDisabled();
   });
 });

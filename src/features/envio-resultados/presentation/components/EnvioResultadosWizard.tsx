@@ -122,6 +122,7 @@ export function EnvioResultadosWizard({
     togglePatient,
     setCamo,
     setEmo,
+    setPicksBatch,
     next,
     prev,
     goToStep,
@@ -268,6 +269,7 @@ export function EnvioResultadosWizard({
               selectedDnIs={state.selectedDnIs}
               camoPicks={state.camoPicks}
               onPickFile={setCamo}
+              onBatch={setPicksBatch}
               onBack={prev}
               onNext={next}
             />
@@ -277,6 +279,7 @@ export function EnvioResultadosWizard({
               selectedDnIs={state.selectedDnIs}
               emoPicks={state.emoPicks}
               onPickFile={setEmo}
+              onBatch={setPicksBatch}
               onBack={prev}
               onContinue={next}
             />

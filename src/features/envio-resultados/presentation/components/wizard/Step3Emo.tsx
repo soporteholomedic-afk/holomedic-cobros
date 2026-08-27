@@ -16,6 +16,9 @@
  *
  * Spec coverage:
  *  - REQ-102 — per-ficha slots (S-102.1), legacy single-ficha (S-102.2).
+ *  - REQ-103 — "Adjuntar todos los proyectos" quick action, rendered
+ *    ONLY on multi-ficha cards (S-103.3), with per-slot
+ *    pending/applied/ambiguous/error status (EMO slot kind).
  *  - Legacy REQ-006 — Step 3 EMO (S-010).
  */
 'use client';
@@ -26,7 +29,8 @@ import { useState, type ReactElement } from 'react';
 import { FilesModal } from '@/features/envio-resultados/presentation/components/FilesModal';
 import { normalizeTipoExamen } from '@/features/envio-resultados/domain/ready-files/normalizeTipoExamen';
 import { resolveRucEfectivo } from '@/features/envio-resultados/presentation/utils/resolveRucEfectivo';
-import { pickKey, type WizardFilePick } from '@/features/envio-resultados/presentation/hooks/useEnvioWizard';
+import { pickKey, type WizardBatchPick, type WizardFilePick } from '@/features/envio-resultados/presentation/hooks/useEnvioWizard';
+import { useAttachAllProyectos, type QuickSlotStatus } from '@/features/envio-resultados/presentation/hooks/useAttachAllProyectos';
 import { derivePickSlots } from '@/features/envio-resultados/presentation/helpers/derivePickSlots';
 import type { UnifiedPerson } from '@/types/sp-result';
 
@@ -43,6 +47,12 @@ export interface Step3EmoProps {
    * action. `null` for skip; `{ ref, displayName }` for pick.
    */
   onPickFile: (dni: string, idAten: string, pick: WizardFilePick) => void;
+  /**
+   * Receives the quick action's applied picks for one patient as a
+   * single batch (the shell forwards `setPicksBatch`, i.e. a
+   * `SET_PICKS_BATCH` dispatch).
+   */
+  onBatch: (dni: string, picks: ReadonlyArray<WizardBatchPick>) => void;
   /** Fired by the "Volver" footer button (returns to step 2). */
   onBack: () => void;
   /**
@@ -66,14 +76,34 @@ function pickLabelClass(pick: WizardFilePick | undefined): string {
   return 'text-slate-700 font-medium';
 }
 
+/** Operator-facing text for a quick-action slot status. */
+function quickStatusText(status: QuickSlotStatus): string {
+  switch (status.kind) {
+    case 'pending':
+      return 'Buscando…';
+    case 'applied':
+      return 'Adjuntado';
+    case 'ambiguous':
+      return 'Ambiguo — elegir manualmente';
+    case 'error':
+      return `Error: ${status.message}`;
+  }
+}
+
 export function Step3Emo({
   people,
   selectedDnIs,
   emoPicks,
   onPickFile,
+  onBatch,
   onBack,
   onContinue,
 }: Step3EmoProps): ReactElement {
+  // Quick action "Adjuntar todos los proyectos" (REQ-103): shared
+  // hook instance for the whole step, EMO slot kind — statuses are
+  // keyed by `pickKey(dni, idAten)` so every multi-ficha card reads
+  // its own.
+  const attachAllState = useAttachAllProyectos({ slotKind: 'emo', onBatch });
   // The FilesModal is per-slot. The component only allows one modal
   // open at a time; `activePick` identifies which patient's atención
   // modal is on screen (`null` = no modal).
@@ -190,10 +220,21 @@ export function Step3Emo({
                     </p>
                     <p className="text-xs text-slate-500">DNI {person.dni}</p>
                   </div>
+                  <button
+                    type="button"
+                    onClick={() => attachAllState.attachAll(person)}
+                    disabled={attachAllState.isRunning}
+                    data-testid={`step3-attach-all-${person.dni}`}
+                    className="px-3 py-1.5 rounded-lg text-xs font-semibold border border-sky-200 text-sky-600 hover:bg-sky-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex-shrink-0"
+                  >
+                    Adjuntar todos los proyectos
+                  </button>
                 </div>
                 <ul className="mt-3 space-y-1.5">
                   {slots.map((slot, i) => {
                     const slotPick = emoPicks[slot.key];
+                    const slotStatus: QuickSlotStatus | undefined =
+                      attachAllState.slotStatus[slot.key];
                     return (
                       <li
                         key={slot.key}
@@ -219,6 +260,14 @@ export function Step3Emo({
                             >
                               EMO: {pickLabel(slotPick)}
                             </span>
+                            {slotStatus ? (
+                              <span
+                                data-testid={`step3-slot-status-${person.dni}-${i}`}
+                                className="ml-1 rounded-full bg-slate-100 px-2 py-0.5 text-[11px] text-slate-600"
+                              >
+                                {quickStatusText(slotStatus)}
+                              </span>
+                            ) : null}
                           </div>
                         </div>
                         <div className="flex items-center gap-2 flex-shrink-0">

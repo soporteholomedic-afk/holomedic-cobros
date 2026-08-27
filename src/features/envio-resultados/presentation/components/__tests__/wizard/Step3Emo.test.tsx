@@ -62,6 +62,18 @@ vi.mock('../../FilesModal', () => ({
   },
 }));
 
+// ---- useAttachAllProyectos stub ----
+// The quick-action hook is stubbed at the module boundary so these
+// tests stay focused on Step3Emo's WIRING: button visibility
+// (S-103.3), click pass-through and per-slot status render. The
+// hook's own behavior — listing fan-out, candidate rule, batching —
+// is covered by `useAttachAllProyectos.test.ts`.
+const mockAttachAll = vi.hoisted(() => vi.fn());
+const mockUseAttachAllProyectos = vi.hoisted(() => vi.fn());
+vi.mock('../../../hooks/useAttachAllProyectos', () => ({
+  useAttachAllProyectos: mockUseAttachAllProyectos,
+}));
+
 // ---- Fixtures ----
 
 function makeFicha(overrides: Partial<UnifiedFicha> = {}): UnifiedFicha {
@@ -125,16 +137,18 @@ function renderStep3({
   const onPickFile = vi.fn();
   const onBack = vi.fn();
   const onContinue = vi.fn();
+  const onBatch = vi.fn();
   const props = {
     people: thePeople,
     selectedDnIs,
     emoPicks,
     onPickFile,
+    onBatch,
     onBack,
     onContinue,
   };
   const utils = render(<Step3Emo {...props} />);
-  return { ...utils, onPickFile, onBack, onContinue };
+  return { ...utils, onPickFile, onBatch, onBack, onContinue };
 }
 
 // Stateful variant — updates `emoPicks` whenever `onPickFile` is
@@ -150,12 +164,14 @@ function renderStep3Stateful(
   });
   const onBack = vi.fn();
   const onContinue = vi.fn();
+  const onBatch = vi.fn();
   const utils = render(
     <Step3Emo
       people={args.people ?? people}
       selectedDnIs={args.selectedDnIs ?? new Set(['11111111', '22222222'])}
       emoPicks={emoPicks}
       onPickFile={onPickFile}
+      onBatch={onBatch}
       onBack={onBack}
       onContinue={onContinue}
     />,
@@ -167,16 +183,24 @@ function renderStep3Stateful(
         selectedDnIs={args.selectedDnIs ?? new Set(['11111111', '22222222'])}
         emoPicks={emoPicks}
         onPickFile={onPickFile}
+        onBatch={onBatch}
         onBack={onBack}
         onContinue={onContinue}
       />,
     );
   }
-  return { ...utils, onPickFile, onBack, onContinue };
+  return { ...utils, onPickFile, onBatch, onBack, onContinue };
 }
 
 beforeEach(() => {
   mockFilesModalProps.mockReset();
+  mockAttachAll.mockReset();
+  mockUseAttachAllProyectos.mockReset();
+  mockUseAttachAllProyectos.mockReturnValue({
+    attachAll: mockAttachAll,
+    slotStatus: {},
+    isRunning: false,
+  });
 });
 
 // ================================================================
@@ -326,5 +350,76 @@ describe('Step3Emo — per-ficha slots (S-102.1)', () => {
     expect(screen.getByTestId('step3-slot-pick-label-11111111-1')).toHaveTextContent(/75618561EXPED\.pdf/);
     expect(screen.getByTestId('step3-slot-pick-label-11111111-0')).toHaveTextContent(/Sin seleccionar/);
     expect(screen.getByTestId('step3-slot-pick-label-11111111-2')).toHaveTextContent(/Sin seleccionar/);
+  });
+});
+
+// ================================================================
+
+describe('Step3Emo — attach-all quick action (REQ-103)', () => {
+  it('renders the quick action only for multi-ficha patients (S-103.3: hidden for single-ficha)', () => {
+    const multi = makeMultiProyectoPerson();
+    renderStep3({
+      people: [multi, people[1] as UnifiedPerson],
+      selectedDnIs: new Set(['11111111', '22222222']),
+    });
+    expect(screen.getByTestId('step3-attach-all-11111111')).toBeInTheDocument();
+    expect(screen.queryByTestId('step3-attach-all-22222222')).not.toBeInTheDocument();
+  });
+
+  it('runs the quick action with slotKind "emo" for THAT patient only', () => {
+    const multi = makeMultiProyectoPerson();
+    renderStep3({ people: [multi], selectedDnIs: new Set(['11111111']) });
+    // The EMO step must instantiate the hook for the EMO slot kind
+    // (mirror-drift guard: a copy-paste from Step2 would say 'camo').
+    expect(mockUseAttachAllProyectos).toHaveBeenCalledWith(
+      expect.objectContaining({ slotKind: 'emo' }),
+    );
+    fireEvent.click(screen.getByTestId('step3-attach-all-11111111'));
+    expect(mockAttachAll).toHaveBeenCalledTimes(1);
+    expect(mockAttachAll).toHaveBeenCalledWith(
+      expect.objectContaining({ dni: '11111111', nombre: 'Ana López' }),
+    );
+  });
+
+  it('renders per-slot quick-action statuses: pending, applied, ambiguous', () => {
+    mockUseAttachAllProyectos.mockReturnValue({
+      attachAll: mockAttachAll,
+      slotStatus: {
+        '11111111::AT-1': { kind: 'pending' },
+        '11111111::AT-2': { kind: 'applied' },
+        '11111111::AT-3': { kind: 'ambiguous' },
+      },
+      isRunning: false,
+    });
+    const multi = makeMultiProyectoPerson();
+    renderStep3({ people: [multi], selectedDnIs: new Set(['11111111']) });
+    expect(screen.getByTestId('step3-slot-status-11111111-0')).toHaveTextContent('Buscando');
+    expect(screen.getByTestId('step3-slot-status-11111111-1')).toHaveTextContent('Adjuntado');
+    expect(screen.getByTestId('step3-slot-status-11111111-2')).toHaveTextContent('Ambiguo');
+  });
+
+  it('renders a slot error status with its message', () => {
+    mockUseAttachAllProyectos.mockReturnValue({
+      attachAll: mockAttachAll,
+      slotStatus: {
+        '11111111::AT-1': { kind: 'error', message: 'HTTP 500' },
+      },
+      isRunning: false,
+    });
+    const multi = makeMultiProyectoPerson();
+    renderStep3({ people: [multi], selectedDnIs: new Set(['11111111']) });
+    expect(screen.getByTestId('step3-slot-status-11111111-0')).toHaveTextContent('HTTP 500');
+    expect(screen.queryByTestId('step3-slot-status-11111111-1')).not.toBeInTheDocument();
+  });
+
+  it('disables the quick action while a quick-action run is in flight', () => {
+    mockUseAttachAllProyectos.mockReturnValue({
+      attachAll: mockAttachAll,
+      slotStatus: {},
+      isRunning: true,
+    });
+    const multi = makeMultiProyectoPerson();
+    renderStep3({ people: [multi], selectedDnIs: new Set(['11111111']) });
+    expect(screen.getByTestId('step3-attach-all-11111111')).toBeDisabled();
   });
 });
