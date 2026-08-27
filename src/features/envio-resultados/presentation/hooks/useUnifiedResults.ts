@@ -1,9 +1,10 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import type { SpResultRow, OrderRow, UnifiedPerson, UnifiedFicha } from '@/types/sp-result';
+import type { SpResultRow, OrderRow, UnifiedPerson } from '@/types/sp-result';
 import { normalizeDni } from '@/lib/normalize-dni';
 import { normalizeCondic } from '@/lib/condic';
+import { buildUnifiedFichas } from '../helpers/buildUnifiedFichas';
 
 /**
  * Normalizes FecAte from the SP to `dd/MM/yyyy`.
@@ -117,8 +118,8 @@ export function useUnifiedResults(
           dni: string;
           nombre: string;
           empresa: string;
-          workers: { proyecto: string; tipoExamen: string; condic: string }[];
-          orders: { idAten: string; nroRuc: string; nomCFa: string; fecAte: string }[];
+          workers: { proyecto: string; tipoExamen: string; condic: string; numOrd?: number | string | null }[];
+          orders: { idAten: string; nroRuc: string; nomCFa: string; fecAte: string; numOrd?: number | string | null }[];
         }
 
         const tempMap = new Map<string, TempPerson>();
@@ -161,6 +162,9 @@ export function useUnifiedResults(
               // their original condic. The UI receives a pre-normalized
               // string and never has to re-check 'NULL'.
               condic: normalizeCondic(row.Condic),
+              // Raw NumOrd passes through untouched: buildUnifiedFichas
+              // normalizes keys internally (trim, number|string|null).
+              numOrd: row.NumOrd,
             });
           }
         }
@@ -180,30 +184,20 @@ export function useUnifiedResults(
             // an empty string and the lookup SP guard rejects it with
             // 400 if the operator tries to fetch without a date.
             fecAte: normalizeFecAte(row.FecAte),
+            // Raw NumOrd passes through untouched: buildUnifiedFichas
+            // normalizes keys internally (trim, number|string|null).
+            numOrd: row.NumOrd,
           });
         }
 
         const map = new Map<string, UnifiedPerson>();
 
         for (const [dni, entry] of tempMap.entries()) {
-          const workerCountForFichas = entry.workers.length > 1 ? entry.workers.length : 0;
-          const fichasCount = Math.max(entry.orders.length, workerCountForFichas);
-          const fichas: UnifiedFicha[] = [];
-
-          for (let i = 0; i < fichasCount; i++) {
-            fichas.push({
-              idAten: entry.orders[i]?.idAten ?? '',
-              nroRuc: entry.orders[i]?.nroRuc ?? '',
-              nomCFa: entry.orders[i]?.nomCFa ?? '',
-              proyecto: entry.workers[i]?.proyecto ?? '',
-              tipoExamen: entry.workers[i]?.tipoExamen ?? '',
-              condic: entry.workers[i]?.condic ?? '',
-              // fecAte is sourced from the matching order row. When the
-              // ficha is worker-sourced (no order), it stays `''` and
-              // the lookup SP guard rejects the request.
-              fecAte: entry.orders[i]?.fecAte ?? '',
-            });
-          }
+          // Ficha pairing is delegated to the pure builder (design D1):
+          // NumOrd-keyed claims first, positional fallback second, leftover
+          // orders as pure-order fichas. With no NumOrd keys the output is
+          // byte-identical to the previous inline positional zip.
+          const fichas = buildUnifiedFichas(entry.workers, entry.orders);
 
           const primaryFicha = fichas[0];
 

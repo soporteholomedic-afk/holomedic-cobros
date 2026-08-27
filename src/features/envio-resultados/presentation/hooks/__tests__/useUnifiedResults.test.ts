@@ -530,4 +530,83 @@ describe('useUnifiedResults', () => {
     expect(person.fichas[0].condic).toBe('APTO');
     expect(person.fichas[1].condic).toBe('NO APTO');
   });
+
+  // ---- REQ-101: NumOrd ficha correlation ----
+  // Spec S-101.1: raw NumOrd from BOTH SP feeds must be threaded through both
+  // merge passes; fichas pair by NumOrd (trimmed-string compare, number|string
+  // tolerated) even when the two feeds return rows in shuffled order.
+
+  it('should correlate fichas by raw NumOrd across both merge passes when feeds are shuffled (S-101.1)', async () => {
+    const workerRows: SpResultRow[] = [
+      makeWorkerRow({ NroDId: 'DNI 00250391', Pacien: 'MULTI PROYECTO', DesTCh: 'PERIODICO', DesDes: 'NEXA RESOURCES CAJAMARQUILLA', NomCom: 'MULTI CO', NumOrd: 5 }),
+      makeWorkerRow({ NroDId: 'DNI 00250391', Pacien: 'MULTI PROYECTO', DesTCh: 'PREOCUPACIONAL', DesDes: 'UNACEM', NomCom: 'MULTI CO', NumOrd: 7 }),
+      makeWorkerRow({ NroDId: 'DNI 00250391', Pacien: 'MULTI PROYECTO', DesTCh: 'OCUPACIONAL', DesDes: 'MINSUR', NomCom: 'MULTI CO', NumOrd: 9 }),
+    ];
+    // Shuffled relative to the workers, and mixing number/string/whitespace
+    // NumOrd forms exactly as raw drivers deliver them.
+    const orderRows: OrderRow[] = [
+      makeOrderRow({ IdAten: 'ATE-MIN', NroRuc: '20500000009', NomCFa: 'MINSUR CO', NroDId: '00250391', NumOrd: '9' }),
+      makeOrderRow({ IdAten: 'ATE-NEX', NroRuc: '20500000005', NomCFa: 'NEXA CO', NroDId: '00250391', NumOrd: 5 }),
+      makeOrderRow({ IdAten: 'ATE-UNA', NroRuc: '20500000007', NomCFa: 'UNACEM CO', NroDId: '00250391', NumOrd: ' 7 ' }),
+    ];
+
+    vi.spyOn(globalThis, 'fetch').mockImplementation((input) => {
+      const url = String(input);
+      if (url.includes('/api/consolidados/results_by_companies')) {
+        return Promise.resolve(mockFetchResponse(orderRows));
+      }
+      return Promise.resolve(mockFetchResponse({ companies: [], rows: workerRows }));
+    });
+
+    const { result } = renderHook(() =>
+      useUnifiedResults('MULTI CO', '2026-01-01', '2026-06-30'),
+    );
+
+    await waitFor(() => {
+      expect(result.current.loading).toBe(false);
+    });
+
+    expect(result.current.people).toHaveLength(1);
+    const person = result.current.people[0];
+    expect(person.fichas).toHaveLength(3);
+    // Fichas follow worker-row order; each carries ONLY its own NumOrd's order.
+    expect(person.fichas[0]).toMatchObject({ proyecto: 'NEXA RESOURCES CAJAMARQUILLA', idAten: 'ATE-NEX', nroRuc: '20500000005' });
+    expect(person.fichas[1]).toMatchObject({ proyecto: 'UNACEM', idAten: 'ATE-UNA', nroRuc: '20500000007' });
+    expect(person.fichas[2]).toMatchObject({ proyecto: 'MINSUR', idAten: 'ATE-MIN', nroRuc: '20500000009' });
+  });
+
+  // Spec S-101.2 (through the hook): feeds without NumOrd keep today's
+  // positional zip — worker + first order, second order stays pure-order.
+
+  it('should keep the legacy positional zip when NumOrd is absent from the feeds (S-101.2)', async () => {
+    const workerRows: SpResultRow[] = [
+      makeWorkerRow({ NroDId: 'DNI 00444444', Pacien: 'LEGACY WORKER', DesTCh: 'PERIODICO', DesDes: 'NEXA RESOURCES CAJAMARQUILLA', NomCom: 'LEGACY CO' }),
+    ];
+    const orderRows: OrderRow[] = [
+      makeOrderRow({ IdAten: 'ATE-L1', NroRuc: '20444444441', NomCFa: 'LEGACY CO', NroDId: '00444444' }),
+      makeOrderRow({ IdAten: 'ATE-L2', NroRuc: '20444444442', NomCFa: 'LEGACY CO', NroDId: '00444444' }),
+    ];
+
+    vi.spyOn(globalThis, 'fetch').mockImplementation((input) => {
+      const url = String(input);
+      if (url.includes('/api/consolidados/results_by_companies')) {
+        return Promise.resolve(mockFetchResponse(orderRows));
+      }
+      return Promise.resolve(mockFetchResponse({ companies: [], rows: workerRows }));
+    });
+
+    const { result } = renderHook(() =>
+      useUnifiedResults('LEGACY CO', '2026-01-01', '2026-06-30'),
+    );
+
+    await waitFor(() => {
+      expect(result.current.loading).toBe(false);
+    });
+
+    expect(result.current.people).toHaveLength(1);
+    const person = result.current.people[0];
+    expect(person.fichas).toHaveLength(2);
+    expect(person.fichas[0]).toMatchObject({ proyecto: 'NEXA RESOURCES CAJAMARQUILLA', idAten: 'ATE-L1', nroRuc: '20444444441' });
+    expect(person.fichas[1]).toMatchObject({ proyecto: '', tipoExamen: '', idAten: 'ATE-L2', nroRuc: '20444444442' });
+  });
 });
