@@ -45,13 +45,13 @@ Legend: `[Q-Rn]` = valoraciones-sigla-query req n · `[E-Rn]` = valoraciones-exp
 
 ## Slice 2 (PR 2): Consolidado + PDF/Excel Exports
 
-- [ ] 2.0 SPIKE (first in slice): multi-page pagination on `EdgePrinter` — `displayHeaderFooter` + `footerTemplate` page numbering over `@page{size:A4}` breaks; validate or adopt D6 fallback (per-group in-flow footer); record outcome before 2.1 `[E-R2|D6]`
-- [ ] 2.1 Additive optional `overrides` on `PdfPrinter.print(html, overrides?)` (`musculoesqueletica-pdf/domain/entities.ts`) and `EdgePrinter` (`edgePrinter.ts`: displayHeaderFooter, footerTemplate, margins); existing musculoesqueletica caller unchanged; extend `edgePrinter.test.ts` `[E-R1|E-R2|D6]`
-- [ ] 2.2 `valoraciones/domain/consolidado.ts`: consolidado types + pure `aplicarAjusteAdicionales` (preocupacional `VVtaMn -= ValVta`; adicionales replace; `VImpMn -= ValImp`) + per-destino SubTotal/IGV/Total; RED: fixtures + parity case vs SIGLA (`RptFacturacionForm.cs` 144–291) `[Q-R6]`
-- [ ] 2.3 `SiglaValoracionesRepository`: exported `CONSOLIDADO_BINDS` (drops `pCodCFa/pCodMon/pInFsta`), `SP_RPT_CONSOLIDADOFACTURACION` + Adicionales SP execution, mappers; RED: mocked pool typed-input assertions `[Q-R6|D2]`
-- [ ] 2.4 UI: enable Consolidado checkbox when client selected (clearing resets destinos + consolidado), consolidado table mode, moneda column switch; RED: client→destinos+consolidado flow `[Q-R5|Q-R6]`
-- [ ] 2.5 Create `valoraciones/infrastructure/pdf/template.ts` (pure `buildValoracionHtml`: membrete data-URI, client/RUC/period/moneda/emission header, per-group SubTotal Σ VVta round2, IGV 18%, Total, row `Simbol`, `@page A4`), `HtmlValoracionPdfPrinter` + printer factory seam, `POST /api/valoraciones/pdf` re-querying from posted filter DTO; RED: injected fake `PdfPrinter`; `EdgeUnavailableError` → 502 no stack `[E-R1|E-R2|D4]`
-- [ ] 2.6 Create `valoraciones/infrastructure/excel/formato35.ts` (exact 30-column header fixture) + `POST /api/valoraciones/excel` re-query → `.xlsx` with download `Content-Disposition`; RED: header-row equality `[E-R3]`
+- [x] 2.0 SPIKE (first in slice): multi-page pagination on `EdgePrinter` — `displayHeaderFooter` + `footerTemplate` page numbering over `@page{size:A4}` breaks; validate or adopt D6 fallback (per-group in-flow footer); record outcome before 2.1 `[E-R2|D6]` — **ADOPTED** (`spike-2-0-pagination.md`)
+- [x] 2.1 Additive optional `overrides` on `PdfPrinter.print(html, overrides?)` (`musculoesqueletica-pdf/domain/entities.ts`) and `EdgePrinter` (`edgePrinter.ts`: displayHeaderFooter, footerTemplate, margins); existing musculoesqueletica caller unchanged; extend `edgePrinter.test.ts` `[E-R1|E-R2|D6]`
+- [x] 2.2 `valoraciones/domain/consolidado.ts`: consolidado types + pure `aplicarAjusteAdicionales` (preocupacional `VVtaMn -= ValVta`; adicionales replace; `VImpMn -= ValImp`) + per-destino SubTotal/IGV/Total; RED: fixtures + parity case vs SIGLA (`RptFacturacionForm.cs` 144–291) `[Q-R6]`
+- [x] 2.3 `SiglaValoracionesRepository`: exported `CONSOLIDADO_BINDS` (drops `pCodCFa/pCodMon/pInFsta`), `SP_RPT_CONSOLIDADOFACTURACION` + Adicionales SP execution, mappers; RED: mocked pool typed-input assertions `[Q-R6|D2]`
+- [x] 2.4 UI: enable Consolidado checkbox when client selected (clearing resets destinos + consolidado), consolidado table mode, moneda column switch; RED: client→destinos+consolidado flow `[Q-R5|Q-R6]`
+- [x] 2.5 Create `valoraciones/infrastructure/pdf/template.ts` (pure `buildValoracionHtml`: membrete data-URI, client/RUC/period/moneda/emission header, per-group SubTotal Σ VVta round2, IGV 18%, Total, row `Simbol`, `@page A4`), `HtmlValoracionPdfPrinter` + printer factory seam, `POST /api/valoraciones/pdf` re-querying from posted filter DTO; RED: injected fake `PdfPrinter`; `EdgeUnavailableError` → 502 no stack `[E-R1|E-R2|D4]`
+- [x] 2.6 Create `valoraciones/infrastructure/excel/formato35.ts` (exact 30-column header fixture) + `POST /api/valoraciones/excel` re-query → `.xlsx` with download `Content-Disposition`; RED: header-row equality `[E-R3]`
 
 ## Slice 3 (PR 3): Email & Plantillas
 

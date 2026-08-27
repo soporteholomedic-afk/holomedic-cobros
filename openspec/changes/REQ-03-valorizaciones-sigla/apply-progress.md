@@ -1,7 +1,7 @@
 # Apply Progress — REQ-03-valorizaciones-sigla
 
-**Work units**: U1 (S1 backend, tasks 1.0–1.6) + U2 (S1 UI + CSV retirement, tasks 1.7–1.8) — **S1 complete** · **Mode**: Standard (per-task RED-first as ordered by tasks.md) · **Date**: 2026-08-27
-**Delivery**: 3 chained PRs (S1/S2/S3), feature-branch-chain — tracker `feature/valoraciones-sigla-req03` (from `develop`), work branch `feature/valoraciones-sigla-s1`. PR 1 (S1) = U1 + U2, head `feature/valoraciones-sigla-s1` → base tracker.
+**Work units**: U1 (S1 backend, tasks 1.0–1.6) + U2 (S1 UI + CSV retirement, tasks 1.7–1.8) — **S1 complete** · U3 (S2 consolidado + exports, tasks 2.0–2.6) — **S2 complete** · **Mode**: Standard (per-task RED-first as ordered by tasks.md) · **Date**: 2026-08-27
+**Delivery**: 3 chained PRs (S1/S2/S3), feature-branch-chain — tracker `feature/valoraciones-sigla-req03` (from `develop`), work branches `feature/valoraciones-sigla-s1` (PR 1 = U1+U2) and `feature/valoraciones-sigla-s2` (PR 2 = U3, base = s1).
 
 ## Completed Tasks
 
@@ -19,6 +19,25 @@
 
 - [x] 1.7 UI rewrite: `src/app/valoraciones/page.tsx` (`"use client"`, hooks-only data) + `presentation/hooks/` (`useValoracionesFilters` useReducer with client→destinos reset, `useValoraciones` stale-guarded query + derived moneda-aware groups, `useLookup` debounced/gated) + `presentation/components/` (`FiltersPanel` 11 controls, `ClienteAutocomplete`, `PacienteAutocomplete`, `EmpresaList` adapted from CompanyList, `EmpresaDetailModal`) + `presentation/helpers/format.ts` (`dd/MM/yyyy`, es-PE montos, today ISO). Periodo defaults today; consolidado checkbox DISABLED (slice 1); IndFac tri-state default "No Facturados"; moneda switches MN/MO columns via the query's `codMon` `[Q-R5|Q-R6]`
 - [x] 1.8 CSV retirement: deleted `src/app/api/valoraciones/generate/**` (route + 11 tests), `src/utils/valoracionesCore.ts`, `src/utils/valoraciones.ts`, `src/utils/__tests__/valoraciones.test.ts`, `src/components/CompanyList.tsx`, `src/components/CompanyDetailModal.tsx` + both component tests `[Q-R8]`
+
+### U3 (S2 consolidado + PDF/Excel exports) — tasks 2.0–2.6
+
+- [x] 2.0 SPIKE — **footerTemplate ADOPTED** (outcome recorded durably in `spike-2-0-pagination.md`, committed with 2.1): real-Edge render of a 4-page `@page{size:A4}` document proved `displayHeaderFooter` + `footerTemplate` paint on EVERY page (page-number glyph increments 1→4; last-page number == totalPages glyph) with exact A4 sizes. Requirements learned: non-zero pdf() bottom margin (14mm) + explicit `font-size` in templates. D6 fallback NOT needed.
+- [x] 2.1 `PdfPrintOverrides` (`displayHeaderFooter/headerTemplate/footerTemplate/margin`) added additively to `PdfPrinter.print(html, overrides?)` + `EdgePrinter`; musculoesqueletica callers unchanged (`edgePrinter.test.ts` 13/13; whole musculoesqueletica feature 88/88)
+- [x] 2.2 `domain/consolidado.ts`: `ConsolidadoRow`/`ConsolidadoAdicional` (exact SP casing), `IDE_TCH_PREOCUPACIONAL = 510001` / `IDE_TCH_ADICIONALES = 510011` (verified in `Entidad/Constante.cs`), pure `aplicarAjusteAdicionales` (start round2 → preocupacional subtracts / adicionales REPLACES from original / importe always subtracts → round2; adicionales appended unconditionally, C# 186–207) + `consolidarPorDestino` (round2 Σ, IGV 18%, null-destino excluded — C# 242–262). 8/8 tests incl. hand-computed parity case vs `RptFacturacionForm.cs` 144–291
+- [x] 2.3 `CONSOLIDADO_BINDS` (8 binds — drops CodCFa/CodMon/InFSTA) + `buscarConsolidado` executing BOTH SPs with identical binds + `rowToConsolidado`/`rowToConsolidadoAdicional`; **live-DB probe found the SPs DO NOT EXIST** (see SP access findings); 14/14 repository tests on fake pools
+- [x] 2.4 UI: `SET_CONSOLIDADO` reducer action (client-gated; clearing client resets consolidado+destino, switching keeps it — spec Q-R5 letter), FiltersPanel checkbox enabled-with-client, `useConsolidado` hook + `ConsolidadoTable` (SIGLA-style per-destino SubTotal/IGV/Total rows), sigla route `?consolidado=true` branch (client gate BEFORE pool work; ajuste applied server-side so table and exports share one truth), page mode-switch via `modoConsulta`
+- [x] 2.5 PDF: `pdf/template.ts` (pure `buildValoracionHtml`: membrete logo data-URI + HOLOMEDIC SERVICIOS INTEGRALES S.A.C. / RUC 20556200328 from `paymentInfo.ts`, client/RUC header via new `buscarClientePorCodigo`, period/moneda/emission, destino-grouped tables w/ SubTotal·IGV·Total + row `Simbol`, `@page A4`, HTML-escaped), `HtmlValoracionPdfPrinter` (footer overrides by default) + `getValoracionesPdfPrinter` seam, `POST /api/valoraciones/pdf` (D4 re-query; `EdgeUnavailableError`→502 no-stack; user-safe 500); UI "Descargar PDF" via `useExportarValoraciones('pdf')`
+- [x] 2.6 Excel: `excel/formato35.ts` (`FORMATO_35_HEADER` exact 30 columns; moneda-aware total `round2(ventaPorMoneda)`; nulls→''; hyphens preserved — documented improvement over SIGLA's CSV hyphen-strip), shared `domain/parseFiltroDto.ts` (extracted from pdf route), `POST /api/valoraciones/excel` (.xlsx attachment); UI "Descargar Excel" button
+
+## SP Access Findings — Consolidado Probe (task 2.3 preflight, 2026-08-27)
+
+Probe script `%LOCALAPPDATA%\Temp\opencode\probe-2-3-consolidado.js` (explorar_datos via `HOLOMEDIC_DB_*`, read-only):
+
+1. **`SP_RPT_CONSOLIDADOFACTURACION` and `SP_RPT_CONSOLIDADOFACTURACION_ADICIONALES` DO NOT EXIST in the live SIGLA DB** (172.16.10.14): `sys.parameters` returns zero rows for both; `EXEC` fails with **"Could not find stored procedure"** (an absence error, NOT a permission denial — distinct from S1's `EXECUTE permission denied` on `SP_RPT_REPFACTURACION`). `sys.objects` search for `%ConsolidadoFact%` → 0 matches (1,666 procedures total).
+2. Response per orchestrator authority: repository implemented to the **C#-reader-verified contract** (`InformesD.ConsolidadoFacturacionD`/`...AdicionalesD`: param names follow the sibling SP's verified no-prefix convention; result columns `CodCli, NomCom, CodDes?, DesDes, IdeTCh?, DesTCh, CanEva, VImpMN/MO, VVtaMN/MO` + adicionales `NomSer, ValImp, ValVta`), unit tests on fake rows. **No live findings were fabricated.**
+3. **OPS ACTION (blocks consolidado at runtime)**: deploy both SPs to SIGLA (or provide equivalents) AND grant EXECUTE on all three SPs (`SP_RPT_REPFACTURACION`, both consolidado SPs) to `explorar_datos`. Until then `GET /api/valoraciones/sigla?consolidado=true` returns the user-safe 500 (route test covers exactly this shape).
+4. Detail-mode SP (`SP_RPT_REPFACTURACION`) grant from S1 remains pending too — the whole `/sigla` surface is grant-gated at runtime.
 
 ## Bind Corrections from Smoke Test (1.0 → 1.3)
 
@@ -79,6 +98,29 @@
 - Grep `valoracionesCore|CompanyList|CompanyDetailModal|utils/valoraciones` over `src/` → **0 matches**.
 - `pnpm tsc --noEmit` clean → no dangling imports.
 
+### U3
+
+| Command | Result |
+|---|---|
+| Spike (temp scripts, real Edge) | 4-page `@page{size:A4}` render: all pages A4 (595.3×841.9pt), footer painted on every page (+363 content chars/page), pageNumber glyphs `0014→0017`, page-4 number == totalPages glyph → **footerTemplate ADOPTED** |
+| `pnpm vitest run src/features/musculoesqueletica-pdf` (2.1 blast radius) | 12 files, **88/88 passed** (edgePrinter 13 incl. 3 new overrides tests) |
+| `pnpm vitest run src/features/valoraciones/domain/__tests__/consolidado.test.ts` | 8/8 passed (SIGLA parity case, replace-vs-subtract, null-destino match, rounding) |
+| `pnpm vitest run src/features/valoraciones/infrastructure/sqlserver/__tests__/SiglaValoracionesRepository.test.ts` | 14/14 passed (CONSOLIDADO_BINDS freeze, dual-SP typed binds, dropped CodMon/CodCFa/InFSTA, NULL mapping) |
+| `pnpm vitest run src/features/valoraciones src/app/api/valoraciones/sigla src/app/valoraciones` (2.4) | 10 files, **68/68 passed** (route consolidado branch incl. ajuste+totales end-to-end on fake rows; page client→destinos+consolidado flow) |
+| `pnpm vitest run src/app/api/valoraciones/pdf src/features/valoraciones/infrastructure/pdf` (2.5) | 3 files, 16/16 passed (template membrete/groups/A4/escaping, printer overrides delegation, route 200/400/502/500) |
+| `pnpm vitest run src/features/valoraciones/infrastructure/pdf/__tests__/realEdgeHarness.test.ts` | **1/1 passed with REAL Edge** — production template through `HtmlValoracionPdfPrinter(new EdgePrinter())`: >1 page, all A4, distinct page numbers 1..N, last == total |
+| `pnpm vitest run src/features/valoraciones/infrastructure/excel` (2.6) | 6/6 passed (exact 30-column header equality, row mapping, moneda-aware total, NULL→'', xlsx round-trip) |
+| `pnpm vitest run src/app/api/valoraciones src/features/valoraciones src/app/valoraciones` (U3 aggregate) | **22 files, 146/146 passed** |
+| `pnpm eslint <all U3 modified files>` / `pnpm tsc --noEmit` | clean |
+
+### Work Unit Evidence — U3
+
+| Evidence | Value |
+|---|---|
+| Focused test command + result | `pnpm vitest run src/app/api/valoraciones src/features/valoraciones src/app/valoraciones` → 22 files / 146 tests passed |
+| Runtime harness | TWO live harnesses: (a) spike-2.0 temp scripts rendered a real 4-page Edge PDF proving footerTemplate pagination (adopted); (b) committed `realEdgeHarness.test.ts` (skipIf-no-Edge, musculoesqueletica pdfProof precedent) renders the PRODUCTION template through the real EdgePrinter: multi-page A4 + live footer numbering proven. Live `/api/valoraciones/pdf`-route SP re-query requires the same EXECUTE grant as `/sigla` (pending); route contract covered by seam-injected fakes. |
+| Rollback boundary | `git revert 904d63c..a10c4aa` (or delete `valoraciones/domain/consolidado.ts` + `parseFiltroDto.ts`, `valoraciones/infrastructure/{pdf,excel}/**`, the consolidado additions in repository/ports/sigla-route/filters/UI, and the `PdfPrintOverrides` additions). S1 detail flow + musculoesqueletica PDF work with or without this slice. |
+
 ## Commits (work branch `feature/valoraciones-sigla-s1`, base: develop `a35eb83`)
 
 ### U1 (backend)
@@ -100,6 +142,19 @@
 | `6181eb0` | feat(valoraciones): add realtime SIGLA filter panel and results UI |
 | `7fc888f` | refactor(valoraciones): retire legacy CSV upload flow and generate endpoint |
 
+## Commits (work branch `feature/valoraciones-sigla-s2`, base: `feature/valoraciones-sigla-s1` @ `f83674c`)
+
+### U3 (consolidado + exports)
+
+| Hash | Message |
+|---|---|
+| `904d63c` | feat(valoraciones): add header/footer overrides to EdgePrinter port (+ spike outcome doc) |
+| `c54c6f3` | feat(valoraciones): add consolidado ajuste domain with SIGLA parity tests |
+| `7ffb64f` | feat(valoraciones): add consolidado SP repository with C#-verified binds |
+| `cc6df7e` | feat(valoraciones): enable client-gated consolidado mode in results view |
+| `0780994` | feat(valoraciones): add membretado A4 PDF export with footer page numbering |
+| `a10c4aa` | feat(valoraciones): add Formato 35 xlsx export with 30-column header |
+
 ## Changed Lines
 
 | Unit | Diff (combined, vs previous unit) | Files |
@@ -108,6 +163,11 @@
 | U1 docs (`5a04f46`) | +844 (openspec artifacts only — not code review load) | 9 |
 | U2 (`5a04f46..7fc888f`) | **+2,155 / −2,538** (~1,050 test lines; deletions are the CSV flow + legacy upload page) | 25 |
 | **PR 1 total** (`a35eb83..7fc888f`) | **+5,136 / −2,539** | 52 |
+| U3 code (`f83674c..a10c4aa`, src only) | **+3,268 / −55** (~1,300 test lines traveling with the units) | 36 |
+| U3 docs (spike outcome doc) | +53 (openspec artifact — not code review load) | 1 |
+| **PR 2 code total** (`f83674c..a10c4aa`) | **+3,268 / −55 = 3,323 churn** (≤3,500 attempt budget ✓, 95%) | 36 |
+
+> U3 churn vs the ≤3,500 native-attempt budget: 3,323 code churn + 53 spike-doc lines = 3,376 before wrap-up docs (tasks.md checkoffs + this progress merge add ~140 doc lines — openspec artifacts, not review load; total incl. docs ≈ 3,516, flagged for transparency).
 
 > U1 figure corrected from the earlier "~1,740/17" note — validator-confirmed actual is 2,137 insertions across 18 files.
 > U2 authored insertions (2,155) exceed the ≤1,600 guidance by ~35%: production code is ~1,100 lines, the rest is the RED/verification suites kept with the work units per work-unit-commits. Deletions are mechanical legacy removal. Flagged to the orchestrator for the PR-1 review-budget note.
@@ -125,15 +185,28 @@ U2:
 - Moneda column switching is implemented as "amounts derive from the executed query's `codMon`" (re-query on moneda change) rather than client-side column toggling — the SP filters by `CodMon`, so the other currency's rows are not in the result set.
 - Consolidado: state field + disabled checkbox render exist (slice-2 enable point); no reducer setter yet.
 
+U3:
+- **Consolidado SPs absent from the live DB** (probe finding) — binds frozen from the C# reader + sibling-SP naming convention instead of `sys.parameters`; re-verify once ops deploys (comment on `CONSOLIDADO_BINDS`).
+- Consolidado amounts are MN-only (soles), matching SIGLA's consolidado report tables (which drop `@CodMon`); the consolidado UI table hardcodes `s/.`.
+- Consolidado ajuste rounds each fila to 2 decimals at creation (SIGLA keeps full precision until the DataTable write, then rounds again for display while totals sum the unrounded list — sub-cent identical for 2-decimal currency data; documented on `aplicarAjusteAdicionales`).
+- Consolidado checkbox keeps its checked state when SWITCHING clients (spec Q-R5 letter: "clearing resets both"); SIGLA only disables on clear.
+- PDF groups by DESTINO (`agruparPorDestino`) per E-R2 scenario wording ("rows spanning two destinos"); SIGLA's own print branch is a flat table — the grouped layout is the spec's explicit requirement.
+- Excel `total` column is moneda-aware (`ventaPorMoneda` + round2) instead of SIGLA's raw `VVtaMo`; hyphens preserved in DNIs (SIGLA's CSV stripped ALL hyphens — destructive); NULL dates → '' (SIGLA's '-' placeholder was itself stripped to '' by its global hyphen-removal, so '' is the faithful contract).
+- Membrete address/phone are optional and currently empty (no system of record in the repo carries them — name+RUC sourced from `paymentInfo.ts`); template renders them only when provided.
+- Consolidado route branch lives on `GET /api/valoraciones/sigla?consolidado=true` (single protected surface; Q-R6's "call SP_RPT_CONSOLIDADOFACTURACION" honored via `buscarConsolidado`) rather than a new route.
+
 ## Issues / Risks
 
-1. **OPS BLOCKER (runtime)**: `GRANT EXECUTE ON dbo.SP_RPT_REPFACTURACION TO explorar_datos` (+ `SP_RPT_CONSOLIDADOFACTURACION` before S2) required — today the login has VIEW DEFINITION + table SELECT but EXECUTE denied on all SPs. The route returns a user-safe 500 until granted; the UI surfaces it in the results panel.
+1. **OPS BLOCKER (runtime, WORSENED by U3 probe)**: S1 needs `GRANT EXECUTE ON dbo.SP_RPT_REPFACTURACION TO explorar_datos`; U3 additionally found that **`SP_RPT_CONSOLIDADOFACTURACION` + `_ADICIONALES` are NOT DEPLOYED** on 172.16.10.14 — ops must deploy both SPs (source exists only in the SIGLA C# workspace's caller; ask the SIGLA DBA for the production SP script) and grant EXECUTE on all three. Detail queries, consolidado queries AND both export routes (which re-query) all surface user-safe 500s until then.
 2. `.env.local` has `DB_USER=sa` — the D1 guard refuses the `DB_*` fallback until `SIGLA_RO_*` (or a non-sa `DB_USER`) is configured; deployment must point to `explorar_datos`.
 3. Registering `/api/valoraciones` also closed the previously-public `/api/valoraciones/generate` (now deleted — Q-R8). Deploy note: confirm no scripted consumers before merge (proposal OQ-6).
 4. Stale `.next/dev/types/validator.ts` (from an old dev run) referenced the deleted route — removed locally; a fresh `pnpm dev` regenerates types.
+5. **Consolidado bind names are convention-derived** (sibling-SP no-prefix pattern), not `sys.parameters`-verified — the SPs don't exist to verify against. First live consolidado run after deployment should confirm; a mismatch surfaces as a clear mssql parameter error (user-safe 500), and the fix is a one-line `CONSOLIDADO_BINDS` edit.
+6. `realEdgeHarness.test.ts` silently skips on hosts without Edge (CI) — pagination is proven only on Edge-bearing machines (deployment target has Edge; musculoesqueletica precedent).
+7. PDF/Excel exports re-query with the CURRENT filter (D4) — exporting in consolidado mode still exports the DETAIL dataset (exports are detail-format per E-R1/E-R3; consolidado-specific export is not specified).
 
 ## Remaining
 
 - S1 (U1+U2) **complete** → PR 1 open (head `feature/valoraciones-sigla-s1` → base `feature/valoraciones-sigla-req03`). Do NOT merge until reviewed.
-- [ ] U3 (S2, PR 2): tasks 2.0–2.6 — consolidado (checkbox enable + consolidado table mode), PDF/Excel exports, EdgePrinter overrides spike
-- [ ] U4 (S3, PR 3): tasks 3.1–3.5 — email + plantillas integration
+- S2 (U3) **complete** → PR 2 (head `feature/valoraciones-sigla-s2` → base `feature/valoraciones-sigla-s1`).
+- [ ] U4 (S3, PR 3): tasks 3.1–3.5 — email + plantillas integration (`VALORIZACIONES_CONFIG`, token resolvers, contactos route, send route, EnviarValoracionesModal)
