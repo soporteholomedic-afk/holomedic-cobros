@@ -43,23 +43,9 @@ export interface EmailControlsPanelProps {
 }
 
 /**
- * Generic over the signature field key so consumers can keep their
- * domain key unions (e.g. `keyof SignatureData`) without widening
- * their change handlers. The default instantiation is the plain
- * string-keyed contract.
- */
-export interface SignatureEditorProps<K extends string = string> {
-  fields: { key: K; label: string }[];
-  /** Nullable/absent values render as empty inputs (callers with optional fields). */
-  values: Readonly<Record<K, string | null | undefined>>;
-  onChange: (key: K, value: string) => void;
-}
-
-/**
  * Controlled preview/edit body field. The consumer owns the editing
  * state and the lazy WYSIWYG editor element (injected through
- * `editorSlot` so each consumer keeps its own lazy import seam),
- * plus the structured signature composition (`signatureSlot`).
+ * `editorSlot` so each consumer keeps its own lazy import seam).
  */
 export interface EmailBodyFieldProps {
   html: string;

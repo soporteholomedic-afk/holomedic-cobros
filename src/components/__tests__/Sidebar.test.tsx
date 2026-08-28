@@ -35,6 +35,17 @@ const adminUser: AuthUser = {
   activo: true,
 };
 
+// editor-firmas PR3 (task 3.7): the "Mi firma" entry is gated by the
+// `firma_correo` permiso alone — NOT by `admin` nor `plantillas`.
+const firmaUser: AuthUser = {
+  idUsuario: 'u-firma',
+  usuario: 'jfirma',
+  nombre: 'Julián Firma',
+  area: 'Cobranza',
+  permisos: ['firma_correo'],
+  activo: true,
+};
+
 function mockAuthMe(user: AuthUser | null): void {
   global.fetch = vi.fn().mockImplementation((url: string) =>
     url === '/api/auth/me'
@@ -144,6 +155,31 @@ describe('Sidebar Component', () => {
     renderSidebar();
     expect(await screen.findByText('Ana Cobranza')).toBeInTheDocument();
     expect(screen.queryByText('Usuarios')).not.toBeInTheDocument();
+  });
+
+  // editor-firmas PR3 — task 3.7: "Mi firma" → /admin/plantillas/firma
+  describe('Mi firma entry (permiso firma_correo)', () => {
+    it('debe mostrar "Mi firma" para un usuario con permiso firma_correo y enlazar a /admin/plantillas/firma', async () => {
+      mockAuthMe(firmaUser);
+      renderSidebar();
+      expect(await screen.findByText('Julián Firma')).toBeInTheDocument();
+
+      const link = screen.getByText('Mi firma').closest('a');
+      expect(link).toHaveAttribute('href', '/admin/plantillas/firma');
+    });
+
+    it('debe ocultar "Mi firma" para un usuario sin permiso firma_correo', async () => {
+      renderSidebar();
+      expect(await screen.findByText('Ana Cobranza')).toBeInTheDocument();
+      expect(screen.queryByText('Mi firma')).not.toBeInTheDocument();
+    });
+
+    it('debe ocultar "Mi firma" incluso para un admin sin permiso firma_correo', async () => {
+      mockAuthMe(adminUser);
+      renderSidebar();
+      expect(await screen.findByText('Admin General')).toBeInTheDocument();
+      expect(screen.queryByText('Mi firma')).not.toBeInTheDocument();
+    });
   });
 
   describe('AreasMenuItem dropdown', () => {

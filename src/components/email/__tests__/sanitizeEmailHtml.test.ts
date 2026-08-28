@@ -79,8 +79,9 @@ describe('sanitizeEmailHtml', () => {
   });
 
   it('preserves signature-shaped table markup (nested rows, images, mailto)', () => {
-    // Mirrors the shape of buildSignatureHtml output: a two-cell table
-    // with inline styles, a logo image, a mailto link and social icons.
+    // Mirrors the shape of a persisted email-signature block: a two-cell
+    // table with inline styles, a logo image, a mailto link and social
+    // icons (the composed firma travels inline in dispatched bodies).
     const signature = [
       '<table cellpadding="0" cellspacing="0" style="border-collapse: collapse; font-family: Arial, sans-serif;">',
       '<tr>',

@@ -5,6 +5,7 @@ export const PERMISOS = [
   'valoraciones',
   'envio_resultados',
   'plantillas',
+  'firma_correo',
   'generar_pdfs',
   'informes',
   'pacientes',

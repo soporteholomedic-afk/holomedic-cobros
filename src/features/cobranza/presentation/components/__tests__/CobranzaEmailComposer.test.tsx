@@ -2,48 +2,34 @@
  * CobranzaEmailComposer behavioral suite (envio-correos-facturacion
  * Unit 2, tasks 2.2/2.3) — ports the EmailComposerModal cases (guards,
  * confirm, retry, directory persist, success animation) onto the shared
- * two-panel module, and pins the NEW spec behaviors: structured
- * signature re-append (firma never baked into interpolation), local
- * attachments dispatched as repeated FormData parts, and the ≤10
+ * two-panel module, and pins the NEW spec behaviors: the server-composed
+ * signature interpolated inline at {{firma}} (editor-firmas PR4),
+ * local attachments dispatched as repeated FormData parts, and the ≤10
  * recipients guard (cobranza-envio MODIFIED scenarios).
  *
- * Mocks: SpitchSelector + useAuth at the module boundary; the lazy
- * BlockNote editor stubbed (module behavior covered in Unit 1); fetch
- * routed per-endpoint so call ORDER and payloads are assertable.
+ * Mocks: SpitchSelector at the module boundary; the lazy BlockNote
+ * editor stubbed (module behavior covered in Unit 1); fetch routed
+ * per-endpoint so call ORDER and payloads are assertable.
  */
 import React from 'react';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { CobranzaEmailComposer } from '../CobranzaEmailComposer';
 import { mockClients } from '@/utils/__tests__/mockData';
 import type { ClienteGroup } from '@/types';
 
-// MOCK_USER identity is held stable across renders via vi.hoisted — the
-// real AuthProvider returns a stable user reference, and the composer's
-// late-auth re-seed effect depends on [user] (EmailEditor precedent); a
-// fresh object per render would loop the effect forever.
-const { SAMPLE_SPITCH, MOCK_USER } = vi.hoisted(() => ({
-  SAMPLE_SPITCH: {
-    id: 'tpl-cob-1',
-    area: 'cobranza',
-    type: 'company',
-    name: 'Recordatorio de pago',
-    subject: 'Recordatorio {{empresa}} — deuda {{montoTotal}}',
-    bodyHtml:
-      '<p>Estimados {{empresa}},</p>' +
-      '<p>RUC {{ruc}} — saldo {{montoTotal}} {{moneda}}, vencido {{diasVencidos}} días.</p>' +
-      '{{tabla:documentosPendientes:fecha,factura,monto,saldo}}' +
-      '<div>{{cuentasBancarias}}</div>' +
-      '<div>{{firma}}</div>',
-  },
-  MOCK_USER: {
-    idUsuario: '1',
-    usuario: 'mperez',
-    nombre: 'María Pérez',
-    area: 'consolidados',
-    permisos: ['cobranza'],
-    activo: true,
-  },
+const SAMPLE_SPITCH = vi.hoisted(() => ({
+  id: 'tpl-cob-1',
+  area: 'cobranza',
+  type: 'company',
+  name: 'Recordatorio de pago',
+  subject: 'Recordatorio {{empresa}} — deuda {{montoTotal}}',
+  bodyHtml:
+    '<p>Estimados {{empresa}},</p>' +
+    '<p>RUC {{ruc}} — saldo {{montoTotal}} {{moneda}}, vencido {{diasVencidos}} días.</p>' +
+    '{{tabla:documentosPendientes:fecha,factura,monto,saldo}}' +
+    '<div>{{cuentasBancarias}}</div>' +
+    '<div>{{firma}}</div>',
 }));
 
 vi.mock('@/features/envio-resultados/presentation/components/SpitchSelector', () => ({
@@ -62,16 +48,6 @@ vi.mock('@/features/envio-resultados/presentation/components/SpitchSelector', ()
       </button>
     </div>
   ),
-}));
-
-vi.mock('@/features/auth/presentation/hooks/useAuth', () => ({
-  useAuth: () => ({
-    user: MOCK_USER,
-    loading: false,
-    login: async () => {},
-    logout: async () => {},
-    refresh: async () => {},
-  }),
 }));
 
 vi.mock('@/components/email/EmailBodyEditor', () => ({
@@ -106,6 +82,8 @@ function jsonResponse(body: unknown, ok = true, status = 200): Response {
 interface RouterOptions {
   get?: RouteResponse;
   put?: RouteResponse;
+  /** GET /api/plantillas/firma (own composed signature, editor-firmas PR4). */
+  firma?: RouteResponse;
   /** Sequenced POST outcomes; the last one repeats. */
   postResults?: RouteResponse[];
   /** POST never settles (spinner test). */
@@ -114,15 +92,23 @@ interface RouterOptions {
   postRejects?: boolean;
 }
 
+const COMPOSED_FIRMA = '<table><tr><td>Dra. Firma Guardada</td></tr></table>';
+
 function stubFetchRouter(options: RouterOptions = {}) {
   const get = options.get ?? { body: { success: true, contacto: null } };
   const put = options.put ?? { body: { success: true, contacto: STORED_CONTACT } };
+  const firma = options.firma ?? {
+    body: { success: true, firma: null, firmaHtml: '' },
+  };
   const postResults = options.postResults ?? [{ body: { success: true } }];
   let postCall = 0;
 
   const fetchMock = vi.fn((input: unknown, init?: RequestInit) => {
     const url = String(input);
     const method = init?.method ?? 'GET';
+    if (url === '/api/plantillas/firma') {
+      return Promise.resolve(jsonResponse(firma.body, firma.ok, firma.status));
+    }
     if (url.startsWith('/api/cobranza/contactos')) {
       if (method === 'PUT') {
         return Promise.resolve(jsonResponse(put.body, put.ok, put.status));
@@ -277,10 +263,15 @@ describe('CobranzaEmailComposer', () => {
     expect(selector.getAttribute('data-target')).toBe('company');
   });
 
-  it('al seleccionar plantilla interpola en tiempo real (preview + asunto) con la firma estructurada', () => {
-    stubFetchRouter();
+  it('al seleccionar plantilla interpola en tiempo real con la firma compuesta del servidor inlined en {{firma}}', async () => {
+    stubFetchRouter({
+      firma: { body: { success: true, firma: null, firmaHtml: COMPOSED_FIRMA } },
+    });
 
     renderComposer();
+    // Flush microtasks so the mount-time firma GET resolves BEFORE the
+    // template selection (the documented race avoidance).
+    await act(async () => {});
     selectTemplate();
 
     const preview = getPreviewHtml();
@@ -289,29 +280,73 @@ describe('CobranzaEmailComposer', () => {
     expect(preview).toContain('S/ 1,000.00');
     expect(preview).toContain('FE F001-101'); // documentosPendientes table row
     expect(preview).toContain('DATOS PARA EL PAGO'); // cuentasBancarias
-    // Structured signature appended to the preview body (session-seeded).
-    expect(preview).toContain('María Pérez');
-    // {{firma}} is stripped from the template — never interpolated inline.
+    // Server-composed signature inlined at {{firma}} by the resolver.
+    expect(preview).toContain('Dra. Firma Guardada');
+    // The legacy client-side session-seeded signature is gone.
+    expect(preview).not.toContain('María Pérez');
     expect(preview).not.toContain('{{firma}}');
     expect(
       screen.getByDisplayValue('Recordatorio HOLOMEDIC S.A.C. — deuda S/ 1,000.00')
     ).toBeInTheDocument();
   });
 
-  it('permite editar la firma en modo edición y la re-agrega al cuerpo al enviar', async () => {
-    stubFetchRouter();
-    const fetchMock = stubFetchRouter();
+  it('seleccionar plantilla antes de que resuelva la firma hornea el fallback hasta reseleccionar (carrera aceptada)', async () => {
+    // Deferred firma fetch — the template selection beats resolution.
+    let resolveFirma!: (value: Response) => void;
+    const fetchMock = vi.fn((input: unknown, init?: RequestInit) => {
+      const url = String(input);
+      const method = init?.method ?? 'GET';
+      if (url === '/api/plantillas/firma') {
+        return new Promise<Response>((resolve) => { resolveFirma = resolve; });
+      }
+      if (url.startsWith('/api/cobranza/contactos')) {
+        return Promise.resolve(jsonResponse({ success: true, contacto: null }));
+      }
+      return Promise.reject(new Error(`Unexpected fetch in test: ${method} ${url}`));
+    });
+    vi.stubGlobal('fetch', fetchMock);
 
     renderComposer();
     selectTemplate();
-    fillTo('cobranzas@cliente.com');
 
-    // Enter edit mode → structured SignatureEditor visible, session-seeded.
-    fireEvent.click(screen.getByRole('button', { name: /editar/i }));
-    const nameField = await screen.findByTestId('signature-editor');
-    expect(nameField).toBeInTheDocument();
-    fireEvent.change(screen.getByLabelText('Nombre'), { target: { value: 'Juan Firmado' } });
-    fireEvent.click(screen.getByRole('button', { name: /^Hecho$/i }));
+    // Fallback placeholder baked into this interpolation.
+    expect(getPreviewHtml()).toContain('[Falta configurar firma]');
+
+    // The fetch resolves with the composed block; reselecting the
+    // template re-interpolates with the real firma (recovery path).
+    await act(async () => {
+      resolveFirma(
+        jsonResponse({ success: true, firma: null, firmaHtml: COMPOSED_FIRMA }),
+      );
+    });
+    selectTemplate();
+
+    expect(getPreviewHtml()).toContain('Dra. Firma Guardada');
+    expect(getPreviewHtml()).not.toContain('[Falta configurar firma]');
+  });
+
+  it('sin firma guardada interpola el placeholder [Falta configurar firma] en {{firma}}', async () => {
+    stubFetchRouter(); // firmaHtml: ''
+
+    renderComposer();
+    await act(async () => {});
+    selectTemplate();
+
+    expect(getPreviewHtml()).toContain('[Falta configurar firma]');
+    expect(getPreviewHtml()).not.toContain('María Pérez');
+    expect(getPreviewHtml()).not.toContain('{{firma}}');
+    expect(screen.queryByTestId('signature-editor')).not.toBeInTheDocument();
+  });
+
+  it('despacha el html interpolado con la firma compuesta del servidor exactamente una vez (sin re-agregado del cliente)', async () => {
+    const fetchMock = stubFetchRouter({
+      firma: { body: { success: true, firma: null, firmaHtml: COMPOSED_FIRMA } },
+    });
+
+    renderComposer();
+    await act(async () => {});
+    selectTemplate();
+    fillTo('cobranzas@cliente.com');
 
     submitAndConfirm();
 
@@ -320,10 +355,12 @@ describe('CobranzaEmailComposer', () => {
     });
     const postIndexes = callsTo(fetchMock, '/api/send-email', 'POST');
     const dispatchedHtml = String(postFormOf(fetchMock, postIndexes[0]).get('html') ?? '');
-    // Dispatched html = body + CURRENT signature only (edited name, exactly once).
-    expect(dispatchedHtml).toContain('Juan Firmado');
-    expect(dispatchedHtml.match(/Juan Firmado/g)).toHaveLength(1);
+    // Dispatched html = interpolated body with the composed firma inline
+    // (exactly once) — NO client-side signature re-append remains.
+    expect(dispatchedHtml.match(/Dra. Firma Guardada/g)).toHaveLength(1);
     expect(dispatchedHtml).toContain('Estimados HOLOMEDIC S.A.C.');
+    expect(dispatchedHtml).not.toContain('<!--holomedic-firma-->');
+    expect(dispatchedHtml).not.toContain('{{firma}}');
   });
 
   it('botón Enviar deshabilitado hasta seleccionar una plantilla (plantilla obligatoria)', () => {
@@ -425,8 +462,11 @@ describe('CobranzaEmailComposer', () => {
     expect(form.get('subject')).toBe('Recordatorio HOLOMEDIC S.A.C. — deuda S/ 1,000.00');
     const dispatchedHtml = String(form.get('html') ?? '');
     expect(dispatchedHtml).toContain('Estimados HOLOMEDIC S.A.C.');
-    // Signature appended exactly once at dispatch (firma stripped from body).
-    expect(dispatchedHtml.match(/María Pérez/g)).toHaveLength(1);
+    // No saved signature (default router: firmaHtml '') → the resolver's
+    // fallback is inlined at {{firma}}; no client-side signature append.
+    expect(dispatchedHtml).toContain('[Falta configurar firma]');
+    expect(dispatchedHtml).not.toContain('María Pérez');
+    expect(dispatchedHtml).not.toContain('<!--holomedic-firma-->');
     expect(dispatchedHtml).not.toContain('{{firma}}');
     expect(form.get('cc')).toBeNull();
   });

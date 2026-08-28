@@ -1,14 +1,14 @@
 import { describe, it, expect } from 'vitest';
 import { buildReenvioViewData } from '../buildReenvioViewData';
-import {
-  buildSignatureHtml,
-  DEFAULT_SIGNATURE_DATA,
-  stripSignatureHtml,
-} from '../signatureData';
+import { stripSignatureHtml } from '../signatureData';
 import type { EnvioHistoryRow } from '../../../domain/entities';
 
 // historial-envios-consolidados PR4 (task 4.3, design OQ6) — the
 // persisted row → EmailEditor payload mapper for the reenvío flow.
+//
+// editor-firmas PR4 (task 4.4): the legacy signature builder is gone —
+// fixtures inline the sentinel markup the legacy builder emitted so the
+// strip round-trip stays pinned for historical rows.
 
 function makeRow(overrides: Partial<EnvioHistoryRow> = {}): EnvioHistoryRow {
   return {
@@ -148,10 +148,12 @@ describe('buildReenvioViewData', () => {
     expect(emailViewData.fileRefs).toEqual([]);
   });
 
-  it('round-trips the persisted signature: initialEmail.bodyHtml strips back to the body and re-appends verbatim (D8)', () => {
+  it('carries the persisted body verbatim; the editor-side seed strips the legacy appended signature (D8)', () => {
     const body = '<p>Cuerpo original</p>';
+    const legacySignature =
+      '<!--holomedic-firma--><table><tr><td>María Pérez — firma histórica</td></tr></table><!--holomedic-firma-->';
     const row = makeRow({
-      bodyHtml: body + buildSignatureHtml(DEFAULT_SIGNATURE_DATA),
+      bodyHtml: body + legacySignature,
     });
 
     const { initialEmail } = buildReenvioViewData(row);
@@ -160,7 +162,6 @@ describe('buildReenvioViewData', () => {
     // seed strips it — the round-trip through the seam must be exact.
     expect(initialEmail.bodyHtml).toBe(row.bodyHtml);
     expect(stripSignatureHtml(initialEmail.bodyHtml)).toBe(body);
-    expect(stripSignatureHtml(initialEmail.bodyHtml) + buildSignatureHtml(DEFAULT_SIGNATURE_DATA)).toBe(row.bodyHtml);
   });
 
   it('threads row context: recipients, subject and rename inputs', () => {
