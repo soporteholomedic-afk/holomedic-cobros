@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 
 import { EnviarValoracionesModal } from '../EnviarValoracionesModal';
 import type { EmpresaGrupo, ValoracionesFilter } from '../../../domain/entities';
@@ -56,6 +56,22 @@ const PLANTILLAS = {
   ],
 };
 
+// Firma-bearing variant for the deferred-firma race suite: {{firma}} is
+// baked as the [Falta configurar firma] fallback while the
+// GET /api/plantillas/firma fetch is pending.
+const PLANTILLAS_CON_FIRMA = {
+  spitches: [
+    {
+      id: 't1',
+      area: 'valoraciones',
+      type: 'company',
+      name: 'Valorización con firma',
+      subject: 'Valorización {{empresa}} — {{periodo}}',
+      bodyHtml: '<p>Periodo {{periodo}}, total {{total}} {{moneda}}.</p><div>{{firma}}</div>',
+    },
+  ],
+};
+
 type Route = { url: string; status: number; body: unknown };
 
 function mockFetch(routes: Route[]): ReturnType<typeof vi.fn> {
@@ -85,6 +101,47 @@ function renderModal(props?: Partial<Parameters<typeof EnviarValoracionesModal>[
       {...props}
     />
   );
+}
+
+/**
+ * Deferred-firma harness (CobranzaEmailComposer race-test pattern): the
+ * plantillas list + contactos resolve immediately (template auto-select
+ * fires), while GET /api/plantillas/firma stays pending until the test
+ * calls `resolveFirma`. NOTE: the firma route check MUST come before the
+ * plantillas one — '/api/plantillas/firma'.includes('/api/plantillas').
+ */
+function deferredFirmaHarness(
+  firmaResponseBody: unknown,
+  plantillas: unknown = PLANTILLAS_CON_FIRMA,
+) {
+  let resolveFirma!: (value: Response) => void;
+  const jsonResponseOf = (body: unknown) =>
+    new Response(JSON.stringify(body), {
+      status: 200,
+      headers: { 'content-type': 'application/json' },
+    });
+  const fetchMock = vi.fn().mockImplementation((input: RequestInfo | URL) => {
+    const href = String(input);
+    if (href.includes('/api/plantillas/firma')) {
+      return new Promise<Response>((resolve) => {
+        resolveFirma = resolve;
+      });
+    }
+    if (href.includes('/api/plantillas')) {
+      return Promise.resolve(jsonResponseOf(plantillas));
+    }
+    if (href.includes('/api/valoraciones/contactos')) {
+      return Promise.resolve(
+        jsonResponseOf({ success: true, nroRuc: '20123456789', contacto: CONTACTO }),
+      );
+    }
+    return Promise.reject(new Error(`unexpected fetch: ${href}`));
+  });
+  global.fetch = fetchMock as unknown as typeof fetch;
+  return {
+    fetchMock,
+    resolveFirma: () => resolveFirma(jsonResponseOf(firmaResponseBody)),
+  };
 }
 
 describe('EnviarValoracionesModal', () => {
@@ -239,5 +296,95 @@ describe('EnviarValoracionesModal', () => {
     await screen.findByLabelText('Para');
     fireEvent.click(screen.getByText('Cerrar'));
     expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  // ---------------------------------------------------------------------
+  // Deferred-firma race suite: the modal consumes useFirmaCorreo, so the
+  // template auto-select can beat GET /api/plantillas/firma and bake the
+  // [Falta configurar firma] fallback. Marker-replacement recovery swaps
+  // it in place once the firma lands (same contract as the composers).
+  // ---------------------------------------------------------------------
+
+  async function getBodyPreview(container: HTMLElement) {
+    // The preview div only renders once the auto-selected template
+    // interpolates a non-empty body — wait for it to appear.
+    return waitFor(() => {
+      const preview = container.querySelector('[data-testid="valoraciones-body-preview"]');
+      expect(preview).not.toBeNull();
+      return preview!;
+    });
+  }
+
+  it('firma fetch resolving after template auto-select: the baked marker is replaced with the composed firma', async () => {
+    const harness = deferredFirmaHarness({
+      success: true,
+      firma: null,
+      firmaHtml: '<table><tr><td>Dra. Valoraciones</td></tr></table>',
+    });
+    const { container } = render(renderModal());
+
+    // Auto-select ran while the firma fetch was pending → marker baked.
+    const preview = await getBodyPreview(container);
+    await waitFor(() => expect(preview.textContent).toContain('[Falta configurar firma]'));
+    expect(preview.textContent).toContain('01/01/2026 al 31/01/2026');
+
+    await act(async () => {
+      harness.resolveFirma();
+    });
+
+    // Recovery: firma inlined, marker gone, rest of the body intact.
+    await waitFor(() => expect(preview.textContent).toContain('Dra. Valoraciones'));
+    expect(preview.innerHTML).not.toContain('[Falta configurar firma]');
+    expect(preview.innerHTML).not.toContain('{{firma}}');
+    expect(preview.textContent).toContain('01/01/2026 al 31/01/2026');
+  });
+
+  it('firma tardía con cuerpo SIN el marcador: el cuerpo queda intacto', async () => {
+    // Template without {{firma}} → the body never carries the marker,
+    // so the firma arrival must not touch it.
+    const plantillasSinFirma = {
+      spitches: [
+        {
+          ...PLANTILLAS_CON_FIRMA.spitches[0],
+          bodyHtml: '<p>Solo el periodo {{periodo}}, sin token de firma.</p>',
+        },
+      ],
+    };
+    const harness = deferredFirmaHarness(
+      { success: true, firma: null, firmaHtml: '<table><tr><td>Dra. Valoraciones</td></tr></table>' },
+      plantillasSinFirma,
+    );
+
+    const { container } = render(renderModal());
+    const preview = await getBodyPreview(container);
+    await waitFor(() =>
+      expect(preview.textContent).toContain('Solo el periodo 01/01/2026 al 31/01/2026'),
+    );
+
+    // The firma lands (non-empty) — no marker in the body, so the body
+    // is left untouched.
+    await act(async () => {
+      harness.resolveFirma();
+    });
+
+    expect(preview.innerHTML).not.toContain('Dra. Valoraciones');
+    expect(preview.innerHTML).not.toContain('[Falta configurar firma]');
+    expect(preview.textContent).toContain('Solo el periodo 01/01/2026 al 31/01/2026');
+  });
+
+  it('firma diferida que resuelve vacía (sin firma guardada): el marcador permanece', async () => {
+    const harness = deferredFirmaHarness({ success: true, firma: null, firmaHtml: '' });
+    const { container } = render(renderModal());
+
+    const preview = await getBodyPreview(container);
+    await waitFor(() => expect(preview.textContent).toContain('[Falta configurar firma]'));
+
+    await act(async () => {
+      harness.resolveFirma();
+    });
+
+    // No saved signature → the spec fallback stays.
+    expect(preview.textContent).toContain('[Falta configurar firma]');
+    expect(preview.innerHTML).not.toContain('{{firma}}');
   });
 });

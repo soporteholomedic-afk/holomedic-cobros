@@ -1,11 +1,13 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { FileDown, FileSpreadsheet, Loader2, Mail, Send, X } from 'lucide-react';
 
 import { SpitchSelector } from '@/features/envio-resultados/presentation/components/SpitchSelector';
 import { interpolate } from '@/features/envio-resultados/presentation/helpers/interpolate';
 import { buildTokenResolverRegistry } from '@/features/envio-resultados/presentation/helpers/tokenResolvers/buildTokenResolverRegistry';
+import { useFirmaCorreo } from '@/features/firma-correo/presentation/hooks/useFirmaCorreo';
+import { replaceFirmaFallback } from '@/features/firma-correo/presentation/helpers/replaceFirmaFallback';
 import type { InterpolationContext } from '@/features/envio-resultados/presentation/helpers/tokenResolvers/types';
 import type { Spitch } from '@/features/envio-resultados/domain/entities';
 import { sanitizeEmailHtml } from '@/components/email/sanitizeEmailHtml';
@@ -63,6 +65,12 @@ export function EnviarValoracionesModal({
     enviar,
   } = useEnviarValoraciones(codCli);
 
+  // editor-firmas PR4 contract (composers parity) — the signature is
+  // composed SERVER-SIDE (GET /api/plantillas/firma) and inlined at
+  // {{firma}} by the token resolver. Empty firmaHtml → the resolver's
+  // [Falta configurar firma] fallback (contract unchanged).
+  const { firmaHtml } = useFirmaCorreo();
+
   const [to, setTo] = useState('');
   const [cc, setCc] = useState('');
   const [subject, setSubject] = useState('');
@@ -113,7 +121,7 @@ export function EnviarValoracionesModal({
         companyName: cliNombre ?? '',
         patientNames: [],
         fileNames: [],
-        firma: '',
+        firma: firmaHtml,
         patients: [],
         files: [],
         area: AREA,
@@ -144,8 +152,30 @@ export function EnviarValoracionesModal({
       setSubject(interpolated.subject);
       setBodyHtml(interpolated.html);
     },
-    [cliNombre, filtro.codMon, grupos, montoTotal, nroRuc, periodo, simbol],
+    [cliNombre, filtro.codMon, grupos, montoTotal, nroRuc, periodo, simbol, firmaHtml],
   );
+
+  // Deferred-firma recovery (marker replacement — composers parity):
+  // SpitchSelector auto-selects the first template on mount while the
+  // firma GET is still in flight, baking the resolver's
+  // [Falta configurar firma] fallback into the body. When the firma
+  // lands, swap every baked marker for the real html in place (NO
+  // re-interpolation — the body stays otherwise intact). This modal has
+  // no visual editor; bodyHtml drives the sanitized preview and the
+  // send payload directly. Guards: only the ''→non-empty firma
+  // transition triggers recovery (ref latch); a body without the marker
+  // is untouched; an empty resolved firma keeps the spec fallback.
+  const prevFirmaHtmlRef = useRef('');
+  useEffect(() => {
+    const previous = prevFirmaHtmlRef.current;
+    prevFirmaHtmlRef.current = firmaHtml;
+    if (previous !== '' || firmaHtml === '') return;
+    const recovered = replaceFirmaFallback(bodyHtml, firmaHtml);
+    if (recovered === bodyHtml) return;
+    /* eslint-disable react-hooks/set-state-in-effect -- async recovery of edit-transient body state baked by the mount-time firma GET race; cannot be derived at render */
+    setBodyHtml(recovered);
+    /* eslint-enable react-hooks/set-state-in-effect */
+  }, [firmaHtml, bodyHtml]);
 
   const hayDestinatario = to.split(',').some((entry) => entry.trim() !== '');
   const puedeEnviar =
