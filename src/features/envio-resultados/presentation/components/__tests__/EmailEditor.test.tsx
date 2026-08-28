@@ -928,12 +928,13 @@ describe('EmailEditor', () => {
       render(<EmailEditor {...defaultProps} />);
       const preview = await screen.findByTestId('email-preview');
 
-      // Mount-time auto-select ran BEFORE the firma fetch resolved
-      // (documented accepted race): the fallback placeholder is baked.
+      // Mount-time auto-select ran BEFORE the firma fetch resolved:
+      // the fallback placeholder is baked into the body...
       expect(preview.textContent).toContain('[Falta configurar firma]');
 
-      // The fetch resolves — reselecting the template re-interpolates
-      // with the composed firma (the documented recovery path).
+      // ...the fetch resolves — the marker-replacement recovery effect
+      // swaps the placeholder for the composed firma; the explicit
+      // reselect below re-interpolates with the firma already at hand.
       await act(async () => {
         resolveFirma(firmaFetchResponse('<table><tr><td>Dra. Firma Guardada</td></tr></table>'));
       });
@@ -943,6 +944,109 @@ describe('EmailEditor', () => {
         expect(screen.getByTestId('email-preview').textContent).toContain('Dra. Firma Guardada');
       });
       expect(screen.getByTestId('email-preview').innerHTML).not.toContain('{{firma}}');
+    } finally {
+      Object.assign(mockSpitchOverride, previous);
+    }
+  });
+
+  it('recovers the baked firma marker automatically when the deferred firma fetch resolves (no reselect)', async () => {
+    // Deferred fetch — the mount-time auto-select bakes the fallback
+    // marker; resolving the fetch must swap it in place.
+    let resolveFirma!: (value: { ok: boolean; json: () => Promise<unknown> }) => void;
+    mockFetch.mockImplementation(
+      () => new Promise((resolve) => { resolveFirma = resolve; }),
+    );
+
+    const previous = { ...mockSpitchOverride };
+    mockSpitchOverride.bodyHtml = '<p>Contenido de prueba</p><div>{{firma}}</div>';
+    mockSpitchOverride.name = 'Plantilla con firma';
+
+    try {
+      render(<EmailEditor {...defaultProps} />);
+      const preview = await screen.findByTestId('email-preview');
+      expect(preview.textContent).toContain('[Falta configurar firma]');
+
+      // Operator has the editor open when the firma lands — the visual
+      // editor must be synced with the recovered html (loadHtml seam).
+      fireEvent.click(screen.getByText('Editar'));
+      expect(await screen.findByTestId('email-body-editor')).toBeInTheDocument();
+      mockEditorHandle.loadHtml.mockClear();
+
+      await act(async () => {
+        resolveFirma(firmaFetchResponse('<table><tr><td>Dra. Firma Guardada</td></tr></table>'));
+      });
+
+      await waitFor(() => {
+        expect(screen.getByTestId('email-preview').textContent).toContain('Dra. Firma Guardada');
+      });
+      expect(screen.getByTestId('email-preview').innerHTML).not.toContain('[Falta configurar firma]');
+      expect(mockEditorHandle.loadHtml).toHaveBeenCalledTimes(1);
+      const htmlArg = mockEditorHandle.loadHtml.mock.calls[0]?.[0] ?? '';
+      expect(htmlArg).toContain('Contenido de prueba');
+      expect(htmlArg).toContain('Dra. Firma Guardada');
+      expect(htmlArg).not.toContain('[Falta configurar firma]');
+    } finally {
+      Object.assign(mockSpitchOverride, previous);
+    }
+  });
+
+  it('leaves the body untouched when the deferred firma resolves after the operator edited the marker away', async () => {
+    let resolveFirma!: (value: { ok: boolean; json: () => Promise<unknown> }) => void;
+    mockFetch.mockImplementation(
+      () => new Promise((resolve) => { resolveFirma = resolve; }),
+    );
+
+    const previous = { ...mockSpitchOverride };
+    mockSpitchOverride.bodyHtml = '<p>Contenido de prueba</p><div>{{firma}}</div>';
+    mockSpitchOverride.name = 'Plantilla con firma';
+
+    try {
+      render(<EmailEditor {...defaultProps} />);
+      await screen.findByTestId('email-preview');
+      expect(screen.getByTestId('email-preview').textContent).toContain('[Falta configurar firma]');
+
+      // Operator edits the body and removes the marker.
+      fireEvent.click(screen.getByText('Editar'));
+      expect(await screen.findByTestId('email-body-editor')).toBeInTheDocument();
+      mockEditorHandle.onChange?.('<p>Cuerpo editado por el operador</p>');
+      expect(await screen.findByText('Cuerpo editado por el operador')).toBeInTheDocument();
+      mockEditorHandle.loadHtml.mockClear();
+
+      await act(async () => {
+        resolveFirma(firmaFetchResponse('<table><tr><td>Dra. Firma Guardada</td></tr></table>'));
+      });
+
+      // Body untouched: no marker → no replacement, no editor reload.
+      expect(screen.getByTestId('email-preview').textContent).toContain('Cuerpo editado por el operador');
+      expect(screen.getByTestId('email-preview').textContent).not.toContain('Dra. Firma Guardada');
+      expect(mockEditorHandle.loadHtml).not.toHaveBeenCalled();
+    } finally {
+      Object.assign(mockSpitchOverride, previous);
+    }
+  });
+
+  it('keeps the [Falta configurar firma] marker when the deferred firma fetch resolves empty', async () => {
+    let resolveFirma!: (value: { ok: boolean; json: () => Promise<unknown> }) => void;
+    mockFetch.mockImplementation(
+      () => new Promise((resolve) => { resolveFirma = resolve; }),
+    );
+
+    const previous = { ...mockSpitchOverride };
+    mockSpitchOverride.bodyHtml = '<p>Contenido de prueba</p><div>{{firma}}</div>';
+    mockSpitchOverride.name = 'Plantilla con firma';
+
+    try {
+      render(<EmailEditor {...defaultProps} />);
+      await screen.findByTestId('email-preview');
+      expect(screen.getByTestId('email-preview').textContent).toContain('[Falta configurar firma]');
+
+      // No saved signature (firmaHtml: '') → the spec fallback stays.
+      await act(async () => {
+        resolveFirma(firmaFetchResponse(''));
+      });
+
+      expect(screen.getByTestId('email-preview').textContent).toContain('[Falta configurar firma]');
+      expect(screen.getByTestId('email-preview').textContent).not.toContain('Dra. Firma Guardada');
     } finally {
       Object.assign(mockSpitchOverride, previous);
     }
