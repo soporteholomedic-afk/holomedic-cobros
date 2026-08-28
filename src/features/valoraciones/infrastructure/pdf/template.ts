@@ -4,14 +4,21 @@ import type { DestinoGrupo } from '../../domain/agrupacion';
 import { ventaPorMoneda } from '../../domain/agrupacion';
 
 /**
- * Pure HTML template for the membretado A4 valorización report (REQ-03
- * E-R1/E-R2, slice 2). Everything renders from the input — no IO, no
- * network (the logo travels as a data URI), fully deterministic.
+ * Pure HTML template for the membretado A4 LANDSCAPE valorización report
+ * (REQ-03 E-R1/E-R2, slice 2; landscape + 13 columns per the U6 user fix).
+ * Everything renders from the input — no IO, no network (the logo travels
+ * as a data URI), fully deterministic.
  *
- * Multi-page pagination (spike 2.0 outcome): `@page { size: A4 }` drives
- * the page breaks (`preferCSSPageSize` is on in EdgePrinter); page
- * numbering comes from the printer's footer overrides, NOT from CSS
- * margin boxes (unsupported in Chromium).
+ * Multi-page pagination (spike 2.0 outcome): `@page { size: A4 landscape }`
+ * drives the page breaks (`preferCSSPageSize` is on in EdgePrinter); page
+ * numbering comes from the printer's footer overrides, NOT from CSS margin
+ * boxes (unsupported in Chromium).
+ *
+ * U6 column contract (exact, 13): N°. Ficha | Doc. Iden | ¿Conv.? | N° Conv
+ * | Nombres | Ocupación | Fecha examen | Tipo examen | CR | Anexo 7D |
+ * Solicitado Por | Costos | Doc.Fac — mapped from `RepFacturacion`:
+ * IdAten-ItemEx, NroDId, IndCon(S/N), IdConv, Pacien, DesPue, FecAte,
+ * DesTCh, CenCos, Anex7D, Solici, moneda-aware venta + Simbol, NumDov.
  */
 
 /** Institutional membrete data (RUC sourced from `paymentInfo.ts`). */
@@ -72,14 +79,22 @@ function monto(value: number): string {
 
 function filaHtml(row: RepFacturacion, codMon: CodigoMoneda): string {
   const ficha = `${row.IdAten} - ${row.ItemEx}`;
+  const conv = row.IndCon ? 'S' : 'N';
+  const docFac = row.NumDov === null || row.NumDov === undefined ? '' : String(row.NumDov);
   return `        <tr>
-          <td>${escapeHtml(ficha)}</td>
+          <td style="white-space:nowrap;">${escapeHtml(ficha)}</td>
+          <td style="white-space:nowrap;">${escapeHtml(row.NroDId)}</td>
+          <td style="text-align:center;">${conv}</td>
+          <td>${escapeHtml(row.IdConv)}</td>
           <td>${escapeHtml(row.Pacien)}</td>
-          <td>${escapeHtml(row.NroDId)}</td>
+          <td>${escapeHtml(row.DesPue)}</td>
+          <td style="white-space:nowrap;">${fechaDisplay(row.FecAte)}</td>
           <td>${escapeHtml(row.DesTCh)}</td>
-          <td>${fechaDisplay(row.FecAte)}</td>
-          <td>${escapeHtml(row.Result)}</td>
+          <td>${escapeHtml(row.CenCos)}</td>
+          <td style="text-align:center;">${escapeHtml(row.Anex7D)}</td>
+          <td>${escapeHtml(row.Solici)}</td>
           <td style="text-align:right; white-space:nowrap;">${escapeHtml(row.Simbol)} ${monto(ventaPorMoneda(row, codMon))}</td>
+          <td style="text-align:right; white-space:nowrap;">${escapeHtml(docFac)}</td>
         </tr>`;
 }
 
@@ -89,13 +104,19 @@ function grupoHtml(grupo: DestinoGrupo, codMon: CodigoMoneda): string {
       <table>
         <thead>
           <tr>
-            <th>Ficha</th>
-            <th>Paciente</th>
-            <th>Documento</th>
-            <th>Tipo de chequeo</th>
-            <th>Fecha</th>
-            <th>Resultado</th>
-            <th style="text-align:right;">Venta</th>
+            <th style="white-space:nowrap;">N°. Ficha</th>
+            <th style="white-space:nowrap;">Doc. Iden</th>
+            <th>¿Conv.?</th>
+            <th style="white-space:nowrap;">N° Conv</th>
+            <th>Nombres</th>
+            <th>Ocupación</th>
+            <th style="white-space:nowrap;">Fecha examen</th>
+            <th>Tipo examen</th>
+            <th>CR</th>
+            <th>Anexo 7D</th>
+            <th>Solicitado Por</th>
+            <th style="text-align:right;">Costos</th>
+            <th style="text-align:right;">Doc.Fac</th>
           </tr>
         </thead>
         <tbody>
@@ -103,15 +124,15 @@ ${filas}
         </tbody>
         <tfoot>
           <tr class="totales">
-            <td colspan="6" style="text-align:right;">SubTotal</td>
+            <td colspan="12" style="text-align:right;">SubTotal</td>
             <td style="text-align:right;">${escapeHtml(grupo.simbol)} ${monto(grupo.subtotal)}</td>
           </tr>
           <tr class="totales">
-            <td colspan="6" style="text-align:right;">IGV 18%</td>
+            <td colspan="12" style="text-align:right;">IGV 18%</td>
             <td style="text-align:right;">${escapeHtml(grupo.simbol)} ${monto(grupo.igv)}</td>
           </tr>
           <tr class="total-final">
-            <td colspan="6" style="text-align:right;">Total</td>
+            <td colspan="12" style="text-align:right;">Total</td>
             <td style="text-align:right;">${escapeHtml(grupo.simbol)} ${monto(grupo.total)}</td>
           </tr>
         </tfoot>
@@ -147,9 +168,9 @@ export function buildValoracionHtml(input: ValoracionPdfInput): string {
 <head>
 <meta charset="utf-8">
 <style>
-  @page { size: A4; margin: 16mm 10mm 18mm 10mm; }
+  @page { size: A4 landscape; margin: 14mm 9mm 18mm 9mm; }
   * { box-sizing: border-box; }
-  body { font-family: Arial, Helvetica, sans-serif; font-size: 9px; color: #0f172a; margin: 0; }
+  body { font-family: Arial, Helvetica, sans-serif; font-size: 8px; color: #0f172a; margin: 0; }
   .membrete { display: flex; align-items: center; gap: 12px; border-bottom: 2px solid #0f172a; padding-bottom: 6px; }
   .membrete img { width: 52px; height: 52px; object-fit: contain; }
   .membrete .nombre { font-size: 13px; font-weight: bold; }
@@ -157,10 +178,10 @@ export function buildValoracionHtml(input: ValoracionPdfInput): string {
   h1 { font-size: 12px; margin: 10px 0 2px; }
   .cabecera { width: 100%; border-collapse: collapse; margin: 6px 0 8px; }
   .cabecera td { padding: 2px 6px 2px 0; font-size: 9px; }
-  table { width: 100%; border-collapse: collapse; }
+  table { width: 100%; border-collapse: collapse; table-layout: fixed; }
   thead { display: table-header-group; }
-  th { background: #0f172a; color: #fff; font-size: 8px; padding: 4px 5px; text-align: left; }
-  td { border-bottom: 1px solid #e2e8f0; padding: 3px 5px; }
+  th { background: #0f172a; color: #fff; font-size: 7.5px; padding: 3px 4px; text-align: left; }
+  td { border-bottom: 1px solid #e2e8f0; padding: 2.5px 4px; overflow-wrap: break-word; }
   tr.totales td { background: #f1f5f9; font-weight: bold; }
   tr.total-final td { background: #e2e8f0; font-weight: bold; }
   tr { page-break-inside: avoid; }

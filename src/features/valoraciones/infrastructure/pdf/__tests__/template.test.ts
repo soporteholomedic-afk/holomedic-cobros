@@ -66,12 +66,95 @@ describe('buildValoracionHtml', () => {
     expect(html).toContain('s/.');
   });
 
-  it('declares A4 page sizing so multi-page tables break on @page boundaries', () => {
+  it('declares A4 LANDSCAPE page sizing so 13 wide columns fit (U6)', () => {
     const html = buildValoracionHtml(buildInput());
     expect(html).toContain('@page');
-    expect(html).toContain('size: A4');
+    expect(html).toContain('size: A4 landscape');
     // Table headers repeat across printed pages.
     expect(html).toContain('display: table-header-group');
+  });
+
+  it('renders EXACTLY the 13 required columns in the required order (U6)', () => {
+    const html = buildValoracionHtml(buildInput());
+    const theads = html.split('<thead>').slice(1).map((t) => t.split('</thead>')[0]);
+    // One thead per destino group — EVERY group table carries the contract.
+    expect(theads.length).toBeGreaterThanOrEqual(2);
+    const columnas = (thead: string): string[] =>
+      [...thead.matchAll(/<th[^>]*>([^<]*)<\/th>/g)].map((m) => m[1]);
+    for (const thead of theads) {
+      expect(columnas(thead)).toEqual([
+        'N°. Ficha',
+        'Doc. Iden',
+        '¿Conv.?',
+        'N° Conv',
+        'Nombres',
+        'Ocupación',
+        'Fecha examen',
+        'Tipo examen',
+        'CR',
+        'Anexo 7D',
+        'Solicitado Por',
+        'Costos',
+        'Doc.Fac',
+      ]);
+    }
+  });
+
+  it('maps the 13 columns from real RepFacturacion fields (U6 mapping)', () => {
+    const html = buildValoracionHtml(
+      buildInput({
+        grupos: agruparPorDestino(
+          [
+            makeRepFacturacion({
+              DesDes: 'SEDE NORTE',
+              IdAten: '000123',
+              ItemEx: 4,
+              NroDId: 'DNI 46145583',
+              IndCon: true,
+              IdConv: 'C-777',
+              Pacien: 'CANCINO CUEVA NOELIA',
+              DesPue: 'ANALISTA',
+              FecAte: '2026-01-15T00:00:00.000Z',
+              DesTCh: 'PREOCUPACIONAL',
+              CenCos: 'CC-001',
+              Anex7D: 'S',
+              Solici: 'SOLICITANTE DEMO',
+              VVtaMN: 100,
+              Simbol: 's/.',
+              NumDov: 45678,
+            }),
+            makeRepFacturacion({
+              DesDes: 'SEDE NORTE',
+              IndCon: false,
+              NumDov: null,
+              Pacien: 'SIN FACTURA PAC',
+              VVtaMN: 50,
+              Simbol: 's/.',
+            }),
+          ],
+          1,
+        ),
+      }),
+    );
+    // Row 1: every mapped cell present.
+    expect(html).toContain('000123 - 4');
+    expect(html).toContain('DNI 46145583');
+    expect(html).toContain('C-777');
+    expect(html).toContain('CANCINO CUEVA NOELIA');
+    expect(html).toContain('ANALISTA');
+    expect(html).toContain('15/01/2026');
+    expect(html).toContain('PREOCUPACIONAL');
+    expect(html).toContain('CC-001');
+    expect(html).toContain('SOLICITANTE DEMO');
+    expect(html).toContain('45678');
+    // ¿Conv.? renders SIGLA's S/N convention.
+    expect(html).toMatch(/<td[^>]*>S<\/td>/);
+    expect(html).toMatch(/<td[^>]*>N<\/td>/);
+    // Costos: moneda-aware venta + Simbol (100 and 50).
+    expect(html).toContain('s/. 100.00');
+    expect(html).toContain('s/. 50.00');
+    // NULL NumDov (Doc.Fac) renders empty, not "null".
+    expect(html).not.toContain('>null<');
   });
 
   it('escapes HTML-sensitive characters in dynamic values', () => {

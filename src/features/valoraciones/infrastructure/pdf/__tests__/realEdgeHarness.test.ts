@@ -78,8 +78,10 @@ describe.skipIf(!edgeAvailable)('real Edge valoraciones PDF harness', () => {
     expect(doc.getPageCount()).toBeGreaterThan(1);
     for (let i = 0; i < doc.getPageCount(); i++) {
       const size = doc.getPage(i).getSize();
-      expect(Math.round(size.width)).toBe(595); // A4 595.28pt
-      expect(Math.round(size.height)).toBe(842); // A4 841.89pt
+      // U6: A4 LANDSCAPE — width 841.89pt, height 595.28pt (the 13-column
+      // table needs the horizontal page).
+      expect(Math.round(size.width)).toBe(842);
+      expect(Math.round(size.height)).toBe(595);
     }
 
     // Footer painted on every page: Chromium paints the header/footer
