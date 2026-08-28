@@ -85,7 +85,9 @@ describe('resolveFirmaPageData', () => {
       permisos: ['firma_correo'],
     });
 
-    const result = await resolveFirmaPageData('valoraciones');
+    // Use a name that is guaranteed never to be registered in AREA_CONFIGS —
+    // 'valoraciones' became a real area after REQ-03 landed and broke this fixture.
+    const result = await resolveFirmaPageData('area-que-no-existe');
 
     expect(result).toEqual({ notFound: true });
     expect(usuarioRepo.getById).not.toHaveBeenCalled();
