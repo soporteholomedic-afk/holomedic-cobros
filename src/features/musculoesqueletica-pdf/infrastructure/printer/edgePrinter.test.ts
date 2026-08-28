@@ -150,4 +150,67 @@ describe('EdgePrinter', () => {
     const pdfIndex = page.pdf.mock.invocationCallOrder[0];
     expect(evaluateIndex).toBeLessThan(pdfIndex);
   });
+
+  // ---- REQ-03 D6: additive overrides (spike 2.0 validated footerTemplate) ----
+
+  it('forwards header/footer overrides to page.pdf for multi-page documents', async () => {
+    const { page, launch } = makeFakes(FAKE_PDF);
+    const printer = new EdgePrinter({
+      launch: launch as never,
+      resolveExecutable: () => '/fake/edge',
+    });
+
+    const footer = '<div style="font-size:8px">P&aacute;gina <span class="pageNumber"></span></div>';
+    await printer.print(HTML, {
+      displayHeaderFooter: true,
+      headerTemplate: '<div></div>',
+      footerTemplate: footer,
+      margin: { top: '8mm', right: '8mm', bottom: '14mm', left: '8mm' },
+    });
+
+    expect(page.pdf).toHaveBeenCalledWith(
+      expect.objectContaining({
+        format: 'A4',
+        preferCSSPageSize: true,
+        displayHeaderFooter: true,
+        headerTemplate: '<div></div>',
+        footerTemplate: footer,
+        margin: { top: '8mm', right: '8mm', bottom: '14mm', left: '8mm' },
+      }),
+    );
+  });
+
+  it('applies a margin override without enabling header/footer', async () => {
+    const { page, launch } = makeFakes(FAKE_PDF);
+    const printer = new EdgePrinter({
+      launch: launch as never,
+      resolveExecutable: () => '/fake/edge',
+    });
+
+    await printer.print(HTML, { margin: { top: '10mm' } });
+
+    expect(page.pdf).toHaveBeenCalledWith(
+      expect.objectContaining({
+        margin: { top: '10mm' },
+      }),
+    );
+    // displayHeaderFooter must NOT be forced on by a margins-only override.
+    const options = page.pdf.mock.calls[0][0] as Record<string, unknown>;
+    expect('displayHeaderFooter' in options).toBe(false);
+  });
+
+  it('keeps the default zero-margin single-page options when no overrides are passed', async () => {
+    const { page, launch } = makeFakes(FAKE_PDF);
+    const printer = new EdgePrinter({
+      launch: launch as never,
+      resolveExecutable: () => '/fake/edge',
+    });
+
+    await printer.print(HTML);
+
+    const options = page.pdf.mock.calls[0][0] as Record<string, unknown>;
+    expect(options.margin).toEqual({ top: 0, right: 0, bottom: 0, left: 0 });
+    expect('displayHeaderFooter' in options).toBe(false);
+    expect('footerTemplate' in options).toBe(false);
+  });
 });

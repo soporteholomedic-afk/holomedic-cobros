@@ -1,7 +1,7 @@
 import fs from 'fs';
 import puppeteer from 'puppeteer-core';
 import { EdgeUnavailableError, PrintError } from '../../domain/errors';
-import type { PdfPrinter } from '../../domain/entities';
+import type { PdfPrinter, PdfPrintOverrides } from '../../domain/entities';
 
 /** Known installation paths of Microsoft Edge on Windows. */
 const KNOWN_WINDOWS_EDGE_PATHS: readonly string[] = [
@@ -60,7 +60,7 @@ export class EdgePrinter implements PdfPrinter {
     this.resolveExecutable = options.resolveExecutable ?? (() => resolveEdgeExecutablePath());
   }
 
-  async print(html: string): Promise<Uint8Array> {
+  async print(html: string, overrides: PdfPrintOverrides = {}): Promise<Uint8Array> {
     const executablePath = this.resolveExecutable();
     if (!executablePath) {
       throw new EdgeUnavailableError(
@@ -87,12 +87,27 @@ export class EdgePrinter implements PdfPrinter {
         );
       });
       await page.emulateMediaType('print');
-      const pdf = await page.pdf({
+      // Base options keep the established single-page behavior; overrides are
+      // applied additively so existing callers are byte-for-byte unchanged.
+      const pdfOptions: Parameters<typeof page.pdf>[0] = {
         format: 'A4',
         printBackground: true,
         preferCSSPageSize: true,
         margin: { top: 0, right: 0, bottom: 0, left: 0 },
-      });
+      };
+      if (overrides.displayHeaderFooter !== undefined) {
+        pdfOptions.displayHeaderFooter = overrides.displayHeaderFooter;
+      }
+      if (overrides.headerTemplate !== undefined) {
+        pdfOptions.headerTemplate = overrides.headerTemplate;
+      }
+      if (overrides.footerTemplate !== undefined) {
+        pdfOptions.footerTemplate = overrides.footerTemplate;
+      }
+      if (overrides.margin !== undefined) {
+        pdfOptions.margin = overrides.margin;
+      }
+      const pdf = await page.pdf(pdfOptions);
       return new Uint8Array(pdf);
     } catch (err) {
       if (err instanceof EdgeUnavailableError) throw err;

@@ -1,303 +1,175 @@
 'use client';
 
-import { useState, useRef, useCallback } from 'react';
-import { Loader2, FileSpreadsheet, Upload, ArrowLeft } from 'lucide-react';
-import CompanyList from '@/components/CompanyList';
-import CompanyDetailModal from '@/components/CompanyDetailModal';
-import { parseValoracionesCsvContent } from '@/utils/valoracionesCore';
-import type { CompanyGroup, GroupedData } from '@/utils/valoracionesCore';
+import { useCallback, useState } from 'react';
+import { ClipboardList } from 'lucide-react';
 
-type ViewState = 'upload' | 'list';
+import type {
+  DestinoLookupItem,
+  EmpresaGrupo,
+  SedeLookupItem,
+  TipoTrabajadorItem,
+} from '@/features/valoraciones/domain/entities';
+import { ConsolidadoTable } from '@/features/valoraciones/presentation/components/ConsolidadoTable';
+import { EmpresaDetailModal } from '@/features/valoraciones/presentation/components/EmpresaDetailModal';
+import { EmpresaList } from '@/features/valoraciones/presentation/components/EmpresaList';
+import { EnviarValoracionesModal } from '@/features/valoraciones/presentation/components/EnviarValoracionesModal';
+import { FiltersPanel } from '@/features/valoraciones/presentation/components/FiltersPanel';
+import { useConsolidado } from '@/features/valoraciones/presentation/hooks/useConsolidado';
+import { useExportarValoraciones } from '@/features/valoraciones/presentation/hooks/useExportarValoraciones';
+import { useLookup } from '@/features/valoraciones/presentation/hooks/useLookup';
+import { useValoraciones } from '@/features/valoraciones/presentation/hooks/useValoraciones';
+import {
+  toFiltro,
+  useValoracionesFilters,
+} from '@/features/valoraciones/presentation/hooks/useValoracionesFilters';
 
 /**
- * Download a valoraciones Excel by POSTing the original CSV to the API,
- * optionally filtered to a single company.
+ * Valorizaciones page (REQ-03): realtime SIGLA query with the 11-filter
+ * panel replacing the legacy CSV upload flow. Slice 2 added the
+ * client-gated consolidado mode next to the detail mode; slice 3 the email
+ * modal (plantillas + REQ-01 prefill + regenerated attachments).
+ *
+ * U6: the export/send actions live IN each empresa row of the results
+ * table (Enviar / Excel / PDF, each scoped to that row's empresa only) —
+ * the global header toolbar was removed per the user's fix. All fetching
+ * lives in hooks (`useLookup`, `useValoraciones`, `useConsolidado`,
+ * `useExportarValoraciones`) — the page only wires state.
+ *
+ * The rendered table follows the mode of the LAST executed query
+ * (`modoConsulta`), so toggling the checkbox does not flip the view away
+ * from results already on screen.
  */
-async function downloadValoraciones(
-  file: File,
-  company?: string,
-): Promise<void> {
-  const formData = new FormData();
-  formData.append('file', file);
-  if (company) formData.append('company', company);
-
-  const res = await fetch('/api/valoraciones/generate', {
-    method: 'POST',
-    body: formData,
-  });
-
-  if (!res.ok) {
-    const errData = await res.json().catch(() => null);
-    throw new Error(
-      errData?.error || `Error del servidor (${res.status})`,
-    );
-  }
-
-  const blob = await res.blob();
-  const disposition = res.headers.get('Content-Disposition');
-  const filename =
-    disposition?.match(/filename="?(.+?)"?$/)?.[1] ||
-    'valoraciones.xlsx';
-
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = filename;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
-}
-
 export default function ValoracionesPage() {
-  const [view, setView] = useState<ViewState>('upload');
-  const [file, setFile] = useState<File | null>(null);
-  const [parsedData, setParsedData] = useState<GroupedData | null>(null);
-  const [selectedCompany, setSelectedCompany] =
-    useState<CompanyGroup | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [downloadError, setDownloadError] = useState<string | null>(null);
-  const [dragging, setDragging] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const { filtros, dispatch, limpiar } = useValoracionesFilters();
+  const { grupos, status, error, moneda, totalRegistros, buscar } = useValoraciones();
+  const consolidadoQuery = useConsolidado();
+  const { exportar: exportarPdf, empresaEnCurso: empresaPdfEnCurso, error: errorPdf } =
+    useExportarValoraciones('pdf');
+  const { exportar: exportarExcel, empresaEnCurso: empresaExcelEnCurso, error: errorExcel } =
+    useExportarValoraciones('excel');
+  const [grupoSeleccionado, setGrupoSeleccionado] = useState<EmpresaGrupo | null>(null);
+  const [modoConsulta, setModoConsulta] = useState<'detalle' | 'consolidado'>('detalle');
+  const [enviarScope, setEnviarScope] = useState<EmpresaGrupo | null>(null);
 
-  // ---- File Handling ----
+  // Panel lookups: sedes and tipos trabajador load once; destinos are
+  // gated by the selected client (spec Q-R4/Q-R5 — no client, no fetch).
+  const sedes = useLookup<SedeLookupItem>('sedes', {}, { habilitado: true });
+  const tiposTrabajador = useLookup<TipoTrabajadorItem>('tipos-trabajador', {}, { habilitado: true });
+  const destinos = useLookup<DestinoLookupItem>(
+    'destinos',
+    filtros.codCli !== undefined ? { codCli: String(filtros.codCli) } : {},
+    { habilitado: filtros.codCli !== undefined },
+  );
 
-  const handleFile = useCallback((f: File) => {
-    setError(null);
-
-    if (!f.name.endsWith('.csv')) {
-      setError('Solo se aceptan archivos CSV');
+  const consultar = useCallback(() => {
+    setGrupoSeleccionado(null);
+    const filtro = toFiltro(filtros);
+    if (filtros.consolidado && filtros.codCli !== undefined) {
+      setModoConsulta('consolidado');
+      consolidadoQuery.buscar(filtro);
       return;
     }
+    setModoConsulta('detalle');
+    buscar(filtro);
+  }, [buscar, consolidadoQuery, filtros]);
 
-    // Read CSV client-side and parse into grouped company data
-    setLoading(true);
-    const reader = new FileReader();
-
-    reader.onload = (e) => {
-      try {
-        const csvText = e.target?.result as string;
-        const data = parseValoracionesCsvContent(csvText);
-        setParsedData(data);
-        setFile(f);
-        setView('list');
-        setError(null);
-      } catch (err) {
-        setError(
-          err instanceof Error
-            ? err.message
-            : 'Error al procesar el archivo CSV',
-        );
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    reader.onerror = () => {
-      setError('Error al leer el archivo');
-      setLoading(false);
-    };
-
-    reader.readAsText(f);
+  // U6 row actions: each button acts ONLY on its row's empresa (the
+  // empresa group key scopes the server-side re-query + filename).
+  const enviarEmpresa = useCallback((grupo: EmpresaGrupo) => {
+    setEnviarScope(grupo);
   }, []);
 
-  const handleDrop = useCallback(
-    (e: React.DragEvent) => {
-      e.preventDefault();
-      setDragging(false);
-      const f = e.dataTransfer.files?.[0];
-      if (f) handleFile(f);
+  const exportarExcelEmpresa = useCallback(
+    (grupo: EmpresaGrupo) => {
+      exportarExcel(toFiltro(filtros), grupo.empresa);
     },
-    [handleFile],
+    [exportarExcel, filtros],
   );
 
-  const handleDragOver = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    setDragging(true);
-  }, []);
-
-  const handleDragLeave = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    setDragging(false);
-  }, []);
-
-  const handleInputChange = useCallback(
-    (e: React.ChangeEvent<HTMLInputElement>) => {
-      const f = e.target.files?.[0];
-      if (f) handleFile(f);
+  const exportarPdfEmpresa = useCallback(
+    (grupo: EmpresaGrupo) => {
+      exportarPdf(toFiltro(filtros), grupo.empresa);
     },
-    [handleFile],
+    [exportarPdf, filtros],
   );
 
-  // ---- Navigation ----
-
-  const handleReset = useCallback(() => {
-    setView('upload');
-    setFile(null);
-    setParsedData(null);
-    setSelectedCompany(null);
-    setError(null);
-    setDownloadError(null);
-  }, []);
-
-  const handleSelectCompany = useCallback((company: CompanyGroup) => {
-    setSelectedCompany(company);
-    setDownloadError(null);
-  }, []);
-
-  const handleCloseDetail = useCallback(() => {
-    setSelectedCompany(null);
-    setDownloadError(null);
-  }, []);
-
-  // ---- Downloads ----
-
-  const handleDownloadAll = useCallback(async () => {
-    if (!file) return;
-    setLoading(true);
-    setError(null);
-    try {
-      await downloadValoraciones(file);
-    } catch (err) {
-      setError(
-        err instanceof Error ? err.message : 'Error al generar el Excel',
-      );
-    } finally {
-      setLoading(false);
-    }
-  }, [file]);
-
-  const handleDownloadCompany = useCallback(
-    async (companyName: string) => {
-      if (!file) return;
-      setLoading(true);
-      setDownloadError(null);
-      try {
-        await downloadValoraciones(file, companyName);
-      } catch (err) {
-        setDownloadError(
-          err instanceof Error
-            ? err.message
-            : 'Error al generar el Excel',
-        );
-      } finally {
-        setLoading(false);
-      }
-    },
-    [file],
-  );
-
-  // ---- Render ----
+  const errorExportar = errorPdf ?? errorExcel;
 
   return (
-    <div className="flex-1 w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 flex flex-col">
-      {/* Header */}
-      <div className="mb-8">
-        <div className="flex items-center space-x-3 mb-2">
-          <div className="flex items-center justify-center w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-400 to-emerald-600 text-white shadow-sm">
-            <FileSpreadsheet className="w-5 h-5" />
+    <main className="min-h-screen bg-slate-100 dark:bg-slate-950 p-4 sm:p-6 lg:p-8">
+      <div className="max-w-7xl mx-auto space-y-6">
+        <header className="flex items-center gap-3">
+          <span className="inline-flex items-center justify-center w-11 h-11 rounded-2xl bg-gradient-to-br from-emerald-500 to-emerald-600 text-white shadow-lg shadow-emerald-500/20">
+            <ClipboardList className="w-6 h-6" />
+          </span>
+          <div>
+            <h1 className="text-2xl font-extrabold text-slate-900 dark:text-white leading-tight">
+              Valorizaciones
+            </h1>
+            <p className="text-sm text-slate-500 dark:text-slate-400">
+              Consulta en tiempo real desde SIGLA
+            </p>
           </div>
-          <div className="flex-1">
-            <div className="flex items-center justify-between">
-              <div>
-                <h1 className="text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight">
-Generación de Valoraciones
-                </h1>
-                <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
-                  Arrastra el archivo CSV de valoraciones para generar un Excel
-                  agrupado por empresa con cálculo de IGV y totales.
-                </p>
-              </div>
+          {errorExportar && (
+            <p role="alert" className="ml-auto text-xs text-rose-500 max-w-xs text-right">
+              {errorExportar}
+            </p>
+          )}
+        </header>
 
-              {/* Reset / New File button — visible only in list view */}
-              {view === 'list' && (
-                <button
-                  onClick={handleReset}
-                  className="flex items-center space-x-1.5 px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 text-xs font-semibold text-slate-500 dark:text-slate-400 transition-colors"
-                >
-                  <ArrowLeft className="w-3.5 h-3.5" />
-                  <span>Nuevo archivo</span>
-                </button>
-              )}
-            </div>
-          </div>
-        </div>
+        <FiltersPanel
+          filtros={filtros}
+          onCambio={dispatch}
+          onConsultar={consultar}
+          onLimpiar={limpiar}
+          consultando={status === 'loading' || consolidadoQuery.status === 'loading'}
+          destinos={destinos.items}
+          destinosCargando={destinos.cargando}
+          sedes={sedes.items}
+          tiposTrabajador={tiposTrabajador.items}
+        />
+
+        {modoConsulta === 'consolidado' ? (
+          <ConsolidadoTable
+            filas={consolidadoQuery.filas}
+            totales={consolidadoQuery.totales}
+            status={consolidadoQuery.status}
+            error={consolidadoQuery.error}
+          />
+        ) : (
+          <EmpresaList
+            grupos={grupos}
+            status={status}
+            error={error}
+            totalRegistros={totalRegistros}
+            onSelectEmpresa={setGrupoSeleccionado}
+            onEnviarEmpresa={enviarEmpresa}
+            onExportarExcelEmpresa={exportarExcelEmpresa}
+            onExportarPdfEmpresa={exportarPdfEmpresa}
+            empresaExcelEnCurso={empresaExcelEnCurso}
+            empresaPdfEnCurso={empresaPdfEnCurso}
+          />
+        )}
       </div>
 
-      {/* Error banner */}
-      {error && (
-        <div className="mb-4 max-w-2xl p-3 rounded-xl bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-900/50 text-red-700 dark:text-red-400 text-sm">
-          {error}
-        </div>
-      )}
-
-      {view === 'upload' ? (
-        /* ======== UPLOAD VIEW ======== */
-        <div className="bg-white dark:bg-slate-900/50 border border-slate-200/60 dark:border-slate-800/60 rounded-2xl p-8 max-w-2xl">
-          <div
-            onDrop={handleDrop}
-            onDragOver={handleDragOver}
-            onDragLeave={handleDragLeave}
-            onClick={() => fileInputRef.current?.click()}
-            className={`flex flex-col items-center text-center p-10 rounded-xl border-2 border-dashed cursor-pointer transition-all duration-200 ${
-              dragging
-                ? 'border-emerald-400 bg-emerald-50 dark:bg-emerald-950/20'
-                : 'border-slate-300 dark:border-slate-700 hover:border-emerald-300 dark:hover:border-emerald-700 hover:bg-slate-50 dark:hover:bg-slate-900/30'
-            }`}
-          >
-            <div className="w-16 h-16 rounded-2xl bg-emerald-50 dark:bg-emerald-950/30 flex items-center justify-center mb-4">
-              {loading ? (
-                <Loader2 className="w-8 h-8 text-emerald-600 dark:text-emerald-400 animate-spin" />
-              ) : (
-                <Upload className="w-8 h-8 text-emerald-600 dark:text-emerald-400" />
-              )}
-            </div>
-            <h2 className="text-xl font-bold text-slate-800 dark:text-slate-200 mb-2">
-              {loading
-                ? 'Procesando archivo...'
-                : 'Arrastra tu archivo CSV'}
-            </h2>
-            <p className="text-sm text-slate-500 dark:text-slate-400 max-w-md mb-2">
-              {loading
-                ? 'Leyendo y analizando el archivo...'
-                : 'o haz clic para seleccionar el archivo'}
-            </p>
-            <p className="text-xs text-slate-400 dark:text-slate-500">
-              Solo archivos .csv — archivos-crudos.csv
-            </p>
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept=".csv"
-              onChange={handleInputChange}
-              className="hidden"
-              data-testid="csv-input"
-            />
-          </div>
-        </div>
-      ) : (
-        /* ======== LIST VIEW ======== */
-        <div className="flex-1 flex flex-col">
-          {parsedData && (
-            <CompanyList
-              companies={parsedData.companies}
-              onSelectCompany={handleSelectCompany}
-              onDownloadAll={handleDownloadAll}
-            />
-          )}
-        </div>
-      )}
-
-      {/* Detail Modal — overlays above list view */}
-      {selectedCompany && (
-        <CompanyDetailModal
-          company={selectedCompany}
-          onClose={handleCloseDetail}
-          onDownloadCompany={handleDownloadCompany}
-          downloadError={downloadError}
+      {modoConsulta === 'detalle' && grupoSeleccionado && moneda !== null && (
+        <EmpresaDetailModal
+          grupo={grupoSeleccionado}
+          codMon={moneda}
+          onClose={() => setGrupoSeleccionado(null)}
         />
       )}
-    </div>
+
+      {enviarScope && (
+        <EnviarValoracionesModal
+          filtro={toFiltro(filtros)}
+          codCli={filtros.codCli}
+          cliNombre={enviarScope.empresa}
+          grupos={[enviarScope]}
+          empresa={enviarScope.empresa}
+          onClose={() => setEnviarScope(null)}
+        />
+      )}
+    </main>
   );
 }

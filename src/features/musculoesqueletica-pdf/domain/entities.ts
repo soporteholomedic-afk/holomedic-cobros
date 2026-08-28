@@ -55,9 +55,34 @@ export interface PdfPageManifest {
   tokens: PdfTokenManifest;
 }
 
+/**
+ * Page-level print overrides for multi-page documents (REQ-03 D6).
+ *
+ * Additive and optional: callers that omit them keep the established
+ * single-page zero-margin behavior. Validated by the REQ-03 spike
+ * (`spike-2-0-pagination.md`): `displayHeaderFooter` + `footerTemplate`
+ * page numbering works over `@page { size: A4 }` CSS breaks as long as
+ * the pdf margins reserve room for the footer layer.
+ */
+export interface PdfPrintOverrides {
+  /** Enable Chromium's header/footer layer (requires non-zero margins). */
+  displayHeaderFooter?: boolean;
+  /** HTML template painted in the top margin (needs explicit font-size). */
+  headerTemplate?: string;
+  /** HTML template painted in the bottom margin (needs explicit font-size). */
+  footerTemplate?: string;
+  /** Page margins for the pdf call, e.g. `{ bottom: '14mm' }` (CSS units). */
+  margin?: {
+    top?: string;
+    right?: string;
+    bottom?: string;
+    left?: string;
+  };
+}
+
 /** Port: prints an HTML document to a single A4 page PDF. */
 export interface PdfPrinter {
-  print(html: string): Promise<Uint8Array>;
+  print(html: string, overrides?: PdfPrintOverrides): Promise<Uint8Array>;
 }
 
 /** Port: merges single-page PDFs into one document, preserving order. */
