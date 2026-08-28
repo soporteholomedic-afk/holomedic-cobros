@@ -316,3 +316,75 @@ Files changed (code commit `d6c2faa`): `src/lib/db.ts` (section removed), `src/f
 | Code (`d6c2faa`, src only) | **+47 / âˆ’267 = 314 churn** |
 | Docs (spec D1 amendment, tasks 1.1 note, proposal/exploration annotations, this section) | ~+50 / âˆ’35 |
 | **U5 total** | **~352 churn â‰¤ 800 native-attempt budget âœ“ (44%)** |
+
+## U6 - Fix Batch: Per-Row Actions + Landscape PDF + [Empresa]_[Fecha] Filenames (2026-08-28)
+
+### What / Why
+
+**What**: Moved the export/send actions INTO each empresa row of the results table (3 icon-buttons per row: Enviar, Excel, PDF - each scoped to ONLY that row's empresa via an optional `empresa` group key validated and applied server-side after the D4 re-query), switched the valoracion PDF to A4 LANDSCAPE with exactly the 13 user-required columns, and renamed both exports (and the email attachments) to `[NombreEmpresa]_[fecIni].[ext]` with Windows-sanitized empresa names and ASCII + RFC 5987 `filename*` dispositions. The global header toolbar (Enviar Documentos / Descargar Excel / Descargar PDF) was REMOVED (user: "buttons belong in rows"). Excel CONTENT stays exactly the 30-column Formato 35 - only scope + filename changed.
+
+**Why**: Direct user fix request on the implemented flow - per-row actions, landscape PDF with the SIGLA-print-like 13-column layout, and empresa+date filenames for both downloads.
+
+**Column mapping (all 13 mapped - NO unmapped columns)**: `N°. Ficha`=IdAten-ItemEx | `Doc. Iden`=NroDId | `¿Conv.?`=IndCon S/N | `N° Conv`=IdConv | `Nombres`=Pacien | `Ocupación`=DesPue | `Fecha examen`=FecAte | `Tipo examen`=DesTCh | `CR`=CenCos | `Anexo 7D`=Anex7D | `Solicitado Por`=Solici | `Costos`=ventaPorMoneda+Simbol | `Doc.Fac`=NumDov ('' when NULL). Cross-referenced against SIGLA's own print branch (RptFacturacionForm.cs cols) and the Formato 35 header.
+
+### Mode
+
+Strict TDD (cached testing-capabilities `strict_tdd: true`, vitest 4). RED first per task; see TDD Cycle Evidence below.
+
+### TDD Cycle Evidence
+
+| Task | Test File | Layer | Safety Net | RED | GREEN | TRIANGULATE | REFACTOR |
+|------|-----------|-------|------------|-----|-------|-------------|----------|
+| U6.1 | `infrastructure/__tests__/filename.test.ts` | Unit | N/A (new) | Written (module missing, run failed) | 12/12 | 12 cases (S.A.C. dots, pure-punct, whitespace, accents, RFC5987 reserved) | Sanitize deduped after triangulation killed trailing-dot stripping |
+| U6.2 | `domain/__tests__/parseFiltroDto.test.ts` | Unit | N/A (new) | Written (exports missing) | 7/7 | 7 cases (absent/null/trim/non-string/empty/200-bound/filter-error-wins) | None needed |
+| U6.3 | `infrastructure/pdf/__tests__/template.test.ts` | Unit | 8/8 baseline | 3 failing (landscape/order/mapping) | 9/9 | Header-order per-every-thead + mapping row + NULL NumDov + S/N | Entities->literal UTF-8 headers |
+| U6.4 | `app/api/valoraciones/pdf/__tests__/route.test.ts` | Unit (route) | 5/5 baseline | 3 failing (attachment name, empresa 400, scoping) | 8/8 | Legacy-filename case + no-empresa-property-on-SP-filter case | Double cliente lookup collapsed |
+| U6.5 | `app/api/valoraciones/excel/__tests__/route.test.ts` | Unit (route) | 4/4 baseline | 2 failing | 7/7 | Scoped workbook row parsed via XLSX.read + 400 + legacy name | None needed |
+| U6.6 | `app/api/valoraciones/send/__tests__/route.test.ts` | Unit (route) | 17/17 baseline | 2 failing | 22/22 | Both-attachments scope + filenames + 400 | Test fixture bug fixed (vi.fn() vs mockResolvedValue) |
+| U6.7 | `hooks/__tests__/useExportarValoraciones.test.tsx` | Integration (hook) | 2/2 baseline | 1 failing (empresa param) | 3/3 | Body carries/omits empresa + anchor.download = server name | stubDownload captures anchor via mock `this` |
+| U6.8 | `hooks/__tests__/useEnviarValoraciones.test.ts` | Integration (hook) | 7/7 baseline | 1 failing (payload type) | 8/8 | Present + absent empresa FormData cases | None needed |
+| U6.9 | `components/__tests__/EmpresaList.test.tsx` | Integration | 7/7 baseline | 5 failing | 12/12 | 3 buttons x 2 rows, per-row handlers, stopPropagation, disabled-while-exporting | None needed |
+| U6.10 | `components/__tests__/EnviarValoracionesModal.test.tsx` | Integration | 6/6 baseline | 1 failing (prop type) | 7/7 | FormData empresa passthrough | None needed |
+| U6.11 | (page wiring) | N/A | N/A | Triangulation skipped: wiring-only - no page-level test file exists (U2 precedent); behavior lives in the child components/hooks tested above; gated by `pnpm tsc --noEmit` + eslint on the file | | | | |
+| U6.12 | `realEdgeHarness.test.ts` | Runtime (real Edge) | 1/1 baseline (portrait) | Portrait assertion rewritten to landscape (would fail pre-change) | 1/1 on Edge host | - | - |
+
+### Test Summary
+
+- Tests written this batch: 44 new/extended cases; total touched suites: 13 files / 103 tests green (targeted run, incl. realEdgeHarness)
+- Layers: Unit (routes+pure), Integration (hooks/components via @testing-library), Runtime (real-Edge harness - EXECUTED GREEN on this Edge host, not skipped)
+- Approval tests: realEdgeHarness size assertions doubled as the approval net for the landscape change
+- Pure functions created: `sanitizeEmpresaFilename`, `nombreArchivoExportacion`, `dispositionAttachment`, `asciiFallback`, `encodeRfc5987`, `parseEmpresaField`, `parseExportFiltroDto`
+
+### Work Unit Evidence - U6
+
+| Evidence | Value |
+|---|---|
+| Focused test command + result | `pnpm vitest run <12 touched test files>` -> **12 files / 102 tests passed** (+ realEdgeHarness separately: 1/1 on Edge host) |
+| Runtime harness | realEdgeHarness (REAL EdgePrinter): multi-page PDF, every page 842x595pt (A4 LANDSCAPE), footer numbering 1..N intact - PASSED on this Windows Edge host |
+| Rollback boundary | `git revert 49401d9 4876ea4 211dc54` (+ docs commit) - restores toolbar exports, portrait 7-col PDF and legacy filenames; no other feature touches these files |
+| Lint / types | `pnpm eslint <22 modified files>` -> exit 0; `pnpm tsc --noEmit` -> exit 0 |
+
+### Commits - U6
+
+| Hash | Message |
+|---|---|
+| `49401d9` | feat(valoraciones): scope pdf/excel/send exports to a per-empresa group key |
+| `4876ea4` | feat(valoraciones): render valoracion PDF in A4 landscape with the 13-column layout |
+| `211dc54` | feat(valoraciones): move export and send actions into each empresa row |
+| (docs) | docs(valoraciones): record U6 per-empresa landscape fix in specs and progress |
+
+### Changed Lines - U6
+
+| Scope | Diff |
+|---|---|
+| Code + tests (3 commits) | +903 / -158 = **1,061 churn** |
+| Docs (spec D8 amendment, tasks U6, this section) | ~+170 |
+| **U6 total** | **~1,231 churn vs 1,500 native-attempt budget (82%)** |
+
+### U6 Risks / Assumptions
+
+1. **Filename date = `fecIni` (queried period start, ISO `YYYY-MM-DD`)** - documented assumption from the fix instructions; user can veto (one-line change in `nombreArchivoExportacion` call sites).
+2. **Empresa scoping is NAME-keyed** (`NomCFa` fallback `NomCli` - the only per-empresa identity the SP returns; rows carry no CodCli). Two distinct clientes sharing an exact facturar-a display name would merge into one export group - same behavior as the on-screen grouping since U1, not a regression.
+3. **Consolidado mode has NO export buttons anymore** (the toolbar was the only entry; consolidado export was never specified - pre-existing risk 7 unchanged). Detail-mode rows carry all three actions.
+4. The email modal opened from a row uses the PANEL's `codCli` for the RUC prefill when a client filter is set - correct for the common case (clientless query + row pick = manual-degrade path, spec M-R3).
+5. Untracked `temp/` directory at repo root predates this batch - untouched, reported.

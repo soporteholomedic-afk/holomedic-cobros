@@ -60,3 +60,18 @@ Legend: `[Q-Rn]` = valoraciones-sigla-query req n Â· `[E-Rn]` = valoraciones-exp
 - [x] 3.3 Create `GET /api/valoraciones/contactos`: thin route â†’ `getContactDb().getByRuc()`; RED: RUC passthrough, empty on miss `[M-R3|D5]`
 - [x] 3.4 Create `POST /api/valoraciones/send`: re-query from filter DTO â†’ PDF/Excel attachments (no operator uploads), `sendEmail` purpose `facturacion`, user-safe errors (no credential/internal leakage), zero HOLOMEDIC writes; RED: mocked `sendEmail` success/failure mapping `[M-R1|M-R4|D4|D5]`
 - [x] 3.5 Create `valoraciones/presentation/components/EnviarValoracionesModal.tsx` + `hooks/useEnviarValoraciones.ts`: plantillas picker (area `valoraciones`) with token interpolation, RUC prefill via contactos, graceful manual entry when no RUC, attachment toggles; RED: prefill + manual-degrade scenarios `[M-R3|M-R4]`
+
+## Fix Batch U6 (user fix): Per-Row Actions + Landscape PDF + [Empresa]_[Fecha] Filenames
+
+- [x] U6.1 Create `valoraciones/infrastructure/filename.ts`: `sanitizeEmpresaFilename` (Windows-invalid `\ / : * ? " < > |` + control chars), `nombreArchivoExportacion` (`[Empresa]_[fecIni].[ext]`, legacy fallback), `dispositionAttachment` (ASCII fallback + RFC 5987 `filename*`); RED: filename.test.ts (12 cases incl. S.A.C. trailing-dot preservation)
+- [x] U6.2 `domain/parseFiltroDto.ts`: `parseEmpresaField` + `parseExportFiltroDto` (optional `empresa` group key, trimmed non-empty <=200, filter error wins); RED: parseFiltroDto.test.ts
+- [x] U6.3 `infrastructure/pdf/template.ts`: `@page { size: A4 landscape }` + EXACT 13-column table (`N°. Ficha|Doc. Iden|¿Conv.?|N° Conv|Nombres|Ocupación|Fecha examen|Tipo examen|CR|Anexo 7D|Solicitado Por|Costos|Doc.Fac` from IdAten-ItemEx, NroDId, IndCon S/N, IdConv, Pacien, DesPue, FecAte, DesTCh, CenCos, Anex7D, Solici, venta+Simbol, NumDov), compact CSS, membrete/grouping/IGV/footer kept; RED: template.test.ts (header order + mapping + landscape)
+- [x] U6.4 `renderValoracionesPdf(repo, filtro, empresa?)`: in-memory scoping by `nombreEmpresa`, cliente header = empresa, `nombrePdf(filtro, empresa?)`; pdf route: `parseExportFiltroDto`, `attachment` + `[Empresa]_[fecIni].pdf` disposition; RED: pdf route tests (scoping, filename, invalid-empresa 400)
+- [x] U6.5 Excel route: empresa scoping (content AS IS) + `[Empresa]_[fecIni].xlsx` disposition; RED: excel route tests (scoped workbook row, filename, 400)
+- [x] U6.6 Send route: `empresa` FormData field validated pre-work, threads to BOTH attachment regenerations + filenames; RED: send route tests (scoped attachments + names, 400)
+- [x] U6.7 `useExportarValoraciones.exportar(filtro, empresa?)`: body carries empresa when scoped, downloads under server filename; RED: hook tests
+- [x] U6.8 `useEnviarValoraciones`: payload `empresa?` -> FormData field; RED: hook test
+- [x] U6.9 `EmpresaList`: 3 icon-buttons per row (Enviar/Excel/PDF) with stopPropagation + per-type disabled-while-exporting; RED: component tests (buttons per row, per-row handlers, no row-click leak)
+- [x] U6.10 `EnviarValoracionesModal`: optional `empresa` prop threaded to the send payload; RED: modal test (FormData empresa)
+- [x] U6.11 `page.tsx`: remove global header toolbar, wire row actions + `enviarScope` modal (wiring-only; behavior covered by child tests; tsc/eslint gate)
+- [x] U6.12 realEdgeHarness updated to landscape (842x595pt per page) + ran GREEN on Edge host; docs amended (export spec, design D8 + contracts, this tasks file, apply-progress U6)

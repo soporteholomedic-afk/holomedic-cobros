@@ -15,6 +15,7 @@ Feature-sliced `src/features/valoraciones/**` on the cobranza precedent: domain 
 | D5 | `purpose:'facturacion'`; REQ-01 prefill via thin `GET /api/valoraciones/contactos` → `getContactDb().getByRuc()` | new SMTP env; widening `/api/cobranza/contactos` | proxy allows one permiso per route |
 | D6 | Numbering via additive optional `overrides` on `PdfPrinter.print(html, overrides?)` → puppeteer `displayHeaderFooter`+`footerTemplate`; `@page{size:A4}` drives breaks (`preferCSSPageSize` already true) | CSS margin boxes (Chromium-unsupported); forking EdgePrinter | musculoesqueletica caller unchanged; slice-2 spike validates; fallback: per-group in-flow footer |
 | D7 | Tipo trabajador: runtime constants query, hardcoded domain fallback | hardcode-only | OQ-7: combo never 500s |
+| D8 | **U6 (user fix)**: per-empresa row actions — `EmpresaList` rows carry Enviar/Excel/PDF buttons; export/send routes accept an optional `empresa` group key (`NomCFa`→`NomCli`), re-query from the filter (D4 kept) and scope rows IN MEMORY (the SP has no empresa param); PDF is A4 **landscape** with exactly 13 columns (`N°. Ficha|Doc. Iden|¿Conv.?|N° Conv|Nombres|Ocupación|Fecha examen|Tipo examen|CR|Anexo 7D|Solicitado Por|Costos|Doc.Fac` ← `IdAten-ItemEx|NroDId|IndCon S/N|IdConv|Pacien|DesPue|FecAte|DesTCh|CenCos|Anex7D|Solici|venta+Simbol|NumDov`); both exports named `[NombreEmpresa]_[fecIni].[ext]` (Windows-sanitized, `filename*` UTF-8; date = `fecIni` ISO — documented assumption) | toolbar-level global exports; per-group sub-PDFs; codCli-based scoping (rows carry no CodCli) | user: "buttons belong in rows"; group key is the only per-empresa identity in the row set |
 
 ## Data Flow
 
@@ -44,7 +45,8 @@ Feature-sliced `src/features/valoraciones/**` on the cobranza precedent: domain 
 - `ValoracionesFilter`: `{ fecIni, fecFin: 'YYYY-MM-DD' (required), codMon: 1|2, indFac: null|1|0 (default 0), inFsta: boolean, codCli?, codCfa?, codDes?, codPac?, codSed?, tipTra? }`; repository derives `00:00:00`/`23:59:59` bounds.
 - Binds: dates `DateTime`, `indFac Int` nullable, `inFsta Bit`, ids `Int`; consolidado drops `pCodCFa/pCodMon/pInFsta`; ajuste: preocupacional `VVtaMn -= ValVta`, adicionales replace, `VImpMn -= ValImp`.
 - Excel header (exact, 30): `facturar a, contratades, proyectodes, cr_proy, dociden, nombre, edad, Fecha de Nacimiento, ocupacion, tipotrab, feorden, fesoliciTramAdm, tipo_examen, perfil, resultado, anexo7d, total, solicitado, administrador, ficha, item, tcompro, nrodoc, nrovalor, ordpedi, cod_em, fec_rec, cancela, sede_cob, nro_cob`.
-- PDF: membrete data-URI; client/RUC/period/moneda/emission header; per-group SubTotal (Σ VVta round2), IGV 18%, Total, row `Simbol`.
+- PDF (U6 AMENDMENT): membrete data-URI; client/RUC/period/moneda/emission header; **A4 landscape** `@page`; per-destino-group tables with EXACTLY the 13 columns `N°. Ficha | Doc. Iden | ¿Conv.? | N° Conv | Nombres | Ocupación | Fecha examen | Tipo examen | CR | Anexo 7D | Solicitado Por | Costos | Doc.Fac` (mapping in D8), SubTotal (Σ VVta round2), IGV 18%, Total, row `Simbol`; footer page numbering (spike-2.0 overrides).
+- Export/send scoping (U6): optional `empresa` group key on `/pdf`, `/excel` (JSON body) and `/send` (FormData) — validated (trimmed non-empty ≤200 chars), rows filtered in memory by `nombreEmpresa`; filenames `[NombreEmpresa]_[fecIni].[ext]` via `infrastructure/filename.ts` (`sanitizeEmpresaFilename`, `nombreArchivoExportacion`, `dispositionAttachment` ASCII+RFC 5987).
 
 ## Testing Strategy (vitest, strict TDD — RED first)
 
