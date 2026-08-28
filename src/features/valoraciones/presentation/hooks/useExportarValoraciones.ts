@@ -13,6 +13,10 @@ import type { ValoracionesFilter } from '../../domain/entities';
  * download named by the server's `Content-Disposition`
  * (`[NombreEmpresa]_[fecIni].[ext]` when empresa-scoped).
  *
+ * U7: the in-flight state is scoped to the ONE empresa being exported —
+ * `empresaEnCurso` holds its group key (or `'__global__'` for a
+ * filter-only export) so only the clicked row shows a spinner.
+ *
  * `toFiltro` output is directly postable; the hook stays type-simple on
  * purpose (no label fields needed by the exports).
  */
@@ -20,7 +24,10 @@ export type TipoExportacion = 'pdf' | 'excel';
 
 export interface UseExportarValoracionesResult {
   exportar: (filtro: ValoracionesFilter, empresa?: string) => void;
-  exportando: boolean;
+  /** Empresa group key in flight, `'__global__'` for a filter-only export, `null` when idle. */
+  empresaEnCurso: string | null;
+  /** True while `empresa` is exporting (any export when `empresa` is omitted). */
+  estaExportando: (empresa?: string) => boolean;
   error: string | null;
 }
 
@@ -36,12 +43,13 @@ function nombreDesdeDisposition(disposition: string | null, tipo: TipoExportacio
 export function useExportarValoraciones(
   tipo: TipoExportacion,
 ): UseExportarValoracionesResult {
-  const [exportando, setExportando] = useState(false);
+  const [empresaEnCurso, setEmpresaEnCurso] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const exportar = useCallback(
     (filtro: ValoracionesFilter, empresa?: string): void => {
-      setExportando(true);
+      // U7: track WHICH export is in flight (row key or '__global__').
+      setEmpresaEnCurso(empresa ?? '__global__');
       setError(null);
 
       void (async () => {
@@ -76,12 +84,18 @@ export function useExportarValoraciones(
         } catch {
           setError('Error de conexión al exportar');
         } finally {
-          setExportando(false);
+          setEmpresaEnCurso(null);
         }
       })();
     },
     [tipo],
   );
 
-  return { exportar, exportando, error };
+  const estaExportando = useCallback(
+    (empresa?: string): boolean =>
+      empresa === undefined ? empresaEnCurso !== null : empresaEnCurso === empresa,
+    [empresaEnCurso],
+  );
+
+  return { exportar, empresaEnCurso, estaExportando, error };
 }

@@ -43,9 +43,9 @@ export default function ValoracionesPage() {
   const { filtros, dispatch, limpiar } = useValoracionesFilters();
   const { grupos, status, error, moneda, totalRegistros, buscar } = useValoraciones();
   const consolidadoQuery = useConsolidado();
-  const { exportar: exportarPdf, exportando: exportandoPdf, error: errorPdf } =
+  const { exportar: exportarPdf, empresaEnCurso: empresaPdfEnCurso, error: errorPdf } =
     useExportarValoraciones('pdf');
-  const { exportar: exportarExcel, exportando: exportandoExcel, error: errorExcel } =
+  const { exportar: exportarExcel, empresaEnCurso: empresaExcelEnCurso, error: errorExcel } =
     useExportarValoraciones('excel');
   const [grupoSeleccionado, setGrupoSeleccionado] = useState<EmpresaGrupo | null>(null);
   const [modoConsulta, setModoConsulta] = useState<'detalle' | 'consolidado'>('detalle');
@@ -146,8 +146,8 @@ export default function ValoracionesPage() {
             onEnviarEmpresa={enviarEmpresa}
             onExportarExcelEmpresa={exportarExcelEmpresa}
             onExportarPdfEmpresa={exportarPdfEmpresa}
-            exportandoExcel={exportandoExcel}
-            exportandoPdf={exportandoPdf}
+            empresaExcelEnCurso={empresaExcelEnCurso}
+            empresaPdfEnCurso={empresaPdfEnCurso}
           />
         )}
       </div>

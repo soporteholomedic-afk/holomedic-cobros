@@ -28,8 +28,8 @@ function renderList(overrides: Partial<Parameters<typeof EmpresaList>[0]> = {}) 
     onEnviarEmpresa: vi.fn(),
     onExportarExcelEmpresa: vi.fn(),
     onExportarPdfEmpresa: vi.fn(),
-    exportandoPdf: false,
-    exportandoExcel: false,
+    empresaPdfEnCurso: null,
+    empresaExcelEnCurso: null,
     ...overrides,
   };
   const utils = render(<EmpresaList {...props} />);
@@ -120,10 +120,33 @@ describe('EmpresaList', () => {
     expect(onSelectEmpresa).not.toHaveBeenCalled();
   });
 
-  it('disables the export buttons while that export type is in flight', () => {
-    renderList({ exportandoExcel: true });
-    expect(screen.getByLabelText('Descargar Excel de EMPRESA DEMO S.A.C.')).toBeDisabled();
+  it('scopes the Excel loading state to the clicked row only (U7)', () => {
+    renderList({ empresaExcelEnCurso: 'EMPRESA DEMO S.A.C.' });
+    const target = screen.getByLabelText('Descargar Excel de EMPRESA DEMO S.A.C.');
+    expect(target).toBeDisabled();
+    // The in-flight row swaps its icon for the spinner.
+    expect(target.querySelector('svg')).toHaveClass('animate-spin');
+
+    // Every other row stays enabled with its normal icons (no global spin).
+    const otra = screen.getByLabelText('Descargar Excel de OTRA EMPRESA SRL');
+    expect(otra).not.toBeDisabled();
+    expect(otra.querySelector('svg')).not.toHaveClass('animate-spin');
     expect(screen.getByLabelText('Descargar PDF de EMPRESA DEMO S.A.C.')).not.toBeDisabled();
+    expect(screen.getByLabelText('Descargar PDF de OTRA EMPRESA SRL')).not.toBeDisabled();
+    expect(screen.getByLabelText('Descargar PDF de OTRA EMPRESA SRL').querySelector('svg')).not.toHaveClass('animate-spin');
+  });
+
+  it('scopes the PDF loading state to the clicked row only (U7)', () => {
+    renderList({ empresaPdfEnCurso: 'OTRA EMPRESA SRL' });
+    const target = screen.getByLabelText('Descargar PDF de OTRA EMPRESA SRL');
+    expect(target).toBeDisabled();
+    expect(target.querySelector('svg')).toHaveClass('animate-spin');
+
+    const demo = screen.getByLabelText('Descargar PDF de EMPRESA DEMO S.A.C.');
+    expect(demo).not.toBeDisabled();
+    expect(demo.querySelector('svg')).not.toHaveClass('animate-spin');
+    expect(screen.getByLabelText('Descargar Excel de EMPRESA DEMO S.A.C.')).not.toBeDisabled();
+    expect(screen.getByLabelText('Descargar Excel de OTRA EMPRESA SRL')).not.toBeDisabled();
   });
 
   it('filters groups by the search box', () => {

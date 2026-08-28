@@ -14,13 +14,13 @@ function Probe({
   filtro: ValoracionesFilter;
   empresa?: string;
 }) {
-  const { exportar, exportando, error } = useExportarValoraciones(tipo);
+  const { exportar, empresaEnCurso, error } = useExportarValoraciones(tipo);
   return (
     <div>
       <button type="button" onClick={() => exportar(filtro, empresa)}>
         Exportar {tipo}
       </button>
-      {exportando && <p>Exportando…</p>}
+      {empresaEnCurso !== null && <p>Exportando {empresaEnCurso}</p>}
       {error && <p role="alert">{error}</p>}
     </div>
   );
@@ -96,6 +96,59 @@ describe('useExportarValoraciones', () => {
     // The anchor downloads under the server-provided [Empresa]_[fecha] name.
     const anchor = clickMock.mock.calls[0][0] as HTMLAnchorElement;
     expect(anchor.download).toBe('EMPRESA DEMO S.A.C._2026-01-01.pdf');
+  });
+
+  it('tracks the exporting empresa only while in flight and clears it after (U7)', async () => {
+    const clickMock = stubDownload();
+    // Hold the response open so the in-flight window is observable.
+    let resolveFetch: (value: Response) => void = () => undefined;
+    const fetchMock = vi.fn().mockImplementation(
+      () =>
+        new Promise<Response>((resolve) => {
+          resolveFetch = resolve;
+        }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    render(<Probe tipo="pdf" filtro={filtro} empresa="EMPRESA DEMO S.A.C." />);
+    fireEvent.click(screen.getByRole('button', { name: 'Exportar pdf' }));
+
+    // While pending, ONLY the clicked empresa is marked as in flight.
+    expect(await screen.findByText('Exportando EMPRESA DEMO S.A.C.')).toBeInTheDocument();
+
+    resolveFetch(
+      new Response(new Uint8Array([1]), {
+        status: 200,
+        headers: { 'content-type': 'application/pdf' },
+      }),
+    );
+    await waitFor(() => expect(clickMock).toHaveBeenCalledTimes(1));
+    // Once settled, no empresa remains in flight.
+    await waitFor(() =>
+      expect(screen.queryByText('Exportando EMPRESA DEMO S.A.C.')).not.toBeInTheDocument(),
+    );
+  });
+
+  it('marks a filter-only export with the global sentinel key while in flight (U7)', async () => {
+    let resolveFetch: (value: Response) => void = () => undefined;
+    const fetchMock = vi.fn().mockImplementation(
+      () =>
+        new Promise<Response>((resolve) => {
+          resolveFetch = resolve;
+        }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    render(<Probe tipo="excel" filtro={filtro} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Exportar excel' }));
+
+    expect(await screen.findByText('Exportando __global__')).toBeInTheDocument();
+    resolveFetch(
+      new Response(JSON.stringify({ error: 'boom' }), { status: 500 }),
+    );
+    await waitFor(() =>
+      expect(screen.queryByText('Exportando __global__')).not.toBeInTheDocument(),
+    );
   });
 
   it('surfaces a user-visible error when the export fails (no throw)', async () => {

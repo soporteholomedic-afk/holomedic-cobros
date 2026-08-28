@@ -31,10 +31,10 @@ export interface EmpresaListProps {
   onExportarExcelEmpresa: (grupo: EmpresaGrupo) => void;
   /** U6 row action: download the landscape PDF for this empresa only. */
   onExportarPdfEmpresa: (grupo: EmpresaGrupo) => void;
-  /** Disables the row Excel buttons while an Excel export is in flight. */
-  exportandoExcel: boolean;
-  /** Disables the row PDF buttons while a PDF export is in flight. */
-  exportandoPdf: boolean;
+  /** Empresa whose Excel export is in flight (`null` = none); only that row disables/spins (U7). */
+  empresaExcelEnCurso: string | null;
+  /** Empresa whose PDF export is in flight (`null` = none); only that row disables/spins (U7). */
+  empresaPdfEnCurso: string | null;
 }
 
 const ITEMS_PER_PAGE = 10;
@@ -48,8 +48,8 @@ export function EmpresaList({
   onEnviarEmpresa,
   onExportarExcelEmpresa,
   onExportarPdfEmpresa,
-  exportandoExcel,
-  exportandoPdf,
+  empresaExcelEnCurso,
+  empresaPdfEnCurso,
 }: EmpresaListProps) {
   const [busqueda, setBusqueda] = useState('');
   const [pagina, setPagina] = useState(1);
@@ -135,7 +135,11 @@ export function EmpresaList({
             )}
             {status === 'ready' &&
               (visibles.length > 0 ? (
-                visibles.map((grupo) => (
+                visibles.map((grupo) => {
+                  // U7: scope the loading state to the one row in flight.
+                  const excelFila = empresaExcelEnCurso === grupo.empresa;
+                  const pdfFila = empresaPdfEnCurso === grupo.empresa;
+                  return (
                   <tr
                     key={grupo.empresa}
                     onClick={() => onSelectEmpresa(grupo)}
@@ -175,10 +179,10 @@ export function EmpresaList({
                           aria-label={`Descargar Excel de ${grupo.empresa}`}
                           title="Descargar Excel de esta empresa"
                           onClick={() => onExportarExcelEmpresa(grupo)}
-                          disabled={exportandoExcel}
+                          disabled={excelFila}
                           className="p-2 rounded-lg border border-slate-200 dark:border-slate-800 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
                         >
-                          {exportandoExcel ? (
+                          {excelFila ? (
                             <Loader2 className="w-4 h-4 animate-spin" aria-hidden />
                           ) : (
                             <FileSpreadsheet className="w-4 h-4" aria-hidden />
@@ -189,10 +193,10 @@ export function EmpresaList({
                           aria-label={`Descargar PDF de ${grupo.empresa}`}
                           title="Descargar PDF de esta empresa"
                           onClick={() => onExportarPdfEmpresa(grupo)}
-                          disabled={exportandoPdf}
+                          disabled={pdfFila}
                           className="p-2 rounded-lg border border-slate-200 dark:border-slate-800 text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
                         >
-                          {exportandoPdf ? (
+                          {pdfFila ? (
                             <Loader2 className="w-4 h-4 animate-spin" aria-hidden />
                           ) : (
                             <FileDown className="w-4 h-4" aria-hidden />
@@ -201,7 +205,8 @@ export function EmpresaList({
                       </div>
                     </td>
                   </tr>
-                ))
+                  );
+                })
               ) : (
                 <tr>
                   <td
