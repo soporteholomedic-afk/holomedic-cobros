@@ -5,10 +5,10 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 const mockRequestExecute = vi.hoisted(() => vi.fn());
 const mockRequestInput = vi.hoisted(() => vi.fn());
 const mockPoolConnect = vi.hoisted(() => vi.fn());
-const mockGetSiglaReadOnlyPool = vi.hoisted(() => vi.fn());
+const mockGetPool = vi.hoisted(() => vi.fn());
 
 vi.mock('@/lib/db', () => ({
-  getSiglaReadOnlyPool: mockGetSiglaReadOnlyPool,
+  getPool: mockGetPool,
 }));
 
 function createMockPool() {
@@ -94,7 +94,7 @@ describe('GET /api/valoraciones/sigla', () => {
         },
       ],
     });
-    mockGetSiglaReadOnlyPool.mockResolvedValueOnce(mockPool);
+    mockGetPool.mockResolvedValueOnce(mockPool);
 
     const { GET } = await import('../route');
     const res = await GET(makeUrl(OK_QUERY));
@@ -114,7 +114,7 @@ describe('GET /api/valoraciones/sigla', () => {
   it('executes the SP via the read-only pool with typed binds and time bounds', async () => {
     const mockPool = createMockPool();
     mockRequestExecute.mockResolvedValueOnce({ recordset: [] });
-    mockGetSiglaReadOnlyPool.mockResolvedValueOnce(mockPool);
+    mockGetPool.mockResolvedValueOnce(mockPool);
 
     const { GET } = await import('../route');
     await GET(makeUrl(`${OK_QUERY}&codCli=7&tipTra=620001`));
@@ -137,7 +137,7 @@ describe('GET /api/valoraciones/sigla', () => {
     const res = await GET(makeUrl('?codMon=1'));
 
     expect(res.status).toBe(400);
-    expect(mockGetSiglaReadOnlyPool).not.toHaveBeenCalled();
+    expect(mockGetPool).not.toHaveBeenCalled();
     expect(mockRequestExecute).not.toHaveBeenCalled();
   });
 
@@ -146,7 +146,7 @@ describe('GET /api/valoraciones/sigla', () => {
     const res = await GET(makeUrl('?fecIni=2026-02-01&fecFin=2026-01-31&codMon=1'));
 
     expect(res.status).toBe(400);
-    expect(mockGetSiglaReadOnlyPool).not.toHaveBeenCalled();
+    expect(mockGetPool).not.toHaveBeenCalled();
     expect(mockRequestExecute).not.toHaveBeenCalled();
   });
 
@@ -180,7 +180,7 @@ describe('GET /api/valoraciones/sigla', () => {
   it('accepts indFac=null (Todos) and inFsta=true as BIT binds', async () => {
     const mockPool = createMockPool();
     mockRequestExecute.mockResolvedValueOnce({ recordset: [] });
-    mockGetSiglaReadOnlyPool.mockResolvedValueOnce(mockPool);
+    mockGetPool.mockResolvedValueOnce(mockPool);
 
     const { GET } = await import('../route');
     const res = await GET(makeUrl('?fecIni=2026-01-01&fecFin=2026-01-31&codMon=2&indFac=null&inFsta=true'));
@@ -194,7 +194,7 @@ describe('GET /api/valoraciones/sigla', () => {
   it('binds <=0 numeric filters as NULL (no filter)', async () => {
     const mockPool = createMockPool();
     mockRequestExecute.mockResolvedValueOnce({ recordset: [] });
-    mockGetSiglaReadOnlyPool.mockResolvedValueOnce(mockPool);
+    mockGetPool.mockResolvedValueOnce(mockPool);
 
     const { GET } = await import('../route');
     await GET(makeUrl(`${OK_QUERY}&codCli=0&codSed=-4`));
@@ -211,7 +211,7 @@ describe('GET /api/valoraciones/sigla', () => {
     mockRequestExecute.mockRejectedValueOnce(
       new Error("Procedure or object 'SP_RPT_REPFACTURACION' not found"),
     );
-    mockGetSiglaReadOnlyPool.mockResolvedValueOnce(mockPool);
+    mockGetPool.mockResolvedValueOnce(mockPool);
 
     const { GET } = await import('../route');
     const res = await GET(makeUrl(OK_QUERY));
@@ -224,7 +224,7 @@ describe('GET /api/valoraciones/sigla', () => {
   });
 
   it('returns a user-safe 500 when the pool config rejects sa (config error)', async () => {
-    mockGetSiglaReadOnlyPool.mockRejectedValueOnce(
+    mockGetPool.mockRejectedValueOnce(
       new Error('SIGLA read-only pool misconfiguration: resolved user "sa"'),
     );
 
@@ -255,7 +255,7 @@ describe('GET /api/valoraciones/sigla?consolidado=true', () => {
     expect(res.status).toBe(400);
     const body = await res.json();
     expect(body.error).toContain('cliente');
-    expect(mockGetSiglaReadOnlyPool).not.toHaveBeenCalled();
+    expect(mockGetPool).not.toHaveBeenCalled();
     expect(mockRequestExecute).not.toHaveBeenCalled();
   });
 
@@ -274,7 +274,7 @@ describe('GET /api/valoraciones/sigla?consolidado=true', () => {
         { CodCli: 55, NomCom: 'EMPRESA DEMO', CodDes: 101, DesDes: 'SEDE NORTE', NomSer: 'ADI UNO', CanEva: 1, ValImp: 118, ValVta: 100 },
       ],
     });
-    mockGetSiglaReadOnlyPool.mockResolvedValueOnce(mockPool);
+    mockGetPool.mockResolvedValueOnce(mockPool);
 
     const { GET } = await import('../route');
     const res = await GET(makeUrl(`${OK_QUERY}&consolidado=true&codCli=55`));
@@ -304,7 +304,7 @@ describe('GET /api/valoraciones/sigla?consolidado=true', () => {
   it('treats consolidado=1 the same as consolidado=true', async () => {
     const mockPool = createMockPool();
     mockRequestExecute.mockResolvedValue({ recordset: [] });
-    mockGetSiglaReadOnlyPool.mockResolvedValueOnce(mockPool);
+    mockGetPool.mockResolvedValueOnce(mockPool);
 
     const { GET } = await import('../route');
     const res = await GET(makeUrl(`${OK_QUERY}&consolidado=1&codCli=9`));
@@ -319,7 +319,7 @@ describe('GET /api/valoraciones/sigla?consolidado=true', () => {
   it('returns a user-safe 500 when the consolidado SP is missing (live-DB reality)', async () => {
     const mockPool = createMockPool();
     mockRequestExecute.mockRejectedValueOnce(new Error("Could not find stored procedure 'SP_RPT_CONSOLIDADOFACTURACION'."));
-    mockGetSiglaReadOnlyPool.mockResolvedValueOnce(mockPool);
+    mockGetPool.mockResolvedValueOnce(mockPool);
 
     const { GET } = await import('../route');
     const res = await GET(makeUrl(`${OK_QUERY}&consolidado=true&codCli=55`));

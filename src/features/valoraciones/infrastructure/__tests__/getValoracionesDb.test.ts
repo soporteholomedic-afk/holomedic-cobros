@@ -4,10 +4,10 @@ import type mssql from 'mssql';
 import { SiglaValoracionesRepository } from '../sqlserver/SiglaValoracionesRepository';
 import { getValoracionesDb, __setValoracionesDbForTests } from '../getValoracionesDb';
 
-const mockGetSiglaReadOnlyPool = vi.hoisted(() => vi.fn());
+const mockGetPool = vi.hoisted(() => vi.fn());
 
 vi.mock('@/lib/db', () => ({
-  getSiglaReadOnlyPool: mockGetSiglaReadOnlyPool,
+  getPool: mockGetPool,
 }));
 
 describe('getValoracionesDb — cached-promise factory (REQ-03)', () => {
@@ -21,14 +21,14 @@ describe('getValoracionesDb — cached-promise factory (REQ-03)', () => {
       connect: vi.fn().mockResolvedValue(undefined),
       request: vi.fn(),
     } as unknown as mssql.ConnectionPool;
-    mockGetSiglaReadOnlyPool.mockResolvedValueOnce(fakePool);
+    mockGetPool.mockResolvedValueOnce(fakePool);
 
     const a = await getValoracionesDb();
     const b = await getValoracionesDb();
 
     expect(a).toBe(b);
     expect(a).toBeInstanceOf(SiglaValoracionesRepository);
-    expect(mockGetSiglaReadOnlyPool).toHaveBeenCalledTimes(1);
+    expect(mockGetPool).toHaveBeenCalledTimes(1);
     expect(fakePool.connect).toHaveBeenCalledTimes(1);
   });
 
@@ -36,14 +36,14 @@ describe('getValoracionesDb — cached-promise factory (REQ-03)', () => {
     const fakeRepo = { fake: true } as unknown as Awaited<ReturnType<typeof getValoracionesDb>>;
     __setValoracionesDbForTests(fakeRepo);
     await expect(getValoracionesDb()).resolves.toBe(fakeRepo);
-    expect(mockGetSiglaReadOnlyPool).not.toHaveBeenCalled();
+    expect(mockGetPool).not.toHaveBeenCalled();
 
     __setValoracionesDbForTests(null);
     const fakePool = {
       connect: vi.fn().mockResolvedValue(undefined),
       request: vi.fn(),
     } as unknown as mssql.ConnectionPool;
-    mockGetSiglaReadOnlyPool.mockResolvedValueOnce(fakePool);
+    mockGetPool.mockResolvedValueOnce(fakePool);
 
     const repo = await getValoracionesDb();
     expect(repo).toBeInstanceOf(SiglaValoracionesRepository);

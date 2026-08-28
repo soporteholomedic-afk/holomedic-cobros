@@ -5,10 +5,10 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 const mockRequestExecute = vi.hoisted(() => vi.fn());
 const mockRequestInput = vi.hoisted(() => vi.fn());
 const mockPoolConnect = vi.hoisted(() => vi.fn());
-const mockGetSiglaReadOnlyPool = vi.hoisted(() => vi.fn());
+const mockGetPool = vi.hoisted(() => vi.fn());
 
 vi.mock('@/lib/db', () => ({
-  getSiglaReadOnlyPool: mockGetSiglaReadOnlyPool,
+  getPool: mockGetPool,
 }));
 
 function createMockPool() {
@@ -52,7 +52,7 @@ describe('GET /api/valoraciones/lookups/[tipo]', () => {
     mockPool.request().query = vi.fn().mockResolvedValue({
       recordset: [{ CodCli: 1, NomCom: 'EMPRESA A', NroRuc: '20511165181' }],
     });
-    mockGetSiglaReadOnlyPool.mockResolvedValueOnce(mockPool);
+    mockGetPool.mockResolvedValueOnce(mockPool);
 
     const { GET } = await import('../route');
     const res = await GET(makeRequest('?q=empresa'), ctx('clientes'));
@@ -68,7 +68,7 @@ describe('GET /api/valoraciones/lookups/[tipo]', () => {
   it('clientes: wildcard-only q is escaped so it cannot match everything', async () => {
     const mockPool = createMockPool();
     mockPool.request().query = vi.fn().mockResolvedValue({ recordset: [] });
-    mockGetSiglaReadOnlyPool.mockResolvedValueOnce(mockPool);
+    mockGetPool.mockResolvedValueOnce(mockPool);
 
     const { GET } = await import('../route');
     const res = await GET(makeRequest('?q=%_'), ctx('clientes'));
@@ -83,7 +83,7 @@ describe('GET /api/valoraciones/lookups/[tipo]', () => {
     const res = await GET(makeRequest('?q=A'), ctx('clientes'));
 
     expect(res.status).toBe(400);
-    expect(mockGetSiglaReadOnlyPool).not.toHaveBeenCalled();
+    expect(mockGetPool).not.toHaveBeenCalled();
     expect(mockRequestInput).not.toHaveBeenCalled();
   });
 
@@ -92,7 +92,7 @@ describe('GET /api/valoraciones/lookups/[tipo]', () => {
     const res = await GET(makeRequest(), ctx('clientes'));
 
     expect(res.status).toBe(400);
-    expect(mockGetSiglaReadOnlyPool).not.toHaveBeenCalled();
+    expect(mockGetPool).not.toHaveBeenCalled();
   });
 
   it('pacientes: returns {codPac, nombre} items', async () => {
@@ -100,7 +100,7 @@ describe('GET /api/valoraciones/lookups/[tipo]', () => {
     mockPool.request().query = vi.fn().mockResolvedValue({
       recordset: [{ CodPer: 10000001, NroDId: '46145583', Nombre: 'CANCINO CUEVA NOELIA' }],
     });
-    mockGetSiglaReadOnlyPool.mockResolvedValueOnce(mockPool);
+    mockGetPool.mockResolvedValueOnce(mockPool);
 
     const { GET } = await import('../route');
     const res = await GET(makeRequest('?q=CANCINO'), ctx('pacientes'));
@@ -120,7 +120,7 @@ describe('GET /api/valoraciones/lookups/[tipo]', () => {
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body).toEqual({ resultados: [] });
-    expect(mockGetSiglaReadOnlyPool).not.toHaveBeenCalled();
+    expect(mockGetPool).not.toHaveBeenCalled();
   });
 
   it('destinos: with codCli=1 returns active destinations', async () => {
@@ -128,7 +128,7 @@ describe('GET /api/valoraciones/lookups/[tipo]', () => {
     mockPool.request().query = vi.fn().mockResolvedValue({
       recordset: [{ CodDes: 1657, DesDes: 'ADICIONALES' }],
     });
-    mockGetSiglaReadOnlyPool.mockResolvedValueOnce(mockPool);
+    mockGetPool.mockResolvedValueOnce(mockPool);
 
     const { GET } = await import('../route');
     const res = await GET(makeRequest('?codCli=1'), ctx('destinos'));
@@ -147,7 +147,7 @@ describe('GET /api/valoraciones/lookups/[tipo]', () => {
         { CodCon: 620002, DesCon: 'EMPLEADO' },
       ],
     });
-    mockGetSiglaReadOnlyPool.mockResolvedValueOnce(mockPool);
+    mockGetPool.mockResolvedValueOnce(mockPool);
 
     const { GET } = await import('../route');
     const res = await GET(makeRequest(), ctx('tipos-trabajador'));
@@ -165,7 +165,7 @@ describe('GET /api/valoraciones/lookups/[tipo]', () => {
     mockPool.request().query = vi.fn().mockResolvedValue({
       recordset: [{ CodSed: 1, NomSed: 'SEDE SURQUILLO' }],
     });
-    mockGetSiglaReadOnlyPool.mockResolvedValueOnce(mockPool);
+    mockGetPool.mockResolvedValueOnce(mockPool);
 
     const { GET } = await import('../route');
     const res = await GET(makeRequest(), ctx('sedes'));
@@ -180,7 +180,7 @@ describe('GET /api/valoraciones/lookups/[tipo]', () => {
     const res = await GET(makeRequest('?q=abc'), ctx('monedas'));
 
     expect(res.status).toBe(404);
-    expect(mockGetSiglaReadOnlyPool).not.toHaveBeenCalled();
+    expect(mockGetPool).not.toHaveBeenCalled();
   });
 
   it('repository failure → user-safe 500 (no SQL/table leakage)', async () => {
@@ -188,7 +188,7 @@ describe('GET /api/valoraciones/lookups/[tipo]', () => {
     mockPool.request().query = vi.fn().mockRejectedValue(
       new Error('Invalid object name \'Cliente\'.'),
     );
-    mockGetSiglaReadOnlyPool.mockResolvedValueOnce(mockPool);
+    mockGetPool.mockResolvedValueOnce(mockPool);
 
     const { GET } = await import('../route');
     const res = await GET(makeRequest('?q=empresa'), ctx('clientes'));

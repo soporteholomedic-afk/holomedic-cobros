@@ -8,10 +8,10 @@ import { buscarRutaProtegida, permisoParaRuta } from '../routes';
 
 // Any module-level DB access the routes might attempt is instrumented:
 // if the proxy denies access, nothing below may open a pool.
-const mockGetSiglaReadOnlyPool = vi.hoisted(() => vi.fn());
+const mockGetPool = vi.hoisted(() => vi.fn());
 
 vi.mock('@/lib/db', () => ({
-  getSiglaReadOnlyPool: mockGetSiglaReadOnlyPool,
+  getPool: mockGetPool,
 }));
 
 function fakeRequest(pathname: string, token?: string): NextRequest {
@@ -65,7 +65,7 @@ describe('REQ-03 Q-R7 — /api/valoraciones route protection', () => {
     expect(res.status).toBe(401);
     const body = await res.json();
     expect(body).toEqual({ success: false, error: 'No autenticado' });
-    expect(mockGetSiglaReadOnlyPool).not.toHaveBeenCalled();
+    expect(mockGetPool).not.toHaveBeenCalled();
   });
 
   it('RED threat: authenticated without permiso valoraciones → 403 and zero SP calls', async () => {
@@ -79,7 +79,7 @@ describe('REQ-03 Q-R7 — /api/valoraciones route protection', () => {
     const body = await res.json();
     expect(body.success).toBe(false);
     expect(body.permisoRequerido).toBe('valoraciones');
-    expect(mockGetSiglaReadOnlyPool).not.toHaveBeenCalled();
+    expect(mockGetPool).not.toHaveBeenCalled();
   });
 
   it('lets authenticated users with the permiso through', () => {
