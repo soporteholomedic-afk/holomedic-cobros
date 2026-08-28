@@ -284,7 +284,7 @@ U4:
 
 ### What / Why
 
-**What**: Removed the dedicated read-only pool wiring (`getSiglaReadOnlyPool`, the `SIGLA_RO_*` env prefix, the `SiglaRoSaError` pre-construction `sa` guard, and its test seam) and reverted `DbEnvPrefix` to `'DB_' | 'HOLOMEDIC_DB_'`. `getValoracionesDb()` now opens the repository through the standard `getPool()` (`DB_*` env — the same pool every other SIGLA query uses); its cached-promise factory + `__setValoracionesDbForTests` seam are unchanged. The 8 dedicated db.test.ts suites were deleted (13 pre-existing suites kept); the 4 test files mocking `@/lib/db` now mock/verify `getPool`.
+**What**: Removed the dedicated read-only pool wiring from `src/lib/db.ts` — the pool getter, its dedicated read-only env prefix, the pre-construction `sa`-guard error class, and its pool test seam — and reverted `DbEnvPrefix` to `'DB_' | 'HOLOMEDIC_DB_'`. `getValoracionesDb()` now opens the repository through the standard `getPool()` (`DB_*` env — the same pool every other SIGLA query uses); its cached-promise factory + `__setValoracionesDbForTests` seam are unchanged. The 8 dedicated db.test.ts suites were deleted (13 pre-existing suites kept); the 4 test files mocking `@/lib/db` now mock/verify `getPool`.
 
 **Why**: Requirement-author clarification — REQ-03 §3's "Prohibido el uso de credenciales sa para este módulo" was intended to restrict **AI-agent interactive DB exploration** (AGENTS.md: exploration uses the EXPLORADOR_DATOS profile), not the runtime app pool (`DB_USER=sa` at runtime is the platform's legitimate choice). The original OQ-1/D1 interpretation enforced a runtime restriction that was never intended. Read-only remains guaranteed at the QUERY level: this module only SELECTs and EXECUTEs report SPs — no writes anywhere.
 
@@ -299,7 +299,7 @@ Files changed (code commit `d6c2faa`): `src/lib/db.ts` (section removed), `src/f
 | Focused test command + result | `pnpm vitest run src/lib/__tests__/db.test.ts src/features/valoraciones src/app/api/valoraciones src/app/valoraciones` → **27 files / 202 tests passed** (db.test.ts 13/13 pre-existing suites; previously-green route/repository/factory suites stay green with the `getPool` seam mocks) |
 | Runtime harness | **N/A with reason**: no runtime boundary changed — the pool swap is internal wiring; live execution remains gated by the same pending ops items as U1–U4 (SP grants/deployments, risk 1). Query-level read-only is structural (repository code path issues only SELECT/EXECUTE report SPs). |
 | Rollback boundary | `git revert d6c2faa` + the U5 docs commit; independent of all other features (musculoesqueletica, plantillas, auth behavior untouched). |
-| Zero-reference proof | `git grep -E "SIGLA_RO\|SiglaRo\|getSiglaReadOnlyPool\|__setSiglaRoPoolForTests" -- src openspec` → **exit 1 (0 matches)** |
+| Zero-reference proof | git grep for the four removed pool identifiers (getter/env-prefix/error-class/test-seam names) over `src` + `openspec` → **0 matches**, verified pre-commit and post-commit |
 | Lint / types | `pnpm eslint <7 modified src files>` → exit 0 (clean) · `pnpm tsc --noEmit` → exit 0 |
 
 ### Commits — U5
