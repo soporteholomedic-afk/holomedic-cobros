@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 // Hoist mock functions so they're available in vi.mock factory (vitest hoists mock calls)
 const mockSendMail = vi.hoisted(() => vi.fn());
+const mockReadFile = vi.hoisted(() => vi.fn());
 
 vi.mock('nodemailer', () => ({
   default: {
@@ -11,12 +12,24 @@ vi.mock('nodemailer', () => ({
   },
 }));
 
-import { sendEmail, __resetTransport } from '../sendEmail';
+vi.mock('node:fs/promises', () => {
+  // Provide BOTH the named export (sendEmail's import) and a default
+  // shape — parts of the module graph default-import fs/promises.
+  const readFile = mockReadFile;
+  return { readFile, default: { readFile } };
+});
+
+import { sendEmail, __resetLogoCache, __resetTransport } from '../sendEmail';
 
 beforeEach(() => {
   vi.clearAllMocks();
   __resetTransport();
+  __resetLogoCache();
   mockSendMail.mockReset();
+  mockReadFile.mockReset();
+  // Default: the logo file reads successfully. Tests that exercise the
+  // failure path override this with mockRejectedValue.
+  mockReadFile.mockResolvedValue(Buffer.from('fake-logo-png'));
 
   // Set default env vars before each test — all 6 SMTP vars (shared + both
   // purposes) plus the legacy pair so WU-1's resolver stub (which still reads
@@ -732,5 +745,144 @@ describe('cobranza purpose (REQ-01 DIR-10)', () => {
     if (!result.success) {
       expect(result.error).toContain('SMTP_USER_CONSOLIDADOS');
     }
+  });
+});
+
+// ---- Embedded signature logo (cid:holomedic-logo auto-attach) ----
+
+describe('embedded signature logo (cid:holomedic-logo)', () => {
+  const CID_HTML =
+    '<table><tr><td><img src="cid:holomedic-logo" width="120" /></td></tr></table>';
+
+  function sentAttachments(): unknown[] | undefined {
+    const mailOptions = mockSendMail.mock.calls.at(-1)?.[0] as
+      | { attachments?: unknown[] }
+      | undefined;
+    return mailOptions?.attachments;
+  }
+
+  it('appends the logo attachment when the html references the cid', async () => {
+    mockSendMail.mockResolvedValue({ messageId: '<logo@x.com>' });
+
+    const result = await sendEmail({
+      to: ['a@b.com'],
+      subject: 'Con firma',
+      html: CID_HTML,
+      purpose: 'facturacion',
+    });
+
+    expect(result.success).toBe(true);
+    const attachments = sentAttachments();
+    expect(Array.isArray(attachments)).toBe(true);
+    const logo = (attachments as { filename: string; content?: Buffer }[]).find(
+      (a) => a.filename === 'logo-holomedic.png',
+    );
+    expect(logo).toEqual(
+      expect.objectContaining({
+        filename: 'logo-holomedic.png',
+        contentType: 'image/png',
+        cid: 'holomedic-logo',
+      }),
+    );
+    expect(logo?.content).toBeInstanceOf(Buffer);
+    expect(logo?.content?.toString()).toBe('fake-logo-png');
+  });
+
+  it('does NOT read the logo or attach anything when the html lacks the cid', async () => {
+    mockSendMail.mockResolvedValue({ messageId: '<nologo@x.com>' });
+
+    const result = await sendEmail({
+      to: ['a@b.com'],
+      subject: 'Sin firma',
+      html: '<p>Sin cid</p>',
+      purpose: 'facturacion',
+    });
+
+    expect(result.success).toBe(true);
+    expect(mockReadFile).not.toHaveBeenCalled();
+    expect(mockSendMail).toHaveBeenCalledWith(
+      expect.not.objectContaining({ attachments: expect.anything() }),
+    );
+  });
+
+  it('does NOT duplicate the logo when an attachment already carries the cid', async () => {
+    mockSendMail.mockResolvedValue({ messageId: '<dup@x.com>' });
+
+    await sendEmail({
+      to: ['a@b.com'],
+      subject: 'Logo explicito',
+      html: CID_HTML,
+      attachments: [
+        { filename: 'logo-holomedic.png', content: Buffer.from('explicit'), contentType: 'image/png', cid: 'holomedic-logo' },
+      ],
+      purpose: 'facturacion',
+    });
+
+    const attachments = sentAttachments() as { cid?: string }[];
+    expect(attachments).toHaveLength(1);
+    expect(attachments[0]?.cid).toBe('holomedic-logo');
+    // The caller's buffer wins — no re-read, no second entry.
+    expect(mockReadFile).not.toHaveBeenCalled();
+    expect(attachments[0]).toEqual(
+      expect.objectContaining({ content: Buffer.from('explicit') }),
+    );
+  });
+
+  it('sends WITHOUT the logo when the file read fails — warning logged, send still succeeds', async () => {
+    mockReadFile.mockRejectedValue(
+      new Error('ENOENT: no such file or directory, open logo-holomedic.png'),
+    );
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    mockSendMail.mockResolvedValue({ messageId: '<nologo2@x.com>' });
+
+    const result = await sendEmail({
+      to: ['a@b.com'],
+      subject: 'Logo ausente',
+      html: CID_HTML,
+      purpose: 'facturacion',
+    });
+
+    expect(result).toEqual({ success: true, messageId: '<nologo2@x.com>' });
+    expect(mockSendMail).toHaveBeenCalledWith(
+      expect.not.objectContaining({ attachments: expect.anything() }),
+    );
+    expect(warnSpy).toHaveBeenCalled();
+    const warnText = warnSpy.mock.calls.flat().map(String).join(' ');
+    expect(warnText).toMatch(/logo/i);
+    warnSpy.mockRestore();
+  });
+
+  it('reads the logo file ONCE and caches it across sends', async () => {
+    mockSendMail.mockResolvedValue({ messageId: '<cache-logo@x.com>' });
+
+    await sendEmail({ to: ['a@b.com'], subject: 'Uno', html: CID_HTML, purpose: 'facturacion' });
+    await sendEmail({ to: ['c@d.com'], subject: 'Dos', html: CID_HTML, purpose: 'facturacion' });
+
+    expect(mockReadFile).toHaveBeenCalledTimes(1);
+    expect(mockSendMail).toHaveBeenCalledTimes(2);
+    for (const call of mockSendMail.mock.calls) {
+      const attachments = (call[0] as { attachments?: { cid?: string }[] }).attachments;
+      expect(attachments?.some((a) => a.cid === 'holomedic-logo')).toBe(true);
+    }
+  });
+
+  it('keeps caller attachments and appends the logo after them', async () => {
+    mockSendMail.mockResolvedValue({ messageId: '<mix@x.com>' });
+
+    await sendEmail({
+      to: ['a@b.com'],
+      subject: 'Mixto',
+      html: CID_HTML,
+      attachments: [
+        { filename: 'report.pdf', content: Buffer.from('pdf'), contentType: 'application/pdf' },
+      ],
+      purpose: 'facturacion',
+    });
+
+    const attachments = sentAttachments() as { filename: string }[];
+    expect(attachments.map((a) => a.filename)).toEqual([
+      'report.pdf',
+      'logo-holomedic.png',
+    ]);
   });
 });

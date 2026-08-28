@@ -1,4 +1,6 @@
 import nodemailer from 'nodemailer';
+import { readFile } from 'node:fs/promises';
+import path from 'node:path';
 
 // ---- Types ----
 
@@ -6,6 +8,9 @@ export interface EmailAttachment {
   filename: string;
   content: Buffer | string;
   contentType?: string;
+  /** Content-ID the html body references (`src="cid:<id>"`) — used by
+   *  the embedded signature logo and any future inline image. */
+  cid?: string;
 }
 
 export type Purpose = 'consolidados' | 'facturacion' | 'cobranza';
@@ -127,6 +132,37 @@ function getTransport(
   return transport;
 }
 
+// ---- Embedded signature logo (firma-correo redesign) ----
+
+const LOGO_CID = 'holomedic-logo';
+const LOGO_FILENAME = 'logo-holomedic.png';
+const LOGO_PATH = path.resolve(process.cwd(), 'public', 'logo-holomedic.png');
+
+/**
+ * Lazily-read, module-cached logo buffer. The file is read ONCE per
+ * process; a failed read resolves to `null` (warned, also cached) so a
+ * missing logo NEVER fails a send — the email just goes out without
+ * the embedded image.
+ */
+let logoBufferPromise: Promise<Buffer | null> | null = null;
+
+function loadLogoBuffer(): Promise<Buffer | null> {
+  if (logoBufferPromise === null) {
+    logoBufferPromise = readFile(LOGO_PATH).then(
+      (content) => content,
+      (error: unknown) => {
+        console.warn(
+          '[sendEmail] Could not read the signature logo — sending without it.',
+          `Path: ${LOGO_PATH}`,
+          `Reason: ${error instanceof Error ? error.message : String(error)}`,
+        );
+        return null;
+      },
+    );
+  }
+  return logoBufferPromise;
+}
+
 // ---- Main API ----
 
 export async function sendEmail(
@@ -138,6 +174,30 @@ export async function sendEmail(
   let resolvedHost: string | undefined;
   let resolvedPort: number | undefined;
   let resolvedUser: string | undefined;
+
+  // Signature logo embedding: when the body references the logo cid and
+  // no attachment already carries it, append the cached public asset.
+  // Runs before the try block on purpose — logo resolution can never be
+  // misclassified as an SMTP error.
+  let attachments = params.attachments;
+  if (
+    params.html.includes(`cid:${LOGO_CID}`) &&
+    !(params.attachments ?? []).some((attachment) => attachment.cid === LOGO_CID)
+  ) {
+    const logo = await loadLogoBuffer();
+    if (logo !== null) {
+      attachments = [
+        ...(params.attachments ?? []),
+        {
+          filename: LOGO_FILENAME,
+          content: logo,
+          contentType: 'image/png',
+          cid: LOGO_CID,
+        },
+      ];
+    }
+  }
+
   try {
     const creds = resolveCredsWithFallback(purpose);
     resolvedHost = creds.host;
@@ -149,7 +209,7 @@ export async function sendEmail(
       from: creds.user,
       to: params.to,
       ...(params.cc ? { cc: params.cc } : {}),
-      ...(params.attachments ? { attachments: params.attachments } : {}),
+      ...(attachments ? { attachments } : {}),
       subject: params.subject,
       html: params.html,
     });
@@ -218,4 +278,10 @@ export function __resetTransport(purpose?: Purpose): void {
   } else {
     transports.delete(purpose);
   }
+}
+
+/** Reset the module-level logo cache (for testing only) so each test
+ *  controls the outcome of the lazy `public/logo-holomedic.png` read. */
+export function __resetLogoCache(): void {
+  logoBufferPromise = null;
 }
