@@ -307,7 +307,7 @@ Files changed (code commit `d6c2faa`): `src/lib/db.ts` (section removed), `src/f
 | Hash | Message |
 |---|---|
 | `d6c2faa` | refactor(valoraciones): use standard DB_* app pool per requirement-author clarification |
-| (docs) | docs(valoraciones): record U5 standard-pool amendment in specs and progress |
+| `f4a5ec1` | docs(valoraciones): record U5 standard-pool amendment in specs and progress |
 
 ### Changed Lines — U5
 
