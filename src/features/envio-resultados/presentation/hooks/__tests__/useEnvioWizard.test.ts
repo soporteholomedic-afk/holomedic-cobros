@@ -1,14 +1,19 @@
 /**
- * PR envio-resultados CAMO/EMO wizard — WU-1.3.
- *
  * `useEnvioWizard` is the 4-step wizard state machine. The reducer +
- * selectors are exported as pure functions so PR3 can exercise the
+ * selectors are exported as pure functions so tests can exercise the
  * round-trip without React. The thin `useEnvioWizard` hook just
  * wraps `useReducer` and exposes imperative handlers.
  *
- * Spec coverage (from `sdd/envio-resultados-camo-emo/spec`):
- *  - REQ-003 — state machine, canAdvance, actions.
- *  - Scenarios S-003, S-004, S-005, S-009, S-020, S-021.
+ * Multi-proyecto change (WU-2): picks are keyed by the composite
+ * `pickKey(dni, idAten)` (`'${dni}::${idAten}'`) so every atención
+ * (ficha) of a patient holds its own CAMO/EMO slot. `SET_PICKS_BATCH`
+ * applies a whole per-patient batch (quick action) as ONE atomic
+ * transition. Deselect prunes all of that DNI's composite keys.
+ *
+ * Spec coverage (envio-resultados-multi-proyecto):
+ *  - REQ-102 — composite pick state, deselect prunes.
+ *  - REQ-103 — SET_PICKS_BATCH atomic batch (quick action, WU-4).
+ *  - Legacy REQ-003 — state machine, canAdvance, actions.
  */
 import { describe, expect, it } from 'vitest';
 import { act, renderHook } from '@testing-library/react';
@@ -17,7 +22,9 @@ import {
   canAdvance,
   envioWizardReducer,
   initialWizardState,
+  pickKey,
   useEnvioWizard,
+  type WizardBatchPick,
   type WizardState,
 } from '../useEnvioWizard';
 import type { SelectedFileRef } from '@/features/envio-resultados/domain/entities';
@@ -38,20 +45,35 @@ function makeRef(overrides: Partial<SelectedFileRef> = {}): SelectedFileRef {
 const people = [{ dni: '11111111' }, { dni: '22222222' }, { dni: '33333333' }] as const;
 
 // ================================================================
-// Pure helpers
+// pickKey + initial state
 // ================================================================
 
+describe('pickKey', () => {
+  it('joins dni and idAten with the "::" separator', () => {
+    expect(pickKey('11111111', 'AT-001')).toBe('11111111::AT-001');
+  });
+
+  it('does not collide across dnis that share a digit prefix', () => {
+    // The '::' separator keeps '1' from prefix-matching '12'.
+    expect(pickKey('1', 'AT-1').startsWith(pickKey('12', 'AT-2'))).toBe(false);
+  });
+});
+
 describe('initialWizardState', () => {
-  it('starts at step 1 with empty selection and empty per-patient maps', () => {
+  it('starts at step 1 with empty selection and empty per-ficha pick maps', () => {
     const state = initialWizardState();
     expect(state.currentStep).toBe(1);
     expect(state.maxVisitedStep).toBe(1);
     expect(state.selectedDnIs).toBeInstanceOf(Set);
     expect(state.selectedDnIs.size).toBe(0);
-    expect(state.camoByDni).toEqual({});
-    expect(state.emoByDni).toEqual({});
+    expect(state.camoPicks).toEqual({});
+    expect(state.emoPicks).toEqual({});
   });
 });
+
+// ================================================================
+// canAdvance
+// ================================================================
 
 describe('canAdvance', () => {
   const baseState = initialWizardState();
@@ -112,26 +134,48 @@ describe('envioWizardReducer', () => {
     expect(next.selectedDnIs.size).toBe(1);
   });
 
-  it('TOGGLE_PATIENT on removal prunes the dni from camoByDni and emoByDni', () => {
+  it('TOGGLE_PATIENT on add leaves the pick maps untouched', () => {
+    const key = pickKey('11111111', 'AT-001');
     const start: WizardState = {
       ...initialWizardState(),
       selectedDnIs: new Set(['11111111']),
-      camoByDni: { '11111111': { ref: makeRef(), displayName: '75618561CERT.pdf' } },
-      emoByDni: { '11111111': { ref: makeRef({ name: '012109975EXPED.pdf' }), displayName: '012109975EXPED.pdf' } },
+      camoPicks: { [key]: { ref: makeRef(), displayName: '75618561CERT.pdf' } },
     };
-    const next = envioWizardReducer(start, { type: 'TOGGLE_PATIENT', dni: '11111111' });
-    expect(next.camoByDni).toEqual({});
-    expect(next.emoByDni).toEqual({});
+    const next = envioWizardReducer(start, { type: 'TOGGLE_PATIENT', dni: '22222222' });
+    expect(next.camoPicks[key]).toBeDefined();
   });
 
-  it('SET_CAMO stores the pick in camoByDni', () => {
+  it('TOGGLE_PATIENT on removal prunes ONLY that dni:: prefixed picks (REQ-102)', () => {
+    const start: WizardState = {
+      ...initialWizardState(),
+      selectedDnIs: new Set(['11111111', '22222222']),
+      camoPicks: {
+        [pickKey('11111111', 'AT-001')]: { ref: makeRef(), displayName: 'a.pdf' },
+        [pickKey('11111111', 'AT-002')]: { ref: makeRef(), displayName: 'b.pdf' },
+        [pickKey('22222222', 'AT-003')]: { ref: makeRef(), displayName: 'c.pdf' },
+      },
+      emoPicks: {
+        [pickKey('11111111', 'AT-001')]: { ref: makeRef({ name: '012109975EXPED.pdf' }), displayName: '012109975EXPED.pdf' },
+      },
+    };
+    const next = envioWizardReducer(start, { type: 'TOGGLE_PATIENT', dni: '11111111' });
+    // All 11111111 slots pruned from both maps…
+    expect(Object.keys(next.camoPicks)).toEqual([pickKey('22222222', 'AT-003')]);
+    expect(next.emoPicks).toEqual({});
+    // …while other patients' picks survive.
+    expect(next.camoPicks[pickKey('22222222', 'AT-003')]).toBeDefined();
+  });
+
+  it('SET_CAMO stores the pick under the composite dni::idAten key', () => {
     const start: WizardState = {
       ...initialWizardState(),
       selectedDnIs: new Set(['11111111']),
     };
     const pick = { ref: makeRef(), displayName: '75618561CERT.pdf' };
-    const next = envioWizardReducer(start, { type: 'SET_CAMO', dni: '11111111', pick });
-    expect(next.camoByDni['11111111']).toBe(pick);
+    const next = envioWizardReducer(start, { type: 'SET_CAMO', dni: '11111111', idAten: 'AT-001', pick });
+    expect(next.camoPicks[pickKey('11111111', 'AT-001')]).toBe(pick);
+    // No dni-only key leaks into the map.
+    expect(next.camoPicks['11111111']).toBeUndefined();
   });
 
   it('SET_CAMO with null stores null (Saltar)', () => {
@@ -139,18 +183,30 @@ describe('envioWizardReducer', () => {
       ...initialWizardState(),
       selectedDnIs: new Set(['11111111']),
     };
-    const next = envioWizardReducer(start, { type: 'SET_CAMO', dni: '11111111', pick: null });
-    expect(next.camoByDni['11111111']).toBeNull();
+    const next = envioWizardReducer(start, { type: 'SET_CAMO', dni: '11111111', idAten: 'AT-001', pick: null });
+    expect(next.camoPicks[pickKey('11111111', 'AT-001')]).toBeNull();
+  });
+
+  it('SET_CAMO on a second idAten creates an independent slot (multi-proyecto core)', () => {
+    const start: WizardState = {
+      ...initialWizardState(),
+      selectedDnIs: new Set(['11111111']),
+      camoPicks: { [pickKey('11111111', 'AT-001')]: { ref: makeRef(), displayName: 'a.pdf' } },
+    };
+    const pick2 = { ref: makeRef({ idAten: 'AT-002', name: 'b.pdf' }), displayName: 'b.pdf' };
+    const next = envioWizardReducer(start, { type: 'SET_CAMO', dni: '11111111', idAten: 'AT-002', pick: pick2 });
+    expect(next.camoPicks[pickKey('11111111', 'AT-001')]).toBeDefined();
+    expect(next.camoPicks[pickKey('11111111', 'AT-002')]).toBe(pick2);
   });
 
   it('SET_CAMO is a no-op when the dni is not in selectedDnIs', () => {
     const start = initialWizardState();
     const pick = { ref: makeRef(), displayName: '75618561CERT.pdf' };
-    const next = envioWizardReducer(start, { type: 'SET_CAMO', dni: '11111111', pick });
+    const next = envioWizardReducer(start, { type: 'SET_CAMO', dni: '11111111', idAten: 'AT-001', pick });
     // State must be returned unchanged (referential stability) because
     // the dni was never selected. The reducer does NOT throw.
     expect(next).toBe(start);
-    expect(next.camoByDni['11111111']).toBeUndefined();
+    expect(next.camoPicks[pickKey('11111111', 'AT-001')]).toBeUndefined();
   });
 
   it('SET_EMO is symmetric to SET_CAMO', () => {
@@ -159,8 +215,8 @@ describe('envioWizardReducer', () => {
       selectedDnIs: new Set(['11111111']),
     };
     const pick = { ref: makeRef({ name: '012109975EXPED.pdf' }), displayName: '012109975EXPED.pdf' };
-    const next = envioWizardReducer(start, { type: 'SET_EMO', dni: '11111111', pick });
-    expect(next.emoByDni['11111111']).toBe(pick);
+    const next = envioWizardReducer(start, { type: 'SET_EMO', dni: '11111111', idAten: 'AT-001', pick });
+    expect(next.emoPicks[pickKey('11111111', 'AT-001')]).toBe(pick);
   });
 
   it('SET_EMO with null stores null (Saltar)', () => {
@@ -168,8 +224,50 @@ describe('envioWizardReducer', () => {
       ...initialWizardState(),
       selectedDnIs: new Set(['11111111']),
     };
-    const next = envioWizardReducer(start, { type: 'SET_EMO', dni: '11111111', pick: null });
-    expect(next.emoByDni['11111111']).toBeNull();
+    const next = envioWizardReducer(start, { type: 'SET_EMO', dni: '11111111', idAten: 'AT-001', pick: null });
+    expect(next.emoPicks[pickKey('11111111', 'AT-001')]).toBeNull();
+  });
+
+  it('SET_PICKS_BATCH applies camo and emo entries in ONE atomic transition (REQ-103)', () => {
+    const start: WizardState = {
+      ...initialWizardState(),
+      selectedDnIs: new Set(['11111111']),
+    };
+    const camo1 = { ref: makeRef(), displayName: 'a.pdf' };
+    const camo2 = { ref: makeRef({ idAten: 'AT-002', name: 'b.pdf' }), displayName: 'b.pdf' };
+    const emo1 = { ref: makeRef({ idAten: 'AT-001', name: 'e.pdf' }), displayName: 'e.pdf' };
+    const picks: WizardBatchPick[] = [
+      { slotKind: 'camo', idAten: 'AT-001', pick: camo1 },
+      { slotKind: 'camo', idAten: 'AT-002', pick: camo2 },
+      { slotKind: 'emo', idAten: 'AT-001', pick: emo1 },
+    ];
+    const next = envioWizardReducer(start, { type: 'SET_PICKS_BATCH', dni: '11111111', picks });
+    expect(next.camoPicks[pickKey('11111111', 'AT-001')]).toBe(camo1);
+    expect(next.camoPicks[pickKey('11111111', 'AT-002')]).toBe(camo2);
+    expect(next.emoPicks[pickKey('11111111', 'AT-001')]).toBe(emo1);
+  });
+
+  it('SET_PICKS_BATCH with null entries stores null (skip slot)', () => {
+    const start: WizardState = {
+      ...initialWizardState(),
+      selectedDnIs: new Set(['11111111']),
+    };
+    const next = envioWizardReducer(start, {
+      type: 'SET_PICKS_BATCH',
+      dni: '11111111',
+      picks: [{ slotKind: 'emo', idAten: 'AT-001', pick: null }],
+    });
+    expect(next.emoPicks[pickKey('11111111', 'AT-001')]).toBeNull();
+  });
+
+  it('SET_PICKS_BATCH is a no-op when the dni is not in selectedDnIs', () => {
+    const start = initialWizardState();
+    const next = envioWizardReducer(start, {
+      type: 'SET_PICKS_BATCH',
+      dni: '11111111',
+      picks: [{ slotKind: 'camo', idAten: 'AT-001', pick: { ref: makeRef(), displayName: 'x' } }],
+    });
+    expect(next).toBe(start);
   });
 
   it('NEXT from step 1 with at least 1 selected advances to step 2', () => {
@@ -240,15 +338,15 @@ describe('envioWizardReducer', () => {
       currentStep: 3,
       maxVisitedStep: 3,
       selectedDnIs: new Set(['11111111']),
-      camoByDni: { '11111111': { ref: makeRef(), displayName: 'x' } },
-      emoByDni: {},
+      camoPicks: { [pickKey('11111111', 'AT-001')]: { ref: makeRef(), displayName: 'x' } },
+      emoPicks: {},
     };
     const next = envioWizardReducer(start, { type: 'RESET' });
     expect(next.currentStep).toBe(1);
     expect(next.maxVisitedStep).toBe(1);
     expect(next.selectedDnIs.size).toBe(0);
-    expect(next.camoByDni).toEqual({});
-    expect(next.emoByDni).toEqual({});
+    expect(next.camoPicks).toEqual({});
+    expect(next.emoPicks).toEqual({});
   });
 });
 
@@ -333,16 +431,16 @@ describe('useEnvioWizard', () => {
     expect(result.current.state.selectedDnIs.size).toBe(0);
   });
 
-  it('setCamo stores the pick in camoByDni for a selected patient', () => {
+  it('setCamo stores the pick under the composite key for a selected patient', () => {
     const { result } = renderHook(() => useEnvioWizard({ people }));
     act(() => {
       result.current.togglePatient('11111111');
     });
     const pick = { ref: makeRef(), displayName: '75618561CERT.pdf' };
     act(() => {
-      result.current.setCamo('11111111', pick);
+      result.current.setCamo('11111111', 'AT-001', pick);
     });
-    expect(result.current.state.camoByDni['11111111']).toBe(pick);
+    expect(result.current.state.camoPicks[pickKey('11111111', 'AT-001')]).toBe(pick);
   });
 
   it('setCamo with null stores null (Saltar)', () => {
@@ -351,9 +449,9 @@ describe('useEnvioWizard', () => {
       result.current.togglePatient('11111111');
     });
     act(() => {
-      result.current.setCamo('11111111', null);
+      result.current.setCamo('11111111', 'AT-001', null);
     });
-    expect(result.current.state.camoByDni['11111111']).toBeNull();
+    expect(result.current.state.camoPicks[pickKey('11111111', 'AT-001')]).toBeNull();
   });
 
   it('setEmo is symmetric to setCamo', () => {
@@ -363,9 +461,26 @@ describe('useEnvioWizard', () => {
     });
     const pick = { ref: makeRef({ name: '012109975EXPED.pdf' }), displayName: '012109975EXPED.pdf' };
     act(() => {
-      result.current.setEmo('11111111', pick);
+      result.current.setEmo('11111111', 'AT-001', pick);
     });
-    expect(result.current.state.emoByDni['11111111']).toBe(pick);
+    expect(result.current.state.emoPicks[pickKey('11111111', 'AT-001')]).toBe(pick);
+  });
+
+  it('setPicksBatch applies a whole batch in one dispatch', () => {
+    const { result } = renderHook(() => useEnvioWizard({ people }));
+    act(() => {
+      result.current.togglePatient('11111111');
+    });
+    const camo = { ref: makeRef(), displayName: 'a.pdf' };
+    const emo = { ref: makeRef({ name: 'e.pdf' }), displayName: 'e.pdf' };
+    act(() => {
+      result.current.setPicksBatch('11111111', [
+        { slotKind: 'camo', idAten: 'AT-001', pick: camo },
+        { slotKind: 'emo', idAten: 'AT-001', pick: emo },
+      ]);
+    });
+    expect(result.current.state.camoPicks[pickKey('11111111', 'AT-001')]).toBe(camo);
+    expect(result.current.state.emoPicks[pickKey('11111111', 'AT-001')]).toBe(emo);
   });
 
   it('goToStep is allowed for a step ≤ maxVisitedStep', () => {
@@ -399,15 +514,15 @@ describe('useEnvioWizard', () => {
       currentStep: 4,
       maxVisitedStep: 4,
       selectedDnIs: new Set(['11111111', '22222222']),
-      camoByDni: { '11111111': { ref: makeRef(), displayName: 'x' } },
-      emoByDni: {},
+      camoPicks: { [pickKey('11111111', 'AT-001')]: { ref: makeRef(), displayName: 'x' } },
+      emoPicks: {},
     };
     const { result } = renderHook(() =>
       useEnvioWizard({ people, initialState: restored }),
     );
     expect(result.current.state.currentStep).toBe(4);
     expect(result.current.state.selectedDnIs.size).toBe(2);
-    expect(result.current.state.camoByDni['11111111']).toEqual({
+    expect(result.current.state.camoPicks[pickKey('11111111', 'AT-001')]).toEqual({
       ref: expect.objectContaining({ name: '75618561CERT.pdf' }),
       displayName: 'x',
     });

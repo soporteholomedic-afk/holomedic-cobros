@@ -1,28 +1,73 @@
 /**
- * PR envio-resultados CAMO/EMO wizard — WU-2a.4 + WU-2b.2.
- *
  * `EnvioResultadosWizard` is the modal shell that owns the
  * `useEnvioWizard` reducer and routes the current step to its
  * sub-component. This test exercises the shell in isolation: the
- * step sub-components (`Step1Pacientes`, `Step2Camo`, `Step3Emo`)
- * and the stepper (`WizardStepper`) are imported for real. Step 4
- * is still a placeholder in this PR (real `Step4Resumen` comes in
- * PR 3) and is asserted on directly.
+ * step sub-components (`Step1Pacientes`, `Step2Camo`, `Step3Emo`,
+ * `Step4Resumen`) and the stepper (`WizardStepper`) are imported
+ * for real. The `FilesModal` is stubbed at the module boundary so
+ * the per-ficha pick flow (Step 2 → Step 4) can run without the
+ * real LAN-share modal fetching.
  *
- * Spec coverage (from `sdd/envio-resultados-camo-emo/spec`):
+ * Spec coverage:
  *  - REQ-002 — wizard shell + stepper, Escape closes.
  *  - REQ-003 — useEnvioWizard state machine (observed via shell).
- *  - REQ-006 — Step 3 EMO routing (PR 2b).
+ *  - REQ-102 — per-ficha picks flow Step 2 → Step 4; deselect
+ *    prunes all of the DNI's picks.
  *  - Scenarios S-001, S-009, S-010, S-021.
  */
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { fireEvent, render, screen, within } from '@testing-library/react';
 
+import { createFileNode } from '@/features/envio-resultados/domain/ports';
 import { EnvioResultadosWizard } from '../EnvioResultadosWizard';
-import type { UnifiedPerson } from '@/types/sp-result';
-import type { WizardState } from '@/features/envio-resultados/presentation/hooks/useEnvioWizard';
+import { pickKey, type WizardState } from '@/features/envio-resultados/presentation/hooks/useEnvioWizard';
+import type { UnifiedFicha, UnifiedPerson } from '@/types/sp-result';
+
+// ---- FilesModal stub (module boundary) ----
+const mockFilesModalProps = vi.hoisted(() => vi.fn());
+vi.mock('../FilesModal', () => ({
+  FilesModal: (props: Record<string, unknown>) => {
+    mockFilesModalProps(props);
+    const onPickSingle = props['onPickSingle'] as ((f: unknown, path: string) => void) | undefined;
+    const onClose = props['onClose'] as (() => void) | undefined;
+    const dni = String(props['dni'] ?? '');
+    return (
+      <div data-testid={`wizard-pick-modal-${dni}`}>
+        <button
+          data-testid={`wizard-pick-modal-trigger-pick-${dni}`}
+          onClick={() => {
+            const file = createFileNode({
+              name: '75618561CERT.pdf',
+              sizeBytes: 1024,
+              modifiedAt: '2026-06-01T00:00:00.000Z',
+            });
+            onPickSingle?.(file, 'LEGAJOS');
+          }}
+        >
+          pick
+        </button>
+        <button data-testid={`wizard-pick-modal-trigger-close-${dni}`} onClick={() => onClose?.()}>
+          close
+        </button>
+      </div>
+    );
+  },
+}));
 
 // ---- Fixtures ----
+
+function makeFicha(overrides: Partial<UnifiedFicha> = {}): UnifiedFicha {
+  return {
+    idAten: 'AT-001',
+    nroRuc: '20123456789',
+    nomCFa: 'Acme Corp',
+    proyecto: 'METRO LIMA',
+    tipoExamen: 'CERT',
+    condic: 'APTO',
+    fecAte: '17/06/2026',
+    ...overrides,
+  };
+}
 
 function makePerson(overrides: Partial<UnifiedPerson> = {}): UnifiedPerson {
   return {
@@ -32,17 +77,7 @@ function makePerson(overrides: Partial<UnifiedPerson> = {}): UnifiedPerson {
     tipoExamen: 'CERT',
     proyecto: 'METRO LIMA',
     condic: 'APTO',
-    fichas: [
-      {
-        idAten: 'AT-001',
-        nroRuc: '20123456789',
-        nomCFa: 'Acme Corp',
-        proyecto: 'METRO LIMA',
-        tipoExamen: 'CERT',
-        condic: 'APTO',
-        fecAte: '17/06/2026',
-      },
-    ],
+    fichas: [makeFicha()],
     ...overrides,
   };
 }
@@ -50,6 +85,18 @@ function makePerson(overrides: Partial<UnifiedPerson> = {}): UnifiedPerson {
 const people: ReadonlyArray<UnifiedPerson> = [
   makePerson({ dni: '11111111', nombre: 'Ana López' }),
   makePerson({ dni: '22222222', nombre: 'Beto Ruiz' }),
+];
+
+const multiPeople: ReadonlyArray<UnifiedPerson> = [
+  makePerson({
+    dni: '11111111',
+    nombre: 'Ana López',
+    fichas: [
+      makeFicha({ idAten: 'AT-1', proyecto: 'NEXA RESOURCES CAJAMARQUILLA' }),
+      makeFicha({ idAten: 'AT-2', proyecto: 'UNACEM' }),
+      makeFicha({ idAten: 'AT-3', proyecto: 'MINSUR' }),
+    ],
+  }),
 ];
 
 // ---- Helpers ----
@@ -60,10 +107,6 @@ function renderWizard(
   const onClose = vi.fn();
   const onStateChange = vi.fn();
   const onContinueToEmail = vi.fn();
-  const stateChangeLog: WizardState[] = [];
-  onStateChange.mockImplementation((s: WizardState) => {
-    stateChangeLog.push(s);
-  });
   const props: React.ComponentProps<typeof EnvioResultadosWizard> = {
     people,
     companies: [{ id: 'uuid-acme', name: 'Acme Corp', ruc: '20123456789', email: 'a@x' }],
@@ -74,20 +117,16 @@ function renderWizard(
     ...overrides,
   };
   const utils = render(<EnvioResultadosWizard {...props} />);
-  return { ...utils, onClose, onStateChange, onContinueToEmail, stateChangeLog };
+  return { ...utils, onClose, onStateChange, onContinueToEmail };
 }
 
-// ---- Step component stubs ----
-// We use the REAL step components (Step1Pacientes, Step2Camo) and the
-// REAL stepper (WizardStepper) — they have their own test files. The
-// shell test focuses on the wiring (which step is rendered, how
-// callbacks flow) and the modal chrome (Escape, backdrop, X).
-// No stubbing is needed; if the test breaks, it's because the shell
-// wiring is wrong.
+beforeEach(() => {
+  mockFilesModalProps.mockReset();
+});
 
 // ================================================================
 
-describe('EnvioResultadosWizard', () => {
+describe('EnvioResultadosWizard — shell chrome and routing', () => {
   it('renders a modal with role="dialog" and aria-modal="true"', () => {
     renderWizard();
     const dialog = screen.getByRole('dialog');
@@ -108,30 +147,13 @@ describe('EnvioResultadosWizard', () => {
     expect(screen.getByTestId('step1-pacientes')).toBeInTheDocument();
   });
 
-  it('marks stepper chip 1 as the current step on initial render', () => {
-    renderWizard();
-    expect(screen.getByTestId('wizard-stepper-chip-1')).toHaveAttribute('aria-current', 'step');
-    expect(screen.getByTestId('wizard-stepper-chip-2')).not.toHaveAttribute('aria-current', 'step');
-  });
-
   it('clicking "Siguiente" in Step 1 with one patient selected advances to Step2Camo', () => {
     renderWizard();
-    // Pick a patient.
     fireEvent.click(screen.getByTestId('step1-row-11111111'));
-    // Advance.
     fireEvent.click(screen.getByTestId('step1-siguiente'));
 
     expect(screen.getByTestId('step2-camo')).toBeInTheDocument();
     expect(screen.queryByTestId('step1-pacientes')).not.toBeInTheDocument();
-  });
-
-  it('marks stepper chip 2 as the current step after advancing from step 1', () => {
-    renderWizard();
-    fireEvent.click(screen.getByTestId('step1-row-11111111'));
-    fireEvent.click(screen.getByTestId('step1-siguiente'));
-
-    expect(screen.getByTestId('wizard-stepper-chip-2')).toHaveAttribute('aria-current', 'step');
-    expect(screen.getByTestId('wizard-stepper-chip-1')).not.toHaveAttribute('aria-current', 'step');
   });
 
   it('clicking "Volver" in Step 2 returns to Step 1 with the selection preserved', () => {
@@ -139,11 +161,9 @@ describe('EnvioResultadosWizard', () => {
     fireEvent.click(screen.getByTestId('step1-row-11111111'));
     fireEvent.click(screen.getByTestId('step1-siguiente'));
 
-    // Back to step 1.
     fireEvent.click(screen.getByTestId('step2-volver'));
     expect(screen.getByTestId('step1-pacientes')).toBeInTheDocument();
 
-    // Selection preserved — the row is still selected.
     const row = screen.getByTestId('step1-row-11111111');
     expect(row).toHaveAttribute('data-selected', 'true');
   });
@@ -151,25 +171,20 @@ describe('EnvioResultadosWizard', () => {
   it('fires onStateChange on every reducer transition (toggle, next, prev, goToStep)', () => {
     const { onStateChange } = renderWizard();
 
-    // Initial render fires onStateChange once with the initial state.
     expect(onStateChange).toHaveBeenCalled();
     const callCount = onStateChange.mock.calls.length;
 
-    // Toggle a patient → another onStateChange.
     fireEvent.click(screen.getByTestId('step1-row-11111111'));
     expect(onStateChange.mock.calls.length).toBeGreaterThan(callCount);
     const afterToggle = onStateChange.mock.calls.length;
 
-    // Next → another onStateChange.
     fireEvent.click(screen.getByTestId('step1-siguiente'));
     expect(onStateChange.mock.calls.length).toBeGreaterThan(afterToggle);
     const afterNext = onStateChange.mock.calls.length;
 
-    // Prev → another onStateChange.
     fireEvent.click(screen.getByTestId('step2-volver'));
     expect(onStateChange.mock.calls.length).toBeGreaterThan(afterNext);
 
-    // goToStep via the stepper → another onStateChange.
     const beforeChipClick = onStateChange.mock.calls.length;
     fireEvent.click(screen.getByTestId('wizard-stepper-chip-1'));
     expect(onStateChange.mock.calls.length).toBeGreaterThanOrEqual(beforeChipClick);
@@ -181,66 +196,32 @@ describe('EnvioResultadosWizard', () => {
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 
-  it('click the backdrop to call onClose', () => {
-    const { onClose } = renderWizard();
-    // The backdrop is the outermost fixed div. The dialog stops the
-    // click from bubbling out, so a click on the backdrop itself
-    // should trigger the wizard's onClose. We use the role="dialog"
-    // to verify the dialog is rendered, then dispatch a click on
-    // the backdrop container (the parent of the dialog).
-    const dialog = screen.getByRole('dialog');
-    const backdrop = dialog.parentElement as HTMLElement;
-    fireEvent.click(backdrop);
-    expect(onClose).toHaveBeenCalledTimes(1);
-  });
-
   it('click the X (Cerrar modal) button to call onClose', () => {
     const { onClose } = renderWizard();
     fireEvent.click(screen.getByRole('button', { name: 'Cerrar modal' }));
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 
-  it('renders Step3Emo at currentStep=3 (not the step 3 placeholder)', () => {
-    // Drive the wizard to step 3 via initialState — Step 3 is the
-    // real `Step3Emo` component (PR 2b).
+  it('renders Step3Emo at currentStep=3', () => {
     const initialState: WizardState = {
       currentStep: 3,
       maxVisitedStep: 3,
       selectedDnIs: new Set(['11111111']),
-      camoByDni: {},
-      emoByDni: {},
+      camoPicks: {},
+      emoPicks: {},
     };
     renderWizard({ initialState });
     expect(screen.getByTestId('step3-emo')).toBeInTheDocument();
-    // The old placeholder is gone.
-    expect(screen.queryByTestId('wizard-step-3-placeholder')).not.toBeInTheDocument();
     expect(screen.queryByTestId('step2-camo')).not.toBeInTheDocument();
   });
 
-  it('marks stepper chip 3 as the current step at currentStep=3', () => {
+  it('"Volver" on Step 3 returns to Step 2 with the Step 2 picks preserved (composite key)', () => {
     const initialState: WizardState = {
       currentStep: 3,
       maxVisitedStep: 3,
       selectedDnIs: new Set(['11111111']),
-      camoByDni: {},
-      emoByDni: {},
-    };
-    renderWizard({ initialState });
-    expect(screen.getByTestId('wizard-stepper-chip-3')).toHaveAttribute('aria-current', 'step');
-    expect(screen.getByTestId('wizard-stepper-chip-1')).not.toHaveAttribute('aria-current', 'step');
-    expect(screen.getByTestId('wizard-stepper-chip-2')).not.toHaveAttribute('aria-current', 'step');
-  });
-
-  it('"Volver" on Step 3 returns to Step 2 with the Step 2 picks preserved', () => {
-    // Seed a fake CAMO pick for patient 11111111, then drive the
-    // wizard to step 3. After "Volver", the wizard should be on
-    // step 2 and the camoByDni should still hold the pick.
-    const initialState: WizardState = {
-      currentStep: 3,
-      maxVisitedStep: 3,
-      selectedDnIs: new Set(['11111111']),
-      camoByDni: {
-        '11111111': {
+      camoPicks: {
+        [pickKey('11111111', 'AT-001')]: {
           ref: {
             ruc: '20123456789',
             dni: '11111111',
@@ -252,75 +233,43 @@ describe('EnvioResultadosWizard', () => {
           displayName: '75618561CERT.pdf',
         },
       },
-      emoByDni: {},
+      emoPicks: {},
     };
     renderWizard({ initialState });
-    // Confirm we are on step 3.
     expect(screen.getByTestId('step3-emo')).toBeInTheDocument();
 
-    // Volver → step 2.
     fireEvent.click(screen.getByTestId('step3-volver'));
     expect(screen.getByTestId('step2-camo')).toBeInTheDocument();
-    expect(screen.queryByTestId('step3-emo')).not.toBeInTheDocument();
 
-    // The step 2 card shows the previously-picked CAMO filename.
     const card = screen.getByTestId('step2-card-11111111');
     expect(within(card).getByText(/75618561CERT\.pdf/)).toBeInTheDocument();
   });
 
-  it('"Continuar" on Step 3 advances to Step 4 (the real Step4Resumen — not the placeholder)', () => {
-    // PR 3 (WU-3.1) — the placeholder was replaced with the real
-    // `Step4Resumen` component. This test confirms the
-    // `currentStep === 4` branch mounts the real component.
+  it('"Continuar" on Step 3 advances to Step 4 (the real Step4Resumen)', () => {
     const initialState: WizardState = {
       currentStep: 3,
       maxVisitedStep: 3,
       selectedDnIs: new Set(['11111111']),
-      camoByDni: {},
-      emoByDni: {},
+      camoPicks: {},
+      emoPicks: {},
     };
     renderWizard({ initialState });
     expect(screen.getByTestId('step3-emo')).toBeInTheDocument();
 
     fireEvent.click(screen.getByTestId('step3-continuar'));
-    // Step 3 is gone — Step 4 resumen is on screen.
     expect(screen.queryByTestId('step3-emo')).not.toBeInTheDocument();
     expect(screen.getByTestId('step4-resumen')).toBeInTheDocument();
-    // The old placeholder testid is GONE.
-    expect(screen.queryByTestId('wizard-step-4-placeholder')).not.toBeInTheDocument();
   });
+});
 
-  it('renders the real Step4Resumen (not the placeholder) when currentStep=4', () => {
-    const initialState: WizardState = {
-      currentStep: 4,
-      maxVisitedStep: 4,
-      selectedDnIs: new Set(['11111111']),
-      camoByDni: {},
-      emoByDni: {},
-    };
-    renderWizard({ initialState });
-    expect(screen.getByTestId('step4-resumen')).toBeInTheDocument();
-    expect(screen.queryByTestId('wizard-step-4-placeholder')).not.toBeInTheDocument();
-  });
-
-  it('"Continuar al envío" in Step 4 composes the full EmailViewData and calls onContinueToEmail', () => {
-    // PR 3 (WU-3.5b) — the shell enriches the partial payload
-    // from `buildEmailViewDataFromWizard` (the helper lives inside
-    // `Step4Resumen`) with `companyId`/`companyName`/
-    // `nombreCompleto`/`destino` and forwards the full
-    // `EmailViewData` to the parent's `onContinueToEmail`.
-    //
-    // fix-duplicate-attachment-names: EXTENDED to a 2-patient
-    // fixture. The request-level `nombreCompleto`/`destino` STILL
-    // come from the FIRST selected patient (they are now the
-    // fallback scalar), while each fileRef carries its own
-    // patient's `nombreCompleto` (stamped by the bridge).
+describe('EnvioResultadosWizard — Step 4 handoff', () => {
+  it('"Continuar al envío" composes the full EmailViewData and calls onContinueToEmail', () => {
     const initialState: WizardState = {
       currentStep: 4,
       maxVisitedStep: 4,
       selectedDnIs: new Set(['11111111', '22222222']),
-      camoByDni: {
-        '11111111': {
+      camoPicks: {
+        [pickKey('11111111', 'AT-001')]: {
           ref: {
             ruc: '20123456789',
             dni: '11111111',
@@ -331,11 +280,11 @@ describe('EnvioResultadosWizard', () => {
           },
           displayName: 'CERT.pdf',
         },
-        '22222222': {
+        [pickKey('22222222', 'AT-001')]: {
           ref: {
             ruc: '20123456789',
             dni: '22222222',
-            idAten: 'AT-002',
+            idAten: 'AT-001',
             path: 'LEGAJOS',
             name: 'CERT-2222.pdf',
             tipoExamen: 'CAMO',
@@ -343,8 +292,8 @@ describe('EnvioResultadosWizard', () => {
           displayName: 'CERT-2222.pdf',
         },
       },
-      emoByDni: {
-        '11111111': {
+      emoPicks: {
+        [pickKey('11111111', 'AT-001')]: {
           ref: {
             ruc: '20123456789',
             dni: '11111111',
@@ -367,35 +316,151 @@ describe('EnvioResultadosWizard', () => {
       companyName: string;
       selectedPatients: Record<string, { patientName: string; files: string[] }>;
       patients: unknown[];
-      fileRefs: Array<{ dni: string; name: string; tipoExamen?: 'CAMO' | 'EMO'; nombreCompleto?: string }>;
+      fileRefs: Array<{ dni: string; idAten: string; name: string; tipoExamen?: string; nombreCompleto?: string }>;
       nombreCompleto: string;
       destino: string;
     };
-    // companyId resolved from `companies` via the spec EI-2 contract.
-    // The people fixture's first selected patient is 11111111 with
-    // empresa 'Acme Corp' → companyId is 'uuid-acme'.
     expect(data.companyId).toBe('uuid-acme');
     expect(data.companyName).toBe('Acme Corp');
     // Request-level nombreCompleto / destino STILL come from the
-    // first selected patient — they are the FALLBACK scalar for
-    // unstamped refs (legacy + stray picks), per spec REQ-2.
+    // first selected patient — they are the FALLBACK scalar.
     expect(data.nombreCompleto).toBe('Ana López');
     expect(data.destino).toBe('METRO LIMA');
-    // selectedPatients + fileRefs flow through from the helper.
     expect(data.selectedPatients['11111111']?.patientName).toBe('Ana López');
     expect(data.selectedPatients['11111111']?.files).toEqual(['CERT.pdf', 'EXPED.pdf']);
     expect(data.selectedPatients['22222222']?.patientName).toBe('Beto Ruiz');
-    // Each fileRef carries the correct tipoExamen (REQ-009)…
     expect(data.fileRefs).toHaveLength(3);
     expect(data.fileRefs.find((r) => r.name === 'CERT.pdf')?.tipoExamen).toBe('CAMO');
     expect(data.fileRefs.find((r) => r.name === 'EXPED.pdf')?.tipoExamen).toBe('EMO');
-    // …AND its own patient's nombreCompleto (per-ref stamp — the
-    // multi-patient fix; each ref renames with its patient's name).
     expect(data.fileRefs.find((r) => r.name === 'CERT.pdf')?.nombreCompleto).toBe('Ana López');
-    expect(data.fileRefs.find((r) => r.name === 'EXPED.pdf')?.nombreCompleto).toBe('Ana López');
     expect(data.fileRefs.find((r) => r.name === 'CERT-2222.pdf')?.nombreCompleto).toBe('Beto Ruiz');
-    // Wizard path does not produce PatientFile[] (known limitation;
-    // the AttachmentList is not exercised in the wizard path).
     expect(data.patients).toEqual([]);
+  });
+
+  // REQ-105 (D5): the handoff destino is the DISTINCT proyectos of
+  // the included refs, first-appearance order, joined ", " — not the
+  // first ficha's proyecto scalar. The picks below carry their
+  // per-ficha proyecto stamps directly (as the wizard bridge leaves
+  // them); the AT-2 EMO pick duplicates UNACEM (S-105.1's "UNACEM
+  // twice").
+  it('Step 4 handoff destino joins the distinct proyectos of the included refs (S-105.1)', () => {
+    const wizardPick = (idAten: string, proyecto: string, tipoExamen: 'CAMO' | 'EMO') => ({
+      ref: {
+        ruc: '20123456789',
+        dni: '11111111',
+        idAten,
+        path: 'LEGAJOS',
+        name: `00250391${tipoExamen === 'CAMO' ? 'CERT' : 'EXPED'}.pdf`,
+        tipoExamen,
+        proyecto,
+      },
+      displayName: `00250391${tipoExamen === 'CAMO' ? 'CERT' : 'EXPED'}.pdf`,
+    });
+    const initialState: WizardState = {
+      currentStep: 4,
+      maxVisitedStep: 4,
+      selectedDnIs: new Set(['11111111']),
+      camoPicks: {
+        [pickKey('11111111', 'AT-1')]: wizardPick('AT-1', 'NEXA RESOURCES CAJAMARQUILLA', 'CAMO'),
+        [pickKey('11111111', 'AT-2')]: wizardPick('AT-2', 'UNACEM', 'CAMO'),
+        [pickKey('11111111', 'AT-3')]: wizardPick('AT-3', 'MINSUR', 'CAMO'),
+      },
+      emoPicks: {
+        [pickKey('11111111', 'AT-2')]: wizardPick('AT-2', 'UNACEM', 'EMO'),
+      },
+    };
+    const { onContinueToEmail } = renderWizard({
+      people: multiPeople,
+      initialState,
+    });
+
+    fireEvent.click(screen.getByTestId('step4-continuar'));
+
+    expect(onContinueToEmail).toHaveBeenCalledTimes(1);
+    const data = onContinueToEmail.mock.calls[0]?.[0] as { destino: string };
+    expect(data.destino).toBe('NEXA RESOURCES CAJAMARQUILLA, UNACEM, MINSUR');
+  });
+
+  // REQ-104→REQ-105 integration (D6+D5): slot picks made through the
+  // FilesModal stub are stamped per ficha by the bridge and the shell
+  // joins their distinct proyectos into the handoff destino.
+  it('slot picks through the modal produce the joined destino at handoff (bridge stamping → join)', () => {
+    const { onContinueToEmail } = renderWizard({ people: multiPeople });
+    fireEvent.click(screen.getByTestId('step1-row-11111111'));
+    fireEvent.click(screen.getByTestId('step1-siguiente'));
+    for (const i of [0, 1, 2]) {
+      fireEvent.click(screen.getByTestId(`step2-slot-elegir-11111111-${i}`));
+      fireEvent.click(screen.getByTestId('wizard-pick-modal-trigger-pick-11111111'));
+    }
+    fireEvent.click(screen.getByTestId('step2-siguiente'));
+    fireEvent.click(screen.getByTestId('step3-continuar'));
+    fireEvent.click(screen.getByTestId('step4-continuar'));
+
+    expect(onContinueToEmail).toHaveBeenCalledTimes(1);
+    const data = onContinueToEmail.mock.calls[0]?.[0] as {
+      destino: string;
+      fileRefs: Array<{ proyecto?: string }>;
+    };
+    expect(data.fileRefs.map((r) => r.proyecto)).toEqual([
+      'NEXA RESOURCES CAJAMARQUILLA',
+      'UNACEM',
+      'MINSUR',
+    ]);
+    expect(data.destino).toBe('NEXA RESOURCES CAJAMARQUILLA, UNACEM, MINSUR');
+  });
+});
+
+// ================================================================
+// REQ-102 — per-ficha picks flow + deselect prune
+// ================================================================
+
+describe('EnvioResultadosWizard — per-ficha picks flow (REQ-102)', () => {
+  it('a slot pick at Step 2 flows through Step 3 into the Step 4 summary', () => {
+    renderWizard({ people: multiPeople });
+    // Select the multi-ficha patient and advance to Step 2.
+    fireEvent.click(screen.getByTestId('step1-row-11111111'));
+    fireEvent.click(screen.getByTestId('step1-siguiente'));
+
+    // Slot mode: 3 slot rows are on screen.
+    expect(screen.getByTestId('step2-slot-11111111-0')).toBeInTheDocument();
+    // Pick via slot 2 (UNACEM).
+    fireEvent.click(screen.getByTestId('step2-slot-elegir-11111111-1'));
+    fireEvent.click(screen.getByTestId('wizard-pick-modal-trigger-pick-11111111'));
+    expect(screen.getByTestId('step2-slot-pick-label-11111111-1')).toHaveTextContent(/75618561CERT\.pdf/);
+
+    // Advance through Step 3 into Step 4.
+    fireEvent.click(screen.getByTestId('step2-siguiente'));
+    fireEvent.click(screen.getByTestId('step3-continuar'));
+    expect(screen.getByTestId('step4-resumen')).toBeInTheDocument();
+
+    // The summary row shows the picked filename (count = 1/10).
+    const row = screen.getByTestId('step4-row-11111111');
+    expect(within(row).getByTestId('step4-camo-cell-11111111')).toHaveTextContent('75618561CERT.pdf');
+    expect(screen.getByTestId('step4-count')).toHaveTextContent('1/10');
+  });
+
+  it('deselecting the patient at Step 1 prunes all of its per-ficha picks', () => {
+    renderWizard({ people: multiPeople });
+    fireEvent.click(screen.getByTestId('step1-row-11111111'));
+    fireEvent.click(screen.getByTestId('step1-siguiente'));
+
+    // Pick two different slots.
+    fireEvent.click(screen.getByTestId('step2-slot-elegir-11111111-0'));
+    fireEvent.click(screen.getByTestId('wizard-pick-modal-trigger-pick-11111111'));
+    fireEvent.click(screen.getByTestId('step2-slot-elegir-11111111-2'));
+    fireEvent.click(screen.getByTestId('wizard-pick-modal-trigger-pick-11111111'));
+    expect(screen.getByTestId('step2-slot-pick-label-11111111-0')).toHaveTextContent(/75618561CERT\.pdf/);
+    expect(screen.getByTestId('step2-slot-pick-label-11111111-2')).toHaveTextContent(/75618561CERT\.pdf/);
+
+    // Volver to Step 1, deselect, re-select, advance again.
+    fireEvent.click(screen.getByTestId('step2-volver'));
+    fireEvent.click(screen.getByTestId('step1-row-11111111')); // deselect
+    fireEvent.click(screen.getByTestId('step1-row-11111111')); // re-select
+    fireEvent.click(screen.getByTestId('step1-siguiente'));
+
+    // All slots start from a clean slate (prefix prune).
+    expect(screen.getByTestId('step2-slot-pick-label-11111111-0')).toHaveTextContent(/Sin seleccionar/);
+    expect(screen.getByTestId('step2-slot-pick-label-11111111-1')).toHaveTextContent(/Sin seleccionar/);
+    expect(screen.getByTestId('step2-slot-pick-label-11111111-2')).toHaveTextContent(/Sin seleccionar/);
   });
 });

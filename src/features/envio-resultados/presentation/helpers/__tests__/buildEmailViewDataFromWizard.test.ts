@@ -1,31 +1,42 @@
 /**
- * PR envio-resultados CAMO/EMO wizard — WU-3.1.
- *
  * `buildEmailViewDataFromWizard` is the pure helper that maps the
- * wizard's per-patient picks (CAMO + EMO maps) into the
- * `{ selectedPatients, fileRefs }` shape `EmailEditor` expects.
+ * wizard's per-ficha picks (CAMO + EMO maps keyed `dni::idAten`)
+ * into the `{ selectedPatients, fileRefs }` shape `EmailEditor`
+ * expects.
  *
- * The helper is the wizard-path counterpart of
- * `emailViewDataFromFiles` (the per-row legacy bridge). The legacy
- * helper carries `patients: Patient[]` for the AttachmentList; the
- * wizard helper does not — the wizard's email view shows the
- * patient names from `selectedPatients` and the LAN files from
- * `fileRefs` (the AttachmentList is not exercised in the wizard
- * path; that is a known scope limitation, not a bug).
+ * Multi-proyecto change (REQ-108, design D6): the helper iterates
+ * each resolved person's `fichas` in stable order and looks up
+ * `pickKey(dni, ficha.idAten)` in both maps — one patient with
+ * picks on N fichas flattens into N fileRefs with distinct idAten.
+ * Stray picks (person gone from `people`) pass through UNSTAMPED.
+ * Proyecto stamping lands in WU-3 (not here).
  *
- * Spec coverage (from `sdd/envio-resultados-camo-emo/spec`):
- *  - REQ-007 — Step 4 Resumen handoff.
- *  - REQ-009 — SelectedFileRef.tipoExamen populated on every ref.
- *  - Scenario S-011 (summary row), S-012 (handoff payload).
+ * Spec coverage:
+ *  - REQ-108 — S-108.1 multi-ref flattening, legacy flow unchanged.
+ *  - Legacy REQ-007 — handoff payload (S-012), REQ-009 tipoExamen,
+ *    ADICIONAL stamp preservation (S-13).
  */
 import { describe, expect, it } from 'vitest';
 
 import { buildEmailViewDataFromWizard } from '../buildEmailViewDataFromWizard';
+import { pickKey } from '../../hooks/useEnvioWizard';
 import type { SelectedFileRef } from '../../../domain/entities';
 import type { WizardFilePick } from '../../hooks/useEnvioWizard';
-import type { UnifiedPerson } from '@/types/sp-result';
+import type { UnifiedFicha, UnifiedPerson } from '@/types/sp-result';
 
 // ---- Fixtures ----
+
+function makeFicha(overrides: Partial<UnifiedFicha> = {}): UnifiedFicha {
+  return {
+    idAten: 'AT-001',
+    nroRuc: '20123456789',
+    nomCFa: 'ACME S.A.C.',
+    proyecto: 'METRO LIMA',
+    tipoExamen: 'CAMO',
+    condic: '',
+    ...overrides,
+  };
+}
 
 function makePerson(overrides: Partial<UnifiedPerson> = {}): UnifiedPerson {
   return {
@@ -35,36 +46,27 @@ function makePerson(overrides: Partial<UnifiedPerson> = {}): UnifiedPerson {
     tipoExamen: 'CAMO',
     proyecto: 'METRO LIMA',
     condic: '',
-    fichas: [
-      {
-        idAten: 'AT-001',
-        nroRuc: '20123456789',
-        nomCFa: 'ACME S.A.C.',
-        proyecto: 'METRO LIMA',
-        tipoExamen: 'CAMO',
-        condic: '',
-      },
-    ],
+    fichas: [makeFicha()],
     ...overrides,
   };
 }
 
-function camoRef(dni: string, displayName: string): SelectedFileRef {
+function camoRef(dni: string, idAten: string, displayName: string): SelectedFileRef {
   return {
     ruc: '20123456789',
     dni,
-    idAten: 'AT-001',
+    idAten,
     path: 'LEGAJOS',
     name: displayName,
     tipoExamen: 'CAMO',
   };
 }
 
-function emoRef(dni: string, displayName: string): SelectedFileRef {
+function emoRef(dni: string, idAten: string, displayName: string): SelectedFileRef {
   return {
     ruc: '20123456789',
     dni,
-    idAten: 'AT-001',
+    idAten,
     path: 'LEGAJOS',
     name: displayName,
     tipoExamen: 'EMO',
@@ -77,14 +79,14 @@ function makePick(ref: SelectedFileRef): WizardFilePick {
 
 // ================================================================
 
-describe('buildEmailViewDataFromWizard', () => {
+describe('buildEmailViewDataFromWizard — legacy single-ficha characterization', () => {
   it('builds selectedPatients + fileRefs for a single patient with only a CAMO pick', () => {
     const people = [makePerson()];
-    const camo = makePick(camoRef('12345678', '75618561CERT.pdf'));
+    const camo = makePick(camoRef('12345678', 'AT-001', '75618561CERT.pdf'));
     const result = buildEmailViewDataFromWizard({
       selectedDnIs: new Set(['12345678']),
-      camoByDni: { '12345678': camo },
-      emoByDni: {},
+      camoPicks: { [pickKey('12345678', 'AT-001')]: camo },
+      emoPicks: {},
       people,
     });
     expect(result.selectedPatients).toEqual({
@@ -99,127 +101,74 @@ describe('buildEmailViewDataFromWizard', () => {
       name: '75618561CERT.pdf',
       tipoExamen: 'CAMO',
       nombreCompleto: 'JUAN PEREZ',
+      // REQ-104 (D6): the ficha's proyecto is stamped per ref.
+      proyecto: 'METRO LIMA',
     });
   });
 
-  it('builds fileRefs with tipoExamen set on each entry (CAMO and EMO both)', () => {
-    const people = [
-      makePerson({ dni: '11111111', nombre: 'ANA LOPEZ' }),
-      makePerson({ dni: '22222222', nombre: 'BETO RUIZ' }),
-    ];
-    const result = buildEmailViewDataFromWizard({
-      selectedDnIs: new Set(['11111111', '22222222']),
-      camoByDni: {
-        '11111111': makePick(camoRef('11111111', '11111111CERT.pdf')),
-        '22222222': makePick(camoRef('22222222', '22222222CERT.pdf')),
-      },
-      emoByDni: {
-        '11111111': makePick(emoRef('11111111', '11111111EXPED.pdf')),
-        '22222222': makePick(emoRef('22222222', '22222222EXPED.pdf')),
-      },
-      people,
-    });
-    expect(result.fileRefs).toHaveLength(4);
-    // Each entry carries the correct tipoExamen
-    const byTipo = (t: 'CAMO' | 'EMO') => result.fileRefs.filter((r) => r.tipoExamen === t);
-    expect(byTipo('CAMO')).toHaveLength(2);
-    expect(byTipo('EMO')).toHaveLength(2);
-    expect(byTipo('CAMO').map((r) => r.dni).sort()).toEqual(['11111111', '22222222']);
-    expect(byTipo('EMO').map((r) => r.dni).sort()).toEqual(['11111111', '22222222']);
-  });
-
-  it('skips a null CAMO pick (Saltar CAMO) — not added to fileRefs but patient stays in selectedPatients', () => {
+  it('CAMO + EMO on the same ficha: two fileRefs (CAMO then EMO), both filenames in `files`', () => {
     const people = [makePerson()];
     const result = buildEmailViewDataFromWizard({
       selectedDnIs: new Set(['12345678']),
-      camoByDni: { '12345678': null },
-      emoByDni: {},
-      people,
-    });
-    expect(result.fileRefs).toEqual([]);
-    // Patient stays — the EmailEditor surfaces the "no files" warning
-    expect(result.selectedPatients).toEqual({
-      '12345678': { patientName: 'JUAN PEREZ', files: [] },
-    });
-  });
-
-  it('skips a patient with both picks null (skipped both) — empty fileRefs, patient still listed', () => {
-    const people = [makePerson()];
-    const result = buildEmailViewDataFromWizard({
-      selectedDnIs: new Set(['12345678']),
-      camoByDni: { '12345678': null },
-      emoByDni: { '12345678': null },
-      people,
-    });
-    expect(result.fileRefs).toEqual([]);
-    expect(result.selectedPatients).toEqual({
-      '12345678': { patientName: 'JUAN PEREZ', files: [] },
-    });
-  });
-
-  it('skips a patient missing from the people array (defensive)', () => {
-    // The reducer only ever sets picks for dnis in selectedDnIs, but
-    // a defensive `find` miss must not throw — it just drops the
-    // patient from both maps. (The reducer also guards this, but the
-    // helper is a pure function and is exercised directly.)
-    const people = [makePerson({ dni: '99999999', nombre: 'OTHER PERSON' })];
-    const result = buildEmailViewDataFromWizard({
-      selectedDnIs: new Set(['12345678']),
-      camoByDni: {
-        '12345678': makePick(camoRef('12345678', '75618561CERT.pdf')),
-      },
-      emoByDni: {},
-      people,
-    });
-    // The dni 12345678 is not in people → not added to selectedPatients
-    expect(result.selectedPatients).toEqual({});
-    // But the fileRef still carries the dni (the ref came from the
-    // pick — the helper trusts the ref shape from Step 2/3).
-    expect(result.fileRefs).toHaveLength(1);
-    expect(result.fileRefs[0]?.dni).toBe('12345678');
-  });
-
-  it('always includes the patient entry in selectedPatients even when both picks are missing', () => {
-    // Triangulation: `selectedPatients` is keyed by dni, so a patient
-    // with neither pick (camoByDni[dn] === undefined) MUST still
-    // appear. The EmailEditor relies on this key to render the
-    // patient row in the attachment panel.
-    const people = [makePerson()];
-    const result = buildEmailViewDataFromWizard({
-      selectedDnIs: new Set(['12345678']),
-      camoByDni: {},
-      emoByDni: {},
-      people,
-    });
-    expect(result.selectedPatients).toEqual({
-      '12345678': { patientName: 'JUAN PEREZ', files: [] },
-    });
-    expect(result.fileRefs).toEqual([]);
-  });
-
-  it('CAMO + EMO for the same patient: two fileRefs, both filenames in `files`', () => {
-    const people = [makePerson()];
-    const result = buildEmailViewDataFromWizard({
-      selectedDnIs: new Set(['12345678']),
-      camoByDni: { '12345678': makePick(camoRef('12345678', 'CERT.pdf')) },
-      emoByDni: { '12345678': makePick(emoRef('12345678', 'EXPED.pdf')) },
+      camoPicks: { [pickKey('12345678', 'AT-001')]: makePick(camoRef('12345678', 'AT-001', 'CERT.pdf')) },
+      emoPicks: { [pickKey('12345678', 'AT-001')]: makePick(emoRef('12345678', 'AT-001', 'EXPED.pdf')) },
       people,
     });
     expect(result.fileRefs).toHaveLength(2);
+    expect(result.fileRefs.map((r) => r.tipoExamen)).toEqual(['CAMO', 'EMO']);
     expect(result.selectedPatients['12345678']?.files).toEqual(['CERT.pdf', 'EXPED.pdf']);
-    const dni = result.fileRefs.map((r) => r.dni);
-    expect(dni).toEqual(['12345678', '12345678']);
-    const tipos = result.fileRefs.map((r) => r.tipoExamen).sort();
-    expect(tipos).toEqual(['CAMO', 'EMO']);
   });
 
-  // ================================================================
-  // PR-2 (nomenclatura-adicionales) — stamp preservation
-  // REQ-8/S-13: `buildEmailViewDataFromWizard` MUST preserve an existing
-  // `ref.tipoExamen` (e.g. 'ADICIONAL' stamped by the wizard step) and
-  // NEVER overwrite it with a hardcoded 'CAMO'/'EMO'. S-14: mixed
-  // CAMO+ADICIONAL refs under one nombreCompleto keep per-file prefixes.
-  // ================================================================
+  it('skips null picks (Saltar) — not added to fileRefs but patient stays in selectedPatients', () => {
+    const people = [makePerson()];
+    const result = buildEmailViewDataFromWizard({
+      selectedDnIs: new Set(['12345678']),
+      camoPicks: { [pickKey('12345678', 'AT-001')]: null },
+      emoPicks: {},
+      people,
+    });
+    expect(result.fileRefs).toEqual([]);
+    expect(result.selectedPatients).toEqual({
+      '12345678': { patientName: 'JUAN PEREZ', files: [] },
+    });
+  });
+
+  it('always includes the patient entry even when no picks exist at all', () => {
+    const people = [makePerson()];
+    const result = buildEmailViewDataFromWizard({
+      selectedDnIs: new Set(['12345678']),
+      camoPicks: {},
+      emoPicks: {},
+      people,
+    });
+    expect(result.selectedPatients).toEqual({
+      '12345678': { patientName: 'JUAN PEREZ', files: [] },
+    });
+    expect(result.fileRefs).toEqual([]);
+  });
+
+  it('stamps each resolved-person ref with its own patient\'s nombreCompleto', () => {
+    const people = [
+      makePerson({ dni: '11111111', nombre: 'JUAN PEREZ' }),
+      makePerson({ dni: '22222222', nombre: 'MARIA LOPEZ' }),
+    ];
+    const result = buildEmailViewDataFromWizard({
+      selectedDnIs: new Set(['11111111', '22222222']),
+      camoPicks: {
+        [pickKey('11111111', 'AT-001')]: makePick(camoRef('11111111', 'AT-001', '11111111CERT.pdf')),
+        [pickKey('22222222', 'AT-001')]: makePick(camoRef('22222222', 'AT-001', '22222222CERT.pdf')),
+      },
+      emoPicks: {
+        [pickKey('11111111', 'AT-001')]: makePick(emoRef('11111111', 'AT-001', '11111111EXPED.pdf')),
+      },
+      people,
+    });
+    expect(result.fileRefs).toHaveLength(3);
+    const byName = (n: string) => result.fileRefs.find((r) => r.name === n);
+    expect(byName('11111111CERT.pdf')?.nombreCompleto).toBe('JUAN PEREZ');
+    expect(byName('11111111EXPED.pdf')?.nombreCompleto).toBe('JUAN PEREZ');
+    expect(byName('22222222CERT.pdf')?.nombreCompleto).toBe('MARIA LOPEZ');
+  });
 
   it('preserves a pre-stamped ADICIONAL ref through the email build (S-13)', () => {
     const people = [makePerson()];
@@ -233,34 +182,26 @@ describe('buildEmailViewDataFromWizard', () => {
     });
     const result = buildEmailViewDataFromWizard({
       selectedDnIs: new Set(['12345678']),
-      camoByDni: { '12345678': adicionalCamo },
-      emoByDni: {},
+      camoPicks: { [pickKey('12345678', 'AT-001')]: adicionalCamo },
+      emoPicks: {},
       people,
     });
     expect(result.fileRefs).toHaveLength(1);
     expect(result.fileRefs[0]?.tipoExamen).toBe('ADICIONAL');
   });
 
-  it('falls back to CAMO/EMO only when the pick ref has no stamp (default contract unchanged)', () => {
+  it('falls back to CAMO/EMO only when the pick ref has no stamp', () => {
     const people = [makePerson()];
     const unstampedCamo = makePick({
-      ruc: '20123456789',
-      dni: '12345678',
-      idAten: 'AT-001',
-      path: 'LEGAJOS',
-      name: 'CERT.pdf',
+      ruc: '20123456789', dni: '12345678', idAten: 'AT-001', path: 'LEGAJOS', name: 'CERT.pdf',
     });
     const unstampedEmo = makePick({
-      ruc: '20123456789',
-      dni: '12345678',
-      idAten: 'AT-001',
-      path: 'LEGAJOS',
-      name: 'EXPED.pdf',
+      ruc: '20123456789', dni: '12345678', idAten: 'AT-001', path: 'LEGAJOS', name: 'EXPED.pdf',
     });
     const result = buildEmailViewDataFromWizard({
       selectedDnIs: new Set(['12345678']),
-      camoByDni: { '12345678': unstampedCamo },
-      emoByDni: { '12345678': unstampedEmo },
+      camoPicks: { [pickKey('12345678', 'AT-001')]: unstampedCamo },
+      emoPicks: { [pickKey('12345678', 'AT-001')]: unstampedEmo },
       people,
     });
     expect(result.fileRefs).toHaveLength(2);
@@ -268,77 +209,186 @@ describe('buildEmailViewDataFromWizard', () => {
     expect(result.fileRefs[1]?.tipoExamen).toBe('EMO');
   });
 
-  it('preserves stamps on stray (person-missing) picks too (S-13 defensive path)', () => {
+  it('stray pick (dni not in people) pushes the ref WITHOUT nombreCompleto — no fabrication', () => {
     const people = [makePerson({ dni: '99999999', nombre: 'OTHER PERSON' })];
-    const adicionalCamo = makePick({
-      ruc: '20123456789',
-      dni: '12345678',
-      idAten: 'AT-001',
-      path: 'LEGAJOS',
-      name: '012110336CERT.pdf',
-      tipoExamen: 'ADICIONAL',
-    });
     const result = buildEmailViewDataFromWizard({
       selectedDnIs: new Set(['12345678']),
-      camoByDni: { '12345678': adicionalCamo },
-      emoByDni: {},
+      camoPicks: { [pickKey('12345678', 'AT-001')]: makePick(camoRef('12345678', 'AT-001', '75618561CERT.pdf')) },
+      emoPicks: {},
       people,
     });
+    expect(result.selectedPatients).toEqual({});
     expect(result.fileRefs).toHaveLength(1);
-    expect(result.fileRefs[0]?.tipoExamen).toBe('ADICIONAL');
     expect(result.fileRefs[0]?.dni).toBe('12345678');
+    expect(result.fileRefs[0]?.nombreCompleto).toBeUndefined();
+  });
+});
+
+// ================================================================
+// REQ-108 — multi-ref pipeline integrity (S-108.1)
+// ================================================================
+
+describe('buildEmailViewDataFromWizard — per-ficha flattening (S-108.1)', () => {
+  /** Reference-case patient: 3 idAten-bearing fichas. */
+  function multiPerson(): UnifiedPerson {
+    return makePerson({
+      dni: '00250391',
+      nombre: 'MONTAÑEZ VINO JULIO',
+      fichas: [
+        makeFicha({ idAten: 'AT-1', proyecto: 'NEXA RESOURCES CAJAMARQUILLA' }),
+        makeFicha({ idAten: 'AT-2', proyecto: 'UNACEM' }),
+        makeFicha({ idAten: 'AT-3', proyecto: 'MINSUR' }),
+      ],
+    });
+  }
+
+  it('CAMO picked on 3 fichas: 3 fileRefs with distinct idAten in ficha order + 3 display names', () => {
+    const person = multiPerson();
+    const result = buildEmailViewDataFromWizard({
+      selectedDnIs: new Set(['00250391']),
+      camoPicks: {
+        [pickKey('00250391', 'AT-1')]: makePick(camoRef('00250391', 'AT-1', 'CERT-NEXA.pdf')),
+        [pickKey('00250391', 'AT-2')]: makePick(camoRef('00250391', 'AT-2', 'CERT-UNACEM.pdf')),
+        [pickKey('00250391', 'AT-3')]: makePick(camoRef('00250391', 'AT-3', 'CERT-MINSUR.pdf')),
+      },
+      emoPicks: {},
+      people: [person],
+    });
+    expect(result.fileRefs).toHaveLength(3);
+    expect(result.fileRefs.map((r) => r.idAten)).toEqual(['AT-1', 'AT-2', 'AT-3']);
+    expect(result.selectedPatients['00250391']?.files).toEqual([
+      'CERT-NEXA.pdf',
+      'CERT-UNACEM.pdf',
+      'CERT-MINSUR.pdf',
+    ]);
+    // Every ref is stamped with the person's name (per-ref rename).
+    for (const ref of result.fileRefs) {
+      expect(ref.nombreCompleto).toBe('MONTAÑEZ VINO JULIO');
+    }
   });
 
-  // ================================================================
-  // fix-duplicate-attachment-names — per-ref `nombreCompleto`
-  // stamping. The wizard is the ONLY multi-patient email path; the
-  // bridge must stamp every resolved-person ref with THAT patient's
-  // name so the use-case rename produces per-patient filenames.
-  // Stray picks (dni no longer in `people`) stay UNSTAMPED — the
-  // request-level name renames them (no fabrication).
-  // ================================================================
-
-  it('stamps each resolved-person ref with its own patient\'s nombreCompleto (S-1)', () => {
-    const people = [
-      makePerson({ dni: '11111111', nombre: 'JUAN PEREZ' }),
-      makePerson({ dni: '22222222', nombre: 'MARIA LOPEZ' }),
-    ];
+  it('pick on only one ficha yields only that ficha\'s ref', () => {
+    const person = multiPerson();
     const result = buildEmailViewDataFromWizard({
-      selectedDnIs: new Set(['11111111', '22222222']),
-      camoByDni: {
-        '11111111': makePick(camoRef('11111111', '11111111CERT.pdf')),
-        '22222222': makePick(camoRef('22222222', '22222222CERT.pdf')),
+      selectedDnIs: new Set(['00250391']),
+      camoPicks: {
+        [pickKey('00250391', 'AT-2')]: makePick(camoRef('00250391', 'AT-2', 'CERT-UNACEM.pdf')),
       },
-      emoByDni: {
-        '11111111': makePick(emoRef('11111111', '11111111EXPED.pdf')),
+      emoPicks: {},
+      people: [person],
+    });
+    expect(result.fileRefs).toHaveLength(1);
+    expect(result.fileRefs[0]?.idAten).toBe('AT-2');
+  });
+
+  it('mixed CAMO/EMO across fichas: per-ficha CAMO-then-EMO order', () => {
+    const person = multiPerson();
+    const result = buildEmailViewDataFromWizard({
+      selectedDnIs: new Set(['00250391']),
+      camoPicks: {
+        [pickKey('00250391', 'AT-1')]: makePick(camoRef('00250391', 'AT-1', 'C1.pdf')),
+        [pickKey('00250391', 'AT-3')]: makePick(camoRef('00250391', 'AT-3', 'C3.pdf')),
+      },
+      emoPicks: {
+        [pickKey('00250391', 'AT-2')]: makePick(emoRef('00250391', 'AT-2', 'E2.pdf')),
+      },
+      people: [person],
+    });
+    expect(result.fileRefs.map((r) => r.name)).toEqual(['C1.pdf', 'E2.pdf', 'C3.pdf']);
+  });
+
+  it('stray picks spread over several composite keys all pass through unstamped', () => {
+    const people = [makePerson({ dni: '99999999', nombre: 'OTHER PERSON' })];
+    const result = buildEmailViewDataFromWizard({
+      selectedDnIs: new Set(['00250391']),
+      camoPicks: {
+        [pickKey('00250391', 'AT-1')]: makePick(camoRef('00250391', 'AT-1', 'C1.pdf')),
+        [pickKey('00250391', 'AT-2')]: makePick(camoRef('00250391', 'AT-2', 'C2.pdf')),
+      },
+      emoPicks: {
+        [pickKey('00250391', 'AT-1')]: makePick(emoRef('00250391', 'AT-1', 'E1.pdf')),
       },
       people,
     });
     expect(result.fileRefs).toHaveLength(3);
+    for (const ref of result.fileRefs) {
+      expect(ref.nombreCompleto).toBeUndefined();
+      // Unstamped strays: no fabricated proyecto either.
+      expect(ref.proyecto).toBeUndefined();
+    }
+    // Camo strays first, then emo strays (parallel to the resolved flow).
+    expect(result.fileRefs.map((r) => r.name)).toEqual(['C1.pdf', 'C2.pdf', 'E1.pdf']);
+  });
+});
+
+// ================================================================
+// REQ-104 — proyecto stamping (D6)
+// ================================================================
+
+describe('buildEmailViewDataFromWizard — proyecto stamping (REQ-104, D6)', () => {
+  /** Reference-case patient: 3 idAten-bearing fichas. */
+  function multiPerson(): UnifiedPerson {
+    return makePerson({
+      dni: '00250391',
+      nombre: 'MONTAÑEZ VINO JULIO',
+      fichas: [
+        makeFicha({ idAten: 'AT-1', proyecto: 'NEXA RESOURCES CAJAMARQUILLA' }),
+        makeFicha({ idAten: 'AT-2', proyecto: 'UNACEM' }),
+        makeFicha({ idAten: 'AT-3', proyecto: 'MINSUR' }),
+      ],
+    });
+  }
+
+  it('stamps each ref with ITS OWN ficha proyecto (multi-proyecto)', () => {
+    const person = multiPerson();
+    const result = buildEmailViewDataFromWizard({
+      selectedDnIs: new Set(['00250391']),
+      camoPicks: {
+        [pickKey('00250391', 'AT-1')]: makePick(camoRef('00250391', 'AT-1', 'CERT-NEXA.pdf')),
+        [pickKey('00250391', 'AT-2')]: makePick(camoRef('00250391', 'AT-2', 'CERT-UNACEM.pdf')),
+        [pickKey('00250391', 'AT-3')]: makePick(camoRef('00250391', 'AT-3', 'CERT-MINSUR.pdf')),
+      },
+      emoPicks: {},
+      people: [person],
+    });
     const byName = (n: string) => result.fileRefs.find((r) => r.name === n);
-    // Each ref carries its OWN patient's name — the per-ref stamp
-    // the use-case rename prefers over the request-level scalar.
-    expect(byName('11111111CERT.pdf')?.nombreCompleto).toBe('JUAN PEREZ');
-    expect(byName('11111111EXPED.pdf')?.nombreCompleto).toBe('JUAN PEREZ');
-    expect(byName('22222222CERT.pdf')?.nombreCompleto).toBe('MARIA LOPEZ');
+    expect(byName('CERT-NEXA.pdf')?.proyecto).toBe('NEXA RESOURCES CAJAMARQUILLA');
+    expect(byName('CERT-UNACEM.pdf')?.proyecto).toBe('UNACEM');
+    expect(byName('CERT-MINSUR.pdf')?.proyecto).toBe('MINSUR');
   });
 
-  it('stray pick (dni not in people) pushes the ref WITHOUT nombreCompleto — no fabrication (S-6)', () => {
-    // Pin: a picked dni absent from `people` (table refetched
-    // mid-wizard) cannot be stamped. The ref is still attached
-    // (existing behavior) and the use-case rename falls back to the
-    // request-level name. The bridge MUST NOT fabricate a name.
-    const people = [makePerson({ dni: '99999999', nombre: 'OTHER PERSON' })];
+  it('stamps the EMO pick with its ficha proyecto too', () => {
+    const person = multiPerson();
+    const result = buildEmailViewDataFromWizard({
+      selectedDnIs: new Set(['00250391']),
+      camoPicks: {},
+      emoPicks: {
+        [pickKey('00250391', 'AT-2')]: makePick(emoRef('00250391', 'AT-2', 'EXPED-UNACEM.pdf')),
+      },
+      people: [person],
+    });
+    expect(result.fileRefs[0]?.proyecto).toBe('UNACEM');
+  });
+
+  it('single-proyecto send: per-ref proyecto equals the request-level value (S-104.3 — names identical to today)', () => {
+    const people = [makePerson()]; // ficha proyecto = person proyecto = 'METRO LIMA'
     const result = buildEmailViewDataFromWizard({
       selectedDnIs: new Set(['12345678']),
-      camoByDni: {
-        '12345678': makePick(camoRef('12345678', '75618561CERT.pdf')),
-      },
-      emoByDni: {},
+      camoPicks: { [pickKey('12345678', 'AT-001')]: makePick(camoRef('12345678', 'AT-001', 'CERT.pdf')) },
+      emoPicks: {},
       people,
     });
-    expect(result.fileRefs).toHaveLength(1);
-    expect(result.fileRefs[0]?.dni).toBe('12345678');
-    expect(result.fileRefs[0]?.nombreCompleto).toBeUndefined();
+    expect(result.fileRefs[0]?.proyecto).toBe('METRO LIMA');
+  });
+
+  it('empty-proyecto ficha stamps undefined (request-level destino applies downstream)', () => {
+    const people = [makePerson({ fichas: [makeFicha({ proyecto: '' })] })];
+    const result = buildEmailViewDataFromWizard({
+      selectedDnIs: new Set(['12345678']),
+      camoPicks: { [pickKey('12345678', 'AT-001')]: makePick(camoRef('12345678', 'AT-001', 'CERT.pdf')) },
+      emoPicks: {},
+      people,
+    });
+    expect(result.fileRefs[0]?.proyecto).toBeUndefined();
   });
 });

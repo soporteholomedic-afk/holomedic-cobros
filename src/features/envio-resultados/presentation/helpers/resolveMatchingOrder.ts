@@ -25,8 +25,12 @@ export function normalizeFecAte(raw: string | undefined): string {
  * Return a comparable key for a raw `NumOrd`, or `undefined` when the value
  * is absent or blank. `number | string | null` mirrors the wire shape raw
  * SQL/JSON may produce even though the interfaces declare `number | string`.
+ *
+ * Exported so the NumOrd-based ficha matcher (`buildUnifiedFichas`) compares
+ * keys exactly like this resolver — a single normalization for every NumOrd
+ * correlation in the feature (trim, blank/absent → `undefined`).
  */
-function numOrdKey(value: number | string | null | undefined): string | undefined {
+export function numOrdKey(value: number | string | null | undefined): string | undefined {
   if (value === undefined || value === null) return undefined;
   const text = String(value).trim();
   return text.length > 0 ? text : undefined;

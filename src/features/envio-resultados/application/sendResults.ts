@@ -172,7 +172,10 @@ export class SendResultsUseCase {
       renameReadyFile({
         rawName: safeDisplayName(ref.name),
         nombreCompleto: ref.nombreCompleto?.trim() || params.nombreCompleto,
-        destino: params.destino,
+        // REQ-104 (D4): per-ref proyecto wins over the request-level
+        // destino — exactly the nombreCompleto precedence pattern.
+        // Empty/whitespace post-trim → request-level destino.
+        destino: ref.proyecto?.trim() || params.destino,
         tipoExamen: ref.tipoExamen,
       }),
     );
@@ -187,6 +190,10 @@ export class SendResultsUseCase {
         deliveryName: deliveryNames[i] ?? ref.name,
         ...(ref.tipoExamen ? { tipoExamen: ref.tipoExamen } : {}),
         ...(ref.nombreCompleto ? { nombreCompleto: ref.nombreCompleto } : {}),
+        // REQ-107: conditionally spread — the key is OMITTED when the
+        // ref carried no proyecto, keeping legacy rows byte-compatible
+        // (S-107.2).
+        ...(ref.proyecto ? { proyecto: ref.proyecto } : {}),
       })),
       ...(params.localAttachments ?? []).map(
         (local): EnvioAttachmentSnapshot => ({

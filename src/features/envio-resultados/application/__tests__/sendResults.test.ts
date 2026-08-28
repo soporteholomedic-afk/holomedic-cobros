@@ -707,4 +707,129 @@ describe('SendResultsUseCase (PR #2 — file resolver + byte-equal)', () => {
 
     expect(result).toMatchObject({ success: false, code: 'SMTP_ERROR', error: 'SMTP down' });
   });
+
+  // ================================================================
+  // REQ-104 — per-ref `proyecto` rename precedence (D4). The rename
+  // MUST prefer a non-empty trimmed `ref.proyecto` over the
+  // request-level `destino` (exactly the `nombreCompleto` pattern).
+  // ADICIONAL keeps omitting the destino segment entirely.
+  // ================================================================
+
+  it('renames with the per-ref proyecto despite a joined request-level destino (S-104.1)', async () => {
+    const mockRead = vi.fn<ReadFn>().mockResolvedValue(streamFromBuffer(PDF_BYTES));
+    const mockEmail = makeMockEmail();
+    const useCase = new SendResultsUseCase(makeMockRepo({ read: mockRead }), mockEmail);
+
+    const refs: SelectedFileRef[] = [
+      {
+        ruc: '20123456789',
+        dni: '00250391',
+        idAten: 'AT-2',
+        path: 'LEGAJOS',
+        name: '00250391CERT.pdf',
+        tipoExamen: 'CAMO',
+        nombreCompleto: 'MONTAÑEZ VINO JULIO',
+        proyecto: 'UNACEM',
+      },
+    ];
+
+    await useCase.execute({
+      ...DEFAULT_PARAMS,
+      fileRefs: refs,
+      destino: 'NEXA RESOURCES CAJAMARQUILLA, UNACEM, MINSUR',
+    });
+
+    const call = (mockEmail.sendWithAttachments as unknown as ReturnType<typeof vi.fn>).mock
+      .calls[0]?.[0] as { attachments: { filename: string }[] };
+    expect(call.attachments[0]?.filename).toBe('CAMO-MONTAÑEZ VINO JULIO-UNACEM.pdf');
+  });
+
+  it('ADICIONAL ref ignores proyecto — no destino segment at all (S-104.1)', async () => {
+    const mockRead = vi.fn<ReadFn>().mockResolvedValue(streamFromBuffer(PDF_BYTES));
+    const mockEmail = makeMockEmail();
+    const useCase = new SendResultsUseCase(makeMockRepo({ read: mockRead }), mockEmail);
+
+    const refs: SelectedFileRef[] = [
+      {
+        ruc: '20123456789',
+        dni: '00250391',
+        idAten: 'AT-2',
+        path: 'LEGAJOS',
+        name: '00250391CERT.pdf',
+        tipoExamen: 'ADICIONAL',
+        nombreCompleto: 'MONTAÑEZ VINO JULIO',
+        proyecto: 'UNACEM',
+      },
+    ];
+
+    await useCase.execute({
+      ...DEFAULT_PARAMS,
+      fileRefs: refs,
+      destino: 'NEXA RESOURCES CAJAMARQUILLA, UNACEM, MINSUR',
+    });
+
+    const call = (mockEmail.sendWithAttachments as unknown as ReturnType<typeof vi.fn>).mock
+      .calls[0]?.[0] as { attachments: { filename: string }[] };
+    expect(call.attachments[0]?.filename).toBe('ADICIONAL-MONTAÑEZ VINO JULIO.pdf');
+  });
+
+  it('falls back to the request-level destino when the per-ref proyecto is whitespace-only (S-104.2)', async () => {
+    const mockRead = vi.fn<ReadFn>().mockResolvedValue(streamFromBuffer(PDF_BYTES));
+    const mockEmail = makeMockEmail();
+    const useCase = new SendResultsUseCase(makeMockRepo({ read: mockRead }), mockEmail);
+
+    const refs: SelectedFileRef[] = [
+      {
+        ruc: '20123456789',
+        dni: '00250391',
+        idAten: 'AT-2',
+        path: 'LEGAJOS',
+        name: '00250391CERT.pdf',
+        tipoExamen: 'CAMO',
+        nombreCompleto: 'MONTAÑEZ VINO JULIO',
+        proyecto: '   ',
+      },
+    ];
+
+    await useCase.execute({ ...DEFAULT_PARAMS, fileRefs: refs, destino: 'METRO LIMA' });
+
+    const call = (mockEmail.sendWithAttachments as unknown as ReturnType<typeof vi.fn>).mock
+      .calls[0]?.[0] as { attachments: { filename: string }[] };
+    expect(call.attachments[0]?.filename).toBe('CAMO-MONTAÑEZ VINO JULIO-METRO LIMA.pdf');
+  });
+
+  it('mixed batch: each ref renames with its OWN proyecto, unstamped refs keep the request-level destino', async () => {
+    const mockRead = vi.fn<ReadFn>().mockResolvedValue(streamFromBuffer(PDF_BYTES));
+    const mockEmail = makeMockEmail();
+    const useCase = new SendResultsUseCase(makeMockRepo({ read: mockRead }), mockEmail);
+
+    const refs: SelectedFileRef[] = [
+      {
+        ruc: '20123456789',
+        dni: '00250391',
+        idAten: 'AT-2',
+        path: 'LEGAJOS',
+        name: '00250391CERT.pdf',
+        tipoExamen: 'CAMO',
+        nombreCompleto: 'MONTAÑEZ VINO JULIO',
+        proyecto: 'UNACEM',
+      },
+      {
+        ruc: '20123456789',
+        dni: '00250391',
+        idAten: 'AT-9',
+        path: 'LEGAJOS',
+        name: '00250391EXPED.pdf',
+        tipoExamen: 'EMO',
+        nombreCompleto: 'MONTAÑEZ VINO JULIO',
+      },
+    ];
+
+    await useCase.execute({ ...DEFAULT_PARAMS, fileRefs: refs, destino: 'METRO LIMA' });
+
+    const call = (mockEmail.sendWithAttachments as unknown as ReturnType<typeof vi.fn>).mock
+      .calls[0]?.[0] as { attachments: { filename: string }[] };
+    expect(call.attachments[0]?.filename).toBe('CAMO-MONTAÑEZ VINO JULIO-UNACEM.pdf');
+    expect(call.attachments[1]?.filename).toBe('EMO-MONTAÑEZ VINO JULIO-METRO LIMA.pdf');
+  });
 });

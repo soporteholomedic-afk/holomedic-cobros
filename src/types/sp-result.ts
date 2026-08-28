@@ -88,6 +88,15 @@ export interface OrderRow {
  * - An additional worker row from SP_RPT_MATRIZICCGSA with a distinct DesDes
  *   (proyecto populated, order fields empty).
  *
+ * NumOrd correlation (multi-proyecto change, design D1): `useUnifiedResults`
+ * threads the raw `NumOrd` of both SP feeds through
+ * `buildUnifiedFichas` (`presentation/helpers/buildUnifiedFichas.ts`), which
+ * pairs each order row with the worker row sharing its NumOrd (trimmed-string
+ * compare, number|string tolerated). Rows lacking NumOrd on either side fall
+ * back to the legacy positional pairing, so `fichas[i].proyecto` reliably
+ * names the project of the atención it describes — the value the wizard
+ * stamps onto each `SelectedFileRef.proyecto` (REQ-104).
+ *
  * When fichas.length > 1, the component renders a chevron-based expandable sub-row.
  */
 export interface UnifiedFicha {

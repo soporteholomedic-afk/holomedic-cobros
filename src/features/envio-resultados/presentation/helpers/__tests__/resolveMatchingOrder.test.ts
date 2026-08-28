@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import type { OrderRow, SpResultRow } from '@/types/sp-result';
-import { resolveMatchingOrder, normalizeFecAte } from '../resolveMatchingOrder';
+import { resolveMatchingOrder, normalizeFecAte, numOrdKey } from '../resolveMatchingOrder';
 
 function makeOrder(overrides: Partial<OrderRow> = {}): OrderRow {
   return {
@@ -93,5 +93,26 @@ describe('normalizeFecAte', () => {
     expect(normalizeFecAte('')).toBe('');
     expect(normalizeFecAte(undefined)).toBe('');
     expect(normalizeFecAte('not-a-date')).toBe('');
+  });
+});
+
+describe('numOrdKey', () => {
+  it('accepts numbers and returns their string form', () => {
+    expect(numOrdKey(50001)).toBe('50001');
+  });
+
+  it('accepts strings as-is (trimmed)', () => {
+    expect(numOrdKey('50001')).toBe('50001');
+    expect(numOrdKey('  50001  ')).toBe('50001');
+  });
+
+  it('treats blank or whitespace-only strings as absent', () => {
+    expect(numOrdKey('')).toBeUndefined();
+    expect(numOrdKey('   ')).toBeUndefined();
+  });
+
+  it('treats null and undefined as absent', () => {
+    expect(numOrdKey(null)).toBeUndefined();
+    expect(numOrdKey(undefined)).toBeUndefined();
   });
 });

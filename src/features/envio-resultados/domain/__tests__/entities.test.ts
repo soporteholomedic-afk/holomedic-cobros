@@ -7,6 +7,7 @@ import type {
   Spitch,
   EmailAttachment,
   SpitchType,
+  EnvioAttachmentSnapshot,
 } from '../entities';
 
 describe('Company entity', () => {
@@ -268,5 +269,71 @@ describe('SelectedFileRef entity', () => {
     };
 
     expect(ref.tipoExamen).toBeUndefined();
+  });
+});
+
+/**
+ * Multi-proyecto change (REQ-104/REQ-107, design D3): `SelectedFileRef`
+ * and the 'unc' `EnvioAttachmentSnapshot` variant gain an optional
+ * `proyecto` stamp — the per-ref project the send pipeline prefers
+ * over the request-level `destino` (exactly the established
+ * `nombreCompleto` optional-stamp pattern). Legacy call sites omit it;
+ * legacy history rows omit the key entirely (S-107.2).
+ */
+describe('proyecto optional stamp (multi-proyecto, D3)', () => {
+  it('SelectedFileRef accepts proyecto (wizard multi-proyecto pick)', () => {
+    const ref: SelectedFileRef = {
+      ruc: '20123456789',
+      dni: '00250391',
+      idAten: 'AT-001',
+      path: 'LEGAJOS',
+      name: '00250391CERT.pdf',
+      tipoExamen: 'CAMO',
+      proyecto: 'UNACEM',
+    };
+
+    expect(ref.proyecto).toBe('UNACEM');
+  });
+
+  it('SelectedFileRef stays valid when proyecto is omitted (legacy flow)', () => {
+    const ref: SelectedFileRef = {
+      ruc: '20123456789',
+      dni: '00250391',
+      idAten: 'AT-001',
+      path: 'LEGAJOS',
+      name: 'cert.pdf',
+    };
+
+    expect(ref.proyecto).toBeUndefined();
+  });
+
+  it("'unc' EnvioAttachmentSnapshot accepts proyecto (REQ-107 snapshot stamp)", () => {
+    const snap: EnvioAttachmentSnapshot = {
+      source: 'unc',
+      ruc: '20123456789',
+      dni: '00250391',
+      idAten: 'AT-001',
+      path: 'LEGAJOS',
+      storedName: '00250391CERT.pdf',
+      deliveryName: 'CAMO-MONTAÑEZ VINO JULIO-UNACEM.pdf',
+      proyecto: 'UNACEM',
+    };
+
+    expect(snap.source).toBe('unc');
+    expect(snap.proyecto).toBe('UNACEM');
+  });
+
+  it("'unc' EnvioAttachmentSnapshot stays valid without proyecto (S-107.2: legacy rows omit the key)", () => {
+    const snap: EnvioAttachmentSnapshot = {
+      source: 'unc',
+      ruc: '20123456789',
+      dni: '00250391',
+      idAten: 'AT-001',
+      path: 'LEGAJOS',
+      storedName: 'cert.pdf',
+      deliveryName: 'CAMO-JULIO-UNACEM.pdf',
+    };
+
+    expect('proyecto' in snap).toBe(false);
   });
 });
