@@ -70,4 +70,13 @@ describe('EmailBodyField', () => {
     fireEvent.click(screen.getByText('Editar'));
     expect(onEditingChange).toHaveBeenCalledWith(true);
   });
+
+  it('resolves cid:holomedic-logo to the public logo path for display (read-only preview)', () => {
+    render(
+      <Harness html={'<p>firma</p><img src="cid:holomedic-logo" alt="logo" width="120" />'} />,
+    );
+    const preview = screen.getByTestId('body-preview');
+    expect(preview.innerHTML).toContain('src="/logo-holomedic.png"');
+    expect(preview.innerHTML).not.toContain('cid:holomedic-logo');
+  });
 });

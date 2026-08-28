@@ -1,6 +1,7 @@
 'use client';
 
 import { sanitizeEmailHtml } from './sanitizeEmailHtml';
+import { resolveLogoCid } from '@/features/firma-correo/presentation/helpers/resolveLogoCid';
 import type { EmailBodyFieldProps } from './types';
 
 /**
@@ -41,7 +42,7 @@ export function EmailBodyField({
               <div
                 className="p-4 text-sm text-slate-700 dark:text-slate-200 prose prose-sm dark:prose-invert max-w-none"
                 data-testid="body-preview"
-                dangerouslySetInnerHTML={{ __html: sanitizeEmailHtml(html) }}
+                dangerouslySetInnerHTML={{ __html: sanitizeEmailHtml(resolveLogoCid(html)) }}
               />
               <div className="border-t border-slate-200 dark:border-slate-700 px-4 py-2 bg-slate-50 dark:bg-slate-900/50 flex justify-end">
                 <button
