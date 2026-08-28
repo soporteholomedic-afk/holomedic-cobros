@@ -76,6 +76,44 @@ describe('POST /api/valoraciones/excel', () => {
     expect(filtroUsado).toMatchObject({ codMon: 2, codCli: 55, fecIni: '2026-01-01' });
   });
 
+  it('scopes rows to the posted empresa and names the file [Empresa]_[fecIni].xlsx (U6)', async () => {
+    (fakeRepo.buscarValoraciones as ReturnType<typeof vi.fn>).mockResolvedValue([
+      makeRepFacturacion({ NomCFa: 'EMPRESA DEMO S.A.C.', Pacien: 'PACIENTE DEMO' }),
+      makeRepFacturacion({ NomCFa: 'OTRA EMPRESA SRL', NomCom: 'OTRA EMPRESA SRL', NomCli: 'OTRA EMPRESA SRL', Pacien: 'PACIENTE OTRA' }),
+    ]);
+    const { POST } = await import('../route');
+    const res = await POST(makeRequest({ ...filtroValido, empresa: 'OTRA EMPRESA SRL' }));
+
+    expect(res.status).toBe(200);
+    expect(res.headers.get('content-disposition')).toContain('attachment');
+    expect(res.headers.get('content-disposition')).toContain(
+      'filename="OTRA EMPRESA SRL_2026-01-01.xlsx"',
+    );
+
+    // Workbook carries ONLY the scoped empresa's row (30-col layout as-is).
+    const buffer = Buffer.from(await res.arrayBuffer());
+    const wb = XLSX.read(buffer, { type: 'buffer' });
+    const aoa = XLSX.utils.sheet_to_json<unknown[]>(wb.Sheets[wb.SheetNames[0]], { header: 1 });
+    expect(aoa).toHaveLength(2); // header + exactly 1 row
+    expect(String(aoa[1][1])).toBe('OTRA EMPRESA SRL'); // contratades = NomCom of the scoped row
+    expect(String(aoa[1][5])).toBe('PACIENTE OTRA');
+  });
+
+  it('keeps the legacy filename for clientless exports (no empresa)', async () => {
+    const { POST } = await import('../route');
+    const res = await POST(makeRequest(filtroValido));
+    expect(res.headers.get('content-disposition')).toContain(
+      'filename="valoraciones_2026-01-01_2026-01-31.xlsx"',
+    );
+  });
+
+  it('rejects an invalid empresa with 400 and never queries (U6)', async () => {
+    const { POST } = await import('../route');
+    const res = await POST(makeRequest({ ...filtroValido, empresa: '' }));
+    expect(res.status).toBe(400);
+    expect(fakeRepo.buscarValoraciones).not.toHaveBeenCalled();
+  });
+
   it('rejects an invalid filter with 400 and never queries', async () => {
     const { POST } = await import('../route');
     const res = await POST(makeRequest({ fecIni: '2026-02-01', fecFin: '2026-01-31', codMon: 1 }));

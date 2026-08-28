@@ -2,9 +2,11 @@ import { NextResponse } from 'next/server';
 import * as XLSX from 'xlsx';
 
 import { EdgeUnavailableError } from '@/features/musculoesqueletica-pdf/domain/errors';
-import { parseFiltroDto } from '@/features/valoraciones/domain/parseFiltroDto';
+import { nombreEmpresa } from '@/features/valoraciones/domain/agrupacion';
+import { parseEmpresaField, parseFiltroDto } from '@/features/valoraciones/domain/parseFiltroDto';
 import { getValoracionesDb } from '@/features/valoraciones/infrastructure/getValoracionesDb';
 import { generarFormato35Workbook } from '@/features/valoraciones/infrastructure/excel/formato35';
+import { nombreArchivoExportacion } from '@/features/valoraciones/infrastructure/filename';
 import {
   nombrePdf,
   renderValoracionesPdf,
@@ -26,6 +28,9 @@ import { sendEmail, type EmailAttachment } from '@/utils/sendEmail';
  *   cc           — comma-separated copies (optional)
  *   subject/html — required non-empty strings
  *   adjuntarPdf / adjuntarExcel — 'true' | 'false' (default 'false')
+ *   empresa      — optional U6 per-empresa scope (group key); attachments
+ *                  regenerate from ONLY that empresa's rows and are named
+ *                  `[NombreEmpresa]_[fecIni].[ext]`
  *
  * Failures are user-safe: SMTP codes map to 503/500 with the safe
  * transport message, Edge-unavailable → 502, anything else → a fixed
@@ -86,6 +91,7 @@ interface ParsedSendForm {
   html: string;
   adjuntarPdf: boolean;
   adjuntarExcel: boolean;
+  empresa: string | undefined;
 }
 
 /**
@@ -141,6 +147,13 @@ async function parseSendForm(request: Request): Promise<ParsedSendForm | NextRes
     return buildError('VALIDATION_ERROR', `Max ${MAX_RECIPIENTS} recipients allowed`, 400);
   }
 
+  // U6 per-empresa scoping (optional): validate BEFORE any DB/SMTP work,
+  // same rules as the export routes.
+  const scoped = parseEmpresaField(str('empresa') === '' ? undefined : str('empresa'));
+  if (scoped.error) {
+    return buildError('VALIDATION_ERROR', scoped.error, 400);
+  }
+
   return {
     filtroJson,
     to,
@@ -149,19 +162,23 @@ async function parseSendForm(request: Request): Promise<ParsedSendForm | NextRes
     html,
     adjuntarPdf: flag('adjuntarPdf'),
     adjuntarExcel: flag('adjuntarExcel'),
+    empresa: scoped.empresa,
   };
 }
 
-/** Regenerate the Formato 35 `.xlsx` buffer from the filter (D4). */
+/** Regenerate the Formato 35 `.xlsx` buffer from the filter (D4, U6-scoped). */
 async function generarExcelAttachment(
   repo: Awaited<ReturnType<typeof getValoracionesDb>>,
   filtro: ReturnType<typeof parseFiltroDto>['filtro'] & object,
+  empresa: string | undefined,
 ): Promise<EmailAttachment> {
-  const rows = await repo.buscarValoraciones(filtro);
+  const todas = await repo.buscarValoraciones(filtro);
+  const rows =
+    empresa === undefined ? todas : todas.filter((row) => nombreEmpresa(row) === empresa);
   const workbook = generarFormato35Workbook(rows, filtro.codMon);
   const buffer = XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' }) as Buffer;
   return {
-    filename: `valoraciones_${filtro.fecIni}_${filtro.fecFin}.xlsx`,
+    filename: nombreArchivoExportacion(empresa, filtro.fecIni, 'xlsx', filtro.fecFin),
     content: buffer,
     contentType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
   };
@@ -185,20 +202,21 @@ export async function POST(request: Request): Promise<NextResponse<ApiResponse>>
       return buildError('VALIDATION_ERROR', error ?? 'Solicitud inválida', 400);
     }
 
-    // M-R4: attachments regenerate server-side from the filter (D4) —
-    // the operator never uploads files.
+    // M-R4: attachments regenerate server-side from the filter (D4),
+    // scoped to the posted empresa when present (U6) — the operator never
+    // uploads files.
     const attachments: EmailAttachment[] = [];
     const repo = await getValoracionesDb();
     if (parsed.adjuntarPdf) {
-      const pdf = await renderValoracionesPdf(repo, filtro);
+      const pdf = await renderValoracionesPdf(repo, filtro, parsed.empresa);
       attachments.push({
-        filename: nombrePdf(filtro),
+        filename: nombrePdf(filtro, parsed.empresa),
         content: Buffer.from(pdf),
         contentType: 'application/pdf',
       });
     }
     if (parsed.adjuntarExcel) {
-      attachments.push(await generarExcelAttachment(repo, filtro));
+      attachments.push(await generarExcelAttachment(repo, filtro, parsed.empresa));
     }
 
     // D5: purpose 'facturacion' reuses the existing SMTP creds — no new

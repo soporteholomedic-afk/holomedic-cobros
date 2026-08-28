@@ -62,16 +62,29 @@ describe('POST /api/valoraciones/pdf', () => {
     __setValoracionesPdfPrinterForTests(fakePrinter);
   });
 
-  it('returns PDF bytes with inline download headers (E-R1)', async () => {
+  it('returns PDF bytes with attachment headers and the [Empresa]_[fecIni].pdf filename (U6)', async () => {
     const { POST } = await import('../route');
-    const res = await POST(makeRequest({ ...filtroValido, codCli: 55 }));
+    const res = await POST(makeRequest({ ...filtroValido, codCli: 55, empresa: 'EMPRESA DEMO S.A.C.' }));
 
     expect(res.status).toBe(200);
     expect(res.headers.get('content-type')).toBe('application/pdf');
-    expect(res.headers.get('content-disposition')).toContain('inline');
-    expect(res.headers.get('content-disposition')).toContain('valoraciones_2026-01-01_2026-01-31.pdf');
+    const disposition = res.headers.get('content-disposition') ?? '';
+    expect(disposition).toContain('attachment');
+    expect(disposition).toContain('filename="EMPRESA DEMO S.A.C._2026-01-01.pdf"');
+    // RFC 5987 UTF-8 companion for accented names.
+    expect(disposition).toContain("filename*=UTF-8''");
     const bytes = new Uint8Array(await res.arrayBuffer());
     expect(Array.from(bytes)).toEqual([1, 2, 3, 4]);
+  });
+
+  it('keeps the legacy valoraciones filename for clientless exports (no empresa field)', async () => {
+    const { POST } = await import('../route');
+    const res = await POST(makeRequest(filtroValido));
+
+    expect(res.status).toBe(200);
+    expect(res.headers.get('content-disposition')).toContain(
+      'filename="valoraciones_2026-01-01_2026-01-31.pdf"',
+    );
   });
 
   it('re-queries from the posted filter and renders the membrete HTML through the printer (D4)', async () => {
@@ -102,6 +115,36 @@ describe('POST /api/valoraciones/pdf', () => {
     expect(res.status).toBe(400);
     expect(fakeRepo.buscarValoraciones).not.toHaveBeenCalled();
     expect(printMock).not.toHaveBeenCalled();
+  });
+
+  it('rejects an invalid empresa with 400 and never queries (U6)', async () => {
+    const { POST } = await import('../route');
+    const res = await POST(makeRequest({ ...filtroValido, empresa: 77 }));
+
+    expect(res.status).toBe(400);
+    expect(fakeRepo.buscarValoraciones).not.toHaveBeenCalled();
+    expect(printMock).not.toHaveBeenCalled();
+  });
+
+  it('scopes the re-queried rows to the posted empresa group key (U6, D4 kept)', async () => {
+    (fakeRepo.buscarValoraciones as ReturnType<typeof vi.fn>).mockResolvedValue([
+      makeRepFacturacion({ NomCFa: 'EMPRESA DEMO S.A.C.', Pacien: 'PACIENTE DEMO', DesDes: 'SEDE NORTE' }),
+      makeRepFacturacion({ NomCFa: 'OTRA EMPRESA SRL', NomCli: 'OTRA EMPRESA SRL', Pacien: 'PACIENTE OTRA', DesDes: 'SEDE SUR' }),
+    ]);
+    const { POST } = await import('../route');
+    await POST(makeRequest({ ...filtroValido, empresa: 'OTRA EMPRESA SRL' }));
+
+    // Re-query still receives the BASE filter (empresa never reaches the SP).
+    const filtroUsado = (fakeRepo.buscarValoraciones as ReturnType<typeof vi.fn>).mock.calls[0][0];
+    expect(filtroUsado.fecIni).toBe('2026-01-01');
+    expect(filtroUsado).not.toHaveProperty('empresa');
+
+    const html = printMock.mock.calls[0][0] as string;
+    // Only the scoped empresa's rows survive into the document.
+    expect(html).toContain('PACIENTE OTRA');
+    expect(html).not.toContain('PACIENTE DEMO');
+    // Client header reflects the scoped empresa, not the codCli lookup name.
+    expect(html).toContain('OTRA EMPRESA SRL');
   });
 
   it('maps EdgeUnavailableError to 502 with a user-safe message (E-R2 scenario)', async () => {

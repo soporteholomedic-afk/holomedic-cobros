@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import * as XLSX from 'xlsx';
 
 import type { PdfPrinter } from '@/features/musculoesqueletica-pdf/domain/entities';
 import { EdgeUnavailableError } from '@/features/musculoesqueletica-pdf/domain/errors';
@@ -112,6 +113,49 @@ describe('POST /api/valoraciones/send', () => {
     const html = printMock.mock.calls[0][0] as string;
     expect(html).toContain('HOLOMEDIC SERVICIOS INTEGRALES S.A.C.');
     expect(html).toContain('SEDE NORTE');
+  });
+
+  it('scopes BOTH attachments to the posted empresa and names them [Empresa]_[fecIni] (U6)', async () => {
+    sendEmailMock.mockResolvedValue({ success: true, messageId: '<x>' });
+    const fakeRepo = {
+      buscarValoraciones: vi.fn().mockResolvedValue([
+        makeRepFacturacion({ NomCFa: 'EMPRESA DEMO S.A.C.', NomCom: 'EMPRESA DEMO S.A.C.', Pacien: 'PACIENTE DEMO', DesDes: 'SEDE NORTE', VVtaMN: 100 }),
+        makeRepFacturacion({ NomCFa: 'OTRA EMPRESA SRL', NomCom: 'OTRA EMPRESA SRL', Pacien: 'PACIENTE OTRA', DesDes: 'SEDE SUR', VVtaMN: 200 }),
+      ]),
+      buscarClientePorCodigo: vi.fn().mockResolvedValue(null),
+    } as unknown as ISiglaValoracionesRepository;
+    __setValoracionesDbForTests(fakeRepo);
+
+    const { POST } = await import('../route');
+    const res = await POST(
+      makeRequest({ ...baseFields, adjuntarPdf: 'true', adjuntarExcel: 'true', empresa: 'OTRA EMPRESA SRL' }),
+    );
+    expect(res.status).toBe(200);
+
+    const params = sendEmailMock.mock.calls[0][0] as SendEmailParams;
+    const [pdf, excel] = params.attachments!;
+    expect(pdf.filename).toBe('OTRA EMPRESA SRL_2026-01-01.pdf');
+    expect(excel.filename).toBe('OTRA EMPRESA SRL_2026-01-01.xlsx');
+
+    // PDF html carries ONLY the scoped empresa's rows.
+    const html = printMock.mock.calls[0][0] as string;
+    expect(html).toContain('PACIENTE OTRA');
+    expect(html).not.toContain('PACIENTE DEMO');
+
+    // Excel attachment carries ONLY the scoped empresa's row.
+    const wb = XLSX.read(Buffer.from(excel.content as Buffer), { type: 'buffer' });
+    const aoa = XLSX.utils.sheet_to_json<unknown[]>(wb.Sheets[wb.SheetNames[0]], { header: 1 });
+    expect(aoa).toHaveLength(2);
+    expect(String(aoa[1][5])).toBe('PACIENTE OTRA');
+  });
+
+  it('rejects an invalid empresa with 400 VALIDATION_ERROR and sends nothing (U6)', async () => {
+    const { POST } = await import('../route');
+    const res = await POST(makeRequest({ ...baseFields, empresa: 'x'.repeat(201) }));
+    expect(res.status).toBe(400);
+    const json = (await res.json()) as { code: string };
+    expect(json.code).toBe('VALIDATION_ERROR');
+    expect(sendEmailMock).not.toHaveBeenCalled();
   });
 
   it('splits comma-joined to/cc and sends cc through (M-R3 prefill shape)', async () => {

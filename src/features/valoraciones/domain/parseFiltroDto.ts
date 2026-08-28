@@ -19,6 +19,43 @@ export interface ParseFiltroResult {
   error?: string;
 }
 
+const EMPRESA_MAX_LONGITUD = 200;
+
+/**
+ * U6 per-empresa export scoping: optional `empresa` field (the EmpresaList
+ * group key — `NomCFa` falling back to `NomCli`). Absent/null means the
+ * global export; present values must be a trimmed non-empty string of at
+ * most 200 characters.
+ */
+export function parseEmpresaField(raw: unknown): { empresa?: string; error?: string } {
+  if (raw === undefined || raw === null) return { empresa: undefined };
+  if (typeof raw !== 'string') {
+    return { error: '"empresa" debe ser una cadena de texto' };
+  }
+  const empresa = raw.trim();
+  if (empresa === '') {
+    return { error: '"empresa" no puede estar vacío' };
+  }
+  if (empresa.length > EMPRESA_MAX_LONGITUD) {
+    return { error: `"empresa" no puede superar ${EMPRESA_MAX_LONGITUD} caracteres` };
+  }
+  return { empresa };
+}
+
+/**
+ * Parse + validate an export body (U6): the `ValoracionesFilter` JSON plus
+ * the optional `empresa` scoping field, validated with the same rules as
+ * `parseFiltroDto`. The filter error (when present) wins so route 400s stay
+ * consistent with the pre-U6 contract.
+ */
+export function parseExportFiltroDto(body: unknown): ParseFiltroResult & { empresa?: string } {
+  const { filtro, error } = parseFiltroDto(body);
+  if (error || !filtro) return { error };
+  const scoped = parseEmpresaField((body as Record<string, unknown>).empresa);
+  if (scoped.error) return { error: scoped.error };
+  return { filtro, ...(scoped.empresa !== undefined ? { empresa: scoped.empresa } : {}) };
+}
+
 export function parseFiltroDto(body: unknown): ParseFiltroResult {
   if (typeof body !== 'object' || body === null) {
     return { error: 'Cuerpo de la solicitud inválido' };

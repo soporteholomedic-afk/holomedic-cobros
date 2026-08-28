@@ -1,19 +1,23 @@
 import fs from 'fs';
 import path from 'path';
 
-import { agruparPorDestino } from '../../domain/agrupacion';
+import { agruparPorDestino, nombreEmpresa } from '../../domain/agrupacion';
 import type { ValoracionesFilter } from '../../domain/entities';
 import type { ISiglaValoracionesRepository } from '../../domain/ports';
+import { nombreArchivoExportacion } from '../filename';
 import { getValoracionesPdfPrinter } from './HtmlValoracionPdfPrinter';
 import { MEMBRETE_HOLOMEDIC, buildValoracionHtml } from './template';
 
 /**
- * Shared valoraciones PDF renderer (REQ-03 M-R1/M-R4, design D4).
+ * Shared valoraciones PDF renderer (REQ-03 M-R1/M-R4, design D4; per-empresa
+ * scoping per the U6 user fix).
  *
  * Both `/api/valoraciones/pdf` (download) and `/api/valoraciones/send`
  * (email attachment) MUST regenerate IDENTICAL bytes from the posted
- * filter — this function is that single truth. Re-queries the SP, groups
- * by destino, renders the membretado A4 HTML and prints it through the
+ * filter — this function is that single truth. Re-queries the SP (D4),
+ * optionally scopes the rows to one empresa group key (U6: the per-row
+ * export buttons act ONLY on their row's empresa), groups by destino,
+ * renders the membretado A4 LANDSCAPE HTML and prints it through the
  * shared printer (footer numbering via the factory default overrides).
  */
 
@@ -45,7 +49,9 @@ function fechaEmisionHoy(): string {
 
 /**
  * Render the valorización PDF for a filter (D4: re-execute the query —
- * never trust client-held rows).
+ * never trust client-held rows). When `empresa` is provided (U6 per-row
+ * export), the re-queried rows are scoped in memory to that empresa group
+ * key (`NomCFa` falling back to `NomCli` — `nombreEmpresa`).
  *
  * @throws whatever the printer throws (`EdgeUnavailableError` when the
  *   browser binary is missing) — the caller maps to its user-safe
@@ -54,18 +60,31 @@ function fechaEmisionHoy(): string {
 export async function renderValoracionesPdf(
   repo: ISiglaValoracionesRepository,
   filtro: ValoracionesFilter,
+  empresa?: string,
 ): Promise<Uint8Array> {
-  const rows = await repo.buscarValoraciones(filtro);
+  const todas = await repo.buscarValoraciones(filtro);
+  const rows =
+    empresa === undefined ? todas : todas.filter((row) => nombreEmpresa(row) === empresa);
 
-  // Client header: RUC lookup by codCli (OQ-3), name fallback from rows.
-  let cliente: { nombre: string; ruc: string } | null = null;
+  // Client header (U6): the scoped empresa name wins; otherwise the RUC
+  // lookup by codCli (OQ-3), falling back to the first row's names.
+  let rucCliente = '';
+  let nombrePorLookup: string | null = null;
   if (filtro.codCli !== undefined) {
     const lookup = await repo.buscarClientePorCodigo(filtro.codCli).catch(() => null);
-    if (lookup) cliente = { nombre: lookup.nomCom, ruc: lookup.nroRuc ?? '' };
+    if (lookup) {
+      rucCliente = lookup.nroRuc ?? '';
+      nombrePorLookup = lookup.nomCom;
+    }
   }
-  if (cliente === null && rows.length > 0) {
-    cliente = { nombre: rows[0].NomCFa || rows[0].NomCli, ruc: '' };
-  }
+  const nombreCliente =
+    empresa ??
+    nombrePorLookup ??
+    (todas.length > 0 ? todas[0].NomCFa || todas[0].NomCli : null);
+  const cliente =
+    nombreCliente !== null && nombreCliente !== ''
+      ? { nombre: nombreCliente, ruc: rucCliente }
+      : null;
 
   const html = buildValoracionHtml({
     logoDataUri: readLogoDataUri(),
@@ -83,8 +102,9 @@ export async function renderValoracionesPdf(
 
 /**
  * Canonical attachment filename shared by the PDF download route and the
- * email attachment (`valoraciones_<fecIni>_<fecFin>.pdf`).
+ * email attachment: `[NombreEmpresa]_[fecIni].pdf` for per-empresa exports
+ * (U6), the legacy `valoraciones_<fecIni>_<fecFin>.pdf` otherwise.
  */
-export function nombrePdf(filtro: ValoracionesFilter): string {
-  return `valoraciones_${filtro.fecIni}_${filtro.fecFin}.pdf`;
+export function nombrePdf(filtro: ValoracionesFilter, empresa?: string): string {
+  return nombreArchivoExportacion(empresa, filtro.fecIni, 'pdf', filtro.fecFin);
 }
