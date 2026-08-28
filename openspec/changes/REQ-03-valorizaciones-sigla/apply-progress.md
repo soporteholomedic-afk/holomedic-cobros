@@ -325,7 +325,7 @@ Files changed (code commit `d6c2faa`): `src/lib/db.ts` (section removed), `src/f
 
 **Why**: Direct user fix request on the implemented flow - per-row actions, landscape PDF with the SIGLA-print-like 13-column layout, and empresa+date filenames for both downloads.
 
-**Column mapping (all 13 mapped - NO unmapped columns)**: `N�. Ficha`=IdAten-ItemEx | `Doc. Iden`=NroDId | `�Conv.?`=IndCon S/N | `N� Conv`=IdConv | `Nombres`=Pacien | `Ocupaci�n`=DesPue | `Fecha examen`=FecAte | `Tipo examen`=DesTCh | `CR`=CenCos | `Anexo 7D`=Anex7D | `Solicitado Por`=Solici | `Costos`=ventaPorMoneda+Simbol | `Doc.Fac`=NumDov ('' when NULL). Cross-referenced against SIGLA's own print branch (RptFacturacionForm.cs cols) and the Formato 35 header.
+**Column mapping (all 13 mapped - NO unmapped columns)**: `N�. Ficha`=IdAten-ItemEx | `Doc. Iden`=NroDId | `�Conv.?`=IndCon S/N | `N� Conv`=IdConv | `Nombres`=Pacien | `Ocupaci�n`=DesPue | `Fecha examen`=FecAte | `Tipo examen`=DesTCh | `CR`=CenCos | `Anexo 7D`=Anex7D | `Solicitado Por`=Solici | `Costos`=ventaPorMoneda+Simbol | `Doc.Fac`=NumDov ('' when NULL). Cross-referenced against SIGLA's own print branch (RptFacturacionForm.cs cols) and the Formato 35 header.
 
 ### Mode
 
@@ -388,3 +388,56 @@ Strict TDD (cached testing-capabilities `strict_tdd: true`, vitest 4). RED first
 3. **Consolidado mode has NO export buttons anymore** (the toolbar was the only entry; consolidado export was never specified - pre-existing risk 7 unchanged). Detail-mode rows carry all three actions.
 4. The email modal opened from a row uses the PANEL's `codCli` for the RUC prefill when a client filter is set - correct for the common case (clientless query + row pick = manual-degrade path, spec M-R3).
 5. Untracked `temp/` directory at repo root predates this batch - untouched, reported.
+
+---
+
+## Fix Batch U7 — Per-Row Export Loading State (surgical)
+
+**Status**: COMPLETE · **Date**: 2026-08-28 · **Mode**: fix (native attempt `U7-per-row-loading-state`, handled by orchestrator)
+
+### Bug (user-reported, confirmed)
+
+Clicking one row's Excel or PDF button put EVERY row's button into loading state (all rows disabled + spinning), blocking unrelated exports until the request settled.
+
+### Root Cause
+
+`useExportarValoraciones` held a single boolean `exportando` (true for the whole hook instance), and `EmpresaList` applied `disabled={exportandoExcel}` / `disabled={exportandoPdf}` to ALL rows — so one in-flight export froze every row's buttons.
+
+### Fix (exactly as designed)
+
+1. `useExportarValoraciones.ts`: replaced `exportando: boolean` with `empresaEnCurso: string | null` — set to `empresa ?? '__global__'` on start, cleared in `finally`. Result interface: `exportar` + `empresaEnCurso` + convenience `estaExportando(empresa?)` + `error`. Doc comment updated (U7).
+2. `EmpresaList.tsx`: props `exportandoExcel/exportandoPdf: boolean` → `empresaExcelEnCurso/empresaPdfEnCurso: string | null`. Per row: `const excelFila = empresaExcelEnCurso === grupo.empresa;` (same for `pdfFila`) — `disabled={excelFila}` and spinner only when that row is in flight. Enviar button untouched (no loading state by design).
+3. `src/app/valoraciones/page.tsx`: rewired both hook instances to the new destructuring/props. Grep-verified: no other consumers of `exportando`/`exportandoExcel`/`exportandoPdf` existed.
+4. Tests: `EmpresaList.test.tsx` now asserts spinner/disabled ONLY on the target row (other rows enabled, normal icons, cross-type unaffected) — Excel + PDF variants; `useExportarValoraciones.test.tsx` probe tracks `empresaEnCurso` with two new cases (per-empresa key while pending → cleared after settle; `__global__` sentinel for filter-only export). Page integration test unchanged and still green.
+
+### Spec Impact
+
+None — UI polish only, no requirement change. No spec/design delta needed for U7.
+
+### Work Unit Evidence — U7
+
+| Evidence | Value |
+|---|---|
+| Focused test command + result | `pnpm vitest run <EmpresaList.test.tsx, useExportarValoraciones.test.tsx, ValoracionesPage.test.tsx>` -> **3 files / 24 tests passed** |
+| Runtime harness | `ValoracionesPage.test.tsx` page-level integration (real page tree, mocked fetch) — included in the 24 green |
+| Rollback boundary | `git revert <U7 code commit>` — touches only the 5 files below; no other feature consumes these props/symbols (grep-proven) |
+| Lint / types | `pnpm eslint <5 modified files>` -> exit 0; `pnpm tsc --noEmit` -> exit 0 |
+
+### Changed Lines - U7
+
+| Scope | Diff |
+|---|---|
+| Code + tests (5 files) | +123 / -28 = **151 churn** (vs 400 U7 budget) |
+| Docs (this section) | ~+40 |
+
+### Commits - U7
+
+| Hash | Message |
+|---|---|
+| `b49a7f4` | fix(valoraciones): scope row export loading state to the clicked empresa |
+
+### U7 Risks
+
+1. `'__global__'` is a sentinel empresa key — a real empresa literally named `__global__` would collide with the filter-only marker (theoretically impossible in SIGLA data; same sentinel approach as designed).
+2. A second click on a DIFFERENT row while one export is pending is allowed (each hook instance tracks its own single key; Excel and PDF are independent hooks) — matches the designed per-row behavior.
+3. Untracked `temp/` directory at repo root predates this batch - untouched, reported.
