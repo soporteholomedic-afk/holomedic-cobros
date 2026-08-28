@@ -1,12 +1,17 @@
 'use client';
 
 import { sanitizeEmailHtml } from './sanitizeEmailHtml';
+import { resolveLogoCid } from '@/features/firma-correo/presentation/helpers/resolveLogoCid';
 import type { EmailPreviewPanelProps } from './types';
 
 /**
  * LEFT panel of the two-panel email composition: subject card,
  * sanitized HTML preview, template footer, and attachment/drop-zone
  * slots. Presentational only — no feature concepts, no I/O.
+ *
+ * The preview resolves the signature logo's `cid:holomedic-logo` to
+ * the public asset path for DISPLAY ONLY (browsers cannot resolve smtp
+ * Content-IDs); the html that gets stored/sent keeps the cid.
  */
 export function EmailPreviewPanel({
   subject,
@@ -34,7 +39,7 @@ export function EmailPreviewPanel({
             <div
               data-testid="email-preview"
               className="prose prose-sm dark:prose-invert max-w-none text-slate-700 dark:text-slate-200"
-              dangerouslySetInnerHTML={{ __html: sanitizeEmailHtml(html) }}
+              dangerouslySetInnerHTML={{ __html: sanitizeEmailHtml(resolveLogoCid(html)) }}
             />
           ) : (
             <p className="text-slate-400 dark:text-slate-500 text-sm italic">

@@ -48,7 +48,7 @@ describe('FirmaForm', () => {
     expect(screen.getByLabelText('Nombre')).toHaveValue('Dr. Juan Doe');
     expect(screen.getByLabelText('Área')).toHaveValue('Medicina');
     expect(screen.getByLabelText('Correo')).toHaveValue('juan.doe@holomedic.pe');
-    expect(screen.getByLabelText(/Teléfono/)).toHaveValue('999 888 777');
+    expect(screen.getByLabelText(/Móvil/)).toHaveValue('999 888 777');
     expect(screen.getByLabelText(/Anexo/)).toHaveValue('123');
   });
 
@@ -57,12 +57,38 @@ describe('FirmaForm', () => {
 
     const preview = screen.getByTestId('firma-preview');
     expect(preview.innerHTML).toContain('Dr. Juan Doe');
-    expect(preview.querySelector('a')).toHaveAttribute('href', 'mailto:juan.doe@holomedic.pe');
+    expect(preview.innerHTML).toContain('<strong>Dr. Juan Doe</strong> | Área Medicina');
+    // Correo renders as plain text — the composer emits no anchor.
+    expect(preview.innerHTML).toContain('juan.doe@holomedic.pe');
+    expect(preview.querySelector('a')).toBeNull();
 
     fireEvent.change(screen.getByLabelText('Nombre'), { target: { value: 'Dra. Ana Poe' } });
 
     expect(preview.innerHTML).toContain('Dra. Ana Poe');
     expect(preview.innerHTML).not.toContain('Dr. Juan Doe');
+  });
+
+  it('resolves the logo cid to the public path for DISPLAY in the preview', () => {
+    render(<FirmaForm initialFirma={INITIAL} />);
+
+    const preview = screen.getByTestId('firma-preview');
+    const logo = preview.querySelector('img');
+    expect(logo).not.toBeNull();
+    expect(logo).toHaveAttribute('src', '/logo-holomedic.png');
+    // The cid never reaches the rendered preview markup.
+    expect(preview.innerHTML).not.toContain('cid:holomedic-logo');
+  });
+
+  it('renders the FIXED company phone and address even when optional fields are empty', () => {
+    render(<FirmaForm initialFirma={{ ...INITIAL, telefono: '', anexo: '' }} />);
+
+    const html = screen.getByTestId('firma-preview').innerHTML;
+    expect(html).not.toContain('Móvil:');
+    expect(html).not.toContain('Anexo:');
+    expect(html).toContain('Telef. 480-0217');
+    expect(html).toContain(
+      'Pasaje La India 169, Urb. Los Sauces – Surquillo (Altura de 9 y 10 de la Av. Villarán)',
+    );
   });
 
 
@@ -78,7 +104,7 @@ describe('FirmaForm', () => {
     expect(preview.querySelector('b')).toBeNull();
   });
 
-  it('omits the Tel/Anexo line from the preview when both are empty', () => {
+  it('omits the Móvil/Anexo segments from the preview when both are empty', () => {
     render(<FirmaForm initialFirma={{ ...INITIAL, telefono: '', anexo: '' }} />);
 
     expect(screen.getByTestId('firma-preview').innerHTML).not.toContain('Anexo:');

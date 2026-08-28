@@ -141,7 +141,12 @@ describe('/api/plantillas/firma — GET', () => {
     expect(body).toMatchObject({ success: true, firma });
     const html = body.firmaHtml as string;
     expect(html).toContain('Dra. Juana Pérez');
-    expect(html).toContain('mailto:juana.perez@holomedic.pe');
+    // Redesigned composer: correo as plain text (no mailto) + logo cid +
+    // FIXED company contact data.
+    expect(html).toContain('juana.perez@holomedic.pe');
+    expect(html).not.toContain('mailto:');
+    expect(html).toContain('cid:holomedic-logo');
+    expect(html).toContain('Telef. 480-0217');
   });
 
   it('returns firmaHtml as an EMPTY string when no signature exists (no fallback here)', async () => {

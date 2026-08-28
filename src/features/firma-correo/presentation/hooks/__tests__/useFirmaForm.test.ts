@@ -108,7 +108,7 @@ describe('useFirmaForm', () => {
     saveFirmaApiMock.mockResolvedValue({
       ok: false,
       error: 'La firma contiene campos inválidos',
-      fields: { telefono: 'El teléfono debe contener al menos 6 dígitos.' },
+      fields: { telefono: 'El móvil debe contener al menos 6 dígitos.' },
     });
     const { result } = renderHook(() => useFirmaForm(VALID));
 
@@ -118,7 +118,7 @@ describe('useFirmaForm', () => {
 
     await waitFor(() => expect(result.current.status).toBe('error'));
     expect(result.current.errors).toEqual({
-      telefono: 'El teléfono debe contener al menos 6 dígitos.',
+      telefono: 'El móvil debe contener al menos 6 dígitos.',
     });
     expect(result.current.errorMessage).toBe('La firma contiene campos inválidos');
   });

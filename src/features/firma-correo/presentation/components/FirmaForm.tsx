@@ -4,6 +4,7 @@ import type { FormEvent } from 'react';
 
 import type { CampoFirma, FirmaCorreo } from '../../domain/entities';
 import { composeSignatureHtml } from '../../domain/composeSignatureHtml';
+import { resolveLogoCid } from '../helpers/resolveLogoCid';
 import { useFirmaForm } from '../hooks/useFirmaForm';
 
 export interface FirmaFormProps {
@@ -18,12 +19,14 @@ interface CampoDef {
   hint?: string;
 }
 
-/** The five signature fields, in editing order (spec "Signature Editing"). */
+/** The five signature fields, in editing order (spec "Signature Editing").
+ *  Display label says "Móvil"; the storage key stays `telefono`
+ *  (codec/storage compatibility — do NOT rename the key). */
 const CAMPOS: readonly CampoDef[] = [
   { campo: 'nombre', label: 'Nombre', type: 'text' },
   { campo: 'area', label: 'Área', type: 'text' },
   { campo: 'correo', label: 'Correo', type: 'email' },
-  { campo: 'telefono', label: 'Teléfono', type: 'text', hint: 'Opcional' },
+  { campo: 'telefono', label: 'Móvil', type: 'text', hint: 'Opcional' },
   { campo: 'anexo', label: 'Anexo', type: 'text', hint: 'Opcional' },
 ];
 
@@ -32,14 +35,16 @@ const CAMPOS: readonly CampoDef[] = [
  * + submit orchestration live in `useFirmaForm`, persistence in
  * `saveFirmaApi`. The live preview renders `composeSignatureHtml` —
  * the SAME pure function the send path composes with, so preview and
- * delivered body are byte-identical (design D4). Rendering it via
+ * delivered body are byte-identical (design D4) — after
+ * `resolveLogoCid` swaps the logo `cid:` for the public path
+ * (DISPLAY ONLY: browsers cannot resolve smtp Content-IDs; the stored
+ * and sent html keep the cid). Rendering it via
  * `dangerouslySetInnerHTML` is SAFE: the composer HTML-escapes every
- * user value (text nodes AND the mailto href) and emits only fixed
- * structural markup.
+ * user value and emits only fixed structural markup.
  */
 export function FirmaForm({ initialFirma }: FirmaFormProps) {
   const { values, setField, errors, status, errorMessage, submit } = useFirmaForm(initialFirma);
-  const previewHtml = composeSignatureHtml(values);
+  const previewHtml = resolveLogoCid(composeSignatureHtml(values));
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>): void => {
     event.preventDefault();

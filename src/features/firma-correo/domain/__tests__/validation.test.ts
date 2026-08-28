@@ -260,7 +260,7 @@ describe('validateFirmaCorreo — teléfono (optional, 6–20 chars, ≥6 digits
     const result = validateFirmaCorreo({ ...NOMBRE_AREA_CORREO, telefono: '12345' });
     expect(result).toEqual({
       ok: false,
-      fields: { telefono: 'El teléfono debe tener entre 6 y 20 caracteres.' },
+      fields: { telefono: 'El móvil debe tener entre 6 y 20 caracteres.' },
     });
   });
 
@@ -268,7 +268,7 @@ describe('validateFirmaCorreo — teléfono (optional, 6–20 chars, ≥6 digits
     const result = validateFirmaCorreo({ ...NOMBRE_AREA_CORREO, telefono: '9'.repeat(21) });
     expect(result).toEqual({
       ok: false,
-      fields: { telefono: 'El teléfono debe tener entre 6 y 20 caracteres.' },
+      fields: { telefono: 'El móvil debe tener entre 6 y 20 caracteres.' },
     });
   });
 
@@ -277,7 +277,7 @@ describe('validateFirmaCorreo — teléfono (optional, 6–20 chars, ≥6 digits
     expect(result).toEqual({
       ok: false,
       fields: {
-        telefono: 'El teléfono solo admite dígitos, espacios y los caracteres + - ( ).',
+        telefono: 'El móvil solo admite dígitos, espacios y los caracteres + - ( ).',
       },
     });
   });
@@ -286,7 +286,7 @@ describe('validateFirmaCorreo — teléfono (optional, 6–20 chars, ≥6 digits
     const result = validateFirmaCorreo({ ...NOMBRE_AREA_CORREO, telefono: '+ - ( ) + - ( )' });
     expect(result).toEqual({
       ok: false,
-      fields: { telefono: 'El teléfono debe contener al menos 6 dígitos.' },
+      fields: { telefono: 'El móvil debe contener al menos 6 dígitos.' },
     });
   });
 

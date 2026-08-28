@@ -68,6 +68,21 @@ describe('two-panel composition', () => {
     expect(preview.innerHTML).not.toContain('onerror');
   });
 
+  it('resolves cid:holomedic-logo to the public logo path for display', () => {
+    render(
+      <EmailPreviewPanel
+        subject="Asunto"
+        html='<p>firma</p><img src="cid:holomedic-logo" alt="logo" width="120" />'
+        emptyHint="sin cuerpo"
+      />,
+    );
+
+    const img = screen.getByTestId('email-preview').querySelector('img');
+    expect(img).not.toBeNull();
+    expect(img).toHaveAttribute('src', '/logo-holomedic.png');
+    expect(screen.getByTestId('email-preview').innerHTML).not.toContain('cid:holomedic-logo');
+  });
+
   it('shows the empty hint instead of the preview when html is empty', () => {
     render(<EmailPreviewPanel subject="" html="" emptyHint="Seleccione una plantilla" />);
     expect(screen.getByText('Seleccione una plantilla')).toBeInTheDocument();

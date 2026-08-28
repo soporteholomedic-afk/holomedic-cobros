@@ -43,9 +43,9 @@ const MENSAJES = {
     formato: 'El correo no tiene un formato válido.',
   },
   telefono: {
-    longitud: 'El teléfono debe tener entre 6 y 20 caracteres.',
-    caracteres: 'El teléfono solo admite dígitos, espacios y los caracteres + - ( ).',
-    digitos: 'El teléfono debe contener al menos 6 dígitos.',
+    longitud: 'El móvil debe tener entre 6 y 20 caracteres.',
+    caracteres: 'El móvil solo admite dígitos, espacios y los caracteres + - ( ).',
+    digitos: 'El móvil debe contener al menos 6 dígitos.',
   },
   anexo: {
     digitos: 'El anexo debe tener entre 1 y 5 dígitos.',
