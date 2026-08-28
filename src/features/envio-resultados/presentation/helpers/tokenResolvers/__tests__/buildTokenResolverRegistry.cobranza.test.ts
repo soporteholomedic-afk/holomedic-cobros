@@ -1,6 +1,9 @@
 import { describe, it, expect } from 'vitest';
 
-import { buildTokenResolverRegistry } from '../buildTokenResolverRegistry';
+import {
+  buildTokenResolverRegistry,
+  FIRMA_FALLBACK_HTML,
+} from '../buildTokenResolverRegistry';
 import type { InterpolationContext } from '../types';
 import { GOLDEN_CTX } from '../../__tests__/goldenFixtures';
 
@@ -105,6 +108,32 @@ describe('buildTokenResolverRegistry — cobranza branch (T1b.5)', () => {
     const out = registry.resolveToken('firma', { ...COBRANZA_CTX, firma: '' });
     expect(out.html).toContain('[Falta configurar firma]');
     expect(out.html).not.toBe('');
+  });
+
+  it('exposes FIRMA_FALLBACK_HTML as the exact bytes every area branch emits for empty ctx.firma', () => {
+    // Single source of truth pin: the composers' marker-replacement
+    // recovery matches this exact byte sequence against the body. If
+    // the emitted fallback ever drifts, recovery silently breaks —
+    // this test is the tripwire.
+    expect(FIRMA_FALLBACK_HTML).toBe('<em>[Falta configurar firma]</em>');
+    const emptyFirmaCtx = { ...COBRANZA_CTX, firma: '' };
+    expect(
+      buildTokenResolverRegistry('consolidados').resolveToken('firma', emptyFirmaCtx).html,
+    ).toBe(FIRMA_FALLBACK_HTML);
+    expect(
+      buildTokenResolverRegistry('cobranza').resolveToken('firma', emptyFirmaCtx).html,
+    ).toBe(FIRMA_FALLBACK_HTML);
+    expect(
+      buildTokenResolverRegistry('valoraciones').resolveToken('firma', emptyFirmaCtx).html,
+    ).toBe(FIRMA_FALLBACK_HTML);
+  });
+
+  it('passes a non-empty ctx.firma through verbatim in every area branch', () => {
+    const firma = '<table><tr><td>Dra. Firma Guardada</td></tr></table>';
+    const ctx = { ...COBRANZA_CTX, firma };
+    expect(buildTokenResolverRegistry('consolidados').resolveToken('firma', ctx).html).toBe(firma);
+    expect(buildTokenResolverRegistry('cobranza').resolveToken('firma', ctx).html).toBe(firma);
+    expect(buildTokenResolverRegistry('valoraciones').resolveToken('firma', ctx).html).toBe(firma);
   });
 
   it('delegates {{tabla:documentosPendientes:cols}} to the table resolver', () => {

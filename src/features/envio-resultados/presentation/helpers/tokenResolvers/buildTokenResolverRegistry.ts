@@ -37,6 +37,15 @@ import type { InterpolationContext, ResolveResult, TokenResolverRegistry } from 
 import { escapeHtml } from './escapeHtml';
 
 /**
+ * Single source of truth for the visible `{{firma}}` fallback emitted
+ * when `ctx.firma` is empty. Exported so the composers' deferred-firma
+ * recovery (`replaceFirmaFallback`) matches the EXACT bytes the
+ * resolver baked into the body — the emitted markup must never drift
+ * from what recovery looks for. Do not inline this literal anywhere.
+ */
+export const FIRMA_FALLBACK_HTML = '<em>[Falta configurar firma]</em>';
+
+/**
  * Build the token sub-resolver map for the given area. Returns a
  * `Map<key, resolve(ctx)>` for fast dispatch. Keys mirror the prior
  * `interpolateSpitch` placeholder set plus the new `firma` token.
@@ -89,7 +98,7 @@ function buildTokenMap(area: string): Map<string, (ctx: InterpolationContext) =>
       subject: '',
     }));
     map.set('firma', (ctx) => ({
-      html: ctx.firma !== '' ? ctx.firma : '<em>[Falta configurar firma]</em>',
+      html: ctx.firma !== '' ? ctx.firma : FIRMA_FALLBACK_HTML,
       subject: '',
     }));
     map.set('destino', (ctx) => ({
@@ -122,7 +131,7 @@ function buildTokenMap(area: string): Map<string, (ctx: InterpolationContext) =>
       subject: '',
     }));
     map.set('firma', (ctx) => ({
-      html: ctx.firma !== '' ? ctx.firma : '<em>[Falta configurar firma]</em>',
+      html: ctx.firma !== '' ? ctx.firma : FIRMA_FALLBACK_HTML,
       subject: '',
     }));
     return map;
@@ -146,7 +155,7 @@ function buildTokenMap(area: string): Map<string, (ctx: InterpolationContext) =>
       subject: ctx.montoTotal ?? '',
     }));
     map.set('firma', (ctx) => ({
-      html: ctx.firma !== '' ? ctx.firma : '<em>[Falta configurar firma]</em>',
+      html: ctx.firma !== '' ? ctx.firma : FIRMA_FALLBACK_HTML,
       subject: '',
     }));
     return map;
