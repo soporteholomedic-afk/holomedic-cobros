@@ -54,6 +54,20 @@ export interface TablaCobranzaRow {
 }
 
 /**
+ * One row of the valoraciones `tablaValoraciones` table (REQ-03 M-R2).
+ * All 5 fields are PRE-FORMATTED strings — amounts carry the group's own
+ * currency symbol (es-PE 2-decimals) and `registros` is the row count;
+ * the resolver stays a dumb escape-and-emit renderer.
+ */
+export interface TablaValoracionesRow {
+  empresa: string;
+  registros: string;
+  subtotal: string;
+  igv: string;
+  total: string;
+}
+
+/**
  * The interpolation data passed by the send flow (`EmailEditor.handleSpitchSelect`).
  *
  * `today` is injectable — fixes the module-level `TODAY` gotcha the
@@ -99,6 +113,14 @@ export interface InterpolationContext {
   documentosPendientes?: DocumentoPendienteRow[];
   /** Cobranza: full rows for the `tabla-cobranza` table (12 pre-formatted fields). */
   tablaCobranza?: TablaCobranzaRow[];
+  // ---- OPTIONAL valoraciones fields (REQ-03 M-R2 widening, back-compat) ----
+  // Only the valoraciones flow fills these. All values are pre-formatted
+  // strings; other areas' callers keep constructing the context without
+  // them, exactly as before the widening.
+  /** Valoraciones: query period, pre-formatted `dd/MM/yyyy al dd/MM/yyyy`. */
+  periodo?: string;
+  /** Valoraciones: per-empresa summary rows for the `tablaValoraciones` table. */
+  tablaValoraciones?: TablaValoracionesRow[];
 }
 
 /**

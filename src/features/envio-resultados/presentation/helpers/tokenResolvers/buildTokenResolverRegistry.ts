@@ -14,6 +14,9 @@
  *   - `cobranza`     — REQ-01 DIR-06 (empresa, ruc, fecha, montoTotal,
  *                      moneda, diasVencidos, cuentasBancarias, firma +
  *                      the documentosPendientes table sub-resolver).
+ *   - `valoraciones` — REQ-03 M-R2 (empresa, ruc, periodo, moneda, total,
+ *                      fecha, firma + the tablaValoraciones table
+ *                      sub-resolver).
  *
  * Unknown areas return a registry whose `resolveToken` always returns
  * `''` and `resolveTable` always returns `''`. The orchestrator then
@@ -28,6 +31,7 @@
 import { documentosVencidosResolver } from './documentosVencidosResolver';
 import { documentosPendientesResolver } from './documentosPendientesResolver';
 import { tablaCobranzaResolver } from './tablaCobranzaResolver';
+import { tablaValoracionesResolver } from './tablaValoracionesResolver';
 import { examenesResolver } from './examenesResolver';
 import type { InterpolationContext, ResolveResult, TokenResolverRegistry } from './types';
 import { escapeHtml } from './escapeHtml';
@@ -123,6 +127,30 @@ function buildTokenMap(area: string): Map<string, (ctx: InterpolationContext) =>
     }));
     return map;
   }
+  if (area === 'valoraciones') {
+    // REQ-03 M-R2: plain pre-formatted valorización fields. `ruc`/`moneda`/
+    // `montoTotal` are the same optional context fields cobranza uses
+    // (`montoTotal` backs the `total` token); `periodo` is
+    // valoraciones-only. Missing optional fields resolve to '' (signals
+    // block removal).
+    map.set('empresa', (ctx) => ({
+      html: escapeHtml(ctx.companyName),
+      subject: ctx.companyName,
+    }));
+    map.set('ruc', (ctx) => ({ html: ctx.ruc ?? '', subject: ctx.ruc ?? '' }));
+    map.set('fecha', (ctx) => ({ html: ctx.today, subject: ctx.today }));
+    map.set('periodo', (ctx) => ({ html: ctx.periodo ?? '', subject: ctx.periodo ?? '' }));
+    map.set('moneda', (ctx) => ({ html: ctx.moneda ?? '', subject: ctx.moneda ?? '' }));
+    map.set('total', (ctx) => ({
+      html: ctx.montoTotal ?? '',
+      subject: ctx.montoTotal ?? '',
+    }));
+    map.set('firma', (ctx) => ({
+      html: ctx.firma !== '' ? ctx.firma : '<em>[Falta configurar firma]</em>',
+      subject: '',
+    }));
+    return map;
+  }
   // Unknown area → every token resolves to ''.
   return map;
 }
@@ -138,6 +166,10 @@ function buildTableMap(area: string): Map<string, (cols: string[], ctx: Interpol
   if (area === 'cobranza') {
     map.set(documentosPendientesResolver.name, documentosPendientesResolver.resolve);
     map.set(tablaCobranzaResolver.name, tablaCobranzaResolver.resolve);
+    return map;
+  }
+  if (area === 'valoraciones') {
+    map.set(tablaValoracionesResolver.name, tablaValoracionesResolver.resolve);
     return map;
   }
   // Unknown area → every table resolves to ''.

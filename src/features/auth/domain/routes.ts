@@ -19,6 +19,11 @@ export const RUTAS_PROTEGIDAS: RutaProtegida[] = [
   { path: '/consolidados',        permiso: 'consolidados',     label: 'Consolidados' },
   { path: '/api/consolidados/envios', permiso: 'consolidados',  label: 'API Historial de Envíos' },
   { path: '/valoraciones',        permiso: 'valoraciones',     label: 'Valoraciones' },
+  // REQ-03: the whole /api/valoraciones surface (sigla, lookups, pdf,
+  // excel, send) requires the valoraciones permiso. Longest-first
+  // startsWith matching also closes the previously-public /generate
+  // CSV route as a side effect (no scripted consumers verified).
+  { path: '/api/valoraciones',    permiso: 'valoraciones',     label: 'API Valoraciones' },
   { path: '/generador-pdfs',      permiso: 'generar_pdfs',     label: 'Generador de PDFs' },
   { path: '/areas/medicina/jjc',  permiso: 'jjc',              label: 'JJC (Dermatología)' },
   { path: '/areas/musculoesqueletica/jjc', permiso: 'jjc', label: 'JJC (Musculoesquelética)' },
