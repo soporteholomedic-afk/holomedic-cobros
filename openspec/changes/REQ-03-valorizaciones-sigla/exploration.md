@@ -207,7 +207,7 @@ All new lookups must use typed parameterized queries (never interpolated LIKE fr
 
 **Key sub-decisions (forks the proposal must settle)**
 - **SP invocation**: typed `request.input('@pFecIni'…).execute('SP_RPT_REPFACTURACION')` (recommended — mssql binds by SP param name) vs raw `EXEC` string (SIGLA's own style — rejected: injection-prone).
-- **Pool/env**: verify `DB_USER` is the read-only login vs add `getSiglaReadOnlyPool()` (open question OQ-1).
+- **Pool/env**: verify `DB_USER` is the read-only login vs add a dedicated pool getter (open question OQ-1; RESOLVED, then amended in U5: standard `getPool()` — author clarification that §3 governs AI-agent exploration only).
 - **Excel**: keep `xlsx` (already used; `generateValoracionesWorkbook` precedent; 30-column Formato 35 layout) vs introduce `exceljs` (new dependency — not recommended without a stated need).
 - **Email route**: new `/api/valoraciones/send` under permiso `valoraciones` + new/`facturacion` purpose (recommended) vs widening `/api/send-email` permissions (touches cobranza's route — riskier).
 - **Consolidado mode**: call `SP_RPT_CONSOLIDADOFACTURACION` (+ Adicionales SP) and port the ajuste logic (full parity, more work) vs detail-only in v1 (REQ lists Consolidado as one of the 11 filters — parity expected; flag the Adicionales complexity).
@@ -236,7 +236,7 @@ All new lookups must use typed parameterized queries (never interpolated LIKE fr
 
 ### Open questions for sdd-propose
 
-- **OQ-1 — Read-only pool wiring**: is the deployment `DB_USER` the `explorar_datos` login, or should we add a dedicated `getSiglaReadOnlyPool()` (new env prefix, e.g. `SIGLA_RO_*`) so the requirement's "EXPLORADOR_DATOS strictly" is enforced by construction?
+- **OQ-1 — Read-only pool wiring**: is the deployment `DB_USER` the `explorar_datos` login, or should we add a dedicated read-only pool getter (new env prefix) so the requirement's "EXPLORADOR_DATOS strictly" is enforced by construction? — **RESOLVED then AMENDED (U5)**: requirement-author clarified §3 restricts AI-agent interactive exploration only; the runtime module uses the standard `getPool()` (`DB_*`), read-only at the query level. The dedicated getter implemented from the original resolution was removed.
 - **OQ-2 — SP param names for `.execute()` binding**: confirm the actual `@pFecIni…@pInFsta` names (and positions) against the live DB once, via EXPLORADOR_DATOS, before freezing the repository spec.
 - **OQ-3 — RUC source for REQ-01 prefill**: add `NroRuc` to the client lookup (query `Cliente` by `CodCli`) — is `Cliente.NroRuc` reliably populated for all companies (incl. DNI-keyed particulares)?
 - **OQ-4 — Send route & SMTP purpose**: new `/api/valoraciones/send` with `purpose: 'facturacion'` (existing creds) vs adding `SMTP_USER_VALORIZACIONES`? And should sends write audit rows (cobranza REQ-02 precedent) or skip auditing in v1?

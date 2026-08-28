@@ -1,6 +1,6 @@
 # Apply Progress — REQ-03-valorizaciones-sigla
 
-**Work units**: U1 (S1 backend, tasks 1.0–1.6) + U2 (S1 UI + CSV retirement, tasks 1.7–1.8) — **S1 complete** · U3 (S2 consolidado + exports, tasks 2.0–2.6) — **S2 complete** · U4 (S3 email + plantillas, tasks 3.1–3.5) — **S3 complete, ALL 21 TASKS DONE** · **Mode**: Standard (per-task RED-first as ordered by tasks.md) · **Date**: 2026-08-27
+**Work units**: U1 (S1 backend, tasks 1.0–1.6) + U2 (S1 UI + CSV retirement, tasks 1.7–1.8) — **S1 complete** · U3 (S2 consolidado + exports, tasks 2.0–2.6) — **S2 complete** · U4 (S3 email + plantillas, tasks 3.1–3.5) — **S3 complete, ALL 21 TASKS DONE** · U5 (remediation: standard `DB_*` app pool per requirement-author clarification) — **complete** · **Mode**: Standard (per-task RED-first as ordered by tasks.md) · **Date**: 2026-08-27 (U5: 2026-08-28)
 **Delivery**: 3 chained PRs (S1/S2/S3), feature-branch-chain — tracker `feature/valoraciones-sigla-req03` (from `develop`), work branches `feature/valoraciones-sigla-s1` (PR 1 = U1+U2), `feature/valoraciones-sigla-s2` (PR 2 = U3, base = s1) and `feature/valoraciones-sigla-s3` (PR 3 = U4, base = s2 @ `79023a3`).
 
 ## Completed Tasks
@@ -8,7 +8,7 @@
 ### U1 (backend) — tasks 1.0–1.6
 
 - [x] 1.0 SP smoke test → `smoke-test-findings.md` (bind freeze gate — findings corrected binds)
-- [x] 1.1 `getSiglaReadOnlyPool()` + `SiglaRoSaError` + `__setSiglaRoPoolForTests` in `src/lib/db.ts`; `DbEnvPrefix` widened
+- [x] 1.1 dedicated read-only pool getter + sa-guard error class + pool test seam in `src/lib/db.ts`; `DbEnvPrefix` widened — **AMENDED (U5)**: removed; standard `getPool()` (`DB_*`) — see U5 section
 - [x] 1.2 Domain: `entities.ts` (RepFacturacion 39 reader cols exact casing, `ValoracionesFilter`, lookup types, `EmpresaGrupo`, `MONEDAS`), `ports.ts`, pure `agrupacion.ts` (CodMon→*MN/*MO, round2, IGV 18%), `fixtures.ts`
 - [x] 1.3 Infrastructure: `getValoracionesDb.ts` (cached promise + `__setValoracionesDbForTests`), `sqlserver/SiglaValoracionesRepository.ts` (frozen `REPFACTURACION_BINDS`, typed `.input().execute`, `rowToRepFacturacion` ISO boundary, lookups + D7 fallback) + barrel `sqlserver/index.ts`
 - [x] 1.4 `src/app/api/valoraciones/sigla/route.ts` (validation, tri-state indFac, user-safe 500)
@@ -255,7 +255,7 @@ U4:
 ## Issues / Risks
 
 1. **OPS BLOCKER (runtime, WORSENED by U3 probe)**: S1 needs `GRANT EXECUTE ON dbo.SP_RPT_REPFACTURACION TO explorar_datos`; U3 additionally found that **`SP_RPT_CONSOLIDADOFACTURACION` + `_ADICIONALES` are NOT DEPLOYED** on 172.16.10.14 — ops must deploy both SPs (source exists only in the SIGLA C# workspace's caller; ask the SIGLA DBA for the production SP script) and grant EXECUTE on all three. Detail queries, consolidado queries AND both export routes (which re-query) all surface user-safe 500s until then.
-2. `.env.local` has `DB_USER=sa` — the D1 guard refuses the `DB_*` fallback until `SIGLA_RO_*` (or a non-sa `DB_USER`) is configured; deployment must point to `explorar_datos`.
+2. ~~`.env.local` has `DB_USER=sa` — the D1 guard refused the `DB_*` fallback~~ **RESOLVED by U5 amendment**: the sa guard was removed — `DB_USER=sa` (or any legitimate app login) is valid for the runtime pool; REQ-03 §3's credential clause governs AI-agent interactive exploration only (EXPLORADOR_DATOS per AGENTS.md).
 3. Registering `/api/valoraciones` also closed the previously-public `/api/valoraciones/generate` (now deleted — Q-R8). Deploy note: confirm no scripted consumers before merge (proposal OQ-6).
 4. Stale `.next/dev/types/validator.ts` (from an old dev run) referenced the deleted route — removed locally; a fresh `pnpm dev` regenerates types.
 5. **Consolidado bind names are convention-derived** (sibling-SP no-prefix pattern), not `sys.parameters`-verified — the SPs don't exist to verify against. First live consolidado run after deployment should confirm; a mismatch surfaces as a clear mssql parameter error (user-safe 500), and the fix is a one-line `CONSOLIDADO_BINDS` edit.
@@ -272,10 +272,47 @@ U4:
 - [x] S1 (U1+U2) complete → PR 1 prepared (head `feature/valoraciones-sigla-s1` → base `feature/valoraciones-sigla-req03`). Body saved at `C:\Users\soporte\AppData\Local\Temp\opencode\req03-pr1-body.md` (gh unauthenticated at S1 wrap-up).
 - [x] S2 (U3) complete → PR 2 prepared (head `feature/valoraciones-sigla-s2` → base `feature/valoraciones-sigla-s1`). Body saved at `C:\Users\soporte\AppData\Local\Temp\opencode\req03-pr2-body.md` (gh unauthenticated at S2 wrap-up). Note: the root `.pr-1-body.md` / `.pr-2-body.md` dotfiles belong to an older change (worker-table-aptitud-archivos, commit 007a487) — do not reuse them for REQ-03.
 - [x] S3 (U4) complete → PR 3 (head `feature/valoraciones-sigla-s3` → base `feature/valoraciones-sigla-s2`). See "PR 3 note" below.
-- Pending (ops): SIGLA grants + SP deployments (risk 1) and deployment env (`SIGLA_RO_*` or non-sa `DB_USER`, SMTP facturacion pair).
+- Pending (ops): SIGLA grants + SP deployments (risk 1) and deployment env (standard `DB_*` pool vars — U5 amendment; SMTP facturacion pair).
 - Pending (process): open the three chained PRs once `gh` authenticates, then the **verify phase** (`sdd-verify`) — global vitest/lint run + spec-scenario audit across all 21 tasks.
 
 ### PR 3 note (filled at S3 wrap-up)
 
 - Branch `feature/valoraciones-sigla-s3` pushed to origin; PR 3 head `feature/valoraciones-sigla-s3` → base `feature/valoraciones-sigla-s2` per the feature-branch-chain strategy (child PR targets the immediate parent branch, never `main`/`develop` directly).
 - `gh` still unauthenticated at S3 wrap-up (same as S1/S2) — PR body prepared and saved at `C:\Users\soporte\AppData\Local\Temp\opencode\req03-pr3-body.md`; open all three PRs once `gh auth login` succeeds (PR 1: s1 → req03 tracker; PR 2: s2 → s1; PR 3: s3 → s2).
+
+## U5 — Remediation: Standard DB_* App Pool (2026-08-28)
+
+### What / Why
+
+**What**: Removed the dedicated read-only pool wiring (`getSiglaReadOnlyPool`, the `SIGLA_RO_*` env prefix, the `SiglaRoSaError` pre-construction `sa` guard, and its test seam) and reverted `DbEnvPrefix` to `'DB_' | 'HOLOMEDIC_DB_'`. `getValoracionesDb()` now opens the repository through the standard `getPool()` (`DB_*` env — the same pool every other SIGLA query uses); its cached-promise factory + `__setValoracionesDbForTests` seam are unchanged. The 8 dedicated db.test.ts suites were deleted (13 pre-existing suites kept); the 4 test files mocking `@/lib/db` now mock/verify `getPool`.
+
+**Why**: Requirement-author clarification — REQ-03 §3's "Prohibido el uso de credenciales sa para este módulo" was intended to restrict **AI-agent interactive DB exploration** (AGENTS.md: exploration uses the EXPLORADOR_DATOS profile), not the runtime app pool (`DB_USER=sa` at runtime is the platform's legitimate choice). The original OQ-1/D1 interpretation enforced a runtime restriction that was never intended. Read-only remains guaranteed at the QUERY level: this module only SELECTs and EXECUTEs report SPs — no writes anywhere.
+
+### Scope / Rollback Boundary
+
+Files changed (code commit `d6c2faa`): `src/lib/db.ts` (section removed), `src/features/valoraciones/infrastructure/getValoracionesDb.ts` (pool getter swap + doc comment), `src/lib/__tests__/db.test.ts` (8 suites deleted), and mock-boundary renames in `src/features/valoraciones/infrastructure/__tests__/getValoracionesDb.test.ts`, `src/app/api/valoraciones/sigla/__tests__/route.test.ts`, `src/app/api/valoraciones/lookups/[tipo]/__tests__/route.test.ts`, `src/features/auth/domain/__tests__/valoraciones-route-protection.test.ts`. Rollback = `git revert` of the U5 commits; no other feature touches these symbols (grep-proven below).
+
+### Work Unit Evidence — U5
+
+| Evidence | Value |
+|---|---|
+| Focused test command + result | `pnpm vitest run src/lib/__tests__/db.test.ts src/features/valoraciones src/app/api/valoraciones src/app/valoraciones` → **27 files / 202 tests passed** (db.test.ts 13/13 pre-existing suites; previously-green route/repository/factory suites stay green with the `getPool` seam mocks) |
+| Runtime harness | **N/A with reason**: no runtime boundary changed — the pool swap is internal wiring; live execution remains gated by the same pending ops items as U1–U4 (SP grants/deployments, risk 1). Query-level read-only is structural (repository code path issues only SELECT/EXECUTE report SPs). |
+| Rollback boundary | `git revert d6c2faa` + the U5 docs commit; independent of all other features (musculoesqueletica, plantillas, auth behavior untouched). |
+| Zero-reference proof | `git grep -E "SIGLA_RO\|SiglaRo\|getSiglaReadOnlyPool\|__setSiglaRoPoolForTests" -- src openspec` → **exit 1 (0 matches)** |
+| Lint / types | `pnpm eslint <7 modified src files>` → exit 0 (clean) · `pnpm tsc --noEmit` → exit 0 |
+
+### Commits — U5
+
+| Hash | Message |
+|---|---|
+| `d6c2faa` | refactor(valoraciones): use standard DB_* app pool per requirement-author clarification |
+| (docs) | docs(valoraciones): record U5 standard-pool amendment in specs and progress |
+
+### Changed Lines — U5
+
+| Scope | Diff |
+|---|---|
+| Code (`d6c2faa`, src only) | **+47 / −267 = 314 churn** |
+| Docs (spec D1 amendment, tasks 1.1 note, proposal/exploration annotations, this section) | ~+50 / −35 |
+| **U5 total** | **~352 churn ≤ 800 native-attempt budget ✓ (44%)** |

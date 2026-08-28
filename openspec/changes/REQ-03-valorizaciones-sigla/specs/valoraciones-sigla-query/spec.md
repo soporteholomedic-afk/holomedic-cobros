@@ -6,15 +6,15 @@ Read-only valorizaciones query against SIGLA, mirroring `RptFacturacionForm`: lo
 
 ## Requirements
 
-### Requirement: Read-only pool with `sa` rejection
+### Requirement: Standard app pool with query-level read-only
 
-The module MUST use `getSiglaReadOnlyPool()` in `src/lib/db.ts` (`SIGLA_RO_*` env, fallback `DB_*`, login `explorar_datos`), rejecting configs resolving to `sa`.
+The module MUST connect through the standard application pool — `getPool()` in `src/lib/db.ts` (env vars `DB_*`) — the same pool every other SIGLA query uses. All operations MUST remain strictly read-only at the query level: SELECT statements and report stored-procedure EXECUTEs only; the module MUST NOT issue any write (INSERT/UPDATE/DELETE/DDL). AI-agent interactive DB exploration MUST use the EXPLORADOR_DATOS profile per AGENTS.md (REQ-03 §3's credential clause governs exploration, not the runtime pool — requirement-author clarification, U5).
 
-#### Scenario: `sa` rejected
+#### Scenario: Repository issues no writes
 
-- GIVEN the resolved user is `sa`
-- WHEN the repository requests a connection
-- THEN a configuration error is raised, no query executes
+- GIVEN the valoraciones repository connected via the standard app pool
+- WHEN any module operation executes (sigla query, consolidado, lookups)
+- THEN only SELECT / report-SP EXECUTE statements are issued — no write statement is ever sent
 
 ### Requirement: SP smoke test before bind freeze
 

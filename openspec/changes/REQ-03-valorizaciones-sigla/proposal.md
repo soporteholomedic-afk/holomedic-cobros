@@ -25,7 +25,7 @@ Replace the manual SIGLA CSV export → web re-upload flow with a real-time, str
 
 | OQ | Resolution (recommendation · assumption) |
 |---|---|
-| OQ-1 Pool | Add `getSiglaReadOnlyPool()` in `src/lib/db.ts` reading `SIGLA_RO_*` (fallback `DB_*`), deployed as `explorar_datos`; a guard rejects `sa`. Never the generic app pool. |
+| OQ-1 Pool | **AMENDED (U5)**: standard `getPool()` in `src/lib/db.ts` (`DB_*` env) per requirement-author clarification — REQ-03 §3's credential clause restricts AI-agent interactive exploration (EXPLORADOR_DATOS per AGENTS.md), not the runtime app pool. (Original resolution — a dedicated read-only pool with its own env prefix and `sa` rejection — was implemented in U1 and removed in U5.) |
 | OQ-2 SP verify | Slice-1 task 0: one-time EXPLORADOR_DATOS smoke test — confirm `@p…` param names, casing, nullability, empty-result shape — before repository binds freeze. |
 | OQ-3 RUC | Client lookup returns `Cliente.NroRuc` (searched by name/RUC, keyed by `CodCli`). Assumption: populated for corporate clients; DNI-keyed particulares degrade gracefully (manual entry). |
 | OQ-4 Send | Dedicated `/api/valoraciones/send` (permiso `valoraciones`); SMTP `purpose: 'facturacion'` (existing creds, cobranza fallback precedent). No audit table in v1 — assumption to confirm. |
