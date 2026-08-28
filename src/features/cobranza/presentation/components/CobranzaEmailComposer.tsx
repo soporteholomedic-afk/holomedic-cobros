@@ -27,6 +27,7 @@ import { esClaveDirectorioValida } from '@/features/cobranza/domain/entities';
 import { buildCobranzaInterpolationContext } from '@/features/cobranza/presentation/helpers/buildCobranzaInterpolationContext';
 import { buildCobranzaAuditMetadata } from '@/features/cobranza/presentation/helpers/buildCobranzaAuditMetadata';
 import { useFirmaCorreo } from '@/features/firma-correo/presentation/hooks/useFirmaCorreo';
+import { replaceFirmaFallback } from '@/features/firma-correo/presentation/helpers/replaceFirmaFallback';
 import type { ClienteGroup } from '@/types';
 
 import { useSendCobranzaEmail } from '../hooks/useSendCobranzaEmail';
@@ -126,8 +127,9 @@ export function CobranzaEmailComposer({ client, onClose, onSuccess }: CobranzaEm
       setSelectedSpitch(spitch);
       // editor-firmas PR4 — {{firma}} interpolates the server-composed
       // signature (fetched on mount); NO stripping, NO client-side
-      // rebuild. Accepted race: selecting a template before the firma
-      // fetch resolves bakes the fallback placeholder until reselect.
+      // rebuild. If the template selection wins the fetch race the
+      // fallback marker is baked here; the recovery effect below swaps
+      // it for the real firma once the fetch lands (no reselect).
       const interpolated = interpolate(
         spitch.bodyHtml,
         spitch.subject,
@@ -140,6 +142,30 @@ export function CobranzaEmailComposer({ client, onClose, onSuccess }: CobranzaEm
     },
     [client, firmaHtml],
   );
+
+  // Deferred-firma recovery (marker replacement): SpitchSelector
+  // auto-selects the first template on mount while useFirmaCorreo's GET
+  // is still in flight — that interpolation bakes the resolver's
+  // [Falta configurar firma] fallback into the body. When the firma
+  // lands, swap every baked marker for the real html in place (NO
+  // re-interpolation — operator edits around the marker survive) and
+  // sync the visual editor exactly like handleSpitchSelect does.
+  // Guards: only the ''→non-empty firma transition triggers recovery
+  // (ref latch — a firma reverting to '' does nothing); a body without
+  // the marker is untouched; an empty resolved firma keeps the spec
+  // fallback visible.
+  const prevFirmaHtmlRef = useRef('');
+  useEffect(() => {
+    const previous = prevFirmaHtmlRef.current;
+    prevFirmaHtmlRef.current = firmaHtml;
+    if (previous !== '' || firmaHtml === '') return;
+    const recovered = replaceFirmaFallback(bodyHtml, firmaHtml);
+    if (recovered === bodyHtml) return;
+    /* eslint-disable react-hooks/set-state-in-effect -- async recovery of edit-transient body state baked by the mount-time firma GET race; cannot be derived at render */
+    setBodyHtml(recovered);
+    /* eslint-enable react-hooks/set-state-in-effect */
+    editorRef.current?.loadHtml(recovered);
+  }, [firmaHtml, bodyHtml]);
 
   const handleLocalAdd = useCallback(
     (incoming: File[]) => {

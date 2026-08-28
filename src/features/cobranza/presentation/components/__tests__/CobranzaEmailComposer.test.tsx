@@ -50,8 +50,23 @@ vi.mock('@/features/envio-resultados/presentation/components/SpitchSelector', ()
   ),
 }));
 
+// Editor handle mock (EmailEditor.test.tsx pattern): exposes loadHtml so
+// tests can assert the visual-editor sync, and captures onChange so tests
+// can simulate operator body edits.
+const mockEditorHandle = vi.hoisted(() => ({
+  loadHtml: vi.fn(),
+  onChange: null as ((html: string) => void) | null,
+}));
+
 vi.mock('@/components/email/EmailBodyEditor', () => ({
-  EmailBodyEditor: React.forwardRef(function EmailBodyEditor() {
+  EmailBodyEditor: React.forwardRef(function EmailBodyEditor(
+    { onChange }: { onChange?: (html: string) => void },
+    ref: React.ForwardedRef<unknown>,
+  ) {
+    React.useImperativeHandle(ref, () => mockEditorHandle);
+    React.useEffect(() => {
+      mockEditorHandle.onChange = onChange ?? null;
+    });
     return <div data-testid="email-body-editor" />;
   }),
 }));
@@ -290,7 +305,7 @@ describe('CobranzaEmailComposer', () => {
     ).toBeInTheDocument();
   });
 
-  it('seleccionar plantilla antes de que resuelva la firma hornea el fallback hasta reseleccionar (carrera aceptada)', async () => {
+  it('seleccionar plantilla antes de que resuelva la firma: al resolver, el marcador se reemplaza automáticamente (sin reselección)', async () => {
     // Deferred firma fetch — the template selection beats resolution.
     let resolveFirma!: (value: Response) => void;
     const fetchMock = vi.fn((input: unknown, init?: RequestInit) => {
@@ -309,20 +324,95 @@ describe('CobranzaEmailComposer', () => {
     renderComposer();
     selectTemplate();
 
-    // Fallback placeholder baked into this interpolation.
+    // Fallback placeholder baked into this interpolation (fetch pending).
     expect(getPreviewHtml()).toContain('[Falta configurar firma]');
 
-    // The fetch resolves with the composed block; reselecting the
-    // template re-interpolates with the real firma (recovery path).
+    // Operator has the editor open when the firma lands — the visual
+    // editor must be synced with the recovered html (loadHtml seam).
+    fireEvent.click(screen.getByText('Editar'));
+    expect(await screen.findByTestId('email-body-editor')).toBeInTheDocument();
+    mockEditorHandle.loadHtml.mockClear();
+
+    // The fetch resolves → the baked marker is replaced in place, no
+    // reselect needed (marker-replacement recovery).
     await act(async () => {
       resolveFirma(
         jsonResponse({ success: true, firma: null, firmaHtml: COMPOSED_FIRMA }),
       );
     });
-    selectTemplate();
 
-    expect(getPreviewHtml()).toContain('Dra. Firma Guardada');
+    await waitFor(() => {
+      expect(getPreviewHtml()).toContain('Dra. Firma Guardada');
+    });
     expect(getPreviewHtml()).not.toContain('[Falta configurar firma]');
+    expect(mockEditorHandle.loadHtml).toHaveBeenCalledTimes(1);
+    const htmlArg = mockEditorHandle.loadHtml.mock.calls[0]?.[0] ?? '';
+    expect(htmlArg).toContain('Dra. Firma Guardada');
+    expect(htmlArg).not.toContain('[Falta configurar firma]');
+  });
+
+  it('firma tardía con cuerpo editado sin el marcador: el cuerpo queda intacto', async () => {
+    let resolveFirma!: (value: Response) => void;
+    const fetchMock = vi.fn((input: unknown) => {
+      const url = String(input);
+      if (url === '/api/plantillas/firma') {
+        return new Promise<Response>((resolve) => { resolveFirma = resolve; });
+      }
+      if (url.startsWith('/api/cobranza/contactos')) {
+        return Promise.resolve(jsonResponse({ success: true, contacto: null }));
+      }
+      return Promise.reject(new Error(`Unexpected fetch in test: ${url}`));
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    renderComposer();
+    selectTemplate();
+    expect(getPreviewHtml()).toContain('[Falta configurar firma]');
+
+    // Operator edits the body and removes the marker.
+    fireEvent.click(screen.getByText('Editar'));
+    expect(await screen.findByTestId('email-body-editor')).toBeInTheDocument();
+    mockEditorHandle.onChange?.('<p>Cuerpo editado por el operador de cobranza</p>');
+    expect(await screen.findByText('Cuerpo editado por el operador de cobranza')).toBeInTheDocument();
+    mockEditorHandle.loadHtml.mockClear();
+
+    await act(async () => {
+      resolveFirma(
+        jsonResponse({ success: true, firma: null, firmaHtml: COMPOSED_FIRMA }),
+      );
+    });
+
+    // Body untouched: no marker → no replacement, no editor reload.
+    expect(getPreviewHtml()).toContain('Cuerpo editado por el operador de cobranza');
+    expect(getPreviewHtml()).not.toContain('Dra. Firma Guardada');
+    expect(mockEditorHandle.loadHtml).not.toHaveBeenCalled();
+  });
+
+  it('firma diferida que resuelve vacía (sin firma guardada): el marcador permanece', async () => {
+    let resolveFirma!: (value: Response) => void;
+    const fetchMock = vi.fn((input: unknown) => {
+      const url = String(input);
+      if (url === '/api/plantillas/firma') {
+        return new Promise<Response>((resolve) => { resolveFirma = resolve; });
+      }
+      if (url.startsWith('/api/cobranza/contactos')) {
+        return Promise.resolve(jsonResponse({ success: true, contacto: null }));
+      }
+      return Promise.reject(new Error(`Unexpected fetch in test: ${url}`));
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    renderComposer();
+    selectTemplate();
+    expect(getPreviewHtml()).toContain('[Falta configurar firma]');
+
+    // No saved signature (firmaHtml: '') → the spec fallback stays.
+    await act(async () => {
+      resolveFirma(jsonResponse({ success: true, firma: null, firmaHtml: '' }));
+    });
+
+    expect(getPreviewHtml()).toContain('[Falta configurar firma]');
+    expect(getPreviewHtml()).not.toContain('Dra. Firma Guardada');
   });
 
   it('sin firma guardada interpola el placeholder [Falta configurar firma] en {{firma}}', async () => {
