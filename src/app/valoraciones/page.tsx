@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useState } from 'react';
-import { ClipboardList, FileDown, FileSpreadsheet, Loader2, Send } from 'lucide-react';
+import { ClipboardList } from 'lucide-react';
 
 import type {
   DestinoLookupItem,
@@ -25,13 +25,15 @@ import {
 
 /**
  * Valorizaciones page (REQ-03): realtime SIGLA query with the 11-filter
- * panel replacing the legacy CSV upload flow. Slice 2 adds the
- * client-gated consolidado mode (per-destino totals) next to the detail
- * mode, plus the server-side PDF export. Slice 3 adds the email modal
- * (`EnviarValoracionesModal` — plantillas + REQ-01 prefill + regenerated
- * attachments). All fetching lives in hooks (`useLookup`,
- * `useValoraciones`, `useConsolidado`, `useExportarValoraciones`) — the
- * page only wires state.
+ * panel replacing the legacy CSV upload flow. Slice 2 added the
+ * client-gated consolidado mode next to the detail mode; slice 3 the email
+ * modal (plantillas + REQ-01 prefill + regenerated attachments).
+ *
+ * U6: the export/send actions live IN each empresa row of the results
+ * table (Enviar / Excel / PDF, each scoped to that row's empresa only) —
+ * the global header toolbar was removed per the user's fix. All fetching
+ * lives in hooks (`useLookup`, `useValoraciones`, `useConsolidado`,
+ * `useExportarValoraciones`) — the page only wires state.
  *
  * The rendered table follows the mode of the LAST executed query
  * (`modoConsulta`), so toggling the checkbox does not flip the view away
@@ -47,7 +49,7 @@ export default function ValoracionesPage() {
     useExportarValoraciones('excel');
   const [grupoSeleccionado, setGrupoSeleccionado] = useState<EmpresaGrupo | null>(null);
   const [modoConsulta, setModoConsulta] = useState<'detalle' | 'consolidado'>('detalle');
-  const [enviarAbierto, setEnviarAbierto] = useState(false);
+  const [enviarScope, setEnviarScope] = useState<EmpresaGrupo | null>(null);
 
   // Panel lookups: sedes and tipos trabajador load once; destinos are
   // gated by the selected client (spec Q-R4/Q-R5 — no client, no fetch).
@@ -71,18 +73,25 @@ export default function ValoracionesPage() {
     buscar(filtro);
   }, [buscar, consolidadoQuery, filtros]);
 
-  const hayResultados =
-    modoConsulta === 'consolidado'
-      ? consolidadoQuery.status === 'ready' && consolidadoQuery.filas.length > 0
-      : status === 'ready' && totalRegistros > 0;
+  // U6 row actions: each button acts ONLY on its row's empresa (the
+  // empresa group key scopes the server-side re-query + filename).
+  const enviarEmpresa = useCallback((grupo: EmpresaGrupo) => {
+    setEnviarScope(grupo);
+  }, []);
 
-  const descargarPdf = useCallback(() => {
-    exportarPdf(toFiltro(filtros));
-  }, [exportarPdf, filtros]);
+  const exportarExcelEmpresa = useCallback(
+    (grupo: EmpresaGrupo) => {
+      exportarExcel(toFiltro(filtros), grupo.empresa);
+    },
+    [exportarExcel, filtros],
+  );
 
-  const descargarExcel = useCallback(() => {
-    exportarExcel(toFiltro(filtros));
-  }, [exportarExcel, filtros]);
+  const exportarPdfEmpresa = useCallback(
+    (grupo: EmpresaGrupo) => {
+      exportarPdf(toFiltro(filtros), grupo.empresa);
+    },
+    [exportarPdf, filtros],
+  );
 
   const errorExportar = errorPdf ?? errorExcel;
 
@@ -101,50 +110,10 @@ export default function ValoracionesPage() {
               Consulta en tiempo real desde SIGLA
             </p>
           </div>
-          {hayResultados && (
-            <div className="ml-auto flex flex-col items-end gap-1">
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => setEnviarAbierto(true)}
-                  className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-sky-600 text-white text-sm font-semibold shadow-lg shadow-sky-600/20 hover:bg-sky-700 transition-colors"
-                >
-                  <Send className="w-4 h-4" />
-                  Enviar Documentos
-                </button>
-                <button
-                  type="button"
-                  onClick={descargarExcel}
-                  disabled={exportandoExcel}
-                  className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-emerald-600 text-white text-sm font-semibold shadow-lg shadow-emerald-600/20 hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                >
-                  {exportandoExcel ? (
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                  ) : (
-                    <FileSpreadsheet className="w-4 h-4" />
-                  )}
-                  Descargar Excel
-                </button>
-                <button
-                  type="button"
-                  onClick={descargarPdf}
-                  disabled={exportandoPdf}
-                  className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-rose-600 text-white text-sm font-semibold shadow-lg shadow-rose-600/20 hover:bg-rose-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                >
-                  {exportandoPdf ? (
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                  ) : (
-                    <FileDown className="w-4 h-4" />
-                  )}
-                  Descargar PDF
-                </button>
-              </div>
-              {errorExportar && (
-                <p role="alert" className="text-xs text-rose-500 max-w-xs text-right">
-                  {errorExportar}
-                </p>
-              )}
-            </div>
+          {errorExportar && (
+            <p role="alert" className="ml-auto text-xs text-rose-500 max-w-xs text-right">
+              {errorExportar}
+            </p>
           )}
         </header>
 
@@ -174,6 +143,11 @@ export default function ValoracionesPage() {
             error={error}
             totalRegistros={totalRegistros}
             onSelectEmpresa={setGrupoSeleccionado}
+            onEnviarEmpresa={enviarEmpresa}
+            onExportarExcelEmpresa={exportarExcelEmpresa}
+            onExportarPdfEmpresa={exportarPdfEmpresa}
+            exportandoExcel={exportandoExcel}
+            exportandoPdf={exportandoPdf}
           />
         )}
       </div>
@@ -186,13 +160,14 @@ export default function ValoracionesPage() {
         />
       )}
 
-      {enviarAbierto && (
+      {enviarScope && (
         <EnviarValoracionesModal
           filtro={toFiltro(filtros)}
           codCli={filtros.codCli}
-          cliNombre={filtros.cliNombre}
-          grupos={modoConsulta === 'detalle' ? grupos : []}
-          onClose={() => setEnviarAbierto(false)}
+          cliNombre={enviarScope.empresa}
+          grupos={[enviarScope]}
+          empresa={enviarScope.empresa}
+          onClose={() => setEnviarScope(null)}
         />
       )}
     </main>

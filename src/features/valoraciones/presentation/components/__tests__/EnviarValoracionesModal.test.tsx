@@ -189,6 +189,25 @@ describe('EnviarValoracionesModal', () => {
     expect(secondBody.get('adjuntarExcel')).toBe('true');
   });
 
+  it('passes the empresa scope through to the send FormData so attachments stay row-scoped (U6)', async () => {
+    const fetchMock = mockFetch([
+      { url: '/api/plantillas', status: 200, body: PLANTILLAS },
+      { url: '/api/valoraciones/contactos', status: 200, body: { success: true, nroRuc: '20123456789', contacto: CONTACTO } },
+      { url: '/api/valoraciones/send', status: 200, body: { success: true, messageId: '<abc>' } },
+    ]);
+    render(renderModal({ empresa: 'EMPRESA DEMO S.A.C.' }));
+
+    await waitFor(() =>
+      expect((screen.getByLabelText('Asunto') as HTMLInputElement).value).not.toBe(''),
+    );
+    fireEvent.click(screen.getByRole('button', { name: /enviar/i }));
+    await waitFor(() => expect(screen.getByText(/enviado correctamente/i)).toBeInTheDocument());
+
+    const sendCall = fetchMock.mock.calls.find((c) => String(c[0]).includes('/api/valoraciones/send'));
+    const body = (sendCall![1] as RequestInit).body as FormData;
+    expect(body.get('empresa')).toBe('EMPRESA DEMO S.A.C.');
+  });
+
   it('send failure surfaces the API error message (user-safe error handling)', async () => {
     mockFetch([
       { url: '/api/plantillas', status: 200, body: PLANTILLAS },

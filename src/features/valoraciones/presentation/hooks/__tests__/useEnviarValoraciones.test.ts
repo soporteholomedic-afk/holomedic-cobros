@@ -152,6 +152,33 @@ describe('useEnviarValoraciones — enviar', () => {
     expect(body.get('html')).toBe('<p>Hola</p>');
     expect(body.get('adjuntarPdf')).toBe('true');
     expect(body.get('adjuntarExcel')).toBe('false');
+    // No empresa field → global attachments (legacy scope).
+    expect(body.get('empresa')).toBeNull();
+  });
+
+  it('appends the per-empresa scope when provided so attachments stay row-scoped (U6)', async () => {
+    const fetchMock = mockFetchOnce('/api/valoraciones/send', 200, {
+      success: true,
+      messageId: '<abc@demo>',
+    });
+    const { result } = renderHookWithConfig(55);
+
+    await act(async () => {
+      await result.current.enviar({
+        filtro,
+        to: 'a@demo.com',
+        cc: '',
+        subject: 's',
+        html: '<p>h</p>',
+        adjuntarPdf: true,
+        adjuntarExcel: true,
+        empresa: 'EMPRESA DEMO S.A.C.',
+      });
+    });
+
+    const sendCalls = fetchMock.mock.calls.filter((c) => String(c[0]).includes('/api/valoraciones/send'));
+    const body = (sendCalls[0] as [string, RequestInit])[1].body as FormData;
+    expect(body.get('empresa')).toBe('EMPRESA DEMO S.A.C.');
   });
 
   it('maps a non-OK response to envioStatus error with the API message', async () => {

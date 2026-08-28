@@ -6,9 +6,12 @@ import type { ValoracionesFilter } from '../../domain/entities';
 
 /**
  * `useExportarValoraciones` — triggers the server-side PDF/Excel exports
- * (REQ-03 E-R1/E-R3, slice 2). POSTs the CURRENT filter DTO to the export
- * route (design D4: the server re-queries from the filter — rows never
- * travel from the client) and streams the response into a blob download.
+ * (REQ-03 E-R1/E-R3, slice 2; U6 per-empresa scope). POSTs the CURRENT
+ * filter DTO plus the row's empresa group key to the export route (design
+ * D4: the server re-queries from the filter and scopes to that empresa —
+ * rows never travel from the client) and streams the response into a blob
+ * download named by the server's `Content-Disposition`
+ * (`[NombreEmpresa]_[fecIni].[ext]` when empresa-scoped).
  *
  * `toFiltro` output is directly postable; the hook stays type-simple on
  * purpose (no label fields needed by the exports).
@@ -16,7 +19,7 @@ import type { ValoracionesFilter } from '../../domain/entities';
 export type TipoExportacion = 'pdf' | 'excel';
 
 export interface UseExportarValoracionesResult {
-  exportar: (filtro: ValoracionesFilter) => void;
+  exportar: (filtro: ValoracionesFilter, empresa?: string) => void;
   exportando: boolean;
   error: string | null;
 }
@@ -37,7 +40,7 @@ export function useExportarValoraciones(
   const [error, setError] = useState<string | null>(null);
 
   const exportar = useCallback(
-    (filtro: ValoracionesFilter): void => {
+    (filtro: ValoracionesFilter, empresa?: string): void => {
       setExportando(true);
       setError(null);
 
@@ -46,7 +49,7 @@ export function useExportarValoraciones(
           const res = await fetch(`/api/valoraciones/${tipo}`, {
             method: 'POST',
             headers: { 'content-type': 'application/json' },
-            body: JSON.stringify(filtro),
+            body: JSON.stringify(empresa === undefined ? filtro : { ...filtro, empresa }),
           });
 
           if (!res.ok) {

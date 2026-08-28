@@ -38,6 +38,8 @@ export interface EnviarValoracionesModalProps {
   cliNombre?: string;
   /** Current empresa groups ({{total}} + {{tablaValoraciones}} source). */
   grupos: EmpresaGrupo[];
+  /** U6 per-empresa scope — attachments regenerate from ONLY this empresa. */
+  empresa?: string;
   onClose: () => void;
 }
 
@@ -48,6 +50,7 @@ export function EnviarValoracionesModal({
   codCli,
   cliNombre,
   grupos,
+  empresa,
   onClose,
 }: EnviarValoracionesModalProps) {
   const {
@@ -158,8 +161,9 @@ export function EnviarValoracionesModal({
       html: bodyHtml,
       adjuntarPdf,
       adjuntarExcel,
+      ...(empresa !== undefined ? { empresa } : {}),
     });
-  }, [adjuntarExcel, adjuntarPdf, bodyHtml, enviar, filtro, puedeEnviar, subject, to, cc]);
+  }, [adjuntarExcel, adjuntarPdf, bodyHtml, enviar, empresa, filtro, puedeEnviar, subject, to, cc]);
 
   return (
     <div

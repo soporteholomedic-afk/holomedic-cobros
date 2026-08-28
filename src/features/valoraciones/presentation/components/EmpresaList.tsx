@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Loader2, Search, Table2 } from 'lucide-react';
+import { FileDown, FileSpreadsheet, Loader2, Search, Send, Table2 } from 'lucide-react';
 
 import type { EmpresaGrupo } from '../../domain/entities';
 import type { ValoracionesStatus } from '../hooks/useValoraciones';
@@ -13,6 +13,11 @@ import { formatMonto } from '../helpers/format';
  * group's own `simbol` (from the SP row) labels the amounts, so a
  * DOLARES query renders `*MO` amounts with `$` — the codMon switch is
  * driven by the executed query (re-query on moneda change).
+ *
+ * U6: every row carries its own actions — Enviar, Excel and PDF — each
+ * acting ONLY on that row's empresa (the page wires them to the
+ * empresa-scoped export/send flows). Row click still opens the detail
+ * modal; the action buttons stop propagation.
  */
 export interface EmpresaListProps {
   grupos: EmpresaGrupo[];
@@ -20,6 +25,16 @@ export interface EmpresaListProps {
   error: string | null;
   totalRegistros: number;
   onSelectEmpresa: (grupo: EmpresaGrupo) => void;
+  /** U6 row action: open the email modal pre-scoped to this empresa. */
+  onEnviarEmpresa: (grupo: EmpresaGrupo) => void;
+  /** U6 row action: download the Formato 35 Excel for this empresa only. */
+  onExportarExcelEmpresa: (grupo: EmpresaGrupo) => void;
+  /** U6 row action: download the landscape PDF for this empresa only. */
+  onExportarPdfEmpresa: (grupo: EmpresaGrupo) => void;
+  /** Disables the row Excel buttons while an Excel export is in flight. */
+  exportandoExcel: boolean;
+  /** Disables the row PDF buttons while a PDF export is in flight. */
+  exportandoPdf: boolean;
 }
 
 const ITEMS_PER_PAGE = 10;
@@ -30,6 +45,11 @@ export function EmpresaList({
   error,
   totalRegistros,
   onSelectEmpresa,
+  onEnviarEmpresa,
+  onExportarExcelEmpresa,
+  onExportarPdfEmpresa,
+  exportandoExcel,
+  exportandoPdf,
 }: EmpresaListProps) {
   const [busqueda, setBusqueda] = useState('');
   const [pagina, setPagina] = useState(1);
@@ -77,12 +97,13 @@ export function EmpresaList({
               <th className="px-6 py-3.5 text-right">Subtotal</th>
               <th className="px-6 py-3.5 text-right">IGV 18%</th>
               <th className="px-6 py-3.5 text-right">Total</th>
+              <th className="px-6 py-3.5 text-center">Acciones</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100 dark:divide-slate-800/80">
             {status === 'loading' && (
               <tr>
-                <td colSpan={5} className="px-6 py-12 text-center">
+                <td colSpan={6} className="px-6 py-12 text-center">
                   <span className="inline-flex items-center gap-2 text-slate-400 font-medium">
                     <Loader2 className="w-4 h-4 animate-spin" />
                     Consultando valorizaciones…
@@ -93,7 +114,7 @@ export function EmpresaList({
             {status === 'error' && (
               <tr>
                 <td
-                  colSpan={5}
+                  colSpan={6}
                   className="px-6 py-12 text-center text-rose-500 font-medium"
                   role="alert"
                 >
@@ -104,7 +125,7 @@ export function EmpresaList({
             {status === 'idle' && (
               <tr>
                 <td
-                  colSpan={5}
+                  colSpan={6}
                   className="px-6 py-12 text-center text-slate-400 dark:text-slate-500 font-medium"
                 >
                   <Table2 className="w-5 h-5 mx-auto mb-2 opacity-60" />
@@ -135,12 +156,56 @@ export function EmpresaList({
                     <td className="px-6 py-4 text-right font-mono text-sm font-bold text-slate-900 dark:text-slate-100">
                       {grupo.simbol} {formatMonto(grupo.total)}
                     </td>
+                    <td className="px-6 py-4">
+                      <div
+                        className="flex items-center justify-center gap-1.5"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <button
+                          type="button"
+                          aria-label={`Enviar documentos de ${grupo.empresa}`}
+                          title="Enviar documentos de esta empresa"
+                          onClick={() => onEnviarEmpresa(grupo)}
+                          className="p-2 rounded-lg border border-slate-200 dark:border-slate-800 text-sky-600 dark:text-sky-400 hover:bg-sky-50 dark:hover:bg-sky-950/40 transition-colors"
+                        >
+                          <Send className="w-4 h-4" aria-hidden />
+                        </button>
+                        <button
+                          type="button"
+                          aria-label={`Descargar Excel de ${grupo.empresa}`}
+                          title="Descargar Excel de esta empresa"
+                          onClick={() => onExportarExcelEmpresa(grupo)}
+                          disabled={exportandoExcel}
+                          className="p-2 rounded-lg border border-slate-200 dark:border-slate-800 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                        >
+                          {exportandoExcel ? (
+                            <Loader2 className="w-4 h-4 animate-spin" aria-hidden />
+                          ) : (
+                            <FileSpreadsheet className="w-4 h-4" aria-hidden />
+                          )}
+                        </button>
+                        <button
+                          type="button"
+                          aria-label={`Descargar PDF de ${grupo.empresa}`}
+                          title="Descargar PDF de esta empresa"
+                          onClick={() => onExportarPdfEmpresa(grupo)}
+                          disabled={exportandoPdf}
+                          className="p-2 rounded-lg border border-slate-200 dark:border-slate-800 text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                        >
+                          {exportandoPdf ? (
+                            <Loader2 className="w-4 h-4 animate-spin" aria-hidden />
+                          ) : (
+                            <FileDown className="w-4 h-4" aria-hidden />
+                          )}
+                        </button>
+                      </div>
+                    </td>
                   </tr>
                 ))
               ) : (
                 <tr>
                   <td
-                    colSpan={5}
+                    colSpan={6}
                     className="px-6 py-12 text-center text-slate-400 dark:text-slate-500 font-medium"
                   >
                     No se encontraron valorizaciones para los filtros

@@ -25,6 +25,11 @@ function renderList(overrides: Partial<Parameters<typeof EmpresaList>[0]> = {}) 
     error: null,
     totalRegistros: 2,
     onSelectEmpresa: vi.fn(),
+    onEnviarEmpresa: vi.fn(),
+    onExportarExcelEmpresa: vi.fn(),
+    onExportarPdfEmpresa: vi.fn(),
+    exportandoPdf: false,
+    exportandoExcel: false,
     ...overrides,
   };
   const utils = render(<EmpresaList {...props} />);
@@ -66,6 +71,59 @@ describe('EmpresaList', () => {
     expect(onSelectEmpresa).toHaveBeenCalledTimes(1);
     const grupo = onSelectEmpresa.mock.calls[0][0] as EmpresaGrupo;
     expect(grupo.empresa).toBe('EMPRESA DEMO S.A.C.');
+  });
+
+  it('renders 3 icon action buttons (Enviar, Excel, PDF) in EVERY empresa row (U6)', () => {
+    renderList();
+    for (const empresa of ['EMPRESA DEMO S.A.C.', 'OTRA EMPRESA SRL']) {
+      expect(screen.getByLabelText(`Enviar documentos de ${empresa}`)).toBeInTheDocument();
+      expect(screen.getByLabelText(`Descargar Excel de ${empresa}`)).toBeInTheDocument();
+      expect(screen.getByLabelText(`Descargar PDF de ${empresa}`)).toBeInTheDocument();
+    }
+  });
+
+  it('row Excel button exports ONLY that row and does not open the detail modal (U6)', () => {
+    const onExportarExcelEmpresa = vi.fn();
+    const onSelectEmpresa = vi.fn();
+    renderList({ onExportarExcelEmpresa, onSelectEmpresa });
+    fireEvent.click(screen.getByLabelText('Descargar Excel de OTRA EMPRESA SRL'));
+
+    expect(onExportarExcelEmpresa).toHaveBeenCalledTimes(1);
+    expect((onExportarExcelEmpresa.mock.calls[0][0] as EmpresaGrupo).empresa).toBe(
+      'OTRA EMPRESA SRL',
+    );
+    // stopPropagation: the row click (detail modal) must NOT fire.
+    expect(onSelectEmpresa).not.toHaveBeenCalled();
+  });
+
+  it('row PDF button exports ONLY that row (U6)', () => {
+    const onExportarPdfEmpresa = vi.fn();
+    const onSelectEmpresa = vi.fn();
+    renderList({ onExportarPdfEmpresa, onSelectEmpresa });
+    fireEvent.click(screen.getByLabelText('Descargar PDF de EMPRESA DEMO S.A.C.'));
+
+    expect(onExportarPdfEmpresa).toHaveBeenCalledTimes(1);
+    expect((onExportarPdfEmpresa.mock.calls[0][0] as EmpresaGrupo).empresa).toBe(
+      'EMPRESA DEMO S.A.C.',
+    );
+    expect(onSelectEmpresa).not.toHaveBeenCalled();
+  });
+
+  it('row Enviar button opens the email flow for ONLY that row (U6)', () => {
+    const onEnviarEmpresa = vi.fn();
+    const onSelectEmpresa = vi.fn();
+    renderList({ onEnviarEmpresa, onSelectEmpresa });
+    fireEvent.click(screen.getByLabelText('Enviar documentos de OTRA EMPRESA SRL'));
+
+    expect(onEnviarEmpresa).toHaveBeenCalledTimes(1);
+    expect((onEnviarEmpresa.mock.calls[0][0] as EmpresaGrupo).empresa).toBe('OTRA EMPRESA SRL');
+    expect(onSelectEmpresa).not.toHaveBeenCalled();
+  });
+
+  it('disables the export buttons while that export type is in flight', () => {
+    renderList({ exportandoExcel: true });
+    expect(screen.getByLabelText('Descargar Excel de EMPRESA DEMO S.A.C.')).toBeDisabled();
+    expect(screen.getByLabelText('Descargar PDF de EMPRESA DEMO S.A.C.')).not.toBeDisabled();
   });
 
   it('filters groups by the search box', () => {

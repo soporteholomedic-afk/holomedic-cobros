@@ -40,6 +40,8 @@ export interface EnviarValoracionesPayload {
   html: string;
   adjuntarPdf: boolean;
   adjuntarExcel: boolean;
+  /** U6 per-empresa scope (EmpresaList group key) — row-scoped attachments. */
+  empresa?: string;
 }
 
 export interface UseEnviarValoracionesResult {
@@ -187,6 +189,9 @@ export function useEnviarValoraciones(codCli: number | undefined): UseEnviarValo
       body.append('html', payload.html);
       body.append('adjuntarPdf', String(payload.adjuntarPdf));
       body.append('adjuntarExcel', String(payload.adjuntarExcel));
+      if (payload.empresa !== undefined) {
+        body.append('empresa', payload.empresa);
+      }
 
       const res = await fetch('/api/valoraciones/send', { method: 'POST', body });
       const json: unknown = await res.json().catch(() => ({}));
