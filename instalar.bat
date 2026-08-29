@@ -20,11 +20,15 @@ if not exist "%ORIGEN%\iniciar.bat" (
 :: Crear destino si no existe
 if not exist "%DESTINO%" mkdir "%DESTINO%"
 
-:: Copiar todo (sobrescribe)
-xcopy "%ORIGEN%\*" "%DESTINO%\" /E /Y /I /R
+:: Espejo auto-sanador: deja DESTINO identico a ORIGEN (borra archivos
+:: viejos que ya no existen en la red). Se excluyen node_modules y .next
+:: (los genera iniciar.bat) y los .env* (nunca viajan por la red: se copian
+:: manualmente, ver AGENTS.md seccion "SDK Sync").
+robocopy "%ORIGEN%" "%DESTINO%" /MIR /XD node_modules .next /XF .env* /R:2 /W:2
 
-if %ERRORLEVEL% NEQ 0 (
-    echo [ERROR] Fallo la copia.
+:: robocopy: 0-7 = exito (incluye "sin cambios"), 8 o mas = error
+if %ERRORLEVEL% GEQ 8 (
+    echo [ERROR] Fallo la copia. Codigo robocopy: %ERRORLEVEL%
     pause
     exit /b 1
 )
