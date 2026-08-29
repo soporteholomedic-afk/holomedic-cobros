@@ -3,9 +3,9 @@
  *
  * In-module Ports & Adapters split (design A1): a **pure domain core** on top
  * (exclude/protected matching, mirror-plan computation, repo-root resolution —
- * zero fs usage, testable with in-memory entries) and a **side-effecting
- * executor** below (walk/copy/delete adapters). The CLI composition root lands
- * in U3 and will be appended at the file bottom.
+ * zero fs usage, testable with in-memory entries), a **side-effecting
+ * executor** below (walk/copy/delete adapters) and the **CLI composition
+ * root** at the bottom (runs only when invoked directly, never on import).
  *
  * Spec "Exclude List Authority": the engine walks the filesystem, never git;
  * the exclude lists below are the single authority. Excludes filter the SOURCE
@@ -13,9 +13,9 @@
  */
 
 import { createHash } from 'node:crypto';
-import { copyFile, mkdir, readdir, readFile, rm, rmdir } from 'node:fs/promises';
-import { dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { access, copyFile, mkdir, readdir, readFile, rm, rmdir, stat } from 'node:fs/promises';
+import { dirname, join, resolve } from 'node:path';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 /**
  * A file inventory entry. `relPath` uses forward slashes relative to the
@@ -275,4 +275,88 @@ export async function executeMirrorPlan(root, dest, plan) {
       dir = dirname(dir);
     }
   }
+}
+
+// ─── CLI composition root (U3) ───────────────────────────────────────────────
+// Wiring only: resolves roots, runs the pre-flight assert, computes and
+// announces the plan, then executes it. All behavior lives in the core and
+// executor above; this section exits with honest codes (design A7):
+// 0 = success, 1 = file-operation failure, 2 = pre-flight failure.
+
+/** Default destination when SDK_DEST_DIR is unset (design: dest default). */
+const DEFAULT_DEST_WIN32 = '\\\\172.16.10.12\\INSTALADORES\\HOLOMEDICSDK';
+const DEFAULT_DEST_UNIX = '/mnt/instaladores/HOLOMEDICSDK';
+
+/**
+ * CLI entry point. Source resolution: `SDK_SOURCE_DIR` overrides (TEST SEAM —
+ * documented deviation), defaulting to this script's own checkout via
+ * `resolveRepoRoot(import.meta.url)`; never the CWD. `--dry-run` announces the
+ * full plan and mutates nothing (A5).
+ *
+ * @returns {Promise<void>} terminates the process with an honest exit code
+ */
+async function main() {
+  const sourceRoot = process.env.SDK_SOURCE_DIR || resolveRepoRoot(import.meta.url);
+  const destRoot =
+    process.env.SDK_DEST_DIR || (process.platform === 'win32' ? DEFAULT_DEST_WIN32 : DEFAULT_DEST_UNIX);
+  const dryRun = process.argv.includes('--dry-run');
+
+  // Pre-flight assert (spec R3): BEFORE any destination walk or mutation.
+  // The exe specifically — a sigla-cli/ dir without it is equally broken.
+  try {
+    await access(join(sourceRoot, 'sigla-cli', 'SIGLA.PdfCli.exe'));
+  } catch {
+    process.stderr.write(
+      `[ERROR] sigla-cli/ missing or incomplete in ${sourceRoot} — mirror refuses to run ` +
+        'because it could delete destination sigla-cli/. Provision per AGENTS.md "SIGLA.Cli Sync".\n',
+    );
+    process.exit(2);
+  }
+
+  try {
+    /** @type {ExcludeConfig} */
+    const excludes = { dirNames: EXCLUDED_DIR_NAMES, fileGlobs: EXCLUDED_FILE_GLOBS };
+    const destExists = await stat(destRoot).then(
+      () => true,
+      () => false,
+    );
+    const [sourceEntries, destEntries] = await Promise.all([
+      walkTree(sourceRoot, excludes),
+      destExists ? walkTree(destRoot) : Promise.resolve([]),
+    ]);
+    const plan = computeMirrorPlan(sourceEntries, destEntries, excludes, PROTECTED_PATHS);
+
+    // Plan announce (R6/D5): counts always; full listing on --dry-run (A5).
+    process.stdout.write(
+      `sync-sdk: mirror plan — ${plan.copy.length} file(s) to copy, ${plan.delete.length} to delete\n`,
+    );
+    if (dryRun) {
+      if (plan.copy.length > 0) {
+        process.stdout.write(`copy:\n${plan.copy.map((p) => `  + ${p}`).join('\n')}\n`);
+      }
+      if (plan.delete.length > 0) {
+        process.stdout.write(`delete:\n${plan.delete.map((p) => `  - ${p}`).join('\n')}\n`);
+      }
+      process.stdout.write('sync-sdk: dry-run complete — nothing was modified\n');
+      process.exit(0);
+    }
+    if (plan.delete.length > 0) {
+      process.stdout.write(`delete (ghost cleanup):\n${plan.delete.map((p) => `  - ${p}`).join('\n')}\n`);
+    }
+
+    await executeMirrorPlan(sourceRoot, destRoot, plan);
+    process.stdout.write(
+      `sync-sdk: mirror complete — ${plan.copy.length} copied, ${plan.delete.length} deleted → ${destRoot}\n`,
+    );
+    process.exit(0);
+  } catch (err) {
+    process.stderr.write(`${err instanceof Error ? err.message : String(err)}\n`);
+    process.exit(1);
+  }
+}
+
+// Runs ONLY when invoked directly (`node scripts/sync-sdk.mjs`); importing the
+// module (unit tests, future tooling) never triggers a sync.
+if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {
+  await main();
 }
