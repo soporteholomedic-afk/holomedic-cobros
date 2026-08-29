@@ -53,6 +53,9 @@ export interface RepFacturacion {
   FecRec: string | null;
 }
 
+/** Business estado for the detail table's Estado column (mapped from SP codes; '—' = NULL/''/unknown). */
+export type EstadoEmpresa = 'PAGO CONFORME' | 'PAGO POR CONFIRMAR' | 'CREDITO' | '—';
+
 /** Currency codes mirroring SIGLA's `Tbl_Moneda` (verified). */
 export type CodigoMoneda = 1 | 2;
 
