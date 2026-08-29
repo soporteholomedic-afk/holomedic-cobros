@@ -14,6 +14,7 @@ import type {
   ValoracionesFilter,
 } from '../../domain/entities';
 import type { ISiglaValoracionesRepository } from '../../domain/ports';
+import { estadoFromEstCob } from '../../domain/estado';
 
 /**
  * Bind table for `SP_RPT_REPFACTURACION` — FROZEN from the task-1.0
@@ -220,7 +221,7 @@ export function rowToRepFacturacion(row: RepFacturacionRow): RepFacturacion {
     ItemEx: row.ItemEx,
     TipDov: row.TipDov ?? '',
     NumDov: row.NumDov ?? null,
-    EstCob: row.EstCob ?? '',
+    EstCob: estadoFromEstCob(row.EstCob),
     NomCli: row.NomCli ?? '',
     IndCon: row.IndCon ?? false,
     IdConv: row.IdConv ?? '',

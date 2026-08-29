@@ -41,7 +41,7 @@ export interface RepFacturacion {
   ItemEx: number;
   TipDov: string;
   NumDov: number | null;
-  EstCob: string;
+  EstCob: EstadoEmpresa;
   NomCli: string;
   IndCon: boolean;
   IdConv: string;

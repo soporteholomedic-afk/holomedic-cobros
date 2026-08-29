@@ -107,6 +107,8 @@ describe('GET /api/valoraciones/sigla', () => {
       FecSTA: null,
       VVtaMN: 100.5,
       CodiEM: 'EM1',
+      // Raw SP mock keeps 'P' (L84); the repository maps it at the boundary.
+      EstCob: 'CREDITO',
     });
     expect(body.resultados[0].FecAte).toBe(new Date('2026-01-15T00:00:00').toISOString());
   });

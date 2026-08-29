@@ -225,7 +225,8 @@ describe('SiglaValoracionesRepository.buscarValoraciones', () => {
 
     expect(rows).toHaveLength(2);
     const [a, b] = rows;
-    // Exact casing preserved end-to-end
+    // Exact casing preserved end-to-end; raw SP codes are mapped to
+    // EstadoEmpresa labels at the boundary ('P'→CREDITO, 'C'→PAGO CONFORME).
     expect(a).toMatchObject({
       NomCFa: 'EMPRESA A',
       FecSTA: null,
@@ -235,7 +236,9 @@ describe('SiglaValoracionesRepository.buscarValoraciones', () => {
       CodSeC: null,
       VVtaMN: 100.5,
       CodiEM: 'EM1',
+      EstCob: 'CREDITO',
     });
+    expect(b.EstCob).toBe('PAGO CONFORME');
     // Dates cross the boundary as ISO strings (computed, not hardcoded:
     // local-midnight Date objects render in UTC via toISOString).
     expect(a.FecAte).toBe(fecAte.toISOString());
@@ -243,6 +246,58 @@ describe('SiglaValoracionesRepository.buscarValoraciones', () => {
     expect(b.FecNac).toBe(new Date('1985-05-05T00:00:00').toISOString());
     expect(b.FecRec).toBe(new Date('2026-02-01T00:00:00').toISOString());
     expect(b.IndCon).toBe(false);
+  });
+
+  it('maps a raw NULL EstCob row to the U+2014 fallback (D2)', async () => {
+    const fake = createFakePool([
+      {
+        NomCFa: 'EMPRESA NULL',
+        NomCom: 'EMPRESA NULL',
+        DesDes: 'OFICINA',
+        CenCos: 'CC3',
+        NroDId: 'DNI 11111111',
+        Pacien: 'PACIENTE TRES',
+        EdaPac: 28,
+        FecNac: null,
+        DesPue: 'OBRERO',
+        DsTiTr: 'OBRERO',
+        FecAte: new Date('2026-01-20T00:00:00'),
+        FecSTA: null,
+        DesTCh: 'PREOCUPACIONAL',
+        NomPro: 'PROY',
+        Result: 'APTO',
+        Anex7D: 'S',
+        CodMon: 1,
+        DesMon: 'SOLES',
+        Simbol: 's/.',
+        VImpMN: 10,
+        VImpMO: 0,
+        VVtaMN: 8,
+        VVtaMO: 0,
+        Solici: 'SOL',
+        Admini: 'ADM',
+        IdAten: '0003',
+        ItemEx: 3,
+        TipDov: 'FT',
+        NumDov: null,
+        EstCob: null,
+        NomCli: 'EMPRESA NULL',
+        IndCon: false,
+        IdConv: null,
+        CodSeC: null,
+        NumCob: null,
+        NroVal: 'V3',
+        NroOPe: 'O3',
+        CodiEM: 'EM3',
+        FecRec: null,
+      },
+    ]);
+    repo = new SiglaValoracionesRepository(fake.pool as mssql.ConnectionPool);
+
+    const rows = await repo.buscarValoraciones(baseFilter);
+
+    expect(rows).toHaveLength(1);
+    expect(rows[0].EstCob).toBe('\u2014'); // fallback, never null/''
   });
 });
 

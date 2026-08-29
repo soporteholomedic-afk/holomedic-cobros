@@ -37,7 +37,7 @@ export function makeRepFacturacion(
     ItemEx: 1,
     TipDov: 'FT',
     NumDov: 45678,
-    EstCob: 'P',
+    EstCob: 'CREDITO',
     NomCli: 'EMPRESA DEMO S.A.C.',
     IndCon: true,
     IdConv: 'C-001',
