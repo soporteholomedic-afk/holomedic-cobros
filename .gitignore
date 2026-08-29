@@ -44,3 +44,12 @@ next-env.d.ts
 
 # gentle-ai local tooling (machine-local skill registry cache)
 .atl/
+
+# temporary directories and files
+temp/
+tmp/
+.temp/
+.tmp/
+*.tmp
+*.temp
+
