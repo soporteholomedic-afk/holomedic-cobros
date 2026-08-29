@@ -2,6 +2,13 @@ import type { CodigoMoneda, RepFacturacion } from '../../domain/entities';
 import { MONEDAS } from '../../domain/entities';
 import type { DestinoGrupo } from '../../domain/agrupacion';
 import { ventaPorMoneda } from '../../domain/agrupacion';
+import { MEMBRETE_HOLOMEDIC, type Membrete } from '../clientHeaderResolver';
+
+// The institutional membrete now lives in the shared clientHeaderResolver
+// module (used by the PDF and Excel adapters alike) — re-exported here so
+// existing template consumers keep their imports working unchanged.
+export { MEMBRETE_HOLOMEDIC };
+export type { Membrete };
 
 /**
  * Pure HTML template for the membretado A4 LANDSCAPE valorización report
@@ -20,21 +27,6 @@ import { ventaPorMoneda } from '../../domain/agrupacion';
  * IdAten-ItemEx, NroDId, IndCon(S/N), IdConv, Pacien, DesPue, FecAte,
  * DesTCh, CenCos, Anex7D, Solici, moneda-aware venta + Simbol, NumDov.
  */
-
-/** Institutional membrete data (RUC sourced from `paymentInfo.ts`). */
-export interface Membrete {
-  nombre: string;
-  ruc: string;
-  direccion?: string;
-  telefono?: string;
-}
-
-export const MEMBRETE_HOLOMEDIC: Membrete = {
-  nombre: 'HOLOMEDIC SERVICIOS INTEGRALES S.A.C.',
-  ruc: '20556200328',
-  // Address/phone are not yet sourced from a system of record — render
-  // only when provided (ops can extend `Membrete` without template work).
-};
 
 export interface ValoracionPdfInput {
   /** Logo as a `data:` URI; empty string renders a text-only membrete. */

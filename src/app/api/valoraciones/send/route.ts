@@ -1,12 +1,18 @@
 import { NextResponse } from 'next/server';
-import * as XLSX from 'xlsx';
 
 import { EdgeUnavailableError } from '@/features/musculoesqueletica-pdf/domain/errors';
 import { nombreEmpresa } from '@/features/valoraciones/domain/agrupacion';
+import { MONEDAS } from '@/features/valoraciones/domain/entities';
 import { parseEmpresaField, parseFiltroDto } from '@/features/valoraciones/domain/parseFiltroDto';
-import { getValoracionesDb } from '@/features/valoraciones/infrastructure/getValoracionesDb';
-import { generarFormato35Workbook } from '@/features/valoraciones/infrastructure/excel/formato35';
+import {
+  MEMBRETE_HOLOMEDIC,
+  fechaEmisionHoy,
+  readLogoBuffer,
+  resolveClienteCabecera,
+} from '@/features/valoraciones/infrastructure/clientHeaderResolver';
+import { generarValoracionesExcelBuffer } from '@/features/valoraciones/infrastructure/excel/valoracionesExcelReport';
 import { nombreArchivoExportacion } from '@/features/valoraciones/infrastructure/filename';
+import { getValoracionesDb } from '@/features/valoraciones/infrastructure/getValoracionesDb';
 import {
   nombrePdf,
   renderValoracionesPdf,
@@ -166,7 +172,7 @@ async function parseSendForm(request: Request): Promise<ParsedSendForm | NextRes
   };
 }
 
-/** Regenerate the Formato 35 `.xlsx` buffer from the filter (D4, U6-scoped). */
+/** Regenerate the client-facing `.xlsx` buffer from the filter (D4, U6-scoped). */
 async function generarExcelAttachment(
   repo: Awaited<ReturnType<typeof getValoracionesDb>>,
   filtro: ReturnType<typeof parseFiltroDto>['filtro'] & object,
@@ -175,8 +181,20 @@ async function generarExcelAttachment(
   const todas = await repo.buscarValoraciones(filtro);
   const rows =
     empresa === undefined ? todas : todas.filter((row) => nombreEmpresa(row) === empresa);
-  const workbook = generarFormato35Workbook(rows, filtro.codMon);
-  const buffer = XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' }) as Buffer;
+
+  // The resolver's internal `.catch(() => null)` degrades to a clientless
+  // header — this call never rejects, so it cannot 500.
+  const cliente = await resolveClienteCabecera(repo, filtro, empresa, todas);
+  const buffer = await generarValoracionesExcelBuffer({
+    membrete: MEMBRETE_HOLOMEDIC,
+    cliente,
+    fecIni: filtro.fecIni,
+    fecFin: filtro.fecFin,
+    moneda: { codMon: filtro.codMon, ...MONEDAS[filtro.codMon] },
+    fechaEmision: fechaEmisionHoy(),
+    logo: readLogoBuffer(),
+    rows,
+  });
   return {
     filename: nombreArchivoExportacion(empresa, filtro.fecIni, 'xlsx', filtro.fecFin),
     content: buffer,

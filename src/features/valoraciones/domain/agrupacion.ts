@@ -34,7 +34,7 @@ export function nombreEmpresa(row: RepFacturacion): string {
 }
 
 /** Common moneda-aware totals over a group of rows (round2 everywhere). */
-interface GrupoTotales {
+export interface GrupoTotales {
   rows: RepFacturacion[];
   cantidad: number;
   subtotal: number;
@@ -43,7 +43,7 @@ interface GrupoTotales {
   simbol: string;
 }
 
-function totalesDe(rows: RepFacturacion[], codMon: CodigoMoneda): GrupoTotales {
+export function totalesDe(rows: RepFacturacion[], codMon: CodigoMoneda): GrupoTotales {
   const subtotal = round2(rows.reduce((acc, row) => acc + ventaPorMoneda(row, codMon), 0));
   const igv = round2((subtotal * IGV_PORCENTAJE) / 100);
   return {

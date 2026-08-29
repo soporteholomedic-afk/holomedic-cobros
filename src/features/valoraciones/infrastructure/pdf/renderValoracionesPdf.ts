@@ -1,9 +1,11 @@
-import fs from 'fs';
-import path from 'path';
-
 import { agruparPorDestino, nombreEmpresa } from '../../domain/agrupacion';
 import type { ValoracionesFilter } from '../../domain/entities';
 import type { ISiglaValoracionesRepository } from '../../domain/ports';
+import {
+  fechaEmisionHoy,
+  readLogoBuffer,
+  resolveClienteCabecera,
+} from '../clientHeaderResolver';
 import { nombreArchivoExportacion } from '../filename';
 import { getValoracionesPdfPrinter } from './HtmlValoracionPdfPrinter';
 import { MEMBRETE_HOLOMEDIC, buildValoracionHtml } from './template';
@@ -21,30 +23,10 @@ import { MEMBRETE_HOLOMEDIC, buildValoracionHtml } from './template';
  * shared printer (footer numbering via the factory default overrides).
  */
 
-let logoCache: string | null = null;
-
-/**
- * Read the Holomedic logo as a base64 data URI (cached; empty string when
- * the asset is missing — the template degrades to a text-only membrete
- * instead of failing the whole export).
- */
+/** Logo data URI from the shared cached reader ('' → text-only membrete). */
 function readLogoDataUri(): string {
-  if (logoCache !== null) return logoCache;
-  try {
-    const logoPath = path.join(process.cwd(), 'public', 'logo-holomedic.png');
-    logoCache = `data:image/png;base64,${fs.readFileSync(logoPath).toString('base64')}`;
-  } catch {
-    logoCache = '';
-  }
-  return logoCache;
-}
-
-/** `dd/MM/yyyy` emission date in local time (server TZ, es-PE context). */
-function fechaEmisionHoy(): string {
-  const ahora = new Date();
-  const dd = String(ahora.getDate()).padStart(2, '0');
-  const mm = String(ahora.getMonth() + 1).padStart(2, '0');
-  return `${dd}/${mm}/${ahora.getFullYear()}`;
+  const buffer = readLogoBuffer();
+  return buffer ? `data:image/png;base64,${buffer.toString('base64')}` : '';
 }
 
 /**
@@ -66,25 +48,9 @@ export async function renderValoracionesPdf(
   const rows =
     empresa === undefined ? todas : todas.filter((row) => nombreEmpresa(row) === empresa);
 
-  // Client header (U6): the scoped empresa name wins; otherwise the RUC
-  // lookup by codCli (OQ-3), falling back to the first row's names.
-  let rucCliente = '';
-  let nombrePorLookup: string | null = null;
-  if (filtro.codCli !== undefined) {
-    const lookup = await repo.buscarClientePorCodigo(filtro.codCli).catch(() => null);
-    if (lookup) {
-      rucCliente = lookup.nroRuc ?? '';
-      nombrePorLookup = lookup.nomCom;
-    }
-  }
-  const nombreCliente =
-    empresa ??
-    nombrePorLookup ??
-    (todas.length > 0 ? todas[0].NomCFa || todas[0].NomCli : null);
-  const cliente =
-    nombreCliente !== null && nombreCliente !== ''
-      ? { nombre: nombreCliente, ruc: rucCliente }
-      : null;
+  // Client header (U6/OQ-3) — chain owned by the shared resolver module
+  // (identical for the Excel exports).
+  const cliente = await resolveClienteCabecera(repo, filtro, empresa, todas);
 
   const html = buildValoracionHtml({
     logoDataUri: readLogoDataUri(),
