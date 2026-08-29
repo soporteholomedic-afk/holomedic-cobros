@@ -24,7 +24,14 @@ ENV NEXT_TELEMETRY_DISABLED=1
 ENV PORT=3000
 ENV HOSTNAME="0.0.0.0"
 
-RUN addgroup --system --gid 1001 nodejs && \
+# System Chromium for the PDF printer (puppeteer-core has no bundled
+# browser; EdgePrinter resolves this via EDGE_EXECUTABLE_PATH). Alpine's
+# chromium package installs /usr/bin/chromium-browser. nss/freetype/
+# harfbuzz are its runtime deps; ttf-freefont provides the Arial/
+# Helvetica substitutes used by the valoraciones template.
+ENV EDGE_EXECUTABLE_PATH=/usr/bin/chromium-browser
+RUN apk add --no-cache chromium nss freetype harfbuzz ca-certificates ttf-freefont && \
+    addgroup --system --gid 1001 nodejs && \
     adduser --system --uid 1001 nextjs
 
 COPY --from=builder /app/public ./public
