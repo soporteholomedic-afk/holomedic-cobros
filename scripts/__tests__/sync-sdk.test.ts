@@ -1,4 +1,6 @@
 // @vitest-environment node
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import {
   computeMirrorPlan,
@@ -307,5 +309,58 @@ describe('resolveRepoRoot', () => {
   it('resolves the repo root from the main checkout script URL (R4S2)', () => {
     const url = 'file:///home/sysadmin/DEV/holomedic-cobros/scripts/sync-sdk.mjs';
     expect(resolveRepoRoot(url)).toBe('/home/sysadmin/DEV/holomedic-cobros');
+  });
+});
+
+// ─── Wrapper content invariants (U4 — R4, R8) ────────────────────────────────
+// The wrappers MUST be thin delegates: the Node engine owns walking, planning
+// and the mirror; wrappers only forward argv and propagate exit codes. These
+// invariants pin the exact regressions being removed: the sh tar-pipe with its
+// hardcoded /home/sysadmin root, and the ps1 robocopy with its unconditional
+// [OK] (exit-code honesty, R8).
+
+describe('sync-sdk.sh content invariants', () => {
+  const script = readFileSync(fileURLToPath(new URL('../../sync-sdk.sh', import.meta.url)), 'utf8');
+
+  it('contains no hardcoded machine-specific path (R4)', () => {
+    expect(script).not.toContain('/home/sysadmin');
+  });
+
+  it('contains no hardcoded cd into a literal path (R4)', () => {
+    expect(script).not.toMatch(/cd\s+["']?\//);
+  });
+
+  it('delegates via BASH_SOURCE dirname and exec of the engine, forwarding argv', () => {
+    expect(script).toContain('BASH_SOURCE');
+    expect(script).toContain('exec node "$SCRIPT_DIR/scripts/sync-sdk.mjs" "$@"');
+  });
+
+  it('no longer ships the tar-pipe copy (mirror bug root cause removed)', () => {
+    expect(script).not.toMatch(/\btar\b/);
+  });
+
+  it('keeps the mount-existence check (U4 task constraint)', () => {
+    expect(script).toContain('/mnt/instaladores');
+    expect(script).toContain('[ ! -d');
+  });
+});
+
+describe('sync-sdk.ps1 content invariants', () => {
+  const script = readFileSync(fileURLToPath(new URL('../../sync-sdk.ps1', import.meta.url)), 'utf8');
+
+  it('delegates via $PSScriptRoot to the engine, forwarding argv (R4)', () => {
+    expect(script).toContain('$PSScriptRoot');
+    expect(script).toContain('sync-sdk.mjs');
+    expect(script).toContain('@args');
+  });
+
+  it('gates [OK] on the engine exit code and ends with exit $LASTEXITCODE (R8)', () => {
+    expect(script).toContain('if ($LASTEXITCODE -eq 0)');
+    expect(script.trimEnd().endsWith('exit $LASTEXITCODE')).toBe(true);
+  });
+
+  it('no longer ships its own robocopy mirror (defect removed)', () => {
+    expect(script).not.toContain('robocopy');
+    expect(script).not.toContain('C:\\dev\\holomedic_cobros');
   });
 });
