@@ -1,21 +1,20 @@
 /**
- * SDK true-mirror sync engine — pure plan core.
+ * SDK true-mirror sync engine.
  *
- * U1 slice (SDD change "en un worktree trabaja eso"): this file currently
- * contains ONLY the side-effect-free domain core — exclude/protected matching,
- * mirror-plan computation, and repo-root resolution. Zero fs imports: every
- * function is testable with in-memory entries
- * (see scripts/__tests__/sync-sdk.test.ts).
- *
- * The executor adapters (walkTree / executeMirrorPlan) and the CLI composition
- * root land in later slices (U2/U3) and will be appended below this section.
+ * In-module Ports & Adapters split (design A1): a **pure domain core** on top
+ * (exclude/protected matching, mirror-plan computation, repo-root resolution —
+ * zero fs usage, testable with in-memory entries) and a **side-effecting
+ * executor** below (walk/copy/delete adapters). The CLI composition root lands
+ * in U3 and will be appended at the file bottom.
  *
  * Spec "Exclude List Authority": the engine walks the filesystem, never git;
  * the exclude lists below are the single authority. Excludes filter the SOURCE
  * walk only — only PROTECTED_PATHS shields destination entries from deletion.
  */
 
-import { dirname } from 'node:path';
+import { createHash } from 'node:crypto';
+import { copyFile, mkdir, readdir, readFile, rm, rmdir } from 'node:fs/promises';
+import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 /**
@@ -178,4 +177,102 @@ export function computeMirrorPlan(sourceEntries, destEntries, excludes, protecte
  */
 export function resolveRepoRoot(importMetaUrl) {
   return dirname(dirname(fileURLToPath(importMetaUrl)));
+}
+
+// ─── Executor adapters (U2) ──────────────────────────────────────────────────
+// Side-effecting adapters below this line. Only these functions touch the
+// filesystem; the core above stays pure.
+
+/**
+ * Adapter: walk a real file tree into {@link MirrorEntry}s. Deterministic
+ * depth-first order (readdir results sorted lexicographically per level),
+ * forward-slash relPaths, dotfiles included, symlinks skipped (no cycles, no
+ * SMB reparse surprises), directories named in `excludes.dirNames` pruned from
+ * descent, files matching `excludes.fileGlobs` dropped. Hash: SHA-256 hex of
+ * the full contents (design A3).
+ *
+ * @param {string} root
+ * @param {ExcludeConfig} [excludes] defaults to an empty config (dest walks)
+ * @returns {Promise<MirrorEntry[]>}
+ */
+export async function walkTree(root, excludes = { dirNames: [], fileGlobs: [] }) {
+  /** @type {MirrorEntry[]} */
+  const entries = [];
+
+  /**
+   * @param {string} dir absolute directory currently walked
+   * @param {string} prefix forward-slash relPath prefix ('' at the root)
+   */
+  async function walk(dir, prefix) {
+    const items = await readdir(dir, { withFileTypes: true });
+    items.sort((a, b) => (a.name < b.name ? -1 : 1));
+    for (const item of items) {
+      if (item.isSymbolicLink()) continue;
+      const relPath = prefix ? `${prefix}/${item.name}` : item.name;
+      if (item.isDirectory()) {
+        if (excludes.dirNames.includes(item.name)) continue;
+        await walk(join(dir, item.name), relPath);
+      } else if (item.isFile()) {
+        if (matchesExclude(relPath, excludes)) continue;
+        const contents = await readFile(join(dir, item.name));
+        entries.push({
+          relPath,
+          size: contents.byteLength,
+          hash: createHash('sha256').update(contents).digest('hex'),
+        });
+      }
+    }
+  }
+
+  await walk(root, '');
+  return entries;
+}
+
+/**
+ * Adapter: apply a mirror plan to the destination — COPY-FIRST (design A4: a
+ * mid-run failure must leave the destination a working superset, never a
+ * broken subset), then delete deepest-first and prune directories emptied by
+ * the deletions. Fails fast: the first file error throws with relPath
+ * context; convergence on re-run is the recovery story (no journal needed).
+ *
+ * @param {string} root source checkout root
+ * @param {string} dest destination root (created on demand)
+ * @param {MirrorPlan} plan
+ * @returns {Promise<void>}
+ */
+export async function executeMirrorPlan(root, dest, plan) {
+  for (const relPath of plan.copy) {
+    const destAbs = join(dest, relPath);
+    try {
+      await mkdir(dirname(destAbs), { recursive: true });
+      await copyFile(join(root, relPath), destAbs);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      throw new Error(`sync-sdk: failed to copy '${relPath}': ${message}`, { cause: err });
+    }
+  }
+
+  const deletions = [...plan.delete].sort(
+    (a, b) => b.split('/').length - a.split('/').length,
+  );
+  for (const relPath of deletions) {
+    try {
+      await rm(join(dest, relPath));
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      throw new Error(`sync-sdk: failed to delete '${relPath}': ${message}`, { cause: err });
+    }
+  }
+
+  for (const relPath of deletions) {
+    let dir = dirname(relPath);
+    while (dir !== '.' && dir !== '/') {
+      try {
+        await rmdir(join(dest, dir));
+      } catch {
+        break; // not empty (or already gone): nothing more to prune up this chain
+      }
+      dir = dirname(dir);
+    }
+  }
 }

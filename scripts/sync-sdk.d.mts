@@ -42,3 +42,12 @@ export declare function matchesExclude(relPath: string, excludes: ExcludeConfig)
 export declare function isProtected(relPath: string, protectedPaths: readonly string[]): boolean;
 
 export declare function resolveRepoRoot(importMetaUrl: string): string;
+
+/**
+ * Walk a real file tree into entries (forward-slash relPaths, SHA-256 hex
+ * hashes). Dotfiles included, symlinks skipped, excluded dir segments pruned.
+ */
+export declare function walkTree(root: string, excludes?: ExcludeConfig): Promise<MirrorEntry[]>;
+
+/** Apply the plan copy-first, then delete deepest-first and prune empty dirs. */
+export declare function executeMirrorPlan(root: string, dest: string, plan: MirrorPlan): Promise<void>;
