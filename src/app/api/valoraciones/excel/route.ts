@@ -1,11 +1,17 @@
 import { NextResponse } from 'next/server';
-import * as XLSX from 'xlsx';
 
 import { nombreEmpresa } from '@/features/valoraciones/domain/agrupacion';
+import { MONEDAS } from '@/features/valoraciones/domain/entities';
 import { parseExportFiltroDto } from '@/features/valoraciones/domain/parseFiltroDto';
-import { getValoracionesDb } from '@/features/valoraciones/infrastructure/getValoracionesDb';
-import { generarFormato35Workbook } from '@/features/valoraciones/infrastructure/excel/formato35';
+import {
+  MEMBRETE_HOLOMEDIC,
+  fechaEmisionHoy,
+  readLogoBuffer,
+  resolveClienteCabecera,
+} from '@/features/valoraciones/infrastructure/clientHeaderResolver';
+import { generarValoracionesExcelBuffer } from '@/features/valoraciones/infrastructure/excel/valoracionesExcelReport';
 import { dispositionAttachment, nombreArchivoExportacion } from '@/features/valoraciones/infrastructure/filename';
+import { getValoracionesDb } from '@/features/valoraciones/infrastructure/getValoracionesDb';
 
 /**
  * POST /api/valoraciones/excel (REQ-03 E-R3, slice 2; U6 per-empresa
@@ -13,11 +19,11 @@ import { dispositionAttachment, nombreArchivoExportacion } from '@/features/valo
  *
  * Re-executes the SIGLA query from the posted filter DTO (design D4),
  * optionally scoped to one empresa group key (U6: `empresa` in the body —
- * the per-row buttons export ONLY their row), and streams a Formato 35
- * `.xlsx` (30 standard columns UNCHANGED, moneda-aware total) with a
- * download `Content-Disposition` named `[NombreEmpresa]_[fecIni].xlsx`
- * (legacy `valoraciones_…` for clientless exports). Failures → user-safe
- * 500.
+ * the per-row buttons export ONLY their row), and streams the client-facing
+ * membreted workbook (flat one-row-per-ItemEx list + grand-total block)
+ * with a download `Content-Disposition` named
+ * `[NombreEmpresa]_[fecIni].xlsx` (legacy `valoraciones_…` for clientless
+ * exports). Failures → user-safe 500.
  */
 export async function POST(request: Request): Promise<NextResponse> {
   try {
@@ -32,8 +38,19 @@ export async function POST(request: Request): Promise<NextResponse> {
     const rows =
       empresa === undefined ? todas : todas.filter((row) => nombreEmpresa(row) === empresa);
 
-    const workbook = generarFormato35Workbook(rows, filtro.codMon);
-    const buffer = XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' }) as Buffer;
+    // The resolver's internal `.catch(() => null)` degrades to a
+    // clientless header — this call never rejects, so it cannot 500.
+    const cliente = await resolveClienteCabecera(repo, filtro, empresa, todas);
+    const buffer = await generarValoracionesExcelBuffer({
+      membrete: MEMBRETE_HOLOMEDIC,
+      cliente,
+      fecIni: filtro.fecIni,
+      fecFin: filtro.fecFin,
+      moneda: { codMon: filtro.codMon, ...MONEDAS[filtro.codMon] },
+      fechaEmision: fechaEmisionHoy(),
+      logo: readLogoBuffer(),
+      rows,
+    });
 
     const nombre = nombreArchivoExportacion(empresa, filtro.fecIni, 'xlsx', filtro.fecFin);
     return new NextResponse(new Uint8Array(buffer), {

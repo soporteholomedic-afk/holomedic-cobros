@@ -142,11 +142,23 @@ describe('POST /api/valoraciones/send', () => {
     expect(html).toContain('PACIENTE OTRA');
     expect(html).not.toContain('PACIENTE DEMO');
 
-    // Excel attachment carries ONLY the scoped empresa's row.
+    // Excel attachment carries ONLY the scoped empresa's row (exceljs flat
+    // layout: header at absolute row 7, data starting at row 8).
     const wb = XLSX.read(Buffer.from(excel.content as Buffer), { type: 'buffer' });
-    const aoa = XLSX.utils.sheet_to_json<unknown[]>(wb.Sheets[wb.SheetNames[0]], { header: 1 });
-    expect(aoa).toHaveLength(2);
-    expect(String(aoa[1][5])).toBe('PACIENTE OTRA');
+    expect(wb.SheetNames[0]).toBe('VALORACIONES');
+    const sheet = wb.Sheets['VALORACIONES'];
+    const aoa = XLSX.utils.sheet_to_json<unknown[]>(sheet, {
+      header: 1,
+      defval: '',
+      blankrows: true,
+    });
+    const firstRow = XLSX.utils.decode_range(sheet['!ref'] as string).s.r;
+    const absolute: unknown[][] = [];
+    aoa.forEach((row, i) => {
+      absolute[i + firstRow] = row;
+    });
+    expect(String(absolute[7][5])).toBe('PACIENTE OTRA'); // first data row (sheet row 8)
+    expect(String(absolute[8][5])).not.toBe('PACIENTE DEMO'); // scoped only
   });
 
   it('rejects an invalid empresa with 400 VALIDATION_ERROR and sends nothing (U6)', async () => {

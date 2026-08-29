@@ -1,12 +1,15 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import * as XLSX from 'xlsx';
 
 import type { ISiglaValoracionesRepository } from '@/features/valoraciones/domain/ports';
 import { makeRepFacturacion } from '@/features/valoraciones/domain/fixtures';
 
 /**
- * POST /api/valoraciones/excel (REQ-03 E-R3). The repository is injected
- * through its test seam — no SQL.
+ * POST /api/valoraciones/excel (REQ-03 E-R3; change: flat list with one
+ * grand-total block). The repository is injected through its test seam —
+ * no SQL. The response body is parsed with XLSX.read to prove the real
+ * download contract: a VALORACIONES workbook (exceljs layout, header row
+ * at absolute row 7) with the legacy filename/disposition behavior.
  */
 
 const filtroValido = {
@@ -23,6 +26,29 @@ function makeRequest(body: unknown): Request {
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify(body),
   });
+}
+
+/**
+ * Parse the response body as a workbook and return its rows anchored to
+ * ABSOLUTE sheet indices (sheet_to_json is relative to `!ref`'s first
+ * row; blank spacer rows must keep their index).
+ */
+async function leerAoaDeRes(res: Response): Promise<unknown[][]> {
+  const buffer = Buffer.from(await res.arrayBuffer());
+  const wb = XLSX.read(buffer, { type: 'buffer', cellDates: true });
+  expect(wb.SheetNames[0]).toBe('VALORACIONES');
+  const sheet = wb.Sheets['VALORACIONES'];
+  const aoa = XLSX.utils.sheet_to_json<unknown[]>(sheet, {
+    header: 1,
+    defval: '',
+    blankrows: true,
+  });
+  const firstRow = XLSX.utils.decode_range(sheet['!ref'] as string).s.r;
+  const absolute: unknown[][] = [];
+  aoa.forEach((row, i) => {
+    absolute[i + firstRow] = row;
+  });
+  return absolute;
 }
 
 describe('POST /api/valoraciones/excel', () => {
@@ -47,7 +73,7 @@ describe('POST /api/valoraciones/excel', () => {
     __setValoracionesDbForTests(fakeRepo);
   });
 
-  it('returns a .xlsx with download Content-Disposition and the 30-column header', async () => {
+  it('streams a VALORACIONES workbook with the legacy filename and disposition (R5)', async () => {
     const { POST } = await import('../route');
     const res = await POST(makeRequest(filtroValido));
 
@@ -56,15 +82,21 @@ describe('POST /api/valoraciones/excel', () => {
     expect(res.headers.get('content-disposition')).toContain('attachment');
     expect(res.headers.get('content-disposition')).toContain('valoraciones_2026-01-01_2026-01-31.xlsx');
 
-    const buffer = Buffer.from(await res.arrayBuffer());
-    const wb = XLSX.read(buffer, { type: 'buffer' });
-    const aoa = XLSX.utils.sheet_to_json<unknown[]>(wb.Sheets[wb.SheetNames[0]], {
-      header: 1,
-    });
-    expect(aoa[0]).toHaveLength(30);
-    expect(aoa[0][0]).toBe('facturar a');
-    expect(aoa[0][29]).toBe('nro_cob');
-    expect(aoa).toHaveLength(2); // header + 1 row
+    // The body opens as a real workbook: flat 15-column layout with the
+    // header at sheet row 7 (array index 6), the data row at sheet row 8
+    // and the totals block right after the data.
+    const aoa = await leerAoaDeRes(res);
+    const header = aoa[6] as unknown[];
+    expect(header).toHaveLength(15);
+    expect(header[0]).toBe('facturar a');
+    expect(header[14]).toBe('Costo (S/)');
+    expect(aoa[7][5]).toBe('CANCINO CUEVA NOELIA ISABEL'); // first data row (nombre)
+    expect(aoa[8][12]).toBe('SubTotal');
+    expect(aoa[8][14]).toBe(100);
+    expect(aoa[9][12]).toBe('IGV 18%');
+    expect(aoa[9][14]).toBe(18);
+    expect(aoa[10][12]).toBe('Total');
+    expect(aoa[10][14]).toBe(118);
   });
 
   it('re-queries from the posted filter with the query codMon (D4)', async () => {
@@ -76,7 +108,7 @@ describe('POST /api/valoraciones/excel', () => {
     expect(filtroUsado).toMatchObject({ codMon: 2, codCli: 55, fecIni: '2026-01-01' });
   });
 
-  it('scopes rows to the posted empresa and names the file [Empresa]_[fecIni].xlsx (U6)', async () => {
+  it('scopes rows to the posted empresa, names the file [Empresa]_[fecIni].xlsx and carries ONLY scoped patient rows (U6)', async () => {
     (fakeRepo.buscarValoraciones as ReturnType<typeof vi.fn>).mockResolvedValue([
       makeRepFacturacion({ NomCFa: 'EMPRESA DEMO S.A.C.', Pacien: 'PACIENTE DEMO' }),
       makeRepFacturacion({ NomCFa: 'OTRA EMPRESA SRL', NomCom: 'OTRA EMPRESA SRL', NomCli: 'OTRA EMPRESA SRL', Pacien: 'PACIENTE OTRA' }),
@@ -90,13 +122,9 @@ describe('POST /api/valoraciones/excel', () => {
       'filename="OTRA EMPRESA SRL_2026-01-01.xlsx"',
     );
 
-    // Workbook carries ONLY the scoped empresa's row (30-col layout as-is).
-    const buffer = Buffer.from(await res.arrayBuffer());
-    const wb = XLSX.read(buffer, { type: 'buffer' });
-    const aoa = XLSX.utils.sheet_to_json<unknown[]>(wb.Sheets[wb.SheetNames[0]], { header: 1 });
-    expect(aoa).toHaveLength(2); // header + exactly 1 row
-    expect(String(aoa[1][1])).toBe('OTRA EMPRESA SRL'); // contratades = NomCom of the scoped row
-    expect(String(aoa[1][5])).toBe('PACIENTE OTRA');
+    const aoa = await leerAoaDeRes(res);
+    expect(aoa[7][5]).toBe('PACIENTE OTRA'); // data row 1 (sheet row 8) = scoped patient
+    expect(aoa[8][5]).not.toBe('PACIENTE DEMO'); // NO second data row — scoped only
   });
 
   it('keeps the legacy filename for clientless exports (no empresa)', async () => {

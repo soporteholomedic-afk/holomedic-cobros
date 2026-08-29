@@ -2,7 +2,7 @@ import ExcelJS from 'exceljs';
 
 import { nombreEmpresa, round2, totalesDe, ventaPorMoneda } from '../../domain/agrupacion';
 import type { CodigoMoneda, RepFacturacion } from '../../domain/entities';
-import type { Membrete } from '../pdf/template';
+import type { Membrete } from '../clientHeaderResolver';
 
 /**
  * Client-facing valoraciones Excel report (change: flat list with one
