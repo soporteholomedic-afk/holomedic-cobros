@@ -73,6 +73,38 @@ function fechaDisplay(iso: string): string {
 /** Excel numFmt for real date cells (display contract `dd/MM/yyyy`). */
 const FORMATO_FECHA = 'dd/mm/yyyy';
 
+/** Column text alignment mapping by column 1-indexed number. */
+const ALINEACION_COLUMNAS: Record<number, 'left' | 'center' | 'right'> = {
+  1: 'left', // facturar a
+  2: 'left', // contratades
+  3: 'left', // proyectodes
+  4: 'center', // cr_proy
+  5: 'center', // dociden
+  6: 'left', // nombre
+  7: 'center', // edad
+  8: 'center', // Fecha de Nacimiento
+  9: 'left', // ocupacion
+  10: 'left', // tipotrab
+  11: 'center', // feorden
+  12: 'left', // tipo_examen
+  13: 'left', // perfil
+  14: 'left', // solicitado
+  15: 'right', // costo
+};
+
+const BORDE_DELGADO: Partial<ExcelJS.Borders> = {
+  top: { style: 'thin', color: { argb: 'FFE2E8F0' } },
+  bottom: { style: 'thin', color: { argb: 'FFE2E8F0' } },
+  left: { style: 'thin', color: { argb: 'FFE2E8F0' } },
+  right: { style: 'thin', color: { argb: 'FFE2E8F0' } },
+};
+
+const RELLENO_CEBRA: ExcelJS.Fill = {
+  type: 'pattern',
+  pattern: 'solid',
+  fgColor: { argb: 'FFF8FAFC' },
+};
+
 /**
  * ISO `YYYY-MM-DD`[T…] → UTC-anchored `Date`. Anchoring at UTC midnight
  * keeps the rendered day stable regardless of the host timezone (a
@@ -96,33 +128,68 @@ function escribirBloqueCabecera(
 ): void {
   sheet.mergeCells('A1:C2'); // reserved empty zone for the logo image
 
+  sheet.getRow(1).height = 20;
+  sheet.getRow(2).height = 18;
+  sheet.getRow(3).height = 18;
+  sheet.getRow(4).height = 18;
+  sheet.getRow(5).height = 18;
+
+  const titleFont: Partial<ExcelJS.Font> = {
+    name: 'Calibri',
+    size: 11,
+    bold: true,
+    color: { argb: 'FF1E293B' },
+  };
+  const labelFont: Partial<ExcelJS.Font> = {
+    name: 'Calibri',
+    size: 10,
+    color: { argb: 'FF475569' },
+  };
+
   const nombreCell = sheet.getCell('D1');
   nombreCell.value = input.membrete.nombre;
-  nombreCell.font = { bold: true };
+  nombreCell.font = titleFont;
+  nombreCell.alignment = { vertical: 'middle' };
   sheet.mergeCells('D1:H1');
 
-  sheet.getCell('D2').value = `RUC: ${input.membrete.ruc}`;
+  const rucCell = sheet.getCell('D2');
+  rucCell.value = `RUC: ${input.membrete.ruc}`;
+  rucCell.font = labelFont;
+  rucCell.alignment = { vertical: 'middle' };
   sheet.mergeCells('D2:H2');
 
   if (input.cliente) {
     const clienteCell = sheet.getCell('J1');
     clienteCell.value = input.cliente.nombre;
-    clienteCell.font = { bold: true };
+    clienteCell.font = titleFont;
+    clienteCell.alignment = { vertical: 'middle' };
     sheet.mergeCells('J1:O1');
 
     if (input.cliente.ruc !== '') {
-      sheet.getCell('J2').value = `RUC: ${input.cliente.ruc}`;
+      const clienteRucCell = sheet.getCell('J2');
+      clienteRucCell.value = `RUC: ${input.cliente.ruc}`;
+      clienteRucCell.font = labelFont;
+      clienteRucCell.alignment = { vertical: 'middle' };
       sheet.mergeCells('J2:O2');
     }
   }
 
-  sheet.getCell('D3').value = `Período: ${fechaDisplay(input.fecIni)} – ${fechaDisplay(input.fecFin)}`;
+  const periodoCell = sheet.getCell('D3');
+  periodoCell.value = `Período: ${fechaDisplay(input.fecIni)} – ${fechaDisplay(input.fecFin)}`;
+  periodoCell.font = labelFont;
+  periodoCell.alignment = { vertical: 'middle' };
   sheet.mergeCells('D3:H3');
 
-  sheet.getCell('D4').value = `Moneda: ${input.moneda.descripcion} (${input.moneda.simbol})`;
+  const monedaCell = sheet.getCell('D4');
+  monedaCell.value = `Moneda: ${input.moneda.descripcion} (${input.moneda.simbol})`;
+  monedaCell.font = labelFont;
+  monedaCell.alignment = { vertical: 'middle' };
   sheet.mergeCells('D4:H4');
 
-  sheet.getCell('D5').value = `Fecha de emisión: ${input.fechaEmision}`;
+  const emisionCell = sheet.getCell('D5');
+  emisionCell.value = `Fecha de emisión: ${input.fechaEmision}`;
+  emisionCell.font = labelFont;
+  emisionCell.alignment = { vertical: 'middle' };
   sheet.mergeCells('D5:H5');
 }
 
@@ -153,8 +220,17 @@ function escribirFilasDatos(
   sheet: ExcelJS.Worksheet,
   input: ValoracionesExcelInput,
 ): void {
+  const dataFont: Partial<ExcelJS.Font> = {
+    name: 'Calibri',
+    size: 10,
+    color: { argb: 'FF1E293B' },
+  };
+
   input.rows.forEach((row, index) => {
     const dataRow = sheet.getRow(8 + index);
+    dataRow.height = 20;
+    const isEven = index % 2 === 1;
+
     const valores: Array<string | number | null> = [
       nombreEmpresa(row), // 1  facturar a
       row.NomCom, // 2  contratades
@@ -171,14 +247,23 @@ function escribirFilasDatos(
       row.NomPro, // 13 perfil
       row.Solici, // 14 solicitado
     ];
-    valores.forEach((valor, columna) => {
-      if (valor === null) return; // date columns handled below
-      dataRow.getCell(columna + 1).value = valor;
-    });
 
-    const costoCell = dataRow.getCell(15);
-    costoCell.value = round2(ventaPorMoneda(row, input.moneda.codMon));
-    costoCell.numFmt = '#,##0.00';
+    valores.forEach((valor, colIdx) => {
+      const colNum = colIdx + 1;
+      const cell = dataRow.getCell(colNum);
+      if (valor !== null) {
+        cell.value = valor;
+      }
+      cell.font = dataFont;
+      cell.alignment = {
+        vertical: 'middle',
+        horizontal: ALINEACION_COLUMNAS[colNum] ?? 'left',
+      };
+      cell.border = BORDE_DELGADO;
+      if (isEven) {
+        cell.fill = RELLENO_CEBRA;
+      }
+    });
 
     // Real date cells, UTC-anchored (no TZ day-shift); NULL → empty.
     const fechaNacCell = dataRow.getCell(8);
@@ -186,9 +271,26 @@ function escribirFilasDatos(
       fechaNacCell.value = fechaUtc(row.FecNac);
       fechaNacCell.numFmt = FORMATO_FECHA;
     }
+    fechaNacCell.font = dataFont;
+    fechaNacCell.alignment = { vertical: 'middle', horizontal: 'center' };
+    fechaNacCell.border = BORDE_DELGADO;
+    if (isEven) fechaNacCell.fill = RELLENO_CEBRA;
+
     const feordenCell = dataRow.getCell(11);
     feordenCell.value = fechaUtc(row.FecAte);
     feordenCell.numFmt = FORMATO_FECHA;
+    feordenCell.font = dataFont;
+    feordenCell.alignment = { vertical: 'middle', horizontal: 'center' };
+    feordenCell.border = BORDE_DELGADO;
+    if (isEven) feordenCell.fill = RELLENO_CEBRA;
+
+    const costoCell = dataRow.getCell(15);
+    costoCell.value = round2(ventaPorMoneda(row, input.moneda.codMon));
+    costoCell.numFmt = '#,##0.00';
+    costoCell.font = dataFont;
+    costoCell.alignment = { vertical: 'middle', horizontal: 'right' };
+    costoCell.border = BORDE_DELGADO;
+    if (isEven) costoCell.fill = RELLENO_CEBRA;
   });
 }
 
@@ -211,19 +313,54 @@ function escribirBloqueTotales(
   ];
 
   filas.forEach((fila, index) => {
-    const row = sheet.getRow(firstTotalsRow + index);
-    row.getCell(13).value = fila.label; // M
-    sheet.mergeCells(firstTotalsRow + index, 13, firstTotalsRow + index, 14);
-    row.getCell(13).alignment = { horizontal: 'right' };
+    const rowNum = firstTotalsRow + index;
+    const row = sheet.getRow(rowNum);
+    row.height = 22;
+
+    const font: Partial<ExcelJS.Font> = {
+      name: 'Calibri',
+      size: 10,
+      bold: fila.bold,
+      color: { argb: fila.bold ? 'FF0F172A' : 'FF334155' },
+    };
+
+    const totalsFill: ExcelJS.Fill = {
+      type: 'pattern',
+      pattern: 'solid',
+      fgColor: { argb: fila.bold ? 'FFE2E8F0' : 'FFF8FAFC' },
+    };
+
+    const border: Partial<ExcelJS.Borders> = fila.bold
+      ? {
+          top: { style: 'thin', color: { argb: 'FF94A3B8' } },
+          bottom: { style: 'double', color: { argb: 'FF475569' } },
+          left: { style: 'thin', color: { argb: 'FFE2E8F0' } },
+          right: { style: 'thin', color: { argb: 'FFE2E8F0' } },
+        }
+      : {
+          top: { style: 'thin', color: { argb: 'FFE2E8F0' } },
+          bottom: { style: 'thin', color: { argb: 'FFE2E8F0' } },
+          left: { style: 'thin', color: { argb: 'FFE2E8F0' } },
+          right: { style: 'thin', color: { argb: 'FFE2E8F0' } },
+        };
+
+    [13, 14, 15].forEach((col) => {
+      const cell = row.getCell(col);
+      cell.fill = totalsFill;
+      cell.border = border;
+    });
+
+    const labelCell = row.getCell(13); // M
+    labelCell.value = fila.label;
+    sheet.mergeCells(rowNum, 13, rowNum, 14);
+    labelCell.font = font;
+    labelCell.alignment = { vertical: 'middle', horizontal: 'right' };
 
     const valueCell = row.getCell(15); // O
     valueCell.value = fila.value;
     valueCell.numFmt = '#,##0.00';
-
-    if (fila.bold) {
-      row.getCell(13).font = { bold: true };
-      valueCell.font = { bold: true };
-    }
+    valueCell.font = font;
+    valueCell.alignment = { vertical: 'middle', horizontal: 'right' };
   });
 }
 
@@ -238,18 +375,38 @@ export function generarValoracionesExcelWorkbook(
 
   // Row 7 — the 15-column contract header (bold + light-blue fill).
   const headerRow = sheet.getRow(7);
+  headerRow.height = 26;
+
+  const headerBorder: Partial<ExcelJS.Borders> = {
+    top: { style: 'thin', color: { argb: 'FFB0C4DE' } },
+    bottom: { style: 'medium', color: { argb: 'FF8FAADC' } },
+    left: { style: 'thin', color: { argb: 'FFD9D9D9' } },
+    right: { style: 'thin', color: { argb: 'FFD9D9D9' } },
+  };
+
   const headerStyle = {
-    font: { bold: true },
+    font: { name: 'Calibri', size: 10, bold: true, color: { argb: 'FF1E293B' } },
     fill: { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFD9E1F2' } },
+    border: headerBorder,
   } as const;
+
   COLUMNAS_FIJAS.forEach((label, index) => {
-    const cell = headerRow.getCell(index + 1);
+    const colNum = index + 1;
+    const cell = headerRow.getCell(colNum);
     cell.value = label;
     cell.style = headerStyle;
+    cell.alignment = {
+      vertical: 'middle',
+      horizontal: ALINEACION_COLUMNAS[colNum] ?? 'left',
+    };
   });
   const costoCell = headerRow.getCell(15);
   costoCell.value = etiquetaCosto(input.moneda.codMon);
   costoCell.style = headerStyle;
+  costoCell.alignment = {
+    vertical: 'middle',
+    horizontal: 'right',
+  };
 
   ANCHOS.forEach(([columna, ancho]) => {
     sheet.getColumn(columna).width = ancho;
@@ -261,7 +418,7 @@ export function generarValoracionesExcelWorkbook(
   // Sheet usability & print layout (spec R4): frozen header, autofilter
   // over the data region ONLY (totals excluded), A4 landscape fit-to-width
   // with the header row repeated on every printed page.
-  sheet.views = [{ state: 'frozen', ySplit: 7 }];
+  sheet.views = [{ state: 'frozen', ySplit: 7, showGridLines: true }];
   const lastDataRow = 7 + input.rows.length;
   sheet.autoFilter = { from: 'A7', to: `O${lastDataRow}` };
   sheet.pageSetup = {

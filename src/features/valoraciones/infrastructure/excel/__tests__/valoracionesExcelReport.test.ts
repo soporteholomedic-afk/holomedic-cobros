@@ -330,4 +330,41 @@ describe('generarValoracionesExcelWorkbook — usability & print layout (R4)', (
     expect(sheet.getColumn(12).width).toBe(22); // tipo_examen
     expect(sheet.getColumn(15).width).toBe(12); // costo
   });
+
+  it('configures row heights, vertical alignments, borders and zebra striping', async () => {
+    const rows = [makeRepFacturacion(), makeRepFacturacion()];
+    const sheet = await leerHojaExcelJs(makeInput({ rows }));
+
+    // Header row height & alignment
+    expect(sheet.getRow(7).height).toBe(26);
+    expect(sheet.getCell('A7').alignment?.vertical).toBe('middle');
+    expect(sheet.getCell('O7').alignment?.horizontal).toBe('right');
+
+    // Data rows height & alignments
+    expect(sheet.getRow(8).height).toBe(20);
+    expect(sheet.getRow(9).height).toBe(20);
+
+    // Row 8 (first row) -> no zebra fill
+    const fillA8 = sheet.getCell('A8').fill;
+    if (fillA8 && fillA8.type === 'pattern') {
+      expect(fillA8.pattern).toBe('none');
+    }
+    expect(sheet.getCell('A8').border?.top?.style).toBe('thin');
+    expect(sheet.getCell('E8').alignment?.horizontal).toBe('center'); // dociden
+    expect(sheet.getCell('H8').alignment?.horizontal).toBe('center'); // FecNac
+    expect(sheet.getCell('O8').alignment?.horizontal).toBe('right'); // costo
+
+    // Row 9 (even row in 0-indexed list) -> zebra fill
+    expect(sheet.getCell('A9').fill).toMatchObject({
+      pattern: 'solid',
+      fgColor: { argb: 'FFF8FAFC' },
+    });
+
+    // Accounting totals double border on Total row
+    const totalRow = sheet.getRow(12);
+    expect(totalRow.height).toBe(22);
+    expect(sheet.getCell('M12').border?.bottom?.style).toBe('double');
+    expect(sheet.getCell('O12').border?.bottom?.style).toBe('double');
+  });
 });
+
