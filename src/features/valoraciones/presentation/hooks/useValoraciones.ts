@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { agruparPorEmpresa } from '../../domain/agrupacion';
+import { ESTADOS_EMPRESA } from '../../domain/estado';
 import type {
   CodigoMoneda,
   EmpresaGrupo,
@@ -66,7 +67,9 @@ function esListaRepFacturacion(v: unknown): v is RepFacturacion[] {
       typeof r.CodMon === 'number' &&
       typeof r.Pacien === 'string' &&
       typeof r.VVtaMN === 'number' &&
-      typeof r.VVtaMO === 'number'
+      typeof r.VVtaMO === 'number' &&
+      typeof r.EstCob === 'string' &&
+      (ESTADOS_EMPRESA as readonly string[]).includes(r.EstCob)
     );
   });
 }

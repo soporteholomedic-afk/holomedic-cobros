@@ -158,4 +158,22 @@ describe('useValoraciones', () => {
     await waitFor(() => expect(result.current.status).toBe('error'));
     expect(result.current.error).toBe('Respuesta inesperada del servidor');
   });
+
+  it('rejects a success-shaped payload whose EstCob is not an EstadoEmpresa label', async () => {
+    // Raw unknown code 'X' in an otherwise valid row — the guard must not
+    // let it reach state (it is built as a raw literal because the
+    // EstadoEmpresa union correctly refuses to type it).
+    mockFetchOnce({
+      resultados: [{ ...makeRepFacturacion(), EstCob: 'X' }],
+    });
+    const { result } = renderHook(() => useValoraciones());
+
+    act(() => {
+      result.current.buscar(FILTRO_BASE);
+    });
+
+    await waitFor(() => expect(result.current.status).toBe('error'));
+    expect(result.current.error).toBe('Respuesta inesperada del servidor');
+    expect(result.current.grupos).toEqual([]);
+  });
 });
