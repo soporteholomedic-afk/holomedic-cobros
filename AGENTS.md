@@ -140,7 +140,7 @@ The sync is **always required** before running the app from the SDK on Windows. 
 
 The `sigla-cli/` folder holds the compiled .NET runtime the Next.js server spawns to render PDFs (`SIGLA.PdfCli.exe` + `Negocio.dll`, `Entidad.dll`, `Datos.dll` + `rpt/` Crystal Reports templates). It is a **runtime dependency**, not source.
 
-- It is **git-tracked** (20 files, no `.gitignore` entry). Earlier docs claimed it was git-ignored — that claim is stale. (Explicit confirmation of the tracking intent is still pending; treat the tracked status as current reality until decided otherwise.)
+- It is **git-tracked** (20 files, no `.gitignore` entry) — and this is **intentional**, explicitly confirmed by the maintainer (2026-08-29). Earlier docs claimed it was git-ignored; that claim was stale.
 - Because it is tracked, every clone and every worktree gets it via `git checkout` — no manual copy step is needed when creating a worktree.
 - It **is synced** to the Windows SDK as part of `scripts/sync-sdk.mjs` (either wrapper) — do **not** re-add it to the engine's exclude lists.
 - The path is resolved at runtime by `src/features/envio-resultados/infrastructure/informes/constants.ts` as `path.resolve(process.cwd(), 'sigla-cli', 'SIGLA.PdfCli.exe')`. Override with the `PDFCLI_EXE_PATH` env var if you need to point at a different binary location.
