@@ -239,6 +239,99 @@ describe('GET /api/valoraciones/sigla', () => {
   });
 });
 
+// ---- ocultarCero query param (filtro-valores-cero, S1/S8/S9) ----
+
+describe('GET /api/valoraciones/sigla — ocultarCero param', () => {
+  /** Minimal raw SP row factory: mapper-valid defaults, per-test overrides. */
+  function makeSpRow(overrides: Record<string, unknown> = {}): Record<string, unknown> {
+    return {
+      NomCFa: 'EMPRESA A', NomCom: 'EMPRESA A', DesDes: 'OFICINA', CenCos: 'CC1',
+      NroDId: 'DNI 1', Pacien: 'PACIENTE UNO', EdaPac: 30, FecNac: null,
+      DesPue: 'OBRERO', DsTiTr: 'OBRERO', FecAte: new Date('2026-01-15T00:00:00'),
+      FecSTA: null, DesTCh: 'PREOCUPACIONAL', NomPro: 'PROY', Result: 'APTO',
+      Anex7D: 'S', CodMon: 1, DesMon: 'SOLES', Simbol: 's/.',
+      VImpMN: 0, VImpMO: 0, VVtaMN: 100, VVtaMO: 0,
+      Solici: 'SOL', Admini: 'ADM', IdAten: '0001', ItemEx: 1, TipDov: 'FT',
+      NumDov: null, EstCob: 'P', NomCli: 'EMPRESA A', IndCon: false, IdConv: 'C1',
+      CodSeC: null, NumCob: null, NroVal: 'V1', NroOPe: 'O1', CodiEM: 'EM1', FecRec: null,
+      ...overrides,
+    };
+  }
+
+  beforeEach(async () => {
+    vi.clearAllMocks();
+    const { __setValoracionesDbForTests } = await import(
+      '@/features/valoraciones/infrastructure/getValoracionesDb'
+    );
+    __setValoracionesDbForTests(null);
+  });
+
+  it('ocultarCero=true returns 200 with the zero-venta rows absent (S1 e2e slice)', async () => {
+    const mockPool = createMockPool();
+    mockRequestExecute.mockResolvedValueOnce({
+      recordset: [
+        makeSpRow({ IdAten: 'cero', VVtaMN: 0 }),
+        makeSpRow({ IdAten: 'normal', VVtaMN: 100.5 }),
+      ],
+    });
+    mockGetPool.mockResolvedValueOnce(mockPool);
+
+    const { GET } = await import('../route');
+    const res = await GET(makeUrl(`${OK_QUERY}&ocultarCero=true`));
+
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.resultados.map((r: { IdAten: string }) => r.IdAten)).toEqual(['normal']);
+  });
+
+  it('absent ocultarCero keeps today\'s response shape — zero rows included (S8)', async () => {
+    const mockPool = createMockPool();
+    mockRequestExecute.mockResolvedValueOnce({
+      recordset: [
+        makeSpRow({ IdAten: 'cero', VVtaMN: 0 }),
+        makeSpRow({ IdAten: 'normal', VVtaMN: 100.5 }),
+      ],
+    });
+    mockGetPool.mockResolvedValueOnce(mockPool);
+
+    const { GET } = await import('../route');
+    const res = await GET(makeUrl(OK_QUERY));
+
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.resultados.map((r: { IdAten: string }) => r.IdAten)).toEqual(['cero', 'normal']);
+  });
+
+  it('rejects ocultarCero=si with 400 and never touches the pool/SP (S9)', async () => {
+    const { GET } = await import('../route');
+    const res = await GET(makeUrl(`${OK_QUERY}&ocultarCero=si`));
+
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    expect(body.error).toBe('"ocultarCero" debe ser true o false');
+    expect(mockGetPool).not.toHaveBeenCalled();
+    expect(mockRequestExecute).not.toHaveBeenCalled();
+  });
+
+  it('treats ocultarCero=1 the same as true', async () => {
+    const mockPool = createMockPool();
+    mockRequestExecute.mockResolvedValueOnce({
+      recordset: [
+        makeSpRow({ IdAten: 'cero', VVtaMN: 0 }),
+        makeSpRow({ IdAten: 'normal', VVtaMN: 100.5 }),
+      ],
+    });
+    mockGetPool.mockResolvedValueOnce(mockPool);
+
+    const { GET } = await import('../route');
+    const res = await GET(makeUrl(`${OK_QUERY}&ocultarCero=1`));
+
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.resultados.map((r: { IdAten: string }) => r.IdAten)).toEqual(['normal']);
+  });
+});
+
 // ---- Consolidado branch (slice 2, task 2.4/Q-R6) ----
 
 describe('GET /api/valoraciones/sigla?consolidado=true', () => {

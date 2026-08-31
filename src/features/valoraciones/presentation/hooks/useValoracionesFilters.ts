@@ -23,6 +23,8 @@ export interface ValoracionesFilterState {
   inFsta: boolean;
   /** Slice 1: always `false` (checkbox disabled). */
   consolidado: boolean;
+  /** Opt-in zero-row ("0.00") suppression for the detail query (A5: default off). */
+  ocultarCero: boolean;
   codCli?: number;
   cliNombre?: string;
   codCfa?: number;
@@ -48,6 +50,7 @@ export type ValoracionesFilterAction =
   | { type: 'SET_TIPO_TRABAJADOR'; tipTra?: number }
   /** Slice 2: consolidado toggles only while a client is selected. */
   | { type: 'SET_CONSOLIDADO'; consolidado: boolean }
+  | { type: 'SET_OCULTAR_CERO'; ocultarCero: boolean }
   | { type: 'LIMPIAR' };
 
 function defaults(): ValoracionesFilterState {
@@ -59,6 +62,7 @@ function defaults(): ValoracionesFilterState {
     indFac: 0,
     inFsta: false,
     consolidado: false,
+    ocultarCero: false,
   };
 }
 
@@ -114,6 +118,9 @@ function reducer(
       return state.codCli === undefined
         ? state
         : { ...state, consolidado: action.consolidado };
+    case 'SET_OCULTAR_CERO':
+      // NOT cliente-gated (like FecSTA): a global display preference.
+      return { ...state, ocultarCero: action.ocultarCero };
     case 'LIMPIAR':
       return defaults();
     default:
@@ -129,6 +136,7 @@ export function toFiltro(state: ValoracionesFilterState): ValoracionesFilter {
     codMon: state.codMon,
     indFac: state.indFac,
     inFsta: state.inFsta,
+    ocultarCero: state.ocultarCero,
     ...(state.codCli !== undefined ? { codCli: state.codCli } : {}),
     ...(state.codCfa !== undefined ? { codCfa: state.codCfa } : {}),
     ...(state.codDes !== undefined ? { codDes: state.codDes } : {}),

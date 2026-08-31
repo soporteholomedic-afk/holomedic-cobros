@@ -42,6 +42,7 @@ export function buildValoracionesQuery(filtro: ValoracionesFilter): string {
     codMon: String(filtro.codMon),
     indFac: filtro.indFac === null ? 'null' : String(filtro.indFac),
     inFsta: String(filtro.inFsta),
+    ocultarCero: String(filtro.ocultarCero === true),
   });
   const ids: Array<[string, number | undefined]> = [
     ['codCli', filtro.codCli],

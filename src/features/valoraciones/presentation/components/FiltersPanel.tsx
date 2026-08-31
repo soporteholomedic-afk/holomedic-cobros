@@ -308,6 +308,21 @@ export function FiltersPanel({
             />
             Consolidado
           </label>
+          <label
+            htmlFor="val-ocultar-cero"
+            className="inline-flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300 cursor-pointer"
+          >
+            <input
+              id="val-ocultar-cero"
+              type="checkbox"
+              checked={filtros.ocultarCero}
+              onChange={(e) =>
+                onCambio({ type: 'SET_OCULTAR_CERO', ocultarCero: e.target.checked })
+              }
+              className="w-4 h-4 rounded border-slate-300 text-sky-600 focus:ring-sky-500/20"
+            />
+            Ocultar valores 0.00
+          </label>
         </div>
       </div>
 

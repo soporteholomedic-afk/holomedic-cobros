@@ -295,4 +295,63 @@ describe('POST /api/valoraciones/send', () => {
     expect(res.status).toBe(400);
     expect(sendEmailMock).not.toHaveBeenCalled();
   });
+
+  // ---- ocultarCero DTO flag (filtro-valores-cero, S17/S18/S19) ----
+
+  it('carries ocultarCero=true into the attachment re-query so the email matches the screen (S17)', async () => {
+    sendEmailMock.mockResolvedValue({ success: true, messageId: '<x>' });
+    const fakeRepo = {
+      buscarValoraciones: vi.fn().mockResolvedValue([makeRepFacturacion({ VVtaMN: 100 })]),
+      buscarClientePorCodigo: vi.fn().mockResolvedValue(null),
+    } as unknown as ISiglaValoracionesRepository;
+    __setValoracionesDbForTests(fakeRepo);
+
+    const { POST } = await import('../route');
+    const res = await POST(
+      makeRequest({
+        ...baseFields,
+        adjuntarExcel: 'true',
+        filtro: JSON.stringify({ ...filtroValido, ocultarCero: true }),
+      }),
+    );
+
+    expect(res.status).toBe(200);
+    expect(fakeRepo.buscarValoraciones).toHaveBeenCalledTimes(1);
+    const filtroUsado = (fakeRepo.buscarValoraciones as ReturnType<typeof vi.fn>).mock.calls[0][0];
+    expect(filtroUsado.ocultarCero).toBe(true);
+  });
+
+  it('keeps the attachment filter unchanged when the flag is absent (S18)', async () => {
+    sendEmailMock.mockResolvedValue({ success: true, messageId: '<x>' });
+    const fakeRepo = {
+      buscarValoraciones: vi.fn().mockResolvedValue([makeRepFacturacion({ VVtaMN: 100 })]),
+      buscarClientePorCodigo: vi.fn().mockResolvedValue(null),
+    } as unknown as ISiglaValoracionesRepository;
+    __setValoracionesDbForTests(fakeRepo);
+
+    const { POST } = await import('../route');
+    const res = await POST(makeRequest({ ...baseFields, adjuntarExcel: 'true' }));
+
+    expect(res.status).toBe(200);
+    expect(fakeRepo.buscarValoraciones).toHaveBeenCalledTimes(1);
+    const filtroUsado = (fakeRepo.buscarValoraciones as ReturnType<typeof vi.fn>).mock.calls[0][0];
+    expect(filtroUsado.ocultarCero).toBe(false);
+  });
+
+  it('rejects a non-boolean ocultarCero with 400 BEFORE any repo query or email dispatch (S19)', async () => {
+    const { POST } = await import('../route');
+    const res = await POST(
+      makeRequest({
+        ...baseFields,
+        adjuntarExcel: 'true',
+        filtro: JSON.stringify({ ...filtroValido, ocultarCero: 1 }),
+      }),
+    );
+
+    expect(res.status).toBe(400);
+    const json = (await res.json()) as { code: string; error: string };
+    expect(json.code).toBe('VALIDATION_ERROR');
+    expect(json.error).toContain('ocultarCero');
+    expect(sendEmailMock).not.toHaveBeenCalled();
+  });
 });

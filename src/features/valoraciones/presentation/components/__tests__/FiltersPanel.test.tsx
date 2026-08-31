@@ -14,6 +14,7 @@ function makeFiltros(overrides: Partial<ValoracionesFilterState> = {}): Valoraci
     indFac: 0,
     inFsta: false,
     consolidado: false,
+    ocultarCero: false,
     ...overrides,
   };
 }
@@ -123,6 +124,30 @@ describe('FiltersPanel', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /Limpiar/ }));
     expect(props.onLimpiar).toHaveBeenCalledTimes(1);
+  });
+
+  // ---- ocultarCero checkbox (filtro-valores-cero) ----
+
+  it('renders "Ocultar valores 0.00" unchecked and ENABLED without a client (NOT cliente-gated, like FecSTA)', () => {
+    renderPanel();
+
+    const ocultarCero = screen.getByLabelText('Ocultar valores 0.00');
+    expect(ocultarCero).toBeInTheDocument();
+    expect(ocultarCero).toBeEnabled();
+    expect((ocultarCero as HTMLInputElement).checked).toBe(false);
+  });
+
+  it('clicking "Ocultar valores 0.00" dispatches SET_OCULTAR_CERO with the new checked state', () => {
+    const onCambio = vi.fn<(action: ValoracionesFilterAction) => void>();
+    renderPanel(makeFiltros(), onCambio);
+
+    fireEvent.click(screen.getByLabelText('Ocultar valores 0.00'));
+    expect(onCambio).toHaveBeenCalledWith({ type: 'SET_OCULTAR_CERO', ocultarCero: true });
+  });
+
+  it('reflects the checked state from filtros.ocultarCero', () => {
+    renderPanel(makeFiltros({ ocultarCero: true }));
+    expect((screen.getByLabelText('Ocultar valores 0.00') as HTMLInputElement).checked).toBe(true);
   });
 
   it('disables the action buttons while querying', () => {

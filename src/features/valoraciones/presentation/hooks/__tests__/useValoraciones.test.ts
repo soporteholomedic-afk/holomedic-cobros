@@ -40,6 +40,7 @@ describe('buildValoracionesQuery', () => {
     expect(params.get('codMon')).toBe('1');
     expect(params.get('indFac')).toBe('0');
     expect(params.get('inFsta')).toBe('false');
+    expect(params.get('ocultarCero')).toBe('false');
     expect(params.get('codCli')).toBe('15');
     expect(params.has('codDes')).toBe(false);
     expect(params.has('codPac')).toBe(false);
@@ -48,6 +49,11 @@ describe('buildValoracionesQuery', () => {
   it('serializes the tri-state Todos as "null"', () => {
     const query = buildValoracionesQuery({ ...FILTRO_BASE, indFac: null });
     expect(new URLSearchParams(query).get('indFac')).toBe('null');
+  });
+
+  it('emits ocultarCero=true when the filter carries it (query → API contract)', () => {
+    const query = buildValoracionesQuery({ ...FILTRO_BASE, ocultarCero: true });
+    expect(new URLSearchParams(query).get('ocultarCero')).toBe('true');
   });
 });
 

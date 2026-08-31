@@ -113,6 +113,16 @@ export async function GET(request: Request): Promise<NextResponse> {
     }
     const inFsta = inFstaRaw === 'true' || inFstaRaw === '1';
 
+    // ---- OcultarCero boolean zero-row suppression (default false, A5) ----
+    const ocultarCeroRaw = (url.searchParams.get('ocultarCero') ?? 'false').trim().toLowerCase();
+    if (!['true', 'false', '1', '0'].includes(ocultarCeroRaw)) {
+      return NextResponse.json(
+        { error: '"ocultarCero" debe ser true o false' } satisfies ValidationError,
+        { status: 400 },
+      );
+    }
+    const ocultarCero = ocultarCeroRaw === 'true' || ocultarCeroRaw === '1';
+
     // ---- Consolidado toggle (slice 2: requires a client, like SIGLA) ----
     const consolidadoRaw = (url.searchParams.get('consolidado') ?? 'false').trim().toLowerCase();
     if (!['true', 'false', '1', '0'].includes(consolidadoRaw)) {
@@ -141,6 +151,7 @@ export async function GET(request: Request): Promise<NextResponse> {
       codMon,
       indFac,
       inFsta,
+      ocultarCero,
       codCli,
       codCfa,
       codDes,

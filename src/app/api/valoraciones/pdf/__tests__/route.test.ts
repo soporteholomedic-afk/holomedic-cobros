@@ -170,4 +170,33 @@ describe('POST /api/valoraciones/pdf', () => {
     expect(body.error).not.toContain('chromium');
     expect(body.error).not.toContain('EDGEOOM');
   });
+
+  // ---- ocultarCero DTO flag (filtro-valores-cero, S13/S15/S16) ----
+
+  it('carries ocultarCero=true into the re-query filter so the PDF matches the screen (S15)', async () => {
+    const { POST } = await import('../route');
+    await POST(makeRequest({ ...filtroValido, ocultarCero: true }));
+
+    const filtroUsado = (fakeRepo.buscarValoraciones as ReturnType<typeof vi.fn>).mock.calls[0][0];
+    expect(filtroUsado.ocultarCero).toBe(true);
+  });
+
+  it('keeps the filter unchanged when the flag is absent (S16)', async () => {
+    const { POST } = await import('../route');
+    await POST(makeRequest(filtroValido));
+
+    const filtroUsado = (fakeRepo.buscarValoraciones as ReturnType<typeof vi.fn>).mock.calls[0][0];
+    expect(filtroUsado.ocultarCero).toBe(false);
+  });
+
+  it('rejects a non-boolean ocultarCero with 400 before any query or print (S13)', async () => {
+    const { POST } = await import('../route');
+    const res = await POST(makeRequest({ ...filtroValido, ocultarCero: 'si' }));
+
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    expect(body.error).toContain('ocultarCero');
+    expect(fakeRepo.buscarValoraciones).not.toHaveBeenCalled();
+    expect(printMock).not.toHaveBeenCalled();
+  });
 });

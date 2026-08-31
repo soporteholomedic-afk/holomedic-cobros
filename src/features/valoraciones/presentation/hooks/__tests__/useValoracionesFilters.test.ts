@@ -5,7 +5,7 @@ import { hoyIso } from '../../helpers/format';
 import { toFiltro, useValoracionesFilters } from '../useValoracionesFilters';
 
 describe('useValoracionesFilters', () => {
-  it('defaults: periodo today, SOLES, No Facturados, FecAte mode, consolidado off', () => {
+  it('defaults: periodo today, SOLES, No Facturados, FecAte mode, consolidado off, ocultarCero off', () => {
     const { result } = renderHook(() => useValoracionesFilters());
     const hoy = hoyIso();
 
@@ -16,6 +16,7 @@ describe('useValoracionesFilters', () => {
       indFac: 0,
       inFsta: false,
       consolidado: false,
+      ocultarCero: false,
     });
   });
 
@@ -78,6 +79,7 @@ describe('useValoracionesFilters', () => {
       indFac: 0,
       inFsta: false,
       consolidado: false,
+      ocultarCero: false,
     });
   });
 
@@ -94,11 +96,38 @@ describe('useValoracionesFilters', () => {
       codMon: 1,
       indFac: 0,
       inFsta: false,
+      ocultarCero: false,
       codCfa: 7,
       codSed: 2,
     });
     expect('cliNombre' in filtro).toBe(false);
     expect('consolidado' in filtro).toBe(false);
+  });
+
+  // ---- ocultarCero toggle (filtro-valores-cero) ----
+
+  it('SET_OCULTAR_CERO toggles the flag and LIMPIAR resets it', () => {
+    const { result } = renderHook(() => useValoracionesFilters());
+
+    act(() => result.current.dispatch({ type: 'SET_OCULTAR_CERO', ocultarCero: true }));
+    expect(result.current.filtros.ocultarCero).toBe(true);
+
+    act(() => result.current.dispatch({ type: 'SET_OCULTAR_CERO', ocultarCero: false }));
+    expect(result.current.filtros.ocultarCero).toBe(false);
+
+    act(() => result.current.dispatch({ type: 'SET_OCULTAR_CERO', ocultarCero: true }));
+    act(() => result.current.limpiar());
+    expect(result.current.filtros.ocultarCero).toBe(false);
+  });
+
+  it('toFiltro emits the ocultarCero flag to the API filter', () => {
+    const { result } = renderHook(() => useValoracionesFilters());
+
+    act(() => result.current.dispatch({ type: 'SET_OCULTAR_CERO', ocultarCero: true }));
+    expect(toFiltro(result.current.filtros).ocultarCero).toBe(true);
+
+    act(() => result.current.dispatch({ type: 'SET_OCULTAR_CERO', ocultarCero: false }));
+    expect(toFiltro(result.current.filtros).ocultarCero).toBe(false);
   });
 
   // ---- Slice 2: consolidado enablement (spec Q-R5/Q-R6) ----
