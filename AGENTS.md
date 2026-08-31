@@ -108,15 +108,12 @@ Flujo de despliegue obligatorio:
 
 ## SDK Sync
 
-After every code change (especially to API routes or constants), sync the project to the Windows SDK:
+After every code change (especially to API routes or constants), sync the project to the Windows SDK. Use the script matching the machine's OS:
 
-```powershell
-.\sync-sdk.ps1
-```
+- **Linux**: `bash sync-sdk.sh` — requires `//172.16.10.12/instaladores` mounted at `/mnt/instaladores`; tar-pipes the source to `/mnt/instaladores/HOLOMEDICSDK` (overlay copy — files removed locally are NOT deleted from the SDK).
+- **Windows**: `.\sync-sdk.ps1` from PowerShell — `robocopy /MIR` to `\\172.16.10.12\INSTALADORES\HOLOMEDICSDK` (true mirror — files removed locally ARE deleted from the SDK).
 
-This copies the source (excluding `node_modules`, `.next`, `.git`, etc.) directly to `\\172.16.10.12\INSTALADORES\HOLOMEDICSDK` using `robocopy` (native Windows — no WSL needed).
-
-(The old `sync-sdk.sh` was written for WSL/Linux; use `sync-sdk.ps1` from PowerShell instead.)
+Both copy the source (excluding `node_modules`, `.next`, `.git`, etc.) directly to the SDK share.
 
 The sync is **always required** before running the app from the SDK on Windows.
 
