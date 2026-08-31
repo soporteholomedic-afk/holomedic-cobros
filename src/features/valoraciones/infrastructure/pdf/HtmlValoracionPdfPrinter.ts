@@ -19,7 +19,7 @@ export function buildValoracionFooterOverrides(): PdfPrintOverrides {
     displayHeaderFooter: true,
     headerTemplate: '<div></div>',
     footerTemplate:
-      '<div style="width:100%; font-size:8px; text-align:center; color:#334155;">' +
+      '<div style="width:100%; font-size:9px; text-align:center; color:#334155;">' +
       'P&aacute;gina <span class="pageNumber"></span> de <span class="totalPages"></span>' +
       '</div>',
     margin: { top: '8mm', right: '8mm', bottom: '14mm', left: '8mm' },

@@ -92,7 +92,7 @@ function filaHtml(row: RepFacturacion, codMon: CodigoMoneda): string {
 
 function grupoHtml(grupo: DestinoGrupo, codMon: CodigoMoneda): string {
   const filas = grupo.rows.map((row) => filaHtml(row, codMon)).join('\n');
-  return `      <h2 style="font-size:11px; margin:14px 0 4px; color:#0f172a;">${escapeHtml(grupo.destino)}</h2>
+  return `      <h2 style="font-size:12.5px; margin:14px 0 4px; color:#0f172a;">${escapeHtml(grupo.destino)}</h2>
       <table>
         <thead>
           <tr>
@@ -162,17 +162,17 @@ export function buildValoracionHtml(input: ValoracionPdfInput): string {
 <style>
   @page { size: A4 landscape; margin: 14mm 9mm 18mm 9mm; }
   * { box-sizing: border-box; }
-  body { font-family: Arial, Helvetica, sans-serif; font-size: 8px; color: #0f172a; margin: 0; }
+  body { font-family: Arial, Helvetica, sans-serif; font-size: 9.5px; color: #0f172a; margin: 0; }
   .membrete { display: flex; align-items: center; gap: 12px; border-bottom: 2px solid #0f172a; padding-bottom: 6px; }
   .membrete img { width: 52px; height: 52px; object-fit: contain; }
-  .membrete .nombre { font-size: 13px; font-weight: bold; }
-  .membrete .datos { font-size: 8.5px; color: #475569; line-height: 1.5; }
-  h1 { font-size: 12px; margin: 10px 0 2px; }
+  .membrete .nombre { font-size: 15px; font-weight: bold; }
+  .membrete .datos { font-size: 10px; color: #475569; line-height: 1.5; }
+  h1 { font-size: 14px; margin: 10px 0 2px; }
   .cabecera { width: 100%; border-collapse: collapse; margin: 6px 0 8px; }
-  .cabecera td { padding: 2px 6px 2px 0; font-size: 9px; }
+  .cabecera td { padding: 2px 6px 2px 0; font-size: 10.5px; }
   table { width: 100%; border-collapse: collapse; table-layout: fixed; }
   thead { display: table-header-group; }
-  th { background: #0f172a; color: #fff; font-size: 7.5px; padding: 3px 4px; text-align: left; }
+  th { background: #0f172a; color: #fff; font-size: 8.5px; padding: 3px 4px; text-align: left; }
   td { border-bottom: 1px solid #e2e8f0; padding: 2.5px 4px; overflow-wrap: break-word; }
   tr.totales td { background: #f1f5f9; font-weight: bold; }
   tr.total-final td { background: #e2e8f0; font-weight: bold; }
