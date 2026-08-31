@@ -108,23 +108,43 @@ Flujo de despliegue obligatorio:
 
 ## SDK Sync
 
-After every code change (especially to API routes or constants), sync the project to the Windows SDK. Use the script matching the machine's OS:
+After every code change (especially to API routes or constants), sync the project to the Windows SDK. The canonical flow is the Node engine `scripts/sync-sdk.mjs` — a true mirror that deletes destination files no longer present in the source. Both wrappers are thin delegates to it:
 
-- **Linux**: `bash sync-sdk.sh` — requires `//172.16.10.12/instaladores` mounted at `/mnt/instaladores`; tar-pipes the source to `/mnt/instaladores/HOLOMEDICSDK` (overlay copy — files removed locally are NOT deleted from the SDK).
-- **Windows**: `.\sync-sdk.ps1` from PowerShell — `robocopy /MIR` to `\\172.16.10.12\INSTALADORES\HOLOMEDICSDK` (true mirror — files removed locally ARE deleted from the SDK).
+```powershell
+# Windows (PowerShell)
+.\sync-sdk.ps1
+```
 
-Both copy the source (excluding `node_modules`, `.next`, `.git`, etc.) directly to the SDK share.
+```bash
+# Linux/WSL (requires the share mounted at /mnt/instaladores/HOLOMEDICSDK)
+./sync-sdk.sh
+```
 
-The sync is **always required** before running the app from the SDK on Windows.
+Both are equivalent to running `node scripts/sync-sdk.mjs` directly. Supported flag: `--dry-run` prints the full plan (every copy and every deletion) and mutates nothing.
+
+The destination is `\\172.16.10.12\INSTALADORES\HOLOMEDICSDK` (Windows) or `/mnt/instaladores/HOLOMEDICSDK` (mounted share). Excluded from the mirror: `node_modules`, `.next`, `.git`, `openspec`, `sdd`, `docs`, `.gga`, `.codegraph`, `.atl`, `temp`, `tmp`, and the file patterns `*.zip`, `tsconfig.tsbuildinfo`, `*.xlsx`, `.env`, `.env.*`, `.pr-*.md`. Protected on the destination (never deleted, even when absent from the source): `sigla-cli/` and a destination-resident `.env.local`.
+
+The sync is **always required** before running the app from the SDK on Windows. The engine refuses to run when `sigla-cli/SIGLA.PdfCli.exe` is missing from the source checkout (exit 2) — a mirror without the runtime could delete it from the share. Exit codes: 0 success, 1 runtime failure, 2 pre-flight failure.
+
+### `.env.local` is NEVER synced — manual copy
+
+`.env` and `.env.*` files are excluded from every sync. `.env.local` must be provisioned **manually**: copy it from your repo checkout (dev machine) to `C:\HOLOMEDIC\.env.local` on the Windows machine. It is **not** on the network share anymore, and no script will put it there. `iniciar.bat` reminds the operator of this procedure when it detects the file missing.
+
+### First run against the share — one-time steps
+
+1. **Review first**: run `node scripts/sync-sdk.mjs --dry-run` before the first live sync. The first run announces 11 verified ghost files plus leaked artifacts (`.codegraph/`, `temp/`, `docs/`, `openspec/`, `.gga`, `.pr-1-body.md`) for deletion; the dry-run prints the exact delete list so nothing is a surprise.
+2. **Manually delete the leaked share `.env.local` once.** A `.env.local` currently sits on the share, leaked by the old copy-only scripts. The engine protects destination-resident `.env.local` by design (a mirror must never destroy credentials), which means it will shield this leaked copy forever — it must be removed by hand, one time. Never automate this step.
+3. Then run the live sync and spot-check the share.
 
 ## SIGLA.Cli Sync
 
 The `sigla-cli/` folder holds the compiled .NET runtime the Next.js server spawns to render PDFs (`SIGLA.PdfCli.exe` + `Negocio.dll`, `Entidad.dll`, `Datos.dll` + `rpt/` Crystal Reports templates). It is a **runtime dependency**, not source.
 
-- It is **git-ignored** (see `.gitignore`: `/sigla-cli`).
-- It **is synced** to the Windows SDK as part of `sync-sdk.ps1` / `sync-sdk.sh` — do **not** re-add it to the exclude lists.
+- It is **git-tracked** (20 files, no `.gitignore` entry) — and this is **intentional**, explicitly confirmed by the maintainer (2026-08-29). Earlier docs claimed it was git-ignored; that claim was stale.
+- Because it is tracked, every clone and every worktree gets it via `git checkout` — no manual copy step is needed when creating a worktree.
+- It **is synced** to the Windows SDK as part of `scripts/sync-sdk.mjs` (either wrapper) — do **not** re-add it to the engine's exclude lists.
 - The path is resolved at runtime by `src/features/envio-resultados/infrastructure/informes/constants.ts` as `path.resolve(process.cwd(), 'sigla-cli', 'SIGLA.PdfCli.exe')`. Override with the `PDFCLI_EXE_PATH` env var if you need to point at a different binary location.
-- Because `robocopy /MIR` is used, deleting `sigla-cli/` locally and re-syncing will **also delete it on the SDK** — do not run the sync with the folder missing unless you intend to.
+- The sync is a true mirror with a pre-flight assert: if `sigla-cli/SIGLA.PdfCli.exe` is missing from the source, the sync aborts before touching the destination. On top of that, `sigla-cli/` is protected on the destination, so a run can never delete it from the share.
 
 ## Auth & Route Protection
 

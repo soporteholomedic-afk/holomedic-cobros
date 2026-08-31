@@ -36,7 +36,8 @@ pnpm -v
 :: ---- 3. Verificar .env.local ----
 if not exist ".env.local" (
     echo [ERROR] No se encuentra .env.local
-    echo Copialo desde la red o crealo con las credenciales necesarias.
+    echo Este archivo NUNCA se sincroniza por la red: hay que copiarlo manualmente.
+    echo Copialo desde el repositorio del proyecto hacia C:\HOLOMEDIC. Ver AGENTS.md, seccion "SDK Sync".
     pause
     exit /b 1
 )

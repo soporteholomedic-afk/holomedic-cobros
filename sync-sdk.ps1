@@ -1,16 +1,14 @@
 $ErrorActionPreference = "Stop"
 
-$src = "C:\dev\holomedic_cobros"
-$dst = "\\172.16.10.12\INSTALADORES\HOLOMEDICSDK"
+# Thin delegate wrapper. The Node engine (scripts/sync-sdk.mjs) resolves the
+# repo root from its own location, walks the tree, applies the mirror plan and
+# exits with honest codes. This wrapper only forwards argv and propagates the
+# exit code: [OK] is printed on success only.
 
-$excludeDirs = @("node_modules", ".next", ".git", ".env", "sdd", "docs", ".gga")
-$excludeFiles = @("*.zip", "tsconfig.tsbuildinfo", "*.xlsx")
+& node "$PSScriptRoot\scripts\sync-sdk.mjs" @args
 
-if (-not (Test-Path -LiteralPath $dst)) {
-  Write-Error "SDK destination not found: $dst"
-  exit 1
+if ($LASTEXITCODE -eq 0) {
+  Write-Host "[OK] SDK synced"
 }
 
-Write-Host "Syncing project to SDK..."
-robocopy $src $dst /MIR /XD $excludeDirs /XF $excludeFiles /NDL /NFL /NJH /NJS
-Write-Host "[OK] SDK synced to $dst"
+exit $LASTEXITCODE
