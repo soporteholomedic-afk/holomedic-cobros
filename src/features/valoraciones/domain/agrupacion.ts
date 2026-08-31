@@ -13,6 +13,11 @@ export function ventaPorMoneda(row: RepFacturacion, codMon: CodigoMoneda): numbe
   return codMon === 2 ? row.VVtaMO : row.VVtaMN;
 }
 
+/** True when the moneda-aware sale value renders "0.00" (round2-based, A4). */
+export function esVentaCero(row: RepFacturacion, codMon: CodigoMoneda): boolean {
+  return round2(ventaPorMoneda(row, codMon)) === 0;
+}
+
 /** Moneda-aware taxable amount: `VImpMN` for SOLES (1), `VImpMO` for DOLARES (2). */
 export function importePorMoneda(row: RepFacturacion, codMon: CodigoMoneda): number {
   return codMon === 2 ? row.VImpMO : row.VImpMN;

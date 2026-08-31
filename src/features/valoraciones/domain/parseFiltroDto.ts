@@ -8,8 +8,9 @@ import type { ValoracionesFilter } from './entities';
  *
  * Rules mirror `GET /api/valoraciones/sigla`: `fecIni`/`fecFin` required
  * `YYYY-MM-DD` with `fecIni <= fecFin`; `codMon` 1|2; `indFac` tri-state
- * default 0 (No Facturados); `inFsta` boolean; optional integer ids absent
- * or `<= 0` become undefined (NULL binds downstream).
+ * default 0 (No Facturados); `inFsta` boolean; `ocultarCero` optional
+ * boolean; optional integer ids absent or `<= 0` become undefined (NULL
+ * binds downstream).
  */
 
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
@@ -87,6 +88,10 @@ export function parseFiltroDto(body: unknown): ParseFiltroResult {
     return { error: '"inFsta" debe ser true o false' };
   }
 
+  if (raw.ocultarCero !== undefined && typeof raw.ocultarCero !== 'boolean') {
+    return { error: '"ocultarCero" debe ser true o false' };
+  }
+
   const idOpcional = (nombre: string): number | undefined => {
     const valor = raw[nombre];
     if (valor === undefined || valor === null) return undefined;
@@ -102,6 +107,7 @@ export function parseFiltroDto(body: unknown): ParseFiltroResult {
       codMon: raw.codMon,
       indFac,
       inFsta: raw.inFsta === true,
+      ocultarCero: raw.ocultarCero === true,
       codCli: idOpcional('codCli'),
       codCfa: idOpcional('codCfa'),
       codDes: idOpcional('codDes'),

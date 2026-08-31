@@ -77,6 +77,8 @@ export interface ValoracionesFilter {
   codMon: CodigoMoneda;
   indFac: 0 | 1 | null;
   inFsta: boolean;
+  /** Opt-in zero-row suppression (detail mode only; absent ≡ false, A5). */
+  ocultarCero?: boolean;
   codCli?: number;
   codCfa?: number;
   codDes?: number;

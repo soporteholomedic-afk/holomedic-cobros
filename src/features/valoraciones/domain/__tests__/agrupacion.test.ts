@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 
-import { agruparPorDestino, agruparPorEmpresa, round2, ventaPorMoneda, IGV_PORCENTAJE } from '../agrupacion';
+import { agruparPorDestino, agruparPorEmpresa, esVentaCero, round2, ventaPorMoneda, IGV_PORCENTAJE } from '../agrupacion';
 import { makeRepFacturacion } from '../fixtures';
 
 describe('round2', () => {
@@ -106,6 +106,68 @@ describe('agruparPorEmpresa', () => {
 });
 
 // ---- agruparPorDestino (slice 2: PDF groups by destino — spec E-R2) ----
+
+describe('esVentaCero — moneda-aware zero-venta predicate (filtro-valores-cero, A1/A4)', () => {
+  it('is true for a zero venta and false for a non-zero venta (codMon 1 reads VVtaMN)', () => {
+    expect(esVentaCero(makeRepFacturacion({ VVtaMN: 0 }), 1)).toBe(true);
+    expect(esVentaCero(makeRepFacturacion({ VVtaMN: 100.5 }), 1)).toBe(false);
+  });
+
+  it('reads VVtaMO for DOLARES (codMon 2)', () => {
+    expect(esVentaCero(makeRepFacturacion({ VVtaMN: 100.5, VVtaMO: 0 }), 2)).toBe(true);
+    expect(esVentaCero(makeRepFacturacion({ VVtaMN: 100.5, VVtaMO: 28.7 }), 2)).toBe(false);
+  });
+
+  it('is moneda-aware: the same row hides under SOLES but survives under DOLARES (S3)', () => {
+    const row = makeRepFacturacion({ VVtaMN: 0, VVtaMO: 50 });
+    expect(esVentaCero(row, 1)).toBe(true);
+    expect(esVentaCero(row, 2)).toBe(false);
+  });
+
+  it('is display-consistent: ±0.004 renders "0.00" → true; 0.01 survives (S5, A4)', () => {
+    expect(esVentaCero(makeRepFacturacion({ VVtaMN: 0.004 }), 1)).toBe(true);
+    expect(esVentaCero(makeRepFacturacion({ VVtaMN: -0.004 }), 1)).toBe(true);
+    expect(esVentaCero(makeRepFacturacion({ VVtaMN: 0.01 }), 1)).toBe(false);
+  });
+
+  it('depends on venta ONLY — importe/costo never influence the predicate (S6, A1)', () => {
+    expect(esVentaCero(makeRepFacturacion({ VVtaMN: 0, VImpMN: 999 }), 1)).toBe(true);
+  });
+});
+
+describe('filter + agruparPorEmpresa composition — counts derive from the filtered set (S10/S11)', () => {
+  it('an all-zero-venta group disappears after the esVentaCero filter (S10)', () => {
+    const rows = [
+      makeRepFacturacion({ NomCFa: 'EMPRESA E', VVtaMN: 0 }),
+      makeRepFacturacion({ NomCFa: 'EMPRESA E', VVtaMN: -0.004 }),
+      makeRepFacturacion({ NomCFa: 'EMPRESA F', VVtaMN: 0 }),
+      makeRepFacturacion({ NomCFa: 'EMPRESA F', VVtaMN: 80 }),
+    ];
+
+    const visibles = rows.filter((row) => !esVentaCero(row, 1));
+    const grupos = agruparPorEmpresa(visibles, 1);
+
+    expect(grupos.map((g) => g.empresa)).toEqual(['EMPRESA F']);
+    expect(grupos[0].cantidad).toBe(1); // only the returned (non-zero) row counts
+    expect(grupos[0].subtotal).toBe(80);
+  });
+
+  it('registry count equals the visible rows after filtering (S11)', () => {
+    const rows = [
+      makeRepFacturacion({ NomCFa: 'EMPRESA F', VVtaMN: 10 }),
+      makeRepFacturacion({ NomCFa: 'EMPRESA F', VVtaMN: 0.01 }),
+      makeRepFacturacion({ NomCFa: 'EMPRESA F', VVtaMN: 0 }),
+      makeRepFacturacion({ NomCFa: 'EMPRESA F', VVtaMN: 0.004 }),
+    ];
+
+    const visibles = rows.filter((row) => !esVentaCero(row, 1));
+    const grupos = agruparPorEmpresa(visibles, 1);
+
+    expect(visibles).toHaveLength(2);
+    expect(grupos).toHaveLength(1);
+    expect(grupos[0].cantidad).toBe(visibles.length);
+  });
+});
 
 describe('agruparPorDestino', () => {
   it('groups rows by DesDes with moneda-aware totals and first-seen order', () => {

@@ -14,6 +14,7 @@ import type {
   ValoracionesFilter,
 } from '../../domain/entities';
 import type { ISiglaValoracionesRepository } from '../../domain/ports';
+import { esVentaCero } from '../../domain/agrupacion';
 import { estadoFromEstCob } from '../../domain/estado';
 
 /**
@@ -272,7 +273,12 @@ export class SiglaValoracionesRepository implements ISiglaValoracionesRepository
 
     const result = await request.execute('SP_RPT_REPFACTURACION');
     const rows = result.recordset as unknown as RepFacturacionRow[];
-    return rows.map(rowToRepFacturacion);
+    const mapped = rows.map(rowToRepFacturacion);
+    // Opt-in zero-row suppression AFTER mapping (NULL→0 included); absent
+    // flag keeps the predicate inert → today's exact row set (A5).
+    return filtro.ocultarCero === true
+      ? mapped.filter((row) => !esVentaCero(row, filtro.codMon))
+      : mapped;
   }
 
   /**

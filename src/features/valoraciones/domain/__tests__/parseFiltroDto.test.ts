@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { parseExportFiltroDto, parseEmpresaField } from '../parseFiltroDto';
+import { parseExportFiltroDto, parseEmpresaField, parseFiltroDto } from '../parseFiltroDto';
 
 /**
  * U6 per-empresa export scoping: the export/send bodies may carry an
@@ -16,6 +16,40 @@ const filtroValido = {
   indFac: 0,
   inFsta: false,
 };
+
+// ---- ocultarCero flag (filtro-valores-cero, spec S12/S13) ----
+
+describe('parseFiltroDto — ocultarCero', () => {
+  it('defaults to false when absent and passes true/false through', () => {
+    const absent = parseFiltroDto(filtroValido);
+    expect(absent.error).toBeUndefined();
+    expect(absent.filtro?.ocultarCero).toBe(false);
+
+    const on = parseFiltroDto({ ...filtroValido, ocultarCero: true });
+    expect(on.filtro?.ocultarCero).toBe(true);
+
+    const off = parseFiltroDto({ ...filtroValido, ocultarCero: false });
+    expect(off.filtro?.ocultarCero).toBe(false);
+  });
+
+  it('rejects non-boolean values with an error mentioning ocultarCero (S13)', () => {
+    expect(parseFiltroDto({ ...filtroValido, ocultarCero: 'x' }).error).toContain('ocultarCero');
+    expect(parseFiltroDto({ ...filtroValido, ocultarCero: 1 }).error).toContain('ocultarCero');
+  });
+
+  it('parseExportFiltroDto carries the flag through identically (S12/S13)', () => {
+    const on = parseExportFiltroDto({ ...filtroValido, ocultarCero: true });
+    expect(on.error).toBeUndefined();
+    expect(on.filtro?.ocultarCero).toBe(true);
+
+    const absent = parseExportFiltroDto({ ...filtroValido });
+    expect(absent.filtro?.ocultarCero).toBe(false);
+
+    const invalido = parseExportFiltroDto({ ...filtroValido, ocultarCero: 'si' });
+    expect(invalido.filtro).toBeUndefined();
+    expect(invalido.error).toContain('ocultarCero');
+  });
+});
 
 describe('parseEmpresaField', () => {
   it('returns undefined for absent/null (global export scope)', () => {

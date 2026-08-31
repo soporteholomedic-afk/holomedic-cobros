@@ -301,6 +301,114 @@ describe('SiglaValoracionesRepository.buscarValoraciones', () => {
   });
 });
 
+// ---- ocultarCero post-SP filter (filtro-valores-cero, S1–S6) ----
+
+describe('SiglaValoracionesRepository.buscarValoraciones — ocultarCero filter', () => {
+  /** Minimal raw SP row factory: mapper-valid defaults, per-test overrides. */
+  function makeSpRow(overrides: Record<string, unknown> = {}): Record<string, unknown> {
+    return {
+      NomCFa: 'EMPRESA A',
+      NomCom: 'EMPRESA A',
+      DesDes: 'OFICINA',
+      CenCos: 'CC1',
+      NroDId: 'DNI 1',
+      Pacien: 'PACIENTE UNO',
+      EdaPac: 30,
+      FecNac: null,
+      DesPue: 'OBRERO',
+      DsTiTr: 'OBRERO',
+      FecAte: new Date('2026-01-15T00:00:00'),
+      FecSTA: null,
+      DesTCh: 'PREOCUPACIONAL',
+      NomPro: 'PROY',
+      Result: 'APTO',
+      Anex7D: 'S',
+      CodMon: 1,
+      DesMon: 'SOLES',
+      Simbol: 's/.',
+      VImpMN: 0,
+      VImpMO: 0,
+      VVtaMN: 100,
+      VVtaMO: 0,
+      Solici: 'SOL',
+      Admini: 'ADM',
+      IdAten: '0001',
+      ItemEx: 1,
+      TipDov: 'FT',
+      NumDov: null,
+      EstCob: 'P',
+      NomCli: 'EMPRESA A',
+      IndCon: false,
+      IdConv: 'C1',
+      CodSeC: null,
+      NumCob: null,
+      NroVal: 'V1',
+      NroOPe: 'O1',
+      CodiEM: 'EM1',
+      FecRec: null,
+      ...overrides,
+    };
+  }
+
+  it('S2: flag absent or false returns ALL mapped rows — identical to today', async () => {
+    const raws = [
+      makeSpRow({ IdAten: 'cero', VVtaMN: 0 }),
+      makeSpRow({ IdAten: 'normal', VVtaMN: 25 }),
+    ];
+    const fake = createFakePool(raws);
+    const repo = new SiglaValoracionesRepository(fake.pool as mssql.ConnectionPool);
+
+    const sinFlag = await repo.buscarValoraciones(baseFilter);
+    expect(sinFlag).toHaveLength(2);
+    expect(sinFlag.map((r) => r.IdAten)).toEqual(['cero', 'normal']);
+
+    const flagOff = await repo.buscarValoraciones({ ...baseFilter, ocultarCero: false });
+    expect(flagOff).toEqual(sinFlag);
+  });
+
+  it('S1/S5/S6: codMon 1 drops VVtaMN 0 / NULL→0 / ±0.004; keeps 0.01 and VVtaMO≠0 rows unchanged', async () => {
+    const fake = createFakePool([
+      makeSpRow({ IdAten: 'cero', VVtaMN: 0, VVtaMO: 50 }), // zero @1, non-zero @2
+      makeSpRow({ IdAten: 'null-map', VVtaMN: null }), // mapper → 0 → hidden
+      makeSpRow({ IdAten: 'mas-004', VVtaMN: 0.004 }), // renders 0.00 → hidden
+      makeSpRow({ IdAten: 'menos-004', VVtaMN: -0.004 }), // renders 0.00 → hidden
+      makeSpRow({ IdAten: 'un-centimo', VVtaMN: 0.01 }), // survives
+      makeSpRow({ IdAten: 'normal', VVtaMN: 100.5 }), // survives
+    ]);
+    const repo = new SiglaValoracionesRepository(fake.pool as mssql.ConnectionPool);
+
+    const rows = await repo.buscarValoraciones({ ...baseFilter, ocultarCero: true });
+
+    expect(rows.map((r) => r.IdAten)).toEqual(['un-centimo', 'normal']);
+    // Non-zero rows come back unchanged (fields + relative order).
+    expect(rows[0]).toMatchObject({ IdAten: 'un-centimo', VVtaMN: 0.01, EstCob: 'CREDITO' });
+    expect(rows[1]).toMatchObject({ IdAten: 'normal', VVtaMN: 100.5, EstCob: 'CREDITO' });
+  });
+
+  it('S3: codMon 2 filters by VVtaMO — a VVtaMN=0 / VVtaMO=50 row survives', async () => {
+    const fake = createFakePool([
+      makeSpRow({ IdAten: 'soles-cero', VVtaMN: 0, VVtaMO: 50 }),
+      makeSpRow({ IdAten: 'dolares-cero', VVtaMN: 30, VVtaMO: 0 }),
+    ]);
+    const repo = new SiglaValoracionesRepository(fake.pool as mssql.ConnectionPool);
+
+    const rows = await repo.buscarValoraciones({ ...baseFilter, codMon: 2, ocultarCero: true });
+
+    expect(rows.map((r) => r.IdAten)).toEqual(['soles-cero']);
+  });
+
+  it('keeps the SP bind contract frozen — ocultarCero never adds a request.input', async () => {
+    const fake = createFakePool([]);
+    const repo = new SiglaValoracionesRepository(fake.pool as mssql.ConnectionPool);
+
+    await repo.buscarValoraciones({ ...baseFilter, ocultarCero: true });
+
+    expect(fake.inputs.map((i) => i.name)).toEqual(
+      Object.values(REPFACTURACION_BINDS).map((b) => b.param),
+    );
+  });
+});
+
 describe('SiglaValoracionesRepository lookups', () => {
   it('buscarClientes queries Cliente by name/RUC with an escaped LIKE pattern', async () => {
     const fake = createFakePool([
