@@ -42,6 +42,12 @@ export const RUTAS_PROTEGIDAS: RutaProtegida[] = [
   { path: '/api/plantillas/firma',                permiso: 'firma_correo', label: 'API Mi Firma' },
   { path: '/admin/usuarios',      permiso: 'admin',            label: 'Gestión de Usuarios' },
   { path: '/api/usuarios',        permiso: 'admin',            label: 'API Usuarios' },
+  // asistencia-rrhh (Fase 1): session-gated RRHH surface (ADR-6). The
+  // device namespace `/api/asistencia/*` is deliberately NOT registered —
+  // devices authenticate with their own Bearer token inside the route
+  // (REQ-F1-14); the routes.asistencia.test.ts guard pins that exclusion.
+  { path: '/asistencia',          permiso: 'asistencia',       label: 'Asistencia' },
+  { path: '/api/asistencia-rrhh', permiso: 'asistencia',       label: 'API Asistencia RRHH' },
 ];
 
 export function buscarRutaProtegida(pathname: string): RutaProtegida | null {
