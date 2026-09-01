@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 
-import { migrate } from '../migrate';
+import { migrate, seedParametros } from '../migrate';
 
 /**
  * Schema migration tests for the SQL Server asistencia-rrhh schema
@@ -176,5 +176,80 @@ describe('sqlserver asistencia migrate()', () => {
     await migrate(pool);
     expect(calls).toHaveLength(2);
     expect(calls[0]).toBe(calls[1]);
+  });
+});
+
+/**
+ * REQ-F1-18 parameter seed. The fake pool captures every parameterized
+ * `request().input(…).query(sql)` statement so the suite pins the
+ * seed-and-never-overwrite contract sent to SQL Server.
+ */
+describe('seedParametros()', () => {
+  interface SeedStatement {
+    sql: string;
+    inputs: Record<string, unknown>;
+  }
+
+  function makeSeedPool(statements: SeedStatement[]) {
+    return {
+      request: () => {
+        const inputs: Record<string, unknown> = {};
+        const request = {
+          input: (name: string, ...rest: unknown[]) => {
+            // mssql's input() is (name, value) or (name, type, value) — the value is last.
+            inputs[name] = rest[rest.length - 1];
+            return request;
+          },
+          query: async (sql: string) => {
+            statements.push({ sql, inputs: { ...inputs } });
+            return { recordset: [], rowsAffected: [1] };
+          },
+        };
+        return request;
+      },
+    } as unknown as import('mssql').ConnectionPool;
+  }
+
+  const VALORES_ESPERADOS: Record<string, string> = {
+    TOLERANCIA_MINUTOS: '5',
+    TOLERANCIA_USOS_MES: '6',
+    MIN_COLAPSO_MARCAS: '2',
+    REFRI_MIN_MINUTOS: '15',
+    REFRI_MAX_MINUTOS: '180',
+    TARDANZA_ALARMA_RELOJ_SEG: '60',
+    WORKER_CAIDO_SEG: '300',
+  };
+
+  it('inserts exactly the 7 REQ-F1-18 parameter keys with their seed values', async () => {
+    const statements: SeedStatement[] = [];
+    await seedParametros(makeSeedPool(statements));
+    expect(statements).toHaveLength(7);
+    const porClave = new Map(statements.map((s) => [s.inputs['clave'], s.inputs['valor']]));
+    expect([...porClave.keys()].sort()).toEqual(Object.keys(VALORES_ESPERADOS).sort());
+    for (const [clave, valor] of Object.entries(VALORES_ESPERADOS)) {
+      expect(porClave.get(clave)).toBe(valor);
+    }
+  });
+
+  it('never overwrites — every INSERT is IF NOT EXISTS-guarded by clave and no UPDATE is sent', async () => {
+    const statements: SeedStatement[] = [];
+    await seedParametros(makeSeedPool(statements));
+    expect(statements.length).toBeGreaterThan(0);
+    for (const { sql } of statements) {
+      expect(sql).toMatch(/IF\s+NOT\s+EXISTS\s*\(\s*SELECT\s+1\s+FROM\s+dbo\.parametros_sistema\s+WHERE\s+clave\s*=\s*@clave\s*\)/i);
+      expect(sql).toMatch(/INSERT\s+INTO\s+dbo\.parametros_sistema\s*\(\s*clave,\s*valor\s*\)\s+VALUES\s*\(\s*@clave,\s*@valor\s*\)/i);
+      expect(sql).not.toMatch(/UPDATE\s+dbo\.parametros_sistema/i);
+      expect(sql).not.toMatch(/DELETE\s+FROM\s+dbo\.parametros_sistema/i);
+    }
+  });
+
+  it('is idempotent — re-running sends the exact same guarded statements and values', async () => {
+    const primeraVuelta: SeedStatement[] = [];
+    const segundaVuelta: SeedStatement[] = [];
+    const pool = makeSeedPool(primeraVuelta);
+    await seedParametros(pool);
+    const pool2 = makeSeedPool(segundaVuelta);
+    await seedParametros(pool2);
+    expect(segundaVuelta).toEqual(primeraVuelta);
   });
 });

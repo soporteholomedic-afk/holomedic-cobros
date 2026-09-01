@@ -177,3 +177,36 @@ END;
 export async function migrate(pool: mssql.ConnectionPool): Promise<void> {
   await pool.request().batch(SCHEMA_SQL);
 }
+
+/**
+ * System parameters seeded at startup (REQ-F1-18). F1 only READS
+ * TARDANZA_ALARMA_RELOJ_SEG (REQ-F1-03) and WORKER_CAIDO_SEG (ADR-5);
+ * the rest are planted now for the F2/F3 calculation engine.
+ *
+ * Idempotent and non-destructive by construction: one parameterized
+ * `IF NOT EXISTS … INSERT` per clave — an existing value (possibly
+ * hand-tuned by ops) is NEVER overwritten and nothing is updated or
+ * deleted. Runs after `migrate()` inside `getAsistenciaDb()`.
+ */
+const PARAMETROS_INICIALES: ReadonlyArray<{ clave: string; valor: string }> = [
+  { clave: 'TOLERANCIA_MINUTOS', valor: '5' },
+  { clave: 'TOLERANCIA_USOS_MES', valor: '6' },
+  { clave: 'MIN_COLAPSO_MARCAS', valor: '2' },
+  { clave: 'REFRI_MIN_MINUTOS', valor: '15' },
+  { clave: 'REFRI_MAX_MINUTOS', valor: '180' },
+  { clave: 'TARDANZA_ALARMA_RELOJ_SEG', valor: '60' },
+  { clave: 'WORKER_CAIDO_SEG', valor: '300' },
+];
+
+export async function seedParametros(pool: mssql.ConnectionPool): Promise<void> {
+  for (const { clave, valor } of PARAMETROS_INICIALES) {
+    await pool
+      .request()
+      .input('clave', mssql.VarChar(50), clave)
+      .input('valor', mssql.NVarChar(200), valor)
+      .query(
+        'IF NOT EXISTS (SELECT 1 FROM dbo.parametros_sistema WHERE clave = @clave) ' +
+          'INSERT INTO dbo.parametros_sistema (clave, valor) VALUES (@clave, @valor)',
+      );
+  }
+}
