@@ -27,6 +27,7 @@ const SPEC_EXCLUDED_DIR_NAMES = [
   '.atl',
   'temp',
   'tmp',
+  'tools', // ADR-10: the ZKTeco worker lives on the Linux server, never on the Windows SDK share
 ] as const;
 
 const SPEC_EXCLUDED_FILE_GLOBS = [

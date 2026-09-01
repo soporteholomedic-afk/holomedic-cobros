@@ -57,6 +57,7 @@ export const EXCLUDED_DIR_NAMES = Object.freeze([
   '.atl',
   'temp',
   'tmp',
+  'tools', // ADR-10: the ZKTeco worker lives on the Linux server, never on the Windows SDK share
 ]);
 
 /**

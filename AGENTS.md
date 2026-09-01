@@ -122,7 +122,7 @@ After every code change (especially to API routes or constants), sync the projec
 
 Both are equivalent to running `node scripts/sync-sdk.mjs` directly. Supported flag: `--dry-run` prints the full plan (every copy and every deletion) and mutates nothing.
 
-The destination is `\\172.16.10.12\INSTALADORES\HOLOMEDICSDK` (Windows) or `/mnt/instaladores/HOLOMEDICSDK` (mounted share). Excluded from the mirror: `node_modules`, `.next`, `.git`, `openspec`, `sdd`, `docs`, `.gga`, `.codegraph`, `.atl`, `temp`, `tmp`, and the file patterns `*.zip`, `tsconfig.tsbuildinfo`, `*.xlsx`, `.env`, `.env.*`, `.pr-*.md`. Protected on the destination (never deleted, even when absent from the source): `sigla-cli/` and a destination-resident `.env.local`.
+The destination is `\\172.16.10.12\INSTALADORES\HOLOMEDICSDK` (Windows) or `/mnt/instaladores/HOLOMEDICSDK` (mounted share). Excluded from the mirror: `node_modules`, `.next`, `.git`, `openspec`, `sdd`, `docs`, `.gga`, `.codegraph`, `.atl`, `temp`, `tmp`, `tools` (ADR-10: the ZKTeco worker lives on the Linux server, never on the Windows SDK share), and the file patterns `*.zip`, `tsconfig.tsbuildinfo`, `*.xlsx`, `.env`, `.env.*`, `.pr-*.md`. Protected on the destination (never deleted, even when absent from the source): `sigla-cli/` and a destination-resident `.env.local`.
 
 The sync is **always required** before running the app from the SDK on Windows. The engine refuses to run when `sigla-cli/SIGLA.PdfCli.exe` is missing from the source checkout (exit 2) — a mirror without the runtime could delete it from the share. Exit codes: 0 success, 1 runtime failure, 2 pre-flight failure.
 
