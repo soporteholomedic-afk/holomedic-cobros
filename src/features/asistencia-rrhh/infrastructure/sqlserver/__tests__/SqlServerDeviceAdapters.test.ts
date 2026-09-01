@@ -78,6 +78,29 @@ describe('SqlServerDispositivoRepository.porTokenHash (ADR-7)', () => {
   });
 });
 
+describe('SqlServerDispositivoRepository.registrarHeartbeat', () => {
+  it('stamps ultimaSincronizacion with ONE UPDATE…OUTPUT restricted to the device id', async () => {
+    const ahora = new Date('2026-09-01T08:30:00');
+    const { pool, consultas } = makeFakePool([{ ultimaSincronizacion: ahora }]);
+    const repo = new SqlServerDispositivoRepository(pool);
+    const stamped = await repo.registrarHeartbeat(7);
+    expect(consultas).toHaveLength(1);
+    const { sql, inputs } = consultas[0] ?? { sql: '', inputs: {} };
+    expect(sql).toMatch(/UPDATE\s+dbo\.dispositivos/i);
+    expect(sql).toMatch(/SET\s+ultimaSincronizacion\s*=\s*SYSDATETIME\(\)/i);
+    expect(sql).toMatch(/OUTPUT\s+inserted\.ultimaSincronizacion/i);
+    expect(sql).toMatch(/WHERE\s+id\s*=\s*@id/i);
+    expect(inputs['id']).toBe(7);
+    expect(stamped).toBe(ahora);
+  });
+
+  it('throws when the device row vanished (post-auth race) instead of silently no-oping', async () => {
+    const { pool } = makeFakePool([]);
+    const repo = new SqlServerDispositivoRepository(pool);
+    await expect(repo.registrarHeartbeat(7)).rejects.toThrow(/7/);
+  });
+});
+
 describe('SqlServerAlertaRepository.crear', () => {
   it('inserts the alert with tipo, detalle and dispositivoId', async () => {
     const { pool, consultas } = makeFakePool([]);

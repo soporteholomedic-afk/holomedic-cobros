@@ -8,8 +8,9 @@ import type { IDispositivoRepository } from '../../domain/ports';
  * Bearer-auth lookup shared by the three `/api/asistencia/*` endpoints
  * (REQ-F1-14/15): exact byte equality on the VARBINARY(32) SHA-256
  * digest (ADR-7). The hash column is never selected into the domain
- * model. registrarHeartbeat (WU7) and estados (WU13) fail loudly until
- * their work units land.
+ * model. `registrarHeartbeat` stamps the heartbeat liveness read by the
+ * dashboard (ADR-5); estados (WU13) fails loudly until its work unit
+ * lands.
  */
 
 interface DispositivoRow {
@@ -51,10 +52,26 @@ WHERE apiTokenHash = @hash`);
     return fila ? filaADispositivo(fila) : null;
   }
 
-  async registrarHeartbeat(): Promise<never> {
-    throw new Error(
-      'SqlServerDispositivoRepository.registrarHeartbeat llega con el heartbeat (WU7 del plan asistencia-rrhh-fase1)',
-    );
+  /**
+   * Stamp the device's liveness timestamp (REQ-F1-03) and return the
+   * stored server time — OUTPUT makes the stamp and the read one
+   * statement. A vanished row (post-auth race) fails loudly instead of
+   * silently no-oping.
+   */
+  async registrarHeartbeat(id: number): Promise<Date> {
+    const result = await this.pool
+      .request()
+      .input('id', mssql.Int, id)
+      .query(`
+UPDATE dbo.dispositivos
+   SET ultimaSincronizacion = SYSDATETIME()
+ OUTPUT inserted.ultimaSincronizacion
+ WHERE id = @id`);
+    const fila = (result.recordset as unknown as Array<{ ultimaSincronizacion: Date }>)[0];
+    if (!fila) {
+      throw new Error(`registrarHeartbeat: el dispositivo ${id} no existe en dbo.dispositivos`);
+    }
+    return fila.ultimaSincronizacion;
   }
 
   async estados(): Promise<never> {
