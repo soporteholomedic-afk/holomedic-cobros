@@ -59,11 +59,21 @@ export interface IEmpleadoRepository {
   completar(id: number, datos: DatosFicha): Promise<Empleado>;
 }
 
+/**
+ * Outcome of a device command confirmation. CONFIRMADO carries the
+ * (possibly pre-existing, on a no-op re-confirm) confirmadoAt so the
+ * route can echo it back to the worker.
+ */
+export type ResultadoConfirmacion =
+  | { estado: 'CONFIRMADO'; confirmadoAt: Date | null }
+  | { estado: 'NO_EXISTE' }
+  | { estado: 'AJENO' };
+
 export interface IComandoRepository {
   /** Claims the device's PENDIENTE commands, marking them ENVIADO with enviadoAt. */
   pendientesYMarcarEnviados(dispositivoId: number): Promise<Comando[]>;
   /** CONFIRMADO with confirmadoAt; NO_EXISTE (unknown id) or AJENO (other device's command). */
-  confirmar(id: number, dispositivoId: number): Promise<'CONFIRMADO' | 'NO_EXISTE' | 'AJENO'>;
+  confirmar(id: number, dispositivoId: number): Promise<ResultadoConfirmacion>;
 }
 
 export interface IAlertaRepository {

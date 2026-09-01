@@ -18,8 +18,9 @@ interface Consulta {
   inputs: Record<string, unknown>;
 }
 
-function makeFakePool(recordset: unknown[] = []) {
+function makeFakePool(recordset: unknown[] = [], opciones: { rowsAffected?: number[] } = {}) {
   const consultas: Consulta[] = [];
+  let idxAffected = 0;
   const pool = {
     request: () => {
       const inputs: Record<string, unknown> = {};
@@ -30,7 +31,9 @@ function makeFakePool(recordset: unknown[] = []) {
         },
         query: async (sql: string) => {
           consultas.push({ sql, inputs: { ...inputs } });
-          return { recordset, rowsAffected: [recordset.length] };
+          const afectadas = opciones.rowsAffected?.[idxAffected] ?? recordset.length;
+          idxAffected += 1;
+          return { recordset, rowsAffected: [afectadas] };
         },
       };
       return request;
@@ -172,5 +175,80 @@ describe('SqlServerComandoRepository.pendientesYMarcarEnviados', () => {
     const { pool } = makeFakePool([]);
     const repo = new SqlServerComandoRepository(pool);
     await expect(repo.pendientesYMarcarEnviados(7)).resolves.toEqual([]);
+  });
+});
+
+describe('SqlServerComandoRepository.confirmar', () => {
+  const ID = 21;
+  const DISP = 7;
+
+  it('confirms with ONE UPDATE…OUTPUT restricted to its own PENDIENTE/ENVIADO row', async () => {
+    const confirmadoAt = new Date('2026-09-01T08:05:00');
+    const { pool, consultas } = makeFakePool(
+      [
+        {
+          id: ID,
+          dispositivoId: DISP,
+          tipo: 'SET_TIME',
+          payload: null,
+          estado: 'CONFIRMADO',
+          createdAt: new Date('2026-09-01T08:00:00'),
+          enviadoAt: new Date('2026-09-01T08:01:00'),
+          confirmadoAt,
+        },
+      ],
+      { rowsAffected: [1] },
+    );
+    const repo = new SqlServerComandoRepository(pool);
+    const resultado = await repo.confirmar(ID, DISP);
+    expect(resultado).toEqual({ estado: 'CONFIRMADO', confirmadoAt });
+    expect(consultas).toHaveLength(1); // no fallback lookup needed
+    const { sql, inputs } = consultas[0] ?? { sql: '', inputs: {} };
+    expect(sql).toMatch(/UPDATE\s+dbo\.comandos_dispositivo/i);
+    expect(sql).toMatch(/SET\s+estado\s*=\s*'CONFIRMADO',\s*confirmadoAt\s*=\s*SYSDATETIME\(\)/i);
+    expect(sql).toMatch(/OUTPUT\s+inserted\./i);
+    expect(sql).toMatch(
+      /WHERE\s+id\s*=\s*@id\s+AND\s+dispositivoId\s*=\s*@dispositivoId\s+AND\s+estado\s+IN\s*\(\s*'PENDIENTE',\s*'ENVIADO'\s*\)/i,
+    );
+    expect(inputs['id']).toBe(ID);
+    expect(inputs['dispositivoId']).toBe(DISP);
+  });
+
+  it('AJENO: a zero-row update falls back to a lookup and reports a foreign command WITHOUT updating', async () => {
+    const { pool, consultas } = makeFakePool(
+      [{ dispositivoId: 9, estado: 'ENVIADO', confirmadoAt: null }],
+      { rowsAffected: [0, 1] },
+    );
+    const repo = new SqlServerComandoRepository(pool);
+    const resultado = await repo.confirmar(ID, DISP);
+    expect(resultado).toEqual({ estado: 'AJENO' });
+    expect(consultas).toHaveLength(2);
+    const lookup = consultas[1] ?? { sql: '', inputs: {} };
+    expect(lookup.sql).toMatch(
+      /SELECT\s+dispositivoId,\s*estado,\s*confirmadoAt\s+FROM\s+dbo\.comandos_dispositivo\s+WHERE\s+id\s*=\s*@id/i,
+    );
+    expect(lookup.inputs['id']).toBe(ID);
+    // exactly ONE UPDATE was issued (by the confirm attempt) — nothing else wrote
+    expect(consultas.filter((c) => /UPDATE/i.test(c.sql))).toHaveLength(1);
+  });
+
+  it('NO_EXISTE: a zero-row update falls back to a lookup that finds nothing', async () => {
+    const { pool, consultas } = makeFakePool([], { rowsAffected: [0, 0] });
+    const repo = new SqlServerComandoRepository(pool);
+    const resultado = await repo.confirmar(ID, DISP);
+    expect(resultado).toEqual({ estado: 'NO_EXISTE' });
+    expect(consultas).toHaveLength(2);
+  });
+
+  it('no-op re-confirm: a same-device terminal row returns the ORIGINAL confirmadoAt and never writes again', async () => {
+    const original = new Date('2026-09-01T08:01:00');
+    const { pool, consultas } = makeFakePool(
+      [{ dispositivoId: DISP, estado: 'CONFIRMADO', confirmadoAt: original }],
+      { rowsAffected: [0, 1] },
+    );
+    const repo = new SqlServerComandoRepository(pool);
+    const resultado = await repo.confirmar(ID, DISP);
+    expect(resultado).toEqual({ estado: 'CONFIRMADO', confirmadoAt: original });
+    expect(consultas.filter((c) => /UPDATE/i.test(c.sql))).toHaveLength(1);
   });
 });
