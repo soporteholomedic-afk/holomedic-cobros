@@ -1,5 +1,4 @@
 import { describe, expect, it, vi } from 'vitest';
-import { createHash } from 'crypto';
 
 /**
  * Device authentication use case (REQ-F1-14/15): the `Authorization:

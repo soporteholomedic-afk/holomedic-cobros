@@ -10,6 +10,10 @@ import type {
 import { getHolomedicPool } from '@/lib/db';
 
 import { migrate, seedParametros } from './sqlserver/migrate';
+import { SqlServerAlertaRepository } from './sqlserver/SqlServerAlertaRepository';
+import { SqlServerComandoRepository } from './sqlserver/SqlServerComandoRepository';
+import { SqlServerDispositivoRepository } from './sqlserver/SqlServerDispositivoRepository';
+import { SqlServerMarcacionRepository } from './sqlserver/SqlServerMarcacionRepository';
 
 /**
  * The asistencia-rrhh feature container (ADR-3): one factory owning ONE
@@ -33,12 +37,12 @@ export interface AsistenciaDb {
 }
 
 /**
- * Skeleton adapter (this batch ships only the schema + seed — T-F1-02/03).
+ * Skeleton adapter for the ports whose SQL Server class has not landed
+ * yet (empleados → WU7/WU12; parametros → WU12/13; auditoria → WU12).
  * Every method access fails loudly with the port name, so nothing can
- * silently no-op before the adapters land in their work units
- * (dispositivos/marcaciones/comandos/alertas: WU6-WU8; empleados:
- * WU7/WU12; parametros/auditoria: WU12/WU13). Swapping a slot for its
- * real `SqlServer*Repository` class is a one-line change per port.
+ * silently no-op before the adapter arrives. The ingestion-side ports
+ * (dispositivos/marcaciones/comandos/alertas) are real adapters since
+ * WU6.
  */
 function adaptadorEsqueleto<T extends object>(puerto: string): T {
   return new Proxy(
@@ -78,11 +82,11 @@ export function getAsistenciaDb(): Promise<AsistenciaDb> {
     await migrate(pool);
     await seedParametros(pool);
     return {
-      dispositivos: adaptadorEsqueleto('dispositivos'),
-      marcaciones: adaptadorEsqueleto('marcaciones'),
+      dispositivos: new SqlServerDispositivoRepository(pool),
+      marcaciones: new SqlServerMarcacionRepository(pool),
       empleados: adaptadorEsqueleto('empleados'),
-      comandos: adaptadorEsqueleto('comandos'),
-      alertas: adaptadorEsqueleto('alertas'),
+      comandos: new SqlServerComandoRepository(pool),
+      alertas: new SqlServerAlertaRepository(pool),
       parametros: adaptadorEsqueleto('parametros'),
       auditoria: adaptadorEsqueleto('auditoria'),
     };

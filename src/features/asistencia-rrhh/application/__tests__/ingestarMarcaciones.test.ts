@@ -51,7 +51,7 @@ class FakeMarcaciones implements IMarcacionRepository {
     return { insertados, userIdsDesconocidos: [...desconocidos].sort() };
   }
 
-  listarDelDia = vi.fn(async (_fecha: string): Promise<MarcacionRaw[]> => []);
+  listarDelDia = vi.fn(async (): Promise<MarcacionRaw[]> => []);
   buscar = vi.fn(async (): Promise<MarcacionRaw[]> => []);
   reasignarEmpleado = vi.fn(async (): Promise<number> => 0);
 }
