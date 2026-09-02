@@ -38,7 +38,13 @@ CREATE INDEX IF NOT EXISTS idx_marcaciones_estado_id ON marcaciones (estado, id)
 
 
 class BufferAsistencia:
-    """SQLite-backed append-only queue shared by the worker threads."""
+    """SQLite-backed append-only queue shared by the worker threads.
+
+    Items crossing the dict edges carry the marcaciones WIRE shape
+    (REQ-F1-01: user_id/fecha_hora/punch/tipo_verificacion) so captura
+    can enqueue ``mapear_marca`` output directly and the sender can POST
+    ``tomar_pendientes`` output verbatim.
+    """
 
     def __init__(self, ruta_db: str):
         self._lock = threading.Lock()
@@ -49,7 +55,14 @@ class BufferAsistencia:
     def agregar_marcaciones(self, items: list[dict]) -> int:
         if not items:
             return 0
-        filas = [(i["user_id"], i["fecha_hora"], int(i["punch"]), i["tipo"]) for i in items]
+        # Wire-native queue edges: items are REQ-F1-01 wire dicts
+        # {user_id, fecha_hora, punch, tipo_verificacion} — exactly what
+        # zk_client's border projections emit and what the sender POSTs.
+        # The SQL column keeps its short internal name ('tipo').
+        filas = [
+            (i["user_id"], i["fecha_hora"], int(i["punch"]), i["tipo_verificacion"])
+            for i in items
+        ]
         with self._lock:
             self._conn.executemany(
                 "INSERT INTO marcaciones (user_id, fecha_hora, punch, tipo)"
@@ -72,7 +85,7 @@ class BufferAsistencia:
                 "user_id": f[1],
                 "fecha_hora": f[2],
                 "punch": f[3],
-                "tipo": f[4],
+                "tipo_verificacion": f[4],
             }
             for f in filas
         ]

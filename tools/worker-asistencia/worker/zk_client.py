@@ -27,8 +27,13 @@ def mapear_verificacion(codigo: int) -> str:
 
 
 def mapear_usuario(usuario) -> tuple[str, str]:
-    """Project a pyzk user record to the wire pair (user_id, nombre)."""
-    return (usuario.user_id, usuario.name)
+    """Project a pyzk user record to the wire pair (user_id, nombre).
+
+    pyzk hands ``user_id`` over as a NUMBER on several device surfaces
+    (K20 Pro realtime packets among them) — the wire ALWAYS carries it
+    as a string.
+    """
+    return (str(usuario.user_id), usuario.name)
 
 
 def mapear_marca(marca) -> dict:
@@ -38,7 +43,10 @@ def mapear_marca(marca) -> dict:
     local time (America/Lima — ADR-9); no timezone conversion happens.
     """
     return {
-        "user_id": marca.user_id,
+        # K20 Pro realtime events hand user_id over as a NUMBER — the
+        # wire payload NEVER carries a non-string user_id (server
+        # rejects it: USER_ID_MAX/typeof check in the ingestion route).
+        "user_id": str(marca.user_id),
         "fecha_hora": marca.timestamp.strftime("%Y-%m-%dT%H:%M:%S"),
         "punch": int(marca.punch),
         "tipo_verificacion": mapear_verificacion(int(marca.verify)),
