@@ -13,7 +13,7 @@ import { interpolateSpitch } from '../helpers/interpolateSpitch';
 import { stripSignatureHtml } from '../helpers/signatureData';
 import { buildAttachmentRenameItems, refKeyOf } from '../helpers/buildAttachmentRenameItems';
 import { deliveryNameIssueText } from '../helpers/deliveryNameIssueText';
-import { findDeliveryNameCollisions, type DeliveryNameIssue } from '../../domain/attachments/validateDeliveryName';
+import { validateDeliveryName, findDeliveryNameCollisions, type DeliveryNameIssue } from '../../domain/attachments/validateDeliveryName';
 import { useFirmaCorreo } from '@/features/firma-correo/presentation/hooks/useFirmaCorreo';
 import { replaceFirmaFallback } from '@/features/firma-correo/presentation/helpers/replaceFirmaFallback';
 import { showSendLoading, showSendSuccess, showSendError } from '../helpers/sendToasts';
@@ -123,6 +123,14 @@ export function EmailEditor({
 
   const [showNoFilesWarning, setShowNoFilesWarning] = useState(false);
   const [localFiles, setLocalFiles] = useState<File[]>([]);
+  /**
+   * WU-6 (REQ-02) — raw local rename input per row index. Mirrors the
+   * LAN `nameOverrides` flow: the operator's input is never trusted —
+   * it is validated at render through the shared validator and only
+   * the validated value reaches the send payload (`effectiveLocalFiles`).
+   * Index-keyed; `handleLocalRemove` re-keys the map in lockstep.
+   */
+  const [localNameOverrides, setLocalNameOverrides] = useState<Record<number, string>>({});
   const [isEditingBody, setIsEditingBody] = useState(false);
   const editorRef = useRef<EmailBodyEditorHandle>(null);
   const hasSent = useRef(false);
@@ -237,6 +245,28 @@ export function EmailEditor({
     });
   }, [fileRefs, nameOverrides, renameItems]);
 
+  // ================================================================
+  // WU-6 (REQ-02) — local file rename. Validated overrides materialize
+  // as a NEW File via `new File([f], name, f)` (design Presentation):
+  // content, type and lastModified are preserved — the bytes are never
+  // touched. Locals are sanitize-only (D5: `forcePdf: false`, extension
+  // rules don't apply). An invalid override keeps the original File and
+  // surfaces through the SAME blocking error as the LAN rows; an empty
+  // one falls back to the file's original name (REQ-01 semantics).
+  // Feeds both the drop-zone display and the send payload, so the
+  // operator always sees the name that will actually travel.
+  // ================================================================
+  const effectiveLocalFiles = useMemo(() => {
+    if (Object.keys(localNameOverrides).length === 0) return localFiles;
+    return localFiles.map((f, i) => {
+      const raw = localNameOverrides[i];
+      if (raw === undefined) return f;
+      const check = validateDeliveryName(raw, { forcePdf: false });
+      if (!check.ok || check.value === '' || check.value === f.name) return f;
+      return new File([f], check.value, f);
+    });
+  }, [localFiles, localNameOverrides]);
+
   // Blocking pre-send error (REQ-03): an invalid override (names the
   // STORED disk file) or a duplicate involving an override — D6, the
   // server would 400 anyway (D7). Derived at render, never stored.
@@ -248,9 +278,28 @@ export function EmailEditor({
     if (invalid) {
       return `El nombre para "${invalid.storedName}" no es válido: ${deliveryNameIssueText(invalid.issue)}. Corrija o limpie el nombre antes de enviar.`;
     }
-    const collisions = findDeliveryNameCollisions(
-      renameItems.map((item) => ({ value: item.effectiveName, overridden: item.overridden })),
-    );
+    // WU-6 (REQ-02/REQ-03) — local overrides join the same net with
+    // sanitize-only validation (D5) and the same operator copy.
+    for (const [indexKey, raw] of Object.entries(localNameOverrides)) {
+      const check = validateDeliveryName(raw, { forcePdf: false });
+      if (!check.ok) {
+        const storedName = localFiles[Number(indexKey)]?.name ?? `archivo ${indexKey}`;
+        return `El nombre para "${storedName}" no es válido: ${deliveryNameIssueText(check.issue)}. Corrija o limpie el nombre antes de enviar.`;
+      }
+    }
+    const collisions = findDeliveryNameCollisions([
+      ...renameItems.map((item) => ({ value: item.effectiveName, overridden: item.overridden })),
+      // Local rows: the original name when untouched or cleared (never
+      // an override), the validated effective name when overridden.
+      ...localFiles.map((f, i) => {
+        const raw = localNameOverrides[i];
+        if (raw === undefined) return { value: f.name, overridden: false };
+        const check = validateDeliveryName(raw, { forcePdf: false });
+        return check.ok && check.value !== ''
+          ? { value: check.value, overridden: true }
+          : { value: f.name, overridden: false };
+      }),
+    ]);
     // `findDeliveryNameCollisions` only ever yields DUPLICATE issues;
     // the union narrowing keeps the compiler honest about that contract.
     const duplicateName = collisions.find(
@@ -261,7 +310,7 @@ export function EmailEditor({
       return `Nombres de adjunto duplicados: "${duplicateName}" está asignado a más de un archivo. Los nombres personalizados deben ser únicos.`;
     }
     return null;
-  }, [renameItems]);
+  }, [renameItems, localFiles, localNameOverrides]);
 
   // Auto-auto duplicates (D6): allowed, but the operator deserves an
   // amber heads-up before two attachments leave with the same name.
@@ -289,7 +338,10 @@ export function EmailEditor({
     // WU-5 — refs with the validated overrides merged in by refKey (D1);
     // identical to the `fileRefs` prop until the operator renames.
     fileRefs: effectiveFileRefs,
-    localFiles,
+    // WU-6 — local files with validated renames applied (`new File`
+    // semantics); identical to the `localFiles` state until the
+    // operator renames a row.
+    localFiles: effectiveLocalFiles,
     nombreCompleto,
     destino,
     companyId,
@@ -367,6 +419,28 @@ export function EmailEditor({
 
   const handleLocalRemove = useCallback((index: number) => {
     setLocalFiles((prev) => prev.filter((_, i) => i !== index));
+    // WU-6 — overrides are index-keyed: removing a file shifts every
+    // later row one slot left, so the map is re-keyed in lockstep (no
+    // off-by-one bleed of a rename onto the wrong file).
+    setLocalNameOverrides((prev) => {
+      const next: Record<number, string> = {};
+      for (const [key, value] of Object.entries(prev)) {
+        const i = Number(key);
+        if (i === index) continue;
+        next[i > index ? i - 1 : i] = value;
+      }
+      return next;
+    });
+  }, []);
+
+  /**
+   * WU-6 (REQ-02) — commit the RAW operator input for a local row.
+   * Validation happens at render (invalid values block the send through
+   * the shared error box; `''` clears back to the original name), so
+   * this handler stays a dumb state write — same shape as `handleRename`.
+   */
+  const handleLocalRename = useCallback((index: number, next: string) => {
+    setLocalNameOverrides((prev) => ({ ...prev, [index]: next }));
   }, []);
 
   const handleRequestSend = useCallback(() => {
@@ -480,9 +554,10 @@ export function EmailEditor({
             }
             dropZoneSlot={
               <LocalFileDropZone
-                files={localFiles}
+                files={effectiveLocalFiles}
                 onAdd={handleLocalAdd}
                 onRemove={handleLocalRemove}
+                onRename={handleLocalRename}
               />
             }
           />

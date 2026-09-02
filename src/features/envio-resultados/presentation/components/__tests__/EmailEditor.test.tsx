@@ -84,12 +84,41 @@ vi.mock('../SpitchSelector', () => ({
 // (see the test body) and waits for the deferred onSelect to land.
 
 
+// WU-6 — hoisted store with the local rename value the seam "types".
+// Tests mutate `mockLocalRenameValue.value` before clicking a seam
+// button to simulate different operator inputs (same pattern as
+// `mockRenameValue` for the LAN rename seam below).
+const mockLocalRenameValue = vi.hoisted(() => ({ value: 'scan_cliente' }));
+
 // Mock LocalFileDropZone
 vi.mock('../LocalFileDropZone', () => ({
   LocalFileDropZone: vi.fn().mockImplementation(
-    ({ files, onAdd }: { files: File[]; onAdd?: (files: File[]) => void }) => {
+    ({ files, onAdd, onRemove, onRename }: {
+      files: File[];
+      onAdd?: (files: File[]) => void;
+      onRemove?: (index: number) => void;
+      onRename?: (index: number, next: string) => void;
+    }) => {
       // PR4 — the mock exposes `onAdd` through a test button so the
       // reenvío suite can simulate re-attaching a local file.
+      // WU-6 — per-row rename/remove seams: `local-file-rename-mock-<i>`
+      // calls `onRename(i, mockLocalRenameValue.value)` (wired only when
+      // EmailEditor opts in), `local-file-remove-mock-<i>` calls
+      // `onRemove(i)`.
+      const rows = files.map((file, i) => React.createElement(
+        'div',
+        { key: `${file.name}-${i}` },
+        React.createElement('button', {
+          type: 'button',
+          'data-testid': `local-file-rename-mock-${i}`,
+          onClick: () => onRename?.(i, mockLocalRenameValue.value),
+        }, `rename-local-${i}`),
+        React.createElement('button', {
+          type: 'button',
+          'data-testid': `local-file-remove-mock-${i}`,
+          onClick: () => onRemove?.(i),
+        }, `remove-local-${i}`),
+      ));
       return React.createElement('div', {
         'data-testid': 'local-file-drop-zone',
         'data-file-count': files.length,
@@ -97,7 +126,7 @@ vi.mock('../LocalFileDropZone', () => ({
         type: 'button',
         'data-testid': 'local-file-add-mock',
         onClick: () => onAdd?.([new File(['bytes'], 'reenviado.pdf', { type: 'application/pdf' })]),
-      }, `${files.length} archivos locales`));
+      }, `${files.length} archivos locales`), ...rows);
     },
   ),
 }));
@@ -1372,6 +1401,164 @@ describe('EmailEditor', () => {
       const args = lastHookArgs();
       expect('deliveryName' in args.fileRefs[0]!).toBe(false);
       expect(args.fileRefs[1]!.deliveryName).toBe('Solo Segundo.pdf');
+    });
+  });
+
+  // ================================================================
+  // WU-6 — Local attachment rename (REQ-02).
+  //
+  // The rename applies `new File([f], next, f)` (content/type/size
+  // preserved) through the SAME override/validation flow as the LAN
+  // rows: raw input in state, validated at render via the shared
+  // validator with `forcePdf: false` (D5 — locals are sanitize-only,
+  // no `.pdf` forcing), invalid values block send through the same
+  // red box naming the stored file.
+  // ================================================================
+  describe('WU-6 — local file rename (REQ-02)', () => {
+    const localOnlyProps = { ...defaultProps, selectedPatients: {}, patients: [] };
+
+    // LAN fixture for the collision test: one ready file whose auto
+    // delivery name comes from the REAL domain fn (byte-equal oracle,
+    // same approach as WU-5).
+    const lanPatients: Patient[] = [
+      {
+        id: '12345678',
+        companyId: 'comp-001',
+        name: 'María Elena García López',
+        dni: '12345678',
+        files: [
+          { id: 'LEGAJOS::123CERT.pdf', patientId: '12345678', name: '123CERT.pdf', type: 'application/pdf', size: 100 },
+        ],
+      },
+    ];
+    const lanAutoName = renameReadyFile({
+      rawName: '123CERT.pdf',
+      nombreCompleto: 'María Elena García López',
+      destino: 'Proyecto Uno',
+    });
+
+    const lastLocalFiles = (): File[] => {
+      const last = mockUseSendResults.mock.calls[mockUseSendResults.mock.calls.length - 1];
+      return ((last?.[0] ?? {}) as { localFiles: File[] }).localFiles;
+    };
+
+    const renderLocalEditor = () => {
+      mockFetch.mockResolvedValue({ ok: true, json: () => Promise.resolve({ success: true }) });
+      return render(<EmailEditor {...localOnlyProps} />);
+    };
+
+    const addLocalFile = async (count: number) => {
+      for (let i = 0; i < count; i += 1) {
+        fireEvent.click(screen.getByTestId('local-file-add-mock'));
+      }
+      await waitFor(() => {
+        expect(screen.getByTestId('local-file-drop-zone')).toHaveAttribute('data-file-count', String(count));
+      });
+    };
+
+    it('renaming a local file creates a new File preserving content, type and size (new File([f], next, f))', async () => {
+      renderLocalEditor();
+      await addLocalFile(1);
+
+      mockLocalRenameValue.value = 'scan_cliente';
+      fireEvent.click(screen.getByTestId('local-file-rename-mock-0'));
+
+      const files = lastLocalFiles();
+      expect(files).toHaveLength(1);
+      expect(files[0]!.name).toBe('scan_cliente');
+      expect(files[0]!.type).toBe('application/pdf');
+      expect(files[0]!.size).toBe(5);
+      const content = await files[0]!.text();
+      expect(content).toBe('bytes');
+    });
+
+    it('locals are sanitize-only — an extension-less name applies verbatim with NO .pdf forcing (D5)', async () => {
+      renderLocalEditor();
+      await addLocalFile(1);
+
+      mockLocalRenameValue.value = 'Informe';
+      fireEvent.click(screen.getByTestId('local-file-rename-mock-0'));
+
+      expect(lastLocalFiles()[0]!.name).toBe('Informe');
+    });
+
+    it('rejects traversal overrides: file keeps its name and send is blocked naming the stored file (REQ-03)', async () => {
+      const mockSend = vi.fn();
+      mockUseSendResults.mockReturnValue({ send: mockSend, isSending: false, result: null, error: null });
+      renderLocalEditor();
+      await addLocalFile(1);
+
+      mockLocalRenameValue.value = '../../evil.pdf';
+      fireEvent.click(screen.getByTestId('local-file-rename-mock-0'));
+
+      // The File is NOT renamed (invalid raw input never applies)...
+      expect(lastLocalFiles()[0]!.name).toBe('reenviado.pdf');
+      // ...and the shared blocking error names the stored file.
+      expect(screen.getByTestId('delivery-name-error').textContent).toContain('reenviado.pdf');
+
+      fireEvent.click(screen.getByText('Enviar'));
+      expect(mockSend).not.toHaveBeenCalled();
+    });
+
+    it('clearing the override reverts the file to its original name', async () => {
+      renderLocalEditor();
+      await addLocalFile(1);
+
+      mockLocalRenameValue.value = 'informe';
+      fireEvent.click(screen.getByTestId('local-file-rename-mock-0'));
+      expect(lastLocalFiles()[0]!.name).toBe('informe');
+
+      mockLocalRenameValue.value = '';
+      fireEvent.click(screen.getByTestId('local-file-rename-mock-0'));
+      expect(lastLocalFiles()[0]!.name).toBe('reenviado.pdf');
+      expect(screen.queryByTestId('delivery-name-error')).not.toBeInTheDocument();
+    });
+
+    it('removing an earlier local file keeps overrides aligned to the surviving rows', async () => {
+      renderLocalEditor();
+      await addLocalFile(2);
+
+      // Rename the SECOND file, then remove the first.
+      mockLocalRenameValue.value = 'segundo';
+      fireEvent.click(screen.getByTestId('local-file-rename-mock-1'));
+      expect(lastLocalFiles()[1]!.name).toBe('segundo');
+
+      fireEvent.click(screen.getByTestId('local-file-remove-mock-0'));
+
+      const files = lastLocalFiles();
+      expect(files).toHaveLength(1);
+      // The surviving file kept ITS rename (no off-by-one bleed).
+      expect(files[0]!.name).toBe('segundo');
+    });
+
+    it('blocks send when a local override collides with a LAN effective delivery name (D6)', async () => {
+      const mockSend = vi.fn();
+      mockUseSendResults.mockReturnValue({ send: mockSend, isSending: false, result: null, error: null });
+      mockFetch.mockResolvedValue({ ok: true, json: () => Promise.resolve({ success: true }) });
+
+      render(
+        <EmailEditor
+          {...defaultProps}
+          selectedPatients={{
+            '12345678': { patientName: 'María Elena García López', files: ['LEGAJOS::123CERT.pdf'] },
+          }}
+          patients={lanPatients}
+          fileRefs={[{ ruc: '20123456789', dni: '12345678', idAten: 'AT-001', path: 'LEGAJOS', name: '123CERT.pdf' }]}
+          nombreCompleto="María Elena García López"
+          destino="Proyecto Uno"
+        />,
+      );
+      await addLocalFile(1);
+
+      mockLocalRenameValue.value = lanAutoName;
+      fireEvent.click(screen.getByTestId('local-file-rename-mock-0'));
+
+      const errorBox = screen.getByTestId('delivery-name-error');
+      expect(errorBox.textContent).toContain('duplicados');
+      expect(errorBox.textContent).toContain(lanAutoName);
+
+      fireEvent.click(screen.getByText('Enviar'));
+      expect(mockSend).not.toHaveBeenCalled();
     });
   });
 });

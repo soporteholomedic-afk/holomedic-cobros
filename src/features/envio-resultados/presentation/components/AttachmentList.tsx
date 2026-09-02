@@ -1,9 +1,9 @@
 'use client';
 
-import { useRef, useState } from 'react';
 import type { Patient } from '../../domain/entities';
 import type { AttachmentRenameItem } from '../helpers/buildAttachmentRenameItems';
 import { deliveryNameIssueText } from '../helpers/deliveryNameIssueText';
+import { useInlineRename } from '@/components/email/useInlineRename';
 
 /**
  * View projection of a rename row rendered by this list (WU-5, REQ-01).
@@ -73,6 +73,10 @@ function chipClassName(item: AttachmentRenameItemView): string {
  * inline input (placeholder = auto name; Enter/blur commit, Escape
  * cancels). Rows with `refKey: null` never render as chips: the
  * composer passes them through the legacy branch instead.
+ *
+ * WU-6 — the Enter/Escape/blur state machine now lives in the shared
+ * `useInlineRename` hook (same source as the local-file row in
+ * `LocalFileDropZone`), so both affordances can never drift.
  */
 function RenameAttachmentChip({
   item,
@@ -81,46 +85,22 @@ function RenameAttachmentChip({
   item: AttachmentRenameItemView;
   onRename: (refKey: string, next: string) => void;
 }) {
-  const [editing, setEditing] = useState(false);
-  const [draft, setDraft] = useState('');
-  // Guards double-commit: Enter commits and unmounts-blurs; blur then
-  // fires but must not commit again. Escape marks cancelled so the
-  // trailing blur is ignored.
-  const activeRef = useRef(false);
+  const rename = useInlineRename((next) => onRename(item.refKey as string, next));
 
-  const openEditor = () => {
-    setDraft(item.overridden ? item.effectiveName : '');
-    activeRef.current = true;
-    setEditing(true);
-  };
-
-  const commit = () => {
-    activeRef.current = false;
-    onRename(item.refKey as string, draft);
-    setEditing(false);
-  };
-
-  const cancel = () => {
-    activeRef.current = false;
-    setEditing(false);
-  };
-
-  if (editing) {
+  if (rename.editing) {
     return (
       <input
         type="text"
-        value={draft}
-        onChange={(e) => setDraft(e.target.value)}
+        value={rename.draft}
+        onChange={(e) => rename.setDraft(e.target.value)}
         placeholder={item.autoName}
         aria-label={`Renombrar ${item.storedName}`}
         autoFocus
         onKeyDown={(e) => {
-          if (e.key === 'Enter') commit();
-          else if (e.key === 'Escape') cancel();
+          if (e.key === 'Enter') rename.commit();
+          else if (e.key === 'Escape') rename.cancel();
         }}
-        onBlur={() => {
-          if (activeRef.current) commit();
-        }}
+        onBlur={rename.commitIfActive}
         className="w-56 rounded-full border border-sky-300 px-2 py-0.5 text-xs focus:border-sky-500 focus:outline-none"
       />
     );
@@ -143,7 +123,7 @@ function RenameAttachmentChip({
       <button
         type="button"
         aria-label={`Renombrar ${item.storedName}`}
-        onClick={openEditor}
+        onClick={() => rename.open(item.overridden ? item.effectiveName : '')}
         className="cursor-pointer text-slate-400 hover:text-sky-600"
       >
         <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
