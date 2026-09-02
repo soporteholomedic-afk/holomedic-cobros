@@ -10,6 +10,11 @@ export const PERMISOS = [
   'informes',
   'pacientes',
   'jjc',
+  // asistencia-rrhh (Fase 1): RRHH dashboard/fichas access. Only
+  // `asistencia` carries protected routes in F1; `asistencia_admin`
+  // is reserved for F2+ administration surfaces.
+  'asistencia',
+  'asistencia_admin',
 ] as const;
 
 export type Permiso = (typeof PERMISOS)[number];
