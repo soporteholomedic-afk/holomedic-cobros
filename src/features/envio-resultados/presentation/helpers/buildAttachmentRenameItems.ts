@@ -111,8 +111,13 @@ function forcePdfFor(ref: SelectedFileRef): boolean {
  * real share filename that sanitisation is the identity — and names it
  * would change are already unreachable on the Windows share — so the
  * preview uses `ref.name` directly to stay client-importable.
+ *
+ * WU-7: exported as THE shared auto oracle — `EmailEditor`'s seed-once
+ * reenvío logic compares a stamped `ref.deliveryName` against this to
+ * decide pre-fill (REQ-05), so the matcher and the seed can never
+ * disagree about what "the auto name" is.
  */
-function autoDeliveryName(
+export function autoDeliveryName(
   ref: SelectedFileRef,
   fallbackNombreCompleto: string,
   fallbackDestino: string,

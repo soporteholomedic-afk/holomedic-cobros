@@ -1561,4 +1561,166 @@ describe('EmailEditor', () => {
       expect(mockSend).not.toHaveBeenCalled();
     });
   });
+
+  // ================================================================
+  // WU-7 — Reenvío pre-fill (D8 / REQ-05).
+  //
+  // Fixtures simulate buildReenvioViewData OUTPUT: `fileRefs` arrive
+  // with the persisted snapshot `deliveryName` stamped on (D8 — the
+  // helper stamps verbatim). The editor's seed-once logic derives the
+  // initial `nameOverrides` from those stamps at first render (no new
+  // prop, no effects):
+  //   - stamp ≠ recomputed auto name → seeded as a LIVE override
+  //     (editable pre-fill, REQ-05 scenario 1);
+  //   - stamp == auto name → seeded as '' (a live '' outranks the
+  //     stamp in the matcher per the WU-4 contract) so the row renders
+  //     as no-override and the redundant field is dropped from the
+  //     payload — the server recomputes the same name (byte-identical
+  //     resend, REQ-05 scenario 2 + D8).
+  //
+  // The auto-name oracle is the REAL domain fn (byte-equal, same
+  // approach as WU-5/WU-6).
+  // ================================================================
+  describe('WU-7 — reenvío pre-fill (D8/REQ-05)', () => {
+    const prefillPatients: Patient[] = [
+      {
+        id: '12345678',
+        companyId: 'comp-001',
+        name: 'María Elena García López',
+        dni: '12345678',
+        files: [
+          { id: 'LEGAJOS::123CERT.pdf', patientId: '12345678', name: '123CERT.pdf', type: 'application/pdf', size: 100 },
+          { id: 'LEGAJOS::456CERT.pdf', patientId: '12345678', name: '456CERT.pdf', type: 'application/pdf', size: 100 },
+        ],
+      },
+    ];
+
+    const auto123 = renameReadyFile({
+      rawName: '123CERT.pdf',
+      nombreCompleto: 'María Elena García López',
+      destino: 'Proyecto Uno',
+    });
+    const auto456 = renameReadyFile({
+      rawName: '456CERT.pdf',
+      nombreCompleto: 'María Elena García López',
+      destino: 'Proyecto Uno',
+    });
+
+    const prefillRef = (name: string, deliveryName?: string): SelectedFileRef => ({
+      ruc: '20123456789',
+      dni: '12345678',
+      idAten: 'AT-001',
+      path: 'LEGAJOS',
+      name,
+      ...(deliveryName !== undefined ? { deliveryName } : {}),
+    });
+
+    const prefillProps = (fileRefs: SelectedFileRef[]) => ({
+      ...defaultProps,
+      selectedPatients: {
+        '12345678': {
+          patientName: 'María Elena García López',
+          files: ['LEGAJOS::123CERT.pdf', 'LEGAJOS::456CERT.pdf'],
+        },
+      },
+      patients: prefillPatients,
+      fileRefs,
+      nombreCompleto: 'María Elena García López',
+      destino: 'Proyecto Uno',
+    });
+
+    const listMock = vi.mocked(AttachmentList);
+
+    const lastPrefillListProps = (): { renameItems?: Array<Record<string, unknown>> } => {
+      const last = listMock.mock.calls[listMock.mock.calls.length - 1];
+      return (last?.[0] ?? {}) as unknown as { renameItems?: Array<Record<string, unknown>> };
+    };
+
+    const lastPrefillHookArgs = (): {
+      fileRefs: Array<SelectedFileRef & { deliveryName?: string }>;
+    } => {
+      const last = mockUseSendResults.mock.calls[mockUseSendResults.mock.calls.length - 1];
+      return (last?.[0] ?? {}) as { fileRefs: Array<SelectedFileRef & { deliveryName?: string }> };
+    };
+
+    const renderPrefill = (props: ReturnType<typeof prefillProps>) => {
+      const mockSend = vi.fn();
+      mockUseSendResults.mockReturnValue({
+        send: mockSend,
+        isSending: false,
+        result: null,
+        error: null,
+      });
+      mockFetch.mockResolvedValue({ ok: true, json: () => Promise.resolve({ success: true }) });
+      render(<EmailEditor {...props} />);
+      return mockSend;
+    };
+
+    it('pre-fills a prior override as a live editable override (REQ-05 scenario 1)', () => {
+      renderPrefill(prefillProps([prefillRef('123CERT.pdf', 'Informe Juan.pdf')]));
+
+      // The stamped override renders as the effective name (accepted
+      // cosmetic edge documented in WU-5: the secondary auto text can
+      // echo the stamped value until the row is cleared).
+      const item = lastPrefillListProps().renameItems![0] as Record<string, unknown>;
+      expect(item.overridden).toBe(true);
+      expect(item.effectiveName).toBe('Informe Juan.pdf');
+
+      // The pre-fill is EDITABLE: committing a new name updates the
+      // effective name (forcePdf appends .pdf, D5) and the send payload.
+      mockRenameValue.value = 'Nombre Editado';
+      fireEvent.click(screen.getByTestId('attachment-rename-mock-0'));
+
+      const edited = lastPrefillListProps().renameItems![0] as Record<string, unknown>;
+      expect(edited.effectiveName).toBe('Nombre Editado.pdf');
+      expect(lastPrefillHookArgs().fileRefs[0]!.deliveryName).toBe('Nombre Editado.pdf');
+    });
+
+    it('suppresses an equal-auto stamp: no pre-fill, auto semantics, no redundant field sent (REQ-05 scenario 2)', () => {
+      renderPrefill(prefillProps([prefillRef('123CERT.pdf', auto123)]));
+
+      // The editor seed turns the equal-auto stamp into a live ''
+      // (clear) — the row renders as NO override...
+      const item = lastPrefillListProps().renameItems![0] as Record<string, unknown>;
+      expect(item.overridden).toBe(false);
+      expect(item.effectiveName).toBe(auto123);
+
+      // ...and the redundant deliveryName is dropped: the server
+      // recomputes the same auto name on an untouched resend (D8).
+      expect(lastPrefillHookArgs().fileRefs[0]).not.toHaveProperty('deliveryName');
+    });
+
+    it('resends byte-identically when untouched: the prior override travels, equal-auto rows recompute server-side (D8)', () => {
+      const mockSend = renderPrefill(
+        prefillProps([
+          prefillRef('123CERT.pdf', 'Informe Juan.pdf'),
+          prefillRef('456CERT.pdf', auto456),
+        ]),
+      );
+
+      fireEvent.click(screen.getByText('Enviar'));
+
+      expect(mockSend).toHaveBeenCalledTimes(1);
+      const args = lastPrefillHookArgs();
+      // The genuine override travels verbatim (same effective name the
+      // original send dispatched)...
+      expect(args.fileRefs[0]!.deliveryName).toBe('Informe Juan.pdf');
+      // ...while the equal-auto stamp is suppressed — the server
+      // recomputes auto456, so the attachment name is identical.
+      expect(args.fileRefs[1]).not.toHaveProperty('deliveryName');
+    });
+
+    it('clearing a pre-filled override reverts to the auto name and sends NO deliveryName (WU-4 contract)', () => {
+      renderPrefill(prefillProps([prefillRef('123CERT.pdf', 'Informe Juan.pdf')]));
+
+      // The operator clears the pre-filled field — REQ-05 "clearable".
+      mockRenameValue.value = '';
+      fireEvent.click(screen.getByTestId('attachment-rename-mock-0'));
+
+      const item = lastPrefillListProps().renameItems![0] as Record<string, unknown>;
+      expect(item.overridden).toBe(false);
+      expect(item.effectiveName).toBe(auto123);
+      expect(lastPrefillHookArgs().fileRefs[0]).not.toHaveProperty('deliveryName');
+    });
+  });
 });

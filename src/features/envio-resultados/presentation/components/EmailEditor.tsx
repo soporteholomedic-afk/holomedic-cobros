@@ -11,7 +11,7 @@ import { EmailBodyField } from '@/components/email/EmailBodyField';
 import { useSendResults } from '../hooks/useSendResults';
 import { interpolateSpitch } from '../helpers/interpolateSpitch';
 import { stripSignatureHtml } from '../helpers/signatureData';
-import { buildAttachmentRenameItems, refKeyOf } from '../helpers/buildAttachmentRenameItems';
+import { buildAttachmentRenameItems, refKeyOf, autoDeliveryName } from '../helpers/buildAttachmentRenameItems';
 import { deliveryNameIssueText } from '../helpers/deliveryNameIssueText';
 import { validateDeliveryName, findDeliveryNameCollisions, type DeliveryNameIssue } from '../../domain/attachments/validateDeliveryName';
 import { useFirmaCorreo } from '@/features/firma-correo/presentation/hooks/useFirmaCorreo';
@@ -31,6 +31,36 @@ const EmailBodyEditorLazy = lazy(() =>
  * operator types (REQ-01 placeholder contract).
  */
 const EMPTY_NAME_OVERRIDES: Readonly<Record<string, string>> = {};
+
+/**
+ * WU-7 (D8/REQ-05) — seed-once reenvío override state: derive the
+ * initial `nameOverrides` from reenvío-stamped `ref.deliveryName`
+ * values at FIRST RENDER only (same lifecycle as `initialEmail` — no
+ * effects, no new prop; the seed touches ONLY this LAN override map).
+ *
+ * A stamp DIFFERING from the recomputed auto name seeds the raw
+ * persisted value → an editable pre-fill (REQ-05 scenario 1). A stamp
+ * EQUAL to the auto name seeds the EMPTY string: a live '' outranks
+ * the stamp in the matcher (WU-4 contract), so the row renders as
+ * no-override (empty input, auto placeholder) and `effectiveFileRefs`
+ * drops the redundant field — the server recomputes the same name on
+ * an untouched resend (byte-identical, REQ-05 scenario 2 + D8) and
+ * same-name autos keep their allowed auto-auto warning semantics (D6).
+ * Refs without a stamp seed nothing — fresh flows unchanged.
+ */
+function seedNameOverrides(
+  fileRefs: readonly SelectedFileRef[],
+  nombreCompleto: string,
+  destino: string,
+): Record<string, string> {
+  const seeds: Record<string, string> = {};
+  for (const ref of fileRefs) {
+    if (ref.deliveryName === undefined) continue;
+    const isAuto = ref.deliveryName === autoDeliveryName(ref, nombreCompleto, destino);
+    seeds[refKeyOf(ref)] = isAuto ? '' : ref.deliveryName;
+  }
+  return seeds;
+}
 
 interface EmailEditorProps {
   companyId: string;
@@ -178,8 +208,15 @@ export function EmailEditor({
   // time: the matcher (WU-4) validates each override through the shared
   // validator and resolves the effective names, and the send payload
   // merges them into `fileRefs` (D1) right where the hook picks them up.
+  //
+  // WU-7 (D8) — on a reenvío the map starts pre-seeded ONCE from the
+  // stamped refs (`seedNameOverrides`), so a prior override re-applies
+  // as an editable value. Later prop changes do not re-seed (same
+  // seed-once semantics as `initialEmail`).
   // ================================================================
-  const [nameOverrides, setNameOverrides] = useState<Record<string, string>>({});
+  const [nameOverrides, setNameOverrides] = useState<Record<string, string>>(() =>
+    seedNameOverrides(fileRefs, nombreCompleto, destino),
+  );
 
   // Effective rename rows for the chips (validated overrides win, else
   // the auto preview; reenvío-stamped `ref.deliveryName` fills in until
