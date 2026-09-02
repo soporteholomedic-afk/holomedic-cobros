@@ -1,6 +1,6 @@
 import * as mssql from 'mssql';
 
-import type { MarcacionWire } from '../../domain/entities';
+import type { MarcacionRaw, MarcacionWire, TipoVerificacion } from '../../domain/entities';
 import type { IMarcacionRepository } from '../../domain/ports';
 
 /**
@@ -8,9 +8,9 @@ import type { IMarcacionRepository } from '../../domain/ports';
  * ingestion hot path (REQ-F1-01/02): idempotent bulk insert deduped by
  * the `uq_marcacion (userId, fechaHora, punch)` constraint, batched in
  * ~300-row chunks to stay under SQL Server's 2100-parameter limit, each
- * chunk atomic in its own transaction. The remaining port methods land
- * with their work units (listarDelDia/buscar → WU13/14,
- * reasignarEmpleado → WU12) and fail loudly until then.
+ * chunk atomic in its own transaction. `listarDelDia` feeds the dashboard
+ * and `reasignarEmpleado` the RRHH backfill (WU12); `buscar` lands with
+ * the histórico (WU14) and fails loudly until then.
  */
 
 /** Rows per INSERT…SELECT statement: 300×4 + 1 = 1201 parameters (≤ 2100). */
@@ -33,6 +33,32 @@ WHERE NOT EXISTS (
 interface MarcacionLote {
   insertados: number;
   userIdsDesconocidos: string[];
+}
+
+interface MarcacionRow {
+  id: number;
+  dispositivoId: number;
+  userId: string;
+  empleadoId: number | null;
+  fechaHora: Date;
+  punch: number;
+  tipoVerificacion: string;
+  procesada: boolean;
+  createdAt: Date;
+}
+
+function filaAMarcacion(fila: MarcacionRow): MarcacionRaw {
+  return {
+    id: fila.id,
+    dispositivoId: fila.dispositivoId,
+    userId: fila.userId,
+    empleadoId: fila.empleadoId,
+    fechaHora: fila.fechaHora,
+    punch: fila.punch,
+    tipoVerificacion: fila.tipoVerificacion as TipoVerificacion,
+    procesada: Boolean(fila.procesada),
+    createdAt: fila.createdAt,
+  };
 }
 
 export class SqlServerMarcacionRepository implements IMarcacionRepository {
@@ -131,10 +157,18 @@ UPDATE dbo.marcaciones_raw
     return result.rowsAffected[0] ?? 0;
   }
 
-  async listarDelDia(): Promise<never> {
-    throw new Error(
-      'SqlServerMarcacionRepository.listarDelDia llega con el dashboard (WU13 del plan asistencia-rrhh-fase1)',
-    );
+  /** All punches of a calendar date (YYYY-MM-DD) — half-open range so idx_marcaciones_fecha stays sargable. */
+  async listarDelDia(fecha: string): Promise<MarcacionRaw[]> {
+    const result = await this.pool
+      .request()
+      .input('desde', mssql.VarChar(19), `${fecha}T00:00:00`)
+      .input('hasta', mssql.VarChar(19), `${fecha}T23:59:59`)
+      .query(`
+SELECT id, dispositivoId, userId, empleadoId, fechaHora, punch, tipoVerificacion, procesada, createdAt
+FROM dbo.marcaciones_raw
+WHERE fechaHora >= CAST(@desde AS DATETIME2(0)) AND fechaHora <= CAST(@hasta AS DATETIME2(0))
+ORDER BY fechaHora`);
+    return (result.recordset as unknown as MarcacionRow[]).map(filaAMarcacion);
   }
 
   async buscar(): Promise<never> {

@@ -9,8 +9,7 @@ import type { IDispositivoRepository } from '../../domain/ports';
  * (REQ-F1-14/15): exact byte equality on the VARBINARY(32) SHA-256
  * digest (ADR-7). The hash column is never selected into the domain
  * model. `registrarHeartbeat` stamps the heartbeat liveness read by the
- * dashboard (ADR-5); estados (WU13) fails loudly until its work unit
- * lands.
+ * dashboard (ADR-5); `estados` is that dashboard's status projection.
  */
 
 interface DispositivoRow {
@@ -74,9 +73,21 @@ UPDATE dbo.dispositivos
     return fila.ultimaSincronizacion;
   }
 
-  async estados(): Promise<never> {
-    throw new Error(
-      'SqlServerDispositivoRepository.estados llega con el dashboard (WU13 del plan asistencia-rrhh-fase1)',
-    );
+  /**
+   * Lightweight status projection for the dashboard's WORKER_CAIADO
+   * read (ADR-5): only ACTIVE devices — a hand-disabled device must
+   * not scream WORKER_CAIADO on the dashboard.
+   */
+  async estados(): Promise<{ id: number; codigo: string; ultimaSincronizacion: Date | null }[]> {
+    const result = await this.pool.request().query(`
+SELECT id, codigo, ultimaSincronizacion
+FROM dbo.dispositivos
+WHERE activo = 1
+ORDER BY codigo`);
+    return result.recordset as unknown as {
+      id: number;
+      codigo: string;
+      ultimaSincronizacion: Date | null;
+    }[];
   }
 }
