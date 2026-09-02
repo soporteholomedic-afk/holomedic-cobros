@@ -14,8 +14,8 @@ import type { IEmpleadoRepository } from '../../domain/ports';
  * The statement is the ADR-4 family (INSERT…SELECT VALUES + WHERE NOT
  * EXISTS), chunked under SQL Server's 2100-parameter limit with one
  * transaction per chunk. `completar` is the RRHH write path (REQ-F1-10,
- * WU12): it stamps the ficha and moves it to ACTIVO. `pendientes` lands
- * with the RRHH queue UI (WU15) and fails loudly until then.
+ * WU12) and `pendientes` feeds the RRHH queue UI (REQ-F1-13, WU15) —
+ * the port is fully real since WU15.
  */
 
 /** Thrown by `completar` when the id does not exist — routes map it to 404. */
@@ -109,6 +109,17 @@ export class SqlServerEmpleadoRepository implements IEmpleadoRepository {
     return creadas;
   }
 
+  /** Fichas waiting for RRHH completion — oldest first (queue order). */
+  async pendientes(): Promise<Empleado[]> {
+    const result = await this.pool.request().query(`
+SELECT id, userId, dni, nombres, apellidos, area, cargo, fechaIngreso, fechaBaja,
+       estado, modoExtras, createdAt, updatedAt
+FROM dbo.empleados
+WHERE estado = 'PENDIENTE_FICHA'
+ORDER BY createdAt, id`);
+    return (result.recordset as unknown as EmpleadoRow[]).map(filaAEmpleado);
+  }
+
   async completar(id: number, datos: DatosFicha): Promise<Empleado> {
     const result = await this.pool
       .request()
@@ -134,11 +145,5 @@ UPDATE dbo.empleados
     const fila = (result.recordset as unknown as EmpleadoRow[])[0];
     if (!fila) throw new FichaNoEncontradaError(id);
     return filaAEmpleado(fila);
-  }
-
-  async pendientes(): Promise<never> {
-    throw new Error(
-      'SqlServerEmpleadoRepository.pendientes llega con la cola de fichas (WU15 del plan asistencia-rrhh-fase1)',
-    );
   }
 }

@@ -15,6 +15,7 @@ export function BuscadorHistorico({ valores }: BuscadorHistoricoProps) {
     <form
       method="get"
       action="/asistencia/historico"
+      aria-label="Búsqueda del histórico"
       className="grid grid-cols-1 gap-3 rounded-md border p-4 sm:grid-cols-2 lg:grid-cols-5 lg:items-end"
     >
       <label className="flex flex-col gap-1 text-sm">
