@@ -1,4 +1,4 @@
-import { sanitizeComponent } from '@/lib/sanitize-filename';
+import { sanitizeComponent } from '@/lib/sanitize-filename-core';
 import { parseReadyFile, type ReadyFileTipo } from './parseReadyFile';
 
 /**
