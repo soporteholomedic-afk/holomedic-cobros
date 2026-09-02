@@ -70,7 +70,14 @@ function isFileRefShape(v: unknown): v is SelectedFileRef {
     (obj.nombreCompleto === undefined || typeof obj.nombreCompleto === 'string') &&
     // Optional per-ref project (multi-proyecto wizard sends) —
     // same string-when-present rationale (D10, REQ-106 backstop).
-    (obj.proyecto === undefined || typeof obj.proyecto === 'string')
+    (obj.proyecto === undefined || typeof obj.proyecto === 'string') &&
+    // Optional per-ref delivery-name override (attachment filename
+    // editor, D9, REQ-07): string-when-present, SHAPE ONLY — all
+    // content rules (traversal, illegal chars, .pdf forcing,
+    // duplicates) belong to the use case's `resolveDeliveryNames`.
+    // A non-string value must 400 here — otherwise the use case's
+    // `.trim()` would throw and surface as 500 INTERNAL_ERROR.
+    (obj.deliveryName === undefined || typeof obj.deliveryName === 'string')
   );
 }
 
