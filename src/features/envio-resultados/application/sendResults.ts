@@ -11,6 +11,7 @@ import type {
   SelectedFileRef,
 } from '../domain/entities';
 import { sanitizeDownloadName, sanitizeFolderPath } from '@/lib/sanitize-filename';
+import { renameGeneratedCertificate } from '../domain/generated-files/renameGeneratedCertificate';
 import { renameReadyFile } from '../domain/ready-files/renameReadyFile';
 
 // ---- Limits (must match the route's contract) ----
@@ -168,17 +169,27 @@ export class SendResultsUseCase {
     // `renameReadyFile` is pure — the delivery names computed here are
     // BOTH persisted in the snapshot AND reused by the dispatch loop,
     // so the recorded history always matches what was attached (D5).
-    const deliveryNames = params.fileRefs.map((ref) =>
-      renameReadyFile({
-        rawName: safeDisplayName(ref.name),
-        nombreCompleto: ref.nombreCompleto?.trim() || params.nombreCompleto,
+    const deliveryNames = params.fileRefs.map((ref) => {
+      const rawName = safeDisplayName(ref.name);
+      const nombreCompleto = ref.nombreCompleto?.trim() || params.nombreCompleto;
+      const readyName = renameReadyFile({
+        rawName,
+        nombreCompleto,
         // REQ-104 (D4): per-ref proyecto wins over the request-level
         // destino — exactly the nombreCompleto precedence pattern.
         // Empty/whitespace post-trim → request-level destino.
         destino: ref.proyecto?.trim() || params.destino,
         tipoExamen: ref.tipoExamen,
-      }),
-    );
+      });
+      // Mirror the download routes' dual rename: a CLI-generated
+      // certificate (`{idAten}_{idePMe}_{arcPla}.pdf`) never matches the
+      // ready-file pattern, so without this fallback the emailed
+      // attachment keeps the raw CLI name while the same file downloaded
+      // from the app gets `CAMO_{nombreCompleto}.pdf`.
+      return readyName === rawName
+        ? renameGeneratedCertificate({ rawName, nombreCompleto, tipoExamen: ref.tipoExamen })
+        : readyName;
+    });
     const snapshot: EnvioAttachmentSnapshot[] = [
       ...params.fileRefs.map((ref, i): EnvioAttachmentSnapshot => ({
         source: 'unc',
