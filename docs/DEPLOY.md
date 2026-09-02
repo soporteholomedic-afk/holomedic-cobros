@@ -231,6 +231,94 @@ Las credenciales son **por propósito**: cada propósito X lee `SMTP_USER_X` / `
 | `EXPLORADOR_DATOS` (`HOLOMEDIC_DB_USER=explorar_datos`) | **Único perfil válido para exploración** de la base `SIGLA`. Acceso de solo lectura. |
 | `SA` (`DB_USER=sa`) | **JAMÁS para exploración interactiva.** Cuenta administrativa con acceso total de escritura; solo si el código de la aplicación lo requiere en runtime. |
 
+---
+
+## D. Deploy del worker de asistencia (Linux)
+
+El worker de captura (`tools/worker-asistencia/`) **no** es parte del contenedor Docker: corre como servicio systemd nativo en el host Linux, se conecta al lector ZKTeco K20 Pro (TCP 4370) y publica las marcaciones en la API de la app. La app se despliega por la vía estándar de [A. Deploy Docker (producción Linux)](#a-deploy-docker-producción-linux); esa sección no se repite aquí.
+
+> **Nota ADR-10 — sync-sdk no aplica al worker**: `scripts/sync-sdk.mjs` excluye el directorio `tools/` del espejo al share Windows. El worker vive únicamente en este checkout y en el server Linux; jamás se sincroniza al SDK.
+
+### Procedimiento de instalación
+
+Ejecutar desde la raíz del checkout en el host Linux de producción.
+
+**1. Crear el usuario de sistema (sin shell, sin home)**
+
+```bash
+sudo useradd --system --no-create-home --shell /usr/sbin/nologin worker-asistencia
+```
+
+**2. Crear los directorios de código y de estado**
+
+```bash
+sudo mkdir -p /opt/worker-asistencia /var/lib/worker-asistencia
+sudo chown -R worker-asistencia:worker-asistencia /opt/worker-asistencia /var/lib/worker-asistencia
+```
+
+`/var/lib/worker-asistencia` es el único directorio escribible del servicio: ahí vive el buffer SQLite append-only, y el unit lo declara explícitamente en `ReadWritePaths`.
+
+**3. Copiar el código del checkout**
+
+```bash
+sudo rsync -a --delete \
+  --exclude 'tests/' --exclude '__pycache__/' \
+  tools/worker-asistencia/ /opt/worker-asistencia/
+```
+
+**4. Crear el venv e instalar dependencias (PEP 668)**
+
+Las distros modernas bloquean `pip` fuera de un entorno virtual. La única dependencia runtime es `pyzk` (declarada en `requirements.txt`; el resto es stdlib):
+
+```bash
+sudo -u worker-asistencia python3 -m venv /opt/worker-asistencia/venv
+sudo -u worker-asistencia /opt/worker-asistencia/venv/bin/pip install -r /opt/worker-asistencia/requirements.txt
+```
+
+**5. Crear el archivo de entorno**
+
+Partir de la plantilla (las 12 variables que lee `worker/config.py`, 4 requeridas) y completar los valores reales:
+
+```bash
+sudo cp tools/worker-asistencia/env.example /etc/worker-asistencia.env
+sudo nano /etc/worker-asistencia.env
+sudo chown root:worker-asistencia /etc/worker-asistencia.env
+sudo chmod 640 /etc/worker-asistencia.env
+```
+
+> **DB_PATH en producción**: descomentar `#DB_PATH=/var/lib/worker-asistencia/buffer.sqlite3`. El default del código es relativo (`buffer.sqlite3`) y mezclaría datos con código en `/opt`. El token (`DEVICE_TOKEN`) se obtiene del provisioning — ver el runbook.
+
+**6. Instalar y arrancar el servicio**
+
+```bash
+sudo cp tools/worker-asistencia/systemd/worker-asistencia.service /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now worker-asistencia
+```
+
+El unit corre como `worker-asistencia` (jamás root) con hardening mínimo (ADR-11: `ProtectSystem=full`, `ProtectHome=yes`, `NoNewPrivileges=yes`, `ReadWritePaths=/var/lib/worker-asistencia`), elegido para no interferir con el TCP saliente al lector.
+
+**7. Verificar**
+
+```bash
+systemctl status worker-asistencia   # active (running), User=worker-asistencia
+journalctl -u worker-asistencia -f   # sin errores de arranque
+```
+
+Una variable requerida faltante en `/etc/worker-asistencia.env` hace fallar el arranque de forma ruidosa (el servicio reintenta cada 5 s hasta corregirse el env).
+
+### Rollback del worker
+
+```bash
+sudo systemctl disable --now worker-asistencia
+```
+
+Detiene la captura y deshabilita el arranque automático. El buffer `/var/lib/worker-asistencia/buffer.sqlite3` **no** se borra: es append-only y reenvía las marcas pendientes al restaurar el servicio. El rollback de la app sigue la vía estándar de la [sección A](#a-deploy-docker-producción-linux).
+
+### Go-live completo
+
+Para el checklist ordenado de puesta en producción (verificación de TZ del host SQL, provisioning del dispositivo con rotación de token, smoke end-to-end y operación diaria), ver el [Runbook de go-live de asistencia](./ops/RUNBOOK-asistencia-go-live.md).
+
 ## Checklist de deploy completo
 
 - [ ] Cambio mergeado en `develop` y promovido a `master` (ver `docs/DEVELOPMENT.md`).
@@ -240,3 +328,4 @@ Las credenciales son **por propósito**: cada propósito X lee `SMTP_USER_X` / `
 - [ ] `docker run` con `--restart unless-stopped`, `-p 3000:3000`, `--env-file`, `-v /mnt/sigla:/mnt/sigla`.
 - [ ] HTTP 200 verificado; logs sin errores.
 - [ ] Si el cambio toca el SDK Windows: sync ejecutado (`./sync-sdk.sh` o `.\sync-sdk.ps1`) y `.env.local` de `C:\HOLOMEDIC` actualizado si cambió alguna variable.
+- [ ] Si el deploy incluye el worker de asistencia: instalación de la [sección D](#d-deploy-del-worker-de-asistencia-linux) ejecutada y runbook de go-live completado con su evidencia.
