@@ -1,0 +1,6 @@
+# Única dependencia externa del worker; el resto es stdlib.
+# pyzk se importa lazy en worker/zk_client.py (seam de test).
+# Sin pin: no existe versión probada referenciada en el repo ni CI
+# (los tests usan fakes). Instalar la estable de PyPI; si se fija
+# una versión, documentar aquí la evidencia contra el K20 Pro real.
+pyzk
