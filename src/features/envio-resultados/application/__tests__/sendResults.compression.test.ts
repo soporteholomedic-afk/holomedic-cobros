@@ -10,6 +10,7 @@ import {
   makeMockHistory,
   makeMockRepo,
   streamFromBuffer,
+  type ReadFn,
 } from './fakes';
 
 /**
@@ -360,5 +361,104 @@ describe('SendResultsUseCase — PDF compression seam (comprimir-pdfs-consolidad
     expect(error).toContain('compressed 40.0 MB');
     expect(history.updateStatus).toHaveBeenCalledWith('row-001', 'error', error);
     expect(mockEmail.sendWithAttachments).not.toHaveBeenCalled();
+  });
+
+  // ---- Design §7 case 8: per-file + per-send metrics (RF5) ----
+
+  it('logs one metrics row per file plus the send aggregate when one file shrinks and one fails open', async () => {
+    const shrinkSource = pdfBufferOfSize(2);
+    const shrinkResult = pdfBufferOfSize(1);
+    const failSource = pdfBufferOfSize(3);
+    const { compressor, compress } = makeFakeCompressor();
+    compress.mockImplementation(async (input) => {
+      if (input.length === shrinkSource.length) {
+        return compressionResult({
+          bytes: shrinkResult,
+          originalBytes: shrinkSource.length,
+          outputBytes: shrinkResult.length,
+          method: 'pdf-lib-lossless',
+        });
+      }
+      throw new Error('compressor exploded');
+    });
+    const read = vi.fn<ReadFn>().mockImplementation(async (_ruc, _dni, _idAten, _path, name) =>
+      streamFromBuffer(name === 'chico.pdf' ? shrinkSource : failSource),
+    );
+    const mockEmail = makeMockEmail();
+    const useCase = new SendResultsUseCase(
+      makeMockRepo({ read }),
+      mockEmail,
+      undefined,
+      compressor,
+    );
+
+    const result = await useCase.execute({
+      ...BASE_PARAMS,
+      fileRefs: [{ ...REF, name: 'chico.pdf' }, { ...REF, name: 'falla.pdf' }],
+    });
+
+    expect(result.success).toBe(true);
+    const logSpy = vi.mocked(console.log);
+    // Per-file rows carry the EXACT tag — the aggregate tag shares the
+    // prefix, so filter by strict equality.
+    const rows = logSpy.mock.calls
+      .filter(([tag]) => tag === '[SendResultsUseCase] pdf metrics')
+      .map(([, payload]) => payload as Record<string, unknown>);
+    expect(rows).toHaveLength(2);
+    const [shrinkRow, failRow] = rows;
+    expect(shrinkRow).toMatchObject({
+      file: 'chico.pdf',
+      originalBytes: shrinkSource.length,
+      finalBytes: shrinkResult.length,
+      method: 'pdf-lib-lossless',
+    });
+    // skippedReason appears ONLY when the file was skipped.
+    expect(shrinkRow).not.toHaveProperty('skippedReason');
+    expect(typeof shrinkRow?.['durationMs']).toBe('number');
+    // Fail-open is ALSO logged (spec: metrics for every outcome).
+    expect(failRow).toMatchObject({
+      file: 'falla.pdf',
+      originalBytes: failSource.length,
+      finalBytes: failSource.length,
+      method: 'pdf-lib-passthrough',
+    });
+    expect(failRow).not.toHaveProperty('skippedReason');
+    // Send-level aggregate with honest arithmetic: totals are the sums
+    // of the per-file outcomes; savings come from the shrink alone.
+    const aggregate = logSpy.mock.calls.find(
+      ([tag]) => tag === '[SendResultsUseCase] pdf metrics aggregate',
+    )?.[1] as Record<string, number> | undefined;
+    expect(aggregate).toMatchObject({
+      files: 2,
+      originalBytesTotal: shrinkSource.length + failSource.length,
+      finalBytesTotal: shrinkResult.length + failSource.length,
+    });
+    expect(aggregate?.['savedBytesTotal']).toBe(shrinkSource.length - shrinkResult.length);
+  });
+
+  // ---- Design §7 case 9: kill-switch off emits ZERO metrics ----
+
+  it('emits no per-file rows and no aggregate when no compressor is injected', async () => {
+    const original = pdfBufferOfSize(1);
+    const mockEmail = makeMockEmail();
+    // Legacy 3-arg construction: absence of the port IS kill-switch-off.
+    const useCase = new SendResultsUseCase(
+      makeMockRepo({ read: vi.fn().mockResolvedValue(streamFromBuffer(original)) }),
+      mockEmail,
+    );
+
+    const result = await useCase.execute(BASE_PARAMS);
+
+    // The send genuinely ran and dispatched — guards against the log
+    // being empty merely because nothing executed.
+    expect(result.success).toBe(true);
+    const call = firstEmailCall(mockEmail);
+    expect(Buffer.compare(call.attachments[0]!.content, original)).toBe(0);
+    const metricCalls = vi.mocked(console.log).mock.calls.filter(
+      ([tag]) =>
+        tag === '[SendResultsUseCase] pdf metrics' ||
+        tag === '[SendResultsUseCase] pdf metrics aggregate',
+    );
+    expect(metricCalls).toHaveLength(0);
   });
 });
