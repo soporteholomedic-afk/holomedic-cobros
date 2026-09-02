@@ -2,6 +2,7 @@ import type {
   IEmailService,
   IEnvioHistoryRepository,
   IFileRepository,
+  IPdfCompressor,
 } from '../domain/ports';
 import type {
   EmailAttachment,
@@ -30,6 +31,14 @@ export const MAX_FILES = 10;
 
 /** Per-file size cap: 30 MB. */
 export const MAX_FILE_BYTES = 30 * 1024 * 1024;
+
+/**
+ * Read allowance for a single UNC file when a compressor is attached:
+ * 60 MB (2 × `MAX_FILE_BYTES`). The 30 MB per-file cap is still enforced —
+ * but on the POST-compression result, not on the raw stream (RF3). Without
+ * a compressor the legacy `MAX_FILE_BYTES` read cap applies unchanged.
+ */
+export const MAX_READ_BYTES_WITH_COMPRESSION = 2 * MAX_FILE_BYTES;
 
 // ---- Result discriminated union ----
 
@@ -98,6 +107,24 @@ export async function streamToBuffer(
     chunks.push(buf);
   }
   return Buffer.concat(chunks);
+}
+
+// ---- PDF sniff + size formatting (compression seam helpers) ----
+
+const PDF_MAGIC_BYTES = Buffer.from('%PDF-');
+
+/**
+ * Magic-byte sniff for PDF content. Magic beats extensions: delivery
+ * names are renamed/sanitised before dispatch, so the `%PDF-` header is
+ * the only reliable "is this a PDF" signal (RF3).
+ */
+function isPdfBytes(buffer: Buffer): boolean {
+  return buffer.subarray(0, 5).equals(PDF_MAGIC_BYTES);
+}
+
+/** Format a byte count as MB with one decimal, for size-explicit errors. */
+function toMb(bytes: number): string {
+  return (bytes / (1024 * 1024)).toFixed(1);
 }
 
 // ---- Sanitisation helper ----
@@ -233,7 +260,9 @@ function resolveDeliveryNames(
  *    file read or dispatch) with the full attachment snapshot and
  *    precomputed delivery names.
  * 3. For each ref, ask the `IFileRepository` for a stream and
- *    collect the bytes into a `Buffer` (with a 30 MB cap).
+ *    collect the bytes into a `Buffer` (30 MB read cap; with a PDF
+ *    compressor attached the allowance doubles and the cap is enforced
+ *    on the post-compression result instead).
  * 4. Hand the assembled `EmailAttachment[]` to the `IEmailService`
  *    with `cc`/`subject`/`html`.
  * 5. UPDATE the history row to `enviado` / `error`(+detail).
@@ -253,7 +282,34 @@ export class SendResultsUseCase {
     private readonly emailService: IEmailService,
     /** History recorder; when omitted the send runs unrecorded (tests/legacy). */
     private readonly historyRepo?: IEnvioHistoryRepository,
+    /**
+     * Optional lossless compression seam (RF3). Domain-only import —
+     * infrastructure adapters are wired at the composition root. Absent
+     * (or PDF_COMPRESSION_ENABLED=false upstream) → the pipeline runs
+     * byte-identical legacy, INCLUDING legacy cap ordering.
+     */
+    private readonly pdfCompressor?: IPdfCompressor,
   ) {}
+
+  /**
+   * Compression seam for the EMAILED COPY only (RF3/RF6): PDF-magic
+   * buffers are compressed, everything else passes through untouched.
+   * Fail-open (spec): a compressor throw/timeout NEVER fails a send —
+   * the original bytes are attached and dispatch proceeds. The source
+   * buffer on the share is never written back.
+   */
+  private async compressForEmail(content: Buffer): Promise<Buffer> {
+    if (!this.pdfCompressor || !isPdfBytes(content)) return content;
+    try {
+      const result = await this.pdfCompressor.compress(content);
+      return result.bytes;
+    } catch (err) {
+      console.warn('[SendResultsUseCase] compression failed — attaching original bytes', {
+        error: err instanceof Error ? err.message : String(err),
+      });
+      return content;
+    }
+  }
 
   async execute(params: SendResultsParams): Promise<SendResultsResult> {
     // ---- 1. Refs: count cap only ----
@@ -397,10 +453,25 @@ export class SendResultsUseCase {
       }
 
       try {
-        const buffer = await streamToBuffer(stream, MAX_FILE_BYTES);
+        // Cap reordering (RF3): with a compressor attached the read
+        // allowance doubles — the 30 MB per-file cap is enforced on the
+        // POST-compression result below. Without a compressor the legacy
+        // ordering is preserved verbatim: streamToBuffer throws at 30 MB
+        // and the catch maps it to INTERNAL_ERROR exactly as before.
+        const readCap = this.pdfCompressor ? MAX_READ_BYTES_WITH_COMPRESSION : MAX_FILE_BYTES;
+        const buffer = await streamToBuffer(stream, readCap);
+        const content = await this.compressForEmail(buffer);
         // Reuse the precomputed delivery name so the dispatched
         // attachment name is byte-identical to the persisted snapshot.
-        attachments.push({ filename: deliveryNames[i] ?? safeName, content: buffer });
+        const deliveryName = deliveryNames[i] ?? safeName;
+        if (content.length > MAX_FILE_BYTES) {
+          const error =
+            `File "${deliveryName}" exceeds the 30 MB email limit after compression ` +
+            `(original ${toMb(buffer.length)} MB, compressed ${toMb(content.length)} MB)`;
+          await finishRecord('error', error);
+          return { success: false, code: 'VALIDATION_ERROR', error };
+        }
+        attachments.push({ filename: deliveryName, content });
       } catch (err) {
         const error = err instanceof Error ? err.message : 'Stream error';
         await finishRecord('error', error);
@@ -418,9 +489,12 @@ export class SendResultsUseCase {
         await finishRecord('error', error);
         return { success: false, code: 'VALIDATION_ERROR', error };
       }
+      // Same emailed-copy compression treatment as UNC refs (RF3), but
+      // these stay EXEMPT from the per-file cap — no size check here.
+      const content = await this.compressForEmail(local.content);
       attachments.push({
         filename: safeName,
-        content: local.content,
+        content,
         contentType: local.contentType,
       });
     }

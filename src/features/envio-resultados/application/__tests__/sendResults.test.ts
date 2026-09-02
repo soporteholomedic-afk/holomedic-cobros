@@ -1,40 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { Readable } from 'node:stream';
 import { SendResultsUseCase } from '../sendResults';
-import type { IFileRepository, IEmailService } from '../../domain/ports';
 import type { LocalAttachmentInput, SelectedFileRef } from '../../domain/entities';
-
-// ---- Test doubles ----
-
-type ReadFn = IFileRepository['read'];
-type SendFn = IEmailService['sendWithAttachments'];
-
-function makeMockRepo(overrides: {
-  read?: ReturnType<typeof vi.fn<ReadFn>>;
-} = {}): IFileRepository {
-  const readFn: ReturnType<typeof vi.fn<ReadFn>> =
-    overrides.read ?? vi.fn<ReadFn>().mockResolvedValue(Readable.from([Buffer.from('default-bytes')]));
-  return {
-    listFolder: vi.fn().mockResolvedValue([]),
-    read: readFn as unknown as ReadFn,
-  };
-}
-
-function makeMockEmail(overrides: {
-  sendWithAttachments?: ReturnType<typeof vi.fn<SendFn>>;
-} = {}): IEmailService {
-  const sendFn: ReturnType<typeof vi.fn<SendFn>> =
-    overrides.sendWithAttachments ??
-    vi.fn<SendFn>().mockResolvedValue({ success: true, messageId: '<ok@mail.com>' });
-  return {
-    sendWithAttachments: sendFn as unknown as SendFn,
-  };
-}
-
-/** Build a Readable stream that emits the given buffer and closes. */
-function streamFromBuffer(buf: Buffer): NodeJS.ReadableStream {
-  return Readable.from([buf]);
-}
+// Shared test doubles (extracted verbatim from this file — see fakes.ts).
+import { makeMockEmail, makeMockRepo, streamFromBuffer } from './fakes';
+import type { ReadFn, SendFn } from './fakes';
 
 // ---- Test fixtures ----
 
