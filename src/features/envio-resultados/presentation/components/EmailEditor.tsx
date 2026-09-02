@@ -1,8 +1,9 @@
 'use client';
 
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
+import { toast } from 'sonner';
 import { SpitchSelector } from './SpitchSelector';
-import { AttachmentList } from './AttachmentList';
+import { AttachmentList, type AttachmentRenameItemView } from './AttachmentList';
 import { LocalFileDropZone } from './LocalFileDropZone';
 import { EmailPreviewPanel } from '@/components/email/EmailPreviewPanel';
 import { EmailControlsPanel } from '@/components/email/EmailControlsPanel';
@@ -10,6 +11,9 @@ import { EmailBodyField } from '@/components/email/EmailBodyField';
 import { useSendResults } from '../hooks/useSendResults';
 import { interpolateSpitch } from '../helpers/interpolateSpitch';
 import { stripSignatureHtml } from '../helpers/signatureData';
+import { buildAttachmentRenameItems, refKeyOf } from '../helpers/buildAttachmentRenameItems';
+import { deliveryNameIssueText } from '../helpers/deliveryNameIssueText';
+import { findDeliveryNameCollisions, type DeliveryNameIssue } from '../../domain/attachments/validateDeliveryName';
 import { useFirmaCorreo } from '@/features/firma-correo/presentation/hooks/useFirmaCorreo';
 import { replaceFirmaFallback } from '@/features/firma-correo/presentation/helpers/replaceFirmaFallback';
 import { showSendLoading, showSendSuccess, showSendError } from '../helpers/sendToasts';
@@ -20,6 +24,13 @@ import type { EmailBodyEditorHandle } from './EmailBodyEditor';
 const EmailBodyEditorLazy = lazy(() =>
   import('./EmailBodyEditor').then((m) => ({ default: m.EmailBodyEditor })),
 );
+
+/**
+ * WU-5 — stable empty override map for the auto-name preview memo, so
+ * the byte-equal no-override projection never invalidates while the
+ * operator types (REQ-01 placeholder contract).
+ */
+const EMPTY_NAME_OVERRIDES: Readonly<Record<string, string>> = {};
 
 interface EmailEditorProps {
   companyId: string;
@@ -151,12 +162,133 @@ export function EmailEditor({
     return files;
   }, [selectedPatients, patients]);
 
+  // ================================================================
+  // WU-5 (REQ-01/REQ-03) — inline attachment rename state.
+  //
+  // `nameOverrides` holds the RAW operator input per composite refKey
+  // (`ruc::dni::idAten::path::name`). Everything else derives at render
+  // time: the matcher (WU-4) validates each override through the shared
+  // validator and resolves the effective names, and the send payload
+  // merges them into `fileRefs` (D1) right where the hook picks them up.
+  // ================================================================
+  const [nameOverrides, setNameOverrides] = useState<Record<string, string>>({});
+
+  // Effective rename rows for the chips (validated overrides win, else
+  // the auto preview; reenvío-stamped `ref.deliveryName` fills in until
+  // the operator edits the row).
+  const renameItems = useMemo(
+    () =>
+      buildAttachmentRenameItems(
+        fileRefs,
+        selectedPatients,
+        patients,
+        nameOverrides,
+        nombreCompleto,
+        destino,
+      ),
+    [fileRefs, selectedPatients, patients, nameOverrides, nombreCompleto, destino],
+  );
+
+  // Same projection with NO overrides — the source of the autoName view
+  // field (input placeholder / secondary chip text, REQ-01).
+  const autoItems = useMemo(
+    () =>
+      buildAttachmentRenameItems(
+        fileRefs,
+        selectedPatients,
+        patients,
+        EMPTY_NAME_OVERRIDES,
+        nombreCompleto,
+        destino,
+      ),
+    [fileRefs, selectedPatients, patients, nombreCompleto, destino],
+  );
+
+  const renameViewItems: AttachmentRenameItemView[] = useMemo(
+    () =>
+      renameItems.map((item, i) => ({
+        ...item,
+        autoName: autoItems[i]?.effectiveName ?? item.effectiveName,
+      })),
+    [renameItems, autoItems],
+  );
+
+  // Send payload (D1): validated overrides merged into `fileRefs` by
+  // refKey right before the hook serializes the FormData JSON. A row
+  // that is NOT overridden but HAS a live entry means the operator
+  // CLEARED the name — any reenvío-stamped `ref.deliveryName` is
+  // dropped so the send falls back to the auto rename (REQ-01). Refs
+  // with no matching display row pass through untouched (legacy).
+  const effectiveFileRefs = useMemo(() => {
+    if (Object.keys(nameOverrides).length === 0) return fileRefs;
+    const overriddenByKey = new Map(
+      renameItems
+        .filter((item): item is typeof item & { refKey: string } => item.refKey !== null)
+        .map((item) => [item.refKey, item]),
+    );
+    return fileRefs.map((ref) => {
+      const refKey = refKeyOf(ref);
+      const item = overriddenByKey.get(refKey);
+      if (item?.overridden) return { ...ref, deliveryName: item.effectiveName };
+      if (!item && !(refKey in nameOverrides)) return ref;
+      const { deliveryName: _dropped, ...rest } = ref;
+      void _dropped;
+      return rest;
+    });
+  }, [fileRefs, nameOverrides, renameItems]);
+
+  // Blocking pre-send error (REQ-03): an invalid override (names the
+  // STORED disk file) or a duplicate involving an override — D6, the
+  // server would 400 anyway (D7). Derived at render, never stored.
+  const deliveryNameError = useMemo(() => {
+    const invalid = renameItems.find(
+      (item): item is typeof item & { issue: NonNullable<typeof item.issue> } =>
+        item.issue !== null,
+    );
+    if (invalid) {
+      return `El nombre para "${invalid.storedName}" no es válido: ${deliveryNameIssueText(invalid.issue)}. Corrija o limpie el nombre antes de enviar.`;
+    }
+    const collisions = findDeliveryNameCollisions(
+      renameItems.map((item) => ({ value: item.effectiveName, overridden: item.overridden })),
+    );
+    // `findDeliveryNameCollisions` only ever yields DUPLICATE issues;
+    // the union narrowing keeps the compiler honest about that contract.
+    const duplicateName = collisions.find(
+      (issue): issue is Extract<DeliveryNameIssue, { code: 'DUPLICATE' }> =>
+        issue.code === 'DUPLICATE',
+    )?.name;
+    if (duplicateName !== undefined) {
+      return `Nombres de adjunto duplicados: "${duplicateName}" está asignado a más de un archivo. Los nombres personalizados deben ser únicos.`;
+    }
+    return null;
+  }, [renameItems]);
+
+  // Auto-auto duplicates (D6): allowed, but the operator deserves an
+  // amber heads-up before two attachments leave with the same name.
+  const autoAutoDuplicateNames = useMemo(() => {
+    const groups = new Map<string, { name: string; count: number }>();
+    for (const item of renameItems) {
+      if (item.effectiveName === '') continue;
+      const key = item.effectiveName.toLowerCase();
+      const group = groups.get(key);
+      if (group) group.count += 1;
+      else groups.set(key, { name: item.effectiveName, count: 1 });
+    }
+    return [...groups.values()].filter((g) => g.count > 1).map((g) => g.name);
+  }, [renameItems]);
+
+  const handleRename = useCallback((refKey: string, next: string) => {
+    setNameOverrides((prev) => ({ ...prev, [refKey]: next }));
+  }, []);
+
   const { send, isSending, result, error } = useSendResults({
     to: recipients,
     cc: ccList.length > 0 ? ccList : undefined,
     subject,
     html: bodyHtml,
-    fileRefs,
+    // WU-5 — refs with the validated overrides merged in by refKey (D1);
+    // identical to the `fileRefs` prop until the operator renames.
+    fileRefs: effectiveFileRefs,
     localFiles,
     nombreCompleto,
     destino,
@@ -244,9 +376,21 @@ export function EmailEditor({
       setShowNoFilesWarning(true);
       return;
     }
+    // WU-5 (REQ-03/D6) — blocking collision policy: an invalid override
+    // or an override-involved duplicate stops the send here (the red
+    // error box is already visible; the server would reject with 400
+    // anyway, D7). Dismissal happens by fixing or clearing the name.
+    if (deliveryNameError) return;
+    // Auto-auto duplicates stay ALLOWED (D6) — dismissible amber warning.
+    if (autoAutoDuplicateNames.length > 0) {
+      toast.warning(
+        `Hay adjuntos con el mismo nombre: "${autoAutoDuplicateNames[0]}" se generó automáticamente para más de un archivo. El envío continuará con nombres repetidos.`,
+        { duration: 10000 },
+      );
+    }
     hasSent.current = true;
     send();
-  }, [selectedFiles, localFiles, send]);
+  }, [selectedFiles, localFiles, send, deliveryNameError, autoAutoDuplicateNames]);
 
   const handleConfirmNoFiles = useCallback(() => {
     setShowNoFilesWarning(false);
@@ -280,8 +424,25 @@ export function EmailEditor({
             templateName={selectedSpitch?.name}
             attachmentsSlot={
               <>
+                {/* WU-5 (REQ-03) — blocking rename errors: invalid
+                    override or override-involved duplicate. The send
+                    button refuses to fire while this is visible. */}
+                {deliveryNameError && (
+                  <p
+                    role="alert"
+                    data-testid="delivery-name-error"
+                    className="rounded-lg border border-red-200 bg-red-50 dark:border-red-900 dark:bg-red-950/40 px-3 py-2 text-xs text-red-700 dark:text-red-400"
+                  >
+                    {deliveryNameError}
+                  </p>
+                )}
                 {/* Attachments preview */}
-                <AttachmentList selectedPatients={selectedPatients} patients={patients} />
+                <AttachmentList
+                  selectedPatients={selectedPatients}
+                  patients={patients}
+                  renameItems={renameViewItems}
+                  onRename={handleRename}
+                />
 
                 {/* PR4 (reenvío) — metadata-only local attachments from the
                     original send: greyed, reference-only, never re-attachable

@@ -2,11 +2,13 @@ import React, { useEffect, useState } from 'react';
 import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-// Mock sonner toasts
+// Mock sonner toasts — `warning` backs the WU-5 auto-auto duplicate
+// dismissible amber warning (design D6).
 const mockToast = vi.hoisted(() => ({
   loading: vi.fn(),
   success: vi.fn(),
   error: vi.fn(),
+  warning: vi.fn(),
   dismiss: vi.fn(),
 }));
 vi.mock('sonner', () => ({
@@ -100,14 +102,42 @@ vi.mock('../LocalFileDropZone', () => ({
   ),
 }));
 
-// Mock AttachmentList
+// WU-5 — hoisted store with the override value the rename seam "types".
+// Tests mutate `mockRenameValue.value` before clicking the seam button so
+// each scenario simulates a different operator input without re-mocking.
+const mockRenameValue = vi.hoisted(() => ({ value: 'Informe Juan' }));
+
+// Mock AttachmentList. WU-5 — the mock also exposes the rename contract:
+// one button per rename item (`attachment-rename-mock-<i>`); clicking it
+// calls `onRename(item.refKey, mockRenameValue.value)`, simulating the
+// operator committing an inline rename on that row. Rows with a `null`
+// refKey (unmatched) render the button too but never call `onRename`,
+// mirroring the real component's non-editable contract.
 vi.mock('../AttachmentList', () => ({
   AttachmentList: vi.fn().mockImplementation(
-    ({ selectedPatients }: { selectedPatients: Record<string, unknown> }) => {
+    ({ selectedPatients, renameItems, onRename }: {
+      selectedPatients: Record<string, unknown>;
+      renameItems?: ReadonlyArray<{ refKey: string | null }>;
+      onRename?: (refKey: string, next: string) => void;
+    }) => {
       const patientIds = Object.keys(selectedPatients || {});
+      const renameButtons = (renameItems ?? []).map((item, i) =>
+        React.createElement(
+          'button',
+          {
+            key: i,
+            type: 'button',
+            'data-testid': `attachment-rename-mock-${i}`,
+            onClick: () => {
+              if (item.refKey !== null) onRename?.(item.refKey, mockRenameValue.value);
+            },
+          },
+          `rename-${i}`,
+        ),
+      );
       return React.createElement('div', {
         'data-testid': 'attachment-list',
-      }, `${patientIds.length} pacientes seleccionados`);
+      }, `${patientIds.length} pacientes seleccionados`, ...renameButtons);
     },
   ),
 }));
@@ -158,7 +188,12 @@ vi.mock('../../hooks/useSendResults', () => ({
 
 // ---- Import under test ----
 import { EmailEditor } from '../EmailEditor';
+// Mocked module import — used to assert the props EmailEditor forwards.
+import { AttachmentList } from '../AttachmentList';
 import type { Patient, SelectedFileRef } from '../../../domain/entities';
+// Real domain fn (browser-safe since D3) — byte-equal auto-name oracle,
+// same approach as the WU-4 matcher suite.
+import { renameReadyFile } from '../../../domain/ready-files/renameReadyFile';
 
 const mockPatients: Patient[] = [
   {
@@ -1116,5 +1151,227 @@ describe('EmailEditor', () => {
     } finally {
       Object.assign(mockSpitchOverride, previous);
     }
+  });
+
+  // ================================================================
+  // WU-5 — Composer UI (REQ-01 / REQ-03): inline attachment rename.
+  //
+  // Fixtures follow the real flows' shape (buildReenvioViewData /
+  // FilesModal): `selectedPatients` keyed by DNI, display file ids are
+  // the `path::name` composites (PatientFile.id convention), and
+  // `patients[].id === dni` so both `EmailEditor.selectedFiles` and the
+  // WU-4 matcher resolve the same rows.
+  //
+  // The auto-name oracle is the REAL domain fn (byte-equal preview
+  // contract pinned by WU-4); no hard-coded expectations.
+  // ================================================================
+
+  describe('WU-5 — inline attachment rename (REQ-01/REQ-03)', () => {
+    // Composite ref key — the `splitFileRef` convention the WU-4 helper
+    // addresses overrides by.
+    const refKeyOf = (r: SelectedFileRef): string =>
+      [r.ruc, r.dni, r.idAten, r.path, r.name].join('::');
+
+    const renamePatients: Patient[] = [
+      {
+        id: '12345678',
+        companyId: 'comp-001',
+        name: 'María Elena García López',
+        dni: '12345678',
+        files: [
+          { id: 'LEGAJOS::123CERT.pdf', patientId: '12345678', name: '123CERT.pdf', type: 'application/pdf', size: 100 },
+          { id: 'LEGAJOS::456CERT.pdf', patientId: '12345678', name: '456CERT.pdf', type: 'application/pdf', size: 100 },
+        ],
+      },
+    ];
+
+    const renameFileRefs: SelectedFileRef[] = [
+      { ruc: '20123456789', dni: '12345678', idAten: 'AT-001', path: 'LEGAJOS', name: '123CERT.pdf' },
+      { ruc: '20123456789', dni: '12345678', idAten: 'AT-001', path: 'LEGAJOS', name: '456CERT.pdf' },
+    ];
+
+    const renameSelection = {
+      '12345678': {
+        patientName: 'María Elena García López',
+        files: ['LEGAJOS::123CERT.pdf', 'LEGAJOS::456CERT.pdf'],
+      },
+    };
+
+    // Single-file base: one selected ready file — no duplicate noise.
+    const singleProps = {
+      ...defaultProps,
+      selectedPatients: {
+        '12345678': {
+          patientName: 'María Elena García López',
+          files: ['LEGAJOS::123CERT.pdf'],
+        },
+      },
+      patients: renamePatients,
+      fileRefs: [renameFileRefs[0]!],
+      nombreCompleto: 'María Elena García López',
+      destino: 'Proyecto Uno',
+    };
+
+    // Two ready files of the same patient: both auto-rename to the SAME
+    // delivery name (CAMO-María...-Proyecto Uno.pdf) — the natural
+    // auto-auto duplicate for the D6 warning scenario.
+    const dupProps = {
+      ...defaultProps,
+      selectedPatients: renameSelection,
+      patients: renamePatients,
+      fileRefs: renameFileRefs,
+      nombreCompleto: 'María Elena García López',
+      destino: 'Proyecto Uno',
+    };
+
+    const auto123 = renameReadyFile({
+      rawName: '123CERT.pdf',
+      nombreCompleto: 'María Elena García López',
+      destino: 'Proyecto Uno',
+    });
+
+    const listMock = vi.mocked(AttachmentList);
+
+    interface CapturedRenameProps {
+      renameItems?: Array<Record<string, unknown>>;
+      onRename?: (refKey: string, next: string) => void;
+    }
+
+    const lastListProps = (): CapturedRenameProps => {
+      const last = listMock.mock.calls[listMock.mock.calls.length - 1];
+      return (last?.[0] ?? {}) as unknown as CapturedRenameProps;
+    };
+
+    interface LastHookArgs {
+      fileRefs: Array<SelectedFileRef & { deliveryName?: string }>;
+    }
+
+    const lastHookArgs = (): LastHookArgs => {
+      const last = mockUseSendResults.mock.calls[mockUseSendResults.mock.calls.length - 1];
+      return (last?.[0] ?? {}) as LastHookArgs;
+    };
+
+    const renderSending = (props: typeof singleProps) => {
+      const mockSend = vi.fn();
+      mockUseSendResults.mockReturnValue({
+        send: mockSend,
+        isSending: false,
+        result: null,
+        error: null,
+      });
+      render(<EmailEditor {...props} />);
+      return mockSend;
+    };
+
+    it('derives rename items from the selection and forwards them to AttachmentList with the auto preview', () => {
+      mockFetch.mockResolvedValue({ ok: true, json: () => Promise.resolve({ success: true }) });
+      render(<EmailEditor {...singleProps} />);
+
+      const props = lastListProps();
+      expect(props.renameItems).toHaveLength(1);
+      const item = props.renameItems![0] as Record<string, unknown>;
+      expect(item.refKey).toBe(refKeyOf(renameFileRefs[0]!));
+      expect(item.displayName).toBe('123CERT.pdf');
+      expect(item.storedName).toBe('123CERT.pdf');
+      // Byte-equal auto preview (ready file → CAMO-María...-Proyecto Uno.pdf).
+      expect(item.effectiveName).toBe(auto123);
+      // The view carries the auto name separately (input placeholder / secondary text).
+      expect(item.autoName).toBe(auto123);
+      expect(item.overridden).toBe(false);
+      expect(item.issue).toBeNull();
+      expect(typeof props.onRename).toBe('function');
+    });
+
+    it('typing an override shows the validated effective name and merges deliveryName into the refs for useSendResults', () => {
+      renderSending(singleProps);
+
+      // Operator types "Informe Juan" on the ready file — forcePdf (D5)
+      // validates it to "Informe Juan.pdf".
+      fireEvent.click(screen.getByTestId('attachment-rename-mock-0'));
+
+      const props = lastListProps();
+      const item = props.renameItems![0] as Record<string, unknown>;
+      expect(item.effectiveName).toBe('Informe Juan.pdf');
+      expect(item.overridden).toBe(true);
+      expect(item.issue).toBeNull();
+
+      // FormData `fileRefs` JSON carries the override (hook receives the
+      // merged refs — REQ-04 client side of the contract).
+      const args = lastHookArgs();
+      expect(args.fileRefs[0]!.deliveryName).toBe('Informe Juan.pdf');
+    });
+
+    it('clearing the override reverts the chip to the auto name and sends NO deliveryName', () => {
+      renderSending(singleProps);
+
+      fireEvent.click(screen.getByTestId('attachment-rename-mock-0'));
+      expect(lastHookArgs().fileRefs[0]!.deliveryName).toBe('Informe Juan.pdf');
+
+      // Operator clears the field — REQ-01 fallback, no override travels.
+      mockRenameValue.value = '';
+      fireEvent.click(screen.getByTestId('attachment-rename-mock-0'));
+
+      const props = lastListProps();
+      const item = props.renameItems![0] as Record<string, unknown>;
+      expect(item.overridden).toBe(false);
+      expect(item.effectiveName).toBe(auto123);
+
+      const args = lastHookArgs();
+      expect('deliveryName' in args.fileRefs[0]!).toBe(false);
+    });
+
+    it('blocks send and names the STORED file when an override fails validation (traversal)', () => {
+      const mockSend = renderSending(singleProps);
+
+      mockRenameValue.value = '../../evil.pdf';
+      fireEvent.click(screen.getByTestId('attachment-rename-mock-0'));
+
+      // Blocking red error naming the stored (disk) name — REQ-03.
+      const errorBox = screen.getByTestId('delivery-name-error');
+      expect(errorBox.textContent).toContain('123CERT.pdf');
+
+      fireEvent.click(screen.getByText('Enviar'));
+      expect(mockSend).not.toHaveBeenCalled();
+    });
+
+    it('blocks send on an override-involved duplicate, naming the colliding effective name', () => {
+      const mockSend = renderSending(dupProps);
+
+      // Both files overridden to the same delivery name → blocking (D6:
+      // the server would 400 anyway).
+      mockRenameValue.value = 'Informe Final';
+      fireEvent.click(screen.getByTestId('attachment-rename-mock-0'));
+      fireEvent.click(screen.getByTestId('attachment-rename-mock-1'));
+
+      const errorBox = screen.getByTestId('delivery-name-error');
+      expect(errorBox.textContent).toContain('Informe Final.pdf');
+
+      fireEvent.click(screen.getByText('Enviar'));
+      expect(mockSend).not.toHaveBeenCalled();
+    });
+
+    it('warns dismissibly and still sends on an auto-auto duplicate', () => {
+      const mockSend = renderSending(dupProps);
+
+      // No overrides: both ready files auto-rename to the same name.
+      // D6 — auto-auto duplicates are ALLOWED; the client only warns.
+      fireEvent.click(screen.getByText('Enviar'));
+
+      expect(screen.queryByTestId('delivery-name-error')).not.toBeInTheDocument();
+      expect(mockToast.warning).toHaveBeenCalledTimes(1);
+      expect(String(mockToast.warning.mock.calls[0]?.[0])).toContain(auto123);
+      expect(mockSend).toHaveBeenCalledTimes(1);
+    });
+
+    it('merges the override into the addressed ref only (refKey addressing, no index bleed)', () => {
+      renderSending(dupProps);
+
+      mockRenameValue.value = 'Solo Segundo';
+      fireEvent.click(screen.getByTestId('attachment-rename-mock-1'));
+
+      const args = lastHookArgs();
+      expect('deliveryName' in args.fileRefs[0]!).toBe(false);
+      expect(args.fileRefs[1]!.deliveryName).toBe('Solo Segundo.pdf');
+    });
   });
 });

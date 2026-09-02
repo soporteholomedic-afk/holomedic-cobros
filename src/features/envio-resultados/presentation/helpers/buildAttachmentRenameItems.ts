@@ -67,6 +67,19 @@ function basenameOf(display: string): string {
 }
 
 /**
+ * Composite key of a `SelectedFileRef`
+ * (`ruc::dni::idAten::path::name` — the `splitFileRef` convention).
+ *
+ * WU-5 refactor: this join IS the addressing contract between the
+ * matcher, the composer's `nameOverrides` state and its
+ * `fileRefs`-merge — it lives here (the module that introduced the
+ * refKey concept) so the three surfaces cannot drift.
+ */
+export function refKeyOf(ref: SelectedFileRef): string {
+  return [ref.ruc, ref.dni, ref.idAten, ref.path, ref.name].join('::');
+}
+
+/**
  * Row label: the PatientFile name when the display row resolves inside
  * `patients`, else the basename of the raw display string (wizard flow,
  * unmatched rows).
@@ -205,18 +218,11 @@ export function buildAttachmentRenameItems(
       }
 
       consumed.add(matched.index);
-      const refKey = [
-        matched.ref.ruc,
-        matched.ref.dni,
-        matched.ref.idAten,
-        matched.ref.path,
-        matched.ref.name,
-      ].join('::');
       items.push({
-        refKey,
+        refKey: refKeyOf(matched.ref),
         displayName: displayNameFor(display, patient),
         storedName: matched.ref.name,
-        ...resolveEffective(matched.ref, overrides[refKey], nombreCompleto, destino),
+        ...resolveEffective(matched.ref, overrides[refKeyOf(matched.ref)], nombreCompleto, destino),
       });
     }
   }
