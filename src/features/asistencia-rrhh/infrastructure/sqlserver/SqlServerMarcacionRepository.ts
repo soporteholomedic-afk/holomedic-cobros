@@ -8,9 +8,9 @@ import type { IMarcacionRepository } from '../../domain/ports';
  * ingestion hot path (REQ-F1-01/02): idempotent bulk insert deduped by
  * the `uq_marcacion (userId, fechaHora, punch)` constraint, batched in
  * ~300-row chunks to stay under SQL Server's 2100-parameter limit, each
- * chunk atomic in its own transaction. `listarDelDia` feeds the dashboard
- * and `reasignarEmpleado` the RRHH backfill (WU12); `buscar` lands with
- * the histórico (WU14) and fails loudly until then.
+ * chunk atomic in its own transaction. `listarDelDia` feeds the dashboard,
+ * `buscar` the histórico page (REQ-F1-12) and `reasignarEmpleado` the
+ * RRHH backfill (WU12) — the port is fully real since WU14.
  */
 
 /** Rows per INSERT…SELECT statement: 300×4 + 1 = 1201 parameters (≤ 2100). */
@@ -171,9 +171,36 @@ ORDER BY fechaHora`);
     return (result.recordset as unknown as MarcacionRow[]).map(filaAMarcacion);
   }
 
-  async buscar(): Promise<never> {
-    throw new Error(
-      'SqlServerMarcacionRepository.buscar llega con el histórico (WU14 del plan asistencia-rrhh-fase1)',
-    );
+  /**
+   * Historical raw search (REQ-F1-12) — NO collapse in F1: every punch
+   * matching the criterion is listed. Filters are appended only when
+   * provided; the inclusive date range uses a half-open upper bound so
+   * idx_marcaciones_fecha stays sargable.
+   */
+  async buscar(criterio: {
+    empleadoId?: number;
+    userId?: string;
+    desde: string;
+    hasta: string;
+  }): Promise<MarcacionRaw[]> {
+    const condiciones = ['fechaHora >= CAST(@desde AS DATETIME2(0))', 'fechaHora < DATEADD(DAY, 1, CAST(@hasta AS DATE))'];
+    const request = this.pool
+      .request()
+      .input('desde', mssql.VarChar(10), criterio.desde)
+      .input('hasta', mssql.VarChar(10), criterio.hasta);
+    if (criterio.empleadoId !== undefined) {
+      request.input('empleadoId', mssql.Int, criterio.empleadoId);
+      condiciones.push('empleadoId = @empleadoId');
+    }
+    if (criterio.userId !== undefined) {
+      request.input('userId', mssql.VarChar(20), criterio.userId);
+      condiciones.push('userId = @userId');
+    }
+    const result = await request.query(`
+SELECT id, dispositivoId, userId, empleadoId, fechaHora, punch, tipoVerificacion, procesada, createdAt
+FROM dbo.marcaciones_raw
+WHERE ${condiciones.join(' AND ')}
+ORDER BY fechaHora DESC, id DESC`);
+    return (result.recordset as unknown as MarcacionRow[]).map(filaAMarcacion);
   }
 }
