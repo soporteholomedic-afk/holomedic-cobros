@@ -112,6 +112,25 @@ WHERE NOT EXISTS (SELECT 1 FROM dbo.empleados e WHERE e.userId = v.userId)`);
     return insertados;
   }
 
+  /**
+   * Backfill (REQ-F1-10): punches captured before the ficha existed have
+   * empleadoId NULL; once RRHH completes the ficha, every unresolved row
+   * of that device userId points to it. Only NULL rows are touched — a
+   * row already resolved needs no rewrite (userId is UNIQUE in empleados,
+   * so any existing resolution already points to this same person).
+   */
+  async reasignarEmpleado(userId: string, empleadoId: number): Promise<number> {
+    const result = await this.pool
+      .request()
+      .input('userId', mssql.VarChar(20), userId)
+      .input('empleadoId', mssql.Int, empleadoId)
+      .query(`
+UPDATE dbo.marcaciones_raw
+   SET empleadoId = @empleadoId
+ WHERE userId = @userId AND empleadoId IS NULL`);
+    return result.rowsAffected[0] ?? 0;
+  }
+
   async listarDelDia(): Promise<never> {
     throw new Error(
       'SqlServerMarcacionRepository.listarDelDia llega con el dashboard (WU13 del plan asistencia-rrhh-fase1)',
@@ -121,12 +140,6 @@ WHERE NOT EXISTS (SELECT 1 FROM dbo.empleados e WHERE e.userId = v.userId)`);
   async buscar(): Promise<never> {
     throw new Error(
       'SqlServerMarcacionRepository.buscar llega con el histórico (WU14 del plan asistencia-rrhh-fase1)',
-    );
-  }
-
-  async reasignarEmpleado(): Promise<never> {
-    throw new Error(
-      'SqlServerMarcacionRepository.reasignarEmpleado llega con completarFicha (WU12 del plan asistencia-rrhh-fase1)',
     );
   }
 }

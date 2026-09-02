@@ -1,6 +1,6 @@
 import * as mssql from 'mssql';
 
-import type { UsuarioEquipo } from '../../domain/entities';
+import type { DatosFicha, Empleado, UsuarioEquipo } from '../../domain/entities';
 import type { IEmpleadoRepository } from '../../domain/ports';
 
 /**
@@ -13,12 +13,56 @@ import type { IEmpleadoRepository } from '../../domain/ports';
  *
  * The statement is the ADR-4 family (INSERT…SELECT VALUES + WHERE NOT
  * EXISTS), chunked under SQL Server's 2100-parameter limit with one
- * transaction per chunk. pendientes/completar land with RRHH completion
- * (WU12) and fail loudly until then.
+ * transaction per chunk. `completar` is the RRHH write path (REQ-F1-10,
+ * WU12): it stamps the ficha and moves it to ACTIVO. `pendientes` lands
+ * with the RRHH queue UI (WU15) and fails loudly until then.
  */
+
+/** Thrown by `completar` when the id does not exist — routes map it to 404. */
+export class FichaNoEncontradaError extends Error {
+  constructor(id: number) {
+    super(`la ficha ${id} no existe en dbo.empleados`);
+    this.name = 'FichaNoEncontradaError';
+  }
+}
 
 /** Rows per statement: 300 × 2 params = 601 (≤ 2100). */
 const FILAS_POR_CHUNK = 300;
+
+interface EmpleadoRow {
+  id: number;
+  userId: string;
+  dni: string | null;
+  nombres: string | null;
+  apellidos: string | null;
+  area: string | null;
+  cargo: string | null;
+  fechaIngreso: Date | null;
+  fechaBaja: Date | null;
+  estado: string;
+  modoExtras: string;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+function filaAEmpleado(fila: EmpleadoRow): Empleado {
+  return {
+    id: fila.id,
+    userId: fila.userId,
+    dni: fila.dni,
+    nombres: fila.nombres,
+    apellidos: fila.apellidos,
+    area: fila.area,
+    cargo: fila.cargo,
+    // DATE columns render as plain calendar dates at the domain boundary.
+    fechaIngreso: fila.fechaIngreso instanceof Date ? fila.fechaIngreso.toISOString().slice(0, 10) : null,
+    fechaBaja: fila.fechaBaja instanceof Date ? fila.fechaBaja.toISOString().slice(0, 10) : null,
+    estado: fila.estado as Empleado['estado'],
+    modoExtras: fila.modoExtras,
+    createdAt: fila.createdAt,
+    updatedAt: fila.updatedAt,
+  };
+}
 
 const INSERT_BASE = `
 INSERT INTO dbo.empleados (userId, nombres)
@@ -65,15 +109,36 @@ export class SqlServerEmpleadoRepository implements IEmpleadoRepository {
     return creadas;
   }
 
-  async pendientes(): Promise<never> {
-    throw new Error(
-      'SqlServerEmpleadoRepository.pendientes llega con completarFicha (WU12 del plan asistencia-rrhh-fase1)',
-    );
+  async completar(id: number, datos: DatosFicha): Promise<Empleado> {
+    const result = await this.pool
+      .request()
+      .input('id', mssql.Int, id)
+      .input('dni', mssql.VarChar(15), datos.dni)
+      .input('apellidos', mssql.NVarChar(100), datos.apellidos)
+      .input('area', mssql.NVarChar(80), datos.area)
+      .input('fechaIngreso', mssql.Date, new Date(`${datos.fechaIngreso}T00:00:00`))
+      .input('nombres', mssql.NVarChar(100), datos.nombres ?? null)
+      .input('cargo', mssql.NVarChar(80), datos.cargo ?? null)
+      .query(`
+UPDATE dbo.empleados
+   SET dni = @dni,
+       apellidos = @apellidos,
+       area = @area,
+       fechaIngreso = @fechaIngreso,
+       nombres = COALESCE(@nombres, nombres),
+       cargo = COALESCE(@cargo, cargo),
+       estado = 'ACTIVO',
+       updatedAt = SYSDATETIME()
+ OUTPUT inserted.*
+ WHERE id = @id`);
+    const fila = (result.recordset as unknown as EmpleadoRow[])[0];
+    if (!fila) throw new FichaNoEncontradaError(id);
+    return filaAEmpleado(fila);
   }
 
-  async completar(): Promise<never> {
+  async pendientes(): Promise<never> {
     throw new Error(
-      'SqlServerEmpleadoRepository.completar llega con completarFicha (WU12 del plan asistencia-rrhh-fase1)',
+      'SqlServerEmpleadoRepository.pendientes llega con la cola de fichas (WU15 del plan asistencia-rrhh-fase1)',
     );
   }
 }
