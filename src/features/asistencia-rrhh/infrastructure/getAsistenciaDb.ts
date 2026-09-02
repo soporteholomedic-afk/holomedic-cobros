@@ -13,7 +13,9 @@ import { migrate, seedParametros } from './sqlserver/migrate';
 import { SqlServerAlertaRepository } from './sqlserver/SqlServerAlertaRepository';
 import { SqlServerComandoRepository } from './sqlserver/SqlServerComandoRepository';
 import { SqlServerDispositivoRepository } from './sqlserver/SqlServerDispositivoRepository';
+import { SqlServerEmpleadoRepository } from './sqlserver/SqlServerEmpleadoRepository';
 import { SqlServerMarcacionRepository } from './sqlserver/SqlServerMarcacionRepository';
+import { SqlServerParametroRepository } from './sqlserver/SqlServerParametroRepository';
 
 /**
  * The asistencia-rrhh feature container (ADR-3): one factory owning ONE
@@ -37,12 +39,11 @@ export interface AsistenciaDb {
 }
 
 /**
- * Skeleton adapter for the ports whose SQL Server class has not landed
- * yet (empleados → WU7/WU12; parametros → WU12/13; auditoria → WU12).
- * Every method access fails loudly with the port name, so nothing can
- * silently no-op before the adapter arrives. The ingestion-side ports
- * (dispositivos/marcaciones/comandos/alertas) are real adapters since
- * WU6.
+ * Skeleton adapter for the port whose SQL Server class has not landed
+ * yet (auditoria → WU12). Every method access fails loudly with the
+ * port name, so nothing can silently no-op before the adapter arrives.
+ * The ingestion-side ports (dispositivos/marcaciones/comandos/alertas)
+ * are real adapters since WU6, and empleados/parametros since WU7.
  */
 function adaptadorEsqueleto<T extends object>(puerto: string): T {
   return new Proxy(
@@ -84,10 +85,10 @@ export function getAsistenciaDb(): Promise<AsistenciaDb> {
     return {
       dispositivos: new SqlServerDispositivoRepository(pool),
       marcaciones: new SqlServerMarcacionRepository(pool),
-      empleados: adaptadorEsqueleto('empleados'),
+      empleados: new SqlServerEmpleadoRepository(pool),
       comandos: new SqlServerComandoRepository(pool),
       alertas: new SqlServerAlertaRepository(pool),
-      parametros: adaptadorEsqueleto('parametros'),
+      parametros: new SqlServerParametroRepository(pool),
       auditoria: adaptadorEsqueleto('auditoria'),
     };
   })();

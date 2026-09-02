@@ -18,6 +18,7 @@ import type {
   IAlertaRepository,
   IComandoRepository,
   IMarcacionRepository,
+  ResultadoConfirmacion,
 } from '../../domain/ports';
 import type { Comando, Dispositivo, MarcacionRaw, MarcacionWire } from '../../domain/entities';
 
@@ -74,7 +75,9 @@ function makeComandos(reclamados: Comando[]) {
       llamadas.push(dispositivoId);
       return reclamados;
     },
-    confirmar: vi.fn(async (): Promise<'CONFIRMADO'> => 'CONFIRMADO'),
+    confirmar: vi.fn(
+      async (): Promise<ResultadoConfirmacion> => ({ estado: 'CONFIRMADO', confirmadoAt: null }),
+    ),
   };
   return { repo, llamadas };
 }
