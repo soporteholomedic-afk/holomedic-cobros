@@ -5,11 +5,24 @@ Wants=network-online.target
 
 [Service]
 Type=simple
+# ADR-11 (hardening systemd mínimo): usuario de sistema dedicado (jamás
+# root) y sandbox que no interfiere con el TCP saliente al K20 Pro
+# (puerto 4370). Sin PrivateNetwork/IPAddressAllow: cortarían o
+# frágilizarían la única conexión del dispositivo.
+User=worker-asistencia
+Group=worker-asistencia
 WorkingDirectory=/opt/worker-asistencia
 EnvironmentFile=-/etc/worker-asistencia.env
-ExecStart=/usr/bin/python3 -m worker.main
+# Intérprete del venv (REQ-1, PEP 668): /usr/bin/python3 no ve pyzk.
+# Se preserva la invocación por módulo -m worker.main.
+ExecStart=/opt/worker-asistencia/venv/bin/python -m worker.main
 Restart=always
 RestartSec=5
+ProtectSystem=full
+ProtectHome=yes
+NoNewPrivileges=yes
+# Único directorio escribible: el buffer append-only.
+ReadWritePaths=/var/lib/worker-asistencia
 
 [Install]
 WantedBy=multi-user.target
