@@ -1,0 +1,15 @@
+[Unit]
+Description=Asistencia RRHH — ZKTeco K20 Pro worker
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/worker-asistencia
+EnvironmentFile=-/etc/worker-asistencia.env
+ExecStart=/usr/bin/python3 -m worker.main
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

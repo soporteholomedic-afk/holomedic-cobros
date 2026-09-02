@@ -53,3 +53,7 @@ tmp/
 *.tmp
 *.temp
 
+
+# Python bytecode (worker tools)
+__pycache__/
+*.pyc

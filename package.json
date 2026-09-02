@@ -8,7 +8,8 @@
     "start": "next start",
     "lint": "eslint",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "test:worker": "python3 -m unittest discover -s tools/worker-asistencia/tests -t tools/worker-asistencia"
   },
   "dependencies": {
     "@blocknote/core": "^0.51.4",
