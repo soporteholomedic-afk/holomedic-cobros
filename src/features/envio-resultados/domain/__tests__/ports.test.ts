@@ -3,6 +3,10 @@ import {
   type FileEntry,
   type FileSystemNode,
   type IFileRepository,
+  type IPdfCompressor,
+  type PdfCompressionMethod,
+  type PdfCompressionResult,
+  type PdfCompressionSkipReason,
 } from '@/features/envio-resultados/domain/ports';
 
 /**
@@ -103,5 +107,73 @@ describe('IFileRepository port', () => {
     expectTypeOf(MockFileRepository).toMatchTypeOf<new () => IFileRepository>();
     const instance: IFileRepository = new MockFileRepository();
     expectTypeOf(instance).toEqualTypeOf<IFileRepository>();
+  });
+});
+
+/**
+ * Compilation tests for the `IPdfCompressor` hexagonal port
+ * (comprimir-pdfs-consolidados — spec RF1).
+ *
+ * The port is a pure contract (no runtime surface of its own): any
+ * implementation must resolve a typed `PdfCompressionResult` carrying the
+ * best-of output bytes, both sizes, the method used, the duration, and an
+ * optional skip reason present only on passthrough outcomes. These tests
+ * pin the shape exactly as design §2 defines it, so a drift breaks the
+ * build instead of silently changing the PR2 adapter's contract.
+ */
+describe('IPdfCompressor port', () => {
+  it('PdfCompressionMethod is the pdf-lib strategy union (extensible for future adapters)', () => {
+    expectTypeOf<PdfCompressionMethod>().toEqualTypeOf<
+      'pdf-lib-lossless' | 'pdf-lib-passthrough'
+    >();
+  });
+
+  it('PdfCompressionSkipReason is the passthrough-reason union', () => {
+    expectTypeOf<PdfCompressionSkipReason>().toEqualTypeOf<
+      'grew' | 'parse-error' | 'encrypted' | 'timeout' | 'not-pdf'
+    >();
+  });
+
+  it('exposes a PdfCompressionResult with bytes, both sizes, method, duration, optional skip reason', () => {
+    expectTypeOf<PdfCompressionResult>().toMatchObjectType<{
+      bytes: Buffer;
+      originalBytes: number;
+      outputBytes: number;
+      method: PdfCompressionMethod;
+      durationMs: number;
+      skippedReason?: PdfCompressionSkipReason;
+    }>();
+  });
+
+  it('requires compress(pdfBytes) returning Promise<PdfCompressionResult>', () => {
+    type CompressSig = IPdfCompressor['compress'];
+    expectTypeOf<CompressSig>().toEqualTypeOf<
+      (pdfBytes: Buffer) => Promise<PdfCompressionResult>
+    >();
+  });
+
+  it('exposes compress as the ONLY port method', () => {
+    const expectedKeys = ['compress'] as const;
+    type OwnKeys = keyof IPdfCompressor;
+    const owns: ReadonlyArray<OwnKeys> = expectedKeys;
+    expect(owns).toEqual(['compress']);
+  });
+
+  it('can be implemented by a class (compile-time check)', () => {
+    class FakeCompressor implements IPdfCompressor {
+      async compress(pdfBytes: Buffer): Promise<PdfCompressionResult> {
+        return {
+          bytes: pdfBytes,
+          originalBytes: pdfBytes.length,
+          outputBytes: pdfBytes.length,
+          method: 'pdf-lib-passthrough',
+          durationMs: 0,
+          skippedReason: 'grew',
+        };
+      }
+    }
+    expectTypeOf(FakeCompressor).toMatchTypeOf<new () => IPdfCompressor>();
+    const instance: IPdfCompressor = new FakeCompressor();
+    expectTypeOf(instance).toEqualTypeOf<IPdfCompressor>();
   });
 });
