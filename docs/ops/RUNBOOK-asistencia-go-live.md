@@ -133,12 +133,14 @@ Prueba la cadena completa: equipo físico → worker → API → SQL → dashboa
 2. **Verificar la fila en SQL** (esperar ~1 minuto: el worker envía por lotes cada `SENDER_INTERVALO_SEG`, default 10 s):
 
    ```sql
-   SELECT TOP 10 user_id, fecha_hora, punch, tipo_verificacion
+   SELECT TOP 10 userId, fechaHora, punch, tipoVerificacion
    FROM dbo.marcaciones_raw
-   ORDER BY fecha_hora DESC;
+   ORDER BY fechaHora DESC;
    ```
 
-   Debe aparecer la marca recién hecha con el `user_id` de la ficha usada.
+   > Nota: el payload HTTP del worker usa snake_case (`user_id`, `fecha_hora`, ADR-2), pero las columnas SQL de `marcaciones_raw` son camelCase (`userId`, `fechaHora`, `tipoVerificacion`); al consultar la tabla, usar los nombres SQL.
+
+   Debe aparecer la marca recién hecha con el `userId` de la ficha usada.
 
 3. **Verificar el dashboard `/asistencia`** de la app: la misma marca debe verse en el día en curso.
 
