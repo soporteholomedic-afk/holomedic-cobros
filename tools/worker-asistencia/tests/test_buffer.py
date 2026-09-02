@@ -20,7 +20,7 @@ def item(user_id: str, minuto: int, punch: int = 0) -> dict:
         "user_id": user_id,
         "fecha_hora": f"2026-09-01T08:{minuto:02d}:00",
         "punch": punch,
-        "tipo": "HUELLA",
+        "tipo_verificacion": "HUELLA",
     }
 
 
@@ -44,7 +44,7 @@ class BufferAsistenciaTest(unittest.TestCase):
         )
         self.assertEqual(pendientes[2]["punch"], 1)
         self.assertEqual(pendientes[0]["fecha_hora"], "2026-09-01T08:01:00")
-        self.assertEqual(pendientes[0]["tipo"], "HUELLA")
+        self.assertEqual(pendientes[0]["tipo_verificacion"], "HUELLA")
 
     def test_entrega_lotes_de_maximo_200_y_solo_avanza_al_marcar(self):
         buf = self._buffer()
