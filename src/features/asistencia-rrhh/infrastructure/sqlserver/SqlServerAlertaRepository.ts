@@ -1,12 +1,13 @@
 import * as mssql from 'mssql';
 
+import type { Alerta } from '../../domain/entities';
 import type { IAlertaRepository } from '../../domain/ports';
 
 /**
  * SQL Server adapter for capture alerts. `crear` backs the ingestion
- * alerts (USER_ID_DESCONOCIDO) and later the heartbeat drift alert
- * (WU7); `recientes` feeds the dashboard panel (WU13) and fails loudly
- * until then.
+ * alerts (USER_ID_DESCONOCIDO) and the heartbeat drift alert;
+ * `recientes` feeds the dashboard panel (REQ-F1-11) — most recent
+ * first, covered by idx_alertas_fecha.
  */
 export class SqlServerAlertaRepository implements IAlertaRepository {
   constructor(private readonly pool: mssql.ConnectionPool) {}
@@ -22,9 +23,17 @@ INSERT INTO dbo.alertas (tipo, detalle, dispositivoId)
 VALUES (@tipo, @detalle, @dispositivoId)`);
   }
 
-  async recientes(): Promise<never> {
-    throw new Error(
-      'SqlServerAlertaRepository.recientes llega con el dashboard (WU13 del plan asistencia-rrhh-fase1)',
-    );
+  async recientes(limite: number): Promise<Alerta[]> {
+    const result = await this.pool
+      .request()
+      .input('limite', mssql.Int, limite)
+      .query(`
+SELECT TOP (@limite) id, tipo, empleadoId, dispositivoId, detalle, fecha, atendida
+FROM dbo.alertas
+ORDER BY fecha DESC, id DESC`);
+    return (result.recordset as unknown as Alerta[]).map((fila) => ({
+      ...fila,
+      atendida: Boolean(fila.atendida),
+    }));
   }
 }

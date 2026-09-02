@@ -11,6 +11,7 @@ import { getHolomedicPool } from '@/lib/db';
 
 import { migrate, seedParametros } from './sqlserver/migrate';
 import { SqlServerAlertaRepository } from './sqlserver/SqlServerAlertaRepository';
+import { SqlServerAuditoriaRepository } from './sqlserver/SqlServerAuditoriaRepository';
 import { SqlServerComandoRepository } from './sqlserver/SqlServerComandoRepository';
 import { SqlServerDispositivoRepository } from './sqlserver/SqlServerDispositivoRepository';
 import { SqlServerEmpleadoRepository } from './sqlserver/SqlServerEmpleadoRepository';
@@ -26,7 +27,8 @@ import { SqlServerParametroRepository } from './sqlserver/SqlServerParametroRepo
  * pattern: seven separate factories would run seven migrations and
  * seven pools for one feature. Use cases still depend on the individual
  * ports only — this container is the composition root the API routes
- * resolve adapters from.
+ * resolve adapters from. Every port has a real adapter since WU12
+ * (auditoria was the last fail-loud skeleton slot).
  */
 export interface AsistenciaDb {
   dispositivos: IDispositivoRepository;
@@ -36,27 +38,6 @@ export interface AsistenciaDb {
   alertas: IAlertaRepository;
   parametros: IParametroRepository;
   auditoria: IAuditoriaRepository;
-}
-
-/**
- * Skeleton adapter for the port whose SQL Server class has not landed
- * yet (auditoria → WU12). Every method access fails loudly with the
- * port name, so nothing can silently no-op before the adapter arrives.
- * The ingestion-side ports (dispositivos/marcaciones/comandos/alertas)
- * are real adapters since WU6, and empleados/parametros since WU7.
- */
-function adaptadorEsqueleto<T extends object>(puerto: string): T {
-  return new Proxy(
-    {},
-    {
-      get(_target, prop) {
-        throw new Error(
-          `AsistenciaDb.${puerto}.${String(prop)} aún no está implementado ` +
-            '(llega en un work unit posterior del plan asistencia-rrhh-fase1)',
-        );
-      },
-    },
-  ) as T;
 }
 
 let cached: Promise<AsistenciaDb> | null = null;
@@ -89,7 +70,7 @@ export function getAsistenciaDb(): Promise<AsistenciaDb> {
       comandos: new SqlServerComandoRepository(pool),
       alertas: new SqlServerAlertaRepository(pool),
       parametros: new SqlServerParametroRepository(pool),
-      auditoria: adaptadorEsqueleto('auditoria'),
+      auditoria: new SqlServerAuditoriaRepository(pool),
     };
   })();
   return cached;
