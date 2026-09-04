@@ -38,9 +38,10 @@ import { buildDctPdf } from './helpers/dctPdfBuilder';
  * threshold (ineligible — so I7 exercises the bytes gate for real).
  *
  * The eligibility/preservation matrix (I2/I3/I5/I5b/I13/I14) pins the
- * thresholds, filter forms, SMask preservation and JPX skipping; the
- * fail-open family (I4/I6/I8–I12/I15) arrives in the next batch on this
- * same file.
+ * thresholds, filter forms, SMask preservation and JPX skipping; this
+ * batch completes the matrix with the CMYK re-encode (I4), the per-image
+ * fail-open on a corrupt stream (I6), the fail-open family (I8–I12) and
+ * the metadata-preservation divergence (I15).
  *
  * Multi-image fixtures (I2/I5b/I13/I14) are composed test-side with REAL
  * sharp noise JPEGs — the builder emits single-image PDFs only. Every
@@ -620,6 +621,528 @@ describe('PdfImageCompressorAdapter', () => {
       const small = requireImageByWidth(reloaded, 999);
       expect(numberFrom(small.dict, 'Height')).toBe(999);
       expect(Buffer.compare(streamBytesOf(small), smallSnapshot)).toBe(0);
+    }, 60_000);
+  });
+
+  describe('I4 — CMYK scan re-encoded to sRGB', () => {
+    it('re-encodes an eligible DeviceCMYK DCT scan into /DeviceRGB and deletes stale decode hints', async () => {
+      // Primary recipe per design §6: a REAL libvips CMYK JPEG (the PR2
+      // smoke suite proved real CMYK JPEGs embed cleanly through the
+      // builder), so the dict-level synthetic fallback stays unused.
+      const { bytes: built } = await buildDctPdf({
+        width: 2480,
+        height: 3456,
+        content: 'noise',
+        colorspace: 'cmyk',
+      });
+      // Post-flush dict surgery (same test-side pattern as I5b/I3): the
+      // builder cannot attach Adobe-style decode hints, so stale
+      // /DecodeParms and /Decode are injected here to prove D5 DELETES
+      // them on re-encode (a stale /ColorTransform 0 or an inverted
+      // /Decode would corrupt the re-encoded image).
+      const surgeryDoc = await PDFDocument.load(asUint8ArrayView(built), {
+        updateMetadata: false,
+      });
+      const dct = requireDctImage(surgeryDoc);
+      expectEligible(dct);
+      // Fixture guard: the input is genuinely CMYK before surgery.
+      const inputColorSpace = dct.dict.get(PDFName.of('ColorSpace'));
+      if (!(inputColorSpace instanceof PDFName)) {
+        throw new Error('fixture CMYK image dict has no /ColorSpace name');
+      }
+      expect(inputColorSpace.asString()).toBe('/DeviceCMYK');
+      dct.dict.set(
+        PDFName.of('DecodeParms'),
+        surgeryDoc.context.obj({ ColorTransform: 0 }),
+      );
+      dct.dict.set(PDFName.of('Decode'), surgeryDoc.context.obj([1, 0, 1, 0, 1, 0]));
+      const input = Buffer.from(await surgeryDoc.save());
+      const inputSnapshot = streamBytesOf(dct);
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+      const result = await adapter.compress(input);
+
+      // Success row: the CMYK scan re-encoded cleanly, no fail-open.
+      expect(warnSpy).not.toHaveBeenCalled();
+      expect(result.method).toBe('pdf-lib-image-email');
+      expect(result.skippedReason).toBeUndefined();
+      expect(result.outputBytes).toBeLessThan(result.originalBytes);
+
+      const reloaded = await PDFDocument.load(asUint8ArrayView(result.bytes), {
+        updateMetadata: false,
+      });
+      // Exactly one DCTDecode image — its /Filter survived surgery.
+      const outputImage = requireDctImage(reloaded);
+      expect(numberFrom(outputImage.dict, 'Width')).toBe(1240);
+      expect(numberFrom(outputImage.dict, 'Height')).toBe(1728);
+      expect(numberFrom(outputImage.dict, 'BitsPerComponent')).toBe(8);
+
+      // Unconditional sRGB rewrite (D5): the dict now says /DeviceRGB…
+      const outputColorSpace = outputImage.dict.get(PDFName.of('ColorSpace'));
+      if (!(outputColorSpace instanceof PDFName)) {
+        throw new Error('re-encoded image dict lost its /ColorSpace name');
+      }
+      expect(outputColorSpace.asString()).toBe('/DeviceRGB');
+
+      // …and the stale decode hints are GONE (they were in the input).
+      expect(outputImage.dict.get(PDFName.of('DecodeParms'))).toBeUndefined();
+      expect(outputImage.dict.get(PDFName.of('Decode'))).toBeUndefined();
+
+      // The stream is the smaller sRGB re-encode, not the CMYK original.
+      expect(streamBytesOf(outputImage).length).toBeLessThan(inputSnapshot.length);
+    }, 60_000);
+  });
+
+  describe('I6 — corrupt DCT stream fails open per image', () => {
+    it('keeps the corrupt stream byte-identical, compresses the scan beside it, and warns without throwing', async () => {
+      const { doc, page, save } = await composeNoisePdf([
+        { width: 1200, height: 1400, quality: 100 }, // eligible scan
+      ]);
+      // The builder is single-image, so the corrupt stream is attached
+      // test-side with the builder's own corrupt recipe: a JPEG SOI
+      // marker followed by deterministic garbage (proven sharp-
+      // undecodable by dctPdfBuilder.smoke.test.ts), sized above the
+      // bytes threshold so the stream actually reaches the decode step.
+      const corruptBytes = Buffer.concat([
+        Buffer.from([0xff, 0xd8]), // JPEG SOI
+        Buffer.alloc(PDF_IMAGE_MIN_DCT_STREAM_BYTES + 1024 - 2, 0x5a),
+      ]);
+      const corruptDict = doc.context.obj({
+        Type: 'XObject',
+        Subtype: 'Image',
+        Width: 2480,
+        Height: 3456,
+        ColorSpace: 'DeviceRGB',
+        BitsPerComponent: 8,
+        Filter: 'DCTDecode',
+      });
+      const corruptRef = doc.context.register(
+        PDFRawStream.of(corruptDict, new Uint8Array(corruptBytes)),
+      );
+      page.node.setXObject(PDFName.of('ImCorrupt'), corruptRef);
+      const input = await save();
+
+      const inputDoc = await PDFDocument.load(asUint8ArrayView(input), {
+        updateMetadata: false,
+      });
+      expect(findImageDicts(inputDoc)).toHaveLength(2);
+      expectEligible(requireImageByWidth(inputDoc, 1200));
+      // The corrupt image clears BOTH size gates too — only the garbage
+      // CONTENT can fail the pipeline (per-image fail-open, not
+      // eligibility).
+      expectEligible(requireImageByWidth(inputDoc, 2480));
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+      const result = await adapter.compress(input); // must not throw
+
+      // File-level row stays SUCCESS (error map: per-image fail-open does
+      // not mark the file) and the scan's savings survive (best-of).
+      expect(result.method).toBe('pdf-lib-image-email');
+      expect(result.skippedReason).toBeUndefined();
+      expect(result.outputBytes).toBeLessThan(result.originalBytes);
+
+      // Exactly one warn — the per-image skip, carrying the corrupt ref.
+      expect(warnSpy).toHaveBeenCalledTimes(1);
+      expect(warnSpy).toHaveBeenCalledWith(
+        '[PdfImageCompressorAdapter] image skipped',
+        expect.objectContaining({ ref: String(corruptRef), error: expect.any(String) }),
+      );
+
+      const reloaded = await PDFDocument.load(asUint8ArrayView(result.bytes), {
+        updateMetadata: false,
+      });
+      expect(findImageDicts(reloaded)).toHaveLength(2);
+
+      // The healthy scan was re-encoded…
+      const scan = requireImageByWidth(reloaded, 600);
+      expect(numberFrom(scan.dict, 'Height')).toBe(700);
+
+      // …while the corrupt image kept its dict and bytes, byte for byte.
+      const corrupt = requireImageByWidth(reloaded, 2480);
+      expect(numberFrom(corrupt.dict, 'Height')).toBe(3456);
+      expect(Buffer.compare(streamBytesOf(corrupt), corruptBytes)).toBe(0);
+    }, 60_000);
+  });
+
+  describe('I15 — document metadata preserved (divergence vs the lossless adapter)', () => {
+    it('keeps title/author/subject/keywords/producer/creator through the re-encode', async () => {
+      const { bytes: built } = await buildDctPdf({
+        width: 2480,
+        height: 3456,
+        content: 'noise',
+      });
+      const metadataDoc = await PDFDocument.load(asUint8ArrayView(built), {
+        updateMetadata: false,
+      });
+      metadataDoc.setTitle('EMO Consolidado 2026-09');
+      metadataDoc.setAuthor('Holomedic');
+      metadataDoc.setSubject('Clinical archive export');
+      metadataDoc.setKeywords(['holomedic', 'consolidado']);
+      metadataDoc.setProducer('HolomedicPACS 3.1');
+      metadataDoc.setCreator('HolomedicWeb 2.0');
+      // Capture the ACTUAL stored strings — pdf-lib hex-encodes Info text
+      // and joins keyword arrays its own way, so comparing the captured
+      // getters avoids coupling to those encoding formats.
+      const expectedMetadata = {
+        title: metadataDoc.getTitle(),
+        author: metadataDoc.getAuthor(),
+        subject: metadataDoc.getSubject(),
+        keywords: metadataDoc.getKeywords(),
+        producer: metadataDoc.getProducer(),
+        creator: metadataDoc.getCreator(),
+      };
+      const input = Buffer.from(await metadataDoc.save());
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+      const result = await adapter.compress(input);
+
+      // The scan genuinely re-encoded — the preservation is not vacuous.
+      expect(warnSpy).not.toHaveBeenCalled();
+      expect(result.method).toBe('pdf-lib-image-email');
+      expect(result.skippedReason).toBeUndefined();
+      expect(result.outputBytes).toBeLessThan(result.originalBytes);
+      const reloaded = await PDFDocument.load(asUint8ArrayView(result.bytes), {
+        updateMetadata: false,
+      });
+      expect(numberFrom(requireImageByWidth(reloaded, 1240).dict, 'Height')).toBe(1728);
+
+      // The image adapter does NOT strip metadata (design §3.2 D-note):
+      // every Info-dict entry survives surgery. The LOSSLESS adapter
+      // empties exactly these fields (its test A5) — the deliberate
+      // divergence between the two profiles.
+      expect(reloaded.getTitle()).toBe(expectedMetadata.title);
+      expect(reloaded.getAuthor()).toBe(expectedMetadata.author);
+      expect(reloaded.getSubject()).toBe(expectedMetadata.subject);
+      expect(reloaded.getKeywords()).toBe(expectedMetadata.keywords);
+      expect(reloaded.getProducer()).toBe(expectedMetadata.producer);
+      expect(reloaded.getCreator()).toBe(expectedMetadata.creator);
+    }, 60_000);
+  });
+
+  /**
+   * Injects `/Encrypt 1 0 R` into the dict of the LAST indirect object —
+   * always the XRef stream in a pdf-lib save — reproducing an encrypted
+   * PDF at load time. Same pattern as the lossless suite (its test A4).
+   */
+  function injectEncryptEntry(pdf: Buffer): Buffer {
+    const objIdx = pdf.lastIndexOf(Buffer.from(' obj'));
+    const dictIdx = pdf.indexOf(Buffer.from('<<'), objIdx);
+    return Buffer.concat([
+      pdf.subarray(0, dictIdx + 2),
+      Buffer.from('/Encrypt 1 0 R '),
+      pdf.subarray(dictIdx + 2),
+    ]);
+  }
+
+  describe('I9 — encrypted PDF fails open (encrypted)', () => {
+    it('resolves with the original bytes and logs the classified warning (never throws)', async () => {
+      // Any structurally valid pdf-lib-saved PDF works: /Encrypt trips at
+      // PDFDocument.load, before sharp or the eligibility gates ever run.
+      const { bytes: built } = await buildDctPdf({
+        width: 1200,
+        height: 1500,
+        content: 'flat',
+      });
+      const input = injectEncryptEntry(built);
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+      const result = await adapter.compress(input);
+
+      expect(result.method).toBe('pdf-lib-image-email');
+      expect(result.skippedReason).toBe('encrypted');
+      expect(result.originalBytes).toBe(input.length);
+      expect(result.outputBytes).toBe(input.length);
+      expect(Buffer.compare(result.bytes, input)).toBe(0);
+      expect(warnSpy).toHaveBeenCalledTimes(1);
+      expect(warnSpy).toHaveBeenCalledWith(
+        '[PdfImageCompressorAdapter] fail-open',
+        expect.objectContaining({ reason: 'encrypted', sizeBytes: input.length }),
+      );
+    });
+  });
+
+  describe('I10 — non-PDF bytes fail open (parse-error)', () => {
+    it('resolves with the original bytes and logs the classified warning (never throws)', async () => {
+      const input = Buffer.from('not a pdf');
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+      const result = await adapter.compress(input);
+
+      expect(result.method).toBe('pdf-lib-image-email');
+      expect(result.skippedReason).toBe('parse-error');
+      expect(result.originalBytes).toBe(input.length);
+      expect(result.outputBytes).toBe(input.length);
+      expect(Buffer.compare(result.bytes, input)).toBe(0);
+      expect(warnSpy).toHaveBeenCalledTimes(1);
+      expect(warnSpy).toHaveBeenCalledWith(
+        '[PdfImageCompressorAdapter] fail-open',
+        expect.objectContaining({ reason: 'parse-error', sizeBytes: input.length }),
+      );
+    });
+  });
+
+  // ---------------------------------------------------------------------------
+  // Module-mock plumbing (I8/I11/I12 — design §6: vi.mock('sharp'); vitest
+  // intercepts the adapter's DYNAMIC import).
+  //
+  // The adapter module caches its sharp import promise at module scope, so a
+  // mock must be observed by a FRESH adapter module instance: each mocked
+  // test registers the mock with vi.doMock, resets the module registry, and
+  // re-imports the adapter. The file's statically imported adapter class and
+  // the test file's REAL sharp (used for every fixture) keep their original
+  // bindings, so the earlier tests are untouched. Each mocked describe
+  // unmocks and resets again in its afterEach.
+  // ---------------------------------------------------------------------------
+
+  /** Result shape the adapter destructures from the stubbed toBuffer(). */
+  interface SharpStubResult {
+    data: Buffer;
+    info: { width: number; height: number };
+  }
+
+  /** Minimal chainable shape of the `sharp(input)` factory's pipeline. */
+  interface SharpStubPipeline {
+    rotate(): SharpStubPipeline;
+    resize(): SharpStubPipeline;
+    toColorspace(): SharpStubPipeline;
+    jpeg(): SharpStubPipeline;
+    toBuffer(): Promise<SharpStubResult>;
+  }
+
+  /**
+   * Builds a `sharp(input)` factory stub that records the stream length the
+   * adapter hands it and resolves `toBuffer` through `resolve` (which may
+   * return a never-resolving promise to stall the pipeline).
+   */
+  function makeSharpFactoryStub(resolve: (streamBytesLength: number) => Promise<SharpStubResult>): {
+    factory: (input: Buffer) => SharpStubPipeline;
+    seenStreamBytes(): number | undefined;
+  } {
+    let seen: number | undefined;
+    const factory = (input: Buffer): SharpStubPipeline => {
+      seen = input.length;
+      const pipeline: SharpStubPipeline = {
+        rotate: () => pipeline,
+        resize: () => pipeline,
+        toColorspace: () => pipeline,
+        jpeg: () => pipeline,
+        toBuffer: () => resolve(input.length),
+      };
+      return pipeline;
+    };
+    return { factory, seenStreamBytes: () => seen };
+  }
+
+  /** Registers `moduleShape` as the 'sharp' module mock and returns a FRESH
+   * adapter class from a reset module registry (see the block comment). */
+  async function importAdapterWithSharpMock(moduleShape: { default: unknown }): Promise<
+    typeof PdfImageCompressorAdapter
+  > {
+    vi.doMock('sharp', () => moduleShape);
+    vi.resetModules();
+    return (await import('../PdfImageCompressorAdapter')).PdfImageCompressorAdapter;
+  }
+
+  describe('I8 — per-image best-of (mocked sharp pipeline)', () => {
+    afterEach(() => {
+      vi.doUnmock('sharp');
+      vi.resetModules();
+    });
+
+    it('keeps the original stream and returns byte-identical bytes when the mock re-encode is larger', async () => {
+      const { save } = await composeNoisePdf([
+        { width: 1200, height: 1400, quality: 100 },
+      ]);
+      const input = await save();
+      const inputDoc = await PDFDocument.load(asUint8ArrayView(input), {
+        updateMetadata: false,
+      });
+      expectEligible(requireImageByWidth(inputDoc, 1200));
+      const originalStream = streamBytesOf(requireImageByWidth(inputDoc, 1200));
+      const stub = makeSharpFactoryStub(async (streamBytesLength) => ({
+        data: Buffer.alloc(streamBytesLength + 4096, 0x11), // oversized re-encode
+        info: { width: 10, height: 10 },
+      }));
+      const FreshAdapter = await importAdapterWithSharpMock({ default: stub.factory });
+      const mockedAdapter = new FreshAdapter();
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+      const result = await mockedAdapter.compress(input);
+
+      // The stub pipeline RAN — the eligible stream actually reached sharp
+      // (no vacuous green from an eligibility miss).
+      expect(stub.seenStreamBytes()).toBe(originalStream.length);
+
+      // Per-image best-of rejected the oversized re-encode (error map:
+      // 'row stays success') → ZERO images replaced → the D3 no-op
+      // contract returns the ORIGINAL bytes with no save() and NO
+      // skippedReason. Characterization note: the file-level 'grew'
+      // passthrough (≥1 replacement + saved ≥ original) exists in the
+      // adapter but is unreachable from a mocked pipeline — every ACCEPTED
+      // replacement strictly shrinks its stream while the rest of the
+      // document re-serializes deterministically. The user-visible
+      // guarantee pinned here is the invariant both branches serve: this
+      // seam never returns bigger (or different) bytes.
+      expect(warnSpy).not.toHaveBeenCalled();
+      expect(result.method).toBe('pdf-lib-image-email');
+      expect(result.skippedReason).toBeUndefined();
+      expect(result.originalBytes).toBe(input.length);
+      expect(result.outputBytes).toBe(input.length);
+      expect(Buffer.compare(result.bytes, input)).toBe(0);
+
+      // The dict was untouched: no fake info (10×10) ever reached it and
+      // the original stream is still there, byte for byte.
+      const reloaded = await PDFDocument.load(asUint8ArrayView(result.bytes), {
+        updateMetadata: false,
+      });
+      const image = requireImageByWidth(reloaded, 1200);
+      expect(numberFrom(image.dict, 'Height')).toBe(1400);
+      expect(Buffer.compare(streamBytesOf(image), originalStream)).toBe(0);
+    }, 60_000);
+
+    it('accepts a smaller mock re-encode and writes its info dims into the dict', async () => {
+      const { save } = await composeNoisePdf([
+        { width: 1200, height: 1400, quality: 100 },
+      ]);
+      const input = await save();
+      const inputDoc = await PDFDocument.load(asUint8ArrayView(input), {
+        updateMetadata: false,
+      });
+      expectEligible(requireImageByWidth(inputDoc, 1200));
+      const originalStream = streamBytesOf(requireImageByWidth(inputDoc, 1200));
+      const stub = makeSharpFactoryStub(async (streamBytesLength) => ({
+        data: Buffer.alloc(streamBytesLength - 1024, 0x22), // smaller → accepted
+        // Deliberately NOT the arithmetic halving (600×700): the dict must
+        // report what sharp's info says, never arithmetic (design §3.2 D5).
+        info: { width: 321, height: 701 },
+      }));
+      const FreshAdapter = await importAdapterWithSharpMock({ default: stub.factory });
+      const mockedAdapter = new FreshAdapter();
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+      const result = await mockedAdapter.compress(input);
+
+      expect(stub.seenStreamBytes()).toBe(originalStream.length);
+      expect(warnSpy).not.toHaveBeenCalled();
+      expect(result.method).toBe('pdf-lib-image-email');
+      expect(result.skippedReason).toBeUndefined();
+      expect(result.outputBytes).toBeLessThan(result.originalBytes);
+
+      const reloaded = await PDFDocument.load(asUint8ArrayView(result.bytes), {
+        updateMetadata: false,
+      });
+      // The image is found by its NEW width: the mock's info reached the
+      // dict, not the arithmetic halving.
+      const image = requireImageByWidth(reloaded, 321);
+      expect(numberFrom(image.dict, 'Height')).toBe(701);
+      expect(numberFrom(image.dict, 'BitsPerComponent')).toBe(8);
+      const colorspace = image.dict.get(PDFName.of('ColorSpace'));
+      if (!(colorspace instanceof PDFName)) {
+        throw new Error('re-encoded image dict lost its /ColorSpace name');
+      }
+      expect(colorspace.asString()).toBe('/DeviceRGB');
+      // The stored stream IS the mock's data (1024 bytes smaller).
+      expect(streamBytesOf(image).length).toBe(originalStream.length - 1024);
+    }, 60_000);
+  });
+
+  describe('I11 — sharp module load failure fails open (parse-error)', () => {
+    afterEach(() => {
+      vi.doUnmock('sharp');
+      vi.resetModules();
+    });
+
+    it('resolves with the original bytes, warns naming sharp, and recovers on the next call (cache cleared)', async () => {
+      const { save } = await composeNoisePdf([
+        { width: 1200, height: 1400, quality: 100 },
+      ]);
+      const input = await save();
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+      // Phase 1 — the dynamic import of sharp itself rejects.
+      vi.doMock('sharp', () => {
+        throw new Error("Cannot find module 'sharp'");
+      });
+      vi.resetModules();
+      const FreshAdapter = (await import('../PdfImageCompressorAdapter'))
+        .PdfImageCompressorAdapter;
+      const brokenAdapter = new FreshAdapter();
+
+      const failed = await brokenAdapter.compress(input);
+
+      expect(failed.method).toBe('pdf-lib-image-email');
+      expect(failed.skippedReason).toBe('parse-error');
+      expect(failed.originalBytes).toBe(input.length);
+      expect(failed.outputBytes).toBe(input.length);
+      expect(Buffer.compare(failed.bytes, input)).toBe(0);
+      expect(warnSpy).toHaveBeenCalledTimes(1);
+      expect(warnSpy).toHaveBeenCalledWith(
+        '[PdfImageCompressorAdapter] fail-open',
+        expect.objectContaining({ reason: 'parse-error', sizeBytes: input.length }),
+      );
+      // The loader re-throws with a message that always names 'sharp' —
+      // diagnosable regardless of the bundler's own error text (D4).
+      const failPayload = warnSpy.mock.calls[0][1] as { error?: unknown };
+      expect(String(failPayload.error)).toContain('sharp native module failed to load');
+
+      // Phase 2 — a healthy module replaces the broken one: the loader
+      // cleared its cached promise on failure, so THIS SAME adapter
+      // instance retries the import and the pipeline recovers.
+      const stub = makeSharpFactoryStub(async (streamBytesLength) => ({
+        data: Buffer.alloc(streamBytesLength - 1024, 0x22),
+        info: { width: 600, height: 700 },
+      }));
+      vi.doMock('sharp', () => ({ default: stub.factory }));
+      expect(stub.seenStreamBytes()).toBeUndefined(); // nothing ran yet
+
+      const recovered = await brokenAdapter.compress(input);
+
+      expect(stub.seenStreamBytes()).toBeDefined(); // the retry reached sharp
+      expect(recovered.method).toBe('pdf-lib-image-email');
+      expect(recovered.skippedReason).toBeUndefined();
+      expect(recovered.outputBytes).toBeLessThan(recovered.originalBytes);
+      // Phase 1's warn is still the only fail-open warning on the file.
+      expect(warnSpy).toHaveBeenCalledTimes(1);
+    }, 60_000);
+  });
+
+  describe('I12 — stalled sharp pipeline fails open (timeout)', () => {
+    afterEach(() => {
+      vi.doUnmock('sharp');
+      vi.resetModules();
+    });
+
+    it('preempts a never-resolving toBuffer with the original bytes and a timeout warning', async () => {
+      const { save } = await composeNoisePdf([
+        { width: 1200, height: 1400, quality: 100 },
+      ]);
+      const input = await save();
+      const inputDoc = await PDFDocument.load(asUint8ArrayView(input), {
+        updateMetadata: false,
+      });
+      expectEligible(requireImageByWidth(inputDoc, 1200)); // the pipeline is REACHED
+      // Never-resolving toBuffer: the sharp work stays in flight while the
+      // race guard's 25ms timer wins — a REAL preemption (sharp runs on
+      // the libuv threadpool, design §3.2 D4), not the instant bail-out a
+      // 0ms budget would produce before the pipeline even starts.
+      const stub = makeSharpFactoryStub(() => new Promise<SharpStubResult>(() => {}));
+      const FreshAdapter = await importAdapterWithSharpMock({ default: stub.factory });
+      const impatient = new FreshAdapter(25);
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+      const result = await impatient.compress(input);
+
+      expect(stub.seenStreamBytes()).toBeDefined(); // stalled inside the pipeline
+      expect(result.method).toBe('pdf-lib-image-email');
+      expect(result.skippedReason).toBe('timeout');
+      expect(result.originalBytes).toBe(input.length);
+      expect(result.outputBytes).toBe(input.length);
+      expect(Buffer.compare(result.bytes, input)).toBe(0);
+      expect(warnSpy).toHaveBeenCalledTimes(1);
+      expect(warnSpy).toHaveBeenCalledWith(
+        '[PdfImageCompressorAdapter] fail-open',
+        expect.objectContaining({ reason: 'timeout', sizeBytes: input.length }),
+      );
     }, 60_000);
   });
 });
