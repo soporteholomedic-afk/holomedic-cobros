@@ -61,3 +61,82 @@ export function isPdfCompressionEnabled(): boolean {
   );
   return true;
 }
+
+/**
+ * Which compressor strategy the send pipeline may wire, per spec RF2.
+ *
+ * - `'lossless'` — DEFAULT. Byte-identical to the historical pipeline
+ *   (`PdfLibCompressorAdapter`): output can only be smaller, never
+ *   lossy. Requires no clinical sign-off.
+ * - `'email'` — opt-in lossy profile (`PdfImageCompressorAdapter`):
+ *   DCT image surgery with resize + JPEG re-encode to shrink emailed
+ *   copies (~−70.8% on scan-heavy EMOs). Enabling it in production
+ *   requires explicit clinical sign-off on legibility.
+ */
+export type PdfCompressionProfile = 'lossless' | 'email';
+
+/**
+ * Read the `PDF_COMPRESSION_PROFILE` selector at call time (spec RF2).
+ *
+ * Mirrors the `isPdfCompressionEnabled()` precedent in this same file:
+ * the profile is a FUNCTION (not a cached constant) so the route
+ * re-reads it on every request and tests can set the env var per-test.
+ *
+ * Env var semantics:
+ * - Unset or empty resolves to `'lossless'` — the fidelity default.
+ * - `'lossless'` / `'email'` are honored, trimmed and lowercased
+ *   (`' EMAIL '` resolves to `'email'`).
+ * - Any other value is garbage: a `console.warn` is emitted (operator
+ *   typo guard) and the profile fails toward FIDELITY with
+ *   `'lossless'` — an ambiguous configuration can never silently
+ *   degrade clinical document quality.
+ *
+ * Note `PDF_COMPRESSION_ENABLED=false` keeps absolute precedence
+ * (checked first by the route): with the kill switch off, no
+ * compressor is wired at all and this profile is irrelevant.
+ */
+export function getPdfCompressionProfile(): PdfCompressionProfile {
+  const raw = process.env.PDF_COMPRESSION_PROFILE;
+  if (raw === undefined || raw.trim() === '') {
+    return 'lossless';
+  }
+  const normalized = raw.trim().toLowerCase();
+  if (normalized === 'lossless' || normalized === 'email') {
+    return normalized;
+  }
+  console.warn(
+    `[pdf/constants] Unrecognized PDF_COMPRESSION_PROFILE value "${raw}" — expected 'lossless'/'email'. Defaulting to 'lossless'.`,
+  );
+  return 'lossless';
+}
+
+/**
+ * Minimum longest pixel side for an embedded DCT image to be ELIGIBLE
+ * for email-profile surgery (design §3.1). Scans below this are small
+ * enough that lossy re-encoding risks visible degradation for little
+ * savings. Initial value — tunable with evidence.
+ */
+export const PDF_IMAGE_MIN_LONGEST_SIDE_PX = 1000;
+
+/**
+ * Minimum DCT stream size, in bytes (~500KB), for an embedded image to
+ * be ELIGIBLE for email-profile surgery. Small JPEGs re-encode poorly
+ * (block artifacts) and offer negligible savings. Initial value —
+ * tunable with evidence.
+ */
+export const PDF_IMAGE_MIN_DCT_STREAM_BYTES = 512_000;
+
+/**
+ * Dimension divisor applied to eligible images during email-profile
+ * re-encode: 300 DPI scans become 150 DPI (2480×3456 → 1240×1728) —
+ * the measured sweet spot (−70.8% @ q75, exploration #695).
+ */
+export const PDF_IMAGE_RESIZE_DIVISOR = 2;
+
+/**
+ * JPEG quality used by the email-profile re-encode. 75 pairs with the
+ * ÷2 resize to produce the measured −70.8% at acceptable legibility;
+ * mozjpeg is deliberately OFF so shipped numbers stay the measured
+ * numbers (design §3.2 D4).
+ */
+export const PDF_IMAGE_JPEG_QUALITY = 75;
