@@ -74,6 +74,19 @@ export interface SelectedFileRef {
    * callers unchanged).
    */
   proyecto?: string;
+  /**
+   * Optional operator override for the DELIVERY (email attachment)
+   * filename. Stamped by the composer UI and by the reenvío snapshot
+   * (D8). Enforced server-side by the send use case (step 1c, D7)
+   * through the shared `validateDeliveryName` validator (D2): an
+   * invalid value rejects the whole send BEFORE the history row is
+   * created (typed `VALIDATION_ERROR` → HTTP 400). Absent, empty or
+   * whitespace-only falls back to the auto rename (REQ-01/REQ-07).
+   * The disk file is ALWAYS read by `name` (REQ-06) — the override
+   * changes only the attachment filename and the snapshot's
+   * `deliveryName`, never the stored name.
+   */
+  deliveryName?: string;
 }
 
 export interface Spitch {

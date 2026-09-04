@@ -152,4 +152,137 @@ describe('LocalFileDropZone', () => {
 
     expect(screen.getByText('Archivos locales')).toBeInTheDocument();
   });
+
+  // ================================================================
+  // WU-6 — opt-in local rename (REQ-02). The affordance exists ONLY
+  // when the composer passes `onRename`; cobranza/facturacion never
+  // do, so their rows must render byte-identically to before.
+  // ================================================================
+  describe('WU-6 — opt-in local rename (REQ-02)', () => {
+    it('renders NO rename affordance when onRename is absent (cobranza parity)', () => {
+      render(
+        <LocalFileDropZone
+          files={[createFile('doc1.pdf', 200)]}
+          onAdd={vi.fn()}
+          onRemove={vi.fn()}
+        />,
+      );
+
+      expect(screen.queryByLabelText('Renombrar doc1.pdf')).not.toBeInTheDocument();
+      // The legacy affordances stay exactly where they were.
+      expect(screen.getByLabelText('Quitar doc1.pdf')).toBeInTheDocument();
+      expect(screen.getByText('doc1.pdf')).toBeInTheDocument();
+    });
+
+    it('renders a rename affordance per row only when onRename is passed', () => {
+      render(
+        <LocalFileDropZone
+          files={[createFile('a.pdf', 100), createFile('b.png', 100)]}
+          onAdd={vi.fn()}
+          onRemove={vi.fn()}
+          onRename={vi.fn()}
+        />,
+      );
+
+      expect(screen.getByLabelText('Renombrar a.pdf')).toBeInTheDocument();
+      expect(screen.getByLabelText('Renombrar b.png')).toBeInTheDocument();
+    });
+
+    it('seeds the inline input with the current file name and commits onRename(index, next) on Enter', () => {
+      const onRename = vi.fn();
+      render(
+        <LocalFileDropZone
+          files={[createFile('scan.pdf', 10, 'application/pdf')]}
+          onAdd={vi.fn()}
+          onRemove={vi.fn()}
+          onRename={onRename}
+        />,
+      );
+
+      fireEvent.click(screen.getByLabelText('Renombrar scan.pdf'));
+      const input = screen.getByLabelText('Renombrar scan.pdf');
+      // The draft is seeded with the file's current name (its "effective
+      // name" — locals have no auto-rename pipeline).
+      expect(input).toHaveValue('scan.pdf');
+      fireEvent.change(input, { target: { value: 'scan_cliente' } });
+      fireEvent.keyDown(input, { key: 'Enter' });
+
+      expect(onRename).toHaveBeenCalledTimes(1);
+      expect(onRename).toHaveBeenCalledWith(0, 'scan_cliente');
+    });
+
+    it('commits the row index so multi-row lists address the right file', () => {
+      const onRename = vi.fn();
+      render(
+        <LocalFileDropZone
+          files={[createFile('a.pdf', 100), createFile('b.png', 100)]}
+          onAdd={vi.fn()}
+          onRemove={vi.fn()}
+          onRename={onRename}
+        />,
+      );
+
+      fireEvent.click(screen.getByLabelText('Renombrar b.png'));
+      const input = screen.getByLabelText('Renombrar b.png');
+      fireEvent.change(input, { target: { value: 'imagen_final' } });
+      fireEvent.keyDown(input, { key: 'Enter' });
+
+      expect(onRename).toHaveBeenCalledWith(1, 'imagen_final');
+    });
+
+    it('Escape cancels without committing', () => {
+      const onRename = vi.fn();
+      render(
+        <LocalFileDropZone
+          files={[createFile('scan.pdf', 10)]}
+          onAdd={vi.fn()}
+          onRemove={vi.fn()}
+          onRename={onRename}
+        />,
+      );
+
+      fireEvent.click(screen.getByLabelText('Renombrar scan.pdf'));
+      const input = screen.getByLabelText('Renombrar scan.pdf');
+      fireEvent.change(input, { target: { value: 'otro' } });
+      fireEvent.keyDown(input, { key: 'Escape' });
+
+      expect(onRename).not.toHaveBeenCalled();
+      // The pencil affordance is back for another attempt.
+      expect(screen.getByLabelText('Renombrar scan.pdf').tagName).toBe('BUTTON');
+    });
+
+    it('commits an empty string on an emptied input (parent clears the override)', () => {
+      const onRename = vi.fn();
+      render(
+        <LocalFileDropZone
+          files={[createFile('scan.pdf', 10)]}
+          onAdd={vi.fn()}
+          onRemove={vi.fn()}
+          onRename={onRename}
+        />,
+      );
+
+      fireEvent.click(screen.getByLabelText('Renombrar scan.pdf'));
+      const input = screen.getByLabelText('Renombrar scan.pdf');
+      fireEvent.change(input, { target: { value: '' } });
+      fireEvent.keyDown(input, { key: 'Enter' });
+
+      expect(onRename).toHaveBeenCalledWith(0, '');
+    });
+
+    it('keeps the remove affordance alongside the rename affordance', () => {
+      const onRemove = vi.fn();
+      render(
+        <LocalFileDropZone
+          files={[createFile('a.pdf', 100)]}
+          onAdd={vi.fn()}
+          onRemove={onRemove}
+          onRename={vi.fn()}
+        />,
+      );
+
+      fireEvent.click(screen.getByLabelText('Quitar a.pdf'));
+      expect(onRemove).toHaveBeenCalledWith(0);
+    });
+  });
 });

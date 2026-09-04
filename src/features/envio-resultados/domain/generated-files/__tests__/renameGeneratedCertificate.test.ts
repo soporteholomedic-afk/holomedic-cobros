@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { renameGeneratedCertificate } from '../renameGeneratedCertificate';
+import {
+  looksLikeGeneratedCertificate,
+  renameGeneratedCertificate,
+} from '../renameGeneratedCertificate';
 
 /**
  * CLI generated certificates (PR envio-resultados — CAMO download naming).
@@ -138,5 +141,44 @@ describe('renameGeneratedCertificate', () => {
       tipoExamen: 'ADICIONAL',
     });
     expect(result).toBe('012110597_39053_EVALUACION OFTALMOLOGICA.pdf');
+  });
+});
+
+/**
+ * `looksLikeGeneratedCertificate` (WU-2, design D5): the predicate the
+ * use case will pair with `parseReadyFile` to decide whether a
+ * delivery-name override MUST end in `.pdf` (forcePdf context). It must
+ * answer exactly "would `renameGeneratedCertificate` rename this?" —
+ * i.e. the same CLI_CERTIFICATE_PATTERN gate, exposed for reuse.
+ */
+describe('looksLikeGeneratedCertificate', () => {
+  it('matches a CLI certificate report name', () => {
+    expect(
+      looksLikeGeneratedCertificate(
+        '012110597_39183_CERTIFICADO MEDICO DE APTITUD (GEMO Y ANEXO 16).pdf',
+      ),
+    ).toBe(true);
+  });
+
+  it('rejects a CLI non-certificate report', () => {
+    expect(looksLikeGeneratedCertificate('012110597_39053_EVALUACION OFTALMOLOGICA.pdf')).toBe(
+      false,
+    );
+  });
+
+  it('rejects a ready-style file (renameReadyFile\u0027s domain)', () => {
+    expect(looksLikeGeneratedCertificate('75618561CERT.pdf')).toBe(false);
+  });
+
+  it('rejects an arbitrary user file', () => {
+    expect(looksLikeGeneratedCertificate('informe.pdf')).toBe(false);
+  });
+
+  it('trims surrounding whitespace before matching', () => {
+    expect(
+      looksLikeGeneratedCertificate(
+        '  012110597_39183_CERTIFICADO MEDICO DE APTITUD (GEMO Y ANEXO 16).pdf  ',
+      ),
+    ).toBe(true);
   });
 });

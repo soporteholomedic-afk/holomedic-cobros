@@ -13,9 +13,12 @@ import type { EmailViewData } from './emailViewDataFromFiles';
  *
  * Mapping contract (OQ6):
  *  - `unc` snapshot entries → `SelectedFileRef` (`name = storedName`;
- *    `tipoExamen`/`nombreCompleto` are carried so `renameReadyFile`
- *    reproduces the original delivery names) grouped by `dni` into
- *    `selectedPatients` (`files: ['path::storedName']`) and `patients`
+ *    `tipoExamen`/`nombreCompleto`/`proyecto` are carried so
+ *    `renameReadyFile` reproduces the auto delivery names, and the
+ *    persisted `deliveryName` is stamped onto the ref verbatim — WU-7,
+ *    D8: the editor's seed-once logic decides whether it pre-fills an
+ *    editable override) grouped by `dni` into `selectedPatients`
+ *    (`files: ['path::storedName']`) and `patients`
  *    (`PatientFile.id = 'path::storedName'`, the `splitFileRef`
  *    contract from `emailViewDataFromFiles`).
  *  - `local` snapshot entries → `unavailableAttachments` ONLY (BR11 —
@@ -66,10 +69,16 @@ export function buildReenvioViewData(row: EnvioHistoryRow): ReenvioViewData {
       continue;
     }
 
-    // `deliveryName` is intentionally NOT carried: the send path
-    // recomputes it via renameReadyFile from the persisted
-    // tipoExamen/nombreCompleto (D5 — the same pure inputs).
-    fileRefs.push({
+    // WU-7 (D8/REQ-05) — the persisted delivery name is stamped onto
+    // the ref VERBATIM: it is the operator override that produced the
+    // original send. Stamping here is unconditional; whether the value
+    // materializes as an editable pre-fill is the editor's seed-once
+    // decision (it compares the stamp against the recomputed auto name
+    // via the shared `autoDeliveryName` oracle). Legacy rows persisted
+    // before the deliveryName snapshot existed may omit the key at
+    // runtime despite the write-side type — no stamp, legacy behavior
+    // (REQ-07).
+    const ref: SelectedFileRef = {
       ruc: attachment.ruc,
       dni: attachment.dni,
       idAten: attachment.idAten,
@@ -77,7 +86,15 @@ export function buildReenvioViewData(row: EnvioHistoryRow): ReenvioViewData {
       name: attachment.storedName,
       ...(attachment.tipoExamen ? { tipoExamen: attachment.tipoExamen } : {}),
       ...(attachment.nombreCompleto ? { nombreCompleto: attachment.nombreCompleto } : {}),
-    });
+      // S-107.2 — the per-ref project feeds the auto recompute too;
+      // without it the editor could mistake an auto name for an
+      // override when the ref's project differs from the row destino.
+      ...(attachment.proyecto ? { proyecto: attachment.proyecto } : {}),
+    };
+    if (attachment.deliveryName !== undefined) {
+      ref.deliveryName = attachment.deliveryName;
+    }
+    fileRefs.push(ref);
 
     // Mirror the emailViewDataFromFiles contract: the fileRef string
     // `${path}::${name}` doubles as the PatientFile.id.

@@ -11,8 +11,17 @@ import type {
   SelectedFileRef,
 } from '../domain/entities';
 import { sanitizeDownloadName, sanitizeFolderPath } from '@/lib/sanitize-filename';
-import { renameGeneratedCertificate } from '../domain/generated-files/renameGeneratedCertificate';
+import {
+  looksLikeGeneratedCertificate,
+  renameGeneratedCertificate,
+} from '../domain/generated-files/renameGeneratedCertificate';
+import { parseReadyFile } from '../domain/ready-files/parseReadyFile';
 import { renameReadyFile } from '../domain/ready-files/renameReadyFile';
+import {
+  findDeliveryNameCollisions,
+  validateDeliveryName,
+  type DeliveryNameIssue,
+} from '../domain/attachments/validateDeliveryName';
 
 // ---- Limits (must match the route's contract) ----
 
@@ -120,6 +129,100 @@ function safeDisplayName(rawName: string): string {
   }
 }
 
+/**
+ * Human-readable message for a rejected delivery-name override.
+ * REQ-03: the message must identify the offending file, so it carries
+ * the STORED disk name (`ref.name`), never the rejected override text.
+ */
+function describeDeliveryNameIssue(storedName: string, issue: DeliveryNameIssue): string {
+  switch (issue.code) {
+    case 'TRAVERSAL':
+      return `Invalid delivery name for "${storedName}": "..", "/" and "\\" are not allowed`;
+    case 'ILLEGAL_CHAR':
+      return `Invalid delivery name for "${storedName}": contains illegal characters`;
+    case 'BAD_EXTENSION':
+      return `Invalid delivery name for "${storedName}": only ".pdf" is allowed here (got "${issue.got}")`;
+    case 'TOO_LONG':
+      return `Invalid delivery name for "${storedName}": too long (${issue.length} characters, max 255)`;
+    case 'DUPLICATE':
+      return `Duplicate delivery name in batch: "${issue.name}"`;
+  }
+}
+
+/**
+ * Validate the per-ref delivery-name overrides (step 1c, D7) and
+ * compute the EFFECTIVE delivery name for every ref (REQ-04
+ * precedence: `override ?? renameReadyFile ?? renameGeneratedCertificate`).
+ *
+ * Pure — no I/O — so `execute` can run it BEFORE the history INSERT
+ * and reuse the result for both the snapshot and the dispatch loop,
+ * keeping recorded history byte-identical to what was dispatched (D5).
+ *
+ * Rejections (first failure wins, typed `VALIDATION_ERROR` message):
+ * - Per-ref rules via `validateDeliveryName` (D2/D4/D5): traversal,
+ *   illegal characters, forced `.pdf` where the auto-rename pipeline
+ *   applies (D5: `parseReadyFile` OR `looksLikeGeneratedCertificate`),
+ *   and the 255-char final-length cap. An empty/whitespace override is
+ *   NOT a rejection — it falls back to the auto name (REQ-01/REQ-07).
+ * - Batch collisions via `findDeliveryNameCollisions` (D6): only
+ *   duplicates INVOLVING an override reject; auto-auto duplicates stay
+ *   allowed (legacy same-name batches keep working).
+ */
+function resolveDeliveryNames(
+  refs: readonly SelectedFileRef[],
+  fallbackNombreCompleto: string,
+  fallbackDestino: string,
+): { ok: true; names: string[] } | { ok: false; error: string } {
+  const overrides: (string | null)[] = [];
+  for (const ref of refs) {
+    if (ref.deliveryName === undefined) {
+      overrides.push(null);
+      continue;
+    }
+    const forcePdf =
+      parseReadyFile(ref.name) !== null || looksLikeGeneratedCertificate(ref.name);
+    const check = validateDeliveryName(ref.deliveryName, { forcePdf });
+    if (!check.ok) {
+      return { ok: false, error: describeDeliveryNameIssue(ref.name, check.issue) };
+    }
+    overrides.push(check.value === '' ? null : check.value);
+  }
+
+  const names = refs.map((ref, i) => {
+    const override = overrides[i] ?? null;
+    if (override !== null) return override;
+    const rawName = safeDisplayName(ref.name);
+    const nombreCompleto = ref.nombreCompleto?.trim() || fallbackNombreCompleto;
+    const readyName = renameReadyFile({
+      rawName,
+      nombreCompleto,
+      // REQ-104 (D4): per-ref proyecto wins over the request-level
+      // destino — exactly the nombreCompleto precedence pattern.
+      // Empty/whitespace post-trim → request-level destino.
+      destino: ref.proyecto?.trim() || fallbackDestino,
+      tipoExamen: ref.tipoExamen,
+    });
+    // Mirror the download routes' dual rename: a CLI-generated
+    // certificate (`{idAten}_{idePMe}_{arcPla}.pdf`) never matches the
+    // ready-file pattern, so without this fallback the emailed
+    // attachment keeps the raw CLI name while the same file downloaded
+    // from the app gets `CAMO_{nombreCompleto}.pdf`.
+    return readyName === rawName
+      ? renameGeneratedCertificate({ rawName, nombreCompleto, tipoExamen: ref.tipoExamen })
+      : readyName;
+  });
+
+  const collisions = findDeliveryNameCollisions(
+    names.map((value, i) => ({ value, overridden: overrides[i] != null })),
+  );
+  if (collisions.length > 0) {
+    const first = collisions[0]!; // length > 0 checked above — [0] always exists
+    return { ok: false, error: describeDeliveryNameIssue('', first) };
+  }
+
+  return { ok: true, names };
+}
+
 // ---- Use case ----
 
 /**
@@ -165,31 +268,20 @@ export class SendResultsUseCase {
       };
     }
 
-    // ---- 1b. History: precompute delivery names, snapshot, INSERT ----
-    // `renameReadyFile` is pure — the delivery names computed here are
-    // BOTH persisted in the snapshot AND reused by the dispatch loop,
-    // so the recorded history always matches what was attached (D5).
-    const deliveryNames = params.fileRefs.map((ref) => {
-      const rawName = safeDisplayName(ref.name);
-      const nombreCompleto = ref.nombreCompleto?.trim() || params.nombreCompleto;
-      const readyName = renameReadyFile({
-        rawName,
-        nombreCompleto,
-        // REQ-104 (D4): per-ref proyecto wins over the request-level
-        // destino — exactly the nombreCompleto precedence pattern.
-        // Empty/whitespace post-trim → request-level destino.
-        destino: ref.proyecto?.trim() || params.destino,
-        tipoExamen: ref.tipoExamen,
-      });
-      // Mirror the download routes' dual rename: a CLI-generated
-      // certificate (`{idAten}_{idePMe}_{arcPla}.pdf`) never matches the
-      // ready-file pattern, so without this fallback the emailed
-      // attachment keeps the raw CLI name while the same file downloaded
-      // from the app gets `CAMO_{nombreCompleto}.pdf`.
-      return readyName === rawName
-        ? renameGeneratedCertificate({ rawName, nombreCompleto, tipoExamen: ref.tipoExamen })
-        : readyName;
-    });
+    // ---- 1b/1c. Delivery names: validate overrides + precedence → snapshot + INSERT ----
+    // (D7) `resolveDeliveryNames` validates every override and resolves
+    // the effective names BEFORE the history INSERT — an invalid
+    // override is operator-input validation (MAX_FILES precedent):
+    // typed VALIDATION_ERROR with NO row, NO file I/O, NO email. The
+    // names are computed once and reused by BOTH the snapshot and the
+    // dispatch loop, so recorded history always matches what was
+    // attached (D5).
+    const resolvedNames = resolveDeliveryNames(params.fileRefs, params.nombreCompleto, params.destino);
+    if (!resolvedNames.ok) {
+      return { success: false, code: 'VALIDATION_ERROR', error: resolvedNames.error };
+    }
+    const { names: deliveryNames } = resolvedNames;
+
     const snapshot: EnvioAttachmentSnapshot[] = [
       ...params.fileRefs.map((ref, i): EnvioAttachmentSnapshot => ({
         source: 'unc',

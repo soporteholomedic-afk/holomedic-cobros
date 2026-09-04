@@ -1,4 +1,4 @@
-import { sanitizeComponent } from '@/lib/sanitize-filename';
+import { sanitizeComponent } from '@/lib/sanitize-filename-core';
 import type { ReadyFileTipo } from '../ready-files/parseReadyFile';
 
 /**
@@ -9,6 +9,20 @@ import type { ReadyFileTipo } from '../ready-files/parseReadyFile';
  * delivery name; every other generated file keeps its CLI name.
  */
 const CLI_CERTIFICATE_PATTERN = /^\d+_\d+_.*CERTIFICADO.*\.pdf$/i;
+
+/**
+ * Whether `rawName` is a CLI generated medical certificate report —
+ * i.e. exactly the names `renameGeneratedCertificate` would rename.
+ *
+ * WU-2 (design D5): the send-results use case pairs this predicate with
+ * `parseReadyFile(name)` to decide whether a delivery-name override is
+ * FORCED to end in `.pdf` (`forcePdf` context of
+ * `validateDeliveryName`). Exposed here so the detection rule lives in
+ * the single module that owns the pattern.
+ */
+export function looksLikeGeneratedCertificate(rawName: string): boolean {
+  return CLI_CERTIFICATE_PATTERN.test(rawName.trim());
+}
 
 /**
  * Input shape for `renameGeneratedCertificate`.
@@ -48,7 +62,7 @@ export interface RenameGeneratedCertificateInput {
  */
 export function renameGeneratedCertificate(input: RenameGeneratedCertificateInput): string {
   const { rawName, nombreCompleto, tipoExamen } = input;
-  if (!CLI_CERTIFICATE_PATTERN.test(rawName.trim())) return rawName;
+  if (!looksLikeGeneratedCertificate(rawName)) return rawName;
   const nombre = sanitizeComponent(nombreCompleto.trim());
   if (nombre === '') return rawName;
   if (tipoExamen === 'ADICIONAL') return `ADICIONAL_${nombre}.pdf`;

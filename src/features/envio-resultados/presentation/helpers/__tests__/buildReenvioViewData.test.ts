@@ -1,7 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import { buildReenvioViewData } from '../buildReenvioViewData';
 import { stripSignatureHtml } from '../signatureData';
-import type { EnvioHistoryRow } from '../../../domain/entities';
+import { renameReadyFile } from '../../../domain/ready-files/renameReadyFile';
+import type { EnvioAttachmentSnapshot, EnvioHistoryRow } from '../../../domain/entities';
 
 // historial-envios-consolidados PR4 (task 4.3, design OQ6) — the
 // persisted row → EmailEditor payload mapper for the reenvío flow.
@@ -60,7 +61,9 @@ describe('buildReenvioViewData', () => {
     const { emailViewData } = buildReenvioViewData(row);
 
     // fileRefs: storedName becomes the ref name; rename fidelity fields
-    // survive so renameReadyFile reproduces the delivery names.
+    // survive so renameReadyFile reproduces the auto names, and the
+    // persisted delivery name is stamped VERBATIM onto the ref (WU-7,
+    // D8 — the editor's seed-once logic decides whether it pre-fills).
     expect(emailViewData.fileRefs).toHaveLength(2);
     expect(emailViewData.fileRefs[0]).toEqual({
       ruc: '20123456789',
@@ -70,6 +73,7 @@ describe('buildReenvioViewData', () => {
       name: '12345678CERT.pdf',
       tipoExamen: 'CAMO',
       nombreCompleto: 'María Elena García López',
+      deliveryName: 'CAMO-María Elena García López-PROYECTO NORTE.pdf',
     });
     expect(emailViewData.fileRefs[1]).toEqual({
       ruc: '20123456789',
@@ -77,6 +81,7 @@ describe('buildReenvioViewData', () => {
       idAten: 'AT-001',
       path: '',
       name: '12345678EXPED.pdf',
+      deliveryName: 'EMO-María Elena García López-PROYECTO NORTE.pdf',
     });
 
     // selectedPatients keyed by dni; files are `path::storedName` refs.
@@ -181,5 +186,122 @@ describe('buildReenvioViewData', () => {
   it('omits cc when the original send had none', () => {
     const { initialEmail } = buildReenvioViewData(makeRow({ ccRecipients: [] }));
     expect(initialEmail.cc).toBeUndefined();
+  });
+
+  // ================================================================
+  // WU-7 — reenvío pre-fill stamp (D8 / REQ-05).
+  //
+  // The snapshot's persisted delivery name rides the ref VERBATIM
+  // (D8: "stamp the persisted value"); whether it materializes as an
+  // editable pre-fill is the EDITOR's seed-once decision — the helper
+  // stays a dumb mapper. The auto recompute inputs (per-ref
+  // nombreCompleto/proyecto + row-level scalars) must survive so the
+  // editor can tell a true override apart from an auto name (REQ-05
+  // scenario 2) with the same byte-equal oracle the matcher uses.
+  // ================================================================
+  describe('WU-7 — reenvío pre-fill stamp (D8)', () => {
+    it('stamps a snapshot override onto the ref so the prior delivery name re-applies (D8)', () => {
+      const row = makeRow({
+        attachments: [
+          {
+            source: 'unc',
+            ruc: '20123456789',
+            dni: '12345678',
+            idAten: 'AT-001',
+            path: 'LEGAJOS',
+            storedName: '123CERT.pdf',
+            deliveryName: 'Informe Juan.pdf',
+            tipoExamen: 'CAMO',
+            nombreCompleto: 'María Elena García López',
+          },
+        ],
+      });
+
+      const { emailViewData } = buildReenvioViewData(row);
+
+      expect(emailViewData.fileRefs[0]).toMatchObject({
+        name: '123CERT.pdf',
+        deliveryName: 'Informe Juan.pdf',
+      });
+    });
+
+    it('stamps the persisted value even when it equals the recomputed auto name — the editor seed decides pre-fill (D8)', () => {
+      // Byte-equal oracle: the REAL domain fn reproduces the auto name
+      // the server would recompute on an untouched resend.
+      const autoName = renameReadyFile({
+        rawName: '123CERT.pdf',
+        nombreCompleto: 'María Elena García López',
+        destino: 'PROYECTO NORTE',
+      });
+      const row = makeRow({
+        attachments: [
+          {
+            source: 'unc',
+            ruc: '20123456789',
+            dni: '12345678',
+            idAten: 'AT-001',
+            path: '',
+            storedName: '123CERT.pdf',
+            deliveryName: autoName,
+          },
+        ],
+      });
+
+      const { emailViewData } = buildReenvioViewData(row);
+
+      expect(emailViewData.fileRefs[0]!.deliveryName).toBe(autoName);
+    });
+
+    it('carries snapshot proyecto so the editor auto recompute stays faithful (S-107.2/D8)', () => {
+      // A per-ref project that differs from the row destino: the
+      // original auto name used PROYECTO SUR. Without `proyecto` on the
+      // ref, the editor's differ-check would recompute against the row
+      // destino and mistake this auto name for an override (pre-fill
+      // violation of REQ-05 scenario 2).
+      const proyectoAuto = renameReadyFile({
+        rawName: '123CERT.pdf',
+        nombreCompleto: 'María Elena García López',
+        destino: 'PROYECTO SUR',
+      });
+      const row = makeRow({
+        destino: 'PROYECTO NORTE',
+        attachments: [
+          {
+            source: 'unc',
+            ruc: '20123456789',
+            dni: '12345678',
+            idAten: 'AT-001',
+            path: '',
+            storedName: '123CERT.pdf',
+            deliveryName: proyectoAuto,
+            proyecto: 'PROYECTO SUR',
+          },
+        ],
+      });
+
+      const { emailViewData } = buildReenvioViewData(row);
+
+      expect(emailViewData.fileRefs[0]!.proyecto).toBe('PROYECTO SUR');
+      expect(emailViewData.fileRefs[0]!.deliveryName).toBe(proyectoAuto);
+    });
+
+    it('legacy rows persisted before the deliveryName snapshot keep no stamp (REQ-07)', () => {
+      // Pre-WU-3 history rows omit the key in attachmentsJson at
+      // runtime even though the write-side type requires it — the
+      // mapper must not invent a stamp (parity guard).
+      const legacyAttachment = {
+        source: 'unc',
+        ruc: '20123456789',
+        dni: '12345678',
+        idAten: 'AT-001',
+        path: '',
+        storedName: 'cert.pdf',
+      } as EnvioAttachmentSnapshot;
+      const row = makeRow({ attachments: [legacyAttachment] });
+
+      const { emailViewData } = buildReenvioViewData(row);
+
+      expect(emailViewData.fileRefs[0]).not.toHaveProperty('deliveryName');
+    });
   });
 });

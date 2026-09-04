@@ -1,41 +1,16 @@
+/**
+ * Server-side filename sanitization helpers.
+ *
+ * The pure component/zip-name sanitizers live in the browser-safe
+ * `sanitize-filename-core` (design D3 — zero `node:*` imports so the
+ * envio-resultados validator can import them client-side). They are
+ * re-exported here so the 30+ existing consumers keep their import
+ * path unchanged. Only the `node:path`-dependent helpers remain
+ * defined in this module.
+ */
+export { sanitizeComponent, sanitizeZipName } from './sanitize-filename-core';
+
 import * as path from 'node:path';
-
-/**
- * Windows-illegal filename characters per `NTFS` rules: `<>:"/\|?*` plus
- * the C0 control range (`\x00..\x1f`). We replace with `_` so the
- * resulting string is always a valid filename component on every
- * supported filesystem.
- */
-const ILLEGAL_RE = /[<>:"/\\|?*\x00-\x1f]/g;
-const WHITESPACE_RUN_RE = /\s+/g;
-
-/**
- * Sanitize a single filename component (no path separators).
- *
- * - Replaces Windows-illegal characters with `_`.
- * - Collapses runs of whitespace to a single space.
- * - Trims leading and trailing whitespace.
- */
-export function sanitizeComponent(value: string): string {
-  return value.replace(ILLEGAL_RE, '_').replace(WHITESPACE_RUN_RE, ' ').trim();
-}
-
-/**
- * Compose a sanitized zip filename from `{nombre} - {dni} - {empresa}`
- * (the caller appends `.zip`).
- *
- * - Empty components are dropped together with their surrounding
- *   ` - ` separators, so the final value is always non-empty when at
- *   least one input is non-empty.
- * - Each component is run through `sanitizeComponent` so illegal
- *   characters and whitespace runs are normalized.
- */
-export function sanitizeZipName(nombre: string, dni: string, empresa: string): string {
-  const parts = [nombre, dni, empresa]
-    .map(sanitizeComponent)
-    .filter((p) => p.length > 0);
-  return parts.join(' - ');
-}
 
 /**
  * Sanitize the `?filename=` query parameter for the download endpoint.

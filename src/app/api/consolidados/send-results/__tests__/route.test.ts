@@ -655,3 +655,68 @@ describe('POST /api/consolidados/send-results — proyecto guard (D10)', () => {
     expect(mockSendEmail).toHaveBeenCalledTimes(1);
   });
 });
+
+// ================================================================
+// REQ-07 backstop (D9) — `isFileRefShape` guards the optional
+// `deliveryName` field. Shape ONLY: the route allow-lists
+// string-when-present; ALL content rules (traversal, illegal
+// chars, .pdf forcing, duplicates) belong to the use case's
+// `resolveDeliveryNames`. A non-string deliveryName must 400
+// HERE — otherwise the use case's `.trim()` would throw and
+// surface as a 500.
+// ================================================================
+
+describe('POST /api/consolidados/send-results — deliveryName shape guard (D9)', () => {
+  it('accepts a ref with a string deliveryName (REQ-07: optional field passes the allow-list)', async () => {
+    const good = { ...REF_ROOT, deliveryName: 'Informe Juan.pdf' };
+
+    const response = await POST(createMockRequest(buildFileRefsFd([good])));
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.success).toBe(true);
+    expect(mockSendEmail).toHaveBeenCalledTimes(1);
+  });
+
+  it('returns 400 when a ref carries a non-string deliveryName (number)', async () => {
+    const bad = { ...REF_ROOT, deliveryName: 42 };
+
+    const response = await POST(createMockRequest(buildFileRefsFd([bad])));
+    const body = await response.json();
+
+    expect(response.status).toBe(400);
+    expect(body.code).toBe('VALIDATION_ERROR');
+    expect(mockSendEmail).not.toHaveBeenCalled();
+  });
+
+  it('returns 400 when a ref carries a non-string deliveryName (object)', async () => {
+    const bad = { ...REF_ROOT, deliveryName: { name: 'evil.pdf' } };
+
+    const response = await POST(createMockRequest(buildFileRefsFd([bad])));
+    const body = await response.json();
+
+    expect(response.status).toBe(400);
+    expect(body.code).toBe('VALIDATION_ERROR');
+    expect(mockSendEmail).not.toHaveBeenCalled();
+  });
+
+  it('returns 400 when a ref carries a null deliveryName', async () => {
+    const bad = { ...REF_ROOT, deliveryName: null };
+
+    const response = await POST(createMockRequest(buildFileRefsFd([bad])));
+    const body = await response.json();
+
+    expect(response.status).toBe(400);
+    expect(body.code).toBe('VALIDATION_ERROR');
+    expect(mockSendEmail).not.toHaveBeenCalled();
+  });
+
+  it('accepts a legacy ref without deliveryName (REQ-07: absent field still passes)', async () => {
+    const response = await POST(createMockRequest(buildFileRefsFd([REF_ROOT])));
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.success).toBe(true);
+    expect(mockSendEmail).toHaveBeenCalledTimes(1);
+  });
+});
