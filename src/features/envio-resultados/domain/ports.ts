@@ -127,3 +127,68 @@ export interface IEnvioHistoryRepository {
   /** Full row (including `bodyHtml`) by primary key, or null when missing. */
   getById(id: string): Promise<EnvioHistoryRow | null>;
 }
+
+// ---------------------------------------------------------------------------
+// PDF compression (comprimir-pdfs-consolidados)
+//
+// Outbound port for the lossless compression seam of the consolidated-send
+// pipeline. Implementations live in infrastructure adapters
+// (`PdfLibCompressorAdapter`); the application layer depends only on this
+// contract, so a future pdfcpu adapter can land without touching it.
+// ---------------------------------------------------------------------------
+
+/**
+ * Identifier of the strategy that produced a `PdfCompressionResult`.
+ *
+ * `pdf-lib-lossless` — the adapter re-serialized the document (object
+ * streams on, metadata stripped) and the output is strictly smaller.
+ * `pdf-lib-passthrough` — no compression was applied and the ORIGINAL
+ * input bytes were returned (best-of guarantee). Extensible for a future
+ * `pdfcpu-lossless` adapter without breaking consumers.
+ */
+export type PdfCompressionMethod = 'pdf-lib-lossless' | 'pdf-lib-passthrough';
+
+/**
+ * Why a compression attempt returned the original bytes unchanged
+ * (passthrough). Present on `PdfCompressionResult.skippedReason` only.
+ */
+export type PdfCompressionSkipReason =
+  | 'grew'
+  | 'parse-error'
+  | 'encrypted'
+  | 'timeout'
+  | 'not-pdf';
+
+/**
+ * Typed outcome of one compression attempt. The best-of contract is
+ * structural: `outputBytes <= originalBytes` ALWAYS, and when the two are
+ * equal (or the method is passthrough) `bytes` IS the original input, so a
+ * send can never grow or degrade a document because of this seam.
+ */
+export interface PdfCompressionResult {
+  /** Best-of bytes: the compressed output, or the original input on passthrough. */
+  bytes: Buffer;
+  /** Size of the input buffer in bytes. */
+  originalBytes: number;
+  /** Size of `bytes` in bytes. */
+  outputBytes: number;
+  /** Strategy that produced `bytes` (see `PdfCompressionMethod`). */
+  method: PdfCompressionMethod;
+  /** Wall-clock duration of the attempt, in milliseconds. */
+  durationMs: number;
+  /** Present only when `method` is passthrough — why compression was skipped. */
+  skippedReason?: PdfCompressionSkipReason;
+}
+
+/**
+ * Hexagonal port for lossless PDF compression of transient in-RAM buffers.
+ *
+ * Contract (spec RF1): input PDF bytes → best-of(original, compressed) bytes
+ * plus size metrics and the method used. Implementations MUST be lossless
+ * and MUST fail open — compression problems resolve with the original bytes
+ * (or throw only where the caller handles it); a send never fails because
+ * compression did.
+ */
+export interface IPdfCompressor {
+  compress(pdfBytes: Buffer): Promise<PdfCompressionResult>;
+}

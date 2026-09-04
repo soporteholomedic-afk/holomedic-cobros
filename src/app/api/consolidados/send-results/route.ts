@@ -3,6 +3,8 @@ import { SendResultsUseCase } from '@/features/envio-resultados/application/send
 import { getFileRepository } from '@/features/envio-resultados/infrastructure/files/getFileRepository';
 import { makeEmailService } from '@/features/envio-resultados/infrastructure/email/emailService';
 import { getEnvioHistoryDb } from '@/features/envio-resultados/infrastructure/getEnvioHistoryDb';
+import { PdfLibCompressorAdapter } from '@/features/envio-resultados/infrastructure/pdf/PdfLibCompressorAdapter';
+import { isPdfCompressionEnabled } from '@/features/envio-resultados/infrastructure/pdf/constants';
 import type { IEnvioHistoryRepository } from '@/features/envio-resultados/domain/ports';
 import type { LocalAttachmentInput, SelectedFileRef } from '@/features/envio-resultados/domain/entities';
 import { sanitizeDownloadName } from '@/lib/sanitize-filename';
@@ -239,7 +241,17 @@ export async function POST(request: Request): Promise<NextResponse<ApiResponse>>
       console.error('consolidados send-results: history repo unavailable', err);
     }
 
-    const useCase = new SendResultsUseCase(getFileRepository(), makeEmailService(), historyRepo);
+    // Composition root (design §5): the compressor is injected only
+    // when the kill switch allows it. The flag function re-reads the
+    // env var on every request — PDF_COMPRESSION_ENABLED=false (or
+    // '0') wires no compressor and restores the legacy byte-identical
+    // pipeline, cap ordering included.
+    const useCase = new SendResultsUseCase(
+      getFileRepository(),
+      makeEmailService(),
+      historyRepo,
+      isPdfCompressionEnabled() ? new PdfLibCompressorAdapter() : undefined,
+    );
     const result = await useCase.execute({
       to,
       ...(cc ? { cc } : {}),

@@ -10,9 +10,9 @@ Permite al operador enviar por correo los resultados médicos (CAMO/EMO) de los 
 
 | Capa | Responsabilidad | Archivos clave |
 |---|---|---|
-| `domain/` | Entidades y puertos hexagonales. Subdominios puros: árbol de archivos (Composite GoF), archivos "ready" (parseo/renombrado), archivos generados | `domain/ports.ts` (`IFileRepository`, `IEmailService`, `IEnvioHistoryRepository`, `ICompanyRepository`, `IPatientRepository`), `domain/entities.ts` (`SelectedFileRef`, `EnvioHistoryInsert`, `EmailAttachment`), `domain/file-system/` (`FileSystemNode`, `FileNode`, `FolderNode`), `domain/ready-files/` (`parseReadyFile`, `renameReadyFile`, `isReadyFile`, `normalizeTipoExamen`), `domain/generated-files/renameGeneratedCertificate.ts` |
+| `domain/` | Entidades y puertos hexagonales. Subdominios puros: árbol de archivos (Composite GoF), archivos "ready" (parseo/renombrado), archivos generados | `domain/ports.ts` (`IFileRepository`, `IEmailService`, `IEnvioHistoryRepository`, `ICompanyRepository`, `IPatientRepository`, `IPdfCompressor`, `PdfCompressionResult`), `domain/entities.ts` (`SelectedFileRef`, `EnvioHistoryInsert`, `EmailAttachment`), `domain/file-system/` (`FileSystemNode`, `FileNode`, `FolderNode`), `domain/ready-files/` (`parseReadyFile`, `renameReadyFile`, `isReadyFile`, `normalizeTipoExamen`), `domain/generated-files/renameGeneratedCertificate.ts` |
 | `application/` | Casos de uso que orquestan los puertos | `application/sendResults.ts` (`SendResultsUseCase` — pipeline completo de envío con historial write-then-send), `application/getCompanies.ts`, `application/getPatientsByCompany.ts`, `application/searchEnvios.ts` (buscador del historial) |
-| `infrastructure/` | Adaptadores: SMTP, share UNC, SQL Server, CLI de PDFs | `infrastructure/email/emailService.ts` (`EmailService` → `@/utils/sendEmail` con `purpose: 'consolidados'`), `infrastructure/files/UncFileRepository.ts` + `getFileRepository.ts` (singleton) + `patientPathResolver.ts`, `infrastructure/sqlserver/SqlServerEnvioHistoryRepository.ts` + `migrate.ts` + `getEnvioHistoryDb.ts` (pool `HOLOMEDIC`), `infrastructure/informes/constants.ts` + `outputDirResolver.ts` + `parseManifest.ts` + `matchTransientAuthError.ts`, `infrastructure/mock/` (repos de desarrollo) |
+| `infrastructure/` | Adaptadores: SMTP, share UNC, SQL Server, CLI de PDFs, compresión de PDFs | `infrastructure/email/emailService.ts` (`EmailService` → `@/utils/sendEmail` con `purpose: 'consolidados'`), `infrastructure/files/UncFileRepository.ts` + `getFileRepository.ts` (singleton) + `patientPathResolver.ts`, `infrastructure/sqlserver/SqlServerEnvioHistoryRepository.ts` + `migrate.ts` + `getEnvioHistoryDb.ts` (pool `HOLOMEDIC`), `infrastructure/pdf/` (`PdfLibCompressorAdapter.ts` — compresión lossless fail-open, `constants.ts` — kill switch `PDF_COMPRESSION_ENABLED` y `PDF_COMPRESS_TIMEOUT_MS`), `infrastructure/informes/constants.ts` + `outputDirResolver.ts` + `parseManifest.ts` + `matchTransientAuthError.ts`, `infrastructure/mock/` (repos de desarrollo) |
 | `presentation/` | Wizard de 4 pasos, editor de correo, explorador de archivos, visores, hooks y resolvers de tokens | `presentation/components/EnvioResultadosWizard.tsx` + `wizard/Step1Pacientes…Step4Resumen.tsx` + `WizardStepper.tsx`, `EmailEditor.tsx`, `FilesModal.tsx` + `FilesGeneratePane/FilesReadyPane/FilesExplorerPane/FilesPreviewPane`, `viewers/` (`viewerFor.ts`, `PdfViewer`, `ImageViewer`, `TxtViewer`, `NoPreviewViewer`), `hooks/` (`useEnvioWizard`, `useSendResults`, `useGenerarPdf`, `useFileTree`, `useUnifiedResults`, `useEnviosHistory`, …), `helpers/tokenResolvers/buildTokenResolverRegistry.ts` (+ resolvers `tablaCobranza`, `tablaValoraciones`, `examenes`, `documentos*`), `utils/aggregateDocumentStatuses.ts` |
 
 ## Puntos de entrada
@@ -42,9 +42,11 @@ Permite al operador enviar por correo los resultados médicos (CAMO/EMO) de los 
 | Símbolo | Archivo |
 |---|---|
 | `SendResultsUseCase`, `MAX_FILES`, `MAX_FILE_BYTES` | `application/sendResults.ts` |
+| `MAX_READ_BYTES_WITH_COMPRESSION` (60 MB — tope de lectura cuando hay compresión) | `application/sendResults.ts` |
 | `CLI_EXE_PATH`, `FILE_SERVER_BASE_PATH`, `SUPPORTED_IDEPME`, `buildOutputDir` | `infrastructure/informes/constants.ts` |
 | `resolveOutputDir` | `infrastructure/informes/outputDirResolver.ts` |
 | `parseManifest`, `countManifest` | `infrastructure/informes/parseManifest.ts` |
+| `PdfLibCompressorAdapter`, `PDF_COMPRESS_TIMEOUT_MS` | `infrastructure/pdf/` |
 | `EnvioResultadosWizard` | `presentation/components/EnvioResultadosWizard.tsx` |
 | `buildTokenResolverRegistry`, `FIRMA_FALLBACK_HTML` | `presentation/helpers/tokenResolvers/buildTokenResolverRegistry.ts` |
 
@@ -57,7 +59,7 @@ Envío consolidado (happy path):
 3. En el Paso 4, "Continuar al envío" ejecuta `buildEmailViewDataFromWizard` y monta el `EmailEditor` con plantilla interpolada por tokens (`buildTokenResolverRegistry`) y la firma del usuario (ver módulo `firma-correo`).
 4. `EmailEditor` hace POST a `/api/consolidados/send-results` con `fileRefs` (share LAN) + adjuntos locales + `html`.
 5. La ruta inyecta `SendResultsUseCase(UncFileRepository, EmailService, SqlServerEnvioHistoryRepository)`; el caso de uso sanitiza cada ref, calcula los nombres de entrega (`renameReadyFile`) e **inserta primero** la fila de historial `pendiente` (write-then-send).
-6. Lee cada archivo del share como stream (tope 30 MB/archivo, máx. 10 refs), ensambla `EmailAttachment[]` y despacha por `EmailService.sendWithAttachments` → `@/utils/sendEmail` con `purpose: 'consolidados'`.
+6. Lee cada archivo del share como stream (máx. 10 refs). Con compresión activa (default), el tope de lectura sube a 60 MB y cada PDF se comprime **best-of en RAM** (`PdfLibCompressorAdapter`: recarga pdf-lib sin metadatos; si el resultado no queda menor, se adjuntan los bytes originales); el tope de 30 MB se aplica sobre el **resultado** — un archivo que siga sobre el tope aborta solo ese envío con un error por archivo que cita ambos tamaños (original y comprimido). La compresión es **fail-open**: ante cualquier error/timeout se adjuntan los bytes originales y el envío continúa. Sin compresión (kill switch OFF), el pipeline es byte-idéntico al legado, incluido el ordenamiento del tope (30 MB verificados pre-compresión). Ensambla `EmailAttachment[]` y despacha por `EmailService.sendWithAttachments` → `@/utils/sendEmail` con `purpose: 'consolidados'`.
 7. Actualiza la fila de historial a `enviado`/`error`; la UI consulta el historial en `/consolidados/historial-envios`.
 
 Generación de PDFs (branch del `FilesGeneratePane`):
@@ -90,6 +92,7 @@ Generación de PDFs (branch del `FilesGeneratePane`):
 | `PDFCLI_EXE_PATH` | Override de la ruta del CLI (default `path.resolve(process.cwd(), 'sigla-cli', 'SIGLA.PdfCli.exe')`) | `infrastructure/informes/constants.ts` |
 | `FILE_SERVER_BASE_PATH` | Raíz del share UNC (default `\\172.16.10.12\sigla`) | `infrastructure/informes/constants.ts` |
 | `PDFCLI_RETRY_TRANSIENT_AUTH` | Feature flag del retry (`'0'` lo desactiva; ON por defecto) | `infrastructure/informes/constants.ts` |
+| `PDF_COMPRESSION_ENABLED` | Feature flag de compresión de PDFs en el envío (`'false'`/`'0'` la desactiva; ON por defecto; OFF = comportamiento legacy byte-idéntico, incluido el ordenamiento de tope legacy: 30 MB se verifican ANTES de cualquier compresión) | `infrastructure/pdf/constants.ts` |
 | `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER_CONSOLIDADOS`, `SMTP_PASS_CONSOLIDADOS` | Credenciales SMTP del purpose `consolidados` | `src/utils/sendEmail.ts` |
 | `HOLOMEDIC_DB_*` | Pool SQL Server del historial | `infrastructure/getEnvioHistoryDb.ts` → `@/lib/db` |
 | `CLI_TIMEOUT_MS` (120 000 ms), `PDFCLI_RETRY_MAX_ATTEMPTS` (3), `PDFCLI_RETRY_BACKOFF_MS` ([2000, 4000]) | Política de invocación/retry del CLI | `infrastructure/informes/constants.ts` |
@@ -107,6 +110,7 @@ Los tests viven en carpetas `__tests__/` junto a cada pieza: `application/__test
 
 ## Gotchas
 
+- La compresión de PDFs en el envío es **solo una optimización de transporte**: opera sobre el buffer en RAM del correo; el share clínico (UNC) **nunca se muta** — ni bytes, ni nombre, ni mtime del archivo fuente.
 - `sigla-cli/` es una **runtime dependency git-trackada a propósito** (20 archivos: `SIGLA.PdfCli.exe` + `Negocio.dll`/`Entidad.dll`/`Datos.dll` + `rpt/`). No la ignores ni la borres; el exe necesita las DLL y `rpt/` al mismo nivel.
 - El contrato de args del CLI es frágil: los flags van **antes** de los posicionales, `--idepme` toma el valor como argumento separado, y los booleanos .NET solo aceptan `'true'/'false'` literales (no `0/1`).
 - Defaults `EmiAfi=0` / `IncExp=1` (`DEFAULT_EMI_AFI`/`DEFAULT_INC_EXP`): es la combinación que resuelve el IdePMe 39183 en `SP_SEL_PLANTILLAMEDICAXCLIENTE`.

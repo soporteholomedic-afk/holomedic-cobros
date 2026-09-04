@@ -2,6 +2,9 @@ import type {
   IEmailService,
   IEnvioHistoryRepository,
   IFileRepository,
+  IPdfCompressor,
+  PdfCompressionMethod,
+  PdfCompressionSkipReason,
 } from '../domain/ports';
 import type {
   EmailAttachment,
@@ -30,6 +33,14 @@ export const MAX_FILES = 10;
 
 /** Per-file size cap: 30 MB. */
 export const MAX_FILE_BYTES = 30 * 1024 * 1024;
+
+/**
+ * Read allowance for a single UNC file when a compressor is attached:
+ * 60 MB (2 × `MAX_FILE_BYTES`). The 30 MB per-file cap is still enforced —
+ * but on the POST-compression result, not on the raw stream (RF3). Without
+ * a compressor the legacy `MAX_FILE_BYTES` read cap applies unchanged.
+ */
+export const MAX_READ_BYTES_WITH_COMPRESSION = 2 * MAX_FILE_BYTES;
 
 // ---- Result discriminated union ----
 
@@ -98,6 +109,49 @@ export async function streamToBuffer(
     chunks.push(buf);
   }
   return Buffer.concat(chunks);
+}
+
+// ---- PDF sniff + size formatting (compression seam helpers) ----
+
+const PDF_MAGIC_BYTES = Buffer.from('%PDF-');
+
+/**
+ * Magic-byte sniff for PDF content. Magic beats extensions: delivery
+ * names are renamed/sanitised before dispatch, so the `%PDF-` header is
+ * the only reliable "is this a PDF" signal (RF3).
+ */
+function isPdfBytes(buffer: Buffer): boolean {
+  return buffer.subarray(0, 5).equals(PDF_MAGIC_BYTES);
+}
+
+/** Format a byte count as MB with one decimal, for size-explicit errors. */
+function toMb(bytes: number): string {
+  return (bytes / (1024 * 1024)).toFixed(1);
+}
+
+// ---- Size metrics logging (RF5) ----
+
+/** Console tag for one per-file compression outcome. */
+const PDF_METRICS_TAG = '[SendResultsUseCase] pdf metrics';
+
+/** Console tag for the per-send aggregate (distinct, grep-able tag). */
+const PDF_METRICS_AGGREGATE_TAG = '[SendResultsUseCase] pdf metrics aggregate';
+
+/**
+ * One per-file row of the RF5 size-metrics log — the production size
+ * profile (A3) that will justify (or kill) the future pdfcpu adapter.
+ * `skippedReason` is present ONLY when the file was skipped (no port
+ * result): `not-pdf` for non-PDF bytes, or the port's own reason
+ * (`grew`) on passthrough. A fail-open carry carries no reason — the
+ * accompanying `console.warn` records the error.
+ */
+export interface PdfMetricsRow {
+  file: string;
+  originalBytes: number;
+  finalBytes: number;
+  method: PdfCompressionMethod;
+  durationMs: number;
+  skippedReason?: PdfCompressionSkipReason;
 }
 
 // ---- Sanitisation helper ----
@@ -233,7 +287,9 @@ function resolveDeliveryNames(
  *    file read or dispatch) with the full attachment snapshot and
  *    precomputed delivery names.
  * 3. For each ref, ask the `IFileRepository` for a stream and
- *    collect the bytes into a `Buffer` (with a 30 MB cap).
+ *    collect the bytes into a `Buffer` (30 MB read cap; with a PDF
+ *    compressor attached the allowance doubles and the cap is enforced
+ *    on the post-compression result instead).
  * 4. Hand the assembled `EmailAttachment[]` to the `IEmailService`
  *    with `cc`/`subject`/`html`.
  * 5. UPDATE the history row to `enviado` / `error`(+detail).
@@ -253,7 +309,78 @@ export class SendResultsUseCase {
     private readonly emailService: IEmailService,
     /** History recorder; when omitted the send runs unrecorded (tests/legacy). */
     private readonly historyRepo?: IEnvioHistoryRepository,
+    /**
+     * Optional lossless compression seam (RF3). Domain-only import —
+     * infrastructure adapters are wired at the composition root. Absent
+     * (or PDF_COMPRESSION_ENABLED=false upstream) → the pipeline runs
+     * byte-identical legacy, INCLUDING legacy cap ordering.
+     */
+    private readonly pdfCompressor?: IPdfCompressor,
   ) {}
+
+  /**
+   * Compression seam for the EMAILED COPY only (RF3/RF6): PDF-magic
+   * buffers are compressed, everything else passes through untouched.
+   * Fail-open (spec): a compressor throw/timeout NEVER fails a send —
+   * the original bytes are attached and dispatch proceeds. The source
+   * buffer on the share is never written back.
+   *
+   * Returns the bytes to attach plus the RF5 metrics row. The row is
+   * logged here for EVERY compression outcome (shrink, passthrough/
+   * grew, not-pdf skip, fail-open) and returned so the caller can fold
+   * it into the per-send aggregate. `null` when no compressor is
+   * attached — kill-switch-off runs emit zero metrics output.
+   */
+  private async compressForEmail(
+    content: Buffer,
+    file: string,
+  ): Promise<{ content: Buffer; metrics: PdfMetricsRow | null }> {
+    if (!this.pdfCompressor) return { content, metrics: null };
+    if (!isPdfBytes(content)) {
+      const metrics: PdfMetricsRow = {
+        file,
+        originalBytes: content.length,
+        finalBytes: content.length,
+        method: 'pdf-lib-passthrough',
+        durationMs: 0,
+        skippedReason: 'not-pdf',
+      };
+      console.log(PDF_METRICS_TAG, metrics);
+      return { content, metrics };
+    }
+    const startedAt = Date.now();
+    try {
+      const result = await this.pdfCompressor.compress(content);
+      const metrics: PdfMetricsRow = {
+        file,
+        // The seam's own byte counts are the ground truth of the
+        // profile: original = what entered, final = what is attached.
+        originalBytes: content.length,
+        finalBytes: result.bytes.length,
+        method: result.method,
+        durationMs: result.durationMs,
+        ...(result.skippedReason ? { skippedReason: result.skippedReason } : {}),
+      };
+      console.log(PDF_METRICS_TAG, metrics);
+      return { content: result.bytes, metrics };
+    } catch (err) {
+      console.warn('[SendResultsUseCase] compression failed — attaching original bytes', {
+        error: err instanceof Error ? err.message : String(err),
+      });
+      // Fail-open: no port result exists, so no skip reason applies —
+      // the warn line above carries the error; the row records the
+      // effective outcome (original bytes attached, zero saved).
+      const metrics: PdfMetricsRow = {
+        file,
+        originalBytes: content.length,
+        finalBytes: content.length,
+        method: 'pdf-lib-passthrough',
+        durationMs: Date.now() - startedAt,
+      };
+      console.log(PDF_METRICS_TAG, metrics);
+      return { content, metrics };
+    }
+  }
 
   async execute(params: SendResultsParams): Promise<SendResultsResult> {
     // ---- 1. Refs: count cap only ----
@@ -347,6 +474,9 @@ export class SendResultsUseCase {
 
     // ---- 2. Sanitise + read + collect ----
     const attachments: EmailAttachment[] = [];
+    // RF5 per-send accumulator: one row per compression outcome, folded
+    // into the aggregate logged after BOTH loops below.
+    const metricsRows: PdfMetricsRow[] = [];
     console.log('[SendResultsUseCase.execute] starting file resolution', {
       count: params.fileRefs.length,
       refs: params.fileRefs,
@@ -397,10 +527,27 @@ export class SendResultsUseCase {
       }
 
       try {
-        const buffer = await streamToBuffer(stream, MAX_FILE_BYTES);
+        // Cap reordering (RF3): with a compressor attached the read
+        // allowance doubles — the 30 MB per-file cap is enforced on the
+        // POST-compression result below. Without a compressor the legacy
+        // ordering is preserved verbatim: streamToBuffer throws at 30 MB
+        // and the catch maps it to INTERNAL_ERROR exactly as before.
+        const readCap = this.pdfCompressor ? MAX_READ_BYTES_WITH_COMPRESSION : MAX_FILE_BYTES;
+        const buffer = await streamToBuffer(stream, readCap);
         // Reuse the precomputed delivery name so the dispatched
-        // attachment name is byte-identical to the persisted snapshot.
-        attachments.push({ filename: deliveryNames[i] ?? safeName, content: buffer });
+        // attachment name is byte-identical to the persisted snapshot
+        // (and the metrics row names the same file the operator sees).
+        const deliveryName = deliveryNames[i] ?? safeName;
+        const { content, metrics } = await this.compressForEmail(buffer, deliveryName);
+        if (metrics) metricsRows.push(metrics);
+        if (content.length > MAX_FILE_BYTES) {
+          const error =
+            `File "${deliveryName}" exceeds the 30 MB email limit after compression ` +
+            `(original ${toMb(buffer.length)} MB, compressed ${toMb(content.length)} MB)`;
+          await finishRecord('error', error);
+          return { success: false, code: 'VALIDATION_ERROR', error };
+        }
+        attachments.push({ filename: deliveryName, content });
       } catch (err) {
         const error = err instanceof Error ? err.message : 'Stream error';
         await finishRecord('error', error);
@@ -418,10 +565,28 @@ export class SendResultsUseCase {
         await finishRecord('error', error);
         return { success: false, code: 'VALIDATION_ERROR', error };
       }
+      // Same emailed-copy compression treatment as UNC refs (RF3), but
+      // these stay EXEMPT from the per-file cap — no size check here.
+      const { content, metrics } = await this.compressForEmail(local.content, safeName);
+      if (metrics) metricsRows.push(metrics);
       attachments.push({
         filename: safeName,
-        content: local.content,
+        content,
         contentType: local.contentType,
+      });
+    }
+
+    // ---- 3b. Per-send metrics aggregate (RF5) ----
+    // Emitted only when compression ran (compressor attached) — the
+    // kill-switch-off pipeline is byte-identical legacy, logs included.
+    if (this.pdfCompressor) {
+      const originalBytesTotal = metricsRows.reduce((total, row) => total + row.originalBytes, 0);
+      const finalBytesTotal = metricsRows.reduce((total, row) => total + row.finalBytes, 0);
+      console.log(PDF_METRICS_AGGREGATE_TAG, {
+        files: metricsRows.length,
+        originalBytesTotal,
+        finalBytesTotal,
+        savedBytesTotal: originalBytesTotal - finalBytesTotal,
       });
     }
 
