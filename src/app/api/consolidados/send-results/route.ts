@@ -4,8 +4,12 @@ import { getFileRepository } from '@/features/envio-resultados/infrastructure/fi
 import { makeEmailService } from '@/features/envio-resultados/infrastructure/email/emailService';
 import { getEnvioHistoryDb } from '@/features/envio-resultados/infrastructure/getEnvioHistoryDb';
 import { PdfLibCompressorAdapter } from '@/features/envio-resultados/infrastructure/pdf/PdfLibCompressorAdapter';
-import { isPdfCompressionEnabled } from '@/features/envio-resultados/infrastructure/pdf/constants';
-import type { IEnvioHistoryRepository } from '@/features/envio-resultados/domain/ports';
+import { PdfImageCompressorAdapter } from '@/features/envio-resultados/infrastructure/pdf/PdfImageCompressorAdapter';
+import {
+  getPdfCompressionProfile,
+  isPdfCompressionEnabled,
+} from '@/features/envio-resultados/infrastructure/pdf/constants';
+import type { IEnvioHistoryRepository, IPdfCompressor } from '@/features/envio-resultados/domain/ports';
 import type { LocalAttachmentInput, SelectedFileRef } from '@/features/envio-resultados/domain/entities';
 import { sanitizeDownloadName } from '@/lib/sanitize-filename';
 import { isSafeDocumentKey } from '@/lib/normalize-dni';
@@ -81,6 +85,27 @@ function isFileRefShape(v: unknown): v is SelectedFileRef {
     // `.trim()` would throw and surface as 500 INTERNAL_ERROR.
     (obj.deliveryName === undefined || typeof obj.deliveryName === 'string')
   );
+}
+
+/**
+ * Composition-root compressor selection (design §4, spec RF2/RF3).
+ *
+ * The kill switch keeps ABSOLUTE precedence: `PDF_COMPRESSION_ENABLED=false`
+ * (or '0') wires no compressor at all — the pipeline is byte-identical to
+ * the legacy behavior and the profile is irrelevant. Otherwise the
+ * `PDF_COMPRESSION_PROFILE` selector chooses the strategy: `'email'` opts
+ * into the lossy image adapter (sharp DCT downsample re-encode — requires
+ * clinical sign-off in production), anything resolving to `'lossless'`
+ * (the default, garbage included) keeps the byte-safe lib adapter.
+ *
+ * Both flags are read per request (no startup caching) so an operator can
+ * flip the profile/kill switch with a plain restart-free redeploy of env.
+ */
+function makePdfCompressor(): IPdfCompressor | undefined {
+  if (!isPdfCompressionEnabled()) return undefined;
+  return getPdfCompressionProfile() === 'email'
+    ? new PdfImageCompressorAdapter()
+    : new PdfLibCompressorAdapter();
 }
 
 // ---- POST handler ----
@@ -241,16 +266,15 @@ export async function POST(request: Request): Promise<NextResponse<ApiResponse>>
       console.error('consolidados send-results: history repo unavailable', err);
     }
 
-    // Composition root (design §5): the compressor is injected only
-    // when the kill switch allows it. The flag function re-reads the
-    // env var on every request — PDF_COMPRESSION_ENABLED=false (or
-    // '0') wires no compressor and restores the legacy byte-identical
-    // pipeline, cap ordering included.
+    // Composition root (design §4): the compressor is selected per
+    // request — kill switch first (absolute precedence), then the
+    // profile ('email' → image adapter, default → lossless adapter).
+    // See makePdfCompressor() above for the exact env semantics.
     const useCase = new SendResultsUseCase(
       getFileRepository(),
       makeEmailService(),
       historyRepo,
-      isPdfCompressionEnabled() ? new PdfLibCompressorAdapter() : undefined,
+      makePdfCompressor(),
     );
     const result = await useCase.execute({
       to,
