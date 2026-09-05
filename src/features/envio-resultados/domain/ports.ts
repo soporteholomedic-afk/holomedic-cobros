@@ -143,10 +143,17 @@ export interface IEnvioHistoryRepository {
  * `pdf-lib-lossless` — the adapter re-serialized the document (object
  * streams on, metadata stripped) and the output is strictly smaller.
  * `pdf-lib-passthrough` — no compression was applied and the ORIGINAL
- * input bytes were returned (best-of guarantee). Extensible for a future
- * `pdfcpu-lossless` adapter without breaking consumers.
+ * input bytes were returned (best-of guarantee).
+ * `pdf-lib-image-email` — the lossy email-profile adapter (DCTDecode
+ * image surgery via sharp, resize + JPEG re-encode). Like the other
+ * ids it names the WIRED strategy and is carried by every row that
+ * strategy produces, including its fail-open/passthrough rows.
+ * Extensible for future adapters without breaking consumers.
  */
-export type PdfCompressionMethod = 'pdf-lib-lossless' | 'pdf-lib-passthrough';
+export type PdfCompressionMethod =
+  | 'pdf-lib-lossless'
+  | 'pdf-lib-passthrough'
+  | 'pdf-lib-image-email';
 
 /**
  * Why a compression attempt returned the original bytes unchanged

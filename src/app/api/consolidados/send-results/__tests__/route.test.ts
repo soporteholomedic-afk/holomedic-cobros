@@ -26,6 +26,72 @@ vi.mock('@/features/envio-resultados/infrastructure/getEnvioHistoryDb', () => ({
   __setEnvioHistoryDbForTests: vi.fn(),
 }));
 
+// ---- Compressor wiring spies (pdfcpu-adapter PR6, RF3) ----
+//
+// The route is the composition root: it must choose WHICH compressor
+// to inject from `PDF_COMPRESSION_PROFILE` ('email' → image adapter,
+// 'lossless'/default → lib adapter) unless the `PDF_COMPRESSION_ENABLED`
+// kill switch wires none at all. Each mock SUBCLASSES the real adapter
+// (importOriginal) so every pre-existing pipeline test below keeps its
+// exact behavior — only construction is observed, never replaced.
+
+const pdfWiring = vi.hoisted(() => ({
+  imageCtor: vi.fn(),
+  libCtor: vi.fn(),
+  /** Captures the use case's 4th constructor argument (the compressor). */
+  useCaseCompressorArg: vi.fn(),
+  lastImageInstance: undefined as unknown,
+  lastLibInstance: undefined as unknown,
+}));
+
+vi.mock(
+  '@/features/envio-resultados/infrastructure/pdf/PdfImageCompressorAdapter',
+  async (importOriginal) => {
+    const actual = await importOriginal<
+      typeof import('@/features/envio-resultados/infrastructure/pdf/PdfImageCompressorAdapter')
+    >();
+    class SpyImageCompressor extends actual.PdfImageCompressorAdapter {
+      constructor(...args: ConstructorParameters<typeof actual.PdfImageCompressorAdapter>) {
+        super(...args);
+        pdfWiring.imageCtor();
+        pdfWiring.lastImageInstance = this;
+      }
+    }
+    return { PdfImageCompressorAdapter: SpyImageCompressor };
+  },
+);
+
+vi.mock(
+  '@/features/envio-resultados/infrastructure/pdf/PdfLibCompressorAdapter',
+  async (importOriginal) => {
+    const actual = await importOriginal<
+      typeof import('@/features/envio-resultados/infrastructure/pdf/PdfLibCompressorAdapter')
+    >();
+    class SpyLibCompressor extends actual.PdfLibCompressorAdapter {
+      constructor(...args: ConstructorParameters<typeof actual.PdfLibCompressorAdapter>) {
+        super(...args);
+        pdfWiring.libCtor();
+        pdfWiring.lastLibInstance = this;
+      }
+    }
+    return { PdfLibCompressorAdapter: SpyLibCompressor };
+  },
+);
+
+vi.mock('@/features/envio-resultados/application/sendResults', async (importOriginal) => {
+  const actual = await importOriginal<
+    typeof import('@/features/envio-resultados/application/sendResults')
+  >();
+  type UseCaseCtorArgs = ConstructorParameters<typeof actual.SendResultsUseCase>;
+  class SpiedSendResultsUseCase extends actual.SendResultsUseCase {
+    constructor(...args: UseCaseCtorArgs) {
+      super(...args);
+      pdfWiring.useCaseCompressorArg(args[3]);
+    }
+  }
+  return { SendResultsUseCase: SpiedSendResultsUseCase };
+});
+
 // ---- Import under test (after mocks) ----
 
 import { POST } from '../route';
@@ -98,10 +164,13 @@ beforeEach(() => {
     search: vi.fn(),
     getById: vi.fn(),
   });
+  pdfWiring.lastImageInstance = undefined;
+  pdfWiring.lastLibInstance = undefined;
 });
 
 afterEach(() => {
   __setFileRepositoryForTests(null);
+  vi.unstubAllEnvs();
 });
 
 /**
@@ -718,5 +787,75 @@ describe('POST /api/consolidados/send-results — deliveryName shape guard (D9)'
     expect(response.status).toBe(200);
     expect(body.success).toBe(true);
     expect(mockSendEmail).toHaveBeenCalledTimes(1);
+  });
+});
+
+// ================================================================
+// pdfcpu-adapter PR6 — composition-root compressor selection (RF3).
+// The route must select the adapter BY PROFILE at the existing seam:
+// 'email' → PdfImageCompressorAdapter, 'lossless' (default) →
+// PdfLibCompressorAdapter, kill switch OFF → no compressor at all.
+// Spies subclass the real adapters, so these tests observe wiring
+// without changing pipeline behavior.
+// ================================================================
+
+describe('POST /api/consolidados/send-results — compressor wiring (RF3)', () => {
+  it('R1: injects the image compressor when PDF_COMPRESSION_PROFILE=email', async () => {
+    vi.stubEnv('PDF_COMPRESSION_PROFILE', 'email');
+
+    const response = await POST(createMockRequest(buildFileRefsFd([REF_ROOT])));
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.success).toBe(true);
+    expect(pdfWiring.imageCtor).toHaveBeenCalledTimes(1);
+    expect(pdfWiring.libCtor).not.toHaveBeenCalled();
+    // The constructed image adapter IS the use case's 4th ctor arg —
+    // identity check, not merely "an adapter was built somewhere".
+    const wired = pdfWiring.useCaseCompressorArg.mock.calls[0]?.[0];
+    expect(wired).toBe(pdfWiring.lastImageInstance);
+  });
+
+  it('R2: injects the lossless lib compressor for an explicit lossless profile', async () => {
+    vi.stubEnv('PDF_COMPRESSION_PROFILE', 'lossless');
+
+    const response = await POST(createMockRequest(buildFileRefsFd([REF_ROOT])));
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.success).toBe(true);
+    expect(pdfWiring.libCtor).toHaveBeenCalledTimes(1);
+    expect(pdfWiring.imageCtor).not.toHaveBeenCalled();
+    const wired = pdfWiring.useCaseCompressorArg.mock.calls[0]?.[0];
+    expect(wired).toBe(pdfWiring.lastLibInstance);
+  });
+
+  it('R2b: unset profile defaults to the lossless lib compressor', async () => {
+    // vitest ≥1.6: stubEnv with undefined DELETES the env var — the
+    // true "unset" default, not just the empty-string shape (C6).
+    vi.stubEnv('PDF_COMPRESSION_PROFILE', undefined);
+
+    const response = await POST(createMockRequest(buildFileRefsFd([REF_ROOT])));
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.success).toBe(true);
+    expect(pdfWiring.libCtor).toHaveBeenCalledTimes(1);
+    expect(pdfWiring.imageCtor).not.toHaveBeenCalled();
+  });
+
+  it('R3: kill switch OFF wires no compressor at all (profile irrelevant)', async () => {
+    vi.stubEnv('PDF_COMPRESSION_ENABLED', 'false');
+    vi.stubEnv('PDF_COMPRESSION_PROFILE', 'email'); // must be IGNORED
+
+    const response = await POST(createMockRequest(buildFileRefsFd([REF_ROOT])));
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.success).toBe(true);
+    expect(pdfWiring.imageCtor).not.toHaveBeenCalled();
+    expect(pdfWiring.libCtor).not.toHaveBeenCalled();
+    expect(pdfWiring.useCaseCompressorArg).toHaveBeenCalledTimes(1);
+    expect(pdfWiring.useCaseCompressorArg).toHaveBeenCalledWith(undefined);
   });
 });

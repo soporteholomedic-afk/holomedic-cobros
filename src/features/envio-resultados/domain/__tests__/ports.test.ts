@@ -123,8 +123,10 @@ describe('IFileRepository port', () => {
  */
 describe('IPdfCompressor port', () => {
   it('PdfCompressionMethod is the pdf-lib strategy union (extensible for future adapters)', () => {
+    // RF4 (pdfcpu-adapter): 'pdf-lib-image-email' joins the union — the
+    // lossy email-profile adapter reports its own strategy id.
     expectTypeOf<PdfCompressionMethod>().toEqualTypeOf<
-      'pdf-lib-lossless' | 'pdf-lib-passthrough'
+      'pdf-lib-lossless' | 'pdf-lib-passthrough' | 'pdf-lib-image-email'
     >();
   });
 
