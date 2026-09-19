@@ -3,13 +3,14 @@ import type { ConnectionPool } from 'mssql';
 import { getHolomedicPool } from '@/lib/db';
 
 import { migrate } from './sqlserver/migrate';
+import { SqlServerEmpresaRepository } from './sqlserver/sqlServerEmpresaRepository';
+import type { CrmEmpresaRepositoryPort } from '../domain/ports';
 
 /**
  * The CRM feature container (ADR-3): one factory owning ONE pool and
- * ONE idempotent `migrate()`. pr2 exposes the migrated pool — the
- * `withCrmTransaction` input — as the single CRM DB entry point; later
- * slices add the SQL Server adapters here as the `SqlServer*Repository`
- * implementations land (empresa repo in pr3).
+ * ONE idempotent `migrate()`. pr3 adds the first SQL Server adapter —
+ * the empresa registry repository — bound to the migrated pool;
+ * later slices add the remaining `SqlServer*Repository` adapters here.
  *
  * Mirrors `getUsuarioDb`/`getAsistenciaDb`: lazy singleton, async
  * signature for uniform `await` at call sites.
@@ -17,6 +18,8 @@ import { migrate } from './sqlserver/migrate';
 export interface CrmDb {
   /** Shared HOLOMEDIC pool, connected and schema-migrated. */
   pool: ConnectionPool;
+  /** Empresa registry adapter (registro de empresas, spec G1). */
+  empresas: CrmEmpresaRepositoryPort;
 }
 
 let cached: Promise<CrmDb> | null = null;
@@ -33,7 +36,7 @@ export function getCrmDb(): Promise<CrmDb> {
     const pool = await getHolomedicPool();
     await pool.connect();
     await migrate(pool);
-    return { pool };
+    return { pool, empresas: new SqlServerEmpresaRepository(pool) };
   })();
   return cached;
 }
