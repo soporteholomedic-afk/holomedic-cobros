@@ -149,6 +149,7 @@ describe('buildCobranzaInterpolationContext', () => {
 
     expect(ctx.moneda).toBe('');
     expect(ctx.montoTotal).toBe('');
+    expect(ctx.tablaCobranzaTotales).toEqual([]);
   });
 
   it('computes diasVencidos as the max overdue days over pending docs', () => {
@@ -326,6 +327,33 @@ describe('buildCobranzaInterpolationContext', () => {
         saldo: 'S/ 50.00',
         diasVencidos: '0', // fechaVen 20/06/2026 is future at FAKE_NOW (2026-06-15)
       },
+    ]);
+  });
+
+  it('builds tablaCobranzaTotales per currency over the same pending docs (first-appearance order)', () => {
+    const ctx = buildCobranzaInterpolationContext(buildClient(), '');
+
+    // S/ docs first (F001-101), then $ (F001-102); B001-77 (saldo 0) excluded.
+    expect(ctx.tablaCobranzaTotales).toEqual([
+      { moneda: 'S/', debe: 'S/ 1,200.00', haber: 'S/ 200.00', saldo: 'S/ 1,000.00' },
+      { moneda: '$', debe: '$ 0.00', haber: '$ 300.00', saldo: '$ 500.00' },
+    ]);
+  });
+
+  it('applies the SAME saldo > 0.01 filter to tablaCobranzaTotales (boundary and settled docs excluded)', () => {
+    const client = buildClient({
+      documentos: [
+        { tipoDoc: 'FE', serie: 'F001', numero: '201', fechaDoc: '01/06/2026', fechaVen: '20/06/2026', moneda: 'S/', debe: 0, haber: 50, saldo: 50 },
+        { tipoDoc: 'BO', serie: 'B001', numero: '202', fechaDoc: '02/06/2026', fechaVen: '21/06/2026', moneda: 'S/', debe: 10, haber: 9.99, saldo: 0.01 },
+        { tipoDoc: 'BO', serie: 'B001', numero: '203', fechaDoc: '03/06/2026', fechaVen: '22/06/2026', moneda: 'S/', debe: 10, haber: 10, saldo: 0 },
+      ],
+      saldosPorMoneda: { 'S/': { debe: 20, haber: 69.99, saldo: 50.01 } },
+    });
+
+    const ctx = buildCobranzaInterpolationContext(client, '');
+
+    expect(ctx.tablaCobranzaTotales).toEqual([
+      { moneda: 'S/', debe: 'S/ 0.00', haber: 'S/ 50.00', saldo: 'S/ 50.00' },
     ]);
   });
 });

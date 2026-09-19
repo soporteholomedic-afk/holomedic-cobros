@@ -54,6 +54,21 @@ export interface TablaCobranzaRow {
 }
 
 /**
+ * One TOTAL row of the cobranza `tabla-cobranza` table: per-currency
+ * sums over the SAME pending docs the rows carry (saldo > 0.01).
+ * Amounts are never summed across currencies — one entry per currency
+ * present, in first-appearance order. All fields are PRE-FORMATTED
+ * strings (amounts include the currency symbol, same convention as the
+ * rows); the resolver stays a dumb escape-and-emit renderer.
+ */
+export interface TablaCobranzaTotalesRow {
+  moneda: string;
+  debe: string;
+  haber: string;
+  saldo: string;
+}
+
+/**
  * One row of the valoraciones `tablaValoraciones` table (REQ-03 M-R2).
  * All 5 fields are PRE-FORMATTED strings — amounts carry the group's own
  * currency symbol (es-PE 2-decimals) and `registros` is the row count;
@@ -113,6 +128,8 @@ export interface InterpolationContext {
   documentosPendientes?: DocumentoPendienteRow[];
   /** Cobranza: full rows for the `tabla-cobranza` table (12 pre-formatted fields). */
   tablaCobranza?: TablaCobranzaRow[];
+  /** Cobranza: per-currency TOTAL rows appended below the `tabla-cobranza` data rows. */
+  tablaCobranzaTotales?: TablaCobranzaTotalesRow[];
   // ---- OPTIONAL valoraciones fields (REQ-03 M-R2 widening, back-compat) ----
   // Only the valoraciones flow fills these. All values are pre-formatted
   // strings; other areas' callers keep constructing the context without
