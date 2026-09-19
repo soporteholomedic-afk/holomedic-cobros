@@ -4,7 +4,8 @@ import { getHolomedicPool } from '@/lib/db';
 
 import { migrate } from './sqlserver/migrate';
 import { SqlServerEmpresaRepository } from './sqlserver/sqlServerEmpresaRepository';
-import type { CrmEmpresaRepositoryPort } from '../domain/ports';
+import { SqlServerCrmImportador } from './importar/importadorCrm';
+import type { CrmEmpresaRepositoryPort, CrmImportadorPort } from '../domain/ports';
 
 /**
  * The CRM feature container (ADR-3): one factory owning ONE pool and
@@ -20,6 +21,8 @@ export interface CrmDb {
   pool: ConnectionPool;
   /** Empresa registry adapter (registro de empresas, spec G1). */
   empresas: CrmEmpresaRepositoryPort;
+  /** Import execution adapter (spec G2, pr6). */
+  importador: CrmImportadorPort;
 }
 
 let cached: Promise<CrmDb> | null = null;
@@ -36,7 +39,7 @@ export function getCrmDb(): Promise<CrmDb> {
     const pool = await getHolomedicPool();
     await pool.connect();
     await migrate(pool);
-    return { pool, empresas: new SqlServerEmpresaRepository(pool) };
+    return { pool, empresas: new SqlServerEmpresaRepository(pool), importador: new SqlServerCrmImportador(pool) };
   })();
   return cached;
 }

@@ -17,6 +17,9 @@ import * as mssql from 'mssql';
  *   the invariant is enforced app-side (first listed = default).
  * - `CRM_Correos` — N per contacto; addresses stored normalized
  *   (lowercase, trimmed) under `UQ_CRM_Correos_ContactoCorreo`.
+ * - `CRM_Importaciones` (pr6) — one audit row per executed import
+ *   (design §2): job counters + the JSON report rows. Preview and
+ *   cancel write NOTHING here (G2 preview-before-commit).
  *
  * Conventions (design §2): INT IDENTITY PKs for registry tables,
  * `DATETIME2(0) DEFAULT SYSDATETIME()` audit stamps (ADR-9, naive
@@ -70,6 +73,22 @@ BEGIN
     contactoId INT          NOT NULL CONSTRAINT FK_CRM_Correos_Contacto REFERENCES dbo.CRM_Contactos (id) ON DELETE CASCADE,
     correo     VARCHAR(320) NOT NULL,
     CONSTRAINT UQ_CRM_Correos_ContactoCorreo UNIQUE (contactoId, correo)
+  );
+END;
+IF NOT EXISTS (SELECT 1 FROM sys.tables WHERE name = 'CRM_Importaciones' AND schema_id = SCHEMA_ID('dbo'))
+BEGIN
+  CREATE TABLE dbo.CRM_Importaciones (
+    id                   INT           IDENTITY(1,1) NOT NULL PRIMARY KEY,
+    archivoNombre        NVARCHAR(300) NOT NULL,
+    totalFilas           INT           NOT NULL,
+    filasValidas         INT           NOT NULL,
+    empresasCreadas      INT           NOT NULL,
+    empresasActualizadas INT           NOT NULL,
+    contactosCreados     INT           NOT NULL,
+    contactosActualizados INT          NOT NULL,
+    erroresJson          NVARCHAR(MAX) NULL,
+    ejecutadoPor         NVARCHAR(200) NOT NULL,
+    createdAt            DATETIME2(0)  NOT NULL DEFAULT SYSDATETIME()
   );
 END;
 IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'UX_CRM_Contactos_Principal' AND object_id = OBJECT_ID('dbo.CRM_Contactos'))

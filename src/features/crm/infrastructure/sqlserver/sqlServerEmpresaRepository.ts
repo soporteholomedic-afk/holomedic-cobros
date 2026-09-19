@@ -7,10 +7,10 @@ import type {
   CrearEmpresaInput,
   Empresa,
 } from '../../domain/entities';
-import { ConflictError } from '../../domain/errors';
 import { normalizarCorreo, normalizarNombre, normalizarRuc } from '../../domain/normalizar';
 import type { CrmEmpresaRepositoryPort, FiltrosEmpresas } from '../../domain/ports';
 
+import { mapearConflictoUnico } from './conflictos';
 import { withCrmTransaction } from './withCrmTransaction';
 
 /**
@@ -103,7 +103,7 @@ export class SqlServerEmpresaRepository implements CrmEmpresaRepositoryPort {
         return empresa;
       });
     } catch (err: unknown) {
-      throw mapearConflicto(err);
+      throw mapearConflictoUnico(err);
     }
   }
 
@@ -292,31 +292,4 @@ export class SqlServerEmpresaRepository implements CrmEmpresaRepositoryPort {
       WHERE contactoId IN (${placeholders.join(', ')}) ORDER BY id
     `);
   }
-}
-
-/**
- * Map a SQL Server unique violation (2601 duplicate row / 2627
- * constraint) to the typed `ConflictError`, using the constraint/index
- * name embedded in the error message to pick a UI-ready Spanish
- * reason. Any other error passes through untouched.
- */
-function mapearConflicto(err: unknown): unknown {
-  if (typeof err !== 'object' || err === null || !('number' in err)) return err;
-  const numero = (err as { number?: unknown }).number;
-  if (numero !== 2601 && numero !== 2627) return err;
-
-  const mensaje = err instanceof Error ? err.message : '';
-  if (mensaje.includes('RucNormalizado')) {
-    return new ConflictError('Ya existe una empresa con ese RUC');
-  }
-  if (mensaje.includes('EmpresaNombre')) {
-    return new ConflictError('Ya existe un contacto con ese nombre en esta empresa');
-  }
-  if (mensaje.includes('ContactoCorreo')) {
-    return new ConflictError('Ese correo ya está registrado para el contacto');
-  }
-  if (mensaje.includes('Principal')) {
-    return new ConflictError('Solo puede haber un contacto principal por empresa');
-  }
-  return new ConflictError('La operación genera un conflicto de datos duplicados');
 }

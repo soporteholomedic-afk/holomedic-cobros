@@ -9,8 +9,9 @@ import { loadEnvLocal } from './loadEnvLocal';
 loadEnvLocal();
 
 /**
- * DB integration contract for the CRM registry schema (design §2, pr2
- * scope: CRM_Empresas / CRM_Contactos / CRM_Correos).
+ * DB integration contract for the CRM schema (design §2; pr2 scope:
+ * CRM_Empresas / CRM_Contactos / CRM_Correos — pr6 adds the
+ * CRM_Importaciones job table).
  *
  * Unlike the fake-pool migrate suites (asistencia/cobranza), this suite
  * runs the real migration against the local `HOLOMEDIC` database via
@@ -25,7 +26,7 @@ loadEnvLocal();
  * suite leaves zero residue in the developer database.
  */
 
-const TABLAS = ['CRM_Empresas', 'CRM_Contactos', 'CRM_Correos'] as const;
+const TABLAS = ['CRM_Empresas', 'CRM_Contactos', 'CRM_Correos', 'CRM_Importaciones'] as const;
 const CHECKS = ['CK_CRM_Empresas_Tipo', 'CK_CRM_Empresas_Origen'] as const;
 const UNIQUES = [
   'UQ_CRM_Empresas_RucNormalizado',
@@ -85,7 +86,7 @@ async function catalogFingerprint(p: mssql.ConnectionPool): Promise<string[]> {
     UNION ALL
     SELECT 'KEY', kc.name
       FROM sys.key_constraints kc
-     WHERE kc.parent_object_id IN (OBJECT_ID('dbo.CRM_Empresas'), OBJECT_ID('dbo.CRM_Contactos'), OBJECT_ID('dbo.CRM_Correos'))
+     WHERE kc.parent_object_id IN (OBJECT_ID('dbo.CRM_Empresas'), OBJECT_ID('dbo.CRM_Contactos'), OBJECT_ID('dbo.CRM_Correos'), OBJECT_ID('dbo.CRM_Importaciones'))
     UNION ALL
     SELECT 'CHECK', cc.name
       FROM sys.check_constraints cc
@@ -93,11 +94,11 @@ async function catalogFingerprint(p: mssql.ConnectionPool): Promise<string[]> {
     UNION ALL
     SELECT 'FK', fk.name
       FROM sys.foreign_keys fk
-     WHERE fk.parent_object_id IN (OBJECT_ID('dbo.CRM_Empresas'), OBJECT_ID('dbo.CRM_Contactos'), OBJECT_ID('dbo.CRM_Correos'))
+     WHERE fk.parent_object_id IN (OBJECT_ID('dbo.CRM_Contactos'), OBJECT_ID('dbo.CRM_Correos'))
     UNION ALL
     SELECT 'INDEX', i.name
       FROM sys.indexes i
-     WHERE i.object_id IN (OBJECT_ID('dbo.CRM_Empresas'), OBJECT_ID('dbo.CRM_Contactos'), OBJECT_ID('dbo.CRM_Correos'))
+     WHERE i.object_id IN (OBJECT_ID('dbo.CRM_Empresas'), OBJECT_ID('dbo.CRM_Contactos'), OBJECT_ID('dbo.CRM_Correos'), OBJECT_ID('dbo.CRM_Importaciones'))
        AND i.name IS NOT NULL
   `);
   return result.recordset.map((r) => `${r.tipo}:${r.nombre}`).sort();
@@ -109,18 +110,42 @@ describe('crm migrate() — HOLOMEDIC schema integration', () => {
     await migrate(pool);
     const after = await catalogFingerprint(pool);
     expect(after).toEqual(before);
-    // 3 tables + 6 key constraints (3 PK + 3 UQ) + 2 CHECKs + 2 FKs +
-    // 9 indexes (3 named + 3 backing the UQs + 3 clustered PKs).
-    expect(before).toHaveLength(3 + 6 + 2 + 2 + 9);
+    // 4 tables (3 registry + job) + 7 key constraints (4 PK + 3 UQ) +
+    // 2 CHECKs + 2 FKs + 10 indexes (3 named + 3 backing the UQs +
+    // 4 clustered PKs).
+    expect(before).toHaveLength(4 + 7 + 2 + 2 + 10);
   });
 
-  it('creates the 3 registry tables (Empresas → Contactos → Correos)', async () => {
+  it('creates the registry tables (Empresas → Contactos → Correos) and the CRM_Importaciones job table', async () => {
     const result = await pool
       .request()
       .query<NameRow>(
         `SELECT name FROM sys.tables WHERE name IN ('${TABLAS.join("','")}') ORDER BY name`,
       );
     expect(result.recordset.map((r) => r.name).sort()).toEqual([...TABLAS].sort());
+  });
+
+  it('creates CRM_Importaciones with the job-count columns (pr6, design §2)', async () => {
+    const result = await pool.request().query<NameRow>(`
+      SELECT c.name
+        FROM sys.columns c
+       WHERE c.object_id = OBJECT_ID('dbo.CRM_Importaciones')
+       ORDER BY c.name`);
+    expect(result.recordset.map((r) => r.name).sort()).toEqual(
+      [
+        'id',
+        'archivoNombre',
+        'totalFilas',
+        'filasValidas',
+        'empresasCreadas',
+        'empresasActualizadas',
+        'contactosCreados',
+        'contactosActualizados',
+        'erroresJson',
+        'ejecutadoPor',
+        'createdAt',
+      ].sort(),
+    );
   });
 
   it('creates the named CHECK constraints for the tipo/origen enums on CRM_Empresas', async () => {
