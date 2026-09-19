@@ -282,6 +282,10 @@ describe('FilesGeneratePane', () => {
       dni: '12345678',
       idePmeList: [39053, 39056],
     });
+    // Credentials are resolved server-side now — the client payload
+    // must never carry them.
+    expect(request).not.toHaveProperty('user');
+    expect(request).not.toHaveProperty('pass');
   });
 
   it('renders the "Descargando... (intento X/3)" label while status is loading', () => {

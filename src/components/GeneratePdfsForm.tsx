@@ -12,8 +12,6 @@ interface FormData {
   numOrd: string;
   emiAfi: boolean;
   incExp: boolean;
-  user: string;
-  pass: string;
   strict: boolean;
 }
 
@@ -27,8 +25,6 @@ const initialForm: FormData = {
   numOrd: '109994',
   emiAfi: false,
   incExp: true,
-  user: 'soporte',
-  pass: 'soporte',
   strict: false,
 };
 
@@ -67,8 +63,6 @@ export function GeneratePdfsForm() {
           emiAfi: form.emiAfi,
           incExp: form.incExp,
           codDCo: form.codDCo ? Number(form.codDCo) : null,
-          user: form.user,
-          pass: form.pass,
           strict: form.strict,
         }),
       });
@@ -165,27 +159,6 @@ export function GeneratePdfsForm() {
           <input
             name="codTCl"
             value={form.codTCl}
-            onChange={handleChange}
-            className="mt-1 w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2 text-sm"
-            required
-          />
-        </label>
-        <label className="block">
-          <span className="text-sm font-medium text-slate-700 dark:text-slate-300">Usuario DB</span>
-          <input
-            name="user"
-            value={form.user}
-            onChange={handleChange}
-            className="mt-1 w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2 text-sm"
-            required
-          />
-        </label>
-        <label className="block col-span-2">
-          <span className="text-sm font-medium text-slate-700 dark:text-slate-300">Contraseña DB</span>
-          <input
-            name="pass"
-            type="password"
-            value={form.pass}
             onChange={handleChange}
             className="mt-1 w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2 text-sm"
             required

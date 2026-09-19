@@ -36,8 +36,6 @@ function validRequest(): GenerarPdfRequest {
     codDCo: 76,
     ruc: '20123456789',
     dni: '12345678',
-    user: 'soporte',
-    pass: 'soporte',
     idePmeList: [39053, 39056],
   };
 }

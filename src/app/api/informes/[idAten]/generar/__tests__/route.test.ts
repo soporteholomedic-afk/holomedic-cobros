@@ -40,9 +40,9 @@ const mockExecFile = vi.hoisted(() =>
   ),
 );
 
-function queueExecError(exitCode: number, stdout = ''): void {
+function queueExecError(exitCode: number, stdout = '', message = 'exit ' + exitCode): void {
   pendingExecResponses.push((cb) => {
-    const err = Object.assign(new Error('exit ' + exitCode), { code: exitCode, stdout });
+    const err = Object.assign(new Error(message), { code: exitCode, stdout });
     cb(err, { stdout, stderr: '' });
   });
 }
@@ -62,10 +62,14 @@ vi.mock('node:child_process', () => ({
   default: { execFile: mockExecFile },
 }));
 
-// Set the CLI path + UNC root deterministically for every test.
+// Set the CLI path + UNC root + CLI SQL login deterministically for every
+// test. The credentials are resolved server-side via getCliDbCredentials()
+// (PDFCLI_DB_* prefix wins), so argv assertions below expect these values.
 vi.hoisted(() => {
   process.env.FILE_SERVER_BASE_PATH = '\\\\172.16.10.12\\sigla';
   process.env.PDFCLI_EXE_PATH = 'C:\\fake\\SIGLA.PdfCli.exe';
+  process.env.PDFCLI_DB_USER = 'cliuser';
+  process.env.PDFCLI_DB_PASSWORD = 'clipass';
 });
 
 beforeEach(() => {
@@ -131,8 +135,6 @@ function validBody(overrides: Record<string, unknown> = {}): Record<string, unkn
     incExp: 0,
     ruc: '20123456789',
     dni: '12345678',
-    user: 'soporte',
-    pass: 'soporte',
     idePmeList: [39053, 39056],
     ...overrides,
   };
@@ -253,8 +255,8 @@ describe('POST /api/informes/[idAten]/generar', () => {
     ]);
     // No codDCo in this body, so the next slot is outputDir
     expect(args[10]).toBe('\\\\172.16.10.12\\sigla\\20123456789\\12345678\\012110021\\LEGAJOS');
-    expect(args[11]).toBe('soporte'); // user
-    expect(args[12]).toBe('soporte'); // pass
+    expect(args[11]).toBe('cliuser'); // user (server env: PDFCLI_DB_USER)
+    expect(args[12]).toBe('clipass'); // pass (server env: PDFCLI_DB_PASSWORD)
     expect(opts.windowsHide).toBe(true);
     expect(opts.timeout).toBe(120_000);
   });
@@ -314,8 +316,8 @@ describe('POST /api/informes/[idAten]/generar', () => {
       'false', // incExp
       '76', // codDCo
       '\\\\172.16.10.12\\sigla\\20123456789\\12345678\\012110021\\LEGAJOS', // outputDir
-      'soporte', // user
-      'soporte', // pass
+      'cliuser', // user (server env: PDFCLI_DB_USER)
+      'clipass', // pass (server env: PDFCLI_DB_PASSWORD)
     ]);
   });
 
@@ -692,5 +694,113 @@ describe('POST /api/informes/[idAten]/generar', () => {
     expect(payload.transientErrorRow.arcPla).toBe('CERTIFICADO APTITUD - METRO LIMA 2');
     expect(payload.transientErrorRow.reason).toContain('controlador de dominio');
     warnSpy.mockRestore();
+  });
+
+  // ---- Fatal guard: non-zero exit + empty manifest -> 502 CLI_FATAL ----
+
+  it('returns 502 CLI_FATAL with the extracted FATAL line when exit 2 yields an empty manifest', async () => {
+    // Reproduces the observed production defect: SQL Server rejects
+    // the CLI login, the CLI exits 2 after writing a manifest with
+    // no rows — the route used to answer 200 "exitosa" with all-zero
+    // counts, silently swallowing the failure.
+    queueExecError(
+      2,
+      '',
+      "Command failed: C:\\fake\\SIGLA.PdfCli.exe\nFATAL: Error de inicio de sesión del usuario 'cliuser'",
+    );
+    mockReadFile.mockResolvedValueOnce(
+      JSON.stringify({ exitCode: 2, rows: [] }) as never,
+    );
+
+    const { POST } = await import('../route');
+    const res = await POST(buildRequest(validBody()), {
+      params: Promise.resolve({ idAten: '012110021' }),
+    });
+
+    expect(res.status).toBe(502);
+    const body = await res.json();
+    expect(body.code).toBe('CLI_FATAL');
+    expect(body.message).toBe("FATAL: Error de inicio de sesión del usuario 'cliuser'");
+    expect(body.exitCode).toBe(2);
+  });
+
+  it('returns 502 CLI_FATAL with the fallback message when no FATAL line is present', async () => {
+    queueExecError(2);
+    mockReadFile.mockResolvedValueOnce(
+      JSON.stringify({ exitCode: 2, rows: [] }) as never,
+    );
+
+    const { POST } = await import('../route');
+    const res = await POST(buildRequest(validBody()), {
+      params: Promise.resolve({ idAten: '012110021' }),
+    });
+
+    expect(res.status).toBe(502);
+    const body = await res.json();
+    expect(body.code).toBe('CLI_FATAL');
+    expect(body.message).toBe('El CLI terminó con código 2 sin generar archivos.');
+    expect(body.exitCode).toBe(2);
+  });
+
+  it('keeps 200 for a partial exit (code 3) even when the manifest has failed rows', async () => {
+    // Covered above for content; this pins the guard boundary: code 3
+    // with rows must NOT trip the fatal guard.
+    queueExecError(3);
+    mockReadFile.mockResolvedValueOnce(
+      JSON.stringify({
+        exitCode: 3,
+        rows: [{ idePMe: 39056, arcPla: 'exa_aud', status: 'failed', reason: 'Crystal Reports timeout' }],
+      }) as never,
+    );
+
+    const { POST } = await import('../route');
+    const res = await POST(buildRequest(validBody()), {
+      params: Promise.resolve({ idAten: '012110021' }),
+    });
+
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.summary.exitCode).toBe(3);
+    expect(body.summary.failed).toBe(1);
+  });
+
+  // ---- Server-side credentials resolution ----
+
+  it('returns 500 CLI_CREDENTIALS_MISSING (CLI not invoked) when no CLI SQL env vars are set', async () => {
+    const saved = {
+      PDFCLI_DB_USER: process.env.PDFCLI_DB_USER,
+      PDFCLI_DB_PASSWORD: process.env.PDFCLI_DB_PASSWORD,
+      HOLOMEDIC_DB_USER: process.env.HOLOMEDIC_DB_USER,
+      HOLOMEDIC_DB_PASSWORD: process.env.HOLOMEDIC_DB_PASSWORD,
+      DB_USER: process.env.DB_USER,
+      DB_PASSWORD: process.env.DB_PASSWORD,
+    };
+    for (const key of Object.keys(saved)) {
+      delete process.env[key];
+    }
+
+    const { POST } = await import('../route');
+    const res = await POST(buildRequest(validBody()), {
+      params: Promise.resolve({ idAten: '012110021' }),
+    });
+
+    // Restore before asserting so failures don't bleed env state.
+    for (const [key, value] of Object.entries(saved)) {
+      if (value === undefined) {
+        delete process.env[key];
+      } else {
+        process.env[key] = value;
+      }
+    }
+
+    expect(res.status).toBe(500);
+    const body = await res.json();
+    expect(body.code).toBe('CLI_CREDENTIALS_MISSING');
+    expect(body.message).toMatch(/PDFCLI_DB_USER/);
+    expect(body.message).toMatch(/PDFCLI_DB_PASSWORD/);
+    // The message names variables, never values.
+    expect(body.message).not.toContain('cliuser');
+    expect(body.message).not.toContain('clipass');
+    expect(mockExecFile).not.toHaveBeenCalled();
   });
 });

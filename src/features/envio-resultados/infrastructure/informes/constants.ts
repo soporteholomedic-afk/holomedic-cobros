@@ -1,25 +1,76 @@
 import * as path from 'node:path';
 
 /**
- * Hard-coded credentials and business constants for the
- * `SIGLA.PdfCli.exe` invocation. These are the legacy v1 values
- * agreed on 2026-06-18 with the user — they will be externalized
- * once the auth team ships their migration.
+ * Business constants for the `SIGLA.PdfCli.exe` invocation.
  *
  * Per spec REQ-7: this file is the SINGLE source of truth for these
  * literals. Other files in the change MUST import them from here
  * instead of re-declaring them.
  *
- * The `FILE_SERVER_BASE_PATH` env var is the only runtime knob —
- * everything else is a constant the route layer can rely on without
- * further env-var lookups.
+ * The SQL Server login the CLI uses is NOT a constant — it is
+ * resolved per request from env vars by `getCliDbCredentials()`
+ * (see below). The `FILE_SERVER_BASE_PATH` env var is another
+ * runtime knob; everything else is a constant the route layer can
+ * rely on without further env-var lookups.
  */
 
 export const COD_EMP = 1;
 export const COD_SED = 1;
 export const COD_TCL = 2;
-export const CLI_USER = 'soporte';
-export const CLI_PASS = 'soporte';
+
+/**
+ * SQL Server login the PDF CLI passes as its trailing `User` /
+ * `Pass` positional args. Resolved by `getCliDbCredentials()` —
+ * never hard-coded (the legacy `soporte`/`soporte` literals were
+ * rejected by SQL Server with "FATAL: Error de inicio de sesión").
+ */
+export interface CliDbCredentials {
+  user: string;
+  pass: string;
+}
+
+/**
+ * Resolve the SQL Server login for `SIGLA.PdfCli.exe`, reading env
+ * vars at CALL time.
+ *
+ * Precedence (per credential, first non-empty wins):
+ *
+ *  1. `PDFCLI_DB_USER` / `PDFCLI_DB_PASSWORD` — dedicated override
+ *     for the CLI when it must not share the app pool login.
+ *  2. `HOLOMEDIC_DB_USER` / `HOLOMEDIC_DB_PASSWORD` — the Holomedic
+ *     pool prefix (see `getHolomedicPool()` in `src/lib/db.ts`).
+ *  3. `DB_USER` / `DB_PASSWORD` — the SIGLA legacy prefix used by
+ *     `getPool()` in `src/lib/db.ts`.
+ *
+ * The `HOLOMEDIC_DB_*` / `DB_*` fallback reuses the same SQL login
+ * the mssql pool already proves working, so the CLI inherits
+ * credentials ops have validated instead of a hard-coded pair.
+ *
+ * This is a FUNCTION (not module-level constants) so values are read
+ * at call time — tests can set env vars per-test and the route
+ * re-reads them on every request (mirrors
+ * `isPdfcliRetryTransientAuthEnabled`).
+ *
+ * Throws an `Error` naming the missing variables when `user` or
+ * `pass` resolves empty/undefined — the route maps that to HTTP 500
+ * `CLI_CREDENTIALS_MISSING`. Values are never included in the error.
+ */
+export function getCliDbCredentials(): CliDbCredentials {
+  const user = process.env.PDFCLI_DB_USER || process.env.HOLOMEDIC_DB_USER || process.env.DB_USER;
+  const pass =
+    process.env.PDFCLI_DB_PASSWORD || process.env.HOLOMEDIC_DB_PASSWORD || process.env.DB_PASSWORD;
+
+  if (!user || !pass) {
+    const missing: string[] = [];
+    if (!user) missing.push('PDFCLI_DB_USER (o HOLOMEDIC_DB_USER / DB_USER)');
+    if (!pass) missing.push('PDFCLI_DB_PASSWORD (o HOLOMEDIC_DB_PASSWORD / DB_PASSWORD)');
+    throw new Error(
+      `Falta configurar el login SQL del CLI. Defina las variables de entorno: ${missing.join(', ')}.`,
+    );
+  }
+
+  return { user, pass };
+}
 
 /**
  * Default values for the `EmiAfi` / `IncExp` flags sent to

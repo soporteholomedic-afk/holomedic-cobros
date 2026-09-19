@@ -9,8 +9,6 @@ export interface GeneratePdfsRequest {
   incExp: boolean;
   codDCo?: number | null;
   outputDir?: string;
-  user: string;
-  pass: string;
   strict?: boolean;
 }
 

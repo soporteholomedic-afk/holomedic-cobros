@@ -7,7 +7,11 @@ import os from 'os';
 import { randomUUID } from 'crypto';
 import archiver from 'archiver';
 import { GeneratePdfsRequest } from '@/types/generate-pdfs';
-import { CLI_EXE_PATH } from '@/features/envio-resultados/infrastructure/informes/constants';
+import {
+  CLI_EXE_PATH,
+  getCliDbCredentials,
+  type CliDbCredentials,
+} from '@/features/envio-resultados/infrastructure/informes/constants';
 
 const execFileAsync = promisify(execFile);
 
@@ -61,6 +65,20 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   try {
     const body = (await req.json()) as GeneratePdfsRequest;
 
+    // SQL login is resolved server-side from env vars (never from
+    // the request body). 500 with an operator-safe message on
+    // misconfiguration; values are never logged.
+    let cliCreds: CliDbCredentials;
+    try {
+      cliCreds = getCliDbCredentials();
+    } catch (err) {
+      const details = err instanceof Error ? err.message : 'CLI SQL login not configured';
+      return NextResponse.json(
+        { error: 'CLI credentials not configured', details },
+        { status: 500 }
+      );
+    }
+
     const idAten = sanitizeIdAten(body.idAten);
     const args: string[] = [
       String(toInt(body.codEmp)),
@@ -73,8 +91,8 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       String(toBool(body.incExp)),
       body.codDCo == null ? '' : String(toInt(body.codDCo)),
       outputDir,
-      body.user,
-      body.pass,
+      cliCreds.user,
+      cliCreds.pass,
     ];
 
     if (body.strict) {
