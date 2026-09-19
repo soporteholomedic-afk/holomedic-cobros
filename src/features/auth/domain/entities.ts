@@ -15,6 +15,12 @@ export const PERMISOS = [
   // is reserved for F2+ administration surfaces.
   'asistencia',
   'asistencia_admin',
+  // crm (S1a/pr1): B2B occupational CRM. `crm` covers the CRM pages and
+  // API (pipeline, detail, own surfaces); `crm_admin` additionally opens
+  // the Excel import surface and administration. Same split precedent
+  // as asistencia/asistencia_admin — no implication between them.
+  'crm',
+  'crm_admin',
 ] as const;
 
 export type Permiso = (typeof PERMISOS)[number];
