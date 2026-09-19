@@ -108,9 +108,10 @@ describe('proxy outcomes — CRM pages', () => {
     expect(res.status).toBe(307);
     const location = res.headers.get('location') ?? '';
     expect(location).toContain('/auth/denegado');
-    expect(location).toContain('permiso=crm');
-    expect(location).toContain(`label=${encodeURIComponent('CRM')}`);
-    expect(location).toContain(`ruta=${encodeURIComponent('/crm')}`);
+    const params = new URL(location).searchParams;
+    expect(params.get('permiso')).toBe('crm');
+    expect(params.get('label')).toBe('CRM');
+    expect(params.get('ruta')).toBe('/crm');
   });
 
   it('session with crm passes through', () => {
@@ -125,8 +126,10 @@ describe('proxy outcomes — CRM pages', () => {
     expect(res.status).toBe(307);
     const location = res.headers.get('location') ?? '';
     expect(location).toContain('/auth/denegado');
-    expect(location).toContain('permiso=crm_admin');
-    expect(location).toContain(`label=${encodeURIComponent('Importar Empresas CRM')}`);
+    const params = new URL(location).searchParams;
+    expect(params.get('permiso')).toBe('crm_admin');
+    expect(params.get('label')).toBe('Importar Empresas CRM');
+    expect(params.get('ruta')).toBe('/crm/importar');
   });
 
   it('crm_admin session passes on the import page', () => {
