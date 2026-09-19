@@ -138,3 +138,10 @@ export function generarPlantillaCrmWorkbook(): ExcelJS.Workbook {
 
   return workbook;
 }
+
+/** Serialize the template workbook to a Node `Buffer` (.xlsx bytes). */
+export async function generarPlantillaCrmBuffer(): Promise<Buffer> {
+  const workbook = generarPlantillaCrmWorkbook();
+  const arrayBuffer = await workbook.xlsx.writeBuffer();
+  return Buffer.from(arrayBuffer as ArrayBuffer);
+}
