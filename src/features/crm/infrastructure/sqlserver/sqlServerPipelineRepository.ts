@@ -11,7 +11,9 @@ import type {
   FilaHandoffAudit,
   FilaResultadoAudit,
   FilaTransicionAudit,
+  HandoffHistorial,
   TransicionAPersistir,
+  TransicionHistorial,
 } from '../../domain/ports';
 
 import { withCrmTransaction } from './withCrmTransaction';
@@ -45,6 +47,30 @@ interface PipelineRow {
   motivoRechazo: string | null;
   updatedBy: string | null;
   updatedAt: Date;
+}
+
+/** CRM_Transiciones read row — BIGINT id crosses tedious as a string. */
+interface FilaTransicionLeida {
+  id: number | string;
+  empresaId: number;
+  flujoPrevio: string | null;
+  etapaPrevia: string | null;
+  flujoNuevo: string;
+  etapaNueva: string;
+  evento: string;
+  motivo: string | null;
+  usuario: string;
+  createdAt: Date;
+}
+
+/** CRM_Handoffs read row — BIGINT id crosses tedious as a string. */
+interface FilaHandoffLeida {
+  id: number | string;
+  empresaId: number;
+  area: string;
+  nota: string | null;
+  usuario: string;
+  createdAt: Date;
 }
 
 /** Both `ConnectionPool` and `Transaction` expose `.request()`. */
@@ -192,6 +218,49 @@ export class SqlServerPipelineRepository
           `);
       }
     });
+  }
+
+  async listarTransiciones(empresaId: number): Promise<TransicionHistorial[]> {
+    const result = await this.pool
+      .request()
+      .input('empresaId', mssql.Int, empresaId).query(`
+        SELECT id, empresaId, flujoPrevio, etapaPrevia, flujoNuevo, etapaNueva,
+               evento, motivo, usuario, createdAt
+        FROM dbo.CRM_Transiciones
+        WHERE empresaId = @empresaId
+        ORDER BY createdAt DESC, id DESC
+      `);
+    return (result.recordset as FilaTransicionLeida[]).map((row) => ({
+      id: Number(row.id),
+      empresaId: row.empresaId,
+      flujoPrevio: (row.flujoPrevio as TransicionHistorial['flujoPrevio']) ?? null,
+      etapaPrevia: (row.etapaPrevia as TransicionHistorial['etapaPrevia']) ?? null,
+      flujoNuevo: row.flujoNuevo as TransicionHistorial['flujoNuevo'],
+      etapaNueva: row.etapaNueva as TransicionHistorial['etapaNueva'],
+      evento: row.evento,
+      motivo: row.motivo,
+      usuario: row.usuario,
+      createdAt: row.createdAt.toISOString(),
+    }));
+  }
+
+  async listarHandoffs(empresaId: number): Promise<HandoffHistorial[]> {
+    const result = await this.pool
+      .request()
+      .input('empresaId', mssql.Int, empresaId).query(`
+        SELECT id, empresaId, area, nota, usuario, createdAt
+        FROM dbo.CRM_Handoffs
+        WHERE empresaId = @empresaId
+        ORDER BY createdAt DESC, id DESC
+      `);
+    return (result.recordset as FilaHandoffLeida[]).map((row) => ({
+      id: Number(row.id),
+      empresaId: row.empresaId,
+      area: row.area,
+      nota: row.nota,
+      usuario: row.usuario,
+      createdAt: row.createdAt.toISOString(),
+    }));
   }
 
   async registrar(fila: FilaTransicionAudit): Promise<number>;

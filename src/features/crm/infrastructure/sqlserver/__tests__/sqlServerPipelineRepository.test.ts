@@ -484,3 +484,114 @@ describe('SqlServerPipelineRepository — standalone audit ports', () => {
     }
   });
 });
+
+describe('SqlServerPipelineRepository — historial reads (tasks pr11 detail timeline)', () => {
+  it('listarTransiciones returns the audit rows newest-first with mapped fields and numeric ids', async () => {
+    try {
+      const empresaId = await crearConEstado('INBOUND', 'REGISTRADO');
+
+      // Two audited transitions: T2 (REGISTRADO → SEGUIMIENTO) then
+      // T3 (SEGUIMIENTO → PRESENTACION). The adapter test pins the
+      // READ contract, not the effects (pr10 owns those).
+      await pipelines.registrarTransicion(bundleCon({ empresaId }));
+      await pipelines.registrarTransicion(
+        bundleCon({
+          empresaId,
+          evento: 'PresentaciónEnviada',
+          estadoPrevio: { flujo: 'INBOUND', etapa: 'SEGUIMIENTO' },
+          estadoNuevo: { flujo: 'INBOUND', etapa: 'PRESENTACION' },
+          resultado: 'PresentaciónEnviada',
+          efectos: {
+            ciclo: 1,
+            enviosCiclo: 0,
+            fechaCicloInicio: null,
+            fechaUltimoEnvio: null,
+            descansoHasta: null,
+            rechazadoHasta: null,
+            motivoRechazo: null,
+          },
+        }),
+      );
+
+      const filas = await pipelines.listarTransiciones(empresaId);
+
+      expect(filas).toHaveLength(2);
+      // Newest first — the timeline renders top-down.
+      expect(filas[0]?.evento).toBe('PresentaciónEnviada');
+      expect(filas[1]?.evento).toBe('CotizaciónEnviada');
+      expect(filas[0]!.id).toBeGreaterThan(filas[1]!.id);
+      // BIGINT ids cross tedious as strings — the port contract is number.
+      expect(typeof filas[0]?.id).toBe('number');
+      expect(filas[0]).toMatchObject({
+        empresaId,
+        flujoPrevio: 'INBOUND',
+        etapaPrevia: 'SEGUIMIENTO',
+        flujoNuevo: 'INBOUND',
+        etapaNueva: 'PRESENTACION',
+        motivo: null,
+        usuario: 'jperez',
+      });
+      expect(filas[1]).toMatchObject({
+        flujoPrevio: 'INBOUND',
+        etapaPrevia: 'REGISTRADO',
+        flujoNuevo: 'INBOUND',
+        etapaNueva: 'SEGUIMIENTO',
+        usuario: 'jperez',
+      });
+      expect(typeof filas[0]?.createdAt).toBe('string');
+      expect(new Date(filas[0]?.createdAt ?? '').toString()).not.toBe('Invalid Date');
+    } finally {
+      await pool.request().query(`DELETE FROM dbo.CRM_Empresas WHERE ${PROBE_KEY}`);
+    }
+  });
+
+  it('listarHandoffs returns the T5 record (área, nota, usuario, createdAt)', async () => {
+    try {
+      const empresaId = await crearConEstado('INBOUND', 'CONFIRMADA');
+
+      await pipelines.registrarTransicion(
+        bundleCon({
+          empresaId,
+          evento: 'HandoffRegistrado',
+          estadoPrevio: { flujo: 'INBOUND', etapa: 'CONFIRMADA' },
+          estadoNuevo: { flujo: 'INBOUND', etapa: 'ENTREGADA' },
+          resultado: 'HandoffRegistrado',
+          efectos: {
+            ciclo: 1,
+            enviosCiclo: 0,
+            fechaCicloInicio: null,
+            fechaUltimoEnvio: null,
+            descansoHasta: null,
+            rechazadoHasta: null,
+            motivoRechazo: null,
+          },
+          handoff: { area: 'Operaciones', nota: 'Coordinar entrega' },
+        }),
+      );
+
+      const handoffs = await pipelines.listarHandoffs(empresaId);
+      expect(handoffs).toHaveLength(1);
+      expect(typeof handoffs[0]?.id).toBe('number');
+      expect(handoffs[0]).toMatchObject({
+        empresaId,
+        area: 'Operaciones',
+        nota: 'Coordinar entrega',
+        usuario: 'jperez',
+      });
+      expect(typeof handoffs[0]?.createdAt).toBe('string');
+    } finally {
+      await pool.request().query(`DELETE FROM dbo.CRM_Empresas WHERE ${PROBE_KEY}`);
+    }
+  });
+
+  it('a freshly created empresa has an EMPTY historial (T1/T6 seeding writes no audit rows)', async () => {
+    try {
+      const empresa = await empresas.crear(inputCon('Inbound'));
+
+      expect(await pipelines.listarTransiciones(empresa.id)).toEqual([]);
+      expect(await pipelines.listarHandoffs(empresa.id)).toEqual([]);
+    } finally {
+      await pool.request().query(`DELETE FROM dbo.CRM_Empresas WHERE ${PROBE_KEY}`);
+    }
+  });
+});

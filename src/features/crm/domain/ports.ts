@@ -127,12 +127,51 @@ export interface CambiarTipoDatos {
  * effects) and the adapter writes pipeline row, audit row and the optional
  * result/handoff rows in ONE transaction: a mid-flight failure leaves the
  * pipeline untouched (spec G4 audit integrity).
+ *
+ * The history READS live here too (tasks pr11): the ONE adapter class
+ * owns all four pipeline tables, and two same-named `listarPorEmpresa`
+ * methods with different return types could not coexist on it — so the
+ * detail timeline consumes this port instead of the write-side audit
+ * ports (documented tasks deviation).
  */
 export interface CrmPipelineRepositoryPort {
   obtenerPorEmpresaId(empresaId: number): Promise<PipelineEmpresa | null>;
   registrarTransicion(datos: TransicionAPersistir): Promise<PipelineEmpresa>;
   /** T16 — CRM_Empresas.tipo UPDATE + optional conversion result row, one tx. */
   cambiarTipo(datos: CambiarTipoDatos): Promise<void>;
+  /** Transition audit history, newest first (spec G4 timeline). */
+  listarTransiciones(empresaId: number): Promise<TransicionHistorial[]>;
+  /** Handoff records, newest first (spec G4 timeline). */
+  listarHandoffs(empresaId: number): Promise<HandoffHistorial[]>;
+}
+
+/**
+ * One CRM_Transiciones audit row as READ for the detail timeline
+ * (spec G4: who, when, from, to). Mirrors the write payload plus the
+ * BIGINT id and the audit stamp.
+ */
+export interface TransicionHistorial {
+  id: number;
+  empresaId: number;
+  /** NULL for the creation transitions (T1/T6). */
+  flujoPrevio: Flujo | null;
+  etapaPrevia: Etapa | null;
+  flujoNuevo: Flujo;
+  etapaNueva: Etapa;
+  evento: string;
+  motivo: string | null;
+  usuario: string;
+  createdAt: string;
+}
+
+/** One CRM_Handoffs row as READ for the detail timeline (spec G4). */
+export interface HandoffHistorial {
+  id: number;
+  empresaId: number;
+  area: string;
+  nota: string | null;
+  usuario: string;
+  createdAt: string;
 }
 
 /** One CRM_Transiciones audit row (spec G4: who, when, from, to). */

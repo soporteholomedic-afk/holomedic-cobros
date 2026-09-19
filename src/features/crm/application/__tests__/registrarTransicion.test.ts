@@ -64,6 +64,14 @@ class FakePipelineRepository implements CrmPipelineRepositoryPort {
   async cambiarTipo(datos: CambiarTipoDatos): Promise<void> {
     this.cambioTipo.push({ ...datos });
   }
+
+  async listarTransiciones(): Promise<never[]> {
+    return [];
+  }
+
+  async listarHandoffs(): Promise<never[]> {
+    return [];
+  }
 }
 
 function filaInbound(overrides: Partial<PipelineEmpresa> = {}): PipelineEmpresa {

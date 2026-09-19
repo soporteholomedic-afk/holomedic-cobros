@@ -35,6 +35,8 @@ const empresa: Empresa = {
 function makeFakePipeline(overrides: Partial<CrmPipelineRepositoryPort> = {}): CrmPipelineRepositoryPort {
   return {
     obtenerPorEmpresaId: vi.fn(),
+    listarTransiciones: vi.fn().mockResolvedValue([]),
+    listarHandoffs: vi.fn().mockResolvedValue([]),
     registrarTransicion: vi.fn(),
     cambiarTipo: vi.fn().mockResolvedValue(undefined),
     ...overrides,

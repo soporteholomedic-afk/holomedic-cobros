@@ -37,6 +37,8 @@ function filaPipeline(overrides: Partial<FilaPipeline> = {}): FilaPipeline {
 function makeFakePipeline(overrides: Partial<CrmPipelineRepositoryPort> = {}): CrmPipelineRepositoryPort {
   return {
     obtenerPorEmpresaId: vi.fn().mockResolvedValue(filaPipeline()),
+    listarTransiciones: vi.fn().mockResolvedValue([]),
+    listarHandoffs: vi.fn().mockResolvedValue([]),
     registrarTransicion: vi.fn().mockImplementation(async (datos: PipelineEmpresa extends never ? never : Parameters<CrmPipelineRepositoryPort['registrarTransicion']>[0]) => ({
       ...filaPipeline(),
       flujo: datos.estadoNuevo.flujo,
