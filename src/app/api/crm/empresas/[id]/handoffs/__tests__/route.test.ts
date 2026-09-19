@@ -38,7 +38,8 @@ function setDb(empresas: CrmEmpresaRepositoryPort, handoffs: CrmHandoffsReposito
     transiciones: {} as never,
     resultados: {} as never,
     handoffs,
-  } satisfies CrmDb);
+    actividades: {} as never,
+    } satisfies CrmDb);
 }
 
 const sessionBase = { sub: 'u-1', nombre: 'Juana Perez', area: 'ventas' };

@@ -37,6 +37,7 @@ function makeFakePipeline(overrides: Partial<CrmPipelineRepositoryPort> = {}): C
     obtenerPorEmpresaId: vi.fn(),
     listarTransiciones: vi.fn().mockResolvedValue([]),
     listarHandoffs: vi.fn().mockResolvedValue([]),
+    listarCandidatosCola: vi.fn().mockResolvedValue([]),
     registrarTransicion: vi.fn(),
     cambiarTipo: vi.fn().mockResolvedValue(undefined),
     ...overrides,
@@ -62,7 +63,8 @@ function setDb(empresas: CrmEmpresaRepositoryPort, pipeline: CrmPipelineReposito
     transiciones: {} as never,
     resultados: {} as never,
     handoffs: {} as never,
-  } satisfies CrmDb);
+    actividades: {} as never,
+    } satisfies CrmDb);
 }
 
 const sessionBase = { sub: 'u-1', nombre: 'Juana Perez', area: 'ventas' };

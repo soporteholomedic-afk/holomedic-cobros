@@ -127,3 +127,22 @@ export function esReinicioDeCadencia(p: PipelineEmpresa, hoy: string): boolean {
 export function esReactivable(p: PipelineEmpresa, hoy: string): boolean {
   return p.etapa === 'RECHAZADO' && p.rechazadoHasta !== null && p.rechazadoHasta <= hoy;
 }
+
+/** The four queue sections (design §3) — a row lands in at most one. */
+export type SeccionCola = 'vencidasHoy' | 'reinicios' | 'decisionRequerida' | 'reactivables';
+
+/**
+ * Which queue section `p` belongs to today, or null when it is not
+ * due (derived on request — zero background jobs, pr13/WU2). The four
+ * predicates are mutually exclusive by stage and counters: vencida
+ * requires an ACTIVE stage under the 3-strike, decision the agotada
+ * INBOUND fork, reinicio an expired DESCANSO, reactivable an expired
+ * RECHAZADO.
+ */
+export function seccionCola(p: PipelineEmpresa, hoy: string): SeccionCola | null {
+  if (estaVencidaHoy(p, hoy)) return 'vencidasHoy';
+  if (requiereDecision(p)) return 'decisionRequerida';
+  if (esReinicioDeCadencia(p, hoy)) return 'reinicios';
+  if (esReactivable(p, hoy)) return 'reactivables';
+  return null;
+}

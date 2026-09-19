@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 import type { PipelineEmpresa } from '../../domain/entities';
 import { NotFoundError, ValidationError } from '../../domain/errors';
 import type {
+  CandidatoCola,
   CrmActividadesRepositoryPort,
   CrmPipelineRepositoryPort,
   EnvioCadenciaAPersistir,
@@ -51,6 +52,8 @@ class FakePipelineRepository implements CrmPipelineRepositoryPort {
   async listarHandoffs(): Promise<never[]> {
     return [];
   }
+
+  listarCandidatosCola = vi.fn(async (): Promise<CandidatoCola[]> => []);
 }
 
 class FakeActividadesRepository implements CrmActividadesRepositoryPort {

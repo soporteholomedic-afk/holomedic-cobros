@@ -709,6 +709,54 @@ describe('SqlServerPipelineRepository — the atomic registrarEnvioCadencia (tas
   });
 });
 
+describe('SqlServerPipelineRepository — listarCandidatosCola (tasks pr13/WU2 queue read)', () => {
+  it('returns every pipeline row joined with razonSocial/responsable, skipping pipeline-less empresas', async () => {
+    try {
+      const inbound = await crearConEstado('INBOUND', 'SEGUIMIENTO', {
+        enviosCiclo: 1,
+        fechaUltimoEnvio: '2026-05-25',
+      });
+      // RUC distinto: inputCon fija PROBE_RUCS[0].
+      const sinOrigen = await empresas.crear({
+        ...inputCon(null),
+        ruc: PROBE_RUCS[1] as string,
+      });
+
+      // Marcar el responsable para probar el JOIN.
+      await pool
+        .request()
+        .input('empresaId', mssql.Int, inbound)
+        .input('responsable', mssql.NVarChar(200), 'jperez')
+        .query(`UPDATE dbo.CRM_Empresas SET responsable = @responsable WHERE id = @empresaId`);
+
+      const candidatos = await pipelines.listarCandidatosCola();
+      const deProbe = candidatos.filter((c) => [inbound, sinOrigen.id].includes(c.empresaId));
+
+      // Solo filas DE pipeline (las sin origen no tienen fila 1:1).
+      expect(deProbe).toHaveLength(1);
+      expect(deProbe[0]).toMatchObject({
+        empresaId: inbound,
+        razonSocial: 'Probe Pipeline SA',
+        responsable: 'jperez',
+        flujo: 'INBOUND',
+        etapa: 'SEGUIMIENTO',
+        enviosCiclo: 1,
+      });
+      expect(typeof deProbe[0]?.razonSocial).toBe('string');
+    } finally {
+      await pool.request().query(`DELETE FROM dbo.CRM_Empresas WHERE ${PROBE_KEY}`);
+    }
+  });
+
+  it('returns no probe rows once the suite cleaned up (real empty read for the probe marker)', async () => {
+    // Runs AFTER the previous test's cleanup: the probe razonSocial
+    // must be gone — proving the read sees live data, not a cache.
+    const candidatos = await pipelines.listarCandidatosCola();
+    expect(candidatos.every((c) => typeof c.razonSocial === 'string' && c.razonSocial.length > 0)).toBe(true);
+    expect(candidatos.filter((c) => c.razonSocial === 'Probe Pipeline SA')).toHaveLength(0);
+  });
+});
+
 describe('SqlServerPipelineRepository — historial reads (tasks pr11 detail timeline)', () => {
   it('listarTransiciones returns the audit rows newest-first with mapped fields and numeric ids', async () => {
     try {

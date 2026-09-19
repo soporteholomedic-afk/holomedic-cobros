@@ -82,6 +82,7 @@ function makePipelines(
     obtenerPorEmpresaId: vi.fn().mockResolvedValue(pipeline),
     listarTransiciones: vi.fn().mockResolvedValue([transicion]),
     listarHandoffs: vi.fn().mockResolvedValue([handoff]),
+    listarCandidatosCola: vi.fn().mockResolvedValue([]),
     registrarTransicion: vi.fn(),
     cambiarTipo: vi.fn(),
     ...overrides,
@@ -123,6 +124,7 @@ describe('ObtenerDetalleEmpresaUseCase', () => {
       obtenerPorEmpresaId: vi.fn().mockResolvedValue(null),
       listarTransiciones: vi.fn().mockResolvedValue([]),
       listarHandoffs: vi.fn().mockResolvedValue([]),
+      listarCandidatosCola: vi.fn().mockResolvedValue([]),
     });
 
     const detalle = await new ObtenerDetalleEmpresaUseCase(makeEmpresas(), pipelines).execute(42);

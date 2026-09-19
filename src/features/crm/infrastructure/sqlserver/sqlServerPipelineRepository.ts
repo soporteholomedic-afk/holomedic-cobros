@@ -3,6 +3,7 @@ import * as mssql from 'mssql';
 import { NotFoundError } from '../../domain/errors';
 import type { PipelineEmpresa } from '../../domain/entities';
 import type {
+  CandidatoCola,
   CambiarTipoDatos,
   CrmActividadesRepositoryPort,
   CrmHandoffsRepositoryPort,
@@ -119,6 +120,32 @@ export class SqlServerPipelineRepository
       .query(`SELECT * FROM dbo.CRM_Pipeline WHERE empresaId = @empresaId`);
     const row = (result.recordset as PipelineRow[])[0];
     return row ? mapearFila(row) : null;
+  }
+
+  /**
+   * The queue candidates (tasks pr13/WU2): every pipeline row joined
+   * with its empresa display fields. The pipeline side rides the
+   * covering queue index IX_CRM_Pipeline_Etapa (design §2) and the
+   * join lands on the CRM_Empresas PK — one derived-on-request scan,
+   * no background jobs. Pipeline-less empresas (origen null) have no
+   * row to join, so they cannot appear.
+   */
+  async listarCandidatosCola(): Promise<CandidatoCola[]> {
+    const result = await this.pool.request().query(`
+      SELECT p.empresaId, p.flujo, p.etapa, p.ciclo, p.enviosCiclo,
+             p.fechaCicloInicio, p.fechaUltimoEnvio, p.descansoHasta,
+             p.rechazadoHasta, p.motivoRechazo, p.updatedBy, p.updatedAt,
+             e.razonSocial, e.responsable
+      FROM dbo.CRM_Pipeline p
+      JOIN dbo.CRM_Empresas e ON e.id = p.empresaId
+    `);
+    return (result.recordset as (PipelineRow & { razonSocial: string; responsable: string | null })[]).map(
+      (row) => ({
+        ...mapearFila(row),
+        razonSocial: row.razonSocial,
+        responsable: row.responsable,
+      }),
+    );
   }
 
   async registrarTransicion(datos: TransicionAPersistir): Promise<PipelineEmpresa> {

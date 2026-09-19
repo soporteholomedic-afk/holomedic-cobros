@@ -8,6 +8,7 @@ import {
   fechaHoy,
   proximoEnvio,
   requiereDecision,
+  seccionCola,
 } from '../cadence';
 import type { PipelineEmpresa } from '../entities';
 
@@ -252,5 +253,47 @@ describe('esReactivable — RECHAZADO ∧ rechazadoHasta ≤ hoy (T15, spec G4 c
     ['RECHAZADO sin fecha (defensivo: T14 siempre la arma) no es reactivable', { etapa: 'RECHAZADO', rechazadoHasta: null }],
   ])('%s', (_descripcion, overrides) => {
     expect(esReactivable(pipeline(overrides), '2026-09-19')).toBe(false);
+  });
+});
+
+describe('seccionCola — the queue is the union of the four predicates (tasks pr13/WU2, design §3)', () => {
+  const HOY = '2026-09-19';
+
+  it('classifies a due ACTIVE row as vencidasHoy', () => {
+    expect(
+      seccionCola(pipeline({ etapa: 'CADENCIA', enviosCiclo: 1, fechaUltimoEnvio: '2026-09-12' }), HOY),
+    ).toBe('vencidasHoy');
+    expect(
+      seccionCola(pipeline({ flujo: 'INBOUND', etapa: 'SEGUIMIENTO', enviosCiclo: 2, fechaUltimoEnvio: '2026-09-05' }), HOY),
+    ).toBe('vencidasHoy');
+  });
+
+  it('classifies an agotada INBOUND/SEGUIMIENTO as decisionRequerida (3-strike fork)', () => {
+    expect(
+      seccionCola(pipeline({ flujo: 'INBOUND', etapa: 'SEGUIMIENTO', enviosCiclo: 3, fechaUltimoEnvio: '2026-09-05' }), HOY),
+    ).toBe('decisionRequerida');
+  });
+
+  it('classifies an expired DESCANSO as reinicios (T9 re-entry)', () => {
+    expect(
+      seccionCola(pipeline({ etapa: 'DESCANSO', enviosCiclo: 3, descansoHasta: HOY }), HOY),
+    ).toBe('reinicios');
+  });
+
+  it('classifies an expired RECHAZADO as reactivables (T15)', () => {
+    expect(
+      seccionCola(
+        pipeline({ etapa: 'RECHAZADO', rechazadoHasta: HOY, motivoRechazo: 'Ya tiene proveedor' }),
+        HOY,
+      ),
+    ).toBe('reactivables');
+  });
+
+  it('returns null for rows outside the queue (armed-not-due, resting, cooling, disarmed stages)', () => {
+    expect(seccionCola(pipeline({ enviosCiclo: 1, fechaUltimoEnvio: '2026-09-18' }), HOY)).toBeNull(); // proximo = 2026-09-25
+    expect(seccionCola(pipeline({ etapa: 'DESCANSO', descansoHasta: '2026-09-20' }), HOY)).toBeNull(); // rest running
+    expect(seccionCola(pipeline({ etapa: 'RECHAZADO', rechazadoHasta: '2026-12-01' }), HOY)).toBeNull(); // cooldown
+    expect(seccionCola(pipeline({ flujo: 'INBOUND', etapa: 'REGISTRADO', enviosCiclo: 0, fechaCicloInicio: null, fechaUltimoEnvio: null }), HOY)).toBeNull();
+    expect(seccionCola(pipeline({ etapa: 'ENTREGADA' }), HOY)).toBeNull();
   });
 });

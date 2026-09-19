@@ -72,6 +72,10 @@ class FakePipelineRepository implements CrmPipelineRepositoryPort {
   async listarHandoffs(): Promise<never[]> {
     return [];
   }
+
+  async listarCandidatosCola(): Promise<never[]> {
+    return [];
+  }
 }
 
 function filaInbound(overrides: Partial<PipelineEmpresa> = {}): PipelineEmpresa {

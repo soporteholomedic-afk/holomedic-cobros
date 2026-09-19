@@ -123,6 +123,18 @@ export interface CambiarTipoDatos {
 }
 
 /**
+ * A queue candidate (tasks pr13/WU2): the pipeline row joined with the
+ * display fields the /crm/cola page renders per row. The SQL adapter
+ * reads it through the covering queue index IX_CRM_Pipeline_Etapa
+ * (design §2: the daily scan never leaves the index on the pipeline
+ * side; the join lands on the CRM_Empresas PK).
+ */
+export interface CandidatoCola extends PipelineEmpresa {
+  razonSocial: string;
+  responsable: string | null;
+}
+
+/**
  * Outbound port for the pipeline row (design D3 1:1). `registrarTransicion`
  * is the atomic unit — the use case computes the whole bundle (machine +
  * effects) and the adapter writes pipeline row, audit row and the optional
@@ -144,6 +156,12 @@ export interface CrmPipelineRepositoryPort {
   listarTransiciones(empresaId: number): Promise<TransicionHistorial[]>;
   /** Handoff records, newest first (spec G4 timeline). */
   listarHandoffs(empresaId: number): Promise<HandoffHistorial[]>;
+  /**
+   * Every pipeline row with its empresa display fields — the raw
+   * material the queue use case classifies with the pr12 predicates
+   * (pr13/WU2; derived on request, zero background jobs).
+   */
+  listarCandidatosCola(): Promise<CandidatoCola[]>;
 }
 
 /**
