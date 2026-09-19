@@ -12,6 +12,8 @@ import {
 } from '../etiquetas';
 import { useEmpresaDetalle } from '../hooks/useEmpresaDetalle';
 import { useTransicion } from '../hooks/useTransicion';
+import { HandoffModal } from './HandoffModal';
+import { RechazoModal } from './RechazoModal';
 import { Timeline } from './Timeline';
 
 /**
@@ -26,9 +28,6 @@ import { Timeline } from './Timeline';
  * directly; every other available event POSTs immediately and refreshes
  * the detail on success. Labels Spanish.
  */
-
-/** The two events whose button opens a modal (WU3) instead of firing. */
-const EVENTOS_CON_MODAL: readonly EventoPipeline[] = ['Rechazo', 'HandoffRegistrado'];
 
 export function EmpresaDetalle({ id }: { id: number }) {
   const { detalle, status, error, retry, refresh } = useEmpresaDetalle(id);
@@ -218,6 +217,27 @@ export function EmpresaDetalle({ id }: { id: number }) {
       </section>
 
       <Timeline transiciones={transiciones} handoffs={handoffs} />
+
+      {modal === 'Rechazo' && (
+        <RechazoModal
+          empresaId={id}
+          onSalir={() => setModal(null)}
+          onExito={() => {
+            setModal(null);
+            refresh();
+          }}
+        />
+      )}
+      {modal === 'HandoffRegistrado' && (
+        <HandoffModal
+          empresaId={id}
+          onSalir={() => setModal(null)}
+          onExito={() => {
+            setModal(null);
+            refresh();
+          }}
+        />
+      )}
     </div>
   );
 }

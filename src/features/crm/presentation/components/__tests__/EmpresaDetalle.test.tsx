@@ -272,3 +272,97 @@ describe('EmpresaDetalle', () => {
     expect(await screen.findByText('Constructora X')).toBeInTheDocument();
   });
 });
+
+describe('EmpresaDetalle — modal wiring (tasks pr11/WU3)', () => {
+  it('opens the rejection modal from the Rechazar button and refreshes the detail on success', async () => {
+    const user = userEvent.setup();
+    const detalle = makeDetalle();
+    mockDetalle(detalle);
+    render(<EmpresaDetalle id={42} />);
+    await screen.findByText('Constructora X');
+
+    await user.click(screen.getByRole('button', { name: 'Rechazar' }));
+    const dialogo = await screen.findByRole('dialog', { name: 'Rechazar empresa' });
+    expect(dialogo).toBeInTheDocument();
+
+    fetchMock.mockImplementation((input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url === '/api/crm/empresas/42/transiciones') {
+        return Promise.resolve(new Response(JSON.stringify({ success: true }), { status: 200 }));
+      }
+      if (url === DETALLE_URL) return Promise.resolve(okDetalle(detalle));
+      return Promise.reject(new Error(`URL inesperada en el test: ${url}`));
+    });
+
+    await user.type(screen.getByLabelText('Motivo'), 'Ya tiene proveedor');
+    await user.click(within(dialogo).getByRole('button', { name: 'Rechazar' }));
+
+    await waitFor(() =>
+      expect(fetchMock).toHaveBeenCalledWith(
+        '/api/crm/empresas/42/transiciones',
+        expect.objectContaining({
+          body: JSON.stringify({ evento: 'Rechazo', motivo: 'Ya tiene proveedor' }),
+        }),
+      ),
+    );
+    // Success refreshes the detail (initial load + post-mutation reload).
+    await waitFor(() => expect(llamadasDetalle()).toBe(2));
+    await waitFor(() =>
+      expect(screen.queryByRole('dialog', { name: 'Rechazar empresa' })).not.toBeInTheDocument(),
+    );
+  });
+
+  it('opens the handoff modal from the Registrar handoff button and posts the T5 payload', async () => {
+    const user = userEvent.setup();
+    // T5 fires only from INBOUND/CONFIRMADA — seed that state.
+    const detalle = makeDetalle({
+      pipeline: {
+        empresaId: 42,
+        flujo: 'INBOUND',
+        etapa: 'CONFIRMADA',
+        ciclo: 1,
+        enviosCiclo: 0,
+        fechaCicloInicio: null,
+        fechaUltimoEnvio: null,
+        descansoHasta: null,
+        rechazadoHasta: null,
+        motivoRechazo: null,
+        updatedBy: null,
+        updatedAt: '2026-09-01T00:00:00.000Z',
+      },
+      transiciones: [],
+      handoffs: [],
+    });
+    mockDetalle(detalle);
+    render(<EmpresaDetalle id={42} />);
+    await screen.findByText('Constructora X');
+
+    await user.click(screen.getByRole('button', { name: 'Registrar handoff' }));
+    const dialogo = await screen.findByRole('dialog', { name: 'Registrar handoff' });
+
+    fetchMock.mockImplementation((input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url === '/api/crm/empresas/42/transiciones') {
+        return Promise.resolve(new Response(JSON.stringify({ success: true }), { status: 200 }));
+      }
+      if (url === DETALLE_URL) return Promise.resolve(okDetalle(detalle));
+      return Promise.reject(new Error(`URL inesperada en el test: ${url}`));
+    });
+
+    await user.type(screen.getByLabelText('Área'), 'Operaciones');
+    await user.click(within(dialogo).getByRole('button', { name: 'Registrar handoff' }));
+
+    await waitFor(() =>
+      expect(fetchMock).toHaveBeenCalledWith(
+        '/api/crm/empresas/42/transiciones',
+        expect.objectContaining({
+          body: JSON.stringify({
+            evento: 'HandoffRegistrado',
+            handoff: { area: 'Operaciones', nota: undefined },
+          }),
+        }),
+      ),
+    );
+    await waitFor(() => expect(llamadasDetalle()).toBe(2));
+  });
+});
