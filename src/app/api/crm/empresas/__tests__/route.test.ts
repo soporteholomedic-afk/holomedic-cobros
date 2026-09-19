@@ -53,7 +53,15 @@ function makeFakeRepo(overrides: Partial<CrmEmpresaRepositoryPort> = {}): CrmEmp
 }
 
 function setDb(repo: CrmEmpresaRepositoryPort): void {
-  __setCrmDbForTests({ pool: {} as never, empresas: repo } satisfies CrmDb);
+  __setCrmDbForTests({
+    pool: {} as never,
+    empresas: repo,
+    importador: {} as never,
+    pipeline: {} as never,
+    transiciones: {} as never,
+    resultados: {} as never,
+    handoffs: {} as never,
+  } satisfies CrmDb);
 }
 
 const sessionBase = { sub: 'u-1', nombre: 'Juana Perez', area: 'ventas' };

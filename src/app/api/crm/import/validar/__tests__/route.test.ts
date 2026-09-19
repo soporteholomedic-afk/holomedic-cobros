@@ -52,6 +52,10 @@ function setDb(importador: CrmImportadorPort): void {
     pool: {} as never,
     empresas: { crear: vi.fn(), listar: vi.fn(), obtenerPorId: vi.fn(), actualizar: vi.fn() },
     importador,
+    pipeline: {} as never,
+    transiciones: {} as never,
+    resultados: {} as never,
+    handoffs: {} as never,
   } satisfies CrmDb);
 }
 
