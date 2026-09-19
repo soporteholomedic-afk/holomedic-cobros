@@ -1,11 +1,16 @@
+import { Suspense } from 'react';
+
+import { EmpresaList } from '@/features/crm/presentation/components/EmpresaList';
+
 /**
- * `/crm` — placeholder for the B2B CRM module (S1a/pr1). Protected by
- * RUTAS_PROTEGIDAS via the proxy (permiso `crm`). pr4 replaces this
- * placeholder with the empresa list (EmpresaList + filters).
+ * `/crm` — empresa registry list (S1d/pr4, spec G1). Protected by
+ * RUTAS_PROTEGIDAS via the proxy (permiso `crm`). Server Component
+ * wrapper keeps the header outside the `<Suspense>` boundary the
+ * client-side list needs (consolidados/historial-envios precedent).
  */
 export default function CrmPage() {
   return (
-    <main className="mx-auto max-w-5xl space-y-6 p-6">
+    <main className="mx-auto max-w-6xl space-y-6 p-6">
       <header>
         <h1 className="text-2xl font-semibold">CRM</h1>
         <p className="text-sm text-muted-foreground">
@@ -13,15 +18,15 @@ export default function CrmPage() {
         </p>
       </header>
 
-      <section
-        aria-label="Estado del módulo"
-        className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm"
+      <Suspense
+        fallback={
+          <div className="flex items-center justify-center py-16">
+            <div className="h-8 w-8 animate-spin rounded-full border-4 border-sky-600 border-t-transparent" />
+          </div>
+        }
       >
-        <p className="text-sm text-slate-600">
-          Módulo en preparación — el registro de empresas estará disponible
-          próximamente.
-        </p>
-      </section>
+        <EmpresaList />
+      </Suspense>
     </main>
   );
 }
