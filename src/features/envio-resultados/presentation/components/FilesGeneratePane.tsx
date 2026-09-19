@@ -7,8 +7,6 @@ import {
   COD_EMP,
   COD_SED,
   COD_TCL,
-  CLI_USER,
-  CLI_PASS,
   DEFAULT_EMI_AFI,
   DEFAULT_INC_EXP,
   SUPPORTED_IDEPME,
@@ -151,8 +149,6 @@ export function FilesGeneratePane({
       codDCo: order.codDCo,
       ruc,
       dni,
-      user: CLI_USER,
-      pass: CLI_PASS,
       idePmeList: selectedList,
     };
     run(request);

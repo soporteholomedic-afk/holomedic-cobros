@@ -72,8 +72,6 @@ export interface GenerarPdfRequest {
   ruc: string;
   /** Patient's DNI (digits only). Required for the same reason as `ruc`. */
   dni: string;
-  user: string;
-  pass: string;
   strict?: boolean;
   idePmeList: number[];
 }

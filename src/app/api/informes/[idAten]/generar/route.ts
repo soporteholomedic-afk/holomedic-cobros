@@ -10,6 +10,8 @@ import {
   PDFCLI_RETRY_MAX_ATTEMPTS,
   PDFCLI_RETRY_BACKOFF_MS,
   isPdfcliRetryTransientAuthEnabled,
+  getCliDbCredentials,
+  type CliDbCredentials,
 } from '@/features/envio-resultados/infrastructure/informes/constants';
 import { resolveOutputDir } from '@/features/envio-resultados/infrastructure/informes/outputDirResolver';
 import { parseManifest, countManifest } from '@/features/envio-resultados/infrastructure/informes/parseManifest';
@@ -37,13 +39,19 @@ const execFileAsync = promisify(execFile);
  *      `[--strict] [--idepme <csv>]` (flags MUST come first) followed
  *      by the positional block `CodEmp CodSed CodTCl NumOrd IdAten
  *      CodCli EmiAfi IncExp [CodDCo] OutputDir User Pass` where
- *      `<csv>` is `idePmeList.join(',')` and `EmiAfi` / `IncExp` are
+ *      `<csv>` is `idePmeList.join(',')`, `EmiAfi` / `IncExp` are
  *      passed as the literal strings `true` / `false` (the .NET CLI
- *      rejects `0` / `1`).
+ *      rejects `0` / `1`), and `User` / `Pass` are the SQL Server
+ *      login resolved SERVER-SIDE from env vars via
+ *      `getCliDbCredentials()` (never from the request body).
  *   4. Read `manifest.json` from `OutputDir`; if missing, return
  *      502 with a user-safe error (the CLI ran but the share write
  *      is incomplete).
- *   5. Return `{ manifest, summary: { generated, failed, skipped,
+ *   5. Fatal guard: if the CLI exited non-zero AND the manifest has
+ *      no rows (e.g. exit 2 "FATAL: Error de inicio de sesión"),
+ *      return 502 `CLI_FATAL` with the extracted `FATAL:` line —
+ *      an empty manifest must never be reported as a 200 success.
+ *   6. Return `{ manifest, summary: { generated, failed, skipped,
  *      exitCode, retries } }`. Partial CLI exit (code 3) still
  *      returns 200 so the UI can render the failed rows.
  *
@@ -75,8 +83,11 @@ const execFileAsync = promisify(execFile);
  * Status codes:
  * - 200: CLI ran (full or partial). `summary.exitCode` carries the truth.
  * - 400: validation error (empty list, unknown `idePMe`, etc.).
- * - 502: UNC parent unreachable, CLI not found, or `manifest.json` missing post-run.
- * - 500: unexpected error.
+ * - 500: `CLI_CREDENTIALS_MISSING` (env vars for the CLI SQL login
+ *   unset) or unexpected error.
+ * - 502: UNC parent unreachable, CLI not found, `manifest.json`
+ *   missing post-run, or fatal CLI exit with an empty manifest
+ *   (`CLI_FATAL`).
  */
 export async function POST(
   request: Request,
@@ -93,7 +104,13 @@ export async function POST(
     let body: Partial<GenerarPdfRequest>;
     try {
       body = (await request.json()) as Partial<GenerarPdfRequest>;
-      console.log('[api/informes/generar] body recibido:', JSON.stringify(body, null, 2));
+      // Repo security rule: never log credentials. The contract no
+      // longer carries `user`/`pass`, but a legacy client may still
+      // send them — strip credential-shaped keys before logging.
+      const loggableBody: Record<string, unknown> = { ...body };
+      delete loggableBody.user;
+      delete loggableBody.pass;
+      console.log('[api/informes/generar] body recibido:', JSON.stringify(loggableBody, null, 2));
     } catch {
       console.error('[api/informes/generar] JSON inválido en body');
       return NextResponse.json(
@@ -183,20 +200,6 @@ export async function POST(
         { status: 400 },
       );
     }
-    if (typeof body.user !== 'string' || body.user.length === 0) {
-      console.error('[api/informes/generar] user vacío');
-      return NextResponse.json(
-        { code: 'VALIDATION_ERROR', message: 'user es requerido.' },
-        { status: 400 },
-      );
-    }
-    if (typeof body.pass !== 'string' || body.pass.length === 0) {
-      console.error('[api/informes/generar] pass vacío');
-      return NextResponse.json(
-        { code: 'VALIDATION_ERROR', message: 'pass es requerido.' },
-        { status: 400 },
-      );
-    }
 
     // The strict Boolean defaults to false. Only an explicit `true`
     // is treated as strict; any other value (undefined, false, 0,
@@ -257,6 +260,25 @@ export async function POST(
       );
     }
 
+    // ---- Resolve CLI DB credentials (server-side) ----
+    // The SQL login is NEVER taken from the request body — it is
+    // resolved from env vars (see getCliDbCredentials). The message
+    // names the env vars operators must set; values are never logged.
+    let cliCreds: CliDbCredentials;
+    try {
+      cliCreds = getCliDbCredentials();
+    } catch {
+      console.error('[api/informes/generar] credenciales del CLI no configuradas (PDFCLI_DB_* / HOLOMEDIC_DB_* / DB_*)');
+      return NextResponse.json(
+        {
+          code: 'CLI_CREDENTIALS_MISSING',
+          message:
+            'Falta configurar el login SQL del CLI en el servidor. Defina PDFCLI_DB_USER y PDFCLI_DB_PASSWORD, o las variables HOLOMEDIC_DB_USER / HOLOMEDIC_DB_PASSWORD, o DB_USER / DB_PASSWORD.',
+        },
+        { status: 500 },
+      );
+    }
+
     // ---- Compose CLI args ----
     // Flags MUST come before positional args per the CLI's help.
     // `--idepme` takes its value as a separate arg (not `--idepme=...`)
@@ -279,7 +301,7 @@ export async function POST(
     if (body.codDCo !== undefined && body.codDCo !== null) {
       args.push(String(body.codDCo));
     }
-    args.push(outputDir, body.user, body.pass);
+    args.push(outputDir, cliCreds.user, cliCreds.pass);
 
     // ---- Invoke the CLI (with transient-auth retry) ----
     // The CLI sporadically fails with a Windows domain-controller auth
@@ -290,7 +312,14 @@ export async function POST(
     // returns (CLI_NOT_FOUND, MANIFEST_MISSING) break out of the
     // function — they are deterministic failures that must NOT retry.
     // The feature flag (default ON) can disable the loop entirely.
-    console.log('[api/informes/generar] invocando CLI:', { exe: CLI_EXE_PATH, args, timeout: CLI_TIMEOUT_MS });
+    // The credentials are masked in the log — the argv carries the
+    // SQL password as its last positional arg (repo security rule:
+    // never log secrets).
+    console.log('[api/informes/generar] invocando CLI:', {
+      exe: CLI_EXE_PATH,
+      args: [...args.slice(0, -2), '***', '***'],
+      timeout: CLI_TIMEOUT_MS,
+    });
     const manifestPath = path.win32.join(outputDir, MANIFEST_FILENAME);
     const retryEnabled = isPdfcliRetryTransientAuthEnabled();
     const maxAttempts = retryEnabled ? PDFCLI_RETRY_MAX_ATTEMPTS : 1;
@@ -298,6 +327,10 @@ export async function POST(
     let exitCode = 0;
     let manifest: ManifestRow[] = [];
     let attempts = 0;
+    // Last CLI error text (stderr + message). Used by the fatal guard
+    // below to extract the `FATAL:` line; never logged raw because the
+    // message embeds the full argv (credentials included).
+    let lastCliError = '';
 
     for (let attempt = 1; attempt <= maxAttempts; attempt++) {
       attempts = attempt;
@@ -311,7 +344,7 @@ export async function POST(
         });
         console.log('[api/informes/generar] CLI exitoso, exitCode: 0');
       } catch (err) {
-        const e = err as NodeJS.ErrnoException & { code?: string | number };
+        const e = err as NodeJS.ErrnoException & { code?: string | number; stderr?: string };
         // ENOENT post-preflight = the .exe disappeared between access
         // and spawn, or a co-located DLL failed to resolve. Surface it
         // as CLI_NOT_FOUND instead of a misleading MANIFEST_MISSING.
@@ -328,7 +361,20 @@ export async function POST(
         // execFile rejects on non-zero exit. We carry the exit code
         // through so the manifest parser can attach it to the summary.
         exitCode = typeof e.code === 'number' ? e.code : 1;
-        console.error('[api/informes/generar] CLI falló:', { exitCode, stderr: (e as Error).message });
+        // Keep the error text for the fatal guard. `e.message` embeds
+        // the full command line (credentials included), so it is only
+        // stored — the log below prints the child's raw `stderr`,
+        // which never contains the argv.
+        lastCliError = [
+          typeof e.stderr === 'string' ? e.stderr : '',
+          e.message,
+        ]
+          .filter((part) => part.length > 0)
+          .join('\n');
+        console.error('[api/informes/generar] CLI falló:', {
+          exitCode,
+          stderr: typeof e.stderr === 'string' ? e.stderr : undefined,
+        });
       }
 
       // ---- Read manifest.json from OutputDir ----
@@ -386,6 +432,25 @@ export async function POST(
 
       // No transient error, retry disabled, or last attempt — stop.
       break;
+    }
+
+    // ---- Fatal guard ----
+    // A non-zero exit with an EMPTY manifest means the CLI died
+    // before rendering anything (e.g. exit 2 with "FATAL: Error de
+    // inicio de sesión del usuario '...'"). Returning 200 here would
+    // silently swallow the failure as {generated:0, failed:0,
+    // skipped:0} — so surface it as 502 CLI_FATAL instead. Partial
+    // exits (code 3) and manifests with rows keep the 200 path.
+    if (exitCode !== 0 && manifest.length === 0) {
+      const fatalMatch = lastCliError.match(/^FATAL:.*$/m);
+      const message = fatalMatch
+        ? fatalMatch[0].trim().slice(0, 300)
+        : `El CLI terminó con código ${exitCode} sin generar archivos.`;
+      console.error('[api/informes/generar] CLI fatal (manifest vacío):', { exitCode, code: 'CLI_FATAL' });
+      return NextResponse.json(
+        { code: 'CLI_FATAL', message, exitCode },
+        { status: 502 },
+      );
     }
 
     // ---- Tally and respond ----
