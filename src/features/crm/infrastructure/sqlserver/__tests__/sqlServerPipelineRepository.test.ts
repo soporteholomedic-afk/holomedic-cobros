@@ -1,0 +1,486 @@
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import * as mssql from 'mssql';
+
+import { getHolomedicPool } from '@/lib/db';
+
+import type { CrearEmpresaInput } from '../../../domain/entities';
+import { NotFoundError } from '../../../domain/errors';
+import { estadoInicial } from '../../../domain/maquinaEstados';
+import type { TransicionAPersistir } from '../../../domain/ports';
+import { SqlServerEmpresaRepository } from '../sqlServerEmpresaRepository';
+import { SqlServerPipelineRepository } from '../sqlServerPipelineRepository';
+import { loadEnvLocal } from './loadEnvLocal';
+
+loadEnvLocal();
+
+/**
+ * DB integration contract for `SqlServerPipelineRepository` (tasks
+ * pr10/WU2) against the real local HOLOMEDIC SQL Server:
+ * - T1/T6 seeding: `SqlServerEmpresaRepository.crear` lands the 1:1
+ *   pipeline row derived from the origen (rows are born WITH the
+ *   empresa — the transitions endpoint only ever applies moves).
+ * - `registrarTransicion` — the ONE-transaction write of pipeline row
+ *   + CRM_Transiciones audit + optional CRM_Resultados / CRM_Handoffs
+ *   rows (design §2b); a mid-flight failure rolls the WHOLE bundle
+ *   back (proven with a CK violation on the result insert).
+ * - DATE round-trips: the adapter owns the DATE ↔ 'YYYY-MM-DD' mapping.
+ * - T14 motivo + cooldown, T12 re-arm and T5 handoff — the pr10
+ *   mandates — through real SQL.
+ * - `cambiarTipo` (T16): empresas.tipo + optional conversion event.
+ *
+ * Probe rows use reserved rucNormalizado values; every test cleans up
+ * in `finally` and FK CASCADE removes pipeline/history/handoffs with
+ * the empresa — zero residue (pr3 suite precedent).
+ */
+
+const PROBE_RUCS = ['0000000000989', '0000000000988', '0000000000987'];
+const PROBE_KEY = `rucNormalizado IN ('${PROBE_RUCS.join("','")}')`;
+
+let pool: mssql.ConnectionPool;
+let empresas: SqlServerEmpresaRepository;
+let pipelines: SqlServerPipelineRepository;
+
+beforeAll(async () => {
+  pool = await getHolomedicPool();
+  await pool.connect();
+  await pool.request().query(`DELETE FROM dbo.CRM_Empresas WHERE ${PROBE_KEY}`);
+  empresas = new SqlServerEmpresaRepository(pool);
+  pipelines = new SqlServerPipelineRepository(pool);
+});
+
+afterAll(async () => {
+  if (pool) {
+    await pool.request().query(`DELETE FROM dbo.CRM_Empresas WHERE ${PROBE_KEY}`);
+    await pool.close();
+  }
+});
+
+function inputCon(origen: 'Inbound' | 'Outbound' | null, tipo: 'Cliente' | 'Prospecto' = 'Prospecto'): CrearEmpresaInput {
+  return {
+    ruc: PROBE_RUCS[0] as string,
+    razonSocial: 'Probe Pipeline SA',
+    tipo,
+    origen,
+    contactos: [{ nombre: 'Ana Probe', correos: ['ana@pipeline.test'] }],
+  };
+}
+
+/** Land a probe empresa and force its pipeline row into an arbitrary state. */
+async function crearConEstado(
+  flujo: 'INBOUND' | 'OUTBOUND',
+  etapa: string,
+  counters: { ciclo?: number; enviosCiclo?: number; fechaCicloInicio?: string | null; fechaUltimoEnvio?: string | null } = {},
+): Promise<number> {
+  const empresa = await empresas.crear(inputCon(flujo === 'INBOUND' ? 'Inbound' : 'Outbound'));
+  await pool
+    .request()
+    .input('empresaId', mssql.Int, empresa.id)
+    .input('flujo', mssql.VarChar(10), flujo)
+    .input('etapa', mssql.VarChar(20), etapa)
+    .input('ciclo', mssql.Int, counters.ciclo ?? 1)
+    .input('enviosCiclo', mssql.Int, counters.enviosCiclo ?? 0)
+    .input('fechaCicloInicio', mssql.Date, counters.fechaCicloInicio ?? null)
+    .input('fechaUltimoEnvio', mssql.Date, counters.fechaUltimoEnvio ?? null).query(`
+      UPDATE dbo.CRM_Pipeline
+      SET flujo = @flujo, etapa = @etapa, ciclo = @ciclo, enviosCiclo = @enviosCiclo,
+          fechaCicloInicio = @fechaCicloInicio, fechaUltimoEnvio = @fechaUltimoEnvio
+      WHERE empresaId = @empresaId
+    `);
+  return empresa.id;
+}
+
+function bundleCon(overrides: Partial<TransicionAPersistir>): TransicionAPersistir {
+  return {
+    empresaId: 1,
+    usuario: 'jperez',
+    evento: 'CotizaciónEnviada',
+    motivo: null,
+    hoy: '2026-06-01',
+    estadoPrevio: { flujo: 'INBOUND', etapa: 'REGISTRADO' },
+    estadoNuevo: { flujo: 'INBOUND', etapa: 'SEGUIMIENTO' },
+    resultado: 'CotizaciónEnviada',
+    efectos: {
+      ciclo: 1,
+      enviosCiclo: 1,
+      fechaCicloInicio: '2026-06-01',
+      fechaUltimoEnvio: '2026-06-01',
+      descansoHasta: null,
+      rechazadoHasta: null,
+      motivoRechazo: null,
+    },
+    handoff: null,
+    ...overrides,
+  };
+}
+
+async function contar(tabla: string, empresaId: number): Promise<number> {
+  const result = await pool
+    .request()
+    .input('empresaId', mssql.Int, empresaId)
+    .query(`SELECT id FROM dbo.${tabla} WHERE empresaId = @empresaId`);
+  return result.recordset.length;
+}
+
+describe('SqlServerPipelineRepository — T1/T6 seeding at empresa creation', () => {
+  it('crear() seeds the 1:1 pipeline row from the origen (T1: Inbound → INBOUND/REGISTRADO, defaults ciclo=1 envios=0)', async () => {
+    try {
+      const empresa = await empresas.crear(inputCon('Inbound'));
+
+      const fila = await pipelines.obtenerPorEmpresaId(empresa.id);
+      expect(fila).not.toBeNull();
+      expect(fila?.flujo).toBe('INBOUND');
+      expect(fila?.etapa).toBe('REGISTRADO');
+      expect(fila?.ciclo).toBe(1);
+      expect(fila?.enviosCiclo).toBe(0);
+      expect(fila?.fechaCicloInicio).toBeNull();
+      expect(fila?.fechaUltimoEnvio).toBeNull();
+      expect(fila?.descansoHasta).toBeNull();
+      expect(fila?.rechazadoHasta).toBeNull();
+      expect(fila?.motivoRechazo).toBeNull();
+      expect(estadoInicial('Inbound')).toEqual({ flujo: 'INBOUND', etapa: 'REGISTRADO' });
+    } finally {
+      await pool.request().query(`DELETE FROM dbo.CRM_Empresas WHERE ${PROBE_KEY}`);
+    }
+  });
+
+  it('crear() without origen lands NO pipeline row (T1/T6 need a door)', async () => {
+    try {
+      const empresa = await empresas.crear(inputCon(null));
+      expect(await pipelines.obtenerPorEmpresaId(empresa.id)).toBeNull();
+    } finally {
+      await pool.request().query(`DELETE FROM dbo.CRM_Empresas WHERE ${PROBE_KEY}`);
+    }
+  });
+
+  it('obtenerPorEmpresaId returns null for an unknown empresa', async () => {
+    expect(await pipelines.obtenerPorEmpresaId(-7)).toBeNull();
+  });
+});
+
+describe('SqlServerPipelineRepository — DATE mapping', () => {
+  it('round-trips DATE columns as exact YYYY-MM-DD strings', async () => {
+    try {
+      const empresa = await empresas.crear(inputCon('Outbound'));
+      await pool
+        .request()
+        .input('empresaId', mssql.Int, empresa.id).query(`
+          UPDATE dbo.CRM_Pipeline
+          SET fechaCicloInicio = '2026-02-01', fechaUltimoEnvio = '2026-03-10',
+              descansoHasta = '2026-06-10', rechazadoHasta = '2026-09-01',
+              motivoRechazo = 'Sin presupuesto'
+          WHERE empresaId = @empresaId
+        `);
+
+      const fila = await pipelines.obtenerPorEmpresaId(empresa.id);
+      expect(fila?.fechaCicloInicio).toBe('2026-02-01');
+      expect(fila?.fechaUltimoEnvio).toBe('2026-03-10');
+      expect(fila?.descansoHasta).toBe('2026-06-10');
+      expect(fila?.rechazadoHasta).toBe('2026-09-01');
+      expect(fila?.motivoRechazo).toBe('Sin presupuesto');
+    } finally {
+      await pool.request().query(`DELETE FROM dbo.CRM_Empresas WHERE ${PROBE_KEY}`);
+    }
+  });
+});
+
+describe('SqlServerPipelineRepository — the atomic registrarTransicion', () => {
+  it('T2 writes pipeline row + CRM_Transiciones + CRM_Resultados in ONE transaction', async () => {
+    try {
+      const empresa = await empresas.crear(inputCon('Inbound'));
+
+      const fila = await pipelines.registrarTransicion(
+        bundleCon({ empresaId: empresa.id }),
+      );
+
+      // Pipeline row updated with the armed counters and the actor.
+      expect(fila.etapa).toBe('SEGUIMIENTO');
+      expect(fila.enviosCiclo).toBe(1);
+      expect(fila.fechaCicloInicio).toBe('2026-06-01');
+      expect(fila.fechaUltimoEnvio).toBe('2026-06-01');
+      expect(fila.updatedBy).toBe('jperez');
+
+      // Audit: who, when, from, to (spec G4).
+      const transiciones = await pool
+        .request()
+        .input('empresaId', mssql.Int, empresa.id)
+        .query(`SELECT flujoPrevio, etapaPrevia, flujoNuevo, etapaNueva, evento, motivo, usuario
+                FROM dbo.CRM_Transiciones WHERE empresaId = @empresaId`);
+      expect(transiciones.recordset).toHaveLength(1);
+      expect(transiciones.recordset[0]).toMatchObject({
+        flujoPrevio: 'INBOUND',
+        etapaPrevia: 'REGISTRADO',
+        flujoNuevo: 'INBOUND',
+        etapaNueva: 'SEGUIMIENTO',
+        evento: 'CotizaciónEnviada',
+        motivo: null,
+        usuario: 'jperez',
+      });
+
+      // Result event attributed to the acting user on the business date.
+      const resultados = await pool
+        .request()
+        .input('empresaId', mssql.Int, empresa.id)
+        .query(`SELECT tipo, usuario, fecha FROM dbo.CRM_Resultados WHERE empresaId = @empresaId`);
+      expect(resultados.recordset).toHaveLength(1);
+      expect(resultados.recordset[0]?.tipo).toBe('CotizaciónEnviada');
+      expect(resultados.recordset[0]?.usuario).toBe('jperez');
+      expect(resultados.recordset[0]?.fecha).toBeInstanceOf(Date);
+      expect((resultados.recordset[0]?.fecha as Date).toISOString().slice(0, 10)).toBe('2026-06-01');
+    } finally {
+      await pool.request().query(`DELETE FROM dbo.CRM_Empresas WHERE ${PROBE_KEY}`);
+    }
+  });
+
+  it('T5 lands the CRM_Handoffs record next to the audit and result rows', async () => {
+    try {
+      const empresaId = await crearConEstado('INBOUND', 'CONFIRMADA');
+
+      await pipelines.registrarTransicion(
+        bundleCon({
+          empresaId,
+          evento: 'HandoffRegistrado',
+          estadoPrevio: { flujo: 'INBOUND', etapa: 'CONFIRMADA' },
+          estadoNuevo: { flujo: 'INBOUND', etapa: 'ENTREGADA' },
+          resultado: 'HandoffRegistrado',
+          efectos: {
+            ciclo: 1,
+            enviosCiclo: 0,
+            fechaCicloInicio: null,
+            fechaUltimoEnvio: null,
+            descansoHasta: null,
+            rechazadoHasta: null,
+            motivoRechazo: null,
+          },
+          handoff: { area: 'Operaciones', nota: 'Coordinar entrega' },
+        }),
+      );
+
+      expect(await pipelines.obtenerPorEmpresaId(empresaId).then((f) => f?.etapa)).toBe('ENTREGADA');
+      expect(await contar('CRM_Transiciones', empresaId)).toBe(1);
+      expect(await contar('CRM_Resultados', empresaId)).toBe(1);
+      const handoffs = await pool
+        .request()
+        .input('empresaId', mssql.Int, empresaId)
+        .query(`SELECT area, nota, usuario FROM dbo.CRM_Handoffs WHERE empresaId = @empresaId`);
+      expect(handoffs.recordset).toHaveLength(1);
+      expect(handoffs.recordset[0]).toMatchObject({
+        area: 'Operaciones',
+        nota: 'Coordinar entrega',
+        usuario: 'jperez',
+      });
+    } finally {
+      await pool.request().query(`DELETE FROM dbo.CRM_Empresas WHERE ${PROBE_KEY}`);
+    }
+  });
+
+  it('T14 persists the motivo (audit + mirror) and the 3-month cooldown date', async () => {
+    try {
+      const empresaId = await crearConEstado('INBOUND', 'SEGUIMIENTO', { enviosCiclo: 1, fechaUltimoEnvio: '2026-05-25' });
+
+      const fila = await pipelines.registrarTransicion(
+        bundleCon({
+          empresaId,
+          evento: 'Rechazo',
+          motivo: 'Ya tiene proveedor',
+          estadoPrevio: { flujo: 'INBOUND', etapa: 'SEGUIMIENTO' },
+          estadoNuevo: { flujo: 'INBOUND', etapa: 'RECHAZADO' },
+          resultado: null,
+          efectos: {
+            ciclo: 1,
+            enviosCiclo: 1,
+            fechaCicloInicio: null,
+            fechaUltimoEnvio: '2026-05-25',
+            descansoHasta: null,
+            rechazadoHasta: '2026-09-01',
+            motivoRechazo: 'Ya tiene proveedor',
+          },
+        }),
+      );
+
+      expect(fila.etapa).toBe('RECHAZADO');
+      expect(fila.rechazadoHasta).toBe('2026-09-01');
+      expect(fila.motivoRechazo).toBe('Ya tiene proveedor');
+      const transicion = await pool
+        .request()
+        .input('empresaId', mssql.Int, empresaId)
+        .query(`SELECT evento, motivo FROM dbo.CRM_Transiciones WHERE empresaId = @empresaId`);
+      expect(transicion.recordset[0]).toMatchObject({ evento: 'Rechazo', motivo: 'Ya tiene proveedor' });
+      // A rejection is NOT a result event (design D4 catalog).
+      expect(await contar('CRM_Resultados', empresaId)).toBe(0);
+    } finally {
+      await pool.request().query(`DELETE FROM dbo.CRM_Empresas WHERE ${PROBE_KEY}`);
+    }
+  });
+
+  it('T12 flips the flow and re-arms the denormalized cadence counters', async () => {
+    try {
+      const empresaId = await crearConEstado('OUTBOUND', 'DATOS', {
+        ciclo: 2,
+        enviosCiclo: 3,
+        fechaCicloInicio: '2026-01-05',
+        fechaUltimoEnvio: '2026-04-20',
+      });
+
+      const fila = await pipelines.registrarTransicion(
+        bundleCon({
+          empresaId,
+          estadoPrevio: { flujo: 'OUTBOUND', etapa: 'DATOS' },
+          estadoNuevo: { flujo: 'INBOUND', etapa: 'SEGUIMIENTO' },
+          efectos: {
+            ciclo: 1,
+            enviosCiclo: 1,
+            fechaCicloInicio: '2026-06-01',
+            fechaUltimoEnvio: '2026-06-01',
+            descansoHasta: null,
+            rechazadoHasta: null,
+            motivoRechazo: null,
+          },
+        }),
+      );
+
+      expect(fila.flujo).toBe('INBOUND');
+      expect(fila.etapa).toBe('SEGUIMIENTO');
+      expect(fila.ciclo).toBe(1);
+      expect(fila.enviosCiclo).toBe(1);
+      expect(fila.fechaCicloInicio).toBe('2026-06-01');
+      expect(fila.fechaUltimoEnvio).toBe('2026-06-01');
+    } finally {
+      await pool.request().query(`DELETE FROM dbo.CRM_Empresas WHERE ${PROBE_KEY}`);
+    }
+  });
+
+  it('a mid-flight failure rolls the WHOLE bundle back (CK violation on the result insert)', async () => {
+    try {
+      const empresa = await empresas.crear(inputCon('Inbound'));
+
+      // The dropped 'AvanceDeEtapa' violates CK_CRM_Resultados_Tipo —
+      // a deterministic failure AFTER the pipeline UPDATE and the
+      // audit INSERT inside the same transaction.
+      await expect(
+        pipelines.registrarTransicion(
+          bundleCon({
+            empresaId: empresa.id,
+            resultado: 'AvanceDeEtapa' as never, // deliberate catalog violation (test-only cast)
+          }),
+        ),
+      ).rejects.toThrow(/CK_CRM_Resultados_Tipo|CHECK/i);
+
+      // Nothing landed: pipeline untouched, no orphan audit rows.
+      const fila = await pipelines.obtenerPorEmpresaId(empresa.id);
+      expect(fila?.etapa).toBe('REGISTRADO');
+      expect(fila?.enviosCiclo).toBe(0);
+      expect(await contar('CRM_Transiciones', empresa.id)).toBe(0);
+      expect(await contar('CRM_Resultados', empresa.id)).toBe(0);
+      expect(await contar('CRM_Handoffs', empresa.id)).toBe(0);
+    } finally {
+      await pool.request().query(`DELETE FROM dbo.CRM_Empresas WHERE ${PROBE_KEY}`);
+    }
+  });
+
+  it('rejects a bundle for an empresa without a pipeline row (NotFoundError, nothing written)', async () => {
+    try {
+      const empresa = await empresas.crear(inputCon(null));
+
+      await expect(
+        pipelines.registrarTransicion(bundleCon({ empresaId: empresa.id })),
+      ).rejects.toBeInstanceOf(NotFoundError);
+      expect(await contar('CRM_Transiciones', empresa.id)).toBe(0);
+    } finally {
+      await pool.request().query(`DELETE FROM dbo.CRM_Empresas WHERE ${PROBE_KEY}`);
+    }
+  });
+});
+
+describe('SqlServerPipelineRepository — cambiarTipo (T16)', () => {
+  it('updates the tipo and emits ConversiónProspectoACliente on Prospecto→Cliente', async () => {
+    try {
+      const empresa = await empresas.crear(inputCon(null, 'Prospecto'));
+
+      await pipelines.cambiarTipo({
+        empresaId: empresa.id,
+        nuevoTipo: 'Cliente',
+        usuario: 'mgarcia',
+        hoy: '2026-06-01',
+        convertir: true,
+      });
+
+      const tipo = await pool
+        .request()
+        .input('empresaId', mssql.Int, empresa.id)
+        .query(`SELECT tipo FROM dbo.CRM_Empresas WHERE id = @empresaId`);
+      expect(tipo.recordset[0]?.tipo).toBe('Cliente');
+
+      const resultados = await pool
+        .request()
+        .input('empresaId', mssql.Int, empresa.id)
+        .query(`SELECT tipo, usuario FROM dbo.CRM_Resultados WHERE empresaId = @empresaId`);
+      expect(resultados.recordset).toHaveLength(1);
+      expect(resultados.recordset[0]).toMatchObject({
+        tipo: 'ConversiónProspectoACliente',
+        usuario: 'mgarcia',
+      });
+    } finally {
+      await pool.request().query(`DELETE FROM dbo.CRM_Empresas WHERE ${PROBE_KEY}`);
+    }
+  });
+
+  it('updates the tipo WITHOUT a result event when convertir is false (Cliente→Prospecto)', async () => {
+    try {
+      const empresa = await empresas.crear(inputCon(null, 'Cliente'));
+
+      await pipelines.cambiarTipo({
+        empresaId: empresa.id,
+        nuevoTipo: 'Prospecto',
+        usuario: 'mgarcia',
+        hoy: '2026-06-01',
+        convertir: false,
+      });
+
+      const tipo = await pool
+        .request()
+        .input('empresaId', mssql.Int, empresa.id)
+        .query(`SELECT tipo FROM dbo.CRM_Empresas WHERE id = @empresaId`);
+      expect(tipo.recordset[0]?.tipo).toBe('Prospecto');
+      expect(await contar('CRM_Resultados', empresa.id)).toBe(0);
+    } finally {
+      await pool.request().query(`DELETE FROM dbo.CRM_Empresas WHERE ${PROBE_KEY}`);
+    }
+  });
+
+  it('raises NotFoundError when the empresa does not exist', async () => {
+    await expect(
+      pipelines.cambiarTipo({
+        empresaId: -3,
+        nuevoTipo: 'Cliente',
+        usuario: 'mgarcia',
+        hoy: '2026-06-01',
+        convertir: true,
+      }),
+    ).rejects.toBeInstanceOf(NotFoundError);
+  });
+});
+
+describe('SqlServerPipelineRepository — standalone audit ports', () => {
+  it('handoffs.registrar lands a CRM_Handoffs row and returns its id', async () => {
+    try {
+      const empresa = await empresas.crear(inputCon(null));
+
+      const id = await pipelines.registrar({
+        empresaId: empresa.id,
+        area: 'Cobranzas',
+        nota: null,
+        usuario: 'jperez',
+      });
+      expect(id).toBeGreaterThan(0);
+
+      const handoffs = await pool
+        .request()
+        .input('id', mssql.BigInt, id)
+        .query(`SELECT area, usuario FROM dbo.CRM_Handoffs WHERE id = @id`)
+        .then((r) => r.recordset);
+      expect(handoffs[0]).toMatchObject({ area: 'Cobranzas', usuario: 'jperez' });
+    } finally {
+      await pool.request().query(`DELETE FROM dbo.CRM_Empresas WHERE ${PROBE_KEY}`);
+    }
+  });
+});

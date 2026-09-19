@@ -354,3 +354,43 @@ describe('SqlServerCrmImportador — real HOLOMEDIC integration', () => {
     }
   });
 });
+
+describe('SqlServerCrmImportador — pipeline seeding at creation (pr10, T1/T6)', () => {
+  it('create mode seeds the pipeline row from the origen (T1: Inbound → INBOUND/REGISTRADO)', async () => {
+    const importador = new SqlServerCrmImportador(pool);
+    try {
+      await importador.ejecutarGrupo(grupoCon('0000000000991', [contacto('Luis Probe', ['luis@p1.test'])]), 'tester');
+
+      const fila = await pool
+        .request()
+        .input('ruc', mssql.VarChar(30), '0000000000991').query(`
+          SELECT p.flujo, p.etapa, p.ciclo, p.enviosCiclo
+          FROM dbo.CRM_Pipeline p
+          JOIN dbo.CRM_Empresas e ON e.id = p.empresaId
+          WHERE e.rucNormalizado = @ruc`);
+      expect(fila.recordset).toHaveLength(1);
+      expect(fila.recordset[0]).toMatchObject({ flujo: 'INBOUND', etapa: 'REGISTRADO', ciclo: 1, enviosCiclo: 0 });
+    } finally {
+      await pool.request().query(`DELETE FROM dbo.CRM_Empresas WHERE ${PROBE_KEY}`);
+    }
+  });
+
+  it('create mode without origen lands NO pipeline row (T1/T6 need a door)', async () => {
+    const importador = new SqlServerCrmImportador(pool);
+    try {
+      const grupo = { ...grupoCon('0000000000991', [contacto('Luis Probe', ['luis@p1.test'])]), origen: null };
+      await importador.ejecutarGrupo(grupo, 'tester');
+
+      const filas = await pool
+        .request()
+        .input('ruc', mssql.VarChar(30), '0000000000991').query(`
+          SELECT p.id
+          FROM dbo.CRM_Pipeline p
+          JOIN dbo.CRM_Empresas e ON e.id = p.empresaId
+          WHERE e.rucNormalizado = @ruc`);
+      expect(filas.recordset).toHaveLength(0);
+    } finally {
+      await pool.request().query(`DELETE FROM dbo.CRM_Empresas WHERE ${PROBE_KEY}`);
+    }
+  });
+});

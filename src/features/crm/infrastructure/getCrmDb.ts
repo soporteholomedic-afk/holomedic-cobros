@@ -4,14 +4,23 @@ import { getHolomedicPool } from '@/lib/db';
 
 import { migrate } from './sqlserver/migrate';
 import { SqlServerEmpresaRepository } from './sqlserver/sqlServerEmpresaRepository';
+import { SqlServerPipelineRepository } from './sqlserver/sqlServerPipelineRepository';
 import { SqlServerCrmImportador } from './importar/importadorCrm';
-import type { CrmEmpresaRepositoryPort, CrmImportadorPort } from '../domain/ports';
+import type {
+  CrmEmpresaRepositoryPort,
+  CrmHandoffsRepositoryPort,
+  CrmImportadorPort,
+  CrmPipelineRepositoryPort,
+  CrmResultadosRepositoryPort,
+  CrmTransicionesRepositoryPort,
+} from '../domain/ports';
 
 /**
  * The CRM feature container (ADR-3): one factory owning ONE pool and
  * ONE idempotent `migrate()`. pr3 adds the first SQL Server adapter —
- * the empresa registry repository — bound to the migrated pool;
- * later slices add the remaining `SqlServer*Repository` adapters here.
+ * the empresa registry repository — bound to the migrated pool; pr10
+ * adds the pipeline adapter, ONE class implementing the four pipeline
+ * roles (the transition write is genuinely cross-table, design §2b).
  *
  * Mirrors `getUsuarioDb`/`getAsistenciaDb`: lazy singleton, async
  * signature for uniform `await` at call sites.
@@ -23,6 +32,14 @@ export interface CrmDb {
   empresas: CrmEmpresaRepositoryPort;
   /** Import execution adapter (spec G2, pr6). */
   importador: CrmImportadorPort;
+  /** Pipeline state adapter (spec G4, pr10). */
+  pipeline: CrmPipelineRepositoryPort;
+  /** Transition audit adapter (spec G4: who/when/from/to). */
+  transiciones: CrmTransicionesRepositoryPort;
+  /** Result-event adapter (spec G6 productivity). */
+  resultados: CrmResultadosRepositoryPort;
+  /** Handoff record adapter (spec G4). */
+  handoffs: CrmHandoffsRepositoryPort;
 }
 
 let cached: Promise<CrmDb> | null = null;
@@ -39,7 +56,16 @@ export function getCrmDb(): Promise<CrmDb> {
     const pool = await getHolomedicPool();
     await pool.connect();
     await migrate(pool);
-    return { pool, empresas: new SqlServerEmpresaRepository(pool), importador: new SqlServerCrmImportador(pool) };
+    const pipelines = new SqlServerPipelineRepository(pool);
+    return {
+      pool,
+      empresas: new SqlServerEmpresaRepository(pool),
+      importador: new SqlServerCrmImportador(pool),
+      pipeline: pipelines,
+      transiciones: pipelines,
+      resultados: pipelines,
+      handoffs: pipelines,
+    };
   })();
   return cached;
 }

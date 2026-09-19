@@ -34,6 +34,9 @@ import * as mssql from 'mssql';
  *   (design D4's 6-event catalog, CHECK-enforced; `AvanceDeEtapa` is
  *   deliberately absent — stage changes already live in
  *   CRM_Transiciones and must not double-count).
+ * - `CRM_Handoffs` (pr10) — handoff records (design §2: área, nota,
+ *   user); the T5 transition writes its row INSIDE the transition
+ *   transaction, and the standalone handoff endpoint appends records.
  *
  * Conventions (design §2): INT IDENTITY PKs for registry tables,
  * BIGINT for high-volume history rows, `DATETIME2(0) DEFAULT
@@ -154,6 +157,18 @@ BEGIN
     CONSTRAINT FK_CRM_Resultados_Empresa FOREIGN KEY (empresaId) REFERENCES dbo.CRM_Empresas (id) ON DELETE CASCADE
   );
 END;
+IF NOT EXISTS (SELECT 1 FROM sys.tables WHERE name = 'CRM_Handoffs' AND schema_id = SCHEMA_ID('dbo'))
+BEGIN
+  CREATE TABLE dbo.CRM_Handoffs (
+    id        BIGINT         IDENTITY(1,1) NOT NULL PRIMARY KEY,
+    empresaId INT            NOT NULL,
+    area      NVARCHAR(100)  NOT NULL,
+    nota      NVARCHAR(MAX)  NULL,
+    usuario   NVARCHAR(200)  NOT NULL,
+    createdAt DATETIME2(0)   NOT NULL DEFAULT SYSDATETIME(),
+    CONSTRAINT FK_CRM_Handoffs_Empresa FOREIGN KEY (empresaId) REFERENCES dbo.CRM_Empresas (id) ON DELETE CASCADE
+  );
+END;
 IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'UX_CRM_Contactos_Principal' AND object_id = OBJECT_ID('dbo.CRM_Contactos'))
 BEGIN
   CREATE UNIQUE INDEX UX_CRM_Contactos_Principal
@@ -198,6 +213,11 @@ IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_CRM_Resultados_Empresa
 BEGIN
   CREATE INDEX IX_CRM_Resultados_EmpresaFecha
     ON dbo.CRM_Resultados (empresaId, fecha DESC);
+END;
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_CRM_Handoffs_EmpresaFecha' AND object_id = OBJECT_ID('dbo.CRM_Handoffs'))
+BEGIN
+  CREATE INDEX IX_CRM_Handoffs_EmpresaFecha
+    ON dbo.CRM_Handoffs (empresaId, createdAt DESC);
 END;
 `;
 

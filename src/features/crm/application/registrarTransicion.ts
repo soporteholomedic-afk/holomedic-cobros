@@ -2,7 +2,8 @@ import { fechaHoy } from '../domain/cadence';
 import { NotFoundError, ValidationError } from '../domain/errors';
 import { efectosTransicion } from '../domain/efectosTransicion';
 import { transitar } from '../domain/maquinaEstados';
-import type { Clock, CrmPipelineRepositoryPort, HandoffInput, PipelineEmpresa } from '../domain/ports';
+import type { PipelineEmpresa } from '../domain/entities';
+import type { Clock, CrmPipelineRepositoryPort, HandoffInput } from '../domain/ports';
 import type { EstadoPipeline, EventoPipeline, TipoResultado } from '../domain/maquinaEstados';
 
 /** Body of `POST /api/crm/empresas/[id]/transiciones` (route whitelists it). */

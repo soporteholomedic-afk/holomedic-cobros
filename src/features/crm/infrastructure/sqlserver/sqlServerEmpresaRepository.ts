@@ -8,6 +8,7 @@ import type {
   Empresa,
 } from '../../domain/entities';
 import { normalizarCorreo, normalizarNombre, normalizarRuc } from '../../domain/normalizar';
+import { estadoInicial } from '../../domain/maquinaEstados';
 import type { CrmEmpresaRepositoryPort, FiltrosEmpresas } from '../../domain/ports';
 
 import { mapearConflictoUnico } from './conflictos';
@@ -96,6 +97,22 @@ export class SqlServerEmpresaRepository implements CrmEmpresaRepositoryPort {
 
         for (const contacto of datos.contactos) {
           await this.insertContacto(tx, empresaId, contacto);
+        }
+
+        // T1/T6 (design D3): an empresa with a door enters the pipeline
+        // at birth — the 1:1 row lands inside the SAME creation
+        // transaction, so a pipeline-less empresa only exists when the
+        // registration carried no origen.
+        if (datos.origen != null) {
+          const inicial = estadoInicial(datos.origen);
+          await tx
+            .request()
+            .input('empresaId', mssql.Int, empresaId)
+            .input('flujo', mssql.VarChar(10), inicial.flujo)
+            .input('etapa', mssql.VarChar(20), inicial.etapa)
+            .query(
+              'INSERT INTO dbo.CRM_Pipeline (empresaId, flujo, etapa) VALUES (@empresaId, @flujo, @etapa)',
+            );
         }
 
         const empresa = (await this.cargar(tx, [empresaId])).get(empresaId);

@@ -1,6 +1,7 @@
 import * as mssql from 'mssql';
 
 import { normalizarCorreo, normalizarNombre } from '../../domain/normalizar';
+import { estadoInicial } from '../../domain/maquinaEstados';
 import type { CrmImportadorPort, RegistroImportacion, ResultadoGrupoImport } from '../../domain/ports';
 import { planificarMergeContactos } from '../../domain/importar/mergeContactos';
 import type { ContactoExistenteMerge } from '../../domain/importar/mergeContactos';
@@ -132,6 +133,20 @@ export class SqlServerCrmImportador implements CrmImportadorPort {
 
     for (const contacto of grupo.contactos) {
       await this.insertarContacto(tx, empresaId, contacto, contacto.esPrincipal);
+    }
+
+    // T1/T6 (design D3): a created/imported empresa with a door enters
+    // the pipeline inside the SAME group transaction.
+    if (grupo.origen != null) {
+      const inicial = estadoInicial(grupo.origen);
+      await tx
+        .request()
+        .input('empresaId', mssql.Int, empresaId)
+        .input('flujo', mssql.VarChar(10), inicial.flujo)
+        .input('etapa', mssql.VarChar(20), inicial.etapa)
+        .query(
+          'INSERT INTO dbo.CRM_Pipeline (empresaId, flujo, etapa) VALUES (@empresaId, @flujo, @etapa)',
+        );
     }
 
     return { modo: 'crear', contactosCreados: grupo.contactos.length, contactosActualizados: 0, advertencias: [] };
