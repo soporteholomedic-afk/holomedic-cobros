@@ -7,6 +7,7 @@ import { SqlServerEmpresaRepository } from './sqlserver/sqlServerEmpresaReposito
 import { SqlServerPipelineRepository } from './sqlserver/sqlServerPipelineRepository';
 import { SqlServerCrmImportador } from './importar/importadorCrm';
 import type {
+  CrmActividadesRepositoryPort,
   CrmEmpresaRepositoryPort,
   CrmHandoffsRepositoryPort,
   CrmImportadorPort,
@@ -40,6 +41,12 @@ export interface CrmDb {
   resultados: CrmResultadosRepositoryPort;
   /** Handoff record adapter (spec G4). */
   handoffs: CrmHandoffsRepositoryPort;
+  /**
+   * Activity adapter (tasks pr13/WU1): the ENVIO_CADENCIA write is
+   * cross-table (activity + pipeline counters + derived audit), so the
+   * SAME adapter instance implements this port (design §2c).
+   */
+  actividades: CrmActividadesRepositoryPort;
 }
 
 let cached: Promise<CrmDb> | null = null;
@@ -65,6 +72,7 @@ export function getCrmDb(): Promise<CrmDb> {
       transiciones: pipelines,
       resultados: pipelines,
       handoffs: pipelines,
+      actividades: pipelines,
     };
   })();
   return cached;

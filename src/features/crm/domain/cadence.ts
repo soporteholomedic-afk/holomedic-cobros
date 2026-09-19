@@ -24,7 +24,7 @@ import type { Clock } from './ports';
 const DIAS_POR_SEMANA = 7;
 
 /** Sends per cycle before the 3-strike exit (T8 auto / T13-T14 fork). */
-const ENVIOS_POR_CICLO = 3;
+export const ENVIOS_POR_CICLO = 3;
 
 /** Stages where the weekly cadence is ACTIVE (design D3 table). */
 function esEtapaCadenciaActiva(etapa: PipelineEmpresa['etapa']): boolean {

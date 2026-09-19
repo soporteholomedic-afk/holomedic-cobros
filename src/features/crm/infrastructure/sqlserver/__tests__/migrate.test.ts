@@ -36,6 +36,7 @@ const TABLAS = [
   'CRM_Transiciones',
   'CRM_Resultados',
   'CRM_Handoffs',
+  'CRM_Actividades',
 ] as const;
 const CHECKS = [
   'CK_CRM_Empresas_Tipo',
@@ -43,6 +44,7 @@ const CHECKS = [
   'CK_CRM_Pipeline_Flujo',
   'CK_CRM_Pipeline_Etapa',
   'CK_CRM_Resultados_Tipo',
+  'CK_CRM_Actividades_Tipo',
 ] as const;
 const UNIQUES = [
   'UQ_CRM_Empresas_RucNormalizado',
@@ -57,6 +59,8 @@ const FKS = [
   'FK_CRM_Transiciones_Empresa',
   'FK_CRM_Resultados_Empresa',
   'FK_CRM_Handoffs_Empresa',
+  'FK_CRM_Actividades_Empresa',
+  'FK_CRM_Actividades_Contacto',
 ] as const;
 const INDEXES = [
   'UX_CRM_Contactos_Principal',
@@ -71,6 +75,7 @@ const INDEXES_PIPELINE = [
   'IX_CRM_Resultados_EmpresaFecha',
 ] as const;
 const INDEXES_HANDOFFS = ['IX_CRM_Handoffs_EmpresaFecha'] as const;
+const INDEXES_ACTIVIDADES = ['IX_CRM_Actividades_EmpresaFecha', 'IX_CRM_Actividades_UsuarioFecha'] as const;
 
 /** RUC/razonSocial reserved by this suite (always rolled back). */
 const PROBE_RUC = '0000000000999';
@@ -118,19 +123,19 @@ async function catalogFingerprint(p: mssql.ConnectionPool): Promise<string[]> {
     UNION ALL
     SELECT 'KEY', kc.name
       FROM sys.key_constraints kc
-     WHERE kc.parent_object_id IN (OBJECT_ID('dbo.CRM_Empresas'), OBJECT_ID('dbo.CRM_Contactos'), OBJECT_ID('dbo.CRM_Correos'), OBJECT_ID('dbo.CRM_Importaciones'), OBJECT_ID('dbo.CRM_Pipeline'), OBJECT_ID('dbo.CRM_Transiciones'), OBJECT_ID('dbo.CRM_Resultados'), OBJECT_ID('dbo.CRM_Handoffs'))
+     WHERE kc.parent_object_id IN (OBJECT_ID('dbo.CRM_Empresas'), OBJECT_ID('dbo.CRM_Contactos'), OBJECT_ID('dbo.CRM_Correos'), OBJECT_ID('dbo.CRM_Importaciones'), OBJECT_ID('dbo.CRM_Pipeline'), OBJECT_ID('dbo.CRM_Transiciones'), OBJECT_ID('dbo.CRM_Resultados'), OBJECT_ID('dbo.CRM_Handoffs'), OBJECT_ID('dbo.CRM_Actividades'))
     UNION ALL
     SELECT 'CHECK', cc.name
       FROM sys.check_constraints cc
-     WHERE cc.parent_object_id IN (OBJECT_ID('dbo.CRM_Empresas'), OBJECT_ID('dbo.CRM_Pipeline'), OBJECT_ID('dbo.CRM_Resultados'))
+     WHERE cc.parent_object_id IN (OBJECT_ID('dbo.CRM_Empresas'), OBJECT_ID('dbo.CRM_Pipeline'), OBJECT_ID('dbo.CRM_Resultados'), OBJECT_ID('dbo.CRM_Actividades'))
     UNION ALL
     SELECT 'FK', fk.name
       FROM sys.foreign_keys fk
-     WHERE fk.parent_object_id IN (OBJECT_ID('dbo.CRM_Contactos'), OBJECT_ID('dbo.CRM_Correos'), OBJECT_ID('dbo.CRM_Pipeline'), OBJECT_ID('dbo.CRM_Transiciones'), OBJECT_ID('dbo.CRM_Resultados'), OBJECT_ID('dbo.CRM_Handoffs'))
+     WHERE fk.parent_object_id IN (OBJECT_ID('dbo.CRM_Contactos'), OBJECT_ID('dbo.CRM_Correos'), OBJECT_ID('dbo.CRM_Pipeline'), OBJECT_ID('dbo.CRM_Transiciones'), OBJECT_ID('dbo.CRM_Resultados'), OBJECT_ID('dbo.CRM_Handoffs'), OBJECT_ID('dbo.CRM_Actividades'))
     UNION ALL
     SELECT 'INDEX', i.name
       FROM sys.indexes i
-     WHERE i.object_id IN (OBJECT_ID('dbo.CRM_Empresas'), OBJECT_ID('dbo.CRM_Contactos'), OBJECT_ID('dbo.CRM_Correos'), OBJECT_ID('dbo.CRM_Importaciones'), OBJECT_ID('dbo.CRM_Pipeline'), OBJECT_ID('dbo.CRM_Transiciones'), OBJECT_ID('dbo.CRM_Resultados'), OBJECT_ID('dbo.CRM_Handoffs'))
+     WHERE i.object_id IN (OBJECT_ID('dbo.CRM_Empresas'), OBJECT_ID('dbo.CRM_Contactos'), OBJECT_ID('dbo.CRM_Correos'), OBJECT_ID('dbo.CRM_Importaciones'), OBJECT_ID('dbo.CRM_Pipeline'), OBJECT_ID('dbo.CRM_Transiciones'), OBJECT_ID('dbo.CRM_Resultados'), OBJECT_ID('dbo.CRM_Handoffs'), OBJECT_ID('dbo.CRM_Actividades'))
        AND i.name IS NOT NULL
   `);
   return result.recordset.map((r) => `${r.tipo}:${r.nombre}`).sort();
@@ -142,10 +147,10 @@ describe('crm migrate() — HOLOMEDIC schema integration', () => {
     await migrate(pool);
     const after = await catalogFingerprint(pool);
     expect(after).toEqual(before);
-    // 8 tables (3 registry + job + 3 pipeline + handoffs) + 12 key
-    // constraints (8 PK + 4 UQ) + 5 CHECKs + 6 FKs + 21 indexes (9
-    // named + 4 backing the UQs + 8 clustered PKs).
-    expect(before).toHaveLength(8 + 12 + 5 + 6 + 21);
+    // 9 tables (3 registry + job + 3 pipeline + handoffs + activities)
+    // + 13 key constraints (9 PK + 4 UQ) + 6 CHECKs + 8 FKs + 24
+    // indexes (11 named + 4 backing the UQs + 9 clustered PKs).
+    expect(before).toHaveLength(9 + 13 + 6 + 8 + 24);
   });
 
   it('creates the registry tables (Empresas → Contactos → Correos), the CRM_Importaciones job table and the pipeline trio', async () => {
@@ -185,7 +190,7 @@ describe('crm migrate() — HOLOMEDIC schema integration', () => {
       .request()
       .query<NameRow>(
         `SELECT name FROM sys.check_constraints
-          WHERE parent_object_id IN (OBJECT_ID('dbo.CRM_Empresas'), OBJECT_ID('dbo.CRM_Pipeline'), OBJECT_ID('dbo.CRM_Resultados'))
+          WHERE parent_object_id IN (OBJECT_ID('dbo.CRM_Empresas'), OBJECT_ID('dbo.CRM_Pipeline'), OBJECT_ID('dbo.CRM_Resultados'), OBJECT_ID('dbo.CRM_Actividades'))
           ORDER BY name`,
       );
     expect(result.recordset.map((r) => r.name).sort()).toEqual([...CHECKS].sort());
@@ -205,11 +210,18 @@ describe('crm migrate() — HOLOMEDIC schema integration', () => {
     const result = await pool.request().query<FkRow>(`
       SELECT fk.name, fk.delete_referential_action
         FROM sys.foreign_keys fk
-       WHERE fk.parent_object_id IN (OBJECT_ID('dbo.CRM_Contactos'), OBJECT_ID('dbo.CRM_Correos'), OBJECT_ID('dbo.CRM_Pipeline'), OBJECT_ID('dbo.CRM_Transiciones'), OBJECT_ID('dbo.CRM_Resultados'), OBJECT_ID('dbo.CRM_Handoffs'))
+       WHERE fk.parent_object_id IN (OBJECT_ID('dbo.CRM_Contactos'), OBJECT_ID('dbo.CRM_Correos'), OBJECT_ID('dbo.CRM_Pipeline'), OBJECT_ID('dbo.CRM_Transiciones'), OBJECT_ID('dbo.CRM_Resultados'), OBJECT_ID('dbo.CRM_Handoffs'), OBJECT_ID('dbo.CRM_Actividades'))
        ORDER BY fk.name`);
     const fks = new Map(result.recordset.map((r) => [r.name, r.delete_referential_action]));
     expect([...fks.keys()].sort()).toEqual([...FKS].sort());
     for (const fk of FKS) {
+      if (fk === 'FK_CRM_Actividades_Contacto') {
+        // NO ACTION (0): SQL Server forbids the second cascade path
+        // (Actividades→Contactos→Empresas beside Actividades→Empresas);
+        // the empresa cascade already removes the activities.
+        expect(fks.get(fk), `${fk} must be NO ACTION (single cascade path rule)`).toBe(0);
+        continue;
+      }
       expect(fks.get(fk), `${fk} must cascade`).toBe(1); // 1 = ON DELETE CASCADE
     }
   });
@@ -306,6 +318,13 @@ describe('crm migrate() — HOLOMEDIC schema integration', () => {
     expect(await columns('CRM_Handoffs')).toEqual(
       ['id', 'empresaId', 'area', 'nota', 'usuario', 'createdAt'].sort(),
     );
+
+    // CRM_Actividades (pr13) — the activity log the cadence send
+    // writes next to the pipeline counters (design §2: tipo catalog
+    // CHECK, contactoId addressee NULL-able, business fecha DATE).
+    expect(await columns('CRM_Actividades')).toEqual(
+      ['id', 'empresaId', 'contactoId', 'tipo', 'asunto', 'detalle', 'usuario', 'fecha', 'createdAt'].sort(),
+    );
   });
 
   it('creates the handoff audit index IX_CRM_Handoffs_EmpresaFecha', async () => {
@@ -316,6 +335,25 @@ describe('crm migrate() — HOLOMEDIC schema integration', () => {
          AND i.name IN ('${INDEXES_HANDOFFS.join("','")}')
        ORDER BY i.name`);
     expect(names.recordset.map((r) => r.name).sort()).toEqual([...INDEXES_HANDOFFS].sort());
+  });
+
+  it('creates the activity indexes (IX_CRM_Actividades_EmpresaFecha covering + UsuarioFecha) for pr13 sends and pr16 productivity', async () => {
+    const names = await pool.request().query<NameRow>(`
+      SELECT i.name
+        FROM sys.indexes i
+       WHERE i.object_id = OBJECT_ID('dbo.CRM_Actividades')
+         AND i.name IN ('${INDEXES_ACTIVIDADES.join("','")}')
+       ORDER BY i.name`);
+    expect(names.recordset.map((r) => r.name).sort()).toEqual([...INDEXES_ACTIVIDADES].sort());
+
+    const includes = await pool.request().query<IncludeRow>(`
+      SELECT c.name
+        FROM sys.index_columns ic
+        JOIN sys.columns c ON c.object_id = ic.object_id AND c.column_id = ic.column_id
+       WHERE ic.object_id = OBJECT_ID('dbo.CRM_Actividades')
+         AND ic.index_id = INDEXPROPERTY(ic.object_id, 'IX_CRM_Actividades_EmpresaFecha', 'IndexID')
+         AND ic.is_included_column = 1`);
+    expect(includes.recordset.map((r) => r.name).sort()).toEqual(['tipo', 'asunto', 'usuario'].sort());
   });
 
   it('creates the covering queue index IX_CRM_Pipeline_Etapa and the audit indexes on transiciones/resultados', async () => {

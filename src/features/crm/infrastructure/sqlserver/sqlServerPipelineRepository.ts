@@ -4,10 +4,12 @@ import { NotFoundError } from '../../domain/errors';
 import type { PipelineEmpresa } from '../../domain/entities';
 import type {
   CambiarTipoDatos,
+  CrmActividadesRepositoryPort,
   CrmHandoffsRepositoryPort,
   CrmPipelineRepositoryPort,
   CrmResultadosRepositoryPort,
   CrmTransicionesRepositoryPort,
+  EnvioCadenciaAPersistir,
   FilaHandoffAudit,
   FilaResultadoAudit,
   FilaTransicionAudit,
@@ -105,7 +107,8 @@ export class SqlServerPipelineRepository
     CrmPipelineRepositoryPort,
     CrmTransicionesRepositoryPort,
     CrmResultadosRepositoryPort,
-    CrmHandoffsRepositoryPort
+    CrmHandoffsRepositoryPort,
+    CrmActividadesRepositoryPort
 {
   constructor(private readonly pool: mssql.ConnectionPool) {}
 
@@ -189,8 +192,76 @@ export class SqlServerPipelineRepository
     });
   }
 
-  async cambiarTipo(datos: CambiarTipoDatos): Promise<void> {
-    await withCrmTransaction(this.pool, async (tx) => {
+  /**
+   * The logged cadence send (tasks pr13/WU1, design §2c/§3) — ONE
+   * transaction, three writes: the CRM_Actividades row first (the
+   * activity IS the event the engine derives from), then the
+   * CRM_Pipeline counter/state update, then the derived T8/T9 audit
+   * row when the send moved the machine. A failure anywhere rolls the
+   * activity back with the rest — no orphan activity rows.
+   */
+  async registrarEnvioCadencia(datos: EnvioCadenciaAPersistir): Promise<PipelineEmpresa> {
+    return withCrmTransaction(this.pool, async (tx) => {
+      await tx
+        .request()
+        .input('empresaId', mssql.Int, datos.empresaId)
+        .input('contactoId', mssql.Int, datos.actividad.contactoId)
+        .input('tipo', mssql.VarChar(20), 'ENVIO_CADENCIA')
+        .input('asunto', mssql.NVarChar(300), datos.actividad.asunto)
+        .input('detalle', mssql.NVarChar(mssql.MAX), datos.actividad.detalle)
+        .input('usuario', mssql.NVarChar(200), datos.usuario)
+        .input('fecha', mssql.Date, datos.hoy).query(`
+          INSERT INTO dbo.CRM_Actividades (empresaId, contactoId, tipo, asunto, detalle, usuario, fecha)
+          VALUES (@empresaId, @contactoId, @tipo, @asunto, @detalle, @usuario, @fecha)
+        `);
+
+      const update = await tx
+        .request()
+        .input('empresaId', mssql.Int, datos.empresaId)
+        .input('flujo', mssql.VarChar(10), datos.estadoFinal.flujo)
+        .input('etapa', mssql.VarChar(20), datos.estadoFinal.etapa)
+        .input('ciclo', mssql.Int, datos.efectos.ciclo)
+        .input('enviosCiclo', mssql.Int, datos.efectos.enviosCiclo)
+        .input('fechaCicloInicio', mssql.Date, datos.efectos.fechaCicloInicio)
+        .input('fechaUltimoEnvio', mssql.Date, datos.efectos.fechaUltimoEnvio)
+        .input('descansoHasta', mssql.Date, datos.efectos.descansoHasta)
+        .input('rechazadoHasta', mssql.Date, datos.efectos.rechazadoHasta)
+        .input('motivoRechazo', mssql.NVarChar(300), datos.efectos.motivoRechazo)
+        .input('usuario', mssql.NVarChar(200), datos.usuario).query(`
+          UPDATE dbo.CRM_Pipeline
+          SET flujo = @flujo, etapa = @etapa, ciclo = @ciclo, enviosCiclo = @enviosCiclo,
+              fechaCicloInicio = @fechaCicloInicio, fechaUltimoEnvio = @fechaUltimoEnvio,
+              descansoHasta = @descansoHasta, rechazadoHasta = @rechazadoHasta,
+              motivoRechazo = @motivoRechazo, updatedBy = @usuario, updatedAt = SYSDATETIME()
+          WHERE empresaId = @empresaId
+        `);
+      if ((update.rowsAffected[0] ?? 0) === 0) {
+        throw new NotFoundError('La empresa no se encuentra en el pipeline');
+      }
+
+      if (datos.transicion) {
+        await tx
+          .request()
+          .input('empresaId', mssql.Int, datos.empresaId)
+          .input('flujoPrevio', mssql.VarChar(10), datos.transicion.estadoPrevio.flujo)
+          .input('etapaPrevia', mssql.VarChar(20), datos.transicion.estadoPrevio.etapa)
+          .input('flujoNuevo', mssql.VarChar(10), datos.transicion.estadoNuevo.flujo)
+          .input('etapaNueva', mssql.VarChar(20), datos.transicion.estadoNuevo.etapa)
+          .input('evento', mssql.VarChar(40), datos.transicion.evento)
+          .input('usuario', mssql.NVarChar(200), datos.usuario).query(`
+            INSERT INTO dbo.CRM_Transiciones
+              (empresaId, flujoPrevio, etapaPrevia, flujoNuevo, etapaNueva, evento, motivo, usuario)
+            VALUES (@empresaId, @flujoPrevio, @etapaPrevia, @flujoNuevo, @etapaNueva, @evento, NULL, @usuario)
+          `);
+      }
+
+      const fila = await this.cargar(tx, datos.empresaId);
+      if (!fila) throw new Error('La fila de pipeline desapareció dentro del envío de cadencia');
+      return fila;
+    });
+  }
+
+  async cambiarTipo(datos: CambiarTipoDatos): Promise<void> {    await withCrmTransaction(this.pool, async (tx) => {
       const update = await tx
         .request()
         .input('empresaId', mssql.Int, datos.empresaId)

@@ -37,6 +37,10 @@ import * as mssql from 'mssql';
  * - `CRM_Handoffs` (pr10) — handoff records (design §2: área, nota,
  *   user); the T5 transition writes its row INSIDE the transition
  *   transaction, and the standalone handoff endpoint appends records.
+ * - `CRM_Actividades` (pr13) — the activity log (design §2: 6-value
+ *   tipo catalog CHECK, optional contactoId addressee, business
+ *   `fecha` DATE); the cadence send writes its ENVIO_CADENCIA row
+ *   INSIDE the send transaction next to the pipeline counters.
  *
  * Conventions (design §2): INT IDENTITY PKs for registry tables,
  * BIGINT for high-volume history rows, `DATETIME2(0) DEFAULT
@@ -169,6 +173,26 @@ BEGIN
     CONSTRAINT FK_CRM_Handoffs_Empresa FOREIGN KEY (empresaId) REFERENCES dbo.CRM_Empresas (id) ON DELETE CASCADE
   );
 END;
+IF NOT EXISTS (SELECT 1 FROM sys.tables WHERE name = 'CRM_Actividades' AND schema_id = SCHEMA_ID('dbo'))
+BEGIN
+  CREATE TABLE dbo.CRM_Actividades (
+    id         BIGINT         IDENTITY(1,1) NOT NULL PRIMARY KEY,
+    empresaId  INT            NOT NULL,
+    contactoId INT            NULL,
+    tipo       VARCHAR(20)    NOT NULL CONSTRAINT CK_CRM_Actividades_Tipo CHECK (tipo IN ('LLAMADA','CORREO','REUNION','NOTA','ENVIO_CADENCIA','OTRO')),
+    asunto     NVARCHAR(300)  NOT NULL,
+    detalle    NVARCHAR(MAX)  NULL,
+    usuario    NVARCHAR(200)  NOT NULL,
+    fecha      DATE           NOT NULL,
+    createdAt  DATETIME2(0)   NOT NULL DEFAULT SYSDATETIME(),
+    -- NO ACTION on the contacto FK: SQL Server forbids two cascade
+    -- paths (Actividades→Empresas AND Actividades→Contactos→Empresas).
+    -- The empresa cascade already removes the activities; this FK is
+    -- integrity-only (contactos are never deleted on their own in v1).
+    CONSTRAINT FK_CRM_Actividades_Empresa FOREIGN KEY (empresaId) REFERENCES dbo.CRM_Empresas (id) ON DELETE CASCADE,
+    CONSTRAINT FK_CRM_Actividades_Contacto FOREIGN KEY (contactoId) REFERENCES dbo.CRM_Contactos (id) ON DELETE NO ACTION
+  );
+END;
 IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'UX_CRM_Contactos_Principal' AND object_id = OBJECT_ID('dbo.CRM_Contactos'))
 BEGIN
   CREATE UNIQUE INDEX UX_CRM_Contactos_Principal
@@ -218,6 +242,19 @@ IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_CRM_Handoffs_EmpresaFe
 BEGIN
   CREATE INDEX IX_CRM_Handoffs_EmpresaFecha
     ON dbo.CRM_Handoffs (empresaId, createdAt DESC);
+END;
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_CRM_Actividades_EmpresaFecha' AND object_id = OBJECT_ID('dbo.CRM_Actividades'))
+BEGIN
+  -- Activity log reads (empresa timeline) + the pr16 productivity
+  -- aggregation both scan this covering index.
+  CREATE INDEX IX_CRM_Actividades_EmpresaFecha
+    ON dbo.CRM_Actividades (empresaId, fecha DESC)
+    INCLUDE (tipo, asunto, usuario);
+END;
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_CRM_Actividades_UsuarioFecha' AND object_id = OBJECT_ID('dbo.CRM_Actividades'))
+BEGIN
+  CREATE INDEX IX_CRM_Actividades_UsuarioFecha
+    ON dbo.CRM_Actividades (usuario, fecha DESC);
 END;
 `;
 

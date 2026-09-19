@@ -10,6 +10,7 @@ import type {
 import type { ErrorFilaImport, GrupoEmpresaImportado } from './importar/validarImportacion';
 import type { EfectosDenormalizados } from './efectosTransicion';
 import type { EstadoPipeline, EventoPipeline, TipoResultado } from './maquinaEstados';
+import type { TransicionDerivada } from './envioCadencia';
 
 /** Filters for the empresa list (spec G1; etapa filter arrives with the pipeline in pr9+). */
 export interface FiltrosEmpresas {
@@ -214,4 +215,55 @@ export interface FilaHandoffAudit {
 
 export interface CrmHandoffsRepositoryPort {
   registrar(fila: FilaHandoffAudit): Promise<number>;
+}
+
+// ---------------------------------------------------------------------------
+// Activities port (tasks pr13/WU1, spec G4) — the ENVIO_CADENCIA write is
+// genuinely cross-table (activity row + pipeline counters + the derived
+// T8/T9 audit row), so the SAME adapter class that owns the pipeline tables
+// implements this port too and composes everything inside ONE
+// `withCrmTransaction` (design §2c).
+// ---------------------------------------------------------------------------
+
+/** The CRM_Actividades row written by a logged cadence send. */
+export interface ActividadEnvioInput {
+  /** Spanish subject; the use case defaults it from the counters. */
+  asunto: string;
+  /** Optional free-form note, trimmed by the use case (null when blank). */
+  detalle: string | null;
+  /** Optional addressee (defaults to the principal contacto app-side). */
+  contactoId: number | null;
+}
+
+/** Everything the adapter must persist for ONE logged cadence send. */
+export interface EnvioCadenciaAPersistir {
+  empresaId: number;
+  /** Acting session user — CRM_Actividades.usuario / updatedBy. */
+  usuario: string;
+  /** Injected business date (DATE-only) — CRM_Actividades.fecha. */
+  hoy: string;
+  /**
+   * Final pipeline state: the derived move's `estadoNuevo` when the
+   * send fires T8/T9, else the row's unchanged state (a plain weekly
+   * send moves no machine state).
+   */
+  estadoFinal: EstadoPipeline;
+  actividad: ActividadEnvioInput;
+  /** Denormalized counter/marker projection (domain envioCadencia). */
+  efectos: EfectosDenormalizados;
+  /** The derived T8/T9 move, or null for a plain weekly send. */
+  transicion: TransicionDerivada | null;
+}
+
+/**
+ * Outbound port for CRM_Actividades (design §2). pr13 scopes it to the
+ * cadence send; later slices add the general activity registration.
+ */
+export interface CrmActividadesRepositoryPort {
+  /**
+   * Log ONE ENVIO_CADENCIA send atomically: CRM_Actividades insert +
+   * CRM_Pipeline counter update + the derived CRM_Transiciones audit
+   * row (T8/T9) when the send moves the machine.
+   */
+  registrarEnvioCadencia(datos: EnvioCadenciaAPersistir): Promise<PipelineEmpresa>;
 }

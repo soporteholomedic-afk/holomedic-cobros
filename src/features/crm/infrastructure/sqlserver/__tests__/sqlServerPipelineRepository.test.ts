@@ -6,7 +6,7 @@ import { getHolomedicPool } from '@/lib/db';
 import type { CrearEmpresaInput } from '../../../domain/entities';
 import { NotFoundError } from '../../../domain/errors';
 import { estadoInicial } from '../../../domain/maquinaEstados';
-import type { TransicionAPersistir } from '../../../domain/ports';
+import type { EnvioCadenciaAPersistir, TransicionAPersistir } from '../../../domain/ports';
 import { SqlServerEmpresaRepository } from '../sqlServerEmpresaRepository';
 import { SqlServerPipelineRepository } from '../sqlServerPipelineRepository';
 import { loadEnvLocal } from './loadEnvLocal';
@@ -479,6 +479,230 @@ describe('SqlServerPipelineRepository — standalone audit ports', () => {
         .query(`SELECT area, usuario FROM dbo.CRM_Handoffs WHERE id = @id`)
         .then((r) => r.recordset);
       expect(handoffs[0]).toMatchObject({ area: 'Cobranzas', usuario: 'jperez' });
+    } finally {
+      await pool.request().query(`DELETE FROM dbo.CRM_Empresas WHERE ${PROBE_KEY}`);
+    }
+  });
+});
+
+describe('SqlServerPipelineRepository — the atomic registrarEnvioCadencia (tasks pr13/WU1)', () => {
+  /** A full send bundle, pr10's bundleCon shape. */
+  function envioCon(overrides: Partial<EnvioCadenciaAPersistir>): EnvioCadenciaAPersistir {
+    return {
+      empresaId: 1,
+      usuario: 'jperez',
+      hoy: '2026-06-01',
+      estadoFinal: { flujo: 'INBOUND', etapa: 'SEGUIMIENTO' },
+      actividad: { asunto: 'Envío de cadencia (ciclo 1, envío 2)', detalle: null, contactoId: null },
+      efectos: {
+        ciclo: 1,
+        enviosCiclo: 2,
+        fechaCicloInicio: '2026-05-18',
+        fechaUltimoEnvio: '2026-06-01',
+        descansoHasta: null,
+        rechazadoHasta: null,
+        motivoRechazo: null,
+      },
+      transicion: null,
+      ...overrides,
+    };
+  }
+
+  async function contactoPrincipalId(empresaId: number): Promise<number | null> {
+    const result = await pool
+      .request()
+      .input('empresaId', mssql.Int, empresaId)
+      .query(`SELECT TOP 1 id FROM dbo.CRM_Contactos WHERE empresaId = @empresaId`);
+    return (result.recordset[0]?.id as number | undefined) ?? null;
+  }
+
+  it('weekly send: activity row + counter update in ONE tx, NO audit row (a send is not a machine move)', async () => {
+    try {
+      const empresaId = await crearConEstado('INBOUND', 'SEGUIMIENTO', {
+        ciclo: 1,
+        enviosCiclo: 1,
+        fechaCicloInicio: '2026-05-18',
+        fechaUltimoEnvio: '2026-05-25',
+      });
+      const contactoId = await contactoPrincipalId(empresaId);
+
+      const fila = await pipelines.registrarEnvioCadencia(
+        envioCon({ empresaId, actividad: { asunto: 'Seguimiento semana 2', detalle: 'Propuesta', contactoId } }),
+      );
+
+      expect(fila.enviosCiclo).toBe(2);
+      expect(fila.fechaUltimoEnvio).toBe('2026-06-01');
+      expect(fila.etapa).toBe('SEGUIMIENTO');
+      expect(fila.updatedBy).toBe('jperez');
+
+      const actividades = await pool
+        .request()
+        .input('empresaId', mssql.Int, empresaId).query(`
+          SELECT tipo, asunto, detalle, usuario, fecha, contactoId
+          FROM dbo.CRM_Actividades WHERE empresaId = @empresaId`);
+      expect(actividades.recordset).toHaveLength(1);
+      expect(actividades.recordset[0]).toMatchObject({
+        tipo: 'ENVIO_CADENCIA',
+        asunto: 'Seguimiento semana 2',
+        detalle: 'Propuesta',
+        usuario: 'jperez',
+        contactoId,
+      });
+      expect((actividades.recordset[0]?.fecha as Date).toISOString().slice(0, 10)).toBe('2026-06-01');
+
+      expect(await contar('CRM_Transiciones', empresaId)).toBe(0);
+    } finally {
+      await pool.request().query(`DELETE FROM dbo.CRM_Empresas WHERE ${PROBE_KEY}`);
+    }
+  });
+
+  it('T8 bundle: derived EnviosAgotados writes the audit row and lands DESCANSO + descansoHasta', async () => {
+    try {
+      const empresaId = await crearConEstado('OUTBOUND', 'CADENCIA', {
+        ciclo: 2,
+        enviosCiclo: 2,
+        fechaCicloInicio: '2026-05-11',
+        fechaUltimoEnvio: '2026-05-25',
+      });
+
+      const fila = await pipelines.registrarEnvioCadencia(
+        envioCon({
+          empresaId,
+          estadoFinal: { flujo: 'OUTBOUND', etapa: 'DESCANSO' },
+          efectos: {
+            ciclo: 2,
+            enviosCiclo: 3,
+            fechaCicloInicio: '2026-05-11',
+            fechaUltimoEnvio: '2026-06-01',
+            descansoHasta: '2026-09-01',
+            rechazadoHasta: null,
+            motivoRechazo: null,
+          },
+          transicion: {
+            evento: 'EnviosAgotados',
+            estadoPrevio: { flujo: 'OUTBOUND', etapa: 'CADENCIA' },
+            estadoNuevo: { flujo: 'OUTBOUND', etapa: 'DESCANSO' },
+          },
+        }),
+      );
+
+      expect(fila.flujo).toBe('OUTBOUND');
+      expect(fila.etapa).toBe('DESCANSO');
+      expect(fila.enviosCiclo).toBe(3);
+      expect(fila.descansoHasta).toBe('2026-09-01');
+
+      const transiciones = await pool
+        .request()
+        .input('empresaId', mssql.Int, empresaId)
+        .query(`SELECT flujoPrevio, etapaPrevia, flujoNuevo, etapaNueva, evento, usuario FROM dbo.CRM_Transiciones WHERE empresaId = @empresaId`);
+      expect(transiciones.recordset).toHaveLength(1);
+      expect(transiciones.recordset[0]).toMatchObject({
+        flujoPrevio: 'OUTBOUND',
+        etapaPrevia: 'CADENCIA',
+        flujoNuevo: 'OUTBOUND',
+        etapaNueva: 'DESCANSO',
+        evento: 'EnviosAgotados',
+        usuario: 'jperez',
+      });
+
+      // T8 is NOT a bold design row — no result event.
+      expect(await contar('CRM_Resultados', empresaId)).toBe(0);
+      expect(await contar('CRM_Actividades', empresaId)).toBe(1);
+    } finally {
+      await pool.request().query(`DELETE FROM dbo.CRM_Empresas WHERE ${PROBE_KEY}`);
+    }
+  });
+
+  it('T9 bundle: derived ReinicioCadencia writes the audit row, ciclo+1 and clears the rest', async () => {
+    try {
+      const empresaId = await crearConEstado('OUTBOUND', 'DESCANSO', {
+        ciclo: 2,
+        enviosCiclo: 3,
+        fechaCicloInicio: '2026-03-02',
+        fechaUltimoEnvio: '2026-03-16',
+      });
+      await pool
+        .request()
+        .input('empresaId', mssql.Int, empresaId)
+        .query(`UPDATE dbo.CRM_Pipeline SET descansoHasta = '2026-06-01' WHERE empresaId = @empresaId`);
+
+      const fila = await pipelines.registrarEnvioCadencia(
+        envioCon({
+          empresaId,
+          estadoFinal: { flujo: 'OUTBOUND', etapa: 'CADENCIA' },
+          efectos: {
+            ciclo: 3,
+            enviosCiclo: 1,
+            fechaCicloInicio: '2026-06-01',
+            fechaUltimoEnvio: '2026-06-01',
+            descansoHasta: null,
+            rechazadoHasta: null,
+            motivoRechazo: null,
+          },
+          transicion: {
+            evento: 'ReinicioCadencia',
+            estadoPrevio: { flujo: 'OUTBOUND', etapa: 'DESCANSO' },
+            estadoNuevo: { flujo: 'OUTBOUND', etapa: 'CADENCIA' },
+          },
+        }),
+      );
+
+      expect(fila.flujo).toBe('OUTBOUND');
+      expect(fila.etapa).toBe('CADENCIA');
+      expect(fila.ciclo).toBe(3);
+      expect(fila.enviosCiclo).toBe(1);
+      expect(fila.descansoHasta).toBeNull();
+
+      const evento = await pool
+        .request()
+        .input('empresaId', mssql.Int, empresaId)
+        .query(`SELECT evento FROM dbo.CRM_Transiciones WHERE empresaId = @empresaId`);
+      expect(evento.recordset[0]?.evento).toBe('ReinicioCadencia');
+    } finally {
+      await pool.request().query(`DELETE FROM dbo.CRM_Empresas WHERE ${PROBE_KEY}`);
+    }
+  });
+
+  it('a mid-flight failure rolls the WHOLE send back (CK violation on the pipeline update AFTER the activity insert)', async () => {
+    try {
+      const empresaId = await crearConEstado('INBOUND', 'SEGUIMIENTO', {
+        enviosCiclo: 1,
+        fechaUltimoEnvio: '2026-05-25',
+      });
+
+      await expect(
+        pipelines.registrarEnvioCadencia(
+          envioCon({
+            empresaId,
+            estadoFinal: { flujo: 'INBOUND', etapa: 'LEAD' as never }, // deliberate CK violation
+            transicion: {
+              evento: 'EnviosAgotados',
+              estadoPrevio: { flujo: 'INBOUND', etapa: 'SEGUIMIENTO' },
+              estadoNuevo: { flujo: 'INBOUND', etapa: 'LEAD' as never }, // deliberate CK violation
+            },
+          }),
+        ),
+      ).rejects.toThrow(/CK_CRM_Pipeline_Etapa|CHECK/i);
+
+      // Nothing landed: the activity insert rolled back with the tx.
+      expect(await contar('CRM_Actividades', empresaId)).toBe(0);
+      expect(await contar('CRM_Transiciones', empresaId)).toBe(0);
+      const fila = await pipelines.obtenerPorEmpresaId(empresaId);
+      expect(fila?.enviosCiclo).toBe(1);
+      expect(fila?.fechaUltimoEnvio).toBe('2026-05-25');
+    } finally {
+      await pool.request().query(`DELETE FROM dbo.CRM_Empresas WHERE ${PROBE_KEY}`);
+    }
+  });
+
+  it('raises NotFoundError when the empresa has no pipeline row (nothing written)', async () => {
+    try {
+      const empresa = await empresas.crear(inputCon(null));
+
+      await expect(
+        pipelines.registrarEnvioCadencia(envioCon({ empresaId: empresa.id })),
+      ).rejects.toBeInstanceOf(NotFoundError);
+      expect(await contar('CRM_Actividades', empresa.id)).toBe(0);
     } finally {
       await pool.request().query(`DELETE FROM dbo.CRM_Empresas WHERE ${PROBE_KEY}`);
     }
