@@ -33,7 +33,12 @@ export type EtapaOutbound =
   | 'DATOS'
   | 'DESCANSO';
 
-export type Etapa = EtapaInbound | EtapaOutbound;
+/**
+ * RECHAZADO (design D3's 11th state) is cross-flow: the T14 rejection
+ * KEEPS the current flujo and stores `rechazadoHasta` on the pipeline
+ * row (3-month cooldown, T15 reactivation).
+ */
+export type Etapa = EtapaInbound | EtapaOutbound | 'RECHAZADO';
 
 export interface Correo {
   id: number;
