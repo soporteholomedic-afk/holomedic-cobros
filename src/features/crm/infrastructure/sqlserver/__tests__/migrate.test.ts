@@ -37,6 +37,7 @@ const TABLAS = [
   'CRM_Resultados',
   'CRM_Handoffs',
   'CRM_Actividades',
+  'CRM_Asignaciones',
 ] as const;
 const CHECKS = [
   'CK_CRM_Empresas_Tipo',
@@ -45,6 +46,7 @@ const CHECKS = [
   'CK_CRM_Pipeline_Etapa',
   'CK_CRM_Resultados_Tipo',
   'CK_CRM_Actividades_Tipo',
+  'CK_CRM_Asignaciones_Accion',
 ] as const;
 const UNIQUES = [
   'UQ_CRM_Empresas_RucNormalizado',
@@ -61,6 +63,7 @@ const FKS = [
   'FK_CRM_Handoffs_Empresa',
   'FK_CRM_Actividades_Empresa',
   'FK_CRM_Actividades_Contacto',
+  'FK_CRM_Asignaciones_Empresa',
 ] as const;
 const INDEXES = [
   'UX_CRM_Contactos_Principal',
@@ -76,6 +79,7 @@ const INDEXES_PIPELINE = [
 ] as const;
 const INDEXES_HANDOFFS = ['IX_CRM_Handoffs_EmpresaFecha'] as const;
 const INDEXES_ACTIVIDADES = ['IX_CRM_Actividades_EmpresaFecha', 'IX_CRM_Actividades_UsuarioFecha'] as const;
+const INDEXES_ASIGNACIONES = ['IX_CRM_Asignaciones_EmpresaFecha'] as const;
 
 /** RUC/razonSocial reserved by this suite (always rolled back). */
 const PROBE_RUC = '0000000000999';
@@ -123,19 +127,19 @@ async function catalogFingerprint(p: mssql.ConnectionPool): Promise<string[]> {
     UNION ALL
     SELECT 'KEY', kc.name
       FROM sys.key_constraints kc
-     WHERE kc.parent_object_id IN (OBJECT_ID('dbo.CRM_Empresas'), OBJECT_ID('dbo.CRM_Contactos'), OBJECT_ID('dbo.CRM_Correos'), OBJECT_ID('dbo.CRM_Importaciones'), OBJECT_ID('dbo.CRM_Pipeline'), OBJECT_ID('dbo.CRM_Transiciones'), OBJECT_ID('dbo.CRM_Resultados'), OBJECT_ID('dbo.CRM_Handoffs'), OBJECT_ID('dbo.CRM_Actividades'))
+     WHERE kc.parent_object_id IN (OBJECT_ID('dbo.CRM_Empresas'), OBJECT_ID('dbo.CRM_Contactos'), OBJECT_ID('dbo.CRM_Correos'), OBJECT_ID('dbo.CRM_Importaciones'), OBJECT_ID('dbo.CRM_Pipeline'), OBJECT_ID('dbo.CRM_Transiciones'), OBJECT_ID('dbo.CRM_Resultados'), OBJECT_ID('dbo.CRM_Handoffs'), OBJECT_ID('dbo.CRM_Actividades'), OBJECT_ID('dbo.CRM_Asignaciones'))
     UNION ALL
     SELECT 'CHECK', cc.name
       FROM sys.check_constraints cc
-     WHERE cc.parent_object_id IN (OBJECT_ID('dbo.CRM_Empresas'), OBJECT_ID('dbo.CRM_Pipeline'), OBJECT_ID('dbo.CRM_Resultados'), OBJECT_ID('dbo.CRM_Actividades'))
+     WHERE cc.parent_object_id IN (OBJECT_ID('dbo.CRM_Empresas'), OBJECT_ID('dbo.CRM_Pipeline'), OBJECT_ID('dbo.CRM_Resultados'), OBJECT_ID('dbo.CRM_Actividades'), OBJECT_ID('dbo.CRM_Asignaciones'))
     UNION ALL
     SELECT 'FK', fk.name
       FROM sys.foreign_keys fk
-     WHERE fk.parent_object_id IN (OBJECT_ID('dbo.CRM_Contactos'), OBJECT_ID('dbo.CRM_Correos'), OBJECT_ID('dbo.CRM_Pipeline'), OBJECT_ID('dbo.CRM_Transiciones'), OBJECT_ID('dbo.CRM_Resultados'), OBJECT_ID('dbo.CRM_Handoffs'), OBJECT_ID('dbo.CRM_Actividades'))
+     WHERE fk.parent_object_id IN (OBJECT_ID('dbo.CRM_Contactos'), OBJECT_ID('dbo.CRM_Correos'), OBJECT_ID('dbo.CRM_Pipeline'), OBJECT_ID('dbo.CRM_Transiciones'), OBJECT_ID('dbo.CRM_Resultados'), OBJECT_ID('dbo.CRM_Handoffs'), OBJECT_ID('dbo.CRM_Actividades'), OBJECT_ID('dbo.CRM_Asignaciones'))
     UNION ALL
     SELECT 'INDEX', i.name
       FROM sys.indexes i
-     WHERE i.object_id IN (OBJECT_ID('dbo.CRM_Empresas'), OBJECT_ID('dbo.CRM_Contactos'), OBJECT_ID('dbo.CRM_Correos'), OBJECT_ID('dbo.CRM_Importaciones'), OBJECT_ID('dbo.CRM_Pipeline'), OBJECT_ID('dbo.CRM_Transiciones'), OBJECT_ID('dbo.CRM_Resultados'), OBJECT_ID('dbo.CRM_Handoffs'), OBJECT_ID('dbo.CRM_Actividades'))
+     WHERE i.object_id IN (OBJECT_ID('dbo.CRM_Empresas'), OBJECT_ID('dbo.CRM_Contactos'), OBJECT_ID('dbo.CRM_Correos'), OBJECT_ID('dbo.CRM_Importaciones'), OBJECT_ID('dbo.CRM_Pipeline'), OBJECT_ID('dbo.CRM_Transiciones'), OBJECT_ID('dbo.CRM_Resultados'), OBJECT_ID('dbo.CRM_Handoffs'), OBJECT_ID('dbo.CRM_Actividades'), OBJECT_ID('dbo.CRM_Asignaciones'))
        AND i.name IS NOT NULL
   `);
   return result.recordset.map((r) => `${r.tipo}:${r.nombre}`).sort();
@@ -147,10 +151,10 @@ describe('crm migrate() — HOLOMEDIC schema integration', () => {
     await migrate(pool);
     const after = await catalogFingerprint(pool);
     expect(after).toEqual(before);
-    // 9 tables (3 registry + job + 3 pipeline + handoffs + activities)
-    // + 13 key constraints (9 PK + 4 UQ) + 6 CHECKs + 8 FKs + 24
-    // indexes (11 named + 4 backing the UQs + 9 clustered PKs).
-    expect(before).toHaveLength(9 + 13 + 6 + 8 + 24);
+    // 10 tables (3 registry + job + 3 pipeline + handoffs + activities
+    // + asignaciones) + 14 key constraints (10 PK + 4 UQ) + 7 CHECKs +
+    // 9 FKs + 26 indexes (12 named + 4 backing the UQs + 10 clustered PKs).
+    expect(before).toHaveLength(10 + 14 + 7 + 9 + 26);
   });
 
   it('creates the registry tables (Empresas → Contactos → Correos), the CRM_Importaciones job table and the pipeline trio', async () => {
@@ -185,12 +189,12 @@ describe('crm migrate() — HOLOMEDIC schema integration', () => {
     );
   });
 
-  it('creates the named CHECK constraints for the empresa enums, the pipeline flujo/etapa and the result catalog', async () => {
+  it('creates the named CHECK constraints for the empresa enums, the pipeline flujo/etapa, the result catalog and the assignment accion', async () => {
     const result = await pool
       .request()
       .query<NameRow>(
         `SELECT name FROM sys.check_constraints
-          WHERE parent_object_id IN (OBJECT_ID('dbo.CRM_Empresas'), OBJECT_ID('dbo.CRM_Pipeline'), OBJECT_ID('dbo.CRM_Resultados'), OBJECT_ID('dbo.CRM_Actividades'))
+          WHERE parent_object_id IN (OBJECT_ID('dbo.CRM_Empresas'), OBJECT_ID('dbo.CRM_Pipeline'), OBJECT_ID('dbo.CRM_Resultados'), OBJECT_ID('dbo.CRM_Actividades'), OBJECT_ID('dbo.CRM_Asignaciones'))
           ORDER BY name`,
       );
     expect(result.recordset.map((r) => r.name).sort()).toEqual([...CHECKS].sort());
@@ -206,11 +210,11 @@ describe('crm migrate() — HOLOMEDIC schema integration', () => {
     expect(result.recordset.map((r) => r.name).sort()).toEqual([...UNIQUES].sort());
   });
 
-  it('creates the named FKs with ON DELETE CASCADE (empresa → contactos → correos → pipeline/history/handoffs)', async () => {
+  it('creates the named FKs with ON DELETE CASCADE (empresa → contactos → correos → pipeline/history/handoffs/asignaciones)', async () => {
     const result = await pool.request().query<FkRow>(`
       SELECT fk.name, fk.delete_referential_action
         FROM sys.foreign_keys fk
-       WHERE fk.parent_object_id IN (OBJECT_ID('dbo.CRM_Contactos'), OBJECT_ID('dbo.CRM_Correos'), OBJECT_ID('dbo.CRM_Pipeline'), OBJECT_ID('dbo.CRM_Transiciones'), OBJECT_ID('dbo.CRM_Resultados'), OBJECT_ID('dbo.CRM_Handoffs'), OBJECT_ID('dbo.CRM_Actividades'))
+       WHERE fk.parent_object_id IN (OBJECT_ID('dbo.CRM_Contactos'), OBJECT_ID('dbo.CRM_Correos'), OBJECT_ID('dbo.CRM_Pipeline'), OBJECT_ID('dbo.CRM_Transiciones'), OBJECT_ID('dbo.CRM_Resultados'), OBJECT_ID('dbo.CRM_Handoffs'), OBJECT_ID('dbo.CRM_Actividades'), OBJECT_ID('dbo.CRM_Asignaciones'))
        ORDER BY fk.name`);
     const fks = new Map(result.recordset.map((r) => [r.name, r.delete_referential_action]));
     expect([...fks.keys()].sort()).toEqual([...FKS].sort());
@@ -325,6 +329,13 @@ describe('crm migrate() — HOLOMEDIC schema integration', () => {
     expect(await columns('CRM_Actividades')).toEqual(
       ['id', 'empresaId', 'contactoId', 'tipo', 'asunto', 'detalle', 'usuario', 'fecha', 'createdAt'].sort(),
     );
+
+    // CRM_Asignaciones (pr14) — the assignment audit trail (spec G5:
+    // every ASIGNADO/REASIGNADO/DEVUELTO event with actor + timestamp;
+    // responsablePrevio/responsableNuevo NULL = pool).
+    expect(await columns('CRM_Asignaciones')).toEqual(
+      ['id', 'empresaId', 'accion', 'responsablePrevio', 'responsableNuevo', 'actorUsuario', 'createdAt'].sort(),
+    );
   });
 
   it('creates the handoff audit index IX_CRM_Handoffs_EmpresaFecha', async () => {
@@ -335,6 +346,16 @@ describe('crm migrate() — HOLOMEDIC schema integration', () => {
          AND i.name IN ('${INDEXES_HANDOFFS.join("','")}')
        ORDER BY i.name`);
     expect(names.recordset.map((r) => r.name).sort()).toEqual([...INDEXES_HANDOFFS].sort());
+  });
+
+  it('creates the assignment history index IX_CRM_Asignaciones_EmpresaFecha (pr14, spec G5 timeline)', async () => {
+    const names = await pool.request().query<NameRow>(`
+      SELECT i.name
+        FROM sys.indexes i
+       WHERE i.object_id = OBJECT_ID('dbo.CRM_Asignaciones')
+         AND i.name IN ('${INDEXES_ASIGNACIONES.join("','")}')
+       ORDER BY i.name`);
+    expect(names.recordset.map((r) => r.name).sort()).toEqual([...INDEXES_ASIGNACIONES].sort());
   });
 
   it('creates the activity indexes (IX_CRM_Actividades_EmpresaFecha covering + UsuarioFecha) for pr13 sends and pr16 productivity', async () => {
@@ -479,11 +500,22 @@ describe('crm migrate() — HOLOMEDIC schema integration', () => {
         INSERT INTO dbo.CRM_Handoffs (empresaId, area, nota, usuario)
         VALUES (@empresaId, 'Operaciones', 'probe handoff', 'probe')`);
 
-      // Cascade: deleting the empresa removes its pipeline, history
-      // and handoffs.
+      // Asignaciones (pr14): the G5 event row lands with previo/nuevo
+      // NULL = pool semantics, then the accion enum rejects outsiders.
+      await tx.request().input('empresaId', mssql.Int, empresaId).query(`
+        INSERT INTO dbo.CRM_Asignaciones (empresaId, accion, responsablePrevio, responsableNuevo, actorUsuario)
+        VALUES (@empresaId, 'ASIGNADO', NULL, 'jperez', 'admin')`);
+      await expect(
+        tx.request().input('empresaId', mssql.Int, empresaId).query(`
+          INSERT INTO dbo.CRM_Asignaciones (empresaId, accion, responsablePrevio, responsableNuevo, actorUsuario)
+          VALUES (@empresaId, 'ARCHIVADO', NULL, NULL, 'admin')`),
+      ).rejects.toThrow(/CK_CRM_Asignaciones_Accion/);
+
+      // Cascade: deleting the empresa removes its pipeline, history,
+      // handoffs and asignaciones.
       await tx.request().input('empresaId', mssql.Int, empresaId).query(`
         DELETE FROM dbo.CRM_Empresas WHERE id = @empresaId`);
-      for (const tabla of ['CRM_Pipeline', 'CRM_Transiciones', 'CRM_Resultados', 'CRM_Handoffs']) {
+      for (const tabla of ['CRM_Pipeline', 'CRM_Transiciones', 'CRM_Resultados', 'CRM_Handoffs', 'CRM_Asignaciones']) {
         const leftover = await tx
           .request()
           .input('empresaId', mssql.Int, empresaId)

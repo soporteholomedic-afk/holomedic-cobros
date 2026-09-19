@@ -41,6 +41,13 @@ import * as mssql from 'mssql';
  *   tipo catalog CHECK, optional contactoId addressee, business
  *   `fecha` DATE); the cadence send writes its ENVIO_CADENCIA row
  *   INSIDE the send transaction next to the pipeline counters.
+ * - `CRM_Asignaciones` (pr14) — the assignment audit trail (spec G5):
+ *   one append-only row per `ASIGNADO` / `REASIGNADO` / `DEVUELTO`
+ *   event with `responsablePrevio` / `responsableNuevo` (NULL = pool)
+ *   and the acting user; `CRM_Empresas.responsable` remains the CURRENT
+ *   owner (single-owner invariant) and this table is the history. The
+ *   assignment write (empresa UPDATE + event INSERT) lands in ONE
+ *   `withCrmTransaction` (design §2d).
  *
  * Conventions (design §2): INT IDENTITY PKs for registry tables,
  * BIGINT for high-volume history rows, `DATETIME2(0) DEFAULT
@@ -193,6 +200,21 @@ BEGIN
     CONSTRAINT FK_CRM_Actividades_Contacto FOREIGN KEY (contactoId) REFERENCES dbo.CRM_Contactos (id) ON DELETE NO ACTION
   );
 END;
+IF NOT EXISTS (SELECT 1 FROM sys.tables WHERE name = 'CRM_Asignaciones' AND schema_id = SCHEMA_ID('dbo'))
+BEGIN
+  CREATE TABLE dbo.CRM_Asignaciones (
+    id                BIGINT         IDENTITY(1,1) NOT NULL PRIMARY KEY,
+    empresaId         INT            NOT NULL,
+    accion            VARCHAR(12)    NOT NULL CONSTRAINT CK_CRM_Asignaciones_Accion CHECK (accion IN ('ASIGNADO','REASIGNADO','DEVUELTO')),
+    responsablePrevio NVARCHAR(200)  NULL,
+    responsableNuevo  NVARCHAR(200)  NULL,
+    actorUsuario      NVARCHAR(200)  NOT NULL,
+    createdAt         DATETIME2(0)   NOT NULL DEFAULT SYSDATETIME(),
+    -- Single FK to CRM_Empresas → CASCADE is safe here (pr13 rule:
+    -- only a SECOND FK reaching the empresa graph would forbid it).
+    CONSTRAINT FK_CRM_Asignaciones_Empresa FOREIGN KEY (empresaId) REFERENCES dbo.CRM_Empresas (id) ON DELETE CASCADE
+  );
+END;
 IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'UX_CRM_Contactos_Principal' AND object_id = OBJECT_ID('dbo.CRM_Contactos'))
 BEGIN
   CREATE UNIQUE INDEX UX_CRM_Contactos_Principal
@@ -255,6 +277,13 @@ IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_CRM_Actividades_Usuari
 BEGIN
   CREATE INDEX IX_CRM_Actividades_UsuarioFecha
     ON dbo.CRM_Actividades (usuario, fecha DESC);
+END;
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_CRM_Asignaciones_EmpresaFecha' AND object_id = OBJECT_ID('dbo.CRM_Asignaciones'))
+BEGIN
+  -- Assignment history reads (spec G5: every event visible per
+  -- empresa, newest first with actor + timestamp).
+  CREATE INDEX IX_CRM_Asignaciones_EmpresaFecha
+    ON dbo.CRM_Asignaciones (empresaId, createdAt DESC);
 END;
 `;
 
