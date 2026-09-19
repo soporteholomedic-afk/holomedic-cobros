@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { tablaCobranzaResolver } from '../tablaCobranzaResolver';
-import type { InterpolationContext, TablaCobranzaRow } from '../types';
+import type { InterpolationContext, TablaCobranzaRow, TablaCobranzaTotalesRow } from '../types';
 import { GOLDEN_CTX } from '../../__tests__/goldenFixtures';
 import { interpolate } from '../../interpolate';
 import { buildTokenResolverRegistry } from '../buildTokenResolverRegistry';
@@ -31,6 +31,14 @@ function cobranzaCtx(rows: TablaCobranzaRow[]): InterpolationContext {
     area: 'cobranza',
     tablaCobranza: rows,
   };
+}
+
+/** Same as `cobranzaCtx` plus per-currency TOTAL rows. */
+function cobranzaCtxConTotales(
+  rows: TablaCobranzaRow[],
+  totales: TablaCobranzaTotalesRow[],
+): InterpolationContext {
+  return { ...cobranzaCtx(rows), tablaCobranzaTotales: totales };
 }
 
 const ROWS: TablaCobranzaRow[] = [
@@ -306,6 +314,92 @@ describe('tablaCobranzaResolver', () => {
     expect(out.html).toContain('border:1px solid #bfdbfe');
     // The mangled forms must NOT appear in the final HTML.
     expect(out.html).not.toContain('background-border');
+    expect(out.html).not.toContain('background-color');
+  });
+
+  // ---- TOTAL rows (per-currency sums appended below the data rows) ----
+
+  it('appends ONE bold TOTAL row after the data rows (single currency, full selection)', () => {
+    const soloSoles = ROWS.filter((r) => r.moneda === 'S/');
+    const out = tablaCobranzaResolver.resolve(
+      ALL_COLS,
+      cobranzaCtxConTotales(soloSoles, [
+        { moneda: 'S/', debe: 'S/ 1,650.00', haber: 'S/ 0.00', saldo: 'S/ 1,250.00' },
+      ]),
+    );
+    const tbody = out.match(/<tbody>([\s\S]*)<\/tbody>/)?.[1] ?? '';
+    // 2 data rows + 1 TOTAL row.
+    expect(tbody.match(/<tr>/g)?.length).toBe(3);
+    // Caption lands in the FIRST selected non-amount column (cliente).
+    expect(out).toContain('font-weight:bold;background:#eff6ff;">TOTAL S/</td>');
+    // The three amount cells carry the pre-formatted sums.
+    expect(out).toContain('font-weight:bold;background:#eff6ff;">S/ 1,650.00</td>');
+    expect(out).toContain('font-weight:bold;background:#eff6ff;">S/ 0.00</td>');
+    expect(out).toContain('font-weight:bold;background:#eff6ff;">S/ 1,250.00</td>');
+    // Data rows keep the plain cell style (totals styling is totals-only).
+    expect(out).toContain('<td style="padding:4px 8px;border:1px solid #bfdbfe;">20601234567</td>');
+  });
+
+  it('appends one TOTAL row PER currency, in order, never mixing currencies', () => {
+    const out = tablaCobranzaResolver.resolve(
+      ALL_COLS,
+      cobranzaCtxConTotales(ROWS, [
+        { moneda: 'S/', debe: 'S/ 1,650.00', haber: 'S/ 0.00', saldo: 'S/ 1,250.00' },
+        { moneda: 'US$', debe: 'US$ 60.00', haber: 'US$ 0.00', saldo: 'US$ 50.00' },
+      ]),
+    );
+    const tbody = out.match(/<tbody>([\s\S]*)<\/tbody>/)?.[1] ?? '';
+    expect(tbody.match(/<tr>/g)?.length).toBe(5); // 3 data + 2 TOTAL
+    expect(out).toContain('>TOTAL S/</td>');
+    expect(out).toContain('>TOTAL US$</td>');
+  });
+
+  it('skips the caption when ONLY amount columns are selected — the sums still render', () => {
+    const out = tablaCobranzaResolver.resolve(
+      ['debe', 'saldo'],
+      cobranzaCtxConTotales(ROWS, [
+        { moneda: 'S/', debe: 'S/ 1,650.00', haber: 'S/ 0.00', saldo: 'S/ 1,250.00' },
+      ]),
+    );
+    expect(out).not.toContain('TOTAL');
+    expect(out).toContain('font-weight:bold;background:#eff6ff;">S/ 1,650.00</td>');
+    expect(out).toContain('font-weight:bold;background:#eff6ff;">S/ 1,250.00</td>');
+  });
+
+  it('emits NO total rows when ctx.tablaCobranzaTotales is absent (back-compat)', () => {
+    const out = tablaCobranzaResolver.resolve(ALL_COLS, cobranzaCtx(ROWS));
+    expect(out).not.toContain('TOTAL');
+    expect(out).not.toContain('font-weight:bold');
+    expect(out).not.toContain('#eff6ff');
+  });
+
+  it('HTML-escapes the TOTAL caption and sums (injection safety)', () => {
+    const out = tablaCobranzaResolver.resolve(
+      ['cliente', 'debe', 'saldo'],
+      cobranzaCtxConTotales(ROWS, [
+        { moneda: '<b>S/</b>', debe: 'S/ 1 & 2', haber: 'S/ 0.00', saldo: 'S/ 1,250.00' },
+      ]),
+    );
+    expect(out).toContain('&lt;b&gt;S/&lt;/b&gt;');
+    expect(out).toContain('S/ 1 &amp; 2');
+    expect(out).not.toContain('<b>');
+  });
+
+  it('TOTAL row styling SURVIVES the full interpolate() pipeline (color-stripper regression)', () => {
+    const registry = buildTokenResolverRegistry('cobranza');
+    const out = interpolate(
+      '<p>{{tabla:tabla-cobranza:cliente,saldo}}</p>',
+      'Asunto',
+      cobranzaCtxConTotales(ROWS, [
+        { moneda: 'S/', debe: 'S/ 1,650.00', haber: 'S/ 0.00', saldo: 'S/ 1,250.00' },
+      ]),
+      registry,
+    );
+    expect(out.html).toContain('font-weight:bold');
+    expect(out.html).toContain('background:#eff6ff');
+    expect(out.html).toContain('>TOTAL S/</td>');
+    expect(out.html).toContain('>S/ 1,250.00</td>');
+    // The mangled form must NOT appear in the final HTML.
     expect(out.html).not.toContain('background-color');
   });
 });

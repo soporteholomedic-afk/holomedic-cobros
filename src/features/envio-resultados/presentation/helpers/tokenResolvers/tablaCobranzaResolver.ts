@@ -38,6 +38,15 @@
  * to documents with saldo > 0.01 and formats numbers) — the resolver
  * stays a dumb escape-and-emit renderer.
  *
+ * TOTAL rows: when `ctx.tablaCobranzaTotales` is present, one bold,
+ * light-blue `<tr>` per currency is appended AFTER the data rows (same
+ * tbody), aligned to the selected columns: `debe`/`haber`/`saldo` cells
+ * carry the pre-formatted sums; the caption (`TOTAL <moneda>`) lands in
+ * the first selected NON-amount column (skipped when only amount
+ * columns are selected — the sums speak for themselves); every other
+ * selected column renders empty. Contexts without the field emit NO
+ * extra rows (back-compat).
+ *
  * Returns `''` (signals empty → block removal) when the selection is
  * empty or there are no pending rows.
  */
@@ -125,6 +134,29 @@ export const tablaCobranzaResolver: TableResolver = {
         return `<tr>${cells}</tr>`;
       })
       .join('');
-    return `<table style="border-collapse:collapse;width:100%;">\n<thead><tr>${headers}</tr></thead>\n<tbody>${body}</tbody>\n</table>`;
+
+    // TOTAL rows (per-currency): bold + light-blue background to read
+    // apart from data rows. `background:` shorthand — the interpolate()
+    // color-stripper mangles `background-color:#hex` (see header doc).
+    const totales = ctx.tablaCobranzaTotales ?? [];
+    const captionCol = cols.find((c) => c !== 'debe' && c !== 'haber' && c !== 'saldo');
+    const totalRows = totales
+      .map((t) => {
+        const caption = t.moneda !== '' ? `TOTAL ${t.moneda}` : 'TOTAL';
+        const cells = cols
+          .map((c) => {
+            let v = '';
+            if (c === 'debe') v = t.debe;
+            else if (c === 'haber') v = t.haber;
+            else if (c === 'saldo') v = t.saldo;
+            else if (c === captionCol) v = caption;
+            return `<td style="padding:4px 8px;border:1px solid #bfdbfe;font-weight:bold;background:#eff6ff;">${escapeHtml(v)}</td>`;
+          })
+          .join('');
+        return `<tr>${cells}</tr>`;
+      })
+      .join('');
+
+    return `<table style="border-collapse:collapse;width:100%;">\n<thead><tr>${headers}</tr></thead>\n<tbody>${body}${totalRows}</tbody>\n</table>`;
   },
 };

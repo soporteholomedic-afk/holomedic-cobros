@@ -22,6 +22,7 @@ import type {
   DocumentoPendienteRow,
   InterpolationContext,
   TablaCobranzaRow,
+  TablaCobranzaTotalesRow,
 } from '../../../envio-resultados/presentation/helpers/tokenResolvers/types';
 
 // ============================================================
@@ -129,6 +130,30 @@ function toTablaCobranzaRow(client: ClienteGroup, doc: Documento): TablaCobranza
 }
 
 /**
+ * Per-currency TOTAL rows over the SAME pending docs the table rows
+ * carry (saldo > 0.01). Grouped by the doc's own currency in
+ * first-appearance order — amounts are NEVER summed across currencies
+ * (S/ and $ rows must not merge). Pre-formatted with the group's
+ * currency so the resolver stays escape-and-emit.
+ */
+function toTablaCobranzaTotales(docs: Documento[]): TablaCobranzaTotalesRow[] {
+  const sums = new Map<string, { debe: number; haber: number; saldo: number }>();
+  for (const doc of docs) {
+    const acc = sums.get(doc.moneda) ?? { debe: 0, haber: 0, saldo: 0 };
+    acc.debe += doc.debe;
+    acc.haber += doc.haber;
+    acc.saldo += doc.saldo;
+    sums.set(doc.moneda, acc);
+  }
+  return [...sums.entries()].map(([moneda, t]) => ({
+    moneda,
+    debe: formatWithCurrency(moneda, t.debe),
+    haber: formatWithCurrency(moneda, t.haber),
+    saldo: formatWithCurrency(moneda, t.saldo),
+  }));
+}
+
+/**
  * Build the cobranza `InterpolationContext` for one client group.
  * Pure: no I/O, no React — `new Date()` is the only ambient input
  * (today + overdue-day math, same as buildEmailHtml).
@@ -173,5 +198,6 @@ export function buildCobranzaInterpolationContext(
     cuentasBancariasHtml: buildCuentasBancariasHtml(),
     documentosPendientes: pendingDocs.map(toDocumentoPendienteRow),
     tablaCobranza: pendingDocs.map((doc) => toTablaCobranzaRow(client, doc)),
+    tablaCobranzaTotales: toTablaCobranzaTotales(pendingDocs),
   };
 }
