@@ -2,8 +2,6 @@ import * as mssql from 'mssql';
 
 import { normalizarCorreo, normalizarNombre } from '../../domain/normalizar';
 import type { CrmImportadorPort, RegistroImportacion, ResultadoGrupoImport } from '../../domain/ports';
-import { COLUMNAS_IMPORT_CRM, type FilaImportCrm } from '../../domain/importar/columnas';
-import { ImportacionExcedeLimiteError, MAXIMO_FILAS_IMPORTACION } from '../../domain/importar/limiteFilas';
 import { planificarMergeContactos } from '../../domain/importar/mergeContactos';
 import type { ContactoExistenteMerge } from '../../domain/importar/mergeContactos';
 import type { GrupoEmpresaImportado } from '../../domain/importar/validarImportacion';
@@ -13,15 +11,6 @@ import { withCrmTransaction } from '../sqlserver/withCrmTransaction';
 
 /**
  * Import boundary adapter (tasks pr6/WU3, design §4).
- *
- * `mapearFilasImportCrm` — maps client-parsed row objects (keys are
- * Excel headers as typed by the user, possibly asterisked by the
- * template, or the stable column claves) into `FilaImportCrm` rows,
- * deriving every lookup from COLUMNAS_IMPORT_CRM — never a private
- * list (G3 anti-drift). Cells are coerced to raw text ('' = empty);
- * the server re-validates EVERYTHING downstream, so no cleanup happens
- * here. Enforces the 2000-row cap (typed Spanish error) BEFORE any
- * mapping work.
  *
  * `SqlServerCrmImportador` — executes ONE validated RUC group per
  * `withCrmTransaction` (design §2a: a failing group never rolls back
@@ -41,46 +30,12 @@ import { withCrmTransaction } from '../sqlserver/withCrmTransaction';
  *
  * Unique violations (2601/2627) map to the shared Spanish
  * `ConflictError`; the use case turns them into per-group report rows.
+ *
+ * The pure client-row mapper `mapearFilasImportCrm` moved to the domain
+ * layer (pr8) so the browser-side parser shares it without importing
+ * `mssql`; re-exported here for the pr6/pr7 consumers.
  */
-export function mapearFilasImportCrm(
-  filasBrutas: ReadonlyArray<Record<string, unknown>>,
-): FilaImportCrm[] {
-  if (filasBrutas.length > MAXIMO_FILAS_IMPORTACION) {
-    throw new ImportacionExcedeLimiteError();
-  }
-
-  const claveNormalizada = (clave: string): string =>
-    clave.trim().replace(/\s+/g, ' ').replace(/\*+$/, '').toLowerCase();
-
-  const candidatos = new Map<string, string>();
-  for (const columna of COLUMNAS_IMPORT_CRM) {
-    candidatos.set(claveNormalizada(columna.clave), columna.clave);
-    candidatos.set(claveNormalizada(columna.encabezado), columna.clave);
-  }
-
-  return filasBrutas.map((filaBruta) => {
-    const porClave = new Map<string, unknown>();
-    for (const [clave, valor] of Object.entries(filaBruta)) {
-      const claveColumna = candidatos.get(claveNormalizada(clave));
-      if (claveColumna !== undefined) porClave.set(claveColumna, valor);
-    }
-
-    const fila = {} as Record<keyof FilaImportCrm, string>;
-    for (const columna of COLUMNAS_IMPORT_CRM) {
-      fila[columna.clave as keyof FilaImportCrm] = aTexto(porClave.get(columna.clave));
-    }
-    return fila;
-  });
-}
-
-/** Cell → raw text ('' for empty/unknown shapes; numbers via String). */
-function aTexto(valor: unknown): string {
-  if (valor === null || valor === undefined) return '';
-  if (typeof valor === 'string') return valor;
-  if (typeof valor === 'number' || typeof valor === 'bigint') return valor.toString();
-  if (typeof valor === 'boolean') return valor ? 'true' : 'false';
-  return '';
-}
+export { mapearFilasImportCrm } from '../../domain/importar/mapearFilas';
 
 interface EmpresaIdRow {
   id: number;

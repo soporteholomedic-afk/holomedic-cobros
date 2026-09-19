@@ -4,7 +4,7 @@ import { getSession } from '@/lib/auth';
 import { buildCrmError, mapCrmError } from '@/app/api/crm/empresas/errorResponse';
 import type { CrmErrorResponse } from '@/app/api/crm/empresas/errorResponse';
 import { getCrmDb } from '@/features/crm/infrastructure/getCrmDb';
-import { mapearFilasImportCrm } from '@/features/crm/infrastructure/importar/importadorCrm';
+import { mapearFilasImportCrm } from '@/features/crm/domain/importar/mapearFilas';
 import { EjecutarImportacionUseCase } from '@/features/crm/application/importar/ejecutarImportacion';
 import type { ResultadoEjecucionImportacion } from '@/features/crm/application/importar/ejecutarImportacion';
 

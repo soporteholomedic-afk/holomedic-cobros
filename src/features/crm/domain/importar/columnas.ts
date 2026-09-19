@@ -13,6 +13,13 @@
 /** Content kind of a column: free text or constrained dropdown list. */
 export type TipoColumnaImport = 'texto' | 'lista';
 
+/**
+ * Name of the template's data worksheet (first sheet, pinned by the
+ * pr7 drift test). The server builder creates it and the browser-side
+ * parser looks it up by this name — ONE source of truth.
+ */
+export const HOJA_DATOS = 'Empresas';
+
 export interface ColumnaImportCrm {
   /** Stable key — importer field name and template header source. */
   clave: string;

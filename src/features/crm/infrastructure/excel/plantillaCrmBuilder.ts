@@ -1,6 +1,6 @@
 import ExcelJS from 'exceljs';
 
-import { COLUMNAS_IMPORT_CRM } from '../../domain/importar/columnas';
+import { COLUMNAS_IMPORT_CRM, HOJA_DATOS } from '../../domain/importar/columnas';
 
 /**
  * CRM import template builder (tasks pr7/WU1–WU2, spec G3).
@@ -18,8 +18,12 @@ import { COLUMNAS_IMPORT_CRM } from '../../domain/importar/columnas';
  * one-row-per-encargado / repeat-RUC / upsert-by-RUC rules.
  */
 
-/** Name of the data worksheet (first sheet of the workbook). */
-export const HOJA_DATOS = 'Empresas';
+/**
+ * The data-sheet name moved next to the shared column constant (pr8) so
+ * the browser-side parser looks up the same sheet from ONE source;
+ * re-exported here for the pr7 consumers.
+ */
+export { HOJA_DATOS };
 
 /** Name of the instructions worksheet (second sheet). */
 export const HOJA_INSTRUCCIONES = 'Instrucciones';

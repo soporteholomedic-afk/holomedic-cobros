@@ -3,7 +3,7 @@ import { NextResponse } from 'next/server';
 import { getSession } from '@/lib/auth';
 import { buildCrmError, mapCrmError } from '@/app/api/crm/empresas/errorResponse';
 import type { CrmErrorResponse } from '@/app/api/crm/empresas/errorResponse';
-import { mapearFilasImportCrm } from '@/features/crm/infrastructure/importar/importadorCrm';
+import { mapearFilasImportCrm } from '@/features/crm/domain/importar/mapearFilas';
 import type { GrupoEmpresaImportado } from '@/features/crm/domain/importar/validarImportacion';
 import type { ErrorFilaImport } from '@/features/crm/domain/importar/validarImportacion';
 import { validarImportacion } from '@/features/crm/domain/importar/validarImportacion';
