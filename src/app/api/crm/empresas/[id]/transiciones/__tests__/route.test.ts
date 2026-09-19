@@ -67,6 +67,7 @@ function setDb(pipeline: CrmPipelineRepositoryPort): void {
     resultados: {} as never,
     handoffs: {} as never,
     actividades: {} as never,
+    asignaciones: {} as never,
     } satisfies CrmDb);
 }
 

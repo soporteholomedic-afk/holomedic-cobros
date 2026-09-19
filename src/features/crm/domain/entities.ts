@@ -139,3 +139,31 @@ export interface ActualizarEmpresaInput {
   notas?: string | null;
   responsable?: string | null;
 }
+
+// ---- Assignment (spec G5 — cartera; pr14) ----
+
+/**
+ * Assignment event catalog (CHECK-backed in CRM_Asignaciones).
+ * ASIGNADO = pool → user; REASIGNADO = user → user (reassign replaces
+ * the owner); DEVUELTO = user → pool.
+ */
+export type AccionAsignacion = 'ASIGNADO' | 'REASIGNADO' | 'DEVUELTO';
+
+/**
+ * One assignment audit row (spec G5 traceability: every assign,
+ * reassign and return event records actor, target user and timestamp).
+ * The empresa's `responsable` column is the CURRENT owner (single-owner
+ * invariant, NULL = pool); this table is the HISTORY.
+ */
+export interface Asignacion {
+  id: number;
+  empresaId: number;
+  accion: AccionAsignacion;
+  /** Owner before the event; NULL when the empresa came from the pool. */
+  responsablePrevio: string | null;
+  /** Owner after the event; NULL = back to the pool. */
+  responsableNuevo: string | null;
+  /** Acting session user. */
+  actorUsuario: string;
+  createdAt: string;
+}

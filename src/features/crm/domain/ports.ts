@@ -1,6 +1,7 @@
 import type {
   Etapa,
   Flujo,
+  AccionAsignacion,
   ActualizarEmpresaInput,
   CrearEmpresaInput,
   Empresa,
@@ -284,4 +285,54 @@ export interface CrmActividadesRepositoryPort {
    * row (T8/T9) when the send moves the machine.
    */
   registrarEnvioCadencia(datos: EnvioCadenciaAPersistir): Promise<PipelineEmpresa>;
+}
+
+// ---------------------------------------------------------------------------
+// Assignment port (tasks pr14/WU2, spec G5) — the assignment write is
+// genuinely cross-table (CRM_Empresas.responsable UPDATE + CRM_Asignaciones
+// event INSERT), so it composes inside ONE `withCrmTransaction` (design
+// §2d): the current-owner column and the history row can never diverge.
+// ---------------------------------------------------------------------------
+
+/** Everything the adapter must persist for ONE assignment event. */
+export interface AsignacionAPersistir {
+  empresaId: number;
+  accion: AccionAsignacion;
+  /** Owner before the event; NULL when the empresa came from the pool. */
+  responsablePrevio: string | null;
+  /** Owner after the event; NULL = back to the pool. */
+  responsableNuevo: string | null;
+  /** Acting session user (CRM_Asignaciones.actorUsuario). */
+  actorUsuario: string;
+}
+
+/**
+ * One CRM_Asignaciones row as READ for the per-empresa history (spec G5
+ * reassignment-history scenario: all events in order with actor and
+ * timestamp). BIGINT id crosses tedious as a string; the adapter maps it.
+ */
+export interface AsignacionHistorial {
+  id: number;
+  empresaId: number;
+  accion: AccionAsignacion;
+  responsablePrevio: string | null;
+  responsableNuevo: string | null;
+  actorUsuario: string;
+  createdAt: string;
+}
+
+/**
+ * Outbound port for the assignment model (spec G5: at most ONE
+ * Responsable at a time; NULL = pool; every event traceable).
+ */
+export interface CrmAsignacionesRepositoryPort {
+  /**
+   * Persist ONE assignment event atomically: the CRM_Empresas
+   * `.responsable` UPDATE and the CRM_Asignaciones INSERT in a single
+   * `withCrmTransaction`. `NotFoundError` when the empresa does not
+   * exist (rowsAffected 0 on the UPDATE).
+   */
+  registrarAsignacion(datos: AsignacionAPersistir): Promise<void>;
+  /** Assignment history for one empresa, newest first (spec G5). */
+  listarAsignaciones(empresaId: number): Promise<AsignacionHistorial[]>;
 }

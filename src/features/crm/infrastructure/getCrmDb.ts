@@ -5,9 +5,11 @@ import { getHolomedicPool } from '@/lib/db';
 import { migrate } from './sqlserver/migrate';
 import { SqlServerEmpresaRepository } from './sqlserver/sqlServerEmpresaRepository';
 import { SqlServerPipelineRepository } from './sqlserver/sqlServerPipelineRepository';
+import { SqlServerAsignacionesRepository } from './sqlserver/sqlServerAsignacionesRepository';
 import { SqlServerCrmImportador } from './importar/importadorCrm';
 import type {
   CrmActividadesRepositoryPort,
+  CrmAsignacionesRepositoryPort,
   CrmEmpresaRepositoryPort,
   CrmHandoffsRepositoryPort,
   CrmImportadorPort,
@@ -47,6 +49,12 @@ export interface CrmDb {
    * SAME adapter instance implements this port (design §2c).
    */
   actividades: CrmActividadesRepositoryPort;
+  /**
+   * Assignment adapter (tasks pr14/WU2, spec G5): the assignment write
+   * is cross-table (empresa.responsable + CRM_Asignaciones event in
+   * ONE transaction, design §2d).
+   */
+  asignaciones: CrmAsignacionesRepositoryPort;
 }
 
 let cached: Promise<CrmDb> | null = null;
@@ -73,6 +81,7 @@ export function getCrmDb(): Promise<CrmDb> {
       resultados: pipelines,
       handoffs: pipelines,
       actividades: pipelines,
+      asignaciones: new SqlServerAsignacionesRepository(pool),
     };
   })();
   return cached;
