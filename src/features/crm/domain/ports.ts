@@ -1,10 +1,15 @@
 import type {
+  Etapa,
+  Flujo,
   ActualizarEmpresaInput,
   CrearEmpresaInput,
   Empresa,
+  PipelineEmpresa,
   TipoEmpresa,
 } from './entities';
 import type { ErrorFilaImport, GrupoEmpresaImportado } from './importar/validarImportacion';
+import type { EfectosDenormalizados } from './efectosTransicion';
+import type { EstadoPipeline, EventoPipeline, TipoResultado } from './maquinaEstados';
 
 /** Filters for the empresa list (spec G1; etapa filter arrives with the pipeline in pr9+). */
 export interface FiltrosEmpresas {
@@ -71,3 +76,103 @@ export interface CrmImportadorPort {
  * tests (design §3: hoy injected, no hidden Date.now in the domain).
  */
 export type Clock = () => Date;
+
+// ---------------------------------------------------------------------------
+// Pipeline ports (tasks pr10, spec G4) — one SQL Server adapter
+// (`SqlServerPipelineRepository`) implements all four so the atomic
+// transition write composes pipeline + audit + result + handoff inside
+// a single `withCrmTransaction` (design §2b).
+// ---------------------------------------------------------------------------
+
+/** Handoff payload carried by T5 (design D3: área + nota). */
+export interface HandoffInput {
+  area: string;
+  nota?: string | null;
+}
+
+/** Everything the adapter must persist for ONE applied transition. */
+export interface TransicionAPersistir {
+  empresaId: number;
+  /** Acting session user — CRM_Transiciones.usuario / updatedBy. */
+  usuario: string;
+  /** The pinned machine event name (CRM_Transiciones.evento, VC(40)). */
+  evento: EventoPipeline;
+  /** T14's validated motivo (Spanish), else null. */
+  motivo: string | null;
+  /** Injected business date (DATE-only) — CRM_Resultados.fecha. */
+  hoy: string;
+  estadoPrevio: EstadoPipeline;
+  estadoNuevo: EstadoPipeline;
+  /** Bold T-row only (design D3 catalog), else null. */
+  resultado: TipoResultado | null;
+  /** Denormalized counter/marker projection (domain efectosTransicion). */
+  efectos: EfectosDenormalizados;
+  /** T5's handoff payload, else null. */
+  handoff: HandoffInput | null;
+}
+
+/** T16 payload: the empresa's tipo change (+ optional conversion event). */
+export interface CambiarTipoDatos {
+  empresaId: number;
+  nuevoTipo: TipoEmpresa;
+  usuario: string;
+  hoy: string;
+  /** true (Prospecto→Cliente) → emit the ConversiónProspectoACliente row. */
+  convertir: boolean;
+}
+
+/**
+ * Outbound port for the pipeline row (design D3 1:1). `registrarTransicion`
+ * is the atomic unit — the use case computes the whole bundle (machine +
+ * effects) and the adapter writes pipeline row, audit row and the optional
+ * result/handoff rows in ONE transaction: a mid-flight failure leaves the
+ * pipeline untouched (spec G4 audit integrity).
+ */
+export interface CrmPipelineRepositoryPort {
+  obtenerPorEmpresaId(empresaId: number): Promise<PipelineEmpresa | null>;
+  registrarTransicion(datos: TransicionAPersistir): Promise<PipelineEmpresa>;
+  /** T16 — CRM_Empresas.tipo UPDATE + optional conversion result row, one tx. */
+  cambiarTipo(datos: CambiarTipoDatos): Promise<void>;
+}
+
+/** One CRM_Transiciones audit row (spec G4: who, when, from, to). */
+export interface FilaTransicionAudit {
+  empresaId: number;
+  /** NULL for the creation transitions (T1/T6). */
+  flujoPrevio: Flujo | null;
+  etapaPrevia: Etapa | null;
+  flujoNuevo: Flujo;
+  etapaNueva: Etapa;
+  evento: string;
+  motivo: string | null;
+  usuario: string;
+}
+
+export interface CrmTransicionesRepositoryPort {
+  registrar(fila: FilaTransicionAudit): Promise<number>;
+}
+
+/** One CRM_Resultados row (design D4 catalog — productivity events). */
+export interface FilaResultadoAudit {
+  empresaId: number;
+  tipo: TipoResultado;
+  usuario: string;
+  /** DATE-only business date. */
+  fecha: string;
+}
+
+export interface CrmResultadosRepositoryPort {
+  registrar(fila: FilaResultadoAudit): Promise<number>;
+}
+
+/** One CRM_Handoffs row (spec G4: handoff record — área, nota, user). */
+export interface FilaHandoffAudit {
+  empresaId: number;
+  area: string;
+  nota: string | null;
+  usuario: string;
+}
+
+export interface CrmHandoffsRepositoryPort {
+  registrar(fila: FilaHandoffAudit): Promise<number>;
+}

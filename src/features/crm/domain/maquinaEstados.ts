@@ -79,6 +79,28 @@ export type IdTransicion =
   | 'T15'
   | 'T16';
 
+/**
+ * Runtime whitelist of every machine-readable event (the API body
+ * guard validates `evento` against this list before the use case
+ * runs). T1/T6 are creation rows with `evento: null` — they are
+ * applied at empresa creation via `estadoInicial`, never through the
+ * transitions endpoint.
+ */
+export const EVENTOS_PIPELINE: readonly EventoPipeline[] = [
+  'PresentaciónEnviada',
+  'CotizaciónEnviada',
+  'ConfirmaciónPresentación',
+  'HandoffRegistrado',
+  'AceptaciónOutbound',
+  'ConversiónProspectoACliente',
+  'DatosSolicitados',
+  'EnviosAgotados',
+  'ReinicioCadencia',
+  'PasarAOutbound',
+  'Rechazo',
+  'Reactivar',
+];
+
 /** Required previous state; `null` fields are wildcards (T14/T15/T16). */
 export interface EstadoPrevio {
   readonly flujo: Flujo | null;
@@ -175,6 +197,18 @@ function buscarTransicion(estado: EstadoPipeline, evento: EventoPipeline): FilaT
     if (t.excluye?.includes(estado.etapa)) return false;
     return true;
   });
+}
+
+/**
+ * Resolve the T-row that `evento` fires from `estado` (the guard
+ * table lookup). Exported so the pr10 effects layer can key the
+ * denormalized counters on the UNAMBIGUOUS row id — two rows share
+ * `PresentaciónEnviada` (T3 passthrough vs T7 arm) and two share
+ * `CotizaciónEnviada` (T2/T12, both arm), so the event name alone
+ * cannot select an effect.
+ */
+export function resolverTransicion(estado: EstadoPipeline, evento: EventoPipeline): FilaTransicion | undefined {
+  return buscarTransicion(estado, evento);
 }
 
 /** Whether `evento` is legal from `estado` (the T1–T16 guard table). */

@@ -47,6 +47,35 @@ export interface Correo {
   correo: string;
 }
 
+/**
+ * The empresa's pipeline row (design D3 1:1, `CRM_Pipeline`) — the
+ * machine state (`flujo`/`etapa`) plus the denormalized cadence
+ * counters the daily queue scans (design §3). DATE markers cross the
+ * boundary as `YYYY-MM-DD` strings; the SQL adapter owns the mapping.
+ * `motivoRechazo` is the latest rejection's motivo — a mirror of the
+ * CRM_Transiciones audit, not a second source of history.
+ */
+export interface PipelineEmpresa {
+  empresaId: number;
+  flujo: Flujo;
+  etapa: Etapa;
+  /** Rest-cycle round (T9 increments; arms start at 1). */
+  ciclo: number;
+  /** Sends logged in the current cycle (1–3; 0 = unarmed stage). */
+  enviosCiclo: number;
+  /** Cycle start (T2/T7/T9/T12 arm = hoy). */
+  fechaCicloInicio: string | null;
+  /** Last send of the cycle (T8 derives descansoHasta from it). */
+  fechaUltimoEnvio: string | null;
+  /** T8's 3-month rest boundary (T9 clears). */
+  descansoHasta: string | null;
+  /** T14's 3-month rejection cooldown (T15 clears). */
+  rechazadoHasta: string | null;
+  motivoRechazo: string | null;
+  updatedBy: string | null;
+  updatedAt: string;
+}
+
 export interface Contacto {
   id: number;
   empresaId: number;
