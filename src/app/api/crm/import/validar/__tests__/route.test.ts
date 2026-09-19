@@ -196,7 +196,9 @@ describe('POST /api/crm/import/validar — preview', () => {
   });
 
   it('returns 200 with counts and grouped empresas for valid header-keyed rows', async () => {
-    const importador = makeFakeImportador();
+    // The container is present but the route is DB-free — asserted by
+    // the writes-nothing test above.
+    setDb(makeFakeImportador());
 
     const response = await POST(
       jsonPost({
@@ -225,7 +227,7 @@ describe('POST /api/crm/import/validar — preview', () => {
   });
 
   it('reports per-row Spanish errors without blocking valid rows', async () => {
-    const importador = makeFakeImportador();
+    setDb(makeFakeImportador());
 
     const response = await POST(
       jsonPost({
@@ -266,7 +268,7 @@ describe('POST /api/crm/import/validar — preview', () => {
   });
 
   it('exposes repeated-empresa-field conflicts as row errors, group excluded', async () => {
-    const importador = makeFakeImportador();
+    setDb(makeFakeImportador());
 
     const response = await POST(
       jsonPost({
