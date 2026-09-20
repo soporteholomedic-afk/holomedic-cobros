@@ -867,3 +867,110 @@ describe('SqlServerPipelineRepository — historial reads (tasks pr11 detail tim
     }
   });
 });
+
+// ---------------------------------------------------------------------------
+// Productivity count reads (tasks pr16/WU2, spec G6): GROUP BY usuario over
+// CRM_Actividades / CRM_Resultados inside an inclusive [desde, hasta] DATE
+// window — the IX(usuario, fecha DESC) indexes back both scans. Probe rows
+// are inserted raw so the counts exercise REAL DATE typing.
+// ---------------------------------------------------------------------------
+
+async function insertarActividad(empresaId: number, usuario: string, fecha: string): Promise<void> {
+  await pool
+    .request()
+    .input('empresaId', mssql.Int, empresaId)
+    .input('tipo', mssql.VarChar(20), 'LLAMADA')
+    .input('asunto', mssql.NVarChar(300), 'Probe productividad')
+    .input('usuario', mssql.NVarChar(200), usuario)
+    .input('fecha', mssql.Date, fecha)
+    .query(
+      `INSERT INTO dbo.CRM_Actividades (empresaId, tipo, asunto, usuario, fecha)
+       VALUES (@empresaId, @tipo, @asunto, @usuario, @fecha)`,
+    );
+}
+
+async function insertarResultado(empresaId: number, usuario: string, tipo: string, fecha: string): Promise<void> {
+  await pool
+    .request()
+    .input('empresaId', mssql.Int, empresaId)
+    .input('tipo', mssql.VarChar(40), tipo)
+    .input('usuario', mssql.NVarChar(200), usuario)
+    .input('fecha', mssql.Date, fecha)
+    .query(
+      `INSERT INTO dbo.CRM_Resultados (empresaId, tipo, usuario, fecha)
+       VALUES (@empresaId, @tipo, @usuario, @fecha)`,
+    );
+}
+
+describe('SqlServerPipelineRepository — productivity count reads (tasks pr16/WU2)', () => {
+  it('contarActividadesPorUsuario groups by user inside the INCLUSIVE window', async () => {
+    try {
+      const empresa = await empresas.crear(inputCon('Inbound'));
+      await insertarActividad(empresa.id, 'jperez', '2026-09-01'); // = desde (boundary)
+      await insertarActividad(empresa.id, 'jperez', '2026-09-15');
+      await insertarActividad(empresa.id, 'mgarcia', '2026-09-30'); // = hasta (boundary)
+      await insertarActividad(empresa.id, 'jperez', '2026-08-31'); // before window
+      await insertarActividad(empresa.id, 'jperez', '2026-10-01'); // after window
+
+      const conteos = await pipelines.contarActividadesPorUsuario('2026-09-01', '2026-09-30');
+
+      expect(conteos).toEqual([
+        { usuario: 'jperez', total: 2 },
+        { usuario: 'mgarcia', total: 1 },
+      ]);
+    } finally {
+      await pool.request().query(`DELETE FROM dbo.CRM_Empresas WHERE ${PROBE_KEY}`);
+    }
+  });
+
+  it('contarActividadesPorUsuario limits to ONE user when the filter is passed', async () => {
+    try {
+      const empresa = await empresas.crear(inputCon('Inbound'));
+      await insertarActividad(empresa.id, 'jperez', '2026-09-05');
+      await insertarActividad(empresa.id, 'mgarcia', '2026-09-06');
+
+      const conteos = await pipelines.contarActividadesPorUsuario('2026-09-01', '2026-09-30', 'jperez');
+
+      expect(conteos).toEqual([{ usuario: 'jperez', total: 1 }]);
+    } finally {
+      await pool.request().query(`DELETE FROM dbo.CRM_Empresas WHERE ${PROBE_KEY}`);
+    }
+  });
+
+  it('contarResultadosPorUsuario breaks down by tipo per user (attribution = row usuario)', async () => {
+    try {
+      const empresa = await empresas.crear(inputCon('Inbound'));
+      await insertarResultado(empresa.id, 'jperez', 'CotizaciónEnviada', '2026-09-02');
+      await insertarResultado(empresa.id, 'jperez', 'ConversiónProspectoACliente', '2026-09-03');
+      await insertarResultado(empresa.id, 'jperez', 'CotizaciónEnviada', '2026-09-10');
+      await insertarResultado(empresa.id, 'mgarcia', 'HandoffRegistrado', '2026-09-11');
+      await insertarResultado(empresa.id, 'jperez', 'CotizaciónEnviada', '2026-07-01'); // outside window
+
+      const conteos = await pipelines.contarResultadosPorUsuario('2026-09-01', '2026-09-30');
+
+      expect(conteos).toHaveLength(3);
+      // Within-user row order follows the DB collation (accent-
+      // insensitive) — the aggregation downstream is order-insensitive,
+      // so compare as a set keyed by (usuario, tipo).
+      expect(
+        new Map(conteos.map((c) => [`${c.usuario}|${c.tipo}`, c.total])),
+      ).toEqual(
+        new Map([
+          ['jperez|CotizaciónEnviada', 2],
+          ['jperez|ConversiónProspectoACliente', 1],
+          ['mgarcia|HandoffRegistrado', 1],
+        ]),
+      );
+    } finally {
+      await pool.request().query(`DELETE FROM dbo.CRM_Empresas WHERE ${PROBE_KEY}`);
+    }
+  });
+
+  it('both reads return an empty list for a window with no rows', async () => {
+    const conteosActividades = await pipelines.contarActividadesPorUsuario('2030-01-01', '2030-01-31');
+    const conteosResultados = await pipelines.contarResultadosPorUsuario('2030-01-01', '2030-01-31');
+
+    expect(conteosActividades).toEqual([]);
+    expect(conteosResultados).toEqual([]);
+  });
+});

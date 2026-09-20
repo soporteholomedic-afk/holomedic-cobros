@@ -1,9 +1,10 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import { EVENTOS_RESULTADO } from '../../domain/maquinaEstados';
 import type { TipoResultado } from '../../domain/maquinaEstados';
 import {
   agregarProductividad,
+  ListarProductividadUseCase,
   type ConteoActividadUsuario,
   type ConteoResultadoUsuario,
 } from '../listarProductividad';
@@ -144,5 +145,93 @@ describe('agregarProductividad — per-user merge of activities + results', () =
 
   it('returns an empty list when the period has no activity and no results at all', () => {
     expect(agregarProductividad([], [])).toEqual([]);
+  });
+});
+
+/**
+ * Use-case contract (tasks pr16/WU2, spec G6 "Productivity
+ * visibility"): the own-vs-all SCOPING POLICY lives in the application
+ * layer — a plain `crm` holder is ALWAYS counted with the resolved
+ * login-name filter (a client cannot widen the scope); a `crm_admin`
+ * reads every user. The period travels verbatim (the use case owns no
+ * date math — validation is the route's inbound-adapter job).
+ */
+describe('ListarProductividadUseCase — own-vs-all scoping policy', () => {
+  const DESDE = '2026-09-01';
+  const HASTA = '2026-09-30';
+
+  function fakeActividades(conteos: ConteoActividadUsuario[]) {
+    return {
+      contarActividadesPorUsuario: vi.fn().mockResolvedValue(conteos),
+    };
+  }
+
+  function fakeResultados(conteos: ConteoResultadoUsuario[]) {
+    return {
+      contarResultadosPorUsuario: vi.fn().mockResolvedValue(conteos),
+    };
+  }
+
+  it('a plain crm holder is counted with the resolved usuario filter (never widened)', async () => {
+    const actividades = fakeActividades([{ usuario: 'jperez', total: 10 }]);
+    const resultados = fakeResultados([{ usuario: 'jperez', tipo: 'CotizaciónEnviada', total: 3 }]);
+    const useCase = new ListarProductividadUseCase(actividades, resultados);
+
+    const filas = await useCase.execute({ desde: DESDE, hasta: HASTA, usuario: 'jperez', esAdmin: false });
+
+    expect(filas).toEqual([
+      {
+        usuario: 'jperez',
+        actividades: 10,
+        resultados: 3,
+        porEvento: {
+          CotizaciónEnviada: 3,
+          PresentaciónEnviada: 0,
+          AceptaciónOutbound: 0,
+          ConfirmaciónPresentación: 0,
+          HandoffRegistrado: 0,
+          ConversiónProspectoACliente: 0,
+        },
+      },
+    ]);
+    // THE scoping proof: the resolved login name filters BOTH reads.
+    expect(actividades.contarActividadesPorUsuario).toHaveBeenCalledWith(DESDE, HASTA, 'jperez');
+    expect(resultados.contarResultadosPorUsuario).toHaveBeenCalledWith(DESDE, HASTA, 'jperez');
+  });
+
+  it('a crm_admin reads ALL users (no usuario filter reaches the ports)', async () => {
+    const actividades = fakeActividades([
+      { usuario: 'jperez', total: 2 },
+      { usuario: 'mgarcia', total: 5 },
+    ]);
+    const resultados = fakeResultados([{ usuario: 'mgarcia', tipo: 'HandoffRegistrado', total: 1 }]);
+    const useCase = new ListarProductividadUseCase(actividades, resultados);
+
+    const filas = await useCase.execute({ desde: DESDE, hasta: HASTA, usuario: 'mgarcia', esAdmin: true });
+
+    expect(filas).toHaveLength(2);
+    expect(actividades.contarActividadesPorUsuario).toHaveBeenCalledWith(DESDE, HASTA, undefined);
+    expect(resultados.contarResultadosPorUsuario).toHaveBeenCalledWith(DESDE, HASTA, undefined);
+  });
+
+  it('the period travels verbatim to both ports (the use case adds no date math)', async () => {
+    const actividades = fakeActividades([]);
+    const resultados = fakeResultados([]);
+    const useCase = new ListarProductividadUseCase(actividades, resultados);
+
+    await useCase.execute({ desde: '2026-02-01', hasta: '2026-02-28', usuario: 'jperez', esAdmin: false });
+
+    expect(actividades.contarActividadesPorUsuario).toHaveBeenCalledWith('2026-02-01', '2026-02-28', 'jperez');
+    expect(resultados.contarResultadosPorUsuario).toHaveBeenCalledWith('2026-02-01', '2026-02-28', 'jperez');
+  });
+
+  it('propagates a port failure (no silent empty summary)', async () => {
+    const actividades = fakeActividades([]);
+    actividades.contarActividadesPorUsuario.mockRejectedValue(new Error('db down'));
+    const useCase = new ListarProductividadUseCase(actividades, fakeResultados([]));
+
+    await expect(
+      useCase.execute({ desde: DESDE, hasta: HASTA, usuario: 'jperez', esAdmin: false }),
+    ).rejects.toThrow('db down');
   });
 });

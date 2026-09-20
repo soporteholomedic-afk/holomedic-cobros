@@ -1,4 +1,10 @@
 import { EVENTOS_RESULTADO, type TipoResultado } from '../domain/maquinaEstados';
+import type {
+  CrmActividadesRepositoryPort,
+  ConteoActividadUsuario,
+  ConteoResultadoUsuario,
+  CrmResultadosRepositoryPort,
+} from '../domain/ports';
 
 /**
  * Productivity read model (tasks pr16/WU1+WU2, spec G6
@@ -13,18 +19,10 @@ import { EVENTOS_RESULTADO, type TipoResultado } from '../domain/maquinaEstados'
  * `ListarProductividadUseCase` — never in the client.
  */
 
-/** One CRM_Actividades GROUP BY usuario row (adapter read shape). */
-export interface ConteoActividadUsuario {
-  usuario: string;
-  total: number;
-}
-
-/** One CRM_Resultados GROUP BY usuario, tipo row (adapter read shape). */
-export interface ConteoResultadoUsuario {
-  usuario: string;
-  tipo: TipoResultado;
-  total: number;
-}
+export type {
+  ConteoActividadUsuario,
+  ConteoResultadoUsuario,
+} from '../domain/ports';
 
 /** One productivity summary row: both counts + the per-event breakdown. */
 export interface FilaProductividad {
@@ -78,4 +76,55 @@ export function agregarProductividad(
   }
 
   return [...porUsuario.values()].sort((a, b) => a.usuario.localeCompare(b.usuario));
+}
+
+/** Use-case input: the validated period + the session's resolved identity. */
+export interface EntradaProductividad {
+  /** Inclusive window start, 'YYYY-MM-DD' (route-validated). */
+  desde: string;
+  /** Inclusive window end, 'YYYY-MM-DD' (route-validated). */
+  hasta: string;
+  /** Session user's login name (resolved from sub by the route). */
+  usuario: string;
+  /** `crm_admin` session — the only identity allowed to read all users. */
+  esAdmin: boolean;
+}
+
+/**
+ * ListarProductividadUseCase (tasks pr16/WU2, spec G6 "Productivity
+ * visibility") — the own-vs-all scoping POLICY lives here, in the
+ * application layer, mirroring the cartera decision:
+ *
+ * - A plain `crm` holder (esAdmin false) is ALWAYS counted with the
+ *   resolved login-name filter — user A never sees user B's numbers,
+ *   and the API exposes no parameter that could widen the scope.
+ * - A `crm_admin` reads every user's counts (the admin dashboard
+ *   scenario: per-user activity and result counts for the period).
+ *
+ * `usuario` is the session's LOGIN NAME (dbo.usuarios.usuario — the
+ * column CRM_Actividades/CRM_Resultados store). Resolving sub →
+ * usuario is the CALLER's (route) job, per the pr15 canonical
+ * identity resolution. The period travels verbatim: validation is the
+ * route's inbound-adapter job; this use case owns no date math.
+ */
+export class ListarProductividadUseCase {
+  constructor(
+    private readonly actividades: Pick<
+      CrmActividadesRepositoryPort,
+      'contarActividadesPorUsuario'
+    >,
+    private readonly resultados: Pick<
+      CrmResultadosRepositoryPort,
+      'contarResultadosPorUsuario'
+    >,
+  ) {}
+
+  async execute(entrada: EntradaProductividad): Promise<FilaProductividad[]> {
+    const filtroUsuario = entrada.esAdmin ? undefined : entrada.usuario;
+    const [conteosActividades, conteosResultados] = await Promise.all([
+      this.actividades.contarActividadesPorUsuario(entrada.desde, entrada.hasta, filtroUsuario),
+      this.resultados.contarResultadosPorUsuario(entrada.desde, entrada.hasta, filtroUsuario),
+    ]);
+    return agregarProductividad(conteosActividades, conteosResultados);
+  }
 }

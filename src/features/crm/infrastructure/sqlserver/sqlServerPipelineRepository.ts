@@ -2,9 +2,12 @@ import * as mssql from 'mssql';
 
 import { NotFoundError } from '../../domain/errors';
 import type { PipelineEmpresa } from '../../domain/entities';
+import type { TipoResultado } from '../../domain/maquinaEstados';
 import type {
   CandidatoCola,
   CambiarTipoDatos,
+  ConteoActividadUsuario,
+  ConteoResultadoUsuario,
   CrmActividadesRepositoryPort,
   CrmHandoffsRepositoryPort,
   CrmPipelineRepositoryPort,
@@ -424,5 +427,72 @@ export class SqlServerPipelineRepository
     const id = Number(result.recordset[0]?.id);
     if (!Number.isInteger(id) || id <= 0) throw new Error('INSERT no devolvió id');
     return id;
+  }
+
+  /**
+   * Productivity count reads (tasks pr16/WU2, spec G6): one GROUP BY
+   * per table over the inclusive [desde, hasta] DATE window. Both ride
+   * their IX(usuario, fecha DESC) index (design §2), the optional user
+   * filter becomes an index seek, and COUNT(*) never drags row
+   * payloads. `fecha` is a DATE column — string 'YYYY-MM-DD' binds as
+   * mssql.Date (the pr10 DATE round-trip contract).
+   */
+  async contarActividadesPorUsuario(
+    desde: string,
+    hasta: string,
+    usuario?: string,
+  ): Promise<ConteoActividadUsuario[]> {
+    const request = this.pool
+      .request()
+      .input('desde', mssql.Date, desde)
+      .input('hasta', mssql.Date, hasta);
+    let filtroUsuario = '';
+    if (usuario !== undefined) {
+      request.input('usuario', mssql.NVarChar(200), usuario);
+      filtroUsuario = ' AND usuario = @usuario';
+    }
+    const result = await request.query(`
+      SELECT usuario, COUNT(*) AS total
+        FROM dbo.CRM_Actividades
+        WHERE fecha >= @desde AND fecha <= @hasta${filtroUsuario}
+        GROUP BY usuario
+        ORDER BY usuario
+    `);
+    return (result.recordset as { usuario: string; total: number }[]).map((row) => ({
+      usuario: row.usuario,
+      total: Number(row.total),
+    }));
+  }
+
+  async contarResultadosPorUsuario(
+    desde: string,
+    hasta: string,
+    usuario?: string,
+  ): Promise<ConteoResultadoUsuario[]> {
+    const request = this.pool
+      .request()
+      .input('desde', mssql.Date, desde)
+      .input('hasta', mssql.Date, hasta);
+    let filtroUsuario = '';
+    if (usuario !== undefined) {
+      request.input('usuario', mssql.NVarChar(200), usuario);
+      filtroUsuario = ' AND usuario = @usuario';
+    }
+    const result = await request.query(`
+      SELECT usuario, tipo, COUNT(*) AS total
+        FROM dbo.CRM_Resultados
+        WHERE fecha >= @desde AND fecha <= @hasta${filtroUsuario}
+        GROUP BY usuario, tipo
+        ORDER BY usuario, tipo
+    `);
+    return (
+      result.recordset as { usuario: string; tipo: TipoResultado; total: number }[]
+    ).map((row) => ({
+      usuario: row.usuario,
+      // tipo is CHECK-constrained to the D4 catalog; the cast only
+      // refines the driver's string to the union.
+      tipo: row.tipo,
+      total: Number(row.total),
+    }));
   }
 }

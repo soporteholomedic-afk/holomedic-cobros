@@ -67,6 +67,12 @@ class FakeActividadesRepository implements CrmActividadesRepositoryPort {
     if (!this.respuesta) throw new Error('fixture sin respuesta');
     return structuredClone(this.respuesta);
   }
+
+  // pr16 added the productivity count read to the port; this suite
+  // never exercises it — stub keeps the port contract satisfied.
+  async contarActividadesPorUsuario(): Promise<{ usuario: string; total: number }[]> {
+    return [];
+  }
 }
 
 function filaVencida(overrides: Partial<PipelineEmpresa> = {}): PipelineEmpresa {

@@ -220,8 +220,26 @@ export interface FilaResultadoAudit {
   fecha: string;
 }
 
+/** One CRM_Resultados GROUP BY usuario, tipo row (productivity read, spec G6). */
+export interface ConteoResultadoUsuario {
+  usuario: string;
+  tipo: TipoResultado;
+  total: number;
+}
+
 export interface CrmResultadosRepositoryPort {
   registrar(fila: FilaResultadoAudit): Promise<number>;
+  /**
+   * Result-event counts GROUP BY usuario, tipo inside the inclusive
+   * [desde, hasta] DATE window (spec G6 productivity; optional user
+   * filter is the scoping policy's own-only read). Rows come back
+   * usuario-sorted; the IX(usuario, fecha DESC) index backs the scan.
+   */
+  contarResultadosPorUsuario(
+    desde: string,
+    hasta: string,
+    usuario?: string,
+  ): Promise<ConteoResultadoUsuario[]>;
 }
 
 /** One CRM_Handoffs row (spec G4: handoff record — área, nota, user). */
@@ -278,6 +296,12 @@ export interface EnvioCadenciaAPersistir {
  * Outbound port for CRM_Actividades (design §2). pr13 scopes it to the
  * cadence send; later slices add the general activity registration.
  */
+/** One CRM_Actividades GROUP BY usuario row (productivity read, spec G6). */
+export interface ConteoActividadUsuario {
+  usuario: string;
+  total: number;
+}
+
 export interface CrmActividadesRepositoryPort {
   /**
    * Log ONE ENVIO_CADENCIA send atomically: CRM_Actividades insert +
@@ -285,6 +309,17 @@ export interface CrmActividadesRepositoryPort {
    * row (T8/T9) when the send moves the machine.
    */
   registrarEnvioCadencia(datos: EnvioCadenciaAPersistir): Promise<PipelineEmpresa>;
+  /**
+   * Activity counts GROUP BY usuario inside the inclusive
+   * [desde, hasta] DATE window (spec G6 productivity; optional user
+   * filter is the scoping policy's own-only read). Rows come back
+   * usuario-sorted; the IX(usuario, fecha DESC) index backs the scan.
+   */
+  contarActividadesPorUsuario(
+    desde: string,
+    hasta: string,
+    usuario?: string,
+  ): Promise<ConteoActividadUsuario[]>;
 }
 
 // ---------------------------------------------------------------------------
