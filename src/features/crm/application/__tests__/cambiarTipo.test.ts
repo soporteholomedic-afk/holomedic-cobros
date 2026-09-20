@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import type { Empresa, PipelineEmpresa } from '../../domain/entities';
+import type { Empresa } from '../../domain/entities';
 import { NotFoundError, ValidationError } from '../../domain/errors';
 import type { Clock, CrmPipelineRepositoryPort } from '../../domain/ports';
 import { CambiarTipoUseCase } from '../cambiarTipo';

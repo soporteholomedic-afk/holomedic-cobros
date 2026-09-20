@@ -113,6 +113,11 @@ const COLOR_MARCA = 'FF0284C7'; // sky-600
 const COLOR_REQUERIDO = 'FF075985'; // sky-800
 
 describe('plantilla CRM — header styling', () => {
+  /** exceljs `Fill` is a union — only the pattern member carries fgColor. */
+  function argbRelleno(cell: ExcelJS.Cell): string | undefined {
+    return cell.fill?.type === 'pattern' ? cell.fill.fgColor?.argb : undefined;
+  }
+
   it('styles every header cell bold white on a brand fill', () => {
     const sheet = generarPlantillaCrmWorkbook().getWorksheet(HOJA_DATOS);
     expect(sheet).toBeDefined();
@@ -126,7 +131,7 @@ describe('plantilla CRM — header styling', () => {
       );
       // Brand family — the exact per-column split is pinned below.
       expect([COLOR_MARCA, COLOR_REQUERIDO]).toContain(
-        cell.fill?.fgColor?.argb,
+        argbRelleno(cell),
       );
     });
   });
@@ -139,7 +144,7 @@ describe('plantilla CRM — header styling', () => {
     COLUMNAS_IMPORT_CRM.forEach((columna, index) => {
       const cell = sheetDefinida.getRow(1).getCell(index + 1);
       const rellenoEsperado = columna.requerido ? COLOR_REQUERIDO : COLOR_MARCA;
-      expect(cell.fill?.fgColor?.argb, `columna ${columna.clave}`).toBe(
+      expect(argbRelleno(cell), `columna ${columna.clave}`).toBe(
         rellenoEsperado,
       );
     });
@@ -191,8 +196,10 @@ describe('plantilla CRM — data validation dropdowns', () => {
 
   function validarDesplegable(clave: string): void {
     const columna = COLUMNAS_IMPORT_CRM.find((c) => c.clave === clave);
-    expect(columna?.opciones).toBeDefined();
-    const esperado = `"${columna?.opciones.join(',')}"`;
+    const opciones = columna?.opciones;
+    expect(opciones).toBeDefined();
+    if (!opciones) throw new Error(`la columna ${clave} no define opciones`);
+    const esperado = `"${opciones.join(',')}"`;
 
     // First data row, a middle row, and the last validated row all carry
     // the dropdown; one row past the range does not.

@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { NotFoundError, ValidationError } from '../../domain/errors';
+import { NotFoundError } from '../../domain/errors';
 import type { CrmHandoffsRepositoryPort } from '../../domain/ports';
 import { RegistrarHandoffUseCase } from '../registrarHandoff';
 

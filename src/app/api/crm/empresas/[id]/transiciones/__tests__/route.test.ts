@@ -11,7 +11,7 @@ vi.mock('@/lib/auth', () => ({
 
 import { POST } from '../route';
 import { __setCrmDbForTests, type CrmDb } from '@/features/crm/infrastructure/getCrmDb';
-import type { CrmPipelineRepositoryPort, PipelineEmpresa } from '@/features/crm/domain/ports';
+import type { CrmPipelineRepositoryPort } from '@/features/crm/domain/ports';
 import type { PipelineEmpresa as FilaPipeline } from '@/features/crm/domain/entities';
 
 // ---- Fixtures ----
@@ -40,7 +40,7 @@ function makeFakePipeline(overrides: Partial<CrmPipelineRepositoryPort> = {}): C
     listarTransiciones: vi.fn().mockResolvedValue([]),
     listarHandoffs: vi.fn().mockResolvedValue([]),
     listarCandidatosCola: vi.fn().mockResolvedValue([]),
-    registrarTransicion: vi.fn().mockImplementation(async (datos: PipelineEmpresa extends never ? never : Parameters<CrmPipelineRepositoryPort['registrarTransicion']>[0]) => ({
+    registrarTransicion: vi.fn().mockImplementation(async (datos: Parameters<CrmPipelineRepositoryPort['registrarTransicion']>[0]) => ({
       ...filaPipeline(),
       flujo: datos.estadoNuevo.flujo,
       etapa: datos.estadoNuevo.etapa,

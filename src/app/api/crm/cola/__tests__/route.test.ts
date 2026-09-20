@@ -77,7 +77,7 @@ const sessionBase = { sub: 'u-1', nombre: 'Juana Perez', area: 'ventas' };
 const crmSession = { ...sessionBase, permisos: ['crm'] };
 
 function getCola(): Promise<Response> {
-  return GET(new Request('http://localhost/api/crm/cola'));
+  return GET();
 }
 
 beforeEach(() => {

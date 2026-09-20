@@ -91,7 +91,7 @@ describe('proximoEnvio — fechaUltimoEnvio + 7 días exactos (design §3 weekly
 });
 
 describe('estaVencidaHoy — ACTIVE ∧ enviosCiclo < 3 ∧ proximo ≤ hoy (design §3)', () => {
-  it.each([
+  it.each<[string, Partial<PipelineEmpresa>, string, boolean]>([
     [
       '6 días después del envío — la semana no venció',
       { etapa: 'SEGUIMIENTO', flujo: 'INBOUND', enviosCiclo: 1, fechaUltimoEnvio: '2026-09-14' },
@@ -162,7 +162,7 @@ describe('estaVencidaHoy — ACTIVE ∧ enviosCiclo < 3 ∧ proximo ≤ hoy (des
 });
 
 describe('requiereDecision — IN/SEGUIMIENTO agotada → fork T13/T14 (design §3 3-strike)', () => {
-  it.each([
+  it.each<[string, Partial<PipelineEmpresa>, boolean]>([
     [
       'INBOUND/SEGUIMIENTO con 3 envíos sin respuesta → decisión requerida',
       { flujo: 'INBOUND', etapa: 'SEGUIMIENTO', enviosCiclo: 3 },
@@ -214,7 +214,7 @@ describe('esReinicioDeCadencia — DESCANSO ∧ descansoHasta ≤ hoy (T9, desig
     expect(esReinicioDeCadencia(pipeline({ etapa: 'DESCANSO', descansoHasta }), hoy)).toBe(esperado);
   });
 
-  it.each([
+  it.each<[string, Partial<PipelineEmpresa>]>([
     ['CADENCIA activa no es reinicio', { etapa: 'CADENCIA', descansoHasta: null }],
     ['DESCANSO sin fecha (defensivo: T8 siempre la arma) no es reinicio', { etapa: 'DESCANSO', descansoHasta: null }],
   ])('%s', (_descripcion, overrides) => {
@@ -248,7 +248,7 @@ describe('esReactivable — RECHAZADO ∧ rechazadoHasta ≤ hoy (T15, spec G4 c
     expect(esReactivable(pipeline({ etapa: 'RECHAZADO', rechazadoHasta }), hoy)).toBe(esperado);
   });
 
-  it.each([
+  it.each<[string, Partial<PipelineEmpresa>]>([
     ['etapa activa nunca es reactivable', { etapa: 'SEGUIMIENTO', flujo: 'INBOUND', rechazadoHasta: null }],
     ['RECHAZADO sin fecha (defensivo: T14 siempre la arma) no es reactivable', { etapa: 'RECHAZADO', rechazadoHasta: null }],
   ])('%s', (_descripcion, overrides) => {

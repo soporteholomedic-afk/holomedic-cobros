@@ -135,6 +135,11 @@ describe('productividad Excel builder — header contract', () => {
 });
 
 describe('productividad Excel builder — header styling (pr7 conventions)', () => {
+  /** exceljs `Fill` is a union — only the pattern member carries fgColor. */
+  function argbRelleno(cell: ExcelJS.Cell): string | undefined {
+    return cell.fill?.type === 'pattern' ? cell.fill.fgColor?.argb : undefined;
+  }
+
   it('styles every header cell bold white on the brand fill', () => {
     const sheet = hojaDe(
       generarProductividadExcelWorkbook({
@@ -148,7 +153,7 @@ describe('productividad Excel builder — header styling (pr7 conventions)', () 
       const cell = sheet.getRow(2).getCell(columna);
       expect(cell.font?.bold, `columna ${columna} negrita`).toBe(true);
       expect(cell.font?.color?.argb, `columna ${columna} texto blanco`).toBe('FFFFFFFF');
-      expect(cell.fill?.fgColor?.argb, `columna ${columna} relleno marca`).toBe('FF0284C7');
+      expect(argbRelleno(cell), `columna ${columna} relleno marca`).toBe('FF0284C7');
     }
   });
 
@@ -163,7 +168,7 @@ describe('productividad Excel builder — header styling (pr7 conventions)', () 
 
     const titulo = sheet.getRow(1).getCell(1);
     expect(titulo.font?.bold).toBe(true);
-    expect(titulo.fill?.fgColor?.argb).toBeUndefined();
+    expect(argbRelleno(titulo)).toBeUndefined();
   });
 });
 
