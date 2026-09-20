@@ -40,6 +40,18 @@ export interface ProductividadExcelInput {
   filas: readonly FilaProductividad[];
 }
 
+/**
+ * The export's exact header contract, exported so the API route test
+ * (and any future consumer) pins against the same array the builder
+ * writes — no private copy anywhere.
+ */
+export const ENCABEZADOS_PRODUCTIVIDAD: string[] = [
+  'Usuario',
+  'Actividades',
+  'Resultados',
+  ...EVENTOS_RESULTADO.map((evento) => ETIQUETA_EVENTO_RESULTADO[evento]),
+];
+
 /** Build the workbook. Column order is the export's exact contract. */
 export function generarProductividadExcelWorkbook(
   input: ProductividadExcelInput,
@@ -54,12 +66,7 @@ export function generarProductividadExcelWorkbook(
   sheet.getRow(1).height = 22;
 
   // ---- Row 2: the 9-column header (bold white on the brand fill) ----
-  const encabezados: string[] = [
-    'Usuario',
-    'Actividades',
-    'Resultados',
-    ...EVENTOS_RESULTADO.map((evento) => ETIQUETA_EVENTO_RESULTADO[evento]),
-  ];
+  const encabezados = ENCABEZADOS_PRODUCTIVIDAD;
   encabezados.forEach((encabezado, index) => {
     const cell = sheet.getRow(2).getCell(index + 1);
     cell.value = encabezado;

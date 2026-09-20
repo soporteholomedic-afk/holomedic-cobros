@@ -6,6 +6,7 @@ import { getCrmDb } from '@/features/crm/infrastructure/getCrmDb';
 import { ListarProductividadUseCase } from '@/features/crm/application/listarProductividad';
 import type { FilaProductividad } from '@/features/crm/application/listarProductividad';
 import { buildCrmError, mapCrmError, type CrmErrorResponse } from '../empresas/errorResponse';
+import { esFechaValida } from './fechas';
 
 /**
  * `/api/crm/productividad` (permiso `crm`, tasks pr16/WU2, spec G6
@@ -31,22 +32,6 @@ interface ProductividadSuccess {
   desde: string;
   hasta: string;
   filas: FilaProductividad[];
-}
-
-const REGEX_FECHA = /^\d{4}-\d{2}-\d{2}$/;
-
-/**
- * Strict 'YYYY-MM-DD' shape + real calendar validity (regex alone
- * would accept 2026-02-31). Dates are naive America/Lima wall-clock
- * strings end to end (ADR-9); no timezone conversion anywhere.
- */
-function esFechaValida(valor: string): boolean {
-  if (!REGEX_FECHA.test(valor)) return false;
-  const [anio, mes, dia] = valor.split('-').map(Number);
-  const fecha = new Date(Date.UTC(anio ?? 0, (mes ?? 1) - 1, dia ?? 1));
-  return (
-    fecha.getUTCFullYear() === anio && fecha.getUTCMonth() === (mes ?? 0) - 1 && fecha.getUTCDate() === dia
-  );
 }
 
 export async function GET(

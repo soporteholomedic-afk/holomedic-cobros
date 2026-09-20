@@ -5,15 +5,18 @@ import { useState } from 'react';
 import { ETIQUETA_EVENTO_RESULTADO } from '../etiquetas';
 import { EVENTOS_RESULTADO, type TipoResultado } from '../../domain/maquinaEstados';
 import type { Periodo } from '../periodo';
+import { useExportarProductividad } from '../hooks/useExportarProductividad';
 import { useProductividad } from '../hooks/useProductividad';
 
 /**
  * ProductividadTable — the `/crm/productividad` body (tasks pr16/WU3,
  * spec G6 "Admin dashboard"). One row per user with actividades,
  * resultados and the zero-filled D4 event breakdown; the Desde/Hasta
- * selector re-fetches through `useProductividad`. The own-vs-all SCOPE
- * is the server's decision — the component renders whatever the API
- * returns, so the same table serves both kinds of session.
+ * selector re-fetches through `useProductividad`. The "Exportar
+ * Excel" button (pr17/WU2) exports the CURRENT selector period; the
+ * own-vs-all SCOPE is the server's decision — the component renders
+ * whatever the API returns, so the same table serves both kinds of
+ * session.
  */
 
 /** Module-level: one array for every render (header + all rows). */
@@ -22,6 +25,7 @@ const COLUMNAS_EVENTO: TipoResultado[] = [...EVENTOS_RESULTADO];
 export function ProductividadTable({ periodoInicial }: { periodoInicial: Periodo }) {
   const [periodo, setPeriodo] = useState<Periodo>(periodoInicial);
   const { filas, status, error, retry } = useProductividad(periodo.desde, periodo.hasta);
+  const { exportar, exportando, error: errorExportacion } = useExportarProductividad();
 
   return (
     <section aria-label="Productividad" className="space-y-4">
@@ -46,7 +50,24 @@ export function ProductividadTable({ periodoInicial }: { periodoInicial: Periodo
             className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm text-slate-800 focus:border-sky-500 focus:outline-none focus:ring-sky-500"
           />
         </label>
+        <button
+          type="button"
+          onClick={() => exportar(periodo)}
+          disabled={exportando}
+          className="rounded-lg bg-sky-600 px-4 py-2 text-sm font-medium text-white hover:bg-sky-700 disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          {exportando ? 'Exportando…' : 'Exportar Excel'}
+        </button>
       </div>
+
+      {errorExportacion && (
+        <div
+          role="alert"
+          className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700"
+        >
+          {errorExportacion}
+        </div>
+      )}
 
       {status === 'error' && (
         <div

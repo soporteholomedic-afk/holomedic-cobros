@@ -160,3 +160,77 @@ describe('ProductividadTable', () => {
     expect(screen.getByRole('button', { name: 'Reintentar' })).toBeInTheDocument();
   });
 });
+
+describe('ProductividadTable — Exportar Excel button (pr17/WU2)', () => {
+  function stubDownload(): ReturnType<typeof vi.fn> {
+    const clickMock = vi.fn();
+    vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:fake-url');
+    vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => undefined);
+    vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function (
+      this: HTMLAnchorElement,
+    ) {
+      clickMock(this);
+    });
+    return clickMock;
+  }
+
+  const MIME_XLSX =
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+
+  function excelOk(): Response {
+    return new Response(new Uint8Array([1, 2, 3]), {
+      status: 200,
+      headers: {
+        'content-type': MIME_XLSX,
+        'content-disposition': 'attachment; filename="productividad_2026-09-01_2026-09-30.xlsx"',
+      },
+    });
+  }
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('exports the CURRENT period when the button is clicked', async () => {
+    stubDownload();
+    fetchMock.mockImplementation((url: string | URL | Request) => {
+      const ruta = String(url);
+      return Promise.resolve(ruta.includes('/excel?') ? excelOk() : productividadOk([filaJperez]));
+    });
+
+    render(<ProductividadTable periodoInicial={PERIODO_INICIAL} />);
+    await waitFor(() => expect(screen.getByText('jperez')).toBeInTheDocument());
+
+    fireEvent.click(screen.getByRole('button', { name: 'Exportar Excel' }));
+
+    await waitFor(() =>
+      expect(fetchMock).toHaveBeenCalledWith(
+        '/api/crm/productividad/excel?desde=2026-09-01&hasta=2026-09-30',
+        { method: 'GET' },
+      ),
+    );
+  });
+
+  it('exports the EDITED period after the selector changes', async () => {
+    stubDownload();
+    fetchMock.mockImplementation((url: string | URL | Request) => {
+      const ruta = String(url);
+      return Promise.resolve(ruta.includes('/excel?') ? excelOk() : productividadOk([filaJperez]));
+    });
+
+    render(<ProductividadTable periodoInicial={PERIODO_INICIAL} />);
+    await waitFor(() => expect(screen.getByText('jperez')).toBeInTheDocument());
+
+    fireEvent.change(screen.getByLabelText('Desde'), { target: { value: '2026-09-10' } });
+    await waitFor(() => expect(fetchMock.mock.calls[1]?.[0]).toContain('desde=2026-09-10'));
+
+    fireEvent.click(screen.getByRole('button', { name: 'Exportar Excel' }));
+
+    await waitFor(() =>
+      expect(fetchMock).toHaveBeenLastCalledWith(
+        '/api/crm/productividad/excel?desde=2026-09-10&hasta=2026-09-30',
+        { method: 'GET' },
+      ),
+    );
+  });
+});
