@@ -48,7 +48,8 @@ export function buildEmpresasQuery(filtros: EmpresasFiltros): string {
   return qs === '' ? '/api/crm/empresas' : `/api/crm/empresas?${qs}`;
 }
 
-function isEmpresa(v: unknown): v is Empresa {
+/** Shape guard for a decoded Empresa — exported for the sibling write hooks (useCrearEmpresa). */
+export function isEmpresa(v: unknown): v is Empresa {
   if (typeof v !== 'object' || v === null) return false;
   const obj = v as Record<string, unknown>;
   return (
