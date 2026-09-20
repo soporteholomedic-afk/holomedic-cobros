@@ -42,6 +42,22 @@ export type TipoResultado =
   | 'ConversiónProspectoACliente';
 
 /**
+ * Runtime D4 catalog — the exact 6 result events (mirrors the
+ * CK_CRM_Resultados_Tipo CHECK), in catalog order. `AvanceDeEtapa` is
+ * deliberately absent: stage changes already live in CRM_Transiciones
+ * and must not double-count (design D4). Productivity reads and the
+ * pr17 export derive their breakdown columns from this list.
+ */
+export const EVENTOS_RESULTADO: readonly TipoResultado[] = [
+  'CotizaciónEnviada',
+  'PresentaciónEnviada',
+  'AceptaciónOutbound',
+  'ConfirmaciónPresentación',
+  'HandoffRegistrado',
+  'ConversiónProspectoACliente',
+];
+
+/**
  * Pipeline events. The design table names some rows with prose
  * ("3 envíos sin respuesta", "datos solicitados", "pasar a Outbound");
  * those get the stable machine-readable names here — the SAME string
