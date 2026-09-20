@@ -1,4 +1,4 @@
-import type { Etapa, Flujo } from '../domain/entities';
+import type { AccionAsignacion, Etapa, Flujo } from '../domain/entities';
 import {
   EVENTOS_PIPELINE,
   puedeTransicionar,
@@ -29,6 +29,13 @@ export const ETIQUETA_ETAPA: Record<Etapa, string> = {
   DATOS: 'Datos',
   DESCANSO: 'Descanso',
   RECHAZADO: 'Rechazado',
+};
+
+/** Assignment action labels for the per-empresa history (spec G5, pr15/WU2). */
+export const ETIQUETA_ACCION_ASIGNACION: Record<AccionAsignacion, string> = {
+  ASIGNADO: 'Asignado',
+  REASIGNADO: 'Reasignado',
+  DEVUELTO: 'Devuelto',
 };
 
 export const ETIQUETA_EVENTO: Record<EventoPipeline, string> = {

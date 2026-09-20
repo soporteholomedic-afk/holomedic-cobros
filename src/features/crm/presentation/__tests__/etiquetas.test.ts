@@ -3,12 +3,14 @@ import { describe, expect, it } from 'vitest';
 import { EVENTOS_PIPELINE } from '../../domain/maquinaEstados';
 import type { Etapa } from '../../domain/entities';
 import {
+  ETIQUETA_ACCION_ASIGNACION,
   ETIQUETA_ETAPA,
   ETIQUETA_EVENTO,
   ETIQUETA_FLUJO,
   formatearFecha,
   transicionesDisponibles,
 } from '../etiquetas';
+import type { AccionAsignacion } from '../../domain/entities';
 
 describe('ETIQUETA_ETAPA / ETIQUETA_FLUJO (Spanish UI labels)', () => {
   it('covers every etapa of the machine with a non-empty Spanish label', () => {
@@ -89,5 +91,16 @@ describe('formatearFecha', () => {
 
   it('formats a DATE-only string without a time part', () => {
     expect(formatearFecha('2026-12-25')).toBe('25/12/2026');
+  });
+});
+
+describe('ETIQUETA_ACCION_ASIGNACION (spec G5 assignment history labels)', () => {
+  it('covers the three assignment actions with Spanish labels', () => {
+    const acciones: AccionAsignacion[] = ['ASIGNADO', 'REASIGNADO', 'DEVUELTO'];
+    expect(acciones.map((a) => ETIQUETA_ACCION_ASIGNACION[a])).toEqual([
+      'Asignado',
+      'Reasignado',
+      'Devuelto',
+    ]);
   });
 });
