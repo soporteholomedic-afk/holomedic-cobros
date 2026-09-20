@@ -4,6 +4,7 @@ import {
   puedeTransicionar,
   type EstadoPipeline,
   type EventoPipeline,
+  type TipoResultado,
 } from '../domain/maquinaEstados';
 
 /**
@@ -51,6 +52,21 @@ export const ETIQUETA_EVENTO: Record<EventoPipeline, string> = {
   PasarAOutbound: 'Pasar a Outbound',
   Rechazo: 'Rechazar',
   Reactivar: 'Reactivar',
+};
+
+/**
+ * Result-event labels for the productivity breakdown columns (spec
+ * G6, pr16/WU3) — record-noun phrasing (a thing that HAPPENED),
+ * unlike the action-style ETIQUETA_EVENTO transitions. Covers exactly
+ * the D4 catalog (EVENTOS_RESULTADO).
+ */
+export const ETIQUETA_EVENTO_RESULTADO: Record<TipoResultado, string> = {
+  CotizaciónEnviada: 'Cotización enviada',
+  PresentaciónEnviada: 'Presentación enviada',
+  AceptaciónOutbound: 'Aceptación outbound',
+  ConfirmaciónPresentación: 'Confirmación de presentación',
+  HandoffRegistrado: 'Handoff registrado',
+  ConversiónProspectoACliente: 'Conversión a cliente',
 };
 
 /** Event label with a verbatim fallback for unknown audit values. */

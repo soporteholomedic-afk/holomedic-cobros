@@ -1,11 +1,12 @@
 import { describe, expect, it } from 'vitest';
 
-import { EVENTOS_PIPELINE } from '../../domain/maquinaEstados';
+import { EVENTOS_PIPELINE, EVENTOS_RESULTADO } from '../../domain/maquinaEstados';
 import type { Etapa } from '../../domain/entities';
 import {
   ETIQUETA_ACCION_ASIGNACION,
   ETIQUETA_ETAPA,
   ETIQUETA_EVENTO,
+  ETIQUETA_EVENTO_RESULTADO,
   ETIQUETA_FLUJO,
   formatearFecha,
   transicionesDisponibles,
@@ -102,5 +103,22 @@ describe('ETIQUETA_ACCION_ASIGNACION (spec G5 assignment history labels)', () =>
       'Reasignado',
       'Devuelto',
     ]);
+  });
+});
+
+describe('ETIQUETA_EVENTO_RESULTADO (spec G6 productivity breakdown labels)', () => {
+  it('labels every D4 result event in Spanish', () => {
+    expect(ETIQUETA_EVENTO_RESULTADO).toEqual({
+      CotizaciónEnviada: 'Cotización enviada',
+      PresentaciónEnviada: 'Presentación enviada',
+      AceptaciónOutbound: 'Aceptación outbound',
+      ConfirmaciónPresentación: 'Confirmación de presentación',
+      HandoffRegistrado: 'Handoff registrado',
+      ConversiónProspectoACliente: 'Conversión a cliente',
+    });
+  });
+
+  it('covers EXACTLY the runtime D4 catalog (no drift)', () => {
+    expect(Object.keys(ETIQUETA_EVENTO_RESULTADO).sort()).toEqual([...EVENTOS_RESULTADO].sort());
   });
 });
