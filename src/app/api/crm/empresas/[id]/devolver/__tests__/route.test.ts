@@ -7,6 +7,13 @@ vi.mock('@/lib/auth', () => ({
   getSession: mockGetSession,
 }));
 
+// ---- Mock the idUsuario→usuario lookup seam (cartera route.test.ts precedent) ----
+
+const mockGetUsuarioDb = vi.hoisted(() => vi.fn());
+vi.mock('@/features/auth/infrastructure/getUsuarioDb', () => ({
+  getUsuarioDb: mockGetUsuarioDb,
+}));
+
 // ---- Import under test (after mocks) ----
 
 import { POST } from '../route';
@@ -67,10 +74,22 @@ function setDb(empresas: CrmEmpresaRepositoryPort, asignaciones: CrmAsignaciones
   } satisfies CrmDb);
 }
 
-/** Session `sub` values: u-jperez owns the fixture empresa; u-mgarcia does not. */
+/**
+ * Session `sub` values are OPAQUE auth IDs (idUsuario) — the route must
+ * resolve each to a login name via getById; 'u-jperez' resolves to
+ * 'jperez' (owner of the fixture empresa), 'u-mgarcia' to 'mgarcia'.
+ */
 const crmJperez = { sub: 'u-jperez', nombre: 'Juan Perez', area: 'ventas', permisos: ['crm'] };
 const crmMgarcia = { sub: 'u-mgarcia', nombre: 'Maria Garcia', area: 'ventas', permisos: ['crm'] };
 const adminMgarcia = { ...crmMgarcia, permisos: ['crm', 'crm_admin'] };
+
+function mockUsuarioLookup(mapa: Record<string, string | null>): void {
+  mockGetUsuarioDb.mockResolvedValue({
+    getById: vi.fn(async (id: string) =>
+      mapa[id] === undefined ? null : { idUsuario: id, usuario: mapa[id] },
+    ),
+  });
+}
 
 function routeContext(id: string): { params: Promise<{ id: string }> } {
   return { params: Promise.resolve({ id }) };
@@ -86,6 +105,9 @@ function jsonPost(id: string): Parameters<typeof POST>[0] {
 beforeEach(() => {
   vi.clearAllMocks();
   mockGetSession.mockReset();
+  mockGetUsuarioDb.mockReset();
+  // Canonical resolution default: every authenticated fixture resolves.
+  mockUsuarioLookup({ 'u-jperez': 'jperez', 'u-mgarcia': 'mgarcia', 'usr-7f3a': 'jperez' });
 });
 
 afterEach(() => {
@@ -139,6 +161,33 @@ describe('POST /api/crm/empresas/[id]/devolver — owner or crm_admin in-route (
     );
   });
 
+  it('returns 200 DEVUELTO when a PRODUCTION-identity owner returns the empresa (sub = opaque idUsuario, resolved via getById)', async () => {
+    // REGRESSION (verify flag 1, tasks risks 17/18): real sessions carry
+    // session.sub = dbo.usuarios.idUsuario (an opaque ID), while
+    // CRM_Empresas.responsable stores the login username. The owner match
+    // MUST resolve sub → usuario through the auth module's getById (the
+    // pr15 cartera canonical resolution), not string notation tricks.
+    mockGetSession.mockResolvedValue({ sub: 'usr-7f3a', nombre: 'Juan Perez', area: 'ventas', permisos: ['crm'] });
+    mockUsuarioLookup({ 'usr-7f3a': 'jperez' });
+    const asignaciones = makeFakeAsignaciones();
+    setDb(makeFakeEmpresas(), asignaciones);
+
+    const response = await POST(jsonPost('42'), routeContext('42'));
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body).toEqual({ success: true, accion: 'DEVUELTO', responsablePrevio: 'jperez' });
+    expect(asignaciones.registrarAsignacion).toHaveBeenCalledWith(
+      expect.objectContaining({
+        empresaId: 42,
+        accion: 'DEVUELTO',
+        responsablePrevio: 'jperez',
+        responsableNuevo: null,
+        actorUsuario: 'usr-7f3a',
+      }),
+    );
+  });
+
   it('returns 200 DEVUELTO when an ADMIN (non-owner) returns the empresa', async () => {
     mockGetSession.mockResolvedValue(adminMgarcia);
     const asignaciones = makeFakeAsignaciones();
@@ -164,6 +213,20 @@ describe('POST /api/crm/empresas/[id]/devolver — owner or crm_admin in-route (
 
     expect(response.status).toBe(403);
     expect(body.code).toBe('FORBIDDEN');
+    expect(asignaciones.registrarAsignacion).not.toHaveBeenCalled();
+  });
+
+  it('returns 401 when the session’s idUsuario no longer resolves (stale session)', async () => {
+    mockGetSession.mockResolvedValue(crmJperez);
+    mockUsuarioLookup({}); // getById → null for any id
+    const asignaciones = makeFakeAsignaciones();
+    setDb(makeFakeEmpresas(), asignaciones);
+
+    const response = await POST(jsonPost('42'), routeContext('42'));
+    const body = await response.json();
+
+    expect(response.status).toBe(401);
+    expect(body.code).toBe('UNAUTHORIZED');
     expect(asignaciones.registrarAsignacion).not.toHaveBeenCalled();
   });
 

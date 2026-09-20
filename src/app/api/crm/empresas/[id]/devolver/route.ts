@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 
 import { getSession } from '@/lib/auth';
+import { getUsuarioDb } from '@/features/auth/infrastructure/getUsuarioDb';
 import { getCrmDb } from '@/features/crm/infrastructure/getCrmDb';
 import { DevolverEmpresaUseCase } from '@/features/crm/application/devolverEmpresa';
 import { buildCrmError, mapCrmError, type CrmErrorResponse } from '../../errorResponse';
@@ -13,26 +14,21 @@ import { buildCrmError, mapCrmError, type CrmErrorResponse } from '../../errorRe
  * assignment itself is admin-only). The owner UPDATE + the DEVUELTO
  * audit INSERT land in ONE transaction inside the use case.
  *
- * Identity note: `session.sub` carries the auth ID (dbo.usuarios.
- * idUsuario) while `CRM_Empresas.responsable` stores the login username
- * (dbo.usuarios.usuario) — the route contract pins the "u-<usuario>" ID
- * form as the owning session, so the match accepts either notation.
- * pr15 (cartera scoping) owns the canonical idUsuario→usuario
- * resolution; flagged for design review at verify.
+ * Identity resolution (verify remediation for tasks risks 17/18 — the
+ * pr15 cartera canonical pattern): `session.sub` carries the opaque
+ * auth ID (dbo.usuarios.idUsuario) while `CRM_Empresas.responsable`
+ * stores the login username (dbo.usuarios.usuario). The route resolves
+ * sub → usuario ONCE via the auth module's own container
+ * (`getUsuarioDb().getById(sub)`; single PK lookup, no new identity
+ * scheme) and matches the owner against the RESOLVED login name. A
+ * session whose user row no longer exists gets 401 — ownership cannot
+ * be established without a verified username.
  */
 
 interface DevolverSuccess {
   success: true;
   accion: 'DEVUELTO';
   responsablePrevio: string;
-}
-
-/**
- * Ownership match between the session identity and the stored owner:
- * accepts the raw username or its "u-"-prefixed auth-ID form.
- */
-function esSesionDelResponsable(sub: string, responsable: string): boolean {
-  return sub === responsable || sub === `u-${responsable}`;
 }
 
 function parseEmpresaId(raw: string): number | null {
@@ -57,6 +53,18 @@ export async function POST(
       return buildCrmError('VALIDATION_ERROR', '"id" debe ser un número entero positivo', 400);
     }
 
+    // Canonical idUsuario → usuario resolution (pr15 cartera precedent).
+    const usuarios = await getUsuarioDb();
+    const filaUsuario = await usuarios.getById(session.sub);
+    const usuario = filaUsuario?.usuario ?? null;
+    if (usuario === null) {
+      return buildCrmError(
+        'UNAUTHORIZED',
+        'La sesión ya no corresponde a un usuario válido',
+        401,
+      );
+    }
+
     const { empresas, asignaciones } = await getCrmDb();
     const empresa = await empresas.obtenerPorId(id);
     if (!empresa) {
@@ -64,8 +72,7 @@ export async function POST(
     }
 
     const esAdmin = session.permisos.includes('crm_admin');
-    const esOwner =
-      empresa.responsable !== null && esSesionDelResponsable(session.sub, empresa.responsable);
+    const esOwner = empresa.responsable !== null && usuario === empresa.responsable;
     if (!esOwner && !esAdmin) {
       return buildCrmError(
         'FORBIDDEN',
