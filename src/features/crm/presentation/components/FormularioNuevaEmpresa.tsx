@@ -191,7 +191,6 @@ export function FormularioNuevaEmpresa() {
                   value="Cliente"
                   checked={estado.tipo === 'Cliente'}
                   onChange={() => actualizar('tipo', 'Cliente')}
-                  aria-invalid={errores.tipo ? true : undefined}
                 />
                 Cliente
               </label>
@@ -202,7 +201,6 @@ export function FormularioNuevaEmpresa() {
                   value="Prospecto"
                   checked={estado.tipo === 'Prospecto'}
                   onChange={() => actualizar('tipo', 'Prospecto')}
-                  aria-invalid={errores.tipo ? true : undefined}
                 />
                 Prospecto
               </label>
