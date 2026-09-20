@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, type FormEvent } from 'react';
+import Link from 'next/link';
 
 import type { TipoEmpresa } from '../../domain/entities';
 import { useEmpresas } from '../hooks/useEmpresas';
@@ -9,6 +10,8 @@ import { useEmpresas } from '../hooks/useEmpresas';
  * EmpresaList — the `/crm` registry list (spec G1). Owns the filter
  * inputs (q applied on submit to avoid a fetch per keystroke; tipo
  * applies immediately) and delegates fetching to `useEmpresas`.
+ * Every row links to the empresa detail page (registry → detail flow;
+ * post-verify UX remediation — ColaHoy/CarteraTable precedent).
  * All labels Spanish (repo convention).
  */
 export function EmpresaList() {
@@ -112,7 +115,14 @@ export function EmpresaList() {
               {empresas.map((empresa) => (
                 <tr key={empresa.id} className="hover:bg-slate-50">
                   <td className="px-4 py-3 font-mono text-xs text-slate-600">{empresa.ruc}</td>
-                  <td className="px-4 py-3 font-medium text-slate-800">{empresa.razonSocial}</td>
+                  <td className="px-4 py-3 font-medium text-slate-800">
+                    <Link
+                      href={`/crm/empresas/${empresa.id}`}
+                      className="hover:text-sky-600 hover:underline"
+                    >
+                      {empresa.razonSocial}
+                    </Link>
+                  </td>
                   <td className="px-4 py-3">{empresa.tipo}</td>
                   <td className="px-4 py-3 text-slate-600">
                     {empresa.responsable ?? 'Sin asignar'}

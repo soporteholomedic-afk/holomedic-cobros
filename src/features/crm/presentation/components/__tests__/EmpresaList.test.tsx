@@ -65,6 +65,26 @@ describe('EmpresaList', () => {
     expect(screen.getByRole('button', { name: 'Buscar' })).toBeInTheDocument();
   });
 
+  it('links each row to its empresa detail page (registry → detail flow)', async () => {
+    fetchMock.mockResolvedValue(
+      okResponse({
+        success: true,
+        empresas: [makeEmpresa(), makeEmpresa({ id: 2, razonSocial: 'Clinica Y' })],
+      }),
+    );
+
+    render(<EmpresaList />);
+
+    expect(await screen.findByRole('link', { name: 'Constructora X' })).toHaveAttribute(
+      'href',
+      '/crm/empresas/1',
+    );
+    expect(screen.getByRole('link', { name: 'Clinica Y' })).toHaveAttribute(
+      'href',
+      '/crm/empresas/2',
+    );
+  });
+
   it('refetches with the q filter when the search form is submitted', async () => {
     const user = userEvent.setup();
     fetchMock.mockResolvedValue(okResponse({ success: true, empresas: [] }));
