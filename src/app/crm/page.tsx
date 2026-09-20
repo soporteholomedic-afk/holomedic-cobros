@@ -1,5 +1,6 @@
 import { Suspense } from 'react';
 
+import { getSession } from '@/lib/auth';
 import { EmpresaList } from '@/features/crm/presentation/components/EmpresaList';
 
 /**
@@ -7,8 +8,15 @@ import { EmpresaList } from '@/features/crm/presentation/components/EmpresaList'
  * RUTAS_PROTEGIDAS via the proxy (permiso `crm`). Server Component
  * wrapper keeps the header outside the `<Suspense>` boundary the
  * client-side list needs (consolidados/historial-envios precedent).
+ * The session is read ONCE here to derive `esAdmin` for the client
+ * list (cartera/page.tsx precedent) — the POST behind the "Nueva
+ * empresa" affordance is crm_admin-gated in-route and stays the real
+ * security boundary.
  */
-export default function CrmPage() {
+export default async function CrmPage() {
+  const session = await getSession();
+  const esAdmin = session?.permisos.includes('crm_admin') ?? false;
+
   return (
     <main className="mx-auto max-w-6xl space-y-6 p-6">
       <header>
@@ -25,7 +33,7 @@ export default function CrmPage() {
           </div>
         }
       >
-        <EmpresaList />
+        <EmpresaList esAdmin={esAdmin} />
       </Suspense>
     </main>
   );

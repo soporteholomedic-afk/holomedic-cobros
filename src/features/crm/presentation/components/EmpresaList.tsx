@@ -12,9 +12,17 @@ import { useEmpresas } from '../hooks/useEmpresas';
  * applies immediately) and delegates fetching to `useEmpresas`.
  * Every row links to the empresa detail page (registry → detail flow;
  * post-verify UX remediation — ColaHoy/CarteraTable precedent).
+ * crm_admin users additionally get the "Nueva empresa" entry point to
+ * the manual registration page (the POST is crm_admin-gated in-route;
+ * this prop only drives the affordance — CarteraTable esAdmin model).
  * All labels Spanish (repo convention).
  */
-export function EmpresaList() {
+export interface EmpresaListProps {
+  /** Session-derived elevation; shows the Nueva empresa affordance. */
+  esAdmin: boolean;
+}
+
+export function EmpresaList({ esAdmin }: EmpresaListProps) {
   const [qInput, setQInput] = useState('');
   const [q, setQ] = useState('');
   const [tipo, setTipo] = useState<'' | TipoEmpresa>('');
@@ -68,6 +76,14 @@ export function EmpresaList() {
         >
           Limpiar
         </button>
+        {esAdmin && (
+          <Link
+            href="/crm/empresas/nueva"
+            className="ml-auto rounded-lg bg-slate-800 px-4 py-2 text-sm font-medium text-white hover:bg-slate-700"
+          >
+            Nueva empresa
+          </Link>
+        )}
       </form>
 
       {status === 'error' && (

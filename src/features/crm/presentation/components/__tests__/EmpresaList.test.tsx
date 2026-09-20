@@ -56,7 +56,7 @@ describe('EmpresaList', () => {
       }),
     );
 
-    render(<EmpresaList />);
+    render(<EmpresaList esAdmin={false} />);
 
     expect(await screen.findByText('Constructora X')).toBeInTheDocument();
     expect(screen.getByText('Clinica Y')).toBeInTheDocument();
@@ -73,7 +73,7 @@ describe('EmpresaList', () => {
       }),
     );
 
-    render(<EmpresaList />);
+    render(<EmpresaList esAdmin={false} />);
 
     expect(await screen.findByRole('link', { name: 'Constructora X' })).toHaveAttribute(
       'href',
@@ -89,7 +89,7 @@ describe('EmpresaList', () => {
     const user = userEvent.setup();
     fetchMock.mockResolvedValue(okResponse({ success: true, empresas: [] }));
 
-    render(<EmpresaList />);
+    render(<EmpresaList esAdmin={false} />);
     await screen.findByText('No se encontraron empresas.');
 
     await user.type(screen.getByLabelText('Buscar empresa'), 'constructora');
@@ -106,7 +106,7 @@ describe('EmpresaList', () => {
     const user = userEvent.setup();
     fetchMock.mockResolvedValue(okResponse({ success: true, empresas: [] }));
 
-    render(<EmpresaList />);
+    render(<EmpresaList esAdmin={false} />);
     await screen.findByText('No se encontraron empresas.');
 
     await user.selectOptions(screen.getByLabelText('Filtrar por tipo'), 'Prospecto');
@@ -126,7 +126,7 @@ describe('EmpresaList', () => {
       )
       .mockResolvedValueOnce(okResponse({ success: true, empresas: [makeEmpresa()] }));
 
-    render(<EmpresaList />);
+    render(<EmpresaList esAdmin={false} />);
 
     const alerta = await screen.findByRole('alert');
     expect(alerta).toHaveTextContent('No autorizado');
@@ -139,8 +139,28 @@ describe('EmpresaList', () => {
   it('shows the empty state after a filter with no results', async () => {
     fetchMock.mockResolvedValue(okResponse({ success: true, empresas: [] }));
 
-    render(<EmpresaList />);
+    render(<EmpresaList esAdmin={false} />);
 
     expect(await screen.findByText('No se encontraron empresas.')).toBeInTheDocument();
+  });
+
+  it('offers the Nueva empresa entry only to crm_admin (the POST is crm_admin-gated)', async () => {
+    fetchMock.mockResolvedValue(okResponse({ success: true, empresas: [makeEmpresa()] }));
+
+    render(<EmpresaList esAdmin={true} />);
+
+    expect(await screen.findByRole('link', { name: 'Nueva empresa' })).toHaveAttribute(
+      'href',
+      '/crm/empresas/nueva',
+    );
+  });
+
+  it('hides the Nueva empresa entry for plain crm users', async () => {
+    fetchMock.mockResolvedValue(okResponse({ success: true, empresas: [makeEmpresa()] }));
+
+    render(<EmpresaList esAdmin={false} />);
+
+    expect(await screen.findByText('Constructora X')).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Nueva empresa' })).not.toBeInTheDocument();
   });
 });
