@@ -53,6 +53,8 @@ export class InMemoryCrmEmpresaRepository implements CrmEmpresaRepositoryPort {
       destinoComun: datos.destinoComun ?? null,
       notas: datos.notas ?? null,
       responsable: datos.responsable ?? null,
+      sector: datos.sector ?? null,
+      cantidadTrabajadores: datos.cantidadTrabajadores ?? null,
       contactos: datos.contactos.map((c) => this.mapContacto(id, c)),
       createdAt: now,
       updatedAt: now,
@@ -126,6 +128,7 @@ export class InMemoryCrmEmpresaRepository implements CrmEmpresaRepositoryPort {
       empresaId,
       nombre: c.nombre,
       telefono: c.telefono ?? null,
+      cargo: c.cargo ?? null,
       esPrincipal: c.esPrincipal === true,
       correos,
     };

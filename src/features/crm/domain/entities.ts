@@ -9,6 +9,25 @@
 /** Exactly one per empresa (spec G1; CHECK-backed in CRM_Empresas). */
 export type TipoEmpresa = 'Cliente' | 'Prospecto';
 
+/**
+ * The six-value sector domain (rediseno-crm-panel, design D6; spec
+ * crm-data-normalization). CANONICAL STORAGE FORM = the labels
+ * themselves ("Minería y Energía" is stored, spec OQ3 resolved); the
+ * alta rubro select preselects the first. Single source — the Excel
+ * vocabulary, the modal options and the SQL NVARCHAR(60) column all
+ * derive from this list.
+ */
+export const SECTORES_CRM = [
+  'Construcción',
+  'Minería y Energía',
+  'Fábrica y Producción',
+  'Transporte y Almacén',
+  'Comercio y Tiendas',
+  'Oficinas y Servicios',
+] as const;
+
+export type SectorCrm = (typeof SECTORES_CRM)[number];
+
 /** Registration door (design D3); NULL = not yet classified. */
 export type Origen = 'Inbound' | 'Outbound';
 
@@ -106,6 +125,14 @@ export interface Empresa {
   notas: string | null;
   /** Nullable username; NULL = unassigned/pool (spec G5). */
   responsable: string | null;
+  /**
+   * Operational rubro (rediseno-crm-panel D6); NULL = pre-change rows.
+   * Optional so non-SQL fakes stay valid; the SQL adapter always sets it
+   * (Contacto.cargo precedent).
+   */
+  sector?: SectorCrm | null;
+  /** Head-count for the OcupaCare offering; NULL = unknown. */
+  cantidadTrabajadores?: number | null;
   contactos: Contacto[];
   createdAt: string;
   updatedAt: string;
@@ -116,6 +143,8 @@ export interface Empresa {
 export interface CrearContactoInput {
   nombre: string;
   telefono?: string | null;
+  /** Operational role label shown on the panel (alta default "Recursos Humanos / Seguridad"). */
+  cargo?: string | null;
   /**
    * Undefined principal → the FIRST listed contacto becomes principal
    * (spec G1 default-principal scenario). Swap demotes the other.
@@ -134,6 +163,9 @@ export interface CrearEmpresaInput {
   destinoComun?: string | null;
   notas?: string | null;
   responsable?: string | null;
+  /** Rubro label from SECTORES_CRM; omitted → NULL (alta can defer it). */
+  sector?: SectorCrm | null;
+  cantidadTrabajadores?: number | null;
   contactos: CrearContactoInput[];
 }
 

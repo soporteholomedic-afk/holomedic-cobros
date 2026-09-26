@@ -390,3 +390,81 @@ export interface CrmAsignacionesRepositoryPort {
   /** Assignment history for one empresa, newest first (spec G5). */
   listarAsignaciones(empresaId: number): Promise<AsignacionHistorial[]>;
 }
+
+// ---------------------------------------------------------------------------
+// Email sequencing ports (rediseno-crm-panel, design D3/D5) — the SMTP
+// dispatch and its durable send-log are different concerns, so they get
+// separate ports: `EnviadorCorreoCrmPort` wraps the app-wide sendEmail
+// utility behind a domain contract (purpose 'crm'), and
+// `CrmEnviosCorreoRepositoryPort` owns the CRM_EnviosCorreos rows. The
+// SQL Server adapter implements the repository port on the SAME
+// SqlServerPipelineRepository class (ADR-3 one-class-many-ports).
+// ---------------------------------------------------------------------------
+
+/** The 5 CRM templates (design D5; CHECK-backed in CRM_EnviosCorreos). */
+export type PlantillaCrmKey =
+  | 'carta_presentacion'
+  | 'seguimiento_1'
+  | 'seguimiento_2'
+  | 'seguimiento_3'
+  | 'reactivacion_3m';
+
+/** Everything the template render + SMTP send need for ONE dispatch. */
+export interface EnvioCrmCorreo {
+  /** Normalized principal-contacto address (the only recipient in v1). */
+  destinatario: string;
+  plantilla: PlantillaCrmKey;
+  /** Interpolation values for the verbatim template copy. */
+  empresa: string;
+  contacto: string;
+  sector: string | null;
+  trabajadores: number | null;
+}
+
+/**
+ * Typed SMTP outcome (design D5): the adapter surfaces the app-wide
+ * sendEmail error codes verbatim — the use case turns the failure arm
+ * into a FALLIDO log row and NEVER advances the machine.
+ */
+export type ResultadoEnvioCrm =
+  | { ok: true; messageId: string }
+  | { ok: false; error: 'SMTP_AUTH_ERROR' | 'SMTP_TIMEOUT' | 'SMTP_ERROR'; detalle: string };
+
+/** Outbound port for the CRM SMTP dispatch (purpose 'crm', dedicated sender). */
+export interface EnviadorCorreoCrmPort {
+  enviar(datos: EnvioCrmCorreo): Promise<ResultadoEnvioCrm>;
+}
+
+/** One CRM_EnviosCorreos write (design D3 columns). */
+export interface FilaEnvioCorreoAudit {
+  empresaId: number;
+  /** Addressee contacto when known; NULL = resolve failed after send. */
+  contactoId: number | null;
+  plantilla: PlantillaCrmKey;
+  destinatario: string;
+  messageId: string | null;
+  estado: 'ENVIADO' | 'FALLIDO';
+  errorInfo: string | null;
+  usuario: string;
+}
+
+/** One CRM_EnviosCorreos row as READ for the ficha timeline (spec OP-6). */
+export interface EnvioCorreoHistorial {
+  id: number;
+  plantilla: PlantillaCrmKey;
+  destinatario: string;
+  estado: 'ENVIADO' | 'FALLIDO';
+  createdAt: string;
+}
+
+/**
+ * Outbound port for the per-email dispatch log (spec crm-email-sequencing
+ * send-log persistence: template key, recipient, message id, timestamp
+ * + acting user, every dispatched email).
+ */
+export interface CrmEnviosCorreoRepositoryPort {
+  /** Insert ONE dispatch row (ENVIADO or FALLIDO); returns the BIGINT id. */
+  registrar(fila: FilaEnvioCorreoAudit): Promise<number>;
+  /** Send-log for one empresa, newest first (ficha timeline). */
+  listarPorEmpresa(empresaId: number): Promise<EnvioCorreoHistorial[]>;
+}
