@@ -80,7 +80,7 @@ export interface PipelineEmpresa {
   etapa: Etapa;
   /** Rest-cycle round (T9 increments; arms start at 1). */
   ciclo: number;
-  /** Sends logged in the current cycle (1–3; 0 = unarmed stage). */
+  /** Sends logged in the current cycle (1–4; 0 = unarmed stage). */
   enviosCiclo: number;
   /** Cycle start (T2/T7/T9/T12 arm = hoy). */
   fechaCicloInicio: string | null;

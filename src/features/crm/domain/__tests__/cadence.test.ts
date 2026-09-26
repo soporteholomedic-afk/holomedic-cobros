@@ -16,7 +16,7 @@ import type { PipelineEmpresa } from '../entities';
  * Pure date-math contract for the cadence engine (design §3): the
  * shared 3-month calendar arithmetic (DATEADD(month, 3, x) — descanso
  * T8→T9 and rechazo cooldown T14→T15), the weekly windows
- * (proximo = fechaUltimoEnvio + 7d exact), the 3-strike rule and the
+ * (proximo = fechaUltimoEnvio + 7d exact), the 4-strike rule and the
  * queue predicates (vencida / decisión requerida / reinicio /
  * reactivable). Every predicate receives `hoy` as an injected
  * DATE-only string — the domain never reads the wall clock.
@@ -90,7 +90,7 @@ describe('proximoEnvio — fechaUltimoEnvio + 7 días exactos (design §3 weekly
   });
 });
 
-describe('estaVencidaHoy — ACTIVE ∧ enviosCiclo < 3 ∧ proximo ≤ hoy (design §3)', () => {
+describe('estaVencidaHoy — ACTIVE ∧ enviosCiclo < 4 ∧ proximo ≤ hoy (design §3)', () => {
   it.each<[string, Partial<PipelineEmpresa>, string, boolean]>([
     [
       '6 días después del envío — la semana no venció',
@@ -123,8 +123,8 @@ describe('estaVencidaHoy — ACTIVE ∧ enviosCiclo < 3 ∧ proximo ≤ hoy (des
       true,
     ],
     [
-      '3-strike: enviosCiclo=3 NUNCA vuelve a vencer (sale por T8/T13)',
-      { etapa: 'SEGUIMIENTO', flujo: 'INBOUND', enviosCiclo: 3, fechaUltimoEnvio: '2026-09-07' },
+      '4-strike: enviosCiclo=4 NUNCA vuelve a vencer (sale por T8/T13)',
+      { etapa: 'SEGUIMIENTO', flujo: 'INBOUND', enviosCiclo: 4, fechaUltimoEnvio: '2026-09-07' },
       '2026-09-30',
       false,
     ],
@@ -161,12 +161,17 @@ describe('estaVencidaHoy — ACTIVE ∧ enviosCiclo < 3 ∧ proximo ≤ hoy (des
   });
 });
 
-describe('requiereDecision — IN/SEGUIMIENTO agotada → fork T13/T14 (design §3 3-strike)', () => {
+describe('requiereDecision — IN/SEGUIMIENTO agotada → fork T13/T14 (design §3 4-strike)', () => {
   it.each<[string, Partial<PipelineEmpresa>, boolean]>([
     [
-      'INBOUND/SEGUIMIENTO con 3 envíos sin respuesta → decisión requerida',
-      { flujo: 'INBOUND', etapa: 'SEGUIMIENTO', enviosCiclo: 3 },
+      'INBOUND/SEGUIMIENTO con 4 envíos sin respuesta → decisión requerida',
+      { flujo: 'INBOUND', etapa: 'SEGUIMIENTO', enviosCiclo: 4 },
       true,
+    ],
+    [
+      'INBOUND/SEGUIMIENTO con 3 envíos → la cadencia aún sigue',
+      { flujo: 'INBOUND', etapa: 'SEGUIMIENTO', enviosCiclo: 3 },
+      false,
     ],
     [
       'INBOUND/SEGUIMIENTO con 2 envíos → la cadencia sigue',
@@ -174,13 +179,13 @@ describe('requiereDecision — IN/SEGUIMIENTO agotada → fork T13/T14 (design �
       false,
     ],
     [
-      'OUTBOUND/CADENCIA con 3 envíos → NO es decisión (T8 es automático, asimetría del spec)',
-      { flujo: 'OUTBOUND', etapa: 'CADENCIA', enviosCiclo: 3 },
+      'OUTBOUND/CADENCIA con 4 envíos → NO es decisión (T8 es automático, asimetría del spec)',
+      { flujo: 'OUTBOUND', etapa: 'CADENCIA', enviosCiclo: 4 },
       false,
     ],
     [
-      'INBOUND/RECHAZADO con 3 envíos → no (está en cooldown, sale por T15)',
-      { flujo: 'INBOUND', etapa: 'RECHAZADO', enviosCiclo: 3, rechazadoHasta: '2026-12-19' },
+      'INBOUND/RECHAZADO con 4 envíos → no (está en cooldown, sale por T15)',
+      { flujo: 'INBOUND', etapa: 'RECHAZADO', enviosCiclo: 4, rechazadoHasta: '2026-12-19' },
       false,
     ],
   ])('%s', (_descripcion, overrides, esperado) => {
@@ -268,15 +273,15 @@ describe('seccionCola — the queue is the union of the four predicates (tasks p
     ).toBe('vencidasHoy');
   });
 
-  it('classifies an agotada INBOUND/SEGUIMIENTO as decisionRequerida (3-strike fork)', () => {
+  it('classifies an agotada INBOUND/SEGUIMIENTO as decisionRequerida (4-strike fork)', () => {
     expect(
-      seccionCola(pipeline({ flujo: 'INBOUND', etapa: 'SEGUIMIENTO', enviosCiclo: 3, fechaUltimoEnvio: '2026-09-05' }), HOY),
+      seccionCola(pipeline({ flujo: 'INBOUND', etapa: 'SEGUIMIENTO', enviosCiclo: 4, fechaUltimoEnvio: '2026-09-05' }), HOY),
     ).toBe('decisionRequerida');
   });
 
   it('classifies an expired DESCANSO as reinicios (T9 re-entry)', () => {
     expect(
-      seccionCola(pipeline({ etapa: 'DESCANSO', enviosCiclo: 3, descansoHasta: HOY }), HOY),
+      seccionCola(pipeline({ etapa: 'DESCANSO', enviosCiclo: 4, descansoHasta: HOY }), HOY),
     ).toBe('reinicios');
   });
 

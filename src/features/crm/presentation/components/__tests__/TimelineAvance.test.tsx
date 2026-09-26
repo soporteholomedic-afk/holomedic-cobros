@@ -102,8 +102,8 @@ describe('TimelineAvance — la historia viva', () => {
     expect(indiceActual).toBeGreaterThan(indiceHandoff);
     expect(indiceSigue).toBeGreaterThan(indiceActual);
 
-    // Medidor de envíos: 2 de 3.
-    expect(avance.getByTitle('Envíos del ciclo: 2 de 3')).toBeInTheDocument();
+    // Medidor de envíos: 2 de 4.
+    expect(avance.getByTitle('Envíos del ciclo: 2 de 4')).toBeInTheDocument();
   });
 
   it('fires onAccion with the chosen event from the ¿qué sigue? node', async () => {

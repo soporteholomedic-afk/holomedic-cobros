@@ -10,7 +10,7 @@
  *   projection — enviosCiclo+1, fechaUltimoEnvio = hoy, so the next
  *   `proximoEnvio` is exactly hoy + 7d and the empresa surfaces in
  *   the queue exactly once that week.
- * - 3rd send on OUTBOUND/CADENCIA: T8 fires AUTOMATICALLY — the
+ * - 4th send on OUTBOUND/CADENCIA: T8 fires AUTOMATICALLY — the
  *   machine (`transitar`) moves CADENCIA → DESCANSO and the pr10
  *   effects layer (`efectosTransicion`, keyed on the resolved T-row,
  *   never on the event name) sets descansoHasta = send date + 3
@@ -18,7 +18,7 @@
  * - A send logged on an expired DESCANSO (pr12's
  *   `esReinicioDeCadencia`): T9 fires — CADENCIA again, ciclo+1,
  *   envios=1, descansoHasta cleared.
- * - INBOUND's 3rd strike deliberately derives NOTHING (the T13/T14
+ * - INBOUND's 4th strike deliberately derives NOTHING (the T13/T14
  *   fork is a user decision): the counter projection lands and
  *   pr12's `requiereDecision` lights the decision queue up.
  *
@@ -79,11 +79,11 @@ export function aplicarEnvioCadencia(fila: PipelineEmpresa, hoy: string): Result
     };
   }
 
-  // Weekly window: ACTIVE stage, under the 3-strike, proximo ≤ hoy.
+  // Weekly window: ACTIVE stage, under the 4-strike, proximo ≤ hoy.
   if (estaVencidaHoy(fila, hoy)) {
     const proyeccion = proyeccionEnvioSemanal(fila, hoy);
 
-    // 3rd OUTBOUND strike: T8 is AUTOMATIC (design D3 asymmetry).
+    // 4th OUTBOUND strike: T8 is AUTOMATIC (design D2 asymmetry).
     // The effects read the row AFTER the increment, so descansoHasta
     // derives from the send being logged right now.
     if (fila.flujo === 'OUTBOUND' && proyeccion.enviosCiclo >= ENVIOS_POR_CICLO) {

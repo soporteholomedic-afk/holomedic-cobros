@@ -13,12 +13,12 @@ import { aplicarEnvioCadencia } from '../envioCadencia';
  *   the denormalization the queue scans, so the next proximo is
  *   exactly hoy + 7d;
  * - the pr10 machine effects when the send DERIVES a transition:
- *   the 3rd OUTBOUND/CADENCIA send auto-fires T8 (EnviosAgotados →
+ *   the 4th OUTBOUND/CADENCIA send auto-fires T8 (EnviosAgotados →
  *   DESCANSO, descansoHasta set) and a send logged on an expired
  *   DESCANSO fires T9 (ReinicioCadencia → CADENCIA, ciclo+1) — both
  *   through `efectosTransicion` keyed on the resolved T-row, never on
  *   the event name.
- * INBOUND's 3-strike deliberately stays transition-free (T13/T14 fork
+ * INBOUND's 4-strike deliberately stays transition-free (T13/T14 fork
  * is a USER decision — the pr12 spec asymmetry, test-locked here).
  * Zero mocks: pure functions over an injected `hoy`.
  */
@@ -74,14 +74,14 @@ describe('aplicarEnvioCadencia — weekly due send (plain counter projection)', 
   });
 });
 
-describe('aplicarEnvioCadencia — 3rd send on OUTBOUND/CADENCIA auto-fires T8', () => {
+describe('aplicarEnvioCadencia — 4th send on OUTBOUND/CADENCIA auto-fires T8', () => {
   it('derives EnviosAgotados via the machine: DESCANSO + descansoHasta = hoy + 3 months', () => {
     const resultado = aplicarEnvioCadencia(
       fila({
         flujo: 'OUTBOUND',
         etapa: 'CADENCIA',
         ciclo: 2,
-        enviosCiclo: 2,
+        enviosCiclo: 3,
         fechaCicloInicio: '2026-05-11',
         fechaUltimoEnvio: '2026-05-25',
       }),
@@ -94,11 +94,11 @@ describe('aplicarEnvioCadencia — 3rd send on OUTBOUND/CADENCIA auto-fires T8',
       estadoNuevo: { flujo: 'OUTBOUND', etapa: 'DESCANSO' },
     });
     // T8's descansoHasta derives from the JUST-LOGGED send date (hoy),
-    // and the send counter stays at 3 — the effects read the row AFTER
+    // and the send counter stays at 4 — the effects read the row AFTER
     // the weekly increment.
     expect(resultado.efectos).toEqual({
       ciclo: 2,
-      enviosCiclo: 3,
+      enviosCiclo: 4,
       fechaCicloInicio: '2026-05-11',
       fechaUltimoEnvio: HOY,
       descansoHasta: agregarMeses(HOY, 3),
@@ -107,31 +107,31 @@ describe('aplicarEnvioCadencia — 3rd send on OUTBOUND/CADENCIA auto-fires T8',
     });
   });
 
-  it('does NOT fire T8 before the 3rd send (2nd send stays a plain projection)', () => {
+  it('does NOT fire T8 before the 4th send (3rd send stays a plain projection)', () => {
     const resultado = aplicarEnvioCadencia(
       fila({
         flujo: 'OUTBOUND',
         etapa: 'CADENCIA',
         ciclo: 2,
-        enviosCiclo: 1,
+        enviosCiclo: 2,
         fechaUltimoEnvio: '2026-05-25',
       }),
       HOY,
     );
 
     expect(resultado.transicion).toBeNull();
-    expect(resultado.efectos.enviosCiclo).toBe(2);
+    expect(resultado.efectos.enviosCiclo).toBe(3);
     expect(resultado.efectos.descansoHasta).toBeNull();
   });
 
-  it('does NOT fire T8 on the INBOUND 3-strike: the fork stays a user decision (T13/T14)', () => {
+  it('does NOT fire T8 on the INBOUND 4-strike: the fork stays a user decision (T13/T14)', () => {
     const resultado = aplicarEnvioCadencia(
-      fila({ flujo: 'INBOUND', etapa: 'SEGUIMIENTO', enviosCiclo: 2, fechaUltimoEnvio: '2026-05-25' }),
+      fila({ flujo: 'INBOUND', etapa: 'SEGUIMIENTO', enviosCiclo: 3, fechaUltimoEnvio: '2026-05-25' }),
       HOY,
     );
 
     expect(resultado.transicion).toBeNull();
-    expect(resultado.efectos.enviosCiclo).toBe(3);
+    expect(resultado.efectos.enviosCiclo).toBe(4);
     expect(resultado.efectos.descansoHasta).toBeNull();
   });
 });
@@ -143,7 +143,7 @@ describe('aplicarEnvioCadencia — send logged on an expired DESCANSO fires T9',
         flujo: 'OUTBOUND',
         etapa: 'DESCANSO',
         ciclo: 2,
-        enviosCiclo: 3,
+        enviosCiclo: 4,
         fechaCicloInicio: '2026-03-02',
         fechaUltimoEnvio: '2026-03-16',
         descansoHasta: HOY,
@@ -180,7 +180,7 @@ describe('aplicarEnvioCadencia — send logged on an expired DESCANSO fires T9',
 describe('aplicarEnvioCadencia — sends outside the cadence are validation errors', () => {
   it('rejects a send for an agotada INBOUND/SEGUIMIENTO (decision queue owns it, not the send)', () => {
     expect(() =>
-      aplicarEnvioCadencia(fila({ enviosCiclo: 3, fechaUltimoEnvio: '2026-05-25' }), HOY),
+      aplicarEnvioCadencia(fila({ enviosCiclo: 4, fechaUltimoEnvio: '2026-05-25' }), HOY),
     ).toThrow(ValidationError);
   });
 

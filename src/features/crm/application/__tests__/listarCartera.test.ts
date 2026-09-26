@@ -204,18 +204,18 @@ describe('proximaAccion (pure — pipeline row + injected hoy, spec G4 predicate
   it('maps every cadence situation to its Spanish next action', () => {
     const casos: { pipeline: PipelineEmpresa | null; esperado: string }[] = [
       { pipeline: null, esperado: 'Sin pipeline' },
-      // Vencida: ACTIVE stage, envios < 3, proximo (05-25 + 7d = 06-01) <= hoy.
+      // Vencida: ACTIVE stage, envios < 4, proximo (05-25 + 7d = 06-01) <= hoy.
       {
         pipeline: candidato({ empresaId: 1, etapa: 'CADENCIA', fechaUltimoEnvio: '2026-05-25' }),
         esperado: 'Enviar seguimiento (vencido hoy)',
       },
-      // Fork INBOUND agotada (3 envíos): user decision T13/T14.
+      // Fork INBOUND agotada (4 envíos): user decision T13/T14.
       {
         pipeline: candidato({
           empresaId: 2,
           flujo: 'INBOUND',
           etapa: 'SEGUIMIENTO',
-          enviosCiclo: 3,
+          enviosCiclo: 4,
         }),
         esperado: 'Decisión requerida: pasar a Outbound o rechazar',
       },
@@ -224,7 +224,7 @@ describe('proximaAccion (pure — pipeline row + injected hoy, spec G4 predicate
         pipeline: candidato({
           empresaId: 3,
           etapa: 'DESCANSO',
-          enviosCiclo: 3,
+          enviosCiclo: 4,
           descansoHasta: HOY,
         }),
         esperado: 'Reiniciar cadencia',

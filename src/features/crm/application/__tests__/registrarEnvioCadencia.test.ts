@@ -130,18 +130,18 @@ describe('RegistrarEnvioCadenciaUseCase — el envío registrado escribe UN solo
     expect(resultado.pipeline).toEqual(filaTrasEnvio());
   });
 
-  it('3rd OUTBOUND send: the bundle carries the derived T8 (EnviosAgotados → DESCANSO)', async () => {
+  it('4th OUTBOUND send: the bundle carries the derived T8 (EnviosAgotados → DESCANSO)', async () => {
     const pipelines = new FakePipelineRepository();
     pipelines.filas.set(
       7,
-      filaVencida({ flujo: 'OUTBOUND', etapa: 'CADENCIA', ciclo: 2, enviosCiclo: 2, fechaUltimoEnvio: '2026-05-25' }),
+      filaVencida({ flujo: 'OUTBOUND', etapa: 'CADENCIA', ciclo: 2, enviosCiclo: 3, fechaUltimoEnvio: '2026-05-25' }),
     );
     const actividades = new FakeActividadesRepository();
     actividades.respuesta = filaTrasEnvio({
       flujo: 'OUTBOUND',
       etapa: 'DESCANSO',
       ciclo: 2,
-      enviosCiclo: 3,
+      enviosCiclo: 4,
       descansoHasta: '2026-09-01',
     });
 
@@ -159,7 +159,7 @@ describe('RegistrarEnvioCadenciaUseCase — el envío registrado escribe UN solo
     });
     expect(bundle?.estadoFinal).toEqual({ flujo: 'OUTBOUND', etapa: 'DESCANSO' });
     expect(bundle?.efectos.descansoHasta).toBe('2026-09-01');
-    expect(bundle?.efectos.enviosCiclo).toBe(3);
+    expect(bundle?.efectos.enviosCiclo).toBe(4);
   });
 
   it('send on an expired DESCANSO: the bundle carries the derived T9 (ReinicioCadencia, ciclo+1)', async () => {
@@ -170,7 +170,7 @@ describe('RegistrarEnvioCadenciaUseCase — el envío registrado escribe UN solo
         flujo: 'OUTBOUND',
         etapa: 'DESCANSO',
         ciclo: 2,
-        enviosCiclo: 3,
+        enviosCiclo: 4,
         fechaUltimoEnvio: '2026-03-16',
         descansoHasta: HOY,
       }),
