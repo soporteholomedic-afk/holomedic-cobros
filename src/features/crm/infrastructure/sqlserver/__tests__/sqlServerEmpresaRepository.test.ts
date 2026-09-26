@@ -100,6 +100,45 @@ describe('SqlServerEmpresaRepository', () => {
     }
   });
 
+  it('crear round-trips the normalization fields: sector, cantidadTrabajadores and contacto cargo', async () => {
+    const repo = new SqlServerEmpresaRepository(pool);
+    try {
+      const creada = await repo.crear({
+        ...inputAlfa(),
+        sector: 'Minería y Energía',
+        cantidadTrabajadores: 120,
+        contactos: [
+          {
+            nombre: 'José Pérez',
+            cargo: 'Recursos Humanos / Seguridad',
+            correos: ['jose@perez.com'],
+          },
+          { nombre: 'Ana Díaz', correos: ['ana@diaz.com'], esPrincipal: true },
+        ],
+      });
+
+      // CREATE→READ through the SAME aggregate mapping (cargar).
+      expect(creada.sector).toBe('Minería y Energía');
+      expect(creada.cantidadTrabajadores).toBe(120);
+      expect(creada.contactos[0]?.cargo).toBe('Recursos Humanos / Seguridad');
+
+      const releida = await repo.obtenerPorId(creada.id);
+      expect(releida?.sector).toBe('Minería y Energía');
+      expect(releida?.cantidadTrabajadores).toBe(120);
+      expect(releida?.contactos[0]?.cargo).toBe('Recursos Humanos / Seguridad');
+      // Absent fields stay NULL (additive columns, pre-change rows keep NULL).
+      const sinDatos = await repo.crear({
+        ...inputAlfa(),
+        ruc: '0000000000995',
+        contactos: [{ nombre: 'Ana Díaz', correos: ['ana@diaz.com'], esPrincipal: true }],
+      });
+      expect(sinDatos.sector).toBeNull();
+      expect(sinDatos.cantidadTrabajadores).toBeNull();
+    } finally {
+      await pool.request().query(`DELETE FROM dbo.CRM_Empresas WHERE ${PROBE_KEY}`);
+    }
+  });
+
   it('crear rejects a duplicated normalized RUC with ConflictError', async () => {
     const repo = new SqlServerEmpresaRepository(pool);
     try {

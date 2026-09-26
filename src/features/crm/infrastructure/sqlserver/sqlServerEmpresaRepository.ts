@@ -47,6 +47,8 @@ interface EmpresaRow {
   destinoComun: string | null;
   notas: string | null;
   responsable: string | null;
+  sector: string | null;
+  cantidadTrabajadores: number | null;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -87,11 +89,13 @@ export class SqlServerEmpresaRepository implements CrmEmpresaRepositoryPort {
           .input('proyectoObra', mssql.NVarChar(200), datos.proyectoObra ?? null)
           .input('destinoComun', mssql.NVarChar(200), datos.destinoComun ?? null)
           .input('notas', mssql.NVarChar(mssql.MAX), datos.notas ?? null)
-          .input('responsable', mssql.NVarChar(200), datos.responsable ?? null).query(`
+          .input('responsable', mssql.NVarChar(200), datos.responsable ?? null)
+          .input('sector', mssql.NVarChar(60), datos.sector ?? null)
+          .input('cantidadTrabajadores', mssql.Int, datos.cantidadTrabajadores ?? null).query(`
             INSERT INTO dbo.CRM_Empresas
-              (ruc, rucNormalizado, razonSocial, tipo, origen, proyectoObra, destinoComun, notas, responsable)
+              (ruc, rucNormalizado, razonSocial, tipo, origen, proyectoObra, destinoComun, notas, responsable, sector, cantidadTrabajadores)
             OUTPUT INSERTED.id
-            VALUES (@ruc, @rucNormalizado, @razonSocial, @tipo, @origen, @proyectoObra, @destinoComun, @notas, @responsable)
+            VALUES (@ruc, @rucNormalizado, @razonSocial, @tipo, @origen, @proyectoObra, @destinoComun, @notas, @responsable, @sector, @cantidadTrabajadores)
           `);
         const empresaId = (inserted.recordset as { id: number }[])[0]?.id;
         if (empresaId === undefined) throw new Error('INSERT de CRM_Empresas no devolvió id');
@@ -212,11 +216,12 @@ export class SqlServerEmpresaRepository implements CrmEmpresaRepositoryPort {
       .input('nombre', mssql.NVarChar(200), contacto.nombre)
       .input('nombreNormalizado', mssql.VarChar(200), normalizarNombre(contacto.nombre))
       .input('telefono', mssql.VarChar(30), contacto.telefono ?? null)
+      .input('cargo', mssql.NVarChar(120), contacto.cargo ?? null)
       .input('esPrincipal', mssql.Bit, contacto.esPrincipal === true)
       .query(`
-        INSERT INTO dbo.CRM_Contactos (empresaId, nombre, nombreNormalizado, telefono, esPrincipal)
+        INSERT INTO dbo.CRM_Contactos (empresaId, nombre, nombreNormalizado, telefono, cargo, esPrincipal)
         OUTPUT INSERTED.id
-        VALUES (@empresaId, @nombre, @nombreNormalizado, @telefono, @esPrincipal)
+        VALUES (@empresaId, @nombre, @nombreNormalizado, @telefono, @cargo, @esPrincipal)
       `);
     const contactoId = (inserted.recordset as { id: number }[])[0]?.id;
     if (contactoId === undefined) throw new Error('INSERT de CRM_Contactos no devolvió id');
@@ -245,7 +250,7 @@ export class SqlServerEmpresaRepository implements CrmEmpresaRepositoryPort {
 
     const empresasRes = await request.query(`
       SELECT id, ruc, rucNormalizado, razonSocial, tipo, origen, proyectoObra, destinoComun,
-             notas, responsable, createdAt, updatedAt
+             notas, responsable, sector, cantidadTrabajadores, createdAt, updatedAt
       FROM dbo.CRM_Empresas WHERE id IN (${placeholders.join(', ')}) ORDER BY id
     `);
     const contactosRes = await request.query(`
@@ -291,6 +296,8 @@ export class SqlServerEmpresaRepository implements CrmEmpresaRepositoryPort {
         destinoComun: row.destinoComun,
         notas: row.notas,
         responsable: row.responsable,
+        sector: (row.sector ?? null) as Empresa['sector'],
+        cantidadTrabajadores: row.cantidadTrabajadores ?? null,
         contactos,
         createdAt: row.createdAt.toISOString(),
         updatedAt: row.updatedAt.toISOString(),
