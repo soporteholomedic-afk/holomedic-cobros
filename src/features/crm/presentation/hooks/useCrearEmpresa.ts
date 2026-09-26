@@ -77,8 +77,15 @@ const textoOpcional = (valor: string): string | null => {
  * The RUC travels trimmed-raw: normalization to rucNormalizado is the
  * server adapter's job (single source of the dedup key). Throws only
  * on the tipo invariant that validarFormularioEmpresa guards first.
+ *
+ * `responsable` (crm-ux redesign): optional self-assignment for the
+ * Cola de hoy quick-capture — the page form keeps the default null
+ * (admin decides later), the board modal passes the session user.
  */
-export function buildCrearEmpresaInput(estado: FormularioEmpresaState): CrearEmpresaInput {
+export function buildCrearEmpresaInput(
+  estado: FormularioEmpresaState,
+  responsable: string | null = null,
+): CrearEmpresaInput {
   const { tipo } = estado;
   if (tipo === '') {
     throw new Error('Selecciona el tipo de empresa.');
@@ -91,7 +98,7 @@ export function buildCrearEmpresaInput(estado: FormularioEmpresaState): CrearEmp
     proyectoObra: textoOpcional(estado.proyectoObra),
     destinoComun: textoOpcional(estado.destinoComun),
     notas: textoOpcional(estado.notas),
-    responsable: null,
+    responsable,
     contactos: [
       {
         nombre: estado.encargado.trim(),

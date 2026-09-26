@@ -1,4 +1,11 @@
-import { esReactivable, esReinicioDeCadencia, estaVencidaHoy, fechaHoy, requiereDecision } from '../domain/cadence';
+import {
+  esReactivable,
+  esReinicioDeCadencia,
+  esperaPrimerContacto,
+  estaVencidaHoy,
+  fechaHoy,
+  requiereDecision,
+} from '../domain/cadence';
 import type { Etapa, Flujo, PipelineEmpresa, TipoEmpresa } from '../domain/entities';
 import type { Clock, CrmEmpresaRepositoryPort, CrmPipelineRepositoryPort } from '../domain/ports';
 
@@ -61,6 +68,7 @@ export function proximaAccion(p: PipelineEmpresa | null, hoy: string): string {
   if (requiereDecision(p)) return 'Decisión requerida: pasar a Outbound o rechazar';
   if (esReinicioDeCadencia(p, hoy)) return 'Reiniciar cadencia';
   if (esReactivable(p, hoy)) return 'Reactivar';
+  if (esperaPrimerContacto(p)) return 'Iniciar primer contacto';
   if (p.etapa === 'SEGUIMIENTO' || p.etapa === 'CADENCIA') {
     return 'Seguimiento semanal al día';
   }

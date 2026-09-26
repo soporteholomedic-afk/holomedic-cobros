@@ -32,6 +32,16 @@ export interface CrmEmpresaRepositoryPort {
   listar(filtros?: FiltrosEmpresas): Promise<Empresa[]>;
   obtenerPorId(id: number): Promise<Empresa | null>;
   actualizar(id: number, cambios: ActualizarEmpresaInput): Promise<Empresa | null>;
+  /**
+   * Upsert ONE operational contacto by (empresaId, cargo) — crm-ux
+   * redesign (DatosSolicitados capture). Optional: only the SQL
+   * adapter implements it; test fakes stay valid without it.
+   */
+  guardarContactoOperativo?(
+    empresaId: number,
+    cargo: string,
+    dato: { nombre: string | null; correo: string | null },
+  ): Promise<void>;
 }
 
 /**
@@ -133,6 +143,15 @@ export interface CambiarTipoDatos {
 export interface CandidatoCola extends PipelineEmpresa {
   razonSocial: string;
   responsable: string | null;
+  /**
+   * Principal encargado display fields (crm-ux redesign — the "who
+   * to write" on the board cards): nombre and first correo of the
+   * exactly-one-principal contacto, null when the empresa has none.
+   * Optional so non-SQL fakes stay valid; the SQL adapter always set
+   * them (principal = first esPrincipal, else first listed).
+   */
+  contactoNombre?: string | null;
+  contactoCorreo?: string | null;
 }
 
 /**

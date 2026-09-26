@@ -60,7 +60,7 @@ const ENCABEZADOS_ESPERADOS = [
   'Resultados',
   'Cotización enviada',
   'Presentación enviada',
-  'Aceptación outbound',
+  'Aceptó nuestro contacto',
   'Confirmación de presentación',
   'Handoff registrado',
   'Conversión a cliente',
@@ -187,7 +187,7 @@ describe('productividad Excel builder — data rows', () => {
     expect(sheet.getRow(3).getCell(3).value).toBe(3);
     expect(sheet.getRow(3).getCell(4).value).toBe(2); // Cotización enviada
     expect(sheet.getRow(3).getCell(5).value).toBe(0); // Presentación enviada
-    expect(sheet.getRow(3).getCell(6).value).toBe(0); // Aceptación outbound
+    expect(sheet.getRow(3).getCell(6).value).toBe(0); // Aceptó nuestro contacto
     expect(sheet.getRow(3).getCell(7).value).toBe(1); // Confirmación de presentación
     expect(sheet.getRow(3).getCell(8).value).toBe(0); // Handoff registrado
     expect(sheet.getRow(3).getCell(9).value).toBe(1); // Conversión a cliente

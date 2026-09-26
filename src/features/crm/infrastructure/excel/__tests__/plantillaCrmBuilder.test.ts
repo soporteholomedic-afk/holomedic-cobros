@@ -216,7 +216,7 @@ describe('plantilla CRM — data validation dropdowns', () => {
     validarDesplegable('tipo');
   });
 
-  it('offers only Inbound/Outbound in the Origen column', () => {
+  it('offers only the intuitive Origen labels in the Origen column', () => {
     validarDesplegable('origen');
   });
 

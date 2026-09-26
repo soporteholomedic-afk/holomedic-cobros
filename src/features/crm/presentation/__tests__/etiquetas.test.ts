@@ -37,8 +37,8 @@ describe('ETIQUETA_ETAPA / ETIQUETA_FLUJO (Spanish UI labels)', () => {
   });
 
   it('labels both flows', () => {
-    expect(ETIQUETA_FLUJO.INBOUND).toBe('Inbound');
-    expect(ETIQUETA_FLUJO.OUTBOUND).toBe('Outbound');
+    expect(ETIQUETA_FLUJO.INBOUND).toBe('Nos contactaron');
+    expect(ETIQUETA_FLUJO.OUTBOUND).toBe('Los buscamos');
   });
 });
 
@@ -111,7 +111,7 @@ describe('ETIQUETA_EVENTO_RESULTADO (spec G6 productivity breakdown labels)', ()
     expect(ETIQUETA_EVENTO_RESULTADO).toEqual({
       CotizaciónEnviada: 'Cotización enviada',
       PresentaciónEnviada: 'Presentación enviada',
-      AceptaciónOutbound: 'Aceptación outbound',
+      AceptaciónOutbound: 'Aceptó nuestro contacto',
       ConfirmaciónPresentación: 'Confirmación de presentación',
       HandoffRegistrado: 'Handoff registrado',
       ConversiónProspectoACliente: 'Conversión a cliente',

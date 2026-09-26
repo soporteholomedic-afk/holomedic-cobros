@@ -83,6 +83,13 @@ export interface Contacto {
   telefono: string | null;
   /** Exactly one principal per empresa (default cadence addressee). */
   esPrincipal: boolean;
+  /**
+   * Operational role (crm-ux redesign): Facturación / Médico
+   * ocupacional / Administrador — null for regular contactos.
+   * Optional so non-SQL fakes stay valid; the SQL adapter always
+   * sets it.
+   */
+  cargo?: string | null;
   correos: Correo[];
 }
 

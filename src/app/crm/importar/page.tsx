@@ -11,7 +11,7 @@ import { ImportWizard } from '@/features/crm/presentation/components/ImportWizar
  */
 export default function ImportarEmpresasPage() {
   return (
-    <main className="mx-auto max-w-6xl space-y-6 p-6">
+    <main className="space-y-6 p-6">
       <header>
         <h1 className="text-2xl font-semibold">Importar Empresas</h1>
         <p className="text-sm text-muted-foreground">

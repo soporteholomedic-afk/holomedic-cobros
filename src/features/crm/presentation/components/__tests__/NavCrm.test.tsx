@@ -19,7 +19,7 @@ vi.mock('next/navigation', () => ({
 const LOS_PERMISOS_ADMIN = ['crm', 'crm_admin'];
 const LOS_PERMISOS_VENDEDOR = ['crm'];
 
-function hrefsEnOrden(): string[] {
+function hrefsEnOrden(): (string | null)[] {
   return screen
     .getByRole('navigation', { name: 'Secciones CRM' })
     .querySelectorAll('a')

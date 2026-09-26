@@ -95,20 +95,72 @@ describe('ListarColaHoyUseCase — la cola se deriva en el pedido (spec G4)', ()
       }),
     ];
 
-    const cola = await new ListarColaHoyUseCase(repo, reloj).execute();
+    const cola = await new ListarColaHoyUseCase(repo, reloj).execute('jperez');
 
     expect(repo.listarCandidatosCola).toHaveBeenCalledTimes(1);
     expect(cola.vencidasHoy.map((f) => f.empresaId)).toEqual([10, 11]);
     expect(cola.decisionRequerida.map((f) => f.empresaId)).toEqual([20]);
     expect(cola.reinicios.map((f) => f.empresaId)).toEqual([30]);
     expect(cola.reactivables.map((f) => f.empresaId)).toEqual([40]);
+    expect(cola.sinGestion).toEqual([]);
+  });
+
+  it("routes the session user's never-sent empresas to sinGestion and drops everyone else's", async () => {
+    const repo = new FakePipelineRepository();
+    repo.candidatos = [
+      // Mine, inbound birth stage (fechaUltimoEnvio carries the schema
+      // DEFAULT — creation day — never NULL in stored rows).
+      candidato({
+        empresaId: 70,
+        flujo: 'INBOUND',
+        etapa: 'REGISTRADO',
+        fechaUltimoEnvio: '2026-05-31',
+        responsable: 'jperez',
+      }),
+      // Mine, outbound birth stage, default fecha → sinGestion.
+      candidato({ empresaId: 71, etapa: 'NUEVO', fechaUltimoEnvio: '2026-05-31', responsable: 'jperez' }),
+      // Mine, cadence stage with ZERO sends (taken over mid-flow) → sinGestion.
+      candidato({
+        empresaId: 75,
+        etapa: 'CADENCIA',
+        enviosCiclo: 0,
+        fechaUltimoEnvio: '2026-05-30',
+        responsable: 'jperez',
+      }),
+      // Mine, cadence stage, zero sends, but DUE (proximo 05-27 ≤ hoy)
+      // → due section wins precedence, never sinGestion.
+      candidato({
+        empresaId: 76,
+        etapa: 'CADENCIA',
+        enviosCiclo: 0,
+        fechaUltimoEnvio: '2026-05-20',
+        responsable: 'jperez',
+      }),
+      // Someone else's fresh empresa → dropped (user-scoped column).
+      candidato({ empresaId: 72, etapa: 'NUEVO', fechaUltimoEnvio: '2026-05-31', responsable: 'mgarcia' }),
+      // Mine but already moving through its own events → dropped.
+      candidato({
+        empresaId: 73,
+        flujo: 'INBOUND',
+        etapa: 'PRESENTACION',
+        fechaUltimoEnvio: '2026-05-31',
+        responsable: 'jperez',
+      }),
+      // Pool (unassigned) fresh empresa → dropped.
+      candidato({ empresaId: 74, etapa: 'NUEVO', fechaUltimoEnvio: '2026-05-31', responsable: null }),
+    ];
+
+    const cola = await new ListarColaHoyUseCase(repo, reloj).execute('jperez');
+
+    expect(cola.sinGestion.map((f) => f.empresaId)).toEqual([70, 71, 75]);
+    expect(cola.vencidasHoy.map((f) => f.empresaId)).toContain(76);
   });
 
   it('carries the empresa display fields (razonSocial, responsable) through untouched', async () => {
     const repo = new FakePipelineRepository();
     repo.candidatos = [candidato({ empresaId: 10, responsable: 'jperez' })];
 
-    const cola = await new ListarColaHoyUseCase(repo, reloj).execute();
+    const cola = await new ListarColaHoyUseCase(repo, reloj).execute('jperez');
 
     expect(cola.vencidasHoy[0]).toMatchObject({
       empresaId: 10,
@@ -120,16 +172,17 @@ describe('ListarColaHoyUseCase — la cola se deriva en el pedido (spec G4)', ()
     });
   });
 
-  it('returns four EMPTY sections for a queue with no candidates (real empty — repo ran)', async () => {
+  it('returns five EMPTY sections for a queue with no candidates (real empty — repo ran)', async () => {
     const repo = new FakePipelineRepository();
 
-    const cola = await new ListarColaHoyUseCase(repo, reloj).execute();
+    const cola = await new ListarColaHoyUseCase(repo, reloj).execute('jperez');
 
     expect(cola).toEqual({
       vencidasHoy: [],
       reinicios: [],
       decisionRequerida: [],
       reactivables: [],
+      sinGestion: [],
     });
   });
 
@@ -139,6 +192,6 @@ describe('ListarColaHoyUseCase — la cola se deriva en el pedido (spec G4)', ()
       throw new Error('db down');
     });
 
-    await expect(new ListarColaHoyUseCase(repo, reloj).execute()).rejects.toThrow('db down');
+    await expect(new ListarColaHoyUseCase(repo, reloj).execute('jperez')).rejects.toThrow('db down');
   });
 });

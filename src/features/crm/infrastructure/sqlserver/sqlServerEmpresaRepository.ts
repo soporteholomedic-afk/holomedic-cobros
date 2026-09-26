@@ -57,6 +57,7 @@ interface ContactoRow {
   nombre: string;
   telefono: string | null;
   esPrincipal: boolean;
+  cargo: string | null;
 }
 
 interface CorreoRow {
@@ -248,7 +249,7 @@ export class SqlServerEmpresaRepository implements CrmEmpresaRepositoryPort {
       FROM dbo.CRM_Empresas WHERE id IN (${placeholders.join(', ')}) ORDER BY id
     `);
     const contactosRes = await request.query(`
-      SELECT id, empresaId, nombre, telefono, esPrincipal
+      SELECT id, empresaId, nombre, telefono, esPrincipal, cargo
       FROM dbo.CRM_Contactos WHERE empresaId IN (${placeholders.join(', ')}) ORDER BY id
     `);
     const contactoIds = (contactosRes.recordset as ContactoRow[]).map((row) => row.id);
@@ -272,6 +273,7 @@ export class SqlServerEmpresaRepository implements CrmEmpresaRepositoryPort {
           nombre: c.nombre,
           telefono: c.telefono,
           esPrincipal: c.esPrincipal,
+          cargo: c.cargo ?? null,
           correos: (correosPorContacto.get(c.id) ?? []).map((correo) => ({
             id: correo.id,
             contactoId: correo.contactoId,
@@ -308,5 +310,66 @@ export class SqlServerEmpresaRepository implements CrmEmpresaRepositoryPort {
       SELECT id, contactoId, correo FROM dbo.CRM_Correos
       WHERE contactoId IN (${placeholders.join(', ')}) ORDER BY id
     `);
+  }
+
+  /**
+   * Upsert ONE operational contacto by (empresaId, cargo) — crm-ux
+   * redesign (DatosSolicitados capture). Singleton semantics per
+   * role: an existing row keeps its id and gets nombre/correos
+   * REPLACED (the re-ask refreshes the data); a new role INSERTs
+   * with nombre defaulting to the cargo label when no encargado was
+   * given. The correo swap (DELETE + INSERT) keeps exactly one
+   * address per operational contacto. Runs in its own transaction —
+   * the transiciones route calls it BEFORE the pipeline transition so
+   * a retry is always safe (upsert idempotent, transition re-fires).
+   */
+  async guardarContactoOperativo(
+    empresaId: number,
+    cargo: string,
+    dato: { nombre: string | null; correo: string | null },
+  ): Promise<void> {
+    const nombre = dato.nombre ?? cargo;
+    const correoNormalizado = dato.correo !== null ? normalizarCorreo(dato.correo) : null;
+    await withCrmTransaction(this.pool, async (tx) => {
+      const existente = await tx
+        .request()
+        .input('empresaId', mssql.Int, empresaId)
+        .input('cargo', mssql.NVarChar(50), cargo)
+        .query('SELECT id FROM dbo.CRM_Contactos WHERE empresaId = @empresaId AND cargo = @cargo');
+      const fila = (existente.recordset as { id: number }[])[0];
+
+      let contactoId = fila?.id;
+      if (contactoId !== undefined) {
+        await tx
+          .request()
+          .input('id', mssql.Int, contactoId)
+          .input('nombre', mssql.NVarChar(200), nombre)
+          .input('nombreNormalizado', mssql.VarChar(200), normalizarNombre(nombre))
+          .query('UPDATE dbo.CRM_Contactos SET nombre = @nombre, nombreNormalizado = @nombreNormalizado WHERE id = @id');
+        await tx.request().input('id', mssql.Int, contactoId).query('DELETE FROM dbo.CRM_Correos WHERE contactoId = @id');
+      } else {
+        const inserted = await tx
+          .request()
+          .input('empresaId', mssql.Int, empresaId)
+          .input('nombre', mssql.NVarChar(200), nombre)
+          .input('nombreNormalizado', mssql.VarChar(200), normalizarNombre(nombre))
+          .input('cargo', mssql.NVarChar(50), cargo)
+          .query(`
+            INSERT INTO dbo.CRM_Contactos (empresaId, nombre, nombreNormalizado, cargo)
+            OUTPUT INSERTED.id
+            VALUES (@empresaId, @nombre, @nombreNormalizado, @cargo)
+          `);
+        contactoId = (inserted.recordset as { id: number }[])[0]?.id;
+        if (contactoId === undefined) throw new Error('INSERT de contacto operativo no devolvió id');
+      }
+
+      if (correoNormalizado !== null && correoNormalizado !== '') {
+        await tx
+          .request()
+          .input('contactoId', mssql.Int, contactoId)
+          .input('correo', mssql.VarChar(320), correoNormalizado)
+          .query('INSERT INTO dbo.CRM_Correos (contactoId, correo) VALUES (@contactoId, @correo)');
+      }
+    });
   }
 }

@@ -128,6 +128,23 @@ export function esReactivable(p: PipelineEmpresa, hoy: string): boolean {
   return p.etapa === 'RECHAZADO' && p.rechazadoHasta !== null && p.rechazadoHasta <= hoy;
 }
 
+/**
+ * Freshly taken/created empresa awaiting its FIRST contacto (crm-ux
+ * redesign). NOT keyed on fechaUltimoEnvio: the CRM_Pipeline column
+ * carries a schema DEFAULT (creation day), so "never sent" is never
+ * NULL in stored rows. The honest signals are the STAGE and the
+ * counters: REGISTRADO (inbound birth, T1) and NUEVO (outbound birth,
+ * T6) exist precisely to await the first contacto; a SEGUIMIENTO/
+ * CADENCIA row with zero sends in the cycle was taken over mid-flow
+ * and nobody has written to it yet. Post-win stages (PRESENTACION…
+ * DATOS) move through their own events and DESCANSO/RECHAZADO have
+ * their own cooldown lifecycle — none of them wait for a first send.
+ */
+export function esperaPrimerContacto(p: PipelineEmpresa): boolean {
+  if (p.etapa === 'REGISTRADO' || p.etapa === 'NUEVO') return true;
+  return esEtapaCadenciaActiva(p.etapa) && p.enviosCiclo === 0;
+}
+
 /** The four queue sections (design §3) — a row lands in at most one. */
 export type SeccionCola = 'vencidasHoy' | 'reinicios' | 'decisionRequerida' | 'reactivables';
 

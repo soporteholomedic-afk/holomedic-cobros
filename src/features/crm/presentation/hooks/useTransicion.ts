@@ -3,6 +3,7 @@
 import { useCallback, useState } from 'react';
 
 import type { HandoffInput } from '../../domain/ports';
+import type { DatosOperativosInput } from '../../domain/datosOperativos';
 import type { EventoPipeline } from '../../domain/maquinaEstados';
 
 /**
@@ -23,6 +24,8 @@ export interface TransicionPayload {
   motivo?: string;
   /** T5's handoff — validated again server-side (área required, ≤100). */
   handoff?: HandoffInput;
+  /** DatosSolicitados capture (crm-ux) — becomes contactos + resumen server-side. */
+  datos?: DatosOperativosInput;
 }
 
 export interface ResultadoTransicionUi {

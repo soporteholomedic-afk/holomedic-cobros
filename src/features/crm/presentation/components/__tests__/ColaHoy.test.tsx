@@ -5,12 +5,20 @@ import userEvent from '@testing-library/user-event';
 import { ColaHoy } from '../ColaHoy';
 import type { CandidatoCola } from '../../../domain/ports';
 
+// useRouter (next/navigation) needs the FormularioNuevaEmpresa.test
+// mock pattern — the toast's "Ver cartera" action pushes on click.
+const pushMock = vi.hoisted(() => vi.fn());
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({ push: pushMock }),
+}));
+
 /**
- * UI contract for the /crm/cola queue (tasks pr13/WU3, spec G4):
- * four Spanish sections — "Vencidas hoy", "Reinicios de cadencia",
- * "Decisión requerida", "Reactivables" — every empresa row links to
- * its detail page, errors surface with a retry, and empty sections
- * say so (no auto-send anywhere: the page only links, it never fires
+ * UI contract for the /crm/cola queue (tasks pr13/WU3, spec G4;
+ * kanban redesign crm-ux): five Spanish columns with action-first
+ * titles — "Iniciar contacto", "Enviar hoy", "Volver a contactar",
+ * "Esperan tu decisión", "Para reactivar" — every empresa card links
+ * to its detail page, errors surface with a retry, and empty columns
+ * say so (no auto-send anywhere: the board only links, it never fires
  * emails).
  */
 
@@ -34,6 +42,17 @@ function candidato(overrides: Partial<CandidatoCola>): CandidatoCola {
   };
 }
 
+function colaVacia() {
+  return {
+    success: true,
+    vencidasHoy: [],
+    reinicios: [],
+    decisionRequerida: [],
+    reactivables: [],
+    sinGestion: [],
+  };
+}
+
 const fetchMock = vi.fn();
 
 function okResponse(payload: unknown): Response {
@@ -53,12 +72,26 @@ afterEach(() => {
 });
 
 describe('ColaHoy — "a quién le toca hoy"', () => {
-  it('renders the four Spanish sections and routes each row to its detail page', async () => {
+  it('renders the five Spanish sections and routes each row to its detail page', async () => {
     fetchMock.mockResolvedValue(
       okResponse({
         success: true,
+        sinGestion: [
+          candidato({
+            empresaId: 50,
+            razonSocial: 'Recién Mía',
+            etapa: 'NUEVO',
+            fechaUltimoEnvio: null,
+            responsable: 'jperez',
+          }),
+        ],
         vencidasHoy: [
-          candidato({ empresaId: 10, razonSocial: 'Vencida Uno' }),
+          candidato({
+            empresaId: 10,
+            razonSocial: 'Vencida Uno',
+            contactoNombre: 'María González',
+            contactoCorreo: 'maria@constructora.com',
+          }),
           candidato({ empresaId: 11, razonSocial: 'Vencida Dos', etapa: 'CADENCIA' }),
         ],
         reinicios: [
@@ -93,10 +126,11 @@ describe('ColaHoy — "a quién le toca hoy"', () => {
 
     render(<ColaHoy />);
 
-    expect(await screen.findByRole('heading', { name: /Vencidas hoy/ })).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: /Reinicios de cadencia/ })).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: /Decisión requerida/ })).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: /Reactivables/ })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: /Iniciar contacto/ })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /Enviar hoy/ })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /Volver a contactar/ })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /Esperan tu decisión/ })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /Para reactivar/ })).toBeInTheDocument();
 
     // Every row is a link to the empresa detail page (the queue never
     // sends anything by itself — it only navigates).
@@ -108,19 +142,20 @@ describe('ColaHoy — "a quién le toca hoy"', () => {
       '/crm/empresas/20',
       '/crm/empresas/30',
       '/crm/empresas/40',
+      '/crm/empresas/50',
     ]);
     expect(screen.getByText('Vencida Uno')).toBeInTheDocument();
+    // The principal encargado rides the card — the "who to write".
+    expect(screen.getByText(/María González · maria@constructora\.com/)).toBeInTheDocument();
     expect(screen.getByText('Agotada Fork')).toBeInTheDocument();
+    expect(screen.getByText('Recién Mía')).toBeInTheDocument();
   });
 
   it('each empresa appears exactly once per week-cycle: a row lands in ONE section only', async () => {
     fetchMock.mockResolvedValue(
       okResponse({
-        success: true,
+        ...colaVacia(),
         vencidasHoy: [candidato({ empresaId: 10, razonSocial: 'Vencida Uno' })],
-        reinicios: [],
-        decisionRequerida: [],
-        reactivables: [],
       }),
     );
 
@@ -128,8 +163,8 @@ describe('ColaHoy — "a quién le toca hoy"', () => {
 
     await screen.findByText('Vencida Uno');
     expect(screen.getAllByText('Vencida Uno')).toHaveLength(1);
-    // The other three sections show their empty state.
-    expect(await screen.findAllByText('Sin empresas')).toHaveLength(3);
+    // The other four columns show their empty state.
+    expect(await screen.findAllByText('Sin empresas')).toHaveLength(4);
   });
 
   it('surfaces API errors with a retry that re-fetches', async () => {
@@ -139,11 +174,8 @@ describe('ColaHoy — "a quién le toca hoy"', () => {
       )
       .mockResolvedValue(
         okResponse({
-          success: true,
+          ...colaVacia(),
           vencidasHoy: [candidato({ empresaId: 10, razonSocial: 'Vencida Uno' })],
-          reinicios: [],
-          decisionRequerida: [],
-          reactivables: [],
         }),
       );
 
@@ -153,5 +185,16 @@ describe('ColaHoy — "a quién le toca hoy"', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Reintentar' }));
     await waitFor(() => expect(screen.getByText('Vencida Uno')).toBeInTheDocument());
     expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('opens the quick-capture modal for a session user (auto-assignment entry)', async () => {
+    fetchMock.mockResolvedValue(okResponse(colaVacia()));
+
+    render(<ColaHoy usuario="u-1" nombreUsuario="Juana Perez" />);
+
+    await userEvent.click(await screen.findByRole('button', { name: /Agregar empresa/ }));
+    expect(await screen.findByRole('dialog', { name: 'Agregar empresa' })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: 'Seleccionar existente' })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: 'Crear nueva' })).toBeInTheDocument();
   });
 });

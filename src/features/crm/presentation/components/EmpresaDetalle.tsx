@@ -3,36 +3,32 @@
 import { useState } from 'react';
 
 import type { EventoPipeline } from '../../domain/maquinaEstados';
-import {
-  ETIQUETA_ETAPA,
-  ETIQUETA_EVENTO,
-  ETIQUETA_FLUJO,
-  formatearFecha,
-  transicionesDisponibles,
-} from '../etiquetas';
+import { ETIQUETA_ORIGEN, transicionesDisponibles } from '../etiquetas';
 import { useEmpresaDetalle } from '../hooks/useEmpresaDetalle';
 import { useTransicion } from '../hooks/useTransicion';
+import { DatosModal } from './DatosModal';
 import { HandoffModal } from './HandoffModal';
 import { RechazoModal } from './RechazoModal';
-import { Timeline } from './Timeline';
+import { TimelineAvance } from './TimelineAvance';
 
 /**
  * EmpresaDetalle — the `/crm/empresas/[id]` detail body (tasks
  * pr11/WU2, spec G1+G4): empresa datos, contactos with correos and the
- * principal badge, the pipeline state with the machine-legal
- * transitions (`puedeTransicionar` over the runtime whitelist) and the
- * history Timeline. Fetch lives in hooks, never here (repo rule).
+ * principal badge, and the LIVING TimelineAvance (crm-ux redesign) —
+ * one story that fuses the pipeline state and the history, with the
+ * machine-legal actions living in the "what's next" node. Fetch lives
+ * in hooks, never here (repo rule).
  *
  * Transition routing: T14 (Rechazo) and T5 (HandoffRegistrado) need
  * extra input, so they open their modals (pr11/WU3) instead of firing
  * directly; every other available event POSTs immediately and refreshes
- * the detail on success. Labels Spanish.
+ * the timeline on success — the story grows a new node. Labels Spanish.
  */
 
 export function EmpresaDetalle({ id }: { id: number }) {
   const { detalle, status, error, retry, refresh } = useEmpresaDetalle(id);
   const { ejecutar, enCurso } = useTransicion(id);
-  const [modal, setModal] = useState<'Rechazo' | 'HandoffRegistrado' | null>(null);
+  const [modal, setModal] = useState<'Rechazo' | 'HandoffRegistrado' | 'DatosSolicitados' | null>(null);
   const [errorTransicion, setErrorTransicion] = useState<string | null>(null);
 
   async function transicionDirecta(evento: EventoPipeline): Promise<void> {
@@ -46,7 +42,7 @@ export function EmpresaDetalle({ id }: { id: number }) {
   }
 
   function abrirEvento(evento: EventoPipeline): void {
-    if (evento === 'Rechazo' || evento === 'HandoffRegistrado') {
+    if (evento === 'Rechazo' || evento === 'HandoffRegistrado' || evento === 'DatosSolicitados') {
       setErrorTransicion(null);
       setModal(evento);
       return;
@@ -102,7 +98,9 @@ export function EmpresaDetalle({ id }: { id: number }) {
           </div>
           <div>
             <dt className="text-xs uppercase tracking-wide text-slate-400">Origen</dt>
-            <dd className="text-slate-700">{empresa.origen ?? '—'}</dd>
+            <dd className="text-slate-700">
+              {empresa.origen !== null ? ETIQUETA_ORIGEN[empresa.origen] : '—'}
+            </dd>
           </div>
           <div>
             <dt className="text-xs uppercase tracking-wide text-slate-400">Responsable</dt>
@@ -139,6 +137,11 @@ export function EmpresaDetalle({ id }: { id: number }) {
                     Principal
                   </span>
                 )}
+                {(contacto.cargo ?? null) !== null && (
+                  <span className="rounded-full bg-indigo-100 px-2 py-0.5 text-xs font-medium text-indigo-700">
+                    {contacto.cargo}
+                  </span>
+                )}
               </div>
               {contacto.telefono !== null && (
                 <p className="mt-1 text-slate-600">Teléfono: {contacto.telefono}</p>
@@ -157,67 +160,28 @@ export function EmpresaDetalle({ id }: { id: number }) {
         </ul>
       </section>
 
-      <section aria-label="Pipeline" className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
-        <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-500">
-          Pipeline
-        </h2>
-        {pipeline === null ? (
-          <p className="text-sm text-slate-500">Esta empresa no tiene pipeline registrado.</p>
-        ) : (
-          <div className="space-y-4">
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="rounded-full bg-slate-100 px-3 py-1 text-sm font-medium text-slate-700">
-                {ETIQUETA_FLUJO[pipeline.flujo]}
-              </span>
-              <span className="rounded-full bg-sky-100 px-3 py-1 text-sm font-medium text-sky-700">
-                {ETIQUETA_ETAPA[pipeline.etapa]}
-              </span>
-              <span className="text-xs text-slate-500">
-                Ciclo {pipeline.ciclo} · Envíos del ciclo {pipeline.enviosCiclo}
-              </span>
-            </div>
+      <TimelineAvance
+        pipeline={pipeline}
+        transiciones={transiciones}
+        handoffs={handoffs}
+        empresaCreatedAt={empresa.createdAt}
+        empresaOrigen={empresa.origen}
+        disponibles={disponibles}
+        enCurso={enCurso}
+        onAccion={abrirEvento}
+        errorTransicion={errorTransicion}
+      />
 
-            {pipeline.etapa === 'RECHAZADO' && pipeline.motivoRechazo !== null && (
-              <p className="text-sm text-slate-600">
-                Motivo: {pipeline.motivoRechazo}
-                {pipeline.rechazadoHasta !== null && (
-                  <> · Reactivable desde {formatearFecha(pipeline.rechazadoHasta)}</>
-                )}
-              </p>
-            )}
-            {pipeline.etapa === 'DESCANSO' && pipeline.descansoHasta !== null && (
-              <p className="text-sm text-slate-600">
-                En descanso hasta {formatearFecha(pipeline.descansoHasta)}
-              </p>
-            )}
-
-            {disponibles.length > 0 && (
-              <div className="flex flex-wrap gap-2">
-                {disponibles.map((evento) => (
-                  <button
-                    key={evento}
-                    type="button"
-                    disabled={enCurso}
-                    onClick={() => abrirEvento(evento)}
-                    className="rounded-lg border border-sky-300 bg-sky-50 px-3 py-1.5 text-sm font-medium text-sky-700 hover:bg-sky-100 disabled:cursor-not-allowed disabled:opacity-40"
-                  >
-                    {ETIQUETA_EVENTO[evento]}
-                  </button>
-                ))}
-              </div>
-            )}
-
-            {errorTransicion !== null && (
-              <p role="alert" className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">
-                {errorTransicion}
-              </p>
-            )}
-          </div>
-        )}
-      </section>
-
-      <Timeline transiciones={transiciones} handoffs={handoffs} />
-
+      {modal === 'DatosSolicitados' && (
+        <DatosModal
+          empresaId={id}
+          onSalir={() => setModal(null)}
+          onExito={() => {
+            setModal(null);
+            refresh();
+          }}
+        />
+      )}
       {modal === 'Rechazo' && (
         <RechazoModal
           empresaId={id}

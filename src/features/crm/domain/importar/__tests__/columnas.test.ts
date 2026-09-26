@@ -48,7 +48,10 @@ describe('COLUMNAS_IMPORT_CRM', () => {
   it('declara las opciones de las columnas de lista (Tipo, Origen, Principal)', () => {
     const porClave = new Map(COLUMNAS_IMPORT_CRM.map((c) => [c.clave, c]));
     expect(porClave.get('tipo')).toMatchObject({ tipo: 'lista', opciones: ['Cliente', 'Prospecto'] });
-    expect(porClave.get('origen')).toMatchObject({ tipo: 'lista', opciones: ['Inbound', 'Outbound'] });
+    expect(porClave.get('origen')).toMatchObject({
+      tipo: 'lista',
+      opciones: ['Nos contactaron', 'Los buscamos'],
+    });
     expect(porClave.get('principal')).toMatchObject({ tipo: 'lista', opciones: ['Sí'] });
     for (const clave of ['empresa', 'ruc', 'proyectoObra', 'destinoComun', 'responsable', 'notas', 'encargado', 'correos', 'telefono']) {
       expect(porClave.get(clave)).toMatchObject({ tipo: 'texto' });

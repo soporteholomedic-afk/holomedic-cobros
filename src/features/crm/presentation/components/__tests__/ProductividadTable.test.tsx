@@ -105,7 +105,7 @@ describe('ProductividadTable', () => {
     expect(screen.getByRole('columnheader', { name: 'Resultados' })).toBeInTheDocument();
     expect(screen.getByRole('columnheader', { name: 'Cotización enviada' })).toBeInTheDocument();
     expect(screen.getByRole('columnheader', { name: 'Presentación enviada' })).toBeInTheDocument();
-    expect(screen.getByRole('columnheader', { name: 'Aceptación outbound' })).toBeInTheDocument();
+    expect(screen.getByRole('columnheader', { name: 'Aceptó nuestro contacto' })).toBeInTheDocument();
     expect(screen.getByRole('columnheader', { name: 'Confirmación de presentación' })).toBeInTheDocument();
     expect(screen.getByRole('columnheader', { name: 'Handoff registrado' })).toBeInTheDocument();
     expect(screen.getByRole('columnheader', { name: 'Conversión a cliente' })).toBeInTheDocument();

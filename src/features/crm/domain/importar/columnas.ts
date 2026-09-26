@@ -8,7 +8,14 @@
  * columns (empresa…notas) repeat across rows of the same empresa; the
  * importer groups rows by normalized RUC. Contact-level columns
  * (encargado…principal) describe one contacto each.
+ *
+ * Crm-ux redesign: user-facing option values speak the intuitive
+ * vocabulary ("Nos contactaron" / "Los buscamos"); the DOMAIN keeps the
+ * machine values ('Inbound'/'Outbound') — `ORIGEN_POR_ETIQUETA` is the
+ * single translation point.
  */
+
+import type { Origen } from '../entities';
 
 /** Content kind of a column: free text or constrained dropdown list. */
 export type TipoColumnaImport = 'texto' | 'lista';
@@ -52,7 +59,7 @@ export const COLUMNAS_IMPORT_CRM: readonly ColumnaImportCrm[] = [
     encabezado: 'Origen',
     requerido: false,
     tipo: 'lista',
-    opciones: ['Inbound', 'Outbound'],
+    opciones: ['Nos contactaron', 'Los buscamos'],
   },
   { clave: 'proyectoObra', encabezado: 'Proyecto/Obra', requerido: false, tipo: 'texto' },
   { clave: 'destinoComun', encabezado: 'Destino Común', requerido: false, tipo: 'texto' },
@@ -92,3 +99,17 @@ export interface FilaImportCrm {
   /** "Sí" marks the contacto as principal; empty = default (first listed). */
   principal: string;
 }
+
+/**
+ * Excel-facing Origen label → domain value (crm-ux redesign). The
+ * spreadsheet speaks the intuitive vocabulary; the domain/DB keeps the
+ * machine values. LEGACY English cells ('Inbound'/'Outbound' from
+ * templates downloaded before the rename) still resolve, so previously
+ * filled files import unchanged.
+ */
+export const ORIGEN_POR_ETIQUETA: ReadonlyMap<string, Origen> = new Map([
+  ['Nos contactaron', 'Inbound'],
+  ['Los buscamos', 'Outbound'],
+  ['Inbound', 'Inbound'],
+  ['Outbound', 'Outbound'],
+]);

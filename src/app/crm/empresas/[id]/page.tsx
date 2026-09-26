@@ -19,11 +19,11 @@ export default async function EmpresaDetallePage({
   const idValido = Number.isInteger(id) && id > 0;
 
   return (
-    <main className="mx-auto max-w-5xl space-y-6 p-6">
+    <main className="space-y-6 p-6">
       <header>
         <h1 className="text-2xl font-semibold">Detalle de empresa</h1>
         <p className="text-sm text-muted-foreground">
-          Datos, pipeline e historial de seguimiento comercial.
+          Datos, avance comercial e historial de seguimiento.
         </p>
       </header>
 

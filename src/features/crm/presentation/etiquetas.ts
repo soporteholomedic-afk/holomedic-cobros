@@ -1,4 +1,4 @@
-import type { AccionAsignacion, Etapa, Flujo } from '../domain/entities';
+import type { AccionAsignacion, Etapa, Flujo, Origen } from '../domain/entities';
 import {
   EVENTOS_PIPELINE,
   puedeTransicionar,
@@ -14,8 +14,14 @@ import {
  */
 
 export const ETIQUETA_FLUJO: Record<Flujo, string> = {
-  INBOUND: 'Inbound',
-  OUTBOUND: 'Outbound',
+  INBOUND: 'Nos contactaron',
+  OUTBOUND: 'Los buscamos',
+};
+
+/** Registration-origen labels (crm-ux redesign: no technical jargon). */
+export const ETIQUETA_ORIGEN: Record<Origen, string> = {
+  Inbound: 'Nos contactaron',
+  Outbound: 'Los buscamos',
 };
 
 export const ETIQUETA_ETAPA: Record<Etapa, string> = {
@@ -44,12 +50,12 @@ export const ETIQUETA_EVENTO: Record<EventoPipeline, string> = {
   CotizaciónEnviada: 'Cotización enviada',
   ConfirmaciónPresentación: 'Confirmación de presentación',
   HandoffRegistrado: 'Registrar handoff',
-  AceptaciónOutbound: 'Aceptación outbound',
+  AceptaciónOutbound: 'Aceptó nuestro contacto',
   ConversiónProspectoACliente: 'Convertir a cliente',
   DatosSolicitados: 'Pedir datos',
   EnviosAgotados: 'Marcar envíos agotados',
   ReinicioCadencia: 'Reiniciar cadencia',
-  PasarAOutbound: 'Pasar a Outbound',
+  PasarAOutbound: 'Empezar a buscarlos',
   Rechazo: 'Rechazar',
   Reactivar: 'Reactivar',
 };
@@ -63,7 +69,7 @@ export const ETIQUETA_EVENTO: Record<EventoPipeline, string> = {
 export const ETIQUETA_EVENTO_RESULTADO: Record<TipoResultado, string> = {
   CotizaciónEnviada: 'Cotización enviada',
   PresentaciónEnviada: 'Presentación enviada',
-  AceptaciónOutbound: 'Aceptación outbound',
+  AceptaciónOutbound: 'Aceptó nuestro contacto',
   ConfirmaciónPresentación: 'Confirmación de presentación',
   HandoffRegistrado: 'Handoff registrado',
   ConversiónProspectoACliente: 'Conversión a cliente',

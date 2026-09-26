@@ -1,5 +1,7 @@
 import { Suspense } from 'react';
 
+import { getSession } from '@/lib/auth';
+import { getUsuarioDb } from '@/features/auth/infrastructure/getUsuarioDb';
 import { ColaHoy } from '@/features/crm/presentation/components/ColaHoy';
 
 /**
@@ -9,15 +11,25 @@ import { ColaHoy } from '@/features/crm/presentation/components/ColaHoy';
  * outside the `<Suspense>` boundary the client-side queue needs
  * (`/crm` precedent). Derived on request — zero background jobs, no
  * auto-send: the page only shows who is due and links to each detail.
+ *
+ * The session is read ONCE here (cartera route precedent) to resolve
+ * the session's LOGIN NAME (session.sub is the opaque idUsuario;
+ * CRM_Empresas.responsable stores usernames) and pass it down for
+ * the quick-capture button and the "Iniciar contacto" column — both
+ * self-assignment flows speak the username currency end to end.
  */
-export default function ColaPage() {
+export default async function ColaPage() {
+  const session = await getSession();
+  const filaUsuario = session ? await (await getUsuarioDb()).getById(session.sub) : null;
+  const usuario = filaUsuario?.usuario ?? null;
+
   return (
-    <main className="mx-auto max-w-6xl space-y-6 p-6">
+    <main className="space-y-6 p-6">
       <header>
         <h1 className="text-2xl font-semibold">Cola de hoy</h1>
         <p className="text-sm text-muted-foreground">
-          A quién le toca hoy: seguimientos vencidos, reinicios de cadencia, decisiones pendientes y
-          reactivables.
+          A quién le toca hoy, en un tablero: qué seguimiento enviar, a quién retomar, qué decisión espera y
+          qué empresa se puede reactivar.
         </p>
       </header>
 
@@ -28,7 +40,7 @@ export default function ColaPage() {
           </div>
         }
       >
-        <ColaHoy />
+        <ColaHoy usuario={usuario} nombreUsuario={session?.nombre ?? null} />
       </Suspense>
     </main>
   );

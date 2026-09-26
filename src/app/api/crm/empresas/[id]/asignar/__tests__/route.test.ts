@@ -7,6 +7,15 @@ vi.mock('@/lib/auth', () => ({
   getSession: mockGetSession,
 }));
 
+// ---- Mock auth identity resolution (cartera route precedent) ----
+// session.sub 'u-1' resolves to login name 'juana' — the currency
+// `responsable` stores; the self-claim guard compares against it.
+
+const mockGetUsuarioDb = vi.hoisted(() => vi.fn());
+vi.mock('@/features/auth/infrastructure/getUsuarioDb', () => ({
+  getUsuarioDb: mockGetUsuarioDb,
+}));
+
 // ---- Import under test (after mocks) ----
 
 import { POST } from '../route';
@@ -86,6 +95,8 @@ function jsonPost(id: string, body: unknown): Parameters<typeof POST>[0] {
 beforeEach(() => {
   vi.clearAllMocks();
   mockGetSession.mockReset();
+  mockGetUsuarioDb.mockReset();
+  mockGetUsuarioDb.mockResolvedValue({ getById: vi.fn().mockResolvedValue({ usuario: 'juana' }) });
 });
 
 afterEach(() => {
@@ -105,17 +116,70 @@ describe('POST /api/crm/empresas/[id]/asignar — crm_admin in-route (spec G5)',
     expect(body.code).toBe('UNAUTHORIZED');
   });
 
-  it('returns 403 when only crm is held — assignment requires crm_admin in-route', async () => {
+  it('self-claims a pool empresa (200 ASIGNADO) for a crm-only session — LOGIN NAME currency', async () => {
     mockGetSession.mockResolvedValue(crmSession);
     const asignaciones = makeFakeAsignaciones();
     setDb(makeFakeEmpresas(), asignaciones);
 
-    const response = await POST(jsonPost('42', { responsable: 'jperez' }), routeContext('42'));
+    const response = await POST(jsonPost('42', { responsable: 'juana' }), routeContext('42'));
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body).toEqual({
+      success: true,
+      accion: 'ASIGNADO',
+      responsable: 'juana',
+      responsablePrevio: null,
+    });
+    expect(asignaciones.registrarAsignacion).toHaveBeenCalledWith(
+      expect.objectContaining({
+        empresaId: 42,
+        accion: 'ASIGNADO',
+        responsableNuevo: 'juana',
+        actorUsuario: 'u-1',
+      }),
+    );
+  });
+
+  it('returns 403 when a crm-only session assigns a foreign responsable (even the opaque sub)', async () => {
+    mockGetSession.mockResolvedValue(crmSession);
+    const asignaciones = makeFakeAsignaciones();
+    setDb(makeFakeEmpresas(), asignaciones);
+
+    const response = await POST(jsonPost('42', { responsable: 'u-1' }), routeContext('42'));
     const body = await response.json();
 
     expect(response.status).toBe(403);
     expect(body.code).toBe('FORBIDDEN');
     expect(asignaciones.registrarAsignacion).not.toHaveBeenCalled();
+  });
+
+  it('self-claims an OWNED empresa (200 REASIGNADO) for a crm-only session', async () => {
+    mockGetSession.mockResolvedValue(crmSession);
+    const asignaciones = makeFakeAsignaciones();
+    setDb(
+      makeFakeEmpresas({ obtenerPorId: vi.fn().mockResolvedValue({ ...empresa, responsable: 'jperez' }) }),
+      asignaciones,
+    );
+
+    const response = await POST(jsonPost('42', { responsable: 'juana' }), routeContext('42'));
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body).toEqual({
+      success: true,
+      accion: 'REASIGNADO',
+      responsable: 'juana',
+      responsablePrevio: 'jperez',
+    });
+    expect(asignaciones.registrarAsignacion).toHaveBeenCalledWith(
+      expect.objectContaining({
+        accion: 'REASIGNADO',
+        responsablePrevio: 'jperez',
+        responsableNuevo: 'juana',
+        actorUsuario: 'u-1',
+      }),
+    );
   });
 
   it('returns 200 ASIGNADO when an admin assigns a pool empresa', async () => {

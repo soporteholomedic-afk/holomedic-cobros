@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 
 import { getSession } from '@/lib/auth';
+import { getUsuarioDb } from '@/features/auth/infrastructure/getUsuarioDb';
 import { getCrmDb } from '@/features/crm/infrastructure/getCrmDb';
 import { AsignarEmpresaUseCase } from '@/features/crm/application/asignarEmpresa';
 import type { ResultadoAsignacion } from '@/features/crm/application/asignarEmpresa';
@@ -13,10 +14,14 @@ import { buildCrmError, mapCrmError, type CrmErrorResponse } from '../../errorRe
  * had an owner; the owner UPDATE + the audit INSERT land in ONE
  * transaction inside the use case (through the asignaciones port).
  *
- * Permiso: `crm` at the route prefix PLUS `crm_admin` checked IN-ROUTE
- * (design D2: assignment is an empresa-level mutation at the same
- * elevation as POST/PUT empresas — prefix matching cannot split by
- * HTTP method).
+ * Permiso: `crm` at the route prefix PLUS the in-route split (design
+ * D2 — prefix matching cannot split by HTTP method):
+ * - `crm_admin`: unrestricted assignment/reassignment (PanelAsignacion).
+ * - plain `crm` (crm-ux redesign self-claim): may claim any empresa
+ *   for THEMSELVES — pool (ASIGNADO) or owned by someone else
+ *   (REASIGNADO; the UI asks for confirmation in that case and the
+ *   audit trail records the actor). Assigning to someone else stays
+ *   crm_admin territory.
  */
 
 interface AsignarSuccess {
@@ -41,9 +46,7 @@ export async function POST(
     if (!session.permisos.includes('crm')) {
       return buildCrmError('FORBIDDEN', 'No autorizado', 403);
     }
-    if (!session.permisos.includes('crm_admin')) {
-      return buildCrmError('FORBIDDEN', 'Esta acción requiere el permiso crm_admin', 403);
-    }
+    const esAdmin = session.permisos.includes('crm_admin');
 
     const { id: rawId } = await ctx.params;
     const id = parseEmpresaId(rawId);
@@ -70,6 +73,25 @@ export async function POST(
     }
 
     const { empresas, asignaciones } = await getCrmDb();
+
+    // Canonical idUsuario → usuario resolution (cartera route
+    // precedent): the self-claim guard compares against the LOGIN
+    // NAME — the currency `responsable` stores — never the opaque sub.
+    const usuarios = await getUsuarioDb();
+    const filaUsuario = await usuarios.getById(session.sub);
+    const usuarioSesion = filaUsuario?.usuario ?? null;
+    if (usuarioSesion === null) {
+      return buildCrmError('UNAUTHORIZED', 'La sesión ya no corresponde a un usuario válido', 401);
+    }
+
+    // Self-claim guard (crm-ux redesign): a plain `crm` holder claims
+    // for THEMSELVES only — a foreign responsable is admin territory
+    // (PanelAsignacion). Pool vs owned is derived by the use case
+    // (ASIGNADO / REASIGNADO) and audited with the acting user.
+    if (!esAdmin && responsable !== usuarioSesion) {
+      return buildCrmError('FORBIDDEN', 'Solo puedes asignar empresas a tu propio usuario', 403);
+    }
+
     const resultado = await new AsignarEmpresaUseCase(empresas, asignaciones).execute({
       empresaId: id,
       responsable,

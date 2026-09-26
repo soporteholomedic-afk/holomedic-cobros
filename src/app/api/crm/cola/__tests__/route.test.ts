@@ -7,6 +7,15 @@ vi.mock('@/lib/auth', () => ({
   getSession: mockGetSession,
 }));
 
+// ---- Mock auth identity resolution (cartera route precedent) ----
+// session.sub 'u-1' resolves to login name 'jperez' — the currency
+// the sinGestion scope compares against.
+
+const mockGetUsuarioDb = vi.hoisted(() => vi.fn());
+vi.mock('@/features/auth/infrastructure/getUsuarioDb', () => ({
+  getUsuarioDb: mockGetUsuarioDb,
+}));
+
 // ---- Import under test (after mocks) ----
 
 import { GET } from '../route';
@@ -15,11 +24,12 @@ import type { CandidatoCola, CrmPipelineRepositoryPort } from '@/features/crm/do
 
 /**
  * Seam contract for GET /api/crm/cola (tasks pr13/WU3, design §4):
- * permiso `crm` (401 without a session, 403 without the permiso),
- * the use case result rides the success body verbatim, and repository
- * failures map to 500 INTERNAL_ERROR. The queue is NOT scoped per
- * user in v1 (spec G4 team tool; per-user scoping lands with cartera,
- * pr15) — the auth matrix is 401/403/200.
+ * permiso `crm` (401 without a session, 403 without the permiso,
+ * 401 when the session user no longer resolves), the use case result
+ * rides the success body verbatim, and repository failures map to
+ * 500 INTERNAL_ERROR. The four due sections are team-wide (spec G4)
+ * while sinGestion (crm-ux redesign) is scoped to the session user's
+ * resolved login name.
  */
 
 function candidato(overrides: Partial<CandidatoCola>): CandidatoCola {
@@ -83,6 +93,8 @@ function getCola(): Promise<Response> {
 beforeEach(() => {
   vi.clearAllMocks();
   mockGetSession.mockReset();
+  mockGetUsuarioDb.mockReset();
+  mockGetUsuarioDb.mockResolvedValue({ getById: vi.fn().mockResolvedValue({ usuario: 'jperez' }) });
 });
 
 afterEach(() => {
@@ -114,7 +126,7 @@ describe('GET /api/crm/cola', () => {
     expect(listarCandidatosCola).not.toHaveBeenCalled();
   });
 
-  it('returns 200 with the four sections derived by the use case (wiring through the real use case)', async () => {
+  it('returns 200 with the sections derived by the use case (wiring through the real use case)', async () => {
     mockGetSession.mockResolvedValue(crmSession);
     const listarCandidatosCola = vi.fn().mockResolvedValue([
       // Vencida HOY: fechaUltimoEnvio = hoy - 8d (proximo ≤ hoy para cualquier hoy real).
@@ -146,6 +158,23 @@ describe('GET /api/crm/cola', () => {
         etapa: 'RECHAZADO',
         rechazadoHasta: '2000-01-01',
       }),
+      // sinGestion (crm-ux redesign): fresh NUEVO owned by the
+      // session's resolved login name 'jperez'.
+      candidato({
+        empresaId: 60,
+        razonSocial: 'Recién Mía',
+        etapa: 'NUEVO',
+        enviosCiclo: 0,
+        responsable: 'jperez',
+      }),
+      // Fresh NUEVO owned by someone else → dropped (user-scoped).
+      candidato({
+        empresaId: 61,
+        razonSocial: 'De Otro',
+        etapa: 'NUEVO',
+        enviosCiclo: 0,
+        responsable: 'mgarcia',
+      }),
     ]);
     setDb(makeFakePipeline({ listarCandidatosCola }));
 
@@ -158,6 +187,7 @@ describe('GET /api/crm/cola', () => {
     expect(body.decisionRequerida.map((f: CandidatoCola) => f.empresaId)).toEqual([20]);
     expect(body.reactivables.map((f: CandidatoCola) => f.empresaId)).toEqual([40]);
     expect(body.reinicios).toEqual([]);
+    expect(body.sinGestion.map((f: CandidatoCola) => f.empresaId)).toEqual([60]);
   });
 
   it('returns 500 INTERNAL_ERROR on a repository failure', async () => {

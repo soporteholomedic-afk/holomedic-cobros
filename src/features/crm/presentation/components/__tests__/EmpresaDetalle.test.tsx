@@ -160,9 +160,9 @@ describe('EmpresaDetalle', () => {
     render(<EmpresaDetalle id={42} />);
 
     await screen.findByText('Constructora X');
-    const pipeline = within(screen.getByLabelText('Pipeline'));
-    expect(pipeline.getByText('Inbound')).toBeInTheDocument();
-    expect(pipeline.getByText('Registrado')).toBeInTheDocument();
+    const pipeline = within(screen.getByLabelText('Avance comercial'));
+    expect(pipeline.getByText('Nos contactaron')).toBeInTheDocument();
+    expect(pipeline.getByText(/Estás acá: Registrado/)).toBeInTheDocument();
     // From INBOUND/REGISTRADO the machine fires T2 and the T14 fork.
     expect(screen.getByRole('button', { name: 'Cotización enviada' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Rechazar' })).toBeInTheDocument();
@@ -170,15 +170,17 @@ describe('EmpresaDetalle', () => {
     expect(screen.queryByRole('button', { name: 'Reactivar' })).not.toBeInTheDocument();
   });
 
-  it('renders the Timeline with the transition audit and handoff records', async () => {
+  it('renders the living timeline with the audit story and handoff records merged', async () => {
     mockDetalle(makeDetalle());
     render(<EmpresaDetalle id={42} />);
 
     await screen.findByText('Constructora X');
-    const historial = within(screen.getByLabelText('Historial'));
-    expect(historial.getByText('Cotización enviada')).toBeInTheDocument();
-    expect(historial.getByText('Operaciones')).toBeInTheDocument();
-    expect(historial.getByText(/Coordinar entrega/)).toBeInTheDocument();
+    const avance = within(screen.getByLabelText('Avance comercial'));
+    // The story: birth node, live position, and the merged handoff record.
+    expect(avance.getByText('Empresa en el CRM')).toBeInTheDocument();
+    expect(avance.getByText(/Estás acá: Registrado/)).toBeInTheDocument();
+    expect(avance.getByText(/Handoff a Operaciones/)).toBeInTheDocument();
+    expect(avance.getByText(/Coordinar entrega/)).toBeInTheDocument();
   });
 
   it('POSTs a direct transition and refreshes the detail on success', async () => {
@@ -236,7 +238,7 @@ describe('EmpresaDetalle', () => {
     render(<EmpresaDetalle id={42} />);
 
     await screen.findByText('Constructora X');
-    expect(screen.getByText('Rechazado')).toBeInTheDocument();
+    expect(screen.getByText(/Estás acá: Rechazado/)).toBeInTheDocument();
     expect(screen.getByText(/Ya tiene proveedor/)).toBeInTheDocument();
     expect(screen.getByText(/10\/12\/2026/)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Reactivar' })).toBeInTheDocument();
@@ -248,7 +250,7 @@ describe('EmpresaDetalle', () => {
     render(<EmpresaDetalle id={42} />);
 
     await screen.findByText('Constructora X');
-    expect(screen.getByText('Esta empresa no tiene pipeline registrado.')).toBeInTheDocument();
+    expect(screen.getByText('Esta empresa todavía no registra avance comercial.')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Cotización enviada' })).not.toBeInTheDocument();
   });
 

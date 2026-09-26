@@ -741,6 +741,9 @@ describe('SqlServerPipelineRepository — listarCandidatosCola (tasks pr13/WU2 q
         flujo: 'INBOUND',
         etapa: 'SEGUIMIENTO',
         enviosCiclo: 1,
+        // Crm-ux redesign: the principal encargado rides the queue row.
+        contactoNombre: 'Ana Probe',
+        contactoCorreo: 'ana@pipeline.test',
       });
       expect(typeof deProbe[0]?.razonSocial).toBe('string');
     } finally {
@@ -914,7 +917,9 @@ describe('SqlServerPipelineRepository — productivity count reads (tasks pr16/W
 
       const conteos = await pipelines.contarActividadesPorUsuario('2026-09-01', '2026-09-30');
 
-      expect(conteos).toEqual([
+      // Probe-scoped: the global query also sees REAL usage rows.
+      const deProbe = conteos.filter((c) => c.usuario === 'jperez' || c.usuario === 'mgarcia');
+      expect(deProbe).toEqual([
         { usuario: 'jperez', total: 2 },
         { usuario: 'mgarcia', total: 1 },
       ]);
@@ -929,7 +934,7 @@ describe('SqlServerPipelineRepository — productivity count reads (tasks pr16/W
       await insertarActividad(empresa.id, 'jperez', '2026-09-05');
       await insertarActividad(empresa.id, 'mgarcia', '2026-09-06');
 
-      const conteos = await pipelines.contarActividadesPorUsuario('2026-09-01', '2026-09-30', 'jperez');
+            const conteos = await pipelines.contarActividadesPorUsuario('2026-09-01', '2026-09-30', 'jperez');
 
       expect(conteos).toEqual([{ usuario: 'jperez', total: 1 }]);
     } finally {
@@ -948,12 +953,17 @@ describe('SqlServerPipelineRepository — productivity count reads (tasks pr16/W
 
       const conteos = await pipelines.contarResultadosPorUsuario('2026-09-01', '2026-09-30');
 
-      expect(conteos).toHaveLength(3);
+      // Scope to the PROBE usuarios: the query is global and the
+      // shared DB now carries REAL usage rows (any user's September
+      // activity would otherwise break the count — the assertion's
+      // intent is the per-tipo breakdown, not global emptiness).
+      const deProbe = conteos.filter((c) => c.usuario === 'jperez' || c.usuario === 'mgarcia');
+      expect(deProbe).toHaveLength(3);
       // Within-user row order follows the DB collation (accent-
       // insensitive) — the aggregation downstream is order-insensitive,
       // so compare as a set keyed by (usuario, tipo).
       expect(
-        new Map(conteos.map((c) => [`${c.usuario}|${c.tipo}`, c.total])),
+        new Map(deProbe.map((c) => [`${c.usuario}|${c.tipo}`, c.total])),
       ).toEqual(
         new Map([
           ['jperez|CotizaciónEnviada', 2],

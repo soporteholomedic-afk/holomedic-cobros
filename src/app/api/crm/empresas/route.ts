@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 
 import { getSession } from '@/lib/auth';
+import { getUsuarioDb } from '@/features/auth/infrastructure/getUsuarioDb';
 import { getCrmDb } from '@/features/crm/infrastructure/getCrmDb';
 import { ListarEmpresasUseCase } from '@/features/crm/application/listarEmpresas';
 import { CrearEmpresaUseCase } from '@/features/crm/application/crearEmpresa';
@@ -19,10 +20,14 @@ import { buildCrmError, mapCrmError, type CrmErrorResponse } from './errorRespon
  *
  * - GET    (permiso `crm` via RUTAS_PROTEGIDAS prefix + re-checked here):
  *   filtered list. Query params: `q` (razón social / RUC), `tipo`.
- * - POST   (permiso `crm_admin` — checked IN-ROUTE because the proxy's
- *   prefix matching cannot split by HTTP method, design D2): creates an
- *   empresa. Business validation and RUC-dedup (409) live in the use
- *   case / adapter; this route only guards shape and session.
+ * - POST   (permiso `crm`; self-assignment guard for non-admins —
+ *   crm-ux redesign): creates an empresa. A `crm_admin` keeps the
+ *   full freedom (any `responsable`, including none); a plain `crm`
+ *   holder may ONLY create auto-assigned to themselves — a foreign
+ *   `responsable` is 403 and a missing one defaults to `session.sub`
+ *   (the Cola de hoy quick-capture contract). Business validation
+ *   and RUC-dedup (409) live in the use case / adapter; this route
+ *   only guards shape, session and the self-assignment rule.
  *
  * Errors: typed `CrmErrorResponse` codes (see errorResponse.ts). Spanish
  * user-facing messages per repo convention.
@@ -123,8 +128,19 @@ export async function POST(
   try {
     const session = await getSession();
     if (!session) return buildCrmError('UNAUTHORIZED', 'No autenticado', 401);
-    if (!session.permisos.includes('crm_admin')) {
-      return buildCrmError('FORBIDDEN', 'Esta acción requiere el permiso crm_admin', 403);
+    if (!session.permisos.includes('crm')) {
+      return buildCrmError('FORBIDDEN', 'No autorizado', 403);
+    }
+    const esAdmin = session.permisos.includes('crm_admin');
+
+    // Canonical idUsuario → usuario resolution (cartera route
+    // precedent): the self-assignment writes the LOGIN NAME — the
+    // currency CRM_Empresas.responsable stores — never the opaque sub.
+    const usuarios = await getUsuarioDb();
+    const filaUsuario = await usuarios.getById(session.sub);
+    const usuarioSesion = filaUsuario?.usuario ?? null;
+    if (usuarioSesion === null) {
+      return buildCrmError('UNAUTHORIZED', 'La sesión ya no corresponde a un usuario válido', 401);
     }
 
     let body: unknown;
@@ -141,6 +157,21 @@ export async function POST(
       );
     }
 
+    // Self-assignment guard: non-admins may only create empresas for
+    // THEMSELVES (a foreign responsable is 403; a missing one defaults
+    // to the session user's login name). Admins keep the unrestricted
+    // contract.
+    if (!esAdmin) {
+      const responsablePedido = body.responsable?.trim() ?? '';
+      if (responsablePedido !== '' && responsablePedido !== usuarioSesion) {
+        return buildCrmError(
+          'FORBIDDEN',
+          'Solo puedes crear empresas asignadas a tu propio usuario',
+          403,
+        );
+      }
+    }
+
     // Explicit whitelist — unknown extra keys never reach the use case.
     const input: CrearEmpresaInput = {
       ruc: body.ruc,
@@ -150,7 +181,7 @@ export async function POST(
       proyectoObra: body.proyectoObra ?? null,
       destinoComun: body.destinoComun ?? null,
       notas: body.notas ?? null,
-      responsable: body.responsable ?? null,
+      responsable: esAdmin ? (body.responsable ?? null) : usuarioSesion,
       contactos: body.contactos.map((contacto) => ({
         nombre: contacto.nombre,
         telefono: contacto.telefono ?? null,

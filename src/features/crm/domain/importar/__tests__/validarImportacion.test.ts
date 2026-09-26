@@ -94,9 +94,24 @@ describe('validarImportacion — validación por fila ({fila, columna, mensaje})
     const resultado = validarImportacion([fila({ origen: 'Email' })]);
 
     expect(resultado.errores).toEqual([
-      { fila: 2, columna: 'Origen', mensaje: '"Origen" debe ser "Inbound" o "Outbound"' },
+      { fila: 2, columna: 'Origen', mensaje: '"Origen" debe ser "Nos contactaron" o "Los buscamos"' },
     ]);
     expect(resultado.filasValidas).toBe(0);
+  });
+
+  it('traduce la etiqueta de Origen al valor de dominio (nueva y legacy)', () => {
+    const resultado = validarImportacion([
+      fila({ ruc: '900123456', origen: 'Nos contactaron' }),
+      fila({ ruc: '20512345678', empresa: 'Obra Y', encargado: 'Luis', origen: 'Los buscamos' }),
+      fila({ ruc: '10123456789', empresa: 'Obra Z', encargado: 'Marta', origen: 'Inbound' }),
+    ]);
+
+    expect(resultado.errores).toEqual([]);
+    const origenes = new Map(resultado.grupos.map((g) => [g.razonSocial, g.origen]));
+    expect(origenes.get('Constructora X')).toBe('Inbound');
+    expect(origenes.get('Obra Y')).toBe('Outbound');
+    // Legacy English cells from previously downloaded templates still import.
+    expect(origenes.get('Obra Z')).toBe('Inbound');
   });
 
   it('RUC con letras tras normalizar es malformado', () => {

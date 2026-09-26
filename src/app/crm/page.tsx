@@ -18,7 +18,7 @@ export default async function CrmPage() {
   const esAdmin = session?.permisos.includes('crm_admin') ?? false;
 
   return (
-    <main className="mx-auto max-w-6xl space-y-6 p-6">
+    <main className="space-y-6 p-6">
       <header>
         <h1 className="text-2xl font-semibold">CRM</h1>
         <p className="text-sm text-muted-foreground">

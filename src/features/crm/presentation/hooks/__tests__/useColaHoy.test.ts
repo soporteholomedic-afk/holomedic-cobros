@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, renderHook, waitFor } from '@testing-library/react';
 
-import { buildColaPath, useColaHoy } from '../useColaHoy';
+import { buildColaPath, INTERVALO_ACTUALIZACION_MS, useColaHoy } from '../useColaHoy';
 import type { ColaHoy } from '../../../application/listarColaHoy';
 
 /**
@@ -33,6 +33,7 @@ const cola: ColaHoy = {
   reinicios: [],
   decisionRequerida: [],
   reactivables: [],
+  sinGestion: [],
 };
 
 const fetchMock = vi.fn();
@@ -116,5 +117,78 @@ describe('useColaHoy', () => {
     await waitFor(() => expect(result.current.status).toBe('ready'));
     expect(result.current.cola).toEqual(cola);
     expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('auto-refreshes silently on the interval — no loading flash, stale cards stay visible', async () => {
+    vi.useFakeTimers();
+    try {
+      fetchMock.mockResolvedValue(okResponse({ success: true, ...cola }));
+      const { result } = renderHook(() => useColaHoy());
+      await act(async () => {});
+      await act(async () => {});
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      expect(result.current.status).toBe('ready');
+
+      // The interval fires while the second request is PENDING — the
+      // board must NOT flash back to loading nor lose its cards.
+      let resolver: (r: Response) => void = () => {};
+      fetchMock.mockReturnValueOnce(
+        new Promise<Response>((res) => {
+          resolver = res;
+        }),
+      );
+      await act(async () => {
+        vi.advanceTimersByTime(INTERVALO_ACTUALIZACION_MS);
+      });
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+      expect(result.current.status).toBe('ready');
+      expect(result.current.cola).toEqual(cola);
+
+      await act(async () => {
+        resolver(okResponse({ success: true, ...cola }));
+      });
+      expect(result.current.status).toBe('ready');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('refetches silently when the window regains focus', async () => {
+    fetchMock.mockResolvedValue(okResponse({ success: true, ...cola }));
+    const { result } = renderHook(() => useColaHoy());
+    await act(async () => {});
+    await act(async () => {});
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      window.dispatchEvent(new Event('focus'));
+    });
+    await act(async () => {});
+    await act(async () => {});
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(result.current.status).toBe('ready');
+  });
+
+  it('keeps the stale board when a silent refresh fails (stale-while-error)', async () => {
+    fetchMock.mockResolvedValueOnce(okResponse({ success: true, ...cola }));
+    const { result } = renderHook(() => useColaHoy());
+    await act(async () => {});
+    await act(async () => {});
+    expect(result.current.status).toBe('ready');
+
+    fetchMock.mockResolvedValueOnce(
+      new Response(JSON.stringify({ error: 'boom' }), { status: 500 }),
+    );
+    await act(async () => {
+      window.dispatchEvent(new Event('focus'));
+    });
+    await act(async () => {});
+    await act(async () => {});
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(result.current.status).toBe('ready');
+    expect(result.current.cola).toEqual(cola);
+    expect(result.current.error).toBeNull();
   });
 });

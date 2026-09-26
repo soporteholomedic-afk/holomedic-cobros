@@ -225,8 +225,8 @@ export function FormularioNuevaEmpresa() {
               className={inputClase}
             >
               <option value="">Sin clasificar</option>
-              <option value="Inbound">Inbound</option>
-              <option value="Outbound">Outbound</option>
+              <option value="Inbound">Nos contactaron</option>
+              <option value="Outbound">Los buscamos</option>
             </select>
           </div>
           <CampoTexto

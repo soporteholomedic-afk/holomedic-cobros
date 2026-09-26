@@ -132,23 +132,49 @@ export class SqlServerPipelineRepository
    * join lands on the CRM_Empresas PK — one derived-on-request scan,
    * no background jobs. Pipeline-less empresas (origen null) have no
    * row to join, so they cannot appear.
+   *
+   * Crm-ux redesign: two OUTER APPLYs ride along the principal
+   * encargado (nombre + first correo — the "who to write" the board
+   * cards show). The ORDER mirrors the app-side resolverContactos:
+   * first esPrincipal DESC, then first listed (id) — TOP 1 per row,
+   * still one round trip.
    */
   async listarCandidatosCola(): Promise<CandidatoCola[]> {
     const result = await this.pool.request().query(`
       SELECT p.empresaId, p.flujo, p.etapa, p.ciclo, p.enviosCiclo,
              p.fechaCicloInicio, p.fechaUltimoEnvio, p.descansoHasta,
              p.rechazadoHasta, p.motivoRechazo, p.updatedBy, p.updatedAt,
-             e.razonSocial, e.responsable
+             e.razonSocial, e.responsable,
+             ct.nombre AS contactoNombre, cr.correo AS contactoCorreo
       FROM dbo.CRM_Pipeline p
       JOIN dbo.CRM_Empresas e ON e.id = p.empresaId
+      OUTER APPLY (
+        SELECT TOP 1 c.id, c.nombre
+        FROM dbo.CRM_Contactos c
+        WHERE c.empresaId = e.id
+        ORDER BY c.esPrincipal DESC, c.id
+      ) ct
+      OUTER APPLY (
+        SELECT TOP 1 co.correo
+        FROM dbo.CRM_Correos co
+        WHERE co.contactoId = ct.id
+        ORDER BY co.id
+      ) cr
     `);
-    return (result.recordset as (PipelineRow & { razonSocial: string; responsable: string | null })[]).map(
-      (row) => ({
-        ...mapearFila(row),
-        razonSocial: row.razonSocial,
-        responsable: row.responsable,
-      }),
-    );
+    return (
+      result.recordset as (PipelineRow & {
+        razonSocial: string;
+        responsable: string | null;
+        contactoNombre: string | null;
+        contactoCorreo: string | null;
+      })[]
+    ).map((row) => ({
+      ...mapearFila(row),
+      razonSocial: row.razonSocial,
+      responsable: row.responsable,
+      contactoNombre: row.contactoNombre,
+      contactoCorreo: row.contactoCorreo,
+    }));
   }
 
   async registrarTransicion(datos: TransicionAPersistir): Promise<PipelineEmpresa> {

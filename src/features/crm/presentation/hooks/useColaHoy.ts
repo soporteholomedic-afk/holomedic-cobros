@@ -9,9 +9,15 @@ import type { ColaHoy } from '../../application/listarColaHoy';
  * pr13/WU3) from `/api/crm/cola`. Fetch-only: the API route is the
  * boundary; no repository is imported here (useEmpresaDetalle
  * precedent). The queue is derived on request server-side — the hook
- * just renders what today's union of the four sections is.
+ * just renders what today's union of the sections is.
  *
- * Status machine: 'loading' (in flight) → 'ready' (200 with the four
+ * Auto-refresh (crm-ux redesign): the board silently re-derives
+ * itself every INTERVALO_ACTUALIZACION_MS and on window focus —
+ * silent refreshes never flash the loading state and keep the stale
+ * board on failure (stale-while-error); the manual retry stays the
+ * loud path.
+ *
+ * Status machine: 'loading' (in flight) → 'ready' (200 with the
  * sections) | 'error' (non-OK response, unexpected shape or network
  * failure). `retry()` re-runs the fetch.
  */
@@ -25,7 +31,10 @@ export interface UseColaHoyResult {
   retry: () => void;
 }
 
-/** Pure — the single source of the request URL for both hook and tests. */
+/** Auto-refresh cadence (crm-ux redesign): the board must not lie. */
+export const INTERVALO_ACTUALIZACION_MS = 30_000;
+
+/** Single source of the request URL for both hook and tests. */
 export function buildColaPath(): string {
   return '/api/crm/cola';
 }
@@ -42,7 +51,8 @@ function isColaSuccess(v: unknown): v is { success: true } & ColaHoy {
     isArray(obj.vencidasHoy) &&
     isArray(obj.reinicios) &&
     isArray(obj.decisionRequerida) &&
-    isArray(obj.reactivables)
+    isArray(obj.reactivables) &&
+    isArray(obj.sinGestion)
   );
 }
 
@@ -54,10 +64,12 @@ export function useColaHoy(): UseColaHoyResult {
   const requestIdRef = useRef(0);
   const mountedRef = useRef(true);
 
-  const fetchOnce = useCallback(async (isRetry: boolean) => {
+  const fetchOnce = useCallback(async (isRetry: boolean, silencioso = false) => {
     const requestId = ++requestIdRef.current;
-    if (isRetry) setStatus('loading');
-    setError(null);
+    // Silent refreshes (auto-poll / focus) never flash the loading
+    // state — the current board stays visible until new data lands.
+    if (isRetry && !silencioso) setStatus('loading');
+    if (!silencioso) setError(null);
 
     try {
       const response = await fetch(buildColaPath(), { method: 'GET' });
@@ -66,6 +78,9 @@ export function useColaHoy(): UseColaHoyResult {
       if (requestId !== requestIdRef.current || !mountedRef.current) return;
 
       if (!response.ok) {
+        // Silent failures keep the stale board (stale-while-error) —
+        // only user-driven fetches surface the error.
+        if (silencioso) return;
         const apiError = (json as { error?: unknown }).error;
         setStatus('error');
         setError(typeof apiError === 'string' ? apiError : `HTTP ${response.status}`);
@@ -73,6 +88,7 @@ export function useColaHoy(): UseColaHoyResult {
         return;
       }
       if (!isColaSuccess(json)) {
+        if (silencioso) return;
         setStatus('error');
         setError('Respuesta inesperada del servidor');
         setCola(null);
@@ -84,9 +100,11 @@ export function useColaHoy(): UseColaHoyResult {
         reinicios: json.reinicios,
         decisionRequerida: json.decisionRequerida,
         reactivables: json.reactivables,
+        sinGestion: json.sinGestion,
       });
     } catch (err: unknown) {
       if (requestId !== requestIdRef.current || !mountedRef.current) return;
+      if (silencioso) return;
       setStatus('error');
       setError(err instanceof Error ? err.message : 'Error de red');
       setCola(null);
@@ -103,6 +121,22 @@ export function useColaHoy(): UseColaHoyResult {
     /* eslint-enable react-hooks/set-state-in-effect */
     return () => {
       mountedRef.current = false;
+    };
+  }, [fetchOnce]);
+
+  // Auto-refresh (crm-ux redesign): the board re-derives itself every
+  // 30s and whenever the tab regains focus — silently, so the current
+  // cards never flash away. Hidden tabs skip the poll (visibility).
+  useEffect(() => {
+    const refrescar = (): void => {
+      if (document.visibilityState !== 'visible') return;
+      void fetchOnce(true, true);
+    };
+    const intervalo = setInterval(refrescar, INTERVALO_ACTUALIZACION_MS);
+    window.addEventListener('focus', refrescar);
+    return () => {
+      clearInterval(intervalo);
+      window.removeEventListener('focus', refrescar);
     };
   }, [fetchOnce]);
 

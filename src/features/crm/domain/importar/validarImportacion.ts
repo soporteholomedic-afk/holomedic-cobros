@@ -28,7 +28,7 @@
 import type { Origen, TipoEmpresa } from '../entities';
 import { normalizarCorreo, normalizarNombre, normalizarRuc } from '../normalizar';
 
-import { COLUMNAS_IMPORT_CRM, type FilaImportCrm } from './columnas';
+import { COLUMNAS_IMPORT_CRM, ORIGEN_POR_ETIQUETA, type FilaImportCrm } from './columnas';
 
 /** Row-level error as surfaced to the admin (Spanish, app language). */
 export interface ErrorFilaImport {
@@ -94,7 +94,9 @@ const ENCABEZADOS = new Map(COLUMNAS_IMPORT_CRM.map((c) => [c.clave, c.encabezad
 
 /** RUC/DNI values use literal option strings shared with the CHECK constraints. */
 const VALORES_TIPO: readonly string[] = ['Cliente', 'Prospecto'];
-const VALORES_ORIGEN: readonly string[] = ['Inbound', 'Outbound'];
+
+/** Accepted Origen cells — the shared label map keys (new vocabulary + legacy English). */
+const ETIQUETAS_ORIGEN: readonly string[] = [...ORIGEN_POR_ETIQUETA.keys()];
 
 interface FilaValida {
   fila: number;
@@ -109,6 +111,12 @@ const opcional = (valor: string): string | null => {
   const recortado = valor.trim();
   return recortado === '' ? null : recortado;
 };
+
+/** Excel Origen cell → domain value ("" → null). Validated rows always hit the map. */
+function resolverOrigen(valor: string): Origen | null {
+  const recortado = valor.trim();
+  return recortado === '' ? null : (ORIGEN_POR_ETIQUETA.get(recortado) ?? null);
+}
 
 /** Split the ";"-separated cell into normalized deduped correos (order-preserving). */
 function partirCorreos(crudo: string): string[] {
@@ -142,8 +150,10 @@ function validarFila(fila: number, f: FilaImportCrm): ErrorFilaImport[] {
     errores.push(errorFila(fila, 'tipo', '"Tipo" debe ser "Cliente" o "Prospecto"'));
   }
 
-  if (f.origen.trim() !== '' && !VALORES_ORIGEN.includes(f.origen.trim())) {
-    errores.push(errorFila(fila, 'origen', '"Origen" debe ser "Inbound" o "Outbound"'));
+  if (f.origen.trim() !== '' && !ETIQUETAS_ORIGEN.includes(f.origen.trim())) {
+    errores.push(
+      errorFila(fila, 'origen', '"Origen" debe ser "Nos contactaron" o "Los buscamos"'),
+    );
   }
 
   if (f.encargado.trim() === '') {
@@ -311,7 +321,7 @@ export function validarImportacion(
       ruc,
       razonSocial: g.empresa.trim(),
       tipo: g.tipo.trim() as TipoEmpresa,
-      origen: opcional(g.origen) as Origen | null,
+      origen: resolverOrigen(g.origen),
       proyectoObra: opcional(g.proyectoObra),
       destinoComun: opcional(g.destinoComun),
       responsable: opcional(g.responsable),

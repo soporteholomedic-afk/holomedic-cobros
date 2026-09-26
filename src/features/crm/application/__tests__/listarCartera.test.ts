@@ -239,9 +239,34 @@ describe('proximaAccion (pure — pipeline row + injected hoy, spec G4 predicate
         pipeline: candidato({ empresaId: 5, etapa: 'SEGUIMIENTO', fechaUltimoEnvio: '2026-05-30' }),
         esperado: 'Seguimiento semanal al día',
       },
-      // Non-cadence stage without due markers.
+      // Fresh empresa (crm-ux redesign): birth stage — fechaUltimoEnvio
+      // carries the schema DEFAULT, the stage is the honest signal.
       {
-        pipeline: candidato({ empresaId: 6, etapa: 'NUEVO', fechaUltimoEnvio: null }),
+        pipeline: candidato({ empresaId: 6, etapa: 'NUEVO', fechaUltimoEnvio: '2026-05-31' }),
+        esperado: 'Iniciar primer contacto',
+      },
+      {
+        pipeline: candidato({
+          empresaId: 7,
+          flujo: 'INBOUND',
+          etapa: 'REGISTRADO',
+          fechaUltimoEnvio: '2026-05-31',
+        }),
+        esperado: 'Iniciar primer contacto',
+      },
+      // Cadence stage, zero sends in the cycle (taken over mid-flow).
+      {
+        pipeline: candidato({ empresaId: 9, etapa: 'CADENCIA', enviosCiclo: 0, fechaUltimoEnvio: '2026-05-30' }),
+        esperado: 'Iniciar primer contacto',
+      },
+      // Non-cadence stage moving through its own events.
+      {
+        pipeline: candidato({
+          empresaId: 8,
+          flujo: 'INBOUND',
+          etapa: 'PRESENTACION',
+          fechaUltimoEnvio: null,
+        }),
         esperado: 'Sin acción pendiente',
       },
     ];
