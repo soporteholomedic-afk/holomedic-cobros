@@ -3,7 +3,7 @@
 import { useState, useCallback } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Activity, FileSpreadsheet, Home, DollarSign, FileText, Mail, Menu, X, Users, LogOut, PenLine } from 'lucide-react';
+import { Activity, Building2, FileSpreadsheet, Home, DollarSign, FileText, Mail, Menu, X, Users, LogOut, PenLine } from 'lucide-react';
 import AreasMenuItem from './AreasMenuItem';
 import { useAuth } from '@/features/auth/presentation/hooks/useAuth';
 
@@ -29,6 +29,10 @@ export default function Sidebar() {
   }, []);
 
   const isAdmin = user?.permisos.includes('admin');
+  // crm (S1a/pr1): the CRM entry is gated by its OWN permiso — the
+  // route requires exactly `crm` via RUTAS_PROTETGIDAS; crm_admin is a
+  // separate elevation for the import surface and never shown here.
+  const canCrm = user?.permisos.includes('crm');
   // editor-firmas: "Mi firma" is gated by its OWN permiso — NOT by
   // admin nor plantillas (design D1/D6; the page route requires
   // exactly `firma_correo` via RUTAS_PROTEGIDAS).
@@ -128,6 +132,24 @@ export default function Sidebar() {
                 </Link>
               );
             })}
+
+          {canCrm && (
+            <Link
+              href="/crm"
+              onClick={closeMobile}
+              className={`flex items-center space-x-3 px-4 py-3 rounded-xl text-sm font-medium transition-all duration-200 ${
+                pathname === '/crm'
+                  ? 'bg-sky-950/50 text-sky-300 border border-sky-800/30 shadow-sm'
+                  : 'text-slate-400 hover:text-white hover:bg-slate-800/50'
+              }`}
+            >
+              <Building2 className="w-5 h-5" />
+              <span>CRM</span>
+              {pathname === '/crm' && (
+                <span className="ml-auto w-1.5 h-1.5 rounded-full bg-sky-400 shadow-sm shadow-sky-400/50" />
+              )}
+            </Link>
+          )}
 
           {canEditFirma && (
             <Link
