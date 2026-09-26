@@ -1,0 +1,1804 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CRM Salud Ocupacional - OcupaCare CRM</title>
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Google Fonts: Inter -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'sans-serif'],
+          },
+          colors: {
+            brand: {
+              50: '#ecfdf5',
+              100: '#d1fae5',
+              500: '#10b981',
+              600: '#059669',
+              700: '#047857',
+              800: '#065f46',
+              900: '#064e3b',
+            },
+            clinic: {
+              navy: '#0f172a',
+              teal: '#0d9488',
+              cyan: '#06b6d4',
+            }
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    /* Custom scrollbar styling */
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: #f1f5f9;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #cbd5e1;
+      border-radius: 9999px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #94a3b8;
+    }
+    .badge-pulse {
+      animation: pulse-ring 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+    }
+    @keyframes pulse-ring {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
+    }
+  </style>
+</head>
+<body class="bg-slate-50 text-slate-800 font-sans antialiased min-h-screen flex flex-col">
+
+  <!-- Barra Superior -->
+  <header class="bg-white border-b border-slate-200 sticky top-0 z-30 shadow-sm">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+      <div class="flex items-center space-x-3">
+        <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-teal-600 to-emerald-500 flex items-center justify-center text-white shadow-md shadow-emerald-500/20">
+          <i data-lucide="heart-pulse" class="w-6 h-6"></i>
+        </div>
+        <div>
+          <span class="text-xl font-bold tracking-tight text-slate-900 flex items-center gap-1.5">
+            Salud<span class="text-teal-600">Empresas</span>
+            <span class="text-[10px] uppercase font-semibold tracking-wider bg-teal-50 text-teal-700 px-2 py-0.5 rounded-full border border-teal-200">Panel Sencillo</span>
+          </span>
+          <p class="text-xs text-slate-500 hidden sm:block">Control de empresas y recordatorios semanales de chequeos médicos</p>
+        </div>
+      </div>
+
+      <!-- Botones de Acción Directa -->
+      <div class="flex items-center space-x-2 sm:space-x-3">
+        <button onclick="openSimulationEngineModal()" class="inline-flex items-center px-3 py-2 text-xs sm:text-sm font-medium rounded-lg text-slate-700 bg-slate-100 hover:bg-slate-200 transition">
+          <i data-lucide="play-circle" class="w-4 h-4 mr-1.5 text-amber-500"></i>
+          <span>Probar paso de 1 semana</span>
+        </button>
+        <button onclick="executeBatchAdvanceThreeMonths()" class="inline-flex items-center px-3 py-2 text-xs sm:text-sm font-medium rounded-lg text-purple-700 bg-purple-50 hover:bg-purple-100 border border-purple-200 transition" title="Simula que ya pasaron los 3 meses de espera">
+          <i data-lucide="fast-forward" class="w-4 h-4 mr-1.5 text-purple-600"></i>
+          <span>Probar paso de 3 meses</span>
+        </button>
+        <button onclick="openClientModal()" class="inline-flex items-center px-3.5 py-2 text-xs sm:text-sm font-semibold rounded-lg text-white bg-teal-600 hover:bg-teal-700 shadow-sm transition">
+          <i data-lucide="plus-circle" class="w-4 h-4 mr-1.5"></i>
+          Anotar Nueva Empresa
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
+
+    <!-- Resumen de Cifras en Palabras Sencillas -->
+    <section class="grid grid-cols-2 lg:grid-cols-6 gap-3 sm:gap-4">
+      <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs flex items-center justify-between col-span-2 sm:col-span-1">
+        <div>
+          <p class="text-xs font-semibold uppercase text-slate-500 tracking-wider">Empresas</p>
+          <h3 id="statTotal" class="text-2xl font-bold text-slate-900 mt-1">0</h3>
+          <p class="text-[11px] text-slate-500 mt-0.5"><span id="statNuevos" class="font-medium text-slate-700">0</span> clientes / <span id="statProspectos" class="font-medium text-slate-700">0</span> posibles</p>
+        </div>
+        <div class="w-10 h-10 rounded-xl bg-slate-100 text-slate-600 flex items-center justify-center shrink-0">
+          <i data-lucide="building-2" class="w-5 h-5"></i>
+        </div>
+      </div>
+
+      <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs flex items-center justify-between">
+        <div>
+          <p class="text-xs font-semibold uppercase text-slate-500 tracking-wider">En espera</p>
+          <h3 id="statSeguimiento" class="text-2xl font-bold text-amber-600 mt-1">0</h3>
+          <p class="text-[11px] text-amber-700 font-medium mt-0.5">1 correo por semana</p>
+        </div>
+        <div class="w-10 h-10 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center shrink-0">
+          <i data-lucide="hourglass" class="w-5 h-5"></i>
+        </div>
+      </div>
+
+      <div class="bg-white p-4 rounded-2xl border border-emerald-200 shadow-xs flex items-center justify-between bg-emerald-50/20">
+        <div>
+          <p class="text-xs font-semibold uppercase text-emerald-700 tracking-wider flex items-center gap-1">
+            <span class="inline-block w-2 h-2 rounded-full bg-emerald-500"></span>
+            Positivos
+          </p>
+          <h3 id="statPositivos" class="text-2xl font-bold text-emerald-600 mt-1">0</h3>
+          <p class="text-[11px] text-emerald-800 font-medium mt-0.5">Tienen interés / Cotizan</p>
+        </div>
+        <div class="w-10 h-10 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0">
+          <i data-lucide="thumbs-up" class="w-5 h-5"></i>
+        </div>
+      </div>
+
+      <div class="bg-white p-4 rounded-2xl border border-rose-200 shadow-xs flex items-center justify-between bg-rose-50/20">
+        <div>
+          <p class="text-xs font-semibold uppercase text-rose-700 tracking-wider flex items-center gap-1">
+            <span class="inline-block w-2 h-2 rounded-full bg-rose-500"></span>
+            Sin interés
+          </p>
+          <h3 id="statNegativos" class="text-2xl font-bold text-rose-600 mt-1">0</h3>
+          <p class="text-[11px] text-rose-700 font-medium mt-0.5">No desean por ahora</p>
+        </div>
+        <div class="w-10 h-10 rounded-xl bg-rose-100 text-rose-700 flex items-center justify-center shrink-0">
+          <i data-lucide="thumbs-down" class="w-5 h-5"></i>
+        </div>
+      </div>
+
+      <div class="bg-white p-4 rounded-2xl border border-purple-200 shadow-xs flex items-center justify-between bg-purple-50/20">
+        <div>
+          <p class="text-xs font-semibold uppercase text-purple-700 tracking-wider flex items-center gap-1">
+            <span class="inline-block w-2 h-2 rounded-full bg-purple-500"></span>
+            Pausa 3 meses
+          </p>
+          <h3 id="statEnPausa" class="text-2xl font-bold text-purple-700 mt-1">0</h3>
+          <p class="text-[11px] text-purple-600 font-medium mt-0.5">Vuelven el próx. trimestre</p>
+        </div>
+        <div class="w-10 h-10 rounded-xl bg-purple-100 text-purple-700 flex items-center justify-center shrink-0">
+          <i data-lucide="timer" class="w-5 h-5"></i>
+        </div>
+      </div>
+
+      <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs flex items-center justify-between">
+        <div>
+          <p class="text-xs font-semibold uppercase text-slate-500 tracking-wider">Falta carta</p>
+          <h3 id="statCartasFaltantes" class="text-2xl font-bold text-slate-700 mt-1">0</h3>
+          <p class="text-[11px] text-slate-500 mt-0.5">Recién anotados</p>
+        </div>
+        <div class="w-10 h-10 rounded-xl bg-slate-100 text-slate-500 flex items-center justify-center shrink-0">
+          <i data-lucide="mail-plus" class="w-5 h-5"></i>
+        </div>
+      </div>
+    </section>
+
+    <!-- Explicación Clara del Flujo -->
+    <div class="bg-gradient-to-r from-teal-900 via-slate-900 to-slate-900 rounded-2xl p-5 text-white shadow-md relative overflow-hidden">
+      <div class="absolute -right-10 -bottom-10 w-48 h-48 bg-teal-500/10 rounded-full blur-2xl pointer-events-none"></div>
+      <div class="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4 relative z-10">
+        <div class="space-y-1.5 max-w-2xl">
+          <div class="flex items-center gap-2">
+            <span class="bg-teal-400/20 text-teal-300 text-xs px-2.5 py-0.5 rounded-full font-medium border border-teal-400/30">Envío Automático y Sin Complicaciones</span>
+            <span class="bg-purple-400/20 text-purple-300 text-xs px-2.5 py-0.5 rounded-full font-medium border border-purple-400/30">Regla de 3 Meses</span>
+          </div>
+          <h2 class="text-lg sm:text-xl font-bold tracking-tight">¿Cómo funciona el envío de correos y la reactivación?</h2>
+          <p class="text-xs sm:text-sm text-slate-300 leading-relaxed">
+            1. Al registrar a una empresa, se le envía de inmediato una <strong>Carta de Presentación</strong>.<br>
+            2. Si no contesta, recibe un correo amable <strong>una vez por semana durante 3 semanas</strong>.<br>
+            3. Si dice que no tiene interés o pasan las 3 semanas, <strong>se pone en pausa durante 3 meses</strong> para no saturarla. Cumplido ese tiempo, el sistema te avisa para volver a contactarla.
+          </p>
+        </div>
+
+        <!-- Indicador visual simple de los pasos -->
+        <div class="flex items-center flex-wrap gap-2 text-xs bg-slate-800/80 p-3 rounded-xl border border-slate-700/60 w-full lg:w-auto justify-between lg:justify-start">
+          <div class="flex items-center gap-1.5 text-emerald-400">
+            <span class="w-6 h-6 rounded-full bg-emerald-500/20 flex items-center justify-center text-xs font-bold border border-emerald-500/40">1</span>
+            <span>Carta Inicial</span>
+          </div>
+          <i data-lucide="arrow-right" class="w-3.5 h-3.5 text-slate-500"></i>
+          <div class="flex items-center gap-1.5 text-amber-300">
+            <span class="w-6 h-6 rounded-full bg-amber-500/20 flex items-center justify-center text-xs font-bold border border-amber-500/40">2</span>
+            <span>3 Semanas</span>
+          </div>
+          <i data-lucide="arrow-right" class="w-3.5 h-3.5 text-slate-500"></i>
+          <div class="flex items-center gap-1.5 text-purple-300">
+            <span class="w-6 h-6 rounded-full bg-purple-500/20 flex items-center justify-center text-xs font-bold border border-purple-500/40">3</span>
+            <span>Pausa 3 Meses</span>
+          </div>
+          <i data-lucide="arrow-right" class="w-3.5 h-3.5 text-slate-500"></i>
+          <div class="flex items-center gap-1.5 text-teal-300">
+            <span class="w-6 h-6 rounded-full bg-teal-500/20 flex items-center justify-center text-xs font-bold border border-teal-500/40">4</span>
+            <span>Reactivación</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Tabla Principal con Filtros Claros -->
+    <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+      <!-- Barra de Filtros y Búsqueda -->
+      <div class="p-4 border-b border-slate-200 flex flex-col md:flex-row gap-4 items-stretch md:items-center justify-between bg-slate-50/50">
+
+        <!-- Pestañas de Filtro con Nombres Simples -->
+        <div class="flex items-center space-x-1 overflow-x-auto pb-1 md:pb-0 text-xs sm:text-sm">
+          <button onclick="setFilter('todos')" id="tab-todos" class="tab-btn px-3 py-1.5 rounded-lg font-medium transition bg-teal-600 text-white shadow-xs">
+            Todas (<span id="count-todos">0</span>)
+          </button>
+          <button onclick="setFilter('en_seguimiento')" id="tab-en_seguimiento" class="tab-btn px-3 py-1.5 rounded-lg font-medium text-slate-600 hover:text-slate-900 hover:bg-slate-100 transition">
+            En espera (<span id="count-seguimiento">0</span>)
+          </button>
+          <button onclick="setFilter('positivos')" id="tab-positivos" class="tab-btn px-3 py-1.5 rounded-lg font-medium text-emerald-700 hover:bg-emerald-50 transition">
+            👍 Positivos (<span id="count-positivos">0</span>)
+          </button>
+          <button onclick="setFilter('en_pausa')" id="tab-en_pausa" class="tab-btn px-3 py-1.5 rounded-lg font-medium text-purple-700 hover:bg-purple-50 transition">
+            💤 Pausa 3 meses (<span id="count-pausa">0</span>)
+          </button>
+          <button onclick="setFilter('reactivados')" id="tab-reactivados" class="tab-btn px-3 py-1.5 rounded-lg font-medium text-teal-700 hover:bg-teal-50 transition">
+            🔔 Reactivados (<span id="count-reactivados">0</span>)
+          </button>
+          <button onclick="setFilter('negativos')" id="tab-negativos" class="tab-btn px-3 py-1.5 rounded-lg font-medium text-rose-700 hover:bg-rose-50 transition">
+            👎 Sin interés (<span id="count-negativos">0</span>)
+          </button>
+          <button onclick="setFilter('pendientes')" id="tab-pendientes" class="tab-btn px-3 py-1.5 rounded-lg font-medium text-slate-600 hover:text-slate-900 hover:bg-slate-100 transition">
+            Falta carta (<span id="count-pendientes">0</span>)
+          </button>
+        </div>
+
+        <!-- Buscador -->
+        <div class="relative w-full md:w-72">
+          <i data-lucide="search" class="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"></i>
+          <input
+            type="text"
+            id="searchInput"
+            oninput="handleSearch(this.value)"
+            placeholder="Buscar por nombre de empresa o persona..."
+            class="w-full pl-9 pr-4 py-2 text-xs sm:text-sm bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent transition"
+          >
+        </div>
+      </div>
+
+      <div class="overflow-x-auto">
+        <table class="w-full text-left text-sm">
+          <thead class="bg-slate-50 text-slate-500 uppercase text-[11px] font-semibold tracking-wider border-b border-slate-200">
+            <tr>
+              <th scope="col" class="px-5 py-3.5">Empresa</th>
+              <th scope="col" class="px-4 py-3.5">Persona de Contacto</th>
+              <th scope="col" class="px-4 py-3.5">Tipo</th>
+              <th scope="col" class="px-4 py-3.5">¿En qué correo va?</th>
+              <th scope="col" class="px-4 py-3.5">Próximo paso</th>
+              <th scope="col" class="px-5 py-3.5 text-right">¿Qué deseas hacer?</th>
+            </tr>
+          </thead>
+          <tbody id="clientsTableBody" class="divide-y divide-slate-100">
+            <!-- Filas dinámicas -->
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Estado vacío cuando no hay resultados -->
+      <div id="emptyState" class="hidden py-12 text-center">
+        <div class="w-16 h-16 rounded-full bg-slate-100 text-slate-400 mx-auto flex items-center justify-center mb-3">
+          <i data-lucide="inbox" class="w-8 h-8"></i>
+        </div>
+        <h4 class="text-sm font-semibold text-slate-700">No hay empresas que mostrar</h4>
+        <p class="text-xs text-slate-500 mt-1 max-w-sm mx-auto">Prueba quitando los filtros o registra una nueva empresa para empezar.</p>
+        <button onclick="openClientModal()" class="mt-4 px-4 py-2 text-xs font-semibold rounded-lg text-white bg-teal-600 hover:bg-teal-700 shadow-sm transition">
+          + Anotar Empresa
+        </button>
+      </div>
+
+      <!-- Pie de Tabla -->
+      <div class="px-5 py-3 bg-slate-50 border-t border-slate-200 flex flex-col sm:flex-row items-center justify-between text-xs text-slate-500 gap-2">
+        <div class="flex items-center gap-2">
+          <span class="inline-block w-2.5 h-2.5 rounded-full bg-purple-500"></span>
+          <span>Regla de reactivación: Si no hay interés, se deja en pausa 3 meses y luego se reactiva para consultar nuevamente.</span>
+        </div>
+        <span id="showingCountText">Mostrando 0 empresas</span>
+      </div>
+    </div>
+
+    <!-- Sección de Correos que se Envían -->
+    <section class="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm space-y-4">
+      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-3">
+        <div>
+          <h3 class="text-base font-bold text-slate-900 flex items-center gap-2">
+            <i data-lucide="mail" class="w-5 h-5 text-teal-600"></i>
+            Secuencia Completa de Correos (Incluye Reactivación tras 3 Meses)
+          </h3>
+          <p class="text-xs text-slate-500">Haz clic en cualquiera de las 5 tarjetas para leer el texto exacto redactado para el cliente.</p>
+        </div>
+        <span class="text-xs font-medium text-purple-700 bg-purple-50 border border-purple-200 px-3 py-1 rounded-full w-fit">4 correos iniciales + 1 de reactivación</span>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-5 gap-3">
+
+        <!-- Tarjeta 1: Carta Inicial -->
+        <div onclick="previewEmailTemplate('carta_presentacion')" class="cursor-pointer border border-teal-200 bg-teal-50/50 hover:bg-teal-50 rounded-xl p-3.5 transition group relative">
+          <div class="flex items-center justify-between mb-2">
+            <span class="text-[11px] font-bold text-teal-800 bg-teal-100/80 px-2 py-0.5 rounded uppercase">Día 1 &bull; Inmediato</span>
+            <i data-lucide="file-text" class="w-4 h-4 text-teal-600"></i>
+          </div>
+          <h4 class="font-bold text-sm text-slate-800 group-hover:text-teal-700 transition">1. Carta de Presentación</h4>
+          <p class="text-xs text-slate-500 mt-1 line-clamp-2">Presenta la clínica, los exámenes médicos que exige la ley y adjunta el folleto.</p>
+          <div class="mt-3 flex items-center text-xs font-semibold text-teal-600">
+            <span>Leer mensaje</span>
+            <i data-lucide="chevron-right" class="w-3.5 h-3.5 ml-1"></i>
+          </div>
+        </div>
+
+        <!-- Tarjeta 2: Semana 1 -->
+        <div onclick="previewEmailTemplate('seguimiento_1')" class="cursor-pointer border border-slate-200 bg-slate-50/70 hover:bg-amber-50/50 hover:border-amber-200 rounded-xl p-3.5 transition group">
+          <div class="flex items-center justify-between mb-2">
+            <span class="text-[11px] font-bold text-amber-800 bg-amber-100/80 px-2 py-0.5 rounded uppercase">A los 7 días</span>
+            <i data-lucide="clock" class="w-4 h-4 text-amber-600"></i>
+          </div>
+          <h4 class="font-bold text-sm text-slate-800 group-hover:text-amber-800 transition">2. Recordatorio Semana 1</h4>
+          <p class="text-xs text-slate-500 mt-1 line-clamp-2">Recordatorio amable para tener los exámenes al día y prevenir multas laborales.</p>
+          <div class="mt-3 flex items-center text-xs font-semibold text-amber-700">
+            <span>Leer mensaje</span>
+            <i data-lucide="chevron-right" class="w-3.5 h-3.5 ml-1"></i>
+          </div>
+        </div>
+
+        <!-- Tarjeta 3: Semana 2 -->
+        <div onclick="previewEmailTemplate('seguimiento_2')" class="cursor-pointer border border-slate-200 bg-slate-50/70 hover:bg-orange-50/50 hover:border-orange-200 rounded-xl p-3.5 transition group">
+          <div class="flex items-center justify-between mb-2">
+            <span class="text-[11px] font-bold text-orange-800 bg-orange-100/80 px-2 py-0.5 rounded uppercase">A los 14 días</span>
+            <i data-lucide="tag" class="w-4 h-4 text-orange-600"></i>
+          </div>
+          <h4 class="font-bold text-sm text-slate-800 group-hover:text-orange-800 transition">3. Recordatorio Semana 2</h4>
+          <p class="text-xs text-slate-500 mt-1 line-clamp-2">Ofrece descuentos por cantidad de trabajadores y atención médica rápida.</p>
+          <div class="mt-3 flex items-center text-xs font-semibold text-orange-700">
+            <span>Leer mensaje</span>
+            <i data-lucide="chevron-right" class="w-3.5 h-3.5 ml-1"></i>
+          </div>
+        </div>
+
+        <!-- Tarjeta 4: Semana 3 -->
+        <div onclick="previewEmailTemplate('seguimiento_3')" class="cursor-pointer border border-slate-200 bg-slate-50/70 hover:bg-rose-50/50 hover:border-rose-200 rounded-xl p-3.5 transition group">
+          <div class="flex items-center justify-between mb-2">
+            <span class="text-[11px] font-bold text-rose-800 bg-rose-100/80 px-2 py-0.5 rounded uppercase">A los 21 días (Cierre)</span>
+            <i data-lucide="bell-off" class="w-4 h-4 text-rose-600"></i>
+          </div>
+          <h4 class="font-bold text-sm text-slate-800 group-hover:text-rose-800 transition">4. Último Recordatorio</h4>
+          <p class="text-xs text-slate-500 mt-1 line-clamp-2">Aviso cortés indicando pausa de contacto para no incomodar a la empresa.</p>
+          <div class="mt-3 flex items-center text-xs font-semibold text-rose-700">
+            <span>Leer mensaje</span>
+            <i data-lucide="chevron-right" class="w-3.5 h-3.5 ml-1"></i>
+          </div>
+        </div>
+
+        <!-- Tarjeta 5: Reactivación 3 Meses -->
+        <div onclick="previewEmailTemplate('reactivacion_3m')" class="cursor-pointer border border-purple-200 bg-purple-50/60 hover:bg-purple-50 rounded-xl p-3.5 transition group">
+          <div class="flex items-center justify-between mb-2">
+            <span class="text-[11px] font-bold text-purple-800 bg-purple-200/80 px-2 py-0.5 rounded uppercase">A los 3 Meses</span>
+            <i data-lucide="refresh-cw" class="w-4 h-4 text-purple-600"></i>
+          </div>
+          <h4 class="font-bold text-sm text-slate-800 group-hover:text-purple-800 transition">5. Saludo tras 3 Meses</h4>
+          <p class="text-xs text-slate-500 mt-1 line-clamp-2">Mensaje cercano de reactivación para consultar si este trimestre toca renovar chequeos.</p>
+          <div class="mt-3 flex items-center text-xs font-semibold text-purple-700">
+            <span>Leer mensaje</span>
+            <i data-lucide="chevron-right" class="w-3.5 h-3.5 ml-1"></i>
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+  </main>
+
+  <footer class="bg-white border-t border-slate-200 py-4 mt-8 text-center text-xs text-slate-500">
+    <p>Sistema de Contacto y Seguimiento para Clínica de Salud Ocupacional &bull; Uso simple para el equipo</p>
+  </footer>
+
+  <!-- MODAL: REGISTRAR EMPRESA -->
+  <div id="clientModal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-50 hidden flex items-center justify-center p-4 overflow-y-auto">
+    <div class="bg-white rounded-2xl max-w-lg w-full shadow-2xl border border-slate-100 overflow-hidden transform transition-all">
+      <div class="p-5 border-b border-slate-200 flex items-center justify-between bg-slate-50/70">
+        <div class="flex items-center space-x-2.5">
+          <div class="w-8 h-8 rounded-lg bg-teal-100 text-teal-700 flex items-center justify-center font-bold">
+            <i data-lucide="building" class="w-4 h-4"></i>
+          </div>
+          <h3 class="font-bold text-base text-slate-900">Anotar Nueva Empresa</h3>
+        </div>
+        <button onclick="closeClientModal()" class="text-slate-400 hover:text-slate-600 p-1 rounded-lg">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+
+      <form id="newClientForm" onsubmit="handleCreateClient(event)" class="p-5 space-y-4">
+        <!-- Tipo de Registro -->
+        <div>
+          <label class="block text-xs font-semibold uppercase text-slate-500 mb-1.5">¿Qué tipo de contacto es?</label>
+          <div class="grid grid-cols-2 gap-3">
+            <label class="flex items-center p-3 border border-slate-200 rounded-xl cursor-pointer hover:bg-slate-50 transition has-[:checked]:border-teal-600 has-[:checked]:bg-teal-50/40">
+              <input type="radio" name="clientType" value="Cliente Nuevo" checked class="text-teal-600 focus:ring-teal-500 mr-2.5">
+              <div>
+                <p class="text-xs font-bold text-slate-800">Cliente Nuevo</p>
+                <p class="text-[11px] text-slate-500">Ya pidió informes o cotización</p>
+              </div>
+            </label>
+            <label class="flex items-center p-3 border border-slate-200 rounded-xl cursor-pointer hover:bg-slate-50 transition has-[:checked]:border-teal-600 has-[:checked]:bg-teal-50/40">
+              <input type="radio" name="clientType" value="Posible Cliente" class="text-teal-600 focus:ring-teal-500 mr-2.5">
+              <div>
+                <p class="text-xs font-bold text-slate-800">Posible Cliente</p>
+                <p class="text-[11px] text-slate-500">Empresa que queremos contactar</p>
+              </div>
+            </label>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs font-medium text-slate-700 mb-1">Nombre de la Empresa *</label>
+            <input type="text" id="inputEmpresa" required placeholder="Ej. Constructora Los Andes S.A.C." class="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:outline-none">
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-slate-700 mb-1">RUC o Identificación *</label>
+            <input type="text" id="inputRuc" required maxlength="11" placeholder="Ej. 20489561234" class="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:outline-none">
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs font-medium text-slate-700 mb-1">Persona de Contacto *</label>
+            <input type="text" id="inputContacto" required placeholder="Ej. Carlos Mendoza" class="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:outline-none">
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-slate-700 mb-1">Puesto o Cargo</label>
+            <input type="text" id="inputCargo" placeholder="Ej. Encargado de Personal" value="Recursos Humanos / Seguridad" class="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:outline-none">
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs font-medium text-slate-700 mb-1">Correo Electrónico *</label>
+            <input type="email" id="inputEmail" required placeholder="contacto@empresa.com" class="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:outline-none">
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-slate-700 mb-1">Teléfono o WhatsApp</label>
+            <input type="text" id="inputTelefono" placeholder="987 654 321" class="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:outline-none">
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs font-medium text-slate-700 mb-1">Rubro de la Empresa</label>
+            <select id="inputSector" class="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:outline-none bg-white">
+              <option value="Construcción">Construcción</option>
+              <option value="Minería">Minería y Energía</option>
+              <option value="Fábrica y Producción">Fábrica y Producción</option>
+              <option value="Transporte y Almacén">Transporte y Almacén</option>
+              <option value="Comercio y Tiendas">Comercio y Tiendas</option>
+              <option value="Oficinas y Servicios">Oficinas y Servicios</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-slate-700 mb-1">Cantidad aprox. de trabajadores</label>
+            <input type="number" id="inputTrabajadores" min="1" value="30" class="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:outline-none">
+          </div>
+        </div>
+
+        <div class="pt-2 border-t border-slate-100 flex items-center justify-between">
+          <label class="flex items-center text-xs text-slate-600 cursor-pointer">
+            <input type="checkbox" id="sendLetterNow" checked class="rounded text-teal-600 focus:ring-teal-500 mr-2">
+            <span>Enviar la Carta de Presentación de inmediato</span>
+          </label>
+        </div>
+
+        <div class="pt-3 flex justify-end space-x-2">
+          <button type="button" onclick="closeClientModal()" class="px-4 py-2 text-xs font-medium text-slate-600 hover:bg-slate-100 rounded-lg transition">Cancelar</button>
+          <button type="submit" class="px-4 py-2 text-xs font-semibold text-white bg-teal-600 hover:bg-teal-700 rounded-lg shadow-sm transition">Guardar y Empezar</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL: VISTA PREVIA DEL CORREO -->
+  <div id="emailPreviewModal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-50 hidden flex items-center justify-center p-4 overflow-y-auto">
+    <div class="bg-white rounded-2xl max-w-2xl w-full shadow-2xl border border-slate-100 overflow-hidden transform transition-all flex flex-col max-h-[90vh]">
+      <div class="p-4 border-b border-slate-200 flex items-center justify-between bg-slate-50/80">
+        <div class="flex items-center space-x-2.5">
+          <div class="w-8 h-8 rounded-lg bg-teal-100 text-teal-700 flex items-center justify-center font-bold">
+            <i data-lucide="mail-open" class="w-4 h-4"></i>
+          </div>
+          <div>
+            <h3 id="previewModalTitle" class="font-bold text-sm text-slate-900">Vista del Mensaje</h3>
+            <p id="previewModalSubtitle" class="text-[11px] text-slate-500">Texto que recibirá el cliente</p>
+          </div>
+        </div>
+        <button onclick="closeEmailPreviewModal()" class="text-slate-400 hover:text-slate-600 p-1 rounded-lg">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+
+      <div class="px-6 py-3 bg-slate-100/70 border-b border-slate-200 text-xs space-y-1">
+        <div class="flex"><span class="w-16 font-semibold text-slate-500">De:</span> <span class="font-medium text-slate-800">Clínica de Salud Ocupacional &lt;contacto@clinica.com&gt;</span></div>
+        <div class="flex"><span class="w-16 font-semibold text-slate-500">Para:</span> <span id="previewTo" class="font-medium text-slate-800">contacto@empresa.com</span></div>
+        <div class="flex"><span class="w-16 font-semibold text-slate-500">Asunto:</span> <span id="previewSubject" class="font-bold text-teal-700">Carta de Presentación</span></div>
+      </div>
+
+      <div class="p-6 overflow-y-auto space-y-4 text-xs sm:text-sm text-slate-700 leading-relaxed font-sans" id="previewEmailBody">
+        <!-- Contenido dinámico -->
+      </div>
+
+      <div id="previewAttachmentBox" class="mx-6 p-3 bg-slate-50 border border-dashed border-slate-200 rounded-xl flex items-center justify-between text-xs text-slate-600">
+        <div class="flex items-center space-x-2">
+          <i data-lucide="paperclip" class="w-4 h-4 text-slate-400"></i>
+          <span class="font-medium">Folleto_Servicios_Medicos.pdf</span>
+          <span class="text-slate-400">(Documento informativo)</span>
+        </div>
+        <span class="text-[11px] text-teal-700 font-semibold bg-teal-50 px-2 py-0.5 rounded border border-teal-200">Archivo listo</span>
+      </div>
+
+      <div class="p-4 border-t border-slate-200 bg-slate-50 flex items-center justify-between">
+        <span class="text-xs text-slate-500" id="previewStepNotice">Paso actual</span>
+        <button onclick="closeEmailPreviewModal()" class="px-4 py-2 text-xs font-medium text-slate-600 hover:bg-slate-200/70 rounded-lg transition">Entendido, cerrar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: FICHA DETALLADA DE LA EMPRESA -->
+  <div id="detailsModal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-50 hidden flex items-center justify-center p-4 overflow-y-auto">
+    <div class="bg-white rounded-2xl max-w-xl w-full shadow-2xl border border-slate-100 overflow-hidden transform transition-all max-h-[90vh] flex flex-col">
+      <div class="p-5 border-b border-slate-200 flex items-center justify-between bg-slate-50">
+        <div>
+          <h3 id="detailCompanyTitle" class="font-bold text-base text-slate-900">Nombre de la Empresa</h3>
+          <p id="detailRucSubtitle" class="text-xs text-slate-500">RUC: 20100000000</p>
+        </div>
+        <button onclick="closeDetailsModal()" class="text-slate-400 hover:text-slate-600 p-1 rounded-lg">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+
+      <div class="p-5 overflow-y-auto space-y-5">
+        <div class="grid grid-cols-2 gap-3 text-xs">
+          <div class="p-3 bg-slate-50 rounded-xl border border-slate-100">
+            <span class="text-slate-500 font-medium block">Contacto</span>
+            <span id="detailContactName" class="font-bold text-slate-800 text-sm mt-0.5 block">Carlos Mendoza</span>
+            <span id="detailContactEmail" class="text-slate-500 text-xs">carlos@empresa.com</span>
+          </div>
+          <div class="p-3 bg-slate-50 rounded-xl border border-slate-100">
+            <span class="text-slate-500 font-medium block">Rubro y Trabajadores</span>
+            <span id="detailSector" class="font-bold text-slate-800 text-sm mt-0.5 block">Construcción</span>
+            <span id="detailWorkers" class="text-slate-500 text-xs">45 trabajadores aprox.</span>
+          </div>
+        </div>
+
+        <div>
+          <h4 class="text-xs font-bold uppercase tracking-wider text-slate-500 mb-3">Historial de correos enviados</h4>
+          <div id="detailTimeline" class="space-y-3 relative before:absolute before:left-3.5 before:top-2 before:bottom-2 before:w-0.5 before:bg-slate-200">
+            <!-- Eventos dinámicos -->
+          </div>
+        </div>
+
+        <!-- Botones de Acción Rápida -->
+        <div class="p-4 bg-slate-50 border border-slate-200 rounded-xl space-y-2.5">
+          <div class="flex items-center justify-between">
+            <h4 class="text-xs font-bold text-slate-900">¿El cliente ya contestó por teléfono, WhatsApp o correo?</h4>
+            <span class="text-[11px] text-slate-500">Detiene los envíos automáticos</span>
+          </div>
+          <p class="text-xs text-slate-600">Registra su respuesta para saber de inmediato si tiene interés o si prefiere no continuar:</p>
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
+            <button id="btnModalPositive" class="px-3 py-2 text-xs font-semibold rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 transition flex items-center justify-center gap-1.5 shadow-xs">
+              <i data-lucide="thumbs-up" class="w-3.5 h-3.5"></i>
+              Respuesta Positiva (Tiene interés)
+            </button>
+            <button id="btnModalNegative" class="px-3 py-2 text-xs font-semibold rounded-lg bg-rose-600 text-white hover:bg-rose-700 transition flex items-center justify-center gap-1.5 shadow-xs">
+              <i data-lucide="thumbs-down" class="w-3.5 h-3.5"></i>
+              Respuesta Negativa (No le interesa)
+            </button>
+          </div>
+          <div class="pt-2 border-t border-slate-200 flex justify-end">
+            <button id="btnAdvanceWeek" class="px-3 py-1.5 text-xs font-medium rounded-lg bg-white border border-slate-300 text-slate-700 hover:bg-slate-100 transition flex items-center gap-1.5">
+              <i data-lucide="send" class="w-3.5 h-3.5 text-amber-500"></i>
+              Enviar el siguiente correo de recordatorio ahora
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div class="p-4 border-t border-slate-200 bg-slate-50 flex justify-end">
+        <button onclick="closeDetailsModal()" class="px-4 py-2 text-xs font-medium text-slate-600 hover:bg-slate-200 rounded-lg">Cerrar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: PROBAR PASO DE UNA SEMANA -->
+  <div id="simulationEngineModal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-50 hidden flex items-center justify-center p-4">
+    <div class="bg-white rounded-2xl max-w-md w-full shadow-2xl border border-slate-100 overflow-hidden transform transition-all p-5 space-y-4">
+      <div class="flex items-center space-x-3">
+        <div class="w-10 h-10 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center">
+          <i data-lucide="calendar" class="w-5 h-5"></i>
+        </div>
+        <div>
+          <h3 class="font-bold text-slate-900 text-sm">Probar el paso del tiempo</h3>
+          <p class="text-xs text-slate-500">Avanzar 1 semana de prueba</p>
+        </div>
+      </div>
+      <p class="text-xs text-slate-600 leading-relaxed">
+        Esta prueba simula que transcurrió una semana completa. Se enviará el siguiente correo de recordatorio a todas las empresas en espera que aún no hayan contestado.
+      </p>
+
+      <div class="p-3 bg-amber-50 rounded-xl border border-amber-200 text-xs text-amber-800 flex items-center justify-between">
+        <span>Empresas que recibirán correo:</span>
+        <strong id="simEligibleCount" class="font-bold">0 empresas</strong>
+      </div>
+
+      <div class="flex justify-end space-x-2 pt-2 border-t border-slate-100">
+        <button onclick="closeSimulationEngineModal()" class="px-3 py-2 text-xs font-medium text-slate-600 hover:bg-slate-100 rounded-lg transition">Cancelar</button>
+        <button onclick="executeBatchAdvanceWeek()" class="px-4 py-2 text-xs font-semibold text-white bg-amber-600 hover:bg-amber-700 rounded-lg shadow-sm transition">Avanzar 1 semana</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: REGISTRAR RESPUESTA DEL CLIENTE (POSITIVA O NEGATIVA) -->
+  <div id="responseActionModal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-50 hidden flex items-center justify-center p-4">
+    <div class="bg-white rounded-2xl max-w-md w-full shadow-2xl border border-slate-100 overflow-hidden transform transition-all p-5 space-y-4">
+      <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+        <div class="flex items-center space-x-2.5">
+          <div class="w-8 h-8 rounded-lg bg-teal-100 text-teal-700 flex items-center justify-center font-bold">
+            <i data-lucide="message-square" class="w-4 h-4"></i>
+          </div>
+          <div>
+            <h3 class="font-bold text-sm text-slate-900">Registrar Respuesta del Cliente</h3>
+            <p id="responseModalCompanyName" class="text-xs text-slate-500 font-medium">Empresa</p>
+          </div>
+        </div>
+        <button onclick="closeResponseActionModal()" class="text-slate-400 hover:text-slate-600 p-1 rounded-lg">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+
+      <div class="p-3 bg-purple-50 rounded-xl border border-purple-200 text-xs text-purple-900 leading-relaxed flex items-start gap-2.5">
+        <i data-lucide="info" class="w-4 h-4 text-purple-600 shrink-0 mt-0.5"></i>
+        <span>
+          <strong>Regla automática:</strong> Si el cliente responde que <strong>no tiene interés</strong>, se detendrán los correos de inmediato y la empresa pasará a una <strong>pausa de 3 meses</strong>. Cuando pasen los 3 meses, se volverá a activar para consultarle por si cambiaron de proveedor.
+        </span>
+      </div>
+
+      <div class="space-y-2.5">
+        <label class="block text-xs font-semibold uppercase text-slate-500">Tipo de Respuesta:</label>
+
+        <div class="grid grid-cols-1 gap-2.5">
+          <label class="flex items-start p-3 border-2 border-slate-200 rounded-xl cursor-pointer hover:bg-emerald-50/40 hover:border-emerald-300 transition has-[:checked]:border-emerald-600 has-[:checked]:bg-emerald-50">
+            <input type="radio" name="responseNature" value="positivo" checked class="text-emerald-600 focus:ring-emerald-500 mt-0.5 mr-3">
+            <div>
+              <p class="text-xs font-bold text-emerald-800 flex items-center gap-1.5">
+                <i data-lucide="thumbs-up" class="w-3.5 h-3.5"></i>
+                Respuesta Positiva (Tiene interés)
+              </p>
+              <p class="text-[11px] text-slate-600 mt-0.5">Pide cotización, información de paquetes o coordinar chequeos.</p>
+            </div>
+          </label>
+
+          <label class="flex items-start p-3 border-2 border-slate-200 rounded-xl cursor-pointer hover:bg-rose-50/40 hover:border-rose-300 transition has-[:checked]:border-purple-600 has-[:checked]:bg-purple-50/60">
+            <input type="radio" name="responseNature" value="negativo" class="text-purple-600 focus:ring-purple-500 mt-0.5 mr-3">
+            <div>
+              <p class="text-xs font-bold text-purple-900 flex items-center gap-1.5">
+                <i data-lucide="clock" class="w-3.5 h-3.5 text-purple-600"></i>
+                No tiene interés &rarr; Pausar por 3 meses
+              </p>
+              <p class="text-[11px] text-slate-600 mt-0.5">Ya tienen clínica o no necesitan ahora. Se reactivará en 3 meses.</p>
+            </div>
+          </label>
+        </div>
+      </div>
+
+      <div>
+        <label class="block text-xs font-medium text-slate-700 mb-1">Comentario o nota (opcional):</label>
+        <textarea id="responseNotesInput" rows="2" placeholder="Ej. Indicó que ya tienen contrato firmado hasta noviembre..." class="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:outline-none"></textarea>
+      </div>
+
+      <div class="flex justify-end space-x-2 pt-2 border-t border-slate-100">
+        <button onclick="closeResponseActionModal()" class="px-3 py-2 text-xs font-medium text-slate-600 hover:bg-slate-100 rounded-lg transition">Cancelar</button>
+        <button onclick="saveClientResponseOutcome()" class="px-4 py-2 text-xs font-semibold text-white bg-teal-600 hover:bg-teal-700 rounded-lg shadow-sm transition">Guardar y Aplicar Regla</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Notificación flotante simple -->
+  <div id="toastNotification" class="fixed bottom-5 right-5 z-50 transform translate-y-24 opacity-0 transition-all duration-300 pointer-events-none flex items-center gap-3 px-4 py-3 bg-slate-900 text-white text-xs sm:text-sm font-medium rounded-xl shadow-xl border border-slate-700">
+    <div id="toastIcon" class="w-5 h-5 text-emerald-400">
+      <i data-lucide="check-circle" class="w-5 h-5"></i>
+    </div>
+    <span id="toastMessage">Acción completada</span>
+  </div>
+
+  <script>
+    // Lista de empresas con fechas y soporte de reactivación trimestral (3 meses)
+    let clients = [
+      {
+        id: 'cli-001',
+        empresa: 'Constructora Los Andes',
+        ruc: '20554896321',
+        contacto: 'Fernando Valdivia',
+        cargo: 'Encargado de Seguridad',
+        email: 'fvaldivia@losandes.com',
+        telefono: '984 123 456',
+        sector: 'Construcción',
+        trabajadores: 85,
+        tipo: 'Cliente Nuevo',
+        // Estados: 'sin_carta' | 'carta_enviada' | 'seguimiento_1' | 'seguimiento_2' | 'seguimiento_3' | 'respondio_positivo' | 'en_pausa_3m' | 'reactivado' | 'respondio_negativo'
+        estado: 'seguimiento_1',
+        fechaRegistro: '2026-09-12',
+        ultimoEnvioFecha: '2026-09-19',
+        fechaReactivacion: null,
+        historial: [
+          { fecha: '2026-09-12', tipo: 'carta_presentacion', detalle: 'Se envió la Carta de Presentación con el folleto de servicios de la clínica.' },
+          { fecha: '2026-09-19', tipo: 'seguimiento_1', detalle: 'Se envió el Recordatorio 1 (Semana 1) para chequeos preventivos de sus trabajadores.' }
+        ]
+      },
+      {
+        id: 'cli-002',
+        empresa: 'Minera Huascarán',
+        ruc: '20489974512',
+        contacto: 'Patricia Alva',
+        cargo: 'Doctora de la empresa',
+        email: 'palva@minerahuascaran.pe',
+        telefono: '998 741 230',
+        sector: 'Minería',
+        trabajadores: 140,
+        tipo: 'Posible Cliente',
+        estado: 'carta_enviada',
+        fechaRegistro: '2026-09-20',
+        ultimoEnvioFecha: '2026-09-20',
+        fechaReactivacion: null,
+        historial: [
+          { fecha: '2026-09-20', tipo: 'carta_presentacion', detalle: 'Se envió la Carta de Presentación inicial.' }
+        ]
+      },
+      {
+        id: 'cli-003',
+        empresa: 'Transportes Central',
+        ruc: '20336688991',
+        contacto: 'Mariana Gómez',
+        cargo: 'Jefa de Personal',
+        email: 'mgomez@centraltransportes.com',
+        telefono: '977 452 110',
+        sector: 'Transporte y Almacén',
+        trabajadores: 60,
+        tipo: 'Cliente Nuevo',
+        estado: 'seguimiento_2',
+        fechaRegistro: '2026-09-05',
+        ultimoEnvioFecha: '2026-09-19',
+        fechaReactivacion: null,
+        historial: [
+          { fecha: '2026-09-05', tipo: 'carta_presentacion', detalle: 'Se envió la Carta de Presentación inicial.' },
+          { fecha: '2026-09-12', tipo: 'seguimiento_1', detalle: 'Se envió el Recordatorio 1 (Semana 1).' },
+          { fecha: '2026-09-19', tipo: 'seguimiento_2', detalle: 'Se envió el Recordatorio 2 (Semana 2) con precios por cantidad de trabajadores.' }
+        ]
+      },
+      {
+        id: 'cli-004',
+        empresa: 'Agrícola del Norte',
+        ruc: '20601239874',
+        contacto: 'Roberto Casas',
+        cargo: 'Administrador',
+        email: 'rcasas@agricolanorte.pe',
+        telefono: '944 632 890',
+        sector: 'Fábrica y Producción',
+        trabajadores: 200,
+        tipo: 'Posible Cliente',
+        estado: 'respondio_positivo',
+        fechaRegistro: '2026-09-08',
+        ultimoEnvioFecha: '2026-09-15',
+        fechaReactivacion: null,
+        historial: [
+          { fecha: '2026-09-08', tipo: 'carta_presentacion', detalle: 'Se envió la Carta de Presentación inicial.' },
+          { fecha: '2026-09-15', tipo: 'seguimiento_1', detalle: 'Se envió el Recordatorio 1.' },
+          { fecha: '2026-09-16', tipo: 'respuesta_positiva', detalle: '¡Respuesta POSITIVA! Dijo: "Hola, necesitamos cotización para 200 chequeos médicos de ingreso".' }
+        ]
+      },
+      {
+        id: 'cli-005',
+        empresa: 'Confecciones Bellavista',
+        ruc: '20109988771',
+        contacto: 'Elena Morales',
+        cargo: 'Asistenta Social',
+        email: 'emorales@textilbellavista.pe',
+        telefono: '961 234 567',
+        sector: 'Fábrica y Producción',
+        trabajadores: 35,
+        tipo: 'Cliente Nuevo',
+        estado: 'sin_carta',
+        fechaRegistro: '2026-09-26',
+        ultimoEnvioFecha: null,
+        fechaReactivacion: null,
+        historial: [
+          { fecha: '2026-09-26', tipo: 'registro', detalle: 'Se anotó la empresa en el sistema. Todavía no se le envía su carta inicial.' }
+        ]
+      },
+      {
+        id: 'cli-006',
+        empresa: 'Servicios Logísticos del Callao',
+        ruc: '20556781290',
+        contacto: 'Gonzalo Silva',
+        cargo: 'Jefe de Operaciones',
+        email: 'gsilva@callaolog.pe',
+        telefono: '951 889 001',
+        sector: 'Transporte y Almacén',
+        trabajadores: 45,
+        tipo: 'Posible Cliente',
+        // Empresa en pausa de 3 meses tras no mostrar interés
+        estado: 'en_pausa_3m',
+        fechaRegistro: '2026-06-20',
+        ultimoEnvioFecha: '2026-06-27',
+        fechaReactivacion: '2026-09-27',
+        historial: [
+          { fecha: '2026-06-20', tipo: 'carta_presentacion', detalle: 'Se envió la Carta de Presentación inicial.' },
+          { fecha: '2026-06-27', tipo: 'respuesta_negativa', detalle: 'Indicó no tener interés inmediato (contrato vigente con otra clínica).' },
+          { fecha: '2026-06-27', tipo: 'pausa_3_meses', detalle: 'Se puso en pausa por 3 meses. Programada para reactivar el 27/09/2026.' }
+        ]
+      }
+    ];
+
+    let currentFilter = 'todos';
+    let currentSearchTerm = '';
+    let selectedClientIdForAction = null;
+    let selectedClientIdForResponse = null;
+
+    // Plantillas de correos con lenguaje claro, cercano y profesional
+    const EMAIL_TEMPLATES = {
+      carta_presentacion: {
+        id: 'carta_presentacion',
+        titulo: 'Carta de Presentación Inicial',
+        fase: 'Día 1 (Inmediato al registrar)',
+        asunto: 'Presentación: Chequeos médicos y salud para los trabajadores de [Empresa]',
+        getBody: (cliente) => `
+          <div class="space-y-3">
+            <p>Hola <strong>${cliente ? cliente.contacto : '[Nombre de Contacto]'}</strong>, un gusto saludarte.</p>
+
+            <p>Te escribimos de parte de nuestra <strong>Clínica de Salud Ocupacional</strong>. Sabemos lo importante que es para <strong>${cliente ? cliente.empresa : '[Nombre de Empresa]'}</strong> cuidar el bienestar de su equipo y tener al día todos los chequeos médicos que exige la ley de forma rápida y sin complicaciones.</p>
+
+            <div class="p-3 bg-slate-50 border-l-4 border-teal-500 rounded-r-lg space-y-1.5 text-slate-800 text-xs">
+              <p class="font-bold text-teal-800 uppercase">¿En qué podemos ayudarte?</p>
+              <ul class="list-disc pl-4 space-y-1 text-slate-600">
+                <li><strong>Exámenes médicos para trabajadores:</strong> De ingreso (cuando entra personal nuevo), chequeos anuales periódicos y de salida.</li>
+                <li><strong>Exámenes especiales según el trabajo:</strong> Altura, manipulación de alimentos, ruido, polvo o esfuerzo físico.</li>
+                <li><strong>Entrega súper rápida:</strong> Certificados médicos listos en 24 horas para que nadie detenga sus labores.</li>
+                <li><strong>Campañas en sus propias oficinas o locales:</strong> Si tienen varios trabajadores, nuestro equipo médico puede ir directamente a su empresa.</li>
+              </ul>
+            </div>
+
+            <p>Te adjuntamos nuestro folleto informativo con todo el detalle para empresas de <strong>${cliente ? cliente.sector : 'su rubro'}</strong> (estimado para ${cliente ? cliente.trabajadores : 'su equipo de'} personas).</p>
+
+            <p>Quedamos a tu disposición para coordinar una breve llamada de 5 minutos o enviarte una cotización sin ningún compromiso.</p>
+
+            <p class="pt-2">Atentamente,<br>
+            <strong>Equipo de Atención a Empresas</strong><br>
+            Clínica de Salud Ocupacional</p>
+          </div>
+        `
+      },
+      seguimiento_1: {
+        id: 'seguimiento_1',
+        titulo: 'Recordatorio 1 (Semana 1): Cuidar a tu equipo y evitar multas',
+        fase: 'A los 7 días sin respuesta',
+        asunto: 'Recordatorio: Exámenes médicos de salud para el personal de [Empresa]',
+        getBody: (cliente) => `
+          <div class="space-y-3">
+            <p>Hola <strong>${cliente ? cliente.contacto : '[Nombre de Contacto]'}</strong>, ¿cómo estás?</p>
+
+            <p>La semana pasada te escribimos para presentarte nuestros servicios de exámenes médicos para los colaboradores de <strong>${cliente ? cliente.empresa : '[Nombre de Empresa]'}</strong>.</p>
+
+            <p>Sabemos que en el día a día siempre hay muchas tareas pendientes; por eso queremos dejarte este recordatorio amistoso para ayudarte a mantener al día los exámenes médicos de tus colaboradores (${cliente ? cliente.trabajadores : 'su personal'} aprox.) y así estar totalmente tranquilos ante cualquier revisión laboral del ministerio.</p>
+
+            <div class="p-3 bg-amber-50 border border-amber-200 rounded-lg text-amber-900 text-xs">
+              <strong>Recuerda:</strong> Atendemos a tu personal de forma muy ágil para que no pierdan horas esperando y los resultados se entregan de inmediato.
+            </div>
+
+            <p>¿Te vendría bien que hablemos unos minutos por teléfono esta semana para ver qué exámenes necesitan renovar?</p>
+
+            <p class="pt-2">Un saludo cordial,<br>
+            <strong>Área de Atención a Empresas</strong></p>
+          </div>
+        `
+      },
+      seguimiento_2: {
+        id: 'seguimiento_2',
+        titulo: 'Recordatorio 2 (Semana 2): Precios especiales por grupo',
+        fase: 'A los 14 días sin respuesta',
+        asunto: 'Precios especiales en exámenes médicos para [Empresa]',
+        getBody: (cliente) => `
+          <div class="space-y-3">
+            <p>Hola <strong>${cliente ? cliente.contacto : '[Nombre de Contacto]'}</strong>,</p>
+
+            <p>Queríamos contarte que para empresas de <strong>${cliente ? cliente.sector : 'su rubro'}</strong> contamos con <strong>precios especiales y paquetes con descuento</strong> según la cantidad de trabajadores.</p>
+
+            <p>Nuestros paquetes para su equipo de aproximadamente ${cliente ? cliente.trabajadores : 'sus'} personas incluyen:</p>
+
+            <ul class="list-disc pl-5 space-y-1 text-xs">
+              <li>Chequeo médico general, vista y audición.</li>
+              <li>Análisis de laboratorio completos.</li>
+              <li>Radiografías y pruebas de pulmón con médicos especialistas.</li>
+              <li>Informe final del estado de salud de toda la empresa sin costo extra.</li>
+            </ul>
+
+            <p>Si ya tienen una clínica o proveedor actual, permítenos enviarte una propuesta de comparación sin compromiso; seguro podemos darte mejor precio o una atención mucho más rápida.</p>
+
+            <p class="pt-2">Atentamente,<br>
+            <strong>Coordinación Comercial</strong></p>
+          </div>
+        `
+      },
+      seguimiento_3: {
+        id: 'seguimiento_3',
+        titulo: 'Recordatorio 3 (Semana 3): Último mensaje de seguimiento',
+        fase: 'A los 21 días sin respuesta (Cierre temporal)',
+        asunto: '¿Podemos ayudarte con los chequeos de este mes en [Empresa]?',
+        getBody: (cliente) => `
+          <div class="space-y-3">
+            <p>Hola <strong>${cliente ? cliente.contacto : '[Nombre de Contacto]'}</strong>,</p>
+
+            <p>Te hemos escrito en las últimas semanas para ofrecerte nuestro apoyo con los exámenes médicos de <strong>${cliente ? cliente.empresa : '[Nombre de Empresa]'}</strong>.</p>
+
+            <p>Como no hemos tenido respuesta, entendemos que quizás en este momento ya tienen este tema cubierto o no están contratando personal nuevo.</p>
+
+            <p>Para no saturar tu correo, <strong>dejaremos una pausa de contacto durante los próximos meses</strong>. De todos modos, guardamos tu contacto con mucho aprecio por si más adelante necesitan renovar exámenes o hacer ingresos rápidos.</p>
+
+            <p>Cualquier consulta a futuro, solo responde a este correo y con todo gusto te atenderemos de inmediato.</p>
+
+            <p class="pt-2">¡Muchos éxitos con todo tu equipo!<br>
+            <strong>Clínica de Salud Ocupacional</strong></p>
+          </div>
+        `
+      },
+      reactivacion_3m: {
+        id: 'reactivacion_3m',
+        titulo: 'Reactivación (A los 3 Meses): Saludo trimestral amistoso',
+        fase: 'A los 90 días de la pausa',
+        asunto: 'Hola de nuevo de la Clínica Ocupacional: ¿Nuevos ingresos o renovaciones en [Empresa]?',
+        getBody: (cliente) => `
+          <div class="space-y-3">
+            <p>Hola <strong>${cliente ? cliente.contacto : '[Nombre de Contacto]'}</strong>, qué gusto saludarte nuevamente.</p>
+
+            <p>Hace tres meses conversamos brevemente respecto a los chequeos de salud ocupacional para <strong>${cliente ? cliente.empresa : '[Nombre de Empresa]'}</strong>.</p>
+
+            <p>Iniciando este nuevo trimestre, queríamos escribirte para saber cómo marcha todo con su equipo de trabajo y si tienen planificado:</p>
+
+            <div class="p-3 bg-purple-50 border border-purple-200 rounded-lg text-purple-900 text-xs space-y-1">
+              <p>✔ <strong>Renovación de chequeos anuales periódicos</strong> para el personal.</p>
+              <p>✔ <strong>Exámenes médicos de ingreso</strong> para nuevas incorporaciones.</p>
+              <p>✔ O si les gustaría conocer nuestras <strong>nuevas tarifas corporativas</strong> para empresas de ${cliente ? cliente.sector : 'su sector'}.</p>
+            </div>
+
+            <p>Si deseas que te enviemos una cotización actualizada o revisar cómo podemos facilitarles las atenciones médicas este mes, solo respóndenos a este mensaje o avísanos para llamarte.</p>
+
+            <p class="pt-2">Un saludo muy cordial,<br>
+            <strong>Equipo de Coordinación y Chequeos Médicos</strong><br>
+            Clínica de Salud Ocupacional</p>
+          </div>
+        `
+      }
+    };
+
+    function renderTable() {
+      const tbody = document.getElementById('clientsTableBody');
+      const emptyState = document.getElementById('emptyState');
+      tbody.innerHTML = '';
+
+      const filtered = clients.filter(c => {
+        let matchFilter = true;
+        if (currentFilter === 'pendientes') matchFilter = c.estado === 'sin_carta';
+        else if (currentFilter === 'en_seguimiento') matchFilter = ['carta_enviada', 'seguimiento_1', 'seguimiento_2', 'seguimiento_3'].includes(c.estado);
+        else if (currentFilter === 'positivos') matchFilter = c.estado === 'respondio_positivo';
+        else if (currentFilter === 'en_pausa') matchFilter = c.estado === 'en_pausa_3m';
+        else if (currentFilter === 'reactivados') matchFilter = c.estado === 'reactivado';
+        else if (currentFilter === 'negativos') matchFilter = c.estado === 'respondio_negativo' || c.estado === 'en_pausa_3m';
+
+        let matchSearch = true;
+        if (currentSearchTerm.trim() !== '') {
+          const term = currentSearchTerm.toLowerCase();
+          matchSearch = c.empresa.toLowerCase().includes(term) ||
+                        c.ruc.includes(term) ||
+                        c.contacto.toLowerCase().includes(term) ||
+                        c.sector.toLowerCase().includes(term);
+        }
+
+        return matchFilter && matchSearch;
+      });
+
+      if (filtered.length === 0) {
+        emptyState.classList.remove('hidden');
+      } else {
+        emptyState.classList.add('hidden');
+      }
+
+      filtered.forEach(client => {
+        const tr = document.createElement('tr');
+        tr.className = 'hover:bg-slate-50/80 transition border-b border-slate-100';
+
+        tr.innerHTML = `
+          <td class="px-5 py-3.5">
+            <div class="flex items-center space-x-3">
+              <div class="w-8 h-8 rounded-lg bg-teal-50 border border-teal-200 text-teal-700 flex items-center justify-center font-bold text-xs">
+                ${client.empresa.substring(0, 2).toUpperCase()}
+              </div>
+              <div>
+                <p class="font-bold text-slate-900 hover:text-teal-600 cursor-pointer text-xs sm:text-sm" onclick="openDetailsModal('${client.id}')">
+                  ${client.empresa}
+                </p>
+                <div class="flex items-center gap-2 text-[11px] text-slate-500">
+                  <span>RUC: ${client.ruc}</span>
+                  <span>&bull;</span>
+                  <span>${client.trabajadores} trabajadores</span>
+                </div>
+              </div>
+            </div>
+          </td>
+
+          <td class="px-4 py-3.5">
+            <p class="font-medium text-slate-800 text-xs">${client.contacto}</p>
+            <p class="text-[11px] text-slate-500">${client.cargo}</p>
+            <span class="inline-block mt-1 text-[10px] bg-slate-100 text-slate-600 px-2 py-0.5 rounded font-medium">
+              ${client.sector}
+            </span>
+          </td>
+
+          <td class="px-4 py-3.5">
+            <span class="inline-flex items-center text-xs font-semibold px-2.5 py-0.5 rounded-full ${client.tipo === 'Posible Cliente' ? 'bg-purple-50 text-purple-700 border border-purple-200' : 'bg-blue-50 text-blue-700 border border-blue-200'}">
+              ${client.tipo}
+            </span>
+          </td>
+
+          <td class="px-4 py-3.5">
+            ${getStatusBadge(client)}
+          </td>
+
+          <td class="px-4 py-3.5 text-xs">
+            ${getNextActionInfo(client)}
+          </td>
+
+          <td class="px-5 py-3.5 text-right space-x-1 whitespace-nowrap">
+            ${getActionButtons(client)}
+          </td>
+        `;
+        tbody.appendChild(tr);
+      });
+
+      updateKPIs();
+      document.getElementById('showingCountText').textContent = `Mostrando ${filtered.length} de ${clients.length} empresas`;
+      lucide.createIcons();
+    }
+
+    function getStatusBadge(client) {
+      const estado = client.estado;
+      switch (estado) {
+        case 'sin_carta':
+          return `
+            <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-rose-50 text-rose-700 border border-rose-200">
+              <span class="w-1.5 h-1.5 rounded-full bg-rose-500"></span>
+              Falta enviar carta
+            </span>
+          `;
+        case 'carta_enviada':
+          return `
+            <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-blue-50 text-blue-700 border border-blue-200">
+              <i data-lucide="mail" class="w-3 h-3 text-blue-600"></i>
+              Carta enviada (Inicio)
+            </span>
+          `;
+        case 'seguimiento_1':
+          return `
+            <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-50 text-amber-700 border border-amber-200">
+              <span class="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
+              Semana 1 enviada
+            </span>
+          `;
+        case 'seguimiento_2':
+          return `
+            <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-orange-50 text-orange-700 border border-orange-200">
+              <span class="w-1.5 h-1.5 rounded-full bg-orange-500"></span>
+              Semana 2 enviada
+            </span>
+          `;
+        case 'seguimiento_3':
+          return `
+            <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-rose-50 text-rose-700 border border-rose-200">
+              <span class="w-1.5 h-1.5 rounded-full bg-rose-500"></span>
+              Semana 3 (Último aviso)
+            </span>
+          `;
+        case 'respondio_positivo':
+          return `
+            <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold bg-emerald-50 text-emerald-700 border border-emerald-300">
+              <i data-lucide="thumbs-up" class="w-3.5 h-3.5 text-emerald-600"></i>
+              ¡Interesado! (Positivo)
+            </span>
+          `;
+        case 'en_pausa_3m':
+          return `
+            <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-purple-50 text-purple-700 border border-purple-300">
+              <i data-lucide="clock" class="w-3.5 h-3.5 text-purple-600"></i>
+              En pausa por 3 meses
+            </span>
+          `;
+        case 'reactivado':
+          return `
+            <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold bg-teal-50 text-teal-700 border border-teal-300">
+              <i data-lucide="refresh-cw" class="w-3.5 h-3.5 text-teal-600"></i>
+              ¡Reactivado tras 3 meses!
+            </span>
+          `;
+        case 'respondio_negativo':
+          return `
+            <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-slate-100 text-slate-600 border border-slate-200">
+              <i data-lucide="thumbs-down" class="w-3.5 h-3.5 text-slate-500"></i>
+              Sin interés (En pausa)
+            </span>
+          `;
+        default:
+          return `<span class="text-xs text-slate-500">${estado}</span>`;
+      }
+    }
+
+    function getNextActionInfo(client) {
+      if (client.estado === 'sin_carta') {
+        return `<span class="text-rose-600 font-semibold flex items-center gap-1"><i data-lucide="alert-circle" class="w-3.5 h-3.5"></i> Enviar carta hoy</span>`;
+      }
+      if (client.estado === 'respondio_positivo') {
+        return `
+          <div>
+            <span class="text-emerald-700 font-bold block flex items-center gap-1">
+              <i data-lucide="phone-call" class="w-3.5 h-3.5 text-emerald-600"></i>
+              Llamar o Cotizar
+            </span>
+            <span class="text-[11px] text-emerald-600">Cliente esperando</span>
+          </div>
+        `;
+      }
+      if (client.estado === 'en_pausa_3m') {
+        const fechaStr = client.fechaReactivacion ? formatDateFriendly(client.fechaReactivacion) : 'En 3 meses';
+        return `
+          <div>
+            <span class="text-purple-700 font-semibold flex items-center gap-1">
+              <i data-lucide="calendar" class="w-3.5 h-3.5 text-purple-600"></i>
+              Se reactiva:
+            </span>
+            <span class="text-[11px] font-medium text-slate-600">${fechaStr}</span>
+          </div>
+        `;
+      }
+      if (client.estado === 'reactivado') {
+        return `
+          <div>
+            <span class="text-teal-700 font-bold flex items-center gap-1">
+              <i data-lucide="bell" class="w-3.5 h-3.5 text-teal-600"></i>
+              Toca volver a contactar
+            </span>
+            <span class="text-[11px] text-slate-500">Pasaron los 3 meses</span>
+          </div>
+        `;
+      }
+
+      let labelNext = '';
+      if (client.estado === 'carta_enviada') labelNext = 'Toca Semana 1';
+      else if (client.estado === 'seguimiento_1') labelNext = 'Toca Semana 2';
+      else if (client.estado === 'seguimiento_2') labelNext = 'Toca Semana 3 (Fin)';
+      else if (client.estado === 'seguimiento_3') labelNext = 'Cumplió 3 semanas (Pausa)';
+
+      return `
+        <div>
+          <span class="font-medium text-slate-700 block">${labelNext}</span>
+          <span class="text-[11px] text-slate-400">Si no responde en 7 días</span>
+        </div>
+      `;
+    }
+
+    function getActionButtons(client) {
+      if (client.estado === 'sin_carta') {
+        return `
+          <button onclick="triggerSendPresentationLetter('${client.id}')" class="px-2.5 py-1.5 text-xs font-semibold text-white bg-teal-600 hover:bg-teal-700 rounded-lg shadow-2xs transition inline-flex items-center gap-1">
+            <i data-lucide="send" class="w-3.5 h-3.5"></i>
+            <span>Enviar carta</span>
+          </button>
+          <button onclick="openDetailsModal('${client.id}')" class="p-1.5 text-slate-500 hover:text-slate-800 hover:bg-slate-100 rounded-lg transition" title="Ver ficha">
+            <i data-lucide="eye" class="w-4 h-4"></i>
+          </button>
+        `;
+      }
+
+      // Si la empresa está en pausa por 3 meses, permitir reactivarla con un clic
+      if (client.estado === 'en_pausa_3m') {
+        return `
+          <button onclick="reactivateClient('${client.id}')" class="px-2.5 py-1.5 text-xs font-semibold text-purple-700 bg-purple-50 hover:bg-purple-100 border border-purple-200 rounded-lg transition inline-flex items-center gap-1 shadow-2xs" title="Volver a activar esta empresa ahora">
+            <i data-lucide="refresh-cw" class="w-3.5 h-3.5 text-purple-600"></i>
+            <span>Reactivar ya</span>
+          </button>
+          <button onclick="openDetailsModal('${client.id}')" class="p-1.5 text-slate-500 hover:text-slate-800 hover:bg-slate-100 rounded-lg transition" title="Ver ficha">
+            <i data-lucide="eye" class="w-4 h-4"></i>
+          </button>
+        `;
+      }
+
+      if (client.estado === 'reactivado') {
+        return `
+          <button onclick="openResponseActionModal('${client.id}')" class="px-2.5 py-1.5 text-xs font-semibold text-white bg-teal-600 hover:bg-teal-700 rounded-lg transition inline-flex items-center gap-1 shadow-2xs">
+            <i data-lucide="message-square" class="w-3.5 h-3.5"></i>
+            <span>¿Respondió?</span>
+          </button>
+          <button onclick="openDetailsModal('${client.id}')" class="p-1.5 text-slate-500 hover:text-slate-800 hover:bg-slate-100 rounded-lg transition">
+            <i data-lucide="eye" class="w-4 h-4"></i>
+          </button>
+        `;
+      }
+
+      if (['carta_enviada', 'seguimiento_1', 'seguimiento_2'].includes(client.estado)) {
+        return `
+          <button onclick="advanceClientFollowup('${client.id}')" class="px-2 py-1.5 text-xs font-medium text-amber-800 bg-amber-50 hover:bg-amber-100 border border-amber-200 rounded-lg transition inline-flex items-center gap-1" title="Enviar siguiente recordatorio">
+            <i data-lucide="forward" class="w-3.5 h-3.5"></i>
+            <span>+1 Sem</span>
+          </button>
+          <button onclick="openResponseActionModal('${client.id}')" class="px-2.5 py-1.5 text-xs font-semibold text-slate-700 bg-white hover:bg-slate-100 border border-slate-300 rounded-lg transition inline-flex items-center gap-1 shadow-2xs" title="Anotar si contestó positivo o negativo">
+            <i data-lucide="message-square-plus" class="w-3.5 h-3.5 text-teal-600"></i>
+            <span>¿Respondió?</span>
+          </button>
+          <button onclick="openDetailsModal('${client.id}')" class="p-1.5 text-slate-500 hover:text-slate-800 hover:bg-slate-100 rounded-lg transition" title="Ver historial">
+            <i data-lucide="eye" class="w-4 h-4"></i>
+          </button>
+        `;
+      }
+
+      if (client.estado === 'seguimiento_3') {
+        return `
+          <button onclick="openResponseActionModal('${client.id}')" class="px-2.5 py-1.5 text-xs font-semibold text-slate-700 bg-white hover:bg-slate-100 border border-slate-300 rounded-lg transition inline-flex items-center gap-1">
+            <i data-lucide="message-square-plus" class="w-3.5 h-3.5 text-teal-600"></i>
+            <span>¿Respondió?</span>
+          </button>
+          <button onclick="finishClientChain('${client.id}')" class="px-2 py-1.5 text-xs font-medium text-purple-700 bg-purple-50 hover:bg-purple-100 border border-purple-200 rounded-lg transition" title="Pasar a pausa de 3 meses">
+            Pausar 3m
+          </button>
+          <button onclick="openDetailsModal('${client.id}')" class="p-1.5 text-slate-500 hover:text-slate-800 hover:bg-slate-100 rounded-lg transition">
+            <i data-lucide="eye" class="w-4 h-4"></i>
+          </button>
+        `;
+      }
+
+      return `
+        <button onclick="openDetailsModal('${client.id}')" class="px-3 py-1.5 text-xs font-medium text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-lg transition inline-flex items-center gap-1">
+          <i data-lucide="eye" class="w-3.5 h-3.5"></i>
+          <span>Ver Ficha</span>
+        </button>
+      `;
+    }
+
+    function updateKPIs() {
+      const total = clients.length;
+      const prospectos = clients.filter(c => c.tipo === 'Posible Cliente').length;
+      const nuevos = clients.filter(c => c.tipo === 'Cliente Nuevo').length;
+      const enSeguimiento = clients.filter(c => ['carta_enviada', 'seguimiento_1', 'seguimiento_2', 'seguimiento_3'].includes(c.estado)).length;
+      const positivos = clients.filter(c => c.estado === 'respondio_positivo').length;
+      const enPausa = clients.filter(c => c.estado === 'en_pausa_3m').length;
+      const reactivados = clients.filter(c => c.estado === 'reactivado').length;
+      const negativos = clients.filter(c => c.estado === 'respondio_negativo' || c.estado === 'en_pausa_3m').length;
+      const pendientes = clients.filter(c => c.estado === 'sin_carta').length;
+
+      document.getElementById('statTotal').textContent = total;
+      document.getElementById('statProspectos').textContent = prospectos;
+      document.getElementById('statNuevos').textContent = nuevos;
+      document.getElementById('statSeguimiento').textContent = enSeguimiento;
+      document.getElementById('statPositivos').textContent = positivos;
+      document.getElementById('statNegativos').textContent = negativos;
+      document.getElementById('statEnPausa').textContent = enPausa;
+      document.getElementById('statCartasFaltantes').textContent = pendientes;
+
+      document.getElementById('count-todos').textContent = total;
+      document.getElementById('count-seguimiento').textContent = enSeguimiento;
+      document.getElementById('count-positivos').textContent = positivos;
+      document.getElementById('count-pausa').textContent = enPausa;
+      document.getElementById('count-reactivados').textContent = reactivados;
+      document.getElementById('count-negativos').textContent = negativos;
+      document.getElementById('count-pendientes').textContent = pendientes;
+    }
+
+    function setFilter(filter) {
+      currentFilter = filter;
+      document.querySelectorAll('.tab-btn').forEach(btn => {
+        btn.className = 'tab-btn px-3 py-1.5 rounded-lg font-medium text-slate-600 hover:text-slate-900 hover:bg-slate-100 transition';
+      });
+      const activeBtn = document.getElementById(`tab-${filter}`);
+      if (activeBtn) {
+        if (filter === 'positivos') {
+          activeBtn.className = 'tab-btn px-3 py-1.5 rounded-lg font-bold transition bg-emerald-600 text-white shadow-xs';
+        } else if (filter === 'en_pausa') {
+          activeBtn.className = 'tab-btn px-3 py-1.5 rounded-lg font-bold transition bg-purple-700 text-white shadow-xs';
+        } else if (filter === 'reactivados') {
+          activeBtn.className = 'tab-btn px-3 py-1.5 rounded-lg font-bold transition bg-teal-600 text-white shadow-xs';
+        } else if (filter === 'negativos') {
+          activeBtn.className = 'tab-btn px-3 py-1.5 rounded-lg font-bold transition bg-rose-600 text-white shadow-xs';
+        } else {
+          activeBtn.className = 'tab-btn px-3 py-1.5 rounded-lg font-medium transition bg-teal-600 text-white shadow-xs';
+        }
+      }
+      renderTable();
+    }
+
+    function handleSearch(val) {
+      currentSearchTerm = val;
+      renderTable();
+    }
+
+    function openClientModal() {
+      document.getElementById('clientModal').classList.remove('hidden');
+    }
+
+    function closeClientModal() {
+      document.getElementById('clientModal').classList.add('hidden');
+      document.getElementById('newClientForm').reset();
+    }
+
+    function handleCreateClient(e) {
+      e.preventDefault();
+      const tipo = document.querySelector('input[name="clientType"]:checked').value;
+      const empresa = document.getElementById('inputEmpresa').value.trim();
+      const ruc = document.getElementById('inputRuc').value.trim();
+      const contacto = document.getElementById('inputContacto').value.trim();
+      const cargo = document.getElementById('inputCargo').value.trim() || 'Encargado';
+      const email = document.getElementById('inputEmail').value.trim();
+      const telefono = document.getElementById('inputTelefono').value.trim() || 'Sin teléfono';
+      const sector = document.getElementById('inputSector').value;
+      const trabajadores = parseInt(document.getElementById('inputTrabajadores').value) || 25;
+      const sendLetterImmediately = document.getElementById('sendLetterNow').checked;
+
+      const todayStr = new Date().toISOString().split('T')[0];
+      const newId = 'cli-' + Date.now().toString().slice(-4);
+
+      const newClient = {
+        id: newId,
+        empresa,
+        ruc,
+        contacto,
+        cargo,
+        email,
+        telefono,
+        sector,
+        trabajadores,
+        tipo,
+        estado: sendLetterImmediately ? 'carta_enviada' : 'sin_carta',
+        fechaRegistro: todayStr,
+        ultimoEnvioFecha: sendLetterImmediately ? todayStr : null,
+        proximoEnvioDias: sendLetterImmediately ? 7 : 0,
+        historial: [
+          {
+            fecha: todayStr,
+            tipo: 'registro',
+            detalle: `Se anotó a la empresa como ${tipo}.`
+          }
+        ]
+      };
+
+      if (sendLetterImmediately) {
+        newClient.historial.push({
+          fecha: todayStr,
+          tipo: 'carta_presentacion',
+          detalle: 'Se envió de forma automática la Carta de Presentación inicial.'
+        });
+      }
+
+      clients.unshift(newClient);
+      closeClientModal();
+      renderTable();
+
+      if (sendLetterImmediately) {
+        showToast(`¡Empresa guardada! Carta de Presentación enviada a ${email}`, 'success');
+      } else {
+        showToast(`Empresa anotada en lista pendiente`, 'success');
+      }
+    }
+
+    function triggerSendPresentationLetter(clientId) {
+      const client = clients.find(c => c.id === clientId);
+      if (!client) return;
+
+      const todayStr = new Date().toISOString().split('T')[0];
+      client.estado = 'carta_enviada';
+      client.ultimoEnvioFecha = todayStr;
+      client.proximoEnvioDias = 7;
+      client.historial.push({
+        fecha: todayStr,
+        tipo: 'carta_presentacion',
+        detalle: 'Se envió la Carta de Presentación inicial por correo.'
+      });
+
+      renderTable();
+      showToast(`Carta enviada a ${client.empresa}`, 'success');
+    }
+
+    function advanceClientFollowup(clientId) {
+      const client = clients.find(c => c.id === clientId);
+      if (!client) return;
+
+      const todayStr = new Date().toISOString().split('T')[0];
+
+      if (client.estado === 'carta_enviada') {
+        client.estado = 'seguimiento_1';
+        client.ultimoEnvioFecha = todayStr;
+        client.historial.push({
+          fecha: todayStr,
+          tipo: 'seguimiento_1',
+          detalle: 'Se envió el Recordatorio 1 (Semana 1) para chequeos preventivos de sus trabajadores.'
+        });
+        showToast(`Recordatorio 1 enviado a ${client.empresa}`, 'success');
+      } else if (client.estado === 'seguimiento_1') {
+        client.estado = 'seguimiento_2';
+        client.ultimoEnvioFecha = todayStr;
+        client.historial.push({
+          fecha: todayStr,
+          tipo: 'seguimiento_2',
+          detalle: 'Se envió el Recordatorio 2 (Semana 2) con precios por cantidad de trabajadores.'
+        });
+        showToast(`Recordatorio 2 enviado a ${client.empresa}`, 'success');
+      } else if (client.estado === 'seguimiento_2') {
+        client.estado = 'seguimiento_3';
+        client.ultimoEnvioFecha = todayStr;
+        client.historial.push({
+          fecha: todayStr,
+          tipo: 'seguimiento_3',
+          detalle: 'Se envió el Recordatorio 3 (Semana 3): Último mensaje cortés de seguimiento.'
+        });
+        showToast(`Recordatorio final enviado a ${client.empresa}`, 'success');
+      }
+
+      renderTable();
+      if (!document.getElementById('detailsModal').classList.contains('hidden')) {
+        openDetailsModal(client.id);
+      }
+    }
+
+    function finishClientChain(clientId) {
+      const client = clients.find(c => c.id === clientId);
+      if (!client) return;
+
+      const today = new Date();
+      const todayStr = today.toISOString().split('T')[0];
+
+      // Calcular fecha a 3 meses (90 días)
+      const reactivationDate = new Date(today);
+      reactivationDate.setDate(reactivationDate.getDate() + 90);
+      const reactStr = reactivationDate.toISOString().split('T')[0];
+
+      client.estado = 'en_pausa_3m';
+      client.fechaReactivacion = reactStr;
+      client.historial.push({
+        fecha: todayStr,
+        tipo: 'pausa_3_meses',
+        detalle: `Completó las 3 semanas de recordatorios. Pasa a pausa por 3 meses para reactivarse el ${formatDateFriendly(reactStr)}.`
+      });
+
+      renderTable();
+      if (!document.getElementById('detailsModal').classList.contains('hidden')) {
+        openDetailsModal(client.id);
+      }
+      showToast(`${client.empresa} puesta en pausa por 3 meses`, 'info');
+    }
+
+    function saveClientResponseOutcome() {
+      if (!selectedClientIdForResponse) return;
+      const client = clients.find(c => c.id === selectedClientIdForResponse);
+      if (!client) return;
+
+      const nature = document.querySelector('input[name="responseNature"]:checked').value;
+      const userNote = document.getElementById('responseNotesInput').value.trim();
+      const today = new Date();
+      const todayStr = today.toISOString().split('T')[0];
+
+      if (nature === 'positivo') {
+        client.estado = 'respondio_positivo';
+        client.fechaReactivacion = null;
+        const noteDetail = userNote ? ` Comentario: "${userNote}"` : ' Indicó interés en los servicios médicos.';
+        client.historial.push({
+          fecha: todayStr,
+          tipo: 'respuesta_positiva',
+          detalle: `¡Respuesta POSITIVA registrada!${noteDetail} Se detuvieron los correos automáticos.`
+        });
+        showToast(`¡Excelente! ${client.empresa} marcada con Respuesta Positiva`, 'success');
+      } else {
+        // Regla: No hay interés -> Pausa automática de 3 meses
+        const reactivationDate = new Date(today);
+        reactivationDate.setDate(reactivationDate.getDate() + 90);
+        const reactStr = reactivationDate.toISOString().split('T')[0];
+
+        client.estado = 'en_pausa_3m';
+        client.fechaReactivacion = reactStr;
+
+        const noteDetail = userNote ? ` Motivo: "${userNote}".` : ' Indicó no tener interés por ahora.';
+        client.historial.push({
+          fecha: todayStr,
+          tipo: 'respuesta_negativa',
+          detalle: `Sin interés momentáneo.${noteDetail} Se detuvieron los correos y se programó su reactivación para dentro de 3 meses (${formatDateFriendly(reactStr)}).`
+        });
+        showToast(`${client.empresa}: en pausa por 3 meses (se reactiva el ${formatDateFriendly(reactStr)})`, 'info');
+      }
+
+      closeResponseActionModal();
+      renderTable();
+
+      if (!document.getElementById('detailsModal').classList.contains('hidden')) {
+        openDetailsModal(client.id);
+      }
+    }
+
+    function reactivateClient(clientId) {
+      const client = clients.find(c => c.id === clientId);
+      if (!client) return;
+
+      const todayStr = new Date().toISOString().split('T')[0];
+      client.estado = 'reactivado';
+      client.ultimoEnvioFecha = todayStr;
+      client.historial.push({
+        fecha: todayStr,
+        tipo: 'reactivado',
+        detalle: '¡Reactivado tras los 3 meses de pausa! Se envió el correo de saludo trimestral para consultar nuevos chequeos.'
+      });
+
+      renderTable();
+      if (!document.getElementById('detailsModal').classList.contains('hidden')) {
+        openDetailsModal(client.id);
+      }
+      showToast(`¡${client.empresa} ha sido reactivada! Correo trimestral enviado.`, 'success');
+    }
+
+    function executeBatchAdvanceThreeMonths() {
+      let reactivatedCount = 0;
+      const today = new Date();
+      today.setDate(today.getDate() + 90);
+      const simulatedDateStr = today.toISOString().split('T')[0];
+
+      clients.forEach(client => {
+        if (client.estado === 'en_pausa_3m') {
+          client.estado = 'reactivado';
+          client.ultimoEnvioFecha = simulatedDateStr;
+          client.historial.push({
+            fecha: simulatedDateStr,
+            tipo: 'reactivado',
+            detalle: `Pasaron los 3 meses de pausa. El contacto se reactivó automáticamente y se le envió el saludo trimestral.`
+          });
+          reactivatedCount++;
+        }
+      });
+
+      renderTable();
+      if (reactivatedCount > 0) {
+        showToast(`¡Se simularon 3 meses! ${reactivatedCount} empresas en pausa se han reactivado.`, 'success');
+      } else {
+        showToast(`No había empresas en pausa de 3 meses para reactivar.`, 'info');
+      }
+    }
+
+    function formatDateFriendly(dateStr) {
+      if (!dateStr) return '';
+      const parts = dateStr.split('-');
+      if (parts.length !== 3) return dateStr;
+      return `${parts[2]}/${parts[1]}/${parts[0]}`;
+    }
+
+    function openResponseActionModal(clientId) {
+      const client = clients.find(c => c.id === clientId);
+      if (!client) return;
+
+      selectedClientIdForResponse = clientId;
+      document.getElementById('responseModalCompanyName').textContent = `${client.empresa} (Contacto: ${client.contacto})`;
+      document.getElementById('responseNotesInput').value = '';
+      document.querySelector('input[name="responseNature"][value="positivo"]').checked = true;
+      document.getElementById('responseActionModal').classList.remove('hidden');
+      lucide.createIcons();
+    }
+
+    function closeResponseActionModal() {
+      document.getElementById('responseActionModal').classList.add('hidden');
+      selectedClientIdForResponse = null;
+    }
+
+    function openDetailsModal(clientId) {
+      const client = clients.find(c => c.id === clientId);
+      if (!client) return;
+
+      selectedClientIdForAction = clientId;
+
+      document.getElementById('detailCompanyTitle').textContent = client.empresa;
+      document.getElementById('detailRucSubtitle').textContent = `RUC: ${client.ruc} &bull; ${client.tipo}`;
+      document.getElementById('detailContactName').textContent = client.contacto;
+      document.getElementById('detailContactEmail').textContent = `${client.cargo} &bull; ${client.email}`;
+      document.getElementById('detailSector').textContent = client.sector;
+      document.getElementById('detailWorkers').textContent = `${client.trabajadores} trabajadores estimados`;
+
+      const timelineContainer = document.getElementById('detailTimeline');
+      timelineContainer.innerHTML = '';
+
+      client.historial.forEach((item) => {
+        const itemDiv = document.createElement('div');
+        itemDiv.className = 'relative flex items-start space-x-3 text-xs';
+
+        let iconColor = 'bg-teal-500 text-white';
+        let iconName = 'check';
+
+        if (item.tipo === 'registro') { iconColor = 'bg-slate-400 text-white'; iconName = 'plus'; }
+        else if (item.tipo === 'carta_presentacion') { iconColor = 'bg-blue-500 text-white'; iconName = 'mail'; }
+        else if (item.tipo.includes('seguimiento')) { iconColor = 'bg-amber-500 text-white'; iconName = 'clock'; }
+        else if (item.tipo === 'respuesta_positiva') { iconColor = 'bg-emerald-500 text-white'; iconName = 'thumbs-up'; }
+        else if (item.tipo === 'respuesta_negativa') { iconColor = 'bg-rose-500 text-white'; iconName = 'thumbs-down'; }
+        else if (item.tipo === 'descarte') { iconColor = 'bg-slate-400 text-white'; iconName = 'x'; }
+
+        itemDiv.innerHTML = `
+          <div class="w-7 h-7 rounded-full ${iconColor} flex items-center justify-center shrink-0 z-10 shadow-xs">
+            <i data-lucide="${iconName}" class="w-3.5 h-3.5"></i>
+          </div>
+          <div class="bg-slate-50 p-2.5 rounded-xl border border-slate-200/70 flex-1">
+            <div class="flex items-center justify-between mb-1">
+              <span class="font-bold text-slate-800 capitalize">${item.tipo.replace('_', ' ')}</span>
+              <span class="text-[11px] text-slate-400">${item.fecha}</span>
+            </div>
+            <p class="text-slate-600 text-xs">${item.detalle}</p>
+          </div>
+        `;
+        timelineContainer.appendChild(itemDiv);
+      });
+
+      const btnPositive = document.getElementById('btnModalPositive');
+      const btnNegative = document.getElementById('btnModalNegative');
+      const btnAdv = document.getElementById('btnAdvanceWeek');
+
+      btnPositive.onclick = () => {
+        closeDetailsModal();
+        openResponseActionModal(client.id);
+        setTimeout(() => {
+          document.querySelector('input[name="responseNature"][value="positivo"]').checked = true;
+        }, 50);
+      };
+
+      btnNegative.onclick = () => {
+        closeDetailsModal();
+        openResponseActionModal(client.id);
+        setTimeout(() => {
+          document.querySelector('input[name="responseNature"][value="negativo"]').checked = true;
+        }, 50);
+      };
+
+      btnAdv.onclick = () => advanceClientFollowup(client.id);
+
+      const hasResponded = client.estado === 'respondio_positivo' || client.estado === 'respondio_negativo';
+      if (hasResponded) {
+        btnPositive.classList.add('opacity-50');
+        btnNegative.classList.add('opacity-50');
+        btnAdv.classList.add('opacity-50', 'pointer-events-none');
+      } else {
+        btnPositive.classList.remove('opacity-50');
+        btnNegative.classList.remove('opacity-50');
+        btnAdv.classList.remove('opacity-50', 'pointer-events-none');
+      }
+
+      document.getElementById('detailsModal').classList.remove('hidden');
+      lucide.createIcons();
+    }
+
+    function closeDetailsModal() {
+      document.getElementById('detailsModal').classList.add('hidden');
+      selectedClientIdForAction = null;
+    }
+
+    function previewEmailTemplate(templateKey) {
+      const tpl = EMAIL_TEMPLATES[templateKey];
+      if (!tpl) return;
+
+      const sampleClient = {
+        empresa: 'Constructora Los Andes',
+        contacto: 'Fernando Valdivia',
+        cargo: 'Encargado de Personal',
+        email: 'contacto@losandes.com',
+        sector: 'Construcción',
+        trabajadores: 85
+      };
+
+      document.getElementById('previewModalTitle').textContent = tpl.titulo;
+      document.getElementById('previewModalSubtitle').textContent = `Momento del envío: ${tpl.fase}`;
+      document.getElementById('previewTo').textContent = `${sampleClient.contacto} <${sampleClient.email}>`;
+      document.getElementById('previewSubject').textContent = tpl.asunto.replace('[Empresa]', sampleClient.empresa);
+      document.getElementById('previewEmailBody').innerHTML = tpl.getBody(sampleClient);
+      document.getElementById('previewStepNotice').textContent = `Envío: ${tpl.fase}`;
+
+      const attachmentBox = document.getElementById('previewAttachmentBox');
+      if (templateKey === 'carta_presentacion') {
+        attachmentBox.classList.remove('hidden');
+      } else {
+        attachmentBox.classList.add('hidden');
+      }
+
+      document.getElementById('emailPreviewModal').classList.remove('hidden');
+      lucide.createIcons();
+    }
+
+    function closeEmailPreviewModal() {
+      document.getElementById('emailPreviewModal').classList.add('hidden');
+    }
+
+    function openSimulationEngineModal() {
+      const eligible = clients.filter(c => ['carta_enviada', 'seguimiento_1', 'seguimiento_2'].includes(c.estado)).length;
+      document.getElementById('simEligibleCount').textContent = `${eligible} empresas`;
+      document.getElementById('simulationEngineModal').classList.remove('hidden');
+    }
+
+    function closeSimulationEngineModal() {
+      document.getElementById('simulationEngineModal').classList.add('hidden');
+    }
+
+    function executeBatchAdvanceWeek() {
+      let countAdvanced = 0;
+      const todayStr = new Date().toISOString().split('T')[0];
+
+      clients.forEach(client => {
+        if (client.estado === 'carta_enviada') {
+          client.estado = 'seguimiento_1';
+          client.ultimoEnvioFecha = todayStr;
+          client.historial.push({
+            fecha: todayStr,
+            tipo: 'seguimiento_1',
+            detalle: 'Se avanzó 1 semana: Envío de Recordatorio 1 (Semana 1).'
+          });
+          countAdvanced++;
+        } else if (client.estado === 'seguimiento_1') {
+          client.estado = 'seguimiento_2';
+          client.ultimoEnvioFecha = todayStr;
+          client.historial.push({
+            fecha: todayStr,
+            tipo: 'seguimiento_2',
+            detalle: 'Se avanzó 1 semana: Envío de Recordatorio 2 (Precios especiales).'
+          });
+          countAdvanced++;
+        } else if (client.estado === 'seguimiento_2') {
+          client.estado = 'seguimiento_3';
+          client.ultimoEnvioFecha = todayStr;
+          client.historial.push({
+            fecha: todayStr,
+            tipo: 'seguimiento_3',
+            detalle: 'Se avanzó 1 semana: Envío de Recordatorio 3 (Último mensaje cortés).'
+          });
+          countAdvanced++;
+        }
+      });
+
+      closeSimulationEngineModal();
+      renderTable();
+      showToast(`¡Listo! Pasó 1 semana y se enviaron ${countAdvanced} correos a quienes aún no habían contestado.`, 'success');
+    }
+
+    function showToast(msg, type = 'success') {
+      const toast = document.getElementById('toastNotification');
+      const text = document.getElementById('toastMessage');
+      const icon = document.getElementById('toastIcon');
+
+      text.textContent = msg;
+
+      if (type === 'success') {
+        icon.className = 'w-5 h-5 text-emerald-400';
+        icon.innerHTML = '<i data-lucide="check-circle" class="w-5 h-5"></i>';
+      } else {
+        icon.className = 'w-5 h-5 text-amber-400';
+        icon.innerHTML = '<i data-lucide="info" class="w-5 h-5"></i>';
+      }
+
+      lucide.createIcons();
+      toast.classList.remove('translate-y-24', 'opacity-0');
+      toast.classList.add('translate-y-0', 'opacity-100');
+
+      setTimeout(() => {
+        toast.classList.remove('translate-y-0', 'opacity-100');
+        toast.classList.add('translate-y-24', 'opacity-0');
+      }, 4000);
+    }
+
+    window.addEventListener('DOMContentLoaded', () => {
+      renderTable();
+      lucide.createIcons();
+    });
+  </script>
+</body>
+</html>
