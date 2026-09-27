@@ -16,10 +16,12 @@ import { EstadoVacio } from './EstadoVacio';
  * own badge via `etiquetaEtapaAvanzada` (SD-3 — never the carta badge).
  *
  * Row actions: each button reports (fila, accion) through onAccion —
- * PanelCrm owns what each action does (ficha navigation now; the
- * response/ficha modals connect in tasks 9.x/10.x). The empresa name
- * doubles as a ficha affordance (spec OP-6). When nothing matches the
- * active tab + search, the mock's empty state replaces the table.
+ * PanelCrm owns what each action does (ficha/respuesta modals and the
+ * send/pause posts, wired in batch 14). While a row's action is in
+ * flight (`accionEnCurso`), that row's buttons disable so a send
+ * cannot double-fire. The empresa name doubles as a ficha affordance
+ * (spec OP-6). When nothing matches the active tab + search, the
+ * mock's empty state replaces the table.
  */
 
 const ETIQUETA_ESTADO: Record<EstadoPanel, string> = {
@@ -52,6 +54,9 @@ export interface TablaEmpresasProps {
   onAccion: (fila: FilaDerivadaPanel, accion: AccionFila) => void;
   /** Empty-state CTA (interim → alta page; modal in task 10.2). */
   onAnotar: () => void;
+  /** empresaId whose row action is in flight (decision 13): that row's
+   * action buttons disable so a send cannot double-fire. */
+  accionEnCurso?: number | null;
 }
 
 function InsigniaEstado({ derivada }: { derivada: FilaDerivadaPanel }) {
@@ -113,9 +118,11 @@ function CeldaContacto({ fila }: { fila: FilaPanelCrm }) {
 
 function CeldaAcciones({
   derivada,
+  enCurso,
   onAccion,
 }: {
   derivada: FilaDerivadaPanel;
+  enCurso: boolean;
   onAccion: (accion: AccionFila) => void;
 }) {
   const conOtrasAcciones = derivada.acciones.some((accion) => accion !== 'ver_ficha');
@@ -129,8 +136,9 @@ function CeldaAcciones({
               type="button"
               aria-label="Ver ficha"
               title="Ver ficha"
+              disabled={enCurso}
               onClick={() => onAccion(accion)}
-              className="rounded-lg p-1.5 text-slate-500 transition hover:bg-slate-100 hover:text-slate-800"
+              className="rounded-lg p-1.5 text-slate-500 transition hover:bg-slate-100 hover:text-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
             >
               <Eye className="h-4 w-4" aria-hidden="true" />
             </button>
@@ -140,8 +148,9 @@ function CeldaAcciones({
           <button
             key={accion}
             type="button"
+            disabled={enCurso}
             onClick={() => onAccion(accion)}
-            className="rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-700 shadow-2xs transition hover:bg-slate-100"
+            className="rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-700 shadow-2xs transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-50"
           >
             {ETIQUETA_ACCION[accion]}
           </button>
@@ -151,7 +160,13 @@ function CeldaAcciones({
   );
 }
 
-export function TablaEmpresas({ filas, total, onAccion, onAnotar }: TablaEmpresasProps) {
+export function TablaEmpresas({
+  filas,
+  total,
+  onAccion,
+  onAnotar,
+  accionEnCurso = null,
+}: TablaEmpresasProps) {
   return (
     <>
       {filas.length === 0 ? (
@@ -206,6 +221,7 @@ export function TablaEmpresas({ filas, total, onAccion, onAnotar }: TablaEmpresa
                   <td className="px-5 py-3.5">
                     <CeldaAcciones
                       derivada={derivada}
+                      enCurso={accionEnCurso === derivada.fila.empresaId}
                       onAccion={(accion) => onAccion(derivada, accion)}
                     />
                   </td>

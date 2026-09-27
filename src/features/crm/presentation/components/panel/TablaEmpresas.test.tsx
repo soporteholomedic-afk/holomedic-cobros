@@ -313,3 +313,41 @@ describe('TablaEmpresas — estado vacío y pie', () => {
     expect(screen.getByText('Mostrando 2 de 5 empresas')).toBeInTheDocument();
   });
 });
+
+describe('TablaEmpresas — acción en curso (decision 13, batch 14)', () => {
+  /** PanelCrm passes the empresaId whose row action is in flight; the
+   * in-flight row's buttons disable so a send cannot double-fire. */
+  function renderConCurso(accionEnCurso: number | null): void {
+    const panel = derivarPanel({ hoy: HOY, filas: [fila({ empresaId: 10, ...sinPipeline() })] });
+    render(
+      <TablaEmpresas
+        filas={panel.filas}
+        total={1}
+        onAccion={vi.fn()}
+        onAnotar={vi.fn()}
+        accionEnCurso={accionEnCurso}
+      />,
+    );
+  }
+
+  it('disables every action button of the in-flight row while its action posts', () => {
+    renderConCurso(10);
+
+    expect(screen.getByRole('button', { name: 'Enviar carta' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Ver ficha' })).toBeDisabled();
+  });
+
+  it('keeps the buttons enabled when no action is in flight', () => {
+    renderConCurso(null);
+
+    expect(screen.getByRole('button', { name: 'Enviar carta' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'Ver ficha' })).toBeEnabled();
+  });
+
+  it('keeps other rows enabled while a different row is in flight', () => {
+    renderConCurso(99);
+
+    expect(screen.getByRole('button', { name: 'Enviar carta' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'Ver ficha' })).toBeEnabled();
+  });
+});

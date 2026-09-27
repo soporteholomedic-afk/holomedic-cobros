@@ -3,12 +3,20 @@
 import { useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 
+import {
+  enviarCorreoEmpresa,
+  pausarEmpresa,
+  type ResultadoAccionFila,
+} from '../../accionesFila';
 import { usePanelCrm } from '../../hooks/usePanelCrm';
 import { filtrarFilas, type FilaDerivadaPanel, type TabPanel } from '../../panelDerivado';
 import type { AccionFila } from '../../estadoPanel';
 import { Buscador } from './Buscador';
 import { FlowExplainer } from './FlowExplainer';
 import { KpiCards } from './KpiCards';
+import { ModalFichaEmpresa, plantillaSiguienteDeEstado } from './ModalFichaEmpresa';
+import { SeccionSecuenciaCorreos } from './ModalPreviewCorreo';
+import { ModalRespuesta } from './ModalRespuesta';
 import { TablaEmpresas } from './TablaEmpresas';
 import { TabsFiltro } from './TabsFiltro';
 
@@ -21,18 +29,33 @@ import { TabsFiltro } from './TabsFiltro';
  * error follow the ColaHoy/EmpresaList pattern (spinner / alert +
  * Reintentar).
  *
- * Wiring (interim, disclosed in the tasks artifact): `ver_ficha` and
- * the empresa-name affordance navigate to the existing ficha page and
- * both "+ Anotar Empresa" paths to the alta page — the ficha/preview/
- * respuesta modals (9.x) and the alta modal (10.2) replace these
- * navigation stubs; the remaining row actions stay inert until their
- * modals exist (do not invent modal scope here).
+ * Wiring (batch 14 — tasks 9.x closure + decision 13): ver_ficha
+ * (eye/empresa name) opens ModalFichaEmpresa; ¿Respondió? and the
+ * ficha's quick actions open ModalRespuesta with the positive
+ * preselect — its success closes the modal and refreshes the panel.
+ * The send row actions (Enviar carta / +1 Sem / Reactivar ya) POST the
+ * next template through the shared `accionesFila` seam and "Pausar 3m"
+ * rides the T14 transition; buttons disable in flight (refresh-after,
+ * ficha pattern) and API errors surface in a panel alert. The Secuencia
+ * Completa de Correos section mounts below the table (mock order) and
+ * owns its preview modal. Only the alta CTA remains interim navigation
+ * until ModalAltaEmpresa (task 10.2).
  */
 export function PanelCrm() {
   const router = useRouter();
   const { panel, status, error, retry } = usePanelCrm();
   const [tab, setTab] = useState<TabPanel>('todas');
   const [busqueda, setBusqueda] = useState('');
+  const [ficha, setFicha] = useState<FilaDerivadaPanel | null>(null);
+  const [respuesta, setRespuesta] = useState<{
+    empresaId: number;
+    nombreEmpresa: string;
+    preseleccion: 'positivo' | 'negativo';
+  } | null>(null);
+  // Row-action in flight (decision 13): the row's buttons disable and
+  // API failures surface in a panel-level alert (ficha precedent).
+  const [empresaEnCurso, setEmpresaEnCurso] = useState<number | null>(null);
+  const [errorAccion, setErrorAccion] = useState<string | null>(null);
 
   const filasFiltradas = useMemo(
     () => (panel === null ? [] : filtrarFilas(panel.filas, tab, busqueda)),
@@ -44,12 +67,49 @@ export function PanelCrm() {
     router.push('/crm/empresas/nueva');
   }
 
-  function manejarAccion(derivada: FilaDerivadaPanel, accion: AccionFila): void {
+  function abrirRespuesta(
+    derivada: FilaDerivadaPanel,
+    preseleccion: 'positivo' | 'negativo',
+  ): void {
+    setRespuesta({
+      empresaId: derivada.fila.empresaId,
+      nombreEmpresa: derivada.fila.razonSocial,
+      preseleccion,
+    });
+  }
+
+  async function manejarAccion(derivada: FilaDerivadaPanel, accion: AccionFila): Promise<void> {
+    setErrorAccion(null);
     if (accion === 'ver_ficha') {
-      // Interim: ficha page until ModalFichaEmpresa (task 9.1).
-      router.push(`/crm/empresas/${derivada.fila.empresaId}`);
+      setFicha(derivada);
+      return;
     }
-    // ¿Respondió? / Pausar 3m / ... stay inert until tasks 9.x/10.x.
+    if (accion === 'registrar_respuesta') {
+      abrirRespuesta(derivada, 'positivo');
+      return;
+    }
+    const empresaId = derivada.fila.empresaId;
+    setEmpresaEnCurso(empresaId);
+    let resultado: ResultadoAccionFila;
+    if (accion === 'pausar_3m') {
+      resultado = await pausarEmpresa(empresaId);
+    } else {
+      const plantilla = plantillaSiguienteDeEstado(derivada.estado);
+      if (plantilla === null) {
+        // Defensive: ACCIONES_POR_ESTADO never pairs a send action with
+        // a status whose next template is null.
+        setEmpresaEnCurso(null);
+        setErrorAccion('Esta empresa no tiene un correo pendiente por enviar.');
+        return;
+      }
+      resultado = await enviarCorreoEmpresa(empresaId, plantilla);
+    }
+    if (resultado.ok) {
+      retry(); // refresh-after (ficha pattern): the derivation re-runs on fresh data
+    } else {
+      setErrorAccion(resultado.error);
+    }
+    setEmpresaEnCurso(null);
   }
 
   return (
@@ -110,11 +170,48 @@ export function PanelCrm() {
             <TablaEmpresas
               filas={filasFiltradas}
               total={panel.conteos.todas}
-              onAccion={manejarAccion}
+              onAccion={(derivada, accion) => void manejarAccion(derivada, accion)}
               onAnotar={anotarEmpresa}
+              accionEnCurso={empresaEnCurso}
             />
           </div>
+
+          {errorAccion !== null && (
+            <p
+              role="alert"
+              className="rounded-xl border border-red-200 bg-red-50 p-3 text-xs font-medium text-red-700"
+            >
+              {errorAccion}
+            </p>
+          )}
+
+          <SeccionSecuenciaCorreos />
         </>
+      )}
+
+      {ficha !== null && (
+        <ModalFichaEmpresa
+          derivada={ficha}
+          onSalir={() => setFicha(null)}
+          onRegistrarRespuesta={(preseleccion) => {
+            // The respuesta modal REPLACES the ficha (batch-14 brief).
+            abrirRespuesta(ficha, preseleccion);
+            setFicha(null);
+          }}
+        />
+      )}
+
+      {respuesta !== null && (
+        <ModalRespuesta
+          empresaId={respuesta.empresaId}
+          nombreEmpresa={respuesta.nombreEmpresa}
+          preseleccion={respuesta.preseleccion}
+          onSalir={() => setRespuesta(null)}
+          onExito={() => {
+            setRespuesta(null);
+            retry(); // refresh-after: badges/KPIs re-derive from fresh data
+          }}
+        />
       )}
     </section>
   );
