@@ -343,4 +343,73 @@ describe('POST /api/crm/empresas', () => {
     expect(response.status).toBe(500);
     expect(body.code).toBe('INTERNAL_ERROR');
   });
+
+  // ---- Alta-panel contract (task 10.1, rediseno-crm-panel) ----
+
+  it('round-trips sector, cantidadTrabajadores and contacto.cargo into the use case (alta modal)', async () => {
+    mockGetSession.mockResolvedValue({ ...sessionBase, permisos: ['crm'] });
+    const crear = vi.fn().mockResolvedValue(empresa);
+    setDb(makeFakeRepo({ crear }));
+
+    const response = await POST(
+      jsonPost({
+        ...payload,
+        sector: 'Construcción',
+        cantidadTrabajadores: 30,
+        contactos: [
+          { nombre: 'Ana', cargo: 'Recursos Humanos / Seguridad', correos: ['ana@x.com'] },
+        ],
+      }),
+    );
+
+    expect(response.status).toBe(201);
+    expect(crear).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sector: 'Construcción',
+        cantidadTrabajadores: 30,
+        contactos: [expect.objectContaining({ cargo: 'Recursos Humanos / Seguridad' })],
+      }),
+    );
+  });
+
+  it('maps the absent alta fields to null — pre-panel payloads stay valid', async () => {
+    mockGetSession.mockResolvedValue({ ...sessionBase, permisos: ['crm'] });
+    const crear = vi.fn().mockResolvedValue(empresa);
+    setDb(makeFakeRepo({ crear }));
+
+    const response = await POST(jsonPost(payload));
+
+    expect(response.status).toBe(201);
+    expect(crear).toHaveBeenCalledWith(
+      expect.objectContaining({ sector: null, cantidadTrabajadores: null }),
+    );
+  });
+
+  it('returns 400 VALIDATION_ERROR for a sector outside the six-value domain', async () => {
+    mockGetSession.mockResolvedValue({ ...sessionBase, permisos: ['crm'] });
+    const crear = vi.fn();
+    setDb(makeFakeRepo({ crear }));
+
+    const response = await POST(jsonPost({ ...payload, sector: 'Tecnología' }));
+    const body = await response.json();
+
+    expect(response.status).toBe(400);
+    expect(body.code).toBe('VALIDATION_ERROR');
+    expect(crear).not.toHaveBeenCalled();
+  });
+
+  it('returns 400 VALIDATION_ERROR for a non-integer or sub-1 cantidadTrabajadores', async () => {
+    mockGetSession.mockResolvedValue({ ...sessionBase, permisos: ['crm'] });
+    const crear = vi.fn();
+    setDb(makeFakeRepo({ crear }));
+
+    for (const cantidadTrabajadores of [12.5, 0, -3]) {
+      const response = await POST(jsonPost({ ...payload, cantidadTrabajadores }));
+      const body = await response.json();
+
+      expect(response.status, `falló con ${String(cantidadTrabajadores)}`).toBe(400);
+      expect(body.code, `falló con ${String(cantidadTrabajadores)}`).toBe('VALIDATION_ERROR');
+    }
+    expect(crear).not.toHaveBeenCalled();
+  });
 });
