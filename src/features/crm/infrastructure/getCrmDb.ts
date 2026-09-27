@@ -11,6 +11,7 @@ import type {
   CrmActividadesRepositoryPort,
   CrmAsignacionesRepositoryPort,
   CrmEmpresaRepositoryPort,
+  CrmEnviosCorreoRepositoryPort,
   CrmHandoffsRepositoryPort,
   CrmImportadorPort,
   CrmPipelineRepositoryPort,
@@ -55,6 +56,12 @@ export interface CrmDb {
    * ONE transaction, design §2d).
    */
   asignaciones: CrmAsignacionesRepositoryPort;
+  /**
+   * Send-log adapter (rediseno-crm-panel task 4.2, design D3): the
+   * CRM_EnviosCorreos dispatch log (ENVIADO/FALLIDO) — the SAME
+   * pipeline adapter instance implements this port too (ADR-3).
+   */
+  envios: CrmEnviosCorreoRepositoryPort;
 }
 
 let cached: Promise<CrmDb> | null = null;
@@ -82,6 +89,7 @@ export function getCrmDb(): Promise<CrmDb> {
       handoffs: pipelines,
       actividades: pipelines,
       asignaciones: new SqlServerAsignacionesRepository(pool),
+      envios: pipelines,
     };
   })();
   return cached;

@@ -9,15 +9,19 @@ import type {
   ConteoActividadUsuario,
   ConteoResultadoUsuario,
   CrmActividadesRepositoryPort,
+  CrmEnviosCorreoRepositoryPort,
   CrmHandoffsRepositoryPort,
   CrmPipelineRepositoryPort,
   CrmResultadosRepositoryPort,
   CrmTransicionesRepositoryPort,
   EnvioCadenciaAPersistir,
+  EnvioCorreoHistorial,
+  FilaEnvioCorreoAudit,
   FilaHandoffAudit,
   FilaResultadoAudit,
   FilaTransicionAudit,
   HandoffHistorial,
+  PlantillaCrmKey,
   TransicionAPersistir,
   TransicionHistorial,
 } from '../../domain/ports';
@@ -79,6 +83,15 @@ interface FilaHandoffLeida {
   createdAt: Date;
 }
 
+/** CRM_EnviosCorreos read row — BIGINT id crosses tedious as a string. */
+interface FilaEnvioLeida {
+  id: number | string;
+  plantilla: PlantillaCrmKey;
+  destinatario: string;
+  estado: EnvioCorreoHistorial['estado'];
+  createdAt: Date;
+}
+
 /** Both `ConnectionPool` and `Transaction` expose `.request()`. */
 interface RequestSource {
   request(): mssql.Request;
@@ -112,7 +125,8 @@ export class SqlServerPipelineRepository
     CrmTransicionesRepositoryPort,
     CrmResultadosRepositoryPort,
     CrmHandoffsRepositoryPort,
-    CrmActividadesRepositoryPort
+    CrmActividadesRepositoryPort,
+    CrmEnviosCorreoRepositoryPort
 {
   constructor(private readonly pool: mssql.ConnectionPool) {}
 
@@ -390,10 +404,37 @@ export class SqlServerPipelineRepository
     }));
   }
 
+  /**
+   * Send-log read for the ficha timeline (rediseno-crm-panel task 4.2,
+   * design D3): one empresa's CRM_EnviosCorreos rows newest-first, riding
+   * IX_CRM_EnviosCorreos_EmpresaFecha(empresaId, createdAt DESC). The id
+   * tiebreak keeps identical-timestamp inserts in true dispatch order.
+   */
+  async listarPorEmpresa(empresaId: number): Promise<EnvioCorreoHistorial[]> {
+    const result = await this.pool
+      .request()
+      .input('empresaId', mssql.Int, empresaId).query(`
+        SELECT id, plantilla, destinatario, estado, createdAt
+        FROM dbo.CRM_EnviosCorreos
+        WHERE empresaId = @empresaId
+        ORDER BY createdAt DESC, id DESC
+      `);
+    return (result.recordset as FilaEnvioLeida[]).map((row) => ({
+      id: Number(row.id),
+      plantilla: row.plantilla,
+      destinatario: row.destinatario,
+      estado: row.estado,
+      createdAt: row.createdAt.toISOString(),
+    }));
+  }
+
   async registrar(fila: FilaTransicionAudit): Promise<number>;
   async registrar(fila: FilaResultadoAudit): Promise<number>;
   async registrar(fila: FilaHandoffAudit): Promise<number>;
-  async registrar(fila: FilaTransicionAudit | FilaResultadoAudit | FilaHandoffAudit): Promise<number> {
+  async registrar(fila: FilaEnvioCorreoAudit): Promise<number>;
+  async registrar(
+    fila: FilaTransicionAudit | FilaResultadoAudit | FilaHandoffAudit | FilaEnvioCorreoAudit,
+  ): Promise<number> {
     if ('flujoNuevo' in fila) {
       const result = await this.pool
         .request()
@@ -422,6 +463,24 @@ export class SqlServerPipelineRepository
           INSERT INTO dbo.CRM_Resultados (empresaId, tipo, usuario, fecha)
           OUTPUT INSERTED.id
           VALUES (@empresaId, @tipo, @usuario, @fecha)
+        `);
+      return this.extraerId(result);
+    }
+    if ('plantilla' in fila) {
+      const result = await this.pool
+        .request()
+        .input('empresaId', mssql.Int, fila.empresaId)
+        .input('contactoId', mssql.Int, fila.contactoId)
+        .input('plantilla', mssql.VarChar(40), fila.plantilla)
+        .input('destinatario', mssql.VarChar(320), fila.destinatario)
+        .input('messageId', mssql.NVarChar(200), fila.messageId)
+        .input('estado', mssql.VarChar(10), fila.estado)
+        .input('errorInfo', mssql.NVarChar(500), fila.errorInfo)
+        .input('usuario', mssql.NVarChar(200), fila.usuario).query(`
+          INSERT INTO dbo.CRM_EnviosCorreos
+            (empresaId, contactoId, plantilla, destinatario, messageId, estado, errorInfo, usuario)
+          OUTPUT INSERTED.id
+          VALUES (@empresaId, @contactoId, @plantilla, @destinatario, @messageId, @estado, @errorInfo, @usuario)
         `);
       return this.extraerId(result);
     }

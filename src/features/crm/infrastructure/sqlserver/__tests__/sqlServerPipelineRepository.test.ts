@@ -6,7 +6,11 @@ import { getHolomedicPool } from '@/lib/db';
 import type { CrearEmpresaInput } from '../../../domain/entities';
 import { NotFoundError } from '../../../domain/errors';
 import { estadoInicial } from '../../../domain/maquinaEstados';
-import type { EnvioCadenciaAPersistir, TransicionAPersistir } from '../../../domain/ports';
+import type {
+  EnvioCadenciaAPersistir,
+  FilaEnvioCorreoAudit,
+  TransicionAPersistir,
+} from '../../../domain/ports';
 import { SqlServerEmpresaRepository } from '../sqlServerEmpresaRepository';
 import { SqlServerPipelineRepository } from '../sqlServerPipelineRepository';
 import { loadEnvLocal } from './loadEnvLocal';
@@ -982,5 +986,124 @@ describe('SqlServerPipelineRepository — productivity count reads (tasks pr16/W
 
     expect(conteosActividades).toEqual([]);
     expect(conteosResultados).toEqual([]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// CRM_EnviosCorreos send-log port (rediseno-crm-panel task 4.2, design D3):
+// one INSERT per dispatch (ENVIADO or FALLIDO) + the newest-first read for
+// the ficha timeline. The SAME adapter class gains the port (ADR-3) — the
+// BIGINT id crosses tedious as a string and leaves as a number.
+// ---------------------------------------------------------------------------
+
+describe('SqlServerPipelineRepository — CRM_EnviosCorreos send-log port (task 4.2)', () => {
+  function filaEnvio(overrides: Partial<FilaEnvioCorreoAudit>): FilaEnvioCorreoAudit {
+    return {
+      empresaId: 1,
+      contactoId: null,
+      plantilla: 'carta_presentacion',
+      destinatario: 'rrhh@acme.com',
+      messageId: '<carta-1@holomedic.com>',
+      estado: 'ENVIADO',
+      errorInfo: null,
+      usuario: 'jperez',
+      ...overrides,
+    };
+  }
+
+  it('registrar lands an ENVIADO row with its messageId and returns the BIGINT id as number', async () => {
+    try {
+      const empresa = await empresas.crear(inputCon('Inbound'));
+
+      const id = await pipelines.registrar(
+        filaEnvio({ empresaId: empresa.id, contactoId: null }),
+      );
+      expect(id).toBeGreaterThan(0);
+
+      const filas = await pool
+        .request()
+        .input('empresaId', mssql.Int, empresa.id)
+        .query(`SELECT plantilla, destinatario, messageId, estado, errorInfo, usuario
+                FROM dbo.CRM_EnviosCorreos WHERE empresaId = @empresaId`);
+      expect(filas.recordset).toHaveLength(1);
+      expect(filas.recordset[0]).toMatchObject({
+        plantilla: 'carta_presentacion',
+        destinatario: 'rrhh@acme.com',
+        messageId: '<carta-1@holomedic.com>',
+        estado: 'ENVIADO',
+        errorInfo: null,
+        usuario: 'jperez',
+      });
+    } finally {
+      await pool.request().query(`DELETE FROM dbo.CRM_Empresas WHERE ${PROBE_KEY}`);
+    }
+  });
+
+  it('registrar lands a FALLIDO row carrying errorInfo and NULL messageId (SMTP failure audit)', async () => {
+    try {
+      const empresa = await empresas.crear(inputCon('Inbound'));
+
+      const id = await pipelines.registrar(
+        filaEnvio({
+          empresaId: empresa.id,
+          plantilla: 'seguimiento_1',
+          estado: 'FALLIDO',
+          messageId: null,
+          errorInfo: 'SMTP_AUTH_ERROR: SMTP authentication failed',
+        }),
+      );
+      expect(id).toBeGreaterThan(0);
+
+      const fila = await pool
+        .request()
+        .input('empresaId', mssql.Int, empresa.id)
+        .query(`SELECT estado, messageId, errorInfo FROM dbo.CRM_EnviosCorreos WHERE empresaId = @empresaId`);
+      expect(fila.recordset[0]).toMatchObject({
+        estado: 'FALLIDO',
+        messageId: null,
+        errorInfo: 'SMTP_AUTH_ERROR: SMTP authentication failed',
+      });
+    } finally {
+      await pool.request().query(`DELETE FROM dbo.CRM_Empresas WHERE ${PROBE_KEY}`);
+    }
+  });
+
+  it('listarPorEmpresa returns the send-log newest-first with numeric ids (ficha timeline order)', async () => {
+    try {
+      const empresa = await empresas.crear(inputCon('Inbound'));
+
+      await pipelines.registrar(filaEnvio({ empresaId: empresa.id }));
+      await pipelines.registrar(
+        filaEnvio({
+          empresaId: empresa.id,
+          plantilla: 'seguimiento_1',
+          estado: 'FALLIDO',
+          messageId: null,
+          errorInfo: 'SMTP_TIMEOUT: SMTP connection timed out',
+        }),
+      );
+
+      const historial = await pipelines.listarPorEmpresa(empresa.id);
+      expect(historial).toHaveLength(2);
+      // Newest first — higher id wins even within the same timestamp tick.
+      expect(historial[0]?.plantilla).toBe('seguimiento_1');
+      expect(historial[1]?.plantilla).toBe('carta_presentacion');
+      expect(historial[0]!.id).toBeGreaterThan(historial[1]!.id);
+      expect(typeof historial[0]?.id).toBe('number');
+      expect(historial[0]).toMatchObject({ estado: 'FALLIDO', destinatario: 'rrhh@acme.com' });
+      expect(typeof historial[0]?.createdAt).toBe('string');
+      expect(new Date(historial[0]?.createdAt ?? '').toString()).not.toBe('Invalid Date');
+    } finally {
+      await pool.request().query(`DELETE FROM dbo.CRM_Empresas WHERE ${PROBE_KEY}`);
+    }
+  });
+
+  it('a fresh empresa has an EMPTY send-log (no rows invented)', async () => {
+    try {
+      const empresa = await empresas.crear(inputCon('Inbound'));
+      expect(await pipelines.listarPorEmpresa(empresa.id)).toEqual([]);
+    } finally {
+      await pool.request().query(`DELETE FROM dbo.CRM_Empresas WHERE ${PROBE_KEY}`);
+    }
   });
 });

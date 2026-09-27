@@ -71,6 +71,7 @@ function setDb(empresas: CrmEmpresaRepositoryPort, asignaciones: CrmAsignaciones
     handoffs: {} as never,
     actividades: {} as never,
     asignaciones,
+    envios: {} as never,
   } satisfies CrmDb);
 }
 
