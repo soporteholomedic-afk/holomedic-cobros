@@ -1,47 +1,12 @@
-import { Suspense } from 'react';
-
-import { EmpresaDetalle } from '@/features/crm/presentation/components/EmpresaDetalle';
+import { redirect } from 'next/navigation';
 
 /**
- * `/crm/empresas/[id]` — empresa detail (tasks pr11/WU2, spec G1+G4).
- * Protected by RUTAS_PROTEGIDAS via the proxy (the `/crm` prefix entry
- * covers every subroute — permiso `crm`). Server Component wrapper
- * keeps the header outside the `<Suspense>` boundary the client-side
- * detail needs (the `/crm` list page precedent).
+ * Retired view (rediseno-crm-panel task 11.1, spec "Retirement of
+ * Superseded Views"): the empresa detail PAGE was superseded by the
+ * "Ver Ficha" modal in the /crm operator panel (task 9.1). Deep links
+ * land on the panel; the proxy still gates this path with the `crm`
+ * permission (the /crm prefix entry) before the redirect runs.
  */
-export default async function EmpresaDetallePage({
-  params,
-}: {
-  params: Promise<{ id: string }>;
-}) {
-  const { id: rawId } = await params;
-  const id = Number.parseInt(rawId, 10);
-  const idValido = Number.isInteger(id) && id > 0;
-
-  return (
-    <main className="space-y-6 p-6">
-      <header>
-        <h1 className="text-2xl font-semibold">Detalle de empresa</h1>
-        <p className="text-sm text-muted-foreground">
-          Datos, avance comercial e historial de seguimiento.
-        </p>
-      </header>
-
-      <Suspense
-        fallback={
-          <div className="flex items-center justify-center py-16">
-            <div className="h-8 w-8 animate-spin rounded-full border-4 border-sky-600 border-t-transparent" />
-          </div>
-        }
-      >
-        {idValido ? (
-          <EmpresaDetalle id={id} />
-        ) : (
-          <p role="alert" className="text-sm text-red-700">
-            La ruta debe incluir un id de empresa válido.
-          </p>
-        )}
-      </Suspense>
-    </main>
-  );
+export default function EmpresaDetallePage() {
+  redirect('/crm');
 }
