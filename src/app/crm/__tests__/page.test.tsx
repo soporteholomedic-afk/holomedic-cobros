@@ -2,23 +2,33 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 
 import CrmPage from '../page';
-import { getSession } from '@/lib/auth';
 
 /**
- * Contract for the `/crm` registry page (post-verify UX remediation):
- * the Server Component reads the session ONCE (cartera/page.tsx
- * precedent) and passes `esAdmin` down so the list can gate the
- * "Nueva empresa" affordance — the POST is the real crm_admin gate.
+ * Contract for the `/crm` page (task 8.5, design D4, spec OP-1/OP-9):
+ * the Server Component now RENDERS THE PANEL — a thin wrapper around
+ * the client PanelCrm shell (the page owns no data, no session read;
+ * the proxy gates /crm with the `crm` permission and the alta POST
+ * gate relax arrives in task 10.1). The registry list this page used
+ * to render disappears here; the old cola/cartera/nueva/[id] pages
+ * remain until tasks 11.x retire them.
  */
 
-vi.mock('@/lib/auth', () => ({
-  getSession: vi.fn(),
+const { pushMock } = vi.hoisted(() => ({ pushMock: vi.fn() }));
+
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({ push: pushMock }),
 }));
 
 const fetchMock = vi.fn();
 
 beforeEach(() => {
   fetchMock.mockReset();
+  fetchMock.mockResolvedValue(
+    new Response(JSON.stringify({ success: true, hoy: '2026-09-15', filas: [] }), {
+      status: 200,
+      headers: { 'content-type': 'application/json' },
+    }),
+  );
   vi.stubGlobal('fetch', fetchMock);
 });
 
@@ -26,34 +36,20 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-function sesion(permisos: string[]) {
-  return { sub: 'u-1', nombre: 'Ana', area: 'Comercial', permisos };
-}
-
 describe('CrmPage', () => {
-  it('renders the CRM header with the Nueva empresa affordance for crm_admin', async () => {
-    vi.mocked(getSession).mockResolvedValue(sesion(['crm', 'crm_admin']));
-    fetchMock.mockResolvedValue(
-      new Response(JSON.stringify({ success: true, empresas: [] }), { status: 200 }),
-    );
+  it('renders the panel shell with the header branding and the empty panel', async () => {
+    render(<CrmPage />);
 
-    render(await CrmPage());
-
-    expect(screen.getByRole('heading', { name: 'CRM' })).toBeInTheDocument();
-    expect(
-      await screen.findByRole('link', { name: 'Nueva empresa' }),
-    ).toHaveAttribute('href', '/crm/empresas/nueva');
+    expect(screen.getByRole('heading', { name: 'CRM', level: 1 })).toBeInTheDocument();
+    expect(screen.getByText('Panel Sencillo')).toBeInTheDocument();
+    expect(await screen.findByText('No hay empresas que mostrar')).toBeInTheDocument();
   });
 
-  it('omits the Nueva empresa affordance for plain crm users', async () => {
-    vi.mocked(getSession).mockResolvedValue(sesion(['crm']));
-    fetchMock.mockResolvedValue(
-      new Response(JSON.stringify({ success: true, empresas: [] }), { status: 200 }),
-    );
+  it('offers "Anotar Nueva Empresa" unconditionally (mock parity; POST gate relax = 10.1)', async () => {
+    render(<CrmPage />);
 
-    render(await CrmPage());
-
-    expect(await screen.findByText('No se encontraron empresas.')).toBeInTheDocument();
-    expect(screen.queryByRole('link', { name: 'Nueva empresa' })).not.toBeInTheDocument();
+    expect(
+      await screen.findByRole('button', { name: 'Anotar Nueva Empresa' }),
+    ).toBeInTheDocument();
   });
 });

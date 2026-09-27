@@ -1,40 +1,21 @@
-import { Suspense } from 'react';
-
-import { getSession } from '@/lib/auth';
-import { EmpresaList } from '@/features/crm/presentation/components/EmpresaList';
+import { PanelCrm } from '@/features/crm/presentation/components/panel/PanelCrm';
 
 /**
- * `/crm` — empresa registry list (S1d/pr4, spec G1). Protected by
- * RUTAS_PROTEGIDAS via the proxy (permiso `crm`). Server Component
- * wrapper keeps the header outside the `<Suspense>` boundary the
- * client-side list needs (consolidados/historial-envios precedent).
- * The session is read ONCE here to derive `esAdmin` for the client
- * list (cartera/page.tsx precedent) — the POST behind the "Nueva
- * empresa" affordance is crm_admin-gated in-route and stays the real
- * security boundary.
+ * `/crm` — the operator panel (task 8.5, design D4, spec OP-1/OP-9).
+ * Server Component wrapper that renders the client PanelCrm shell:
+ * the page owns no data and no session read — the proxy gates /crm
+ * with the `crm` permission (RUTAS_PROTEGIDAS, unchanged), the panel
+ * fetches its ONE aggregate from /api/crm/panel client-side, and the
+ * alta POST gate relax (crm_admin → crm) arrives with task 10.1.
+ * The old registry list is superseded here; /crm/cola, /crm/cartera,
+ * /crm/empresas/nueva and /crm/empresas/[id] stay alive until tasks
+ * 11.x retire them (PanelCrm still deep-links to the ficha/alta pages
+ * in the interim).
  */
-export default async function CrmPage() {
-  const session = await getSession();
-  const esAdmin = session?.permisos.includes('crm_admin') ?? false;
-
+export default function CrmPage() {
   return (
     <main className="space-y-6 p-6">
-      <header>
-        <h1 className="text-2xl font-semibold">CRM</h1>
-        <p className="text-sm text-muted-foreground">
-          Gestión de empresas, contactos y seguimiento comercial.
-        </p>
-      </header>
-
-      <Suspense
-        fallback={
-          <div className="flex items-center justify-center py-16">
-            <div className="h-8 w-8 animate-spin rounded-full border-4 border-sky-600 border-t-transparent" />
-          </div>
-        }
-      >
-        <EmpresaList esAdmin={esAdmin} />
-      </Suspense>
+      <PanelCrm />
     </main>
   );
 }
