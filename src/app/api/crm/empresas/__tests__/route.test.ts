@@ -73,6 +73,7 @@ function setDb(repo: CrmEmpresaRepositoryPort): void {
     actividades: {} as never,
     asignaciones: {} as never,
     envios: {} as never,
+    panel: {} as never,
   } satisfies CrmDb);
 }
 

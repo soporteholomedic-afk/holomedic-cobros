@@ -11,6 +11,7 @@ import type {
   CrmActividadesRepositoryPort,
   CrmEnviosCorreoRepositoryPort,
   CrmHandoffsRepositoryPort,
+  CrmPanelRepositoryPort,
   CrmPipelineRepositoryPort,
   CrmResultadosRepositoryPort,
   CrmTransicionesRepositoryPort,
@@ -18,6 +19,7 @@ import type {
   EnvioCorreoHistorial,
   FilaEnvioCorreoAudit,
   FilaHandoffAudit,
+  FilaPanelCrm,
   FilaResultadoAudit,
   FilaTransicionAudit,
   HandoffHistorial,
@@ -126,7 +128,8 @@ export class SqlServerPipelineRepository
     CrmResultadosRepositoryPort,
     CrmHandoffsRepositoryPort,
     CrmActividadesRepositoryPort,
-    CrmEnviosCorreoRepositoryPort
+    CrmEnviosCorreoRepositoryPort,
+    CrmPanelRepositoryPort
 {
   constructor(private readonly pool: mssql.ConnectionPool) {}
 
@@ -187,6 +190,92 @@ export class SqlServerPipelineRepository
       razonSocial: row.razonSocial,
       responsable: row.responsable,
       contactoNombre: row.contactoNombre,
+      contactoCorreo: row.contactoCorreo,
+    }));
+  }
+
+  /**
+   * The panel read (rediseno-crm-panel task 7.1, design D4): ONE query —
+   * every CRM_Empresas row LEFT JOIN its CRM_Pipeline projection plus the
+   * principal contacto (nombre + cargo) and its first correo. The LEFT
+   * JOIN (not the queue's inner JOIN) keeps pipeline-less empresas in the
+   * result with all pipeline fields null — derivation row 0 (sin_carta)
+   * is exactly that shape (design D1). The OUTER APPLYs reuse the
+   * listarCandidatosCola contact rule (esPrincipal DESC, then first
+   * listed), extended with cargo (D6). KPIs, tab counts, search and
+   * status derivation happen CLIENT-SIDE from this single fetch — no
+   * per-tab endpoints.
+   */
+  async listarEmpresasPanel(): Promise<FilaPanelCrm[]> {
+    const result = await this.pool.request().query(`
+      SELECT e.id AS empresaId, e.razonSocial, e.ruc, e.tipo, e.responsable,
+             e.sector, e.cantidadTrabajadores, e.createdAt,
+             p.flujo, p.etapa, p.ciclo, p.enviosCiclo,
+             p.fechaCicloInicio, p.fechaUltimoEnvio, p.descansoHasta,
+             p.rechazadoHasta, p.motivoRechazo,
+             ct.nombre AS contactoNombre, ct.cargo AS contactoCargo,
+             cr.correo AS contactoCorreo
+      FROM dbo.CRM_Empresas e
+      LEFT JOIN dbo.CRM_Pipeline p ON p.empresaId = e.id
+      OUTER APPLY (
+        SELECT TOP 1 c.id, c.nombre, c.cargo
+        FROM dbo.CRM_Contactos c
+        WHERE c.empresaId = e.id
+        ORDER BY c.esPrincipal DESC, c.id
+      ) ct
+      OUTER APPLY (
+        SELECT TOP 1 co.correo
+        FROM dbo.CRM_Correos co
+        WHERE co.contactoId = ct.id
+        ORDER BY co.id
+      ) cr
+      ORDER BY e.id
+    `);
+    return (
+      result.recordset as {
+        empresaId: number;
+        razonSocial: string;
+        ruc: string;
+        tipo: string;
+        responsable: string | null;
+        sector: string | null;
+        cantidadTrabajadores: number | null;
+        createdAt: Date;
+        flujo: string | null;
+        etapa: string | null;
+        ciclo: number | null;
+        enviosCiclo: number | null;
+        fechaCicloInicio: Date | null;
+        fechaUltimoEnvio: Date | null;
+        descansoHasta: Date | null;
+        rechazadoHasta: Date | null;
+        motivoRechazo: string | null;
+        contactoNombre: string | null;
+        contactoCargo: string | null;
+        contactoCorreo: string | null;
+      }[]
+    ).map((row) => ({
+      empresaId: row.empresaId,
+      razonSocial: row.razonSocial,
+      ruc: row.ruc,
+      // tipo/sector are CHECK-constrained columns; the casts only refine
+      // the driver's strings to the domain unions (contarResultados precedent).
+      tipo: row.tipo as FilaPanelCrm['tipo'],
+      responsable: row.responsable,
+      sector: row.sector as FilaPanelCrm['sector'],
+      cantidadTrabajadores: row.cantidadTrabajadores,
+      createdAt: row.createdAt.toISOString(),
+      flujo: (row.flujo as FilaPanelCrm['flujo']) ?? null,
+      etapa: (row.etapa as FilaPanelCrm['etapa']) ?? null,
+      ciclo: row.ciclo,
+      enviosCiclo: row.enviosCiclo,
+      fechaCicloInicio: fechaOnly(row.fechaCicloInicio),
+      fechaUltimoEnvio: fechaOnly(row.fechaUltimoEnvio),
+      descansoHasta: fechaOnly(row.descansoHasta),
+      rechazadoHasta: fechaOnly(row.rechazadoHasta),
+      motivoRechazo: row.motivoRechazo,
+      contactoNombre: row.contactoNombre,
+      contactoCargo: row.contactoCargo,
       contactoCorreo: row.contactoCorreo,
     }));
   }

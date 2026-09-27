@@ -64,6 +64,7 @@ function setDb(actividades: CrmActividadesRepositoryPort, resultados: CrmResulta
     actividades,
     asignaciones: {} as never,
     envios: {} as never,
+    panel: {} as never,
   } satisfies CrmDb);
 }
 

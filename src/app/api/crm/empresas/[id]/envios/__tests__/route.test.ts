@@ -125,6 +125,7 @@ function setDb(overrides: {
     actividades: {} as never,
     asignaciones: {} as never,
     envios: overrides.envios ?? makeFakeEnvios(),
+    panel: {} as never,
   } satisfies CrmDb);
 }
 

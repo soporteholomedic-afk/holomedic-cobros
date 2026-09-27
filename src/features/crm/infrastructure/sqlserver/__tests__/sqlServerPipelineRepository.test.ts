@@ -9,6 +9,7 @@ import { estadoInicial } from '../../../domain/maquinaEstados';
 import type {
   EnvioCadenciaAPersistir,
   FilaEnvioCorreoAudit,
+  FilaPanelCrm,
   TransicionAPersistir,
 } from '../../../domain/ports';
 import { SqlServerEmpresaRepository } from '../sqlServerEmpresaRepository';
@@ -1105,5 +1106,156 @@ describe('SqlServerPipelineRepository — CRM_EnviosCorreos send-log port (task 
     } finally {
       await pool.request().query(`DELETE FROM dbo.CRM_Empresas WHERE ${PROBE_KEY}`);
     }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Panel read (rediseno-crm-panel task 7.1, design D4): ONE query joining
+// every CRM_Empresas row LEFT JOIN its CRM_Pipeline projection plus the
+// principal contacto (nombre + cargo) and first correo. Pipeline-less
+// empresas (origen null) MUST still appear — all pipeline fields null —
+// because derivation row 0 (sin_carta) is exactly that shape (D1).
+// ---------------------------------------------------------------------------
+
+describe('SqlServerPipelineRepository — listarEmpresasPanel (task 7.1, design D4)', () => {
+  function limpiar(): Promise<unknown> {
+    return pool.request().query(`DELETE FROM dbo.CRM_Empresas WHERE ${PROBE_KEY}`);
+  }
+
+  it('returns every empresa with its pipeline projection, sector/trabajadores and principal contacto', async () => {
+    try {
+      const conPipeline = await empresas.crear({
+        ruc: PROBE_RUCS[0] as string,
+        razonSocial: 'Probe Panel SA',
+        tipo: 'Prospecto',
+        origen: 'Inbound',
+        sector: 'Construcción',
+        cantidadTrabajadores: 45,
+        contactos: [
+          { nombre: 'Ana Probe', cargo: 'Recursos Humanos / Seguridad', correos: ['ana@panel.test'] },
+        ],
+      });
+      await pool
+        .request()
+        .input('empresaId', mssql.Int, conPipeline.id).query(`
+          UPDATE dbo.CRM_Pipeline
+          SET flujo = 'OUTBOUND', etapa = 'CADENCIA', ciclo = 1, enviosCiclo = 2,
+              fechaUltimoEnvio = '2026-06-01'
+          WHERE empresaId = @empresaId
+        `);
+
+      const filas = await pipelines.listarEmpresasPanel();
+      const fila: FilaPanelCrm | undefined = filas.find((f) => f.empresaId === conPipeline.id);
+
+      expect(fila).toEqual({
+        empresaId: conPipeline.id,
+        razonSocial: 'Probe Panel SA',
+        ruc: PROBE_RUCS[0],
+        tipo: 'Prospecto',
+        responsable: null,
+        sector: 'Construcción',
+        cantidadTrabajadores: 45,
+        createdAt: expect.any(String),
+        flujo: 'OUTBOUND',
+        etapa: 'CADENCIA',
+        ciclo: 1,
+        enviosCiclo: 2,
+        fechaCicloInicio: null,
+        fechaUltimoEnvio: '2026-06-01',
+        descansoHasta: null,
+        rechazadoHasta: null,
+        motivoRechazo: null,
+        contactoNombre: 'Ana Probe',
+        contactoCargo: 'Recursos Humanos / Seguridad',
+        contactoCorreo: 'ana@panel.test',
+      });
+    } finally {
+      await limpiar();
+    }
+  });
+
+  it('includes pipeline-less empresas with ALL pipeline fields null (derivation row 0 shape)', async () => {
+    try {
+      const sinOrigen = await empresas.crear({
+        ...inputCon(null),
+        ruc: PROBE_RUCS[1] as string,
+        razonSocial: 'Probe Panel SA',
+      });
+
+      const filas = await pipelines.listarEmpresasPanel();
+      const fila = filas.find((f) => f.empresaId === sinOrigen.id);
+
+      expect(fila).toEqual({
+        empresaId: sinOrigen.id,
+        razonSocial: 'Probe Panel SA',
+        ruc: PROBE_RUCS[1],
+        tipo: 'Prospecto',
+        responsable: null,
+        sector: null,
+        cantidadTrabajadores: null,
+        createdAt: expect.any(String),
+        flujo: null,
+        etapa: null,
+        ciclo: null,
+        enviosCiclo: null,
+        fechaCicloInicio: null,
+        fechaUltimoEnvio: null,
+        descansoHasta: null,
+        rechazadoHasta: null,
+        motivoRechazo: null,
+        contactoNombre: 'Ana Probe',
+        contactoCargo: null,
+        contactoCorreo: 'ana@pipeline.test',
+      });
+    } finally {
+      await limpiar();
+    }
+  });
+
+  it('includes an empresa without contactos with null contacto fields (legacy/import rows)', async () => {
+    try {
+      const sinContactos = await empresas.crear({
+        ...inputCon('Outbound'),
+        razonSocial: 'Probe Panel SA',
+        contactos: [],
+      });
+
+      const fila = (await pipelines.listarEmpresasPanel()).find(
+        (f) => f.empresaId === sinContactos.id,
+      );
+      expect(fila).not.toBeUndefined();
+      expect(fila?.contactoNombre).toBeNull();
+      expect(fila?.contactoCargo).toBeNull();
+      expect(fila?.contactoCorreo).toBeNull();
+    } finally {
+      await limpiar();
+    }
+  });
+
+  it('resolves the PRINCIPAL contacto even when listed second (esPrincipal DESC, id)', async () => {
+    try {
+      const empresa = await empresas.crear({
+        ...inputCon('Inbound'),
+        razonSocial: 'Probe Panel SA',
+        contactos: [
+          { nombre: 'Secundaria', correos: ['sec@panel.test'] },
+          { nombre: 'Principal', esPrincipal: true, cargo: 'Administrador', correos: ['prin@panel.test'] },
+        ],
+      });
+
+      const fila = (await pipelines.listarEmpresasPanel()).find((f) => f.empresaId === empresa.id);
+      expect(fila).toMatchObject({
+        contactoNombre: 'Principal',
+        contactoCargo: 'Administrador',
+        contactoCorreo: 'prin@panel.test',
+      });
+    } finally {
+      await limpiar();
+    }
+  });
+
+  it('returns no probe rows once the suite cleaned up (live read, no cache)', async () => {
+    const filas = await pipelines.listarEmpresasPanel();
+    expect(filas.filter((f) => f.razonSocial === 'Probe Panel SA')).toHaveLength(0);
   });
 });

@@ -113,6 +113,7 @@ function setDb(empresas: CrmEmpresaRepositoryPort, pipeline: CrmPipelineReposito
     actividades: {} as never,
     asignaciones: {} as never,
     envios: {} as never,
+    panel: {} as never,
     } satisfies CrmDb);
 }
 

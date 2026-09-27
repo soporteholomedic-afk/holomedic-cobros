@@ -6,6 +6,7 @@ import type {
   CrearEmpresaInput,
   Empresa,
   PipelineEmpresa,
+  SectorCrm,
   TipoEmpresa,
 } from './entities';
 import type { ErrorFilaImport, GrupoEmpresaImportado } from './importar/validarImportacion';
@@ -467,4 +468,52 @@ export interface CrmEnviosCorreoRepositoryPort {
   registrar(fila: FilaEnvioCorreoAudit): Promise<number>;
   /** Send-log for one empresa, newest first (ficha timeline). */
   listarPorEmpresa(empresaId: number): Promise<EnvioCorreoHistorial[]>;
+}
+
+// ---------------------------------------------------------------------------
+// Panel read port (rediseno-crm-panel task 7.1, design D4) — the ONE-fetch
+// aggregate the /crm panel renders from. Its own port (ADR-3
+// one-class-many-ports; the send-log precedent) because the read is a
+// distinct capability: every empresa LEFT JOIN its pipeline projection, so
+// pipeline-less rows still appear (derivation row 0). Implemented by the
+// same SqlServerPipelineRepository class.
+// ---------------------------------------------------------------------------
+
+/**
+ * One panel row (design D4): the empresa display fields + pipeline
+ * projection + principal contacto. All pipeline fields are null when the
+ * empresa has no CRM_Pipeline row (origen null) — the exact shape
+ * `EntradaEstadoPanel` maps to derivation row 0 (sin_carta). DATE columns
+ * cross as `YYYY-MM-DD` strings (adapter-owned mapping, pipeline
+ * precedent).
+ */
+export interface FilaPanelCrm {
+  empresaId: number;
+  razonSocial: string;
+  /** Raw RUC — the panel search matches it client-side (spec OP-3). */
+  ruc: string;
+  tipo: TipoEmpresa;
+  responsable: string | null;
+  sector: SectorCrm | null;
+  cantidadTrabajadores: number | null;
+  createdAt: string;
+  /** Pipeline projection — all seven machine fields null without a row. */
+  flujo: Flujo | null;
+  etapa: Etapa | null;
+  ciclo: number | null;
+  enviosCiclo: number | null;
+  fechaCicloInicio: string | null;
+  fechaUltimoEnvio: string | null;
+  descansoHasta: string | null;
+  rechazadoHasta: string | null;
+  motivoRechazo: string | null;
+  /** Principal contacto (esPrincipal DESC, id — listarCandidatosCola rule). */
+  contactoNombre: string | null;
+  contactoCargo: string | null;
+  contactoCorreo: string | null;
+}
+
+export interface CrmPanelRepositoryPort {
+  /** Every empresa with its panel projection, ordered by id (stable). */
+  listarEmpresasPanel(): Promise<FilaPanelCrm[]>;
 }

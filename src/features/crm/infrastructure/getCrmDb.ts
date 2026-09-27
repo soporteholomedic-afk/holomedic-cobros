@@ -14,6 +14,7 @@ import type {
   CrmEnviosCorreoRepositoryPort,
   CrmHandoffsRepositoryPort,
   CrmImportadorPort,
+  CrmPanelRepositoryPort,
   CrmPipelineRepositoryPort,
   CrmResultadosRepositoryPort,
   CrmTransicionesRepositoryPort,
@@ -62,6 +63,12 @@ export interface CrmDb {
    * pipeline adapter instance implements this port too (ADR-3).
    */
   envios: CrmEnviosCorreoRepositoryPort;
+  /**
+   * Panel read adapter (rediseno-crm-panel task 7.1, design D4): the
+   * ONE-fetch aggregate behind GET /api/crm/panel — the SAME pipeline
+   * adapter instance implements this port too (ADR-3).
+   */
+  panel: CrmPanelRepositoryPort;
 }
 
 let cached: Promise<CrmDb> | null = null;
@@ -90,6 +97,7 @@ export function getCrmDb(): Promise<CrmDb> {
       actividades: pipelines,
       asignaciones: new SqlServerAsignacionesRepository(pool),
       envios: pipelines,
+      panel: pipelines,
     };
   })();
   return cached;

@@ -69,6 +69,7 @@ function setDb(pipeline: CrmPipelineRepositoryPort, empresas: CrmDb['empresas'] 
     actividades: {} as never,
     asignaciones: {} as never,
     envios: {} as never,
+    panel: {} as never,
     } satisfies CrmDb);
 }
 
