@@ -8,15 +8,18 @@ function fila(overrides: Partial<FilaImportCrm> = {}): FilaImportCrm {
   return {
     empresa: 'Constructora X',
     ruc: '900123456',
-    tipo: 'Cliente',
+    tipo: 'Cliente Nuevo',
     origen: 'Inbound',
     proyectoObra: '',
     destinoComun: '',
     responsable: '',
     notas: '',
+    rubro: '',
+    cantidadTrabajadores: '',
     encargado: 'Ana',
     correos: 'ana@x.com',
     telefono: '',
+    cargo: '',
     principal: '',
     ...overrides,
   };
@@ -83,11 +86,58 @@ describe('validarImportacion — validación por fila ({fila, columna, mensaje})
     ]);
 
     expect(resultado.errores).toEqual([
-      { fila: 2, columna: 'Tipo', mensaje: '"Tipo" debe ser "Cliente" o "Prospecto"' },
+      { fila: 2, columna: 'Tipo', mensaje: '"Tipo" debe ser "Cliente Nuevo" o "Posible Cliente"' },
     ]);
     expect(resultado.grupos).toEqual([]);
     expect(resultado.filasValidas).toBe(0);
     expect(resultado.totalFilas).toBe(1);
+  });
+
+  it('traduce el vocabulario del panel de Tipo al valor de dominio (nueva y legacy)', () => {
+    const resultado = validarImportacion([
+      fila({ ruc: '900123456', encargado: 'Ana' }), // Cliente Nuevo → Cliente
+      fila({
+        empresa: 'Obra Y',
+        ruc: '20512345678',
+        tipo: 'Posible Cliente',
+        encargado: 'Luis',
+      }), // Posible Cliente → Prospecto
+      fila({ empresa: 'Obra Z', ruc: '10123456789', tipo: 'Prospecto', encargado: 'Marta' }), // legacy
+    ]);
+
+    expect(resultado.errores).toEqual([]);
+    const tipos = new Map(resultado.grupos.map((g) => [g.razonSocial, g.tipo]));
+    expect(tipos.get('Constructora X')).toBe('Cliente');
+    expect(tipos.get('Obra Y')).toBe('Prospecto');
+    // Legacy cells from previously downloaded templates still import.
+    expect(tipos.get('Obra Z')).toBe('Prospecto');
+  });
+
+  it('Rubro: solo acepta los 6 valores de SECTORES_CRM y llega al grupo como sector', () => {
+    const invalido = validarImportacion([fila({ rubro: 'Salud' })]);
+    expect(invalido.errores).toEqual([
+      { fila: 2, columna: 'Rubro', mensaje: '"Rubro" debe ser uno de: Construcción, Minería y Energía, Fábrica y Producción, Transporte y Almacén, Comercio y Tiendas, Oficinas y Servicios' },
+    ]);
+
+    const valido = validarImportacion([fila({ rubro: '  Minería y Energía  ' })]);
+    expect(valido.errores).toEqual([]);
+    expect(valido.grupos[0]).toMatchObject({ sector: 'Minería y Energía' });
+  });
+
+  it('Cantidad de Trabajadores: entero positivo opcional; texto o no positivo reportan error', () => {
+    const invalida = validarImportacion([fila({ cantidadTrabajadores: 'muchos' })]);
+    expect(invalida.errores).toEqual([
+      { fila: 2, columna: 'Cantidad de Trabajadores', mensaje: '"Cantidad de Trabajadores" debe ser un número entero mayor a 0' },
+    ]);
+
+    const cero = validarImportacion([fila({ cantidadTrabajadores: '0' })]);
+    expect(cero.errores).toEqual([
+      { fila: 2, columna: 'Cantidad de Trabajadores', mensaje: '"Cantidad de Trabajadores" debe ser un número entero mayor a 0' },
+    ]);
+
+    const valida = validarImportacion([fila({ cantidadTrabajadores: ' 45 ' })]);
+    expect(valida.errores).toEqual([]);
+    expect(valida.grupos[0]).toMatchObject({ cantidadTrabajadores: 45 });
   });
 
   it('Origen inválido reporta los valores válidos', () => {
@@ -168,12 +218,12 @@ describe('validarImportacion — conflicto de campos de empresa repetidos', () =
       {
         fila: 2,
         columna: 'Tipo',
-        mensaje: '"Tipo" tiene valores distintos para el mismo RUC ("Cliente" y "Prospecto")',
+        mensaje: '"Tipo" tiene valores distintos para el mismo RUC ("Cliente Nuevo" y "Prospecto")',
       },
       {
         fila: 5,
         columna: 'Tipo',
-        mensaje: '"Tipo" tiene valores distintos para el mismo RUC ("Cliente" y "Prospecto")',
+        mensaje: '"Tipo" tiene valores distintos para el mismo RUC ("Cliente Nuevo" y "Prospecto")',
       },
     ]);
     expect(resultado.grupos).toHaveLength(1);
@@ -240,6 +290,17 @@ describe('validarImportacion — colapso in-file de contactos y principal', () =
     expect(resultado.filasValidas).toBe(2);
   });
 
+  it('el Cargo del encargado llega recortado al contacto (primera aparición)', () => {
+    const resultado = validarImportacion([
+      fila({ encargado: 'Ana', cargo: ' Recursos Humanos / Seguridad ' }),
+    ]);
+
+    expect(resultado.errores).toEqual([]);
+    expect(resultado.grupos[0]!.contactos[0]).toMatchObject({
+      cargo: 'Recursos Humanos / Seguridad',
+    });
+  });
+
   it('Principal: sin marcar queda el primero; con "Sí" el marcado desplaza el default', () => {
     const sinMarcar = validarImportacion([
       fila({ encargado: 'Ana' }),
@@ -262,6 +323,8 @@ describe('validarImportacion — colapso in-file de contactos y principal', () =
         destinoComun: ' Obra Central ',
         responsable: ' jperez ',
         notas: '',
+        rubro: '   ',
+        cantidadTrabajadores: '',
       }),
     ]);
 
@@ -271,6 +334,8 @@ describe('validarImportacion — colapso in-file de contactos y principal', () =
       destinoComun: 'Obra Central',
       responsable: 'jperez',
       notas: null,
+      sector: null,
+      cantidadTrabajadores: null,
     });
   });
 });

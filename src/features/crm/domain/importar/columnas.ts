@@ -15,7 +15,8 @@
  * single translation point.
  */
 
-import type { Origen } from '../entities';
+import type { Origen, TipoEmpresa } from '../entities';
+import { SECTORES_CRM } from '../entities';
 
 /** Content kind of a column: free text or constrained dropdown list. */
 export type TipoColumnaImport = 'texto' | 'lista';
@@ -40,9 +41,12 @@ export interface ColumnaImportCrm {
 }
 
 /**
- * The 12 columns, in template/import order (PRD rev 3). Required: *
- * Empresa, RUC, Tipo, Encargado, Correos. `Principal` only accepts
- * "Sí" — empty means "not principal" (default: first listed contacto).
+ * The 15 columns, in template/import order (PRD rev 3 + rediseno-crm-panel
+ * task 2.1). Required: * Empresa, RUC, Tipo, Encargado, Correos.
+ * `Principal` only accepts "Sí" — empty means "not principal" (default:
+ * first listed contacto). The three panel fields round-trip the alta
+ * form: Rubro (empresa), Cantidad de Trabajadores (empresa) and Cargo
+ * (contacto).
  */
 export const COLUMNAS_IMPORT_CRM: readonly ColumnaImportCrm[] = [
   { clave: 'empresa', encabezado: 'Empresa', requerido: true, tipo: 'texto' },
@@ -52,7 +56,7 @@ export const COLUMNAS_IMPORT_CRM: readonly ColumnaImportCrm[] = [
     encabezado: 'Tipo',
     requerido: true,
     tipo: 'lista',
-    opciones: ['Cliente', 'Prospecto'],
+    opciones: ['Cliente Nuevo', 'Posible Cliente'],
   },
   {
     clave: 'origen',
@@ -65,9 +69,18 @@ export const COLUMNAS_IMPORT_CRM: readonly ColumnaImportCrm[] = [
   { clave: 'destinoComun', encabezado: 'Destino Común', requerido: false, tipo: 'texto' },
   { clave: 'responsable', encabezado: 'Responsable', requerido: false, tipo: 'texto' },
   { clave: 'notas', encabezado: 'Notas', requerido: false, tipo: 'texto' },
+  {
+    clave: 'rubro',
+    encabezado: 'Rubro',
+    requerido: false,
+    tipo: 'lista',
+    opciones: SECTORES_CRM,
+  },
+  { clave: 'cantidadTrabajadores', encabezado: 'Cantidad de Trabajadores', requerido: false, tipo: 'texto' },
   { clave: 'encargado', encabezado: 'Encargado', requerido: true, tipo: 'texto' },
   { clave: 'correos', encabezado: 'Correos', requerido: true, tipo: 'texto' },
   { clave: 'telefono', encabezado: 'Teléfono', requerido: false, tipo: 'texto' },
+  { clave: 'cargo', encabezado: 'Cargo', requerido: false, tipo: 'texto' },
   {
     clave: 'principal',
     encabezado: 'Principal',
@@ -92,10 +105,16 @@ export interface FilaImportCrm {
   destinoComun: string;
   responsable: string;
   notas: string;
+  /** SECTORES_CRM label (display form = storage form); '' = empty cell. */
+  rubro: string;
+  /** Raw cell — validated as a positive integer downstream. */
+  cantidadTrabajadores: string;
   encargado: string;
   /** One or more addresses separated by ";". */
   correos: string;
   telefono: string;
+  /** Operational role of the contacto; '' = empty cell. */
+  cargo: string;
   /** "Sí" marks the contacto as principal; empty = default (first listed). */
   principal: string;
 }
@@ -112,4 +131,18 @@ export const ORIGEN_POR_ETIQUETA: ReadonlyMap<string, Origen> = new Map([
   ['Los buscamos', 'Outbound'],
   ['Inbound', 'Inbound'],
   ['Outbound', 'Outbound'],
+]);
+
+/**
+ * Excel-facing Tipo label → domain value (rediseno-crm-panel task 2.1).
+ * The sheet speaks the panel vocabulary ("Cliente Nuevo" / "Posible
+ * Cliente"); the domain keeps 'Cliente'/'Prospecto'. LEGACY cells with
+ * the bare domain words still resolve, so previously filled files import
+ * unchanged (ORIGEN_POR_ETIQUETA precedent).
+ */
+export const TIPO_POR_ETIQUETA: ReadonlyMap<string, TipoEmpresa> = new Map([
+  ['Cliente Nuevo', 'Cliente'],
+  ['Posible Cliente', 'Prospecto'],
+  ['Cliente', 'Cliente'],
+  ['Prospecto', 'Prospecto'],
 ]);

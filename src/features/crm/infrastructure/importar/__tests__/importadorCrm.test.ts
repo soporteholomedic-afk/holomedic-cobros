@@ -52,8 +52,14 @@ afterAll(async () => {
   }
 });
 
-function contacto(nombre: string, correos: string[], telefono: string | null = null, esPrincipal = false): ContactoImportado {
-  return { nombre, telefono, correos, esPrincipal };
+function contacto(
+  nombre: string,
+  correos: string[],
+  telefono: string | null = null,
+  esPrincipal = false,
+  cargo: string | null = null,
+): ContactoImportado {
+  return { nombre, telefono, correos, esPrincipal, cargo };
 }
 
 function grupoCon(ruc: string, contactos: ContactoImportado[], filas: number[] = [2, 3]): GrupoEmpresaImportado {
@@ -66,6 +72,8 @@ function grupoCon(ruc: string, contactos: ContactoImportado[], filas: number[] =
     destinoComun: null,
     responsable: null,
     notas: null,
+    sector: 'Construcción',
+    cantidadTrabajadores: 30,
     contactos,
     filas,
   };
@@ -77,15 +85,18 @@ describe('mapearFilasImportCrm — client rows → FilaImportCrm', () => {
       {
         Empresa: 'Probe SA',
         RUC: 20100047218, // xlsx numeric cell — coerced to text
-        'Tipo*': 'Cliente',
+        'Tipo*': 'Cliente Nuevo',
         Origen: 'Inbound',
         'Proyecto/Obra': 'Obra Norte',
         'Destino Común': 'Lima',
         Responsable: 'jperez',
         Notas: 'nota',
+        Rubro: 'Construcción',
+        'Cantidad de Trabajadores': 30,
         'Encargado*': 'Ana',
         'Correos*': 'ana@x.com; Ana@X.com',
         Teléfono: '0981',
+        Cargo: 'Recursos Humanos / Seguridad',
         Principal: 'Sí',
       },
     ]);
@@ -94,15 +105,18 @@ describe('mapearFilasImportCrm — client rows → FilaImportCrm', () => {
     expect(filas[0]).toEqual({
       empresa: 'Probe SA',
       ruc: '20100047218',
-      tipo: 'Cliente',
+      tipo: 'Cliente Nuevo',
       origen: 'Inbound',
       proyectoObra: 'Obra Norte',
       destinoComun: 'Lima',
       responsable: 'jperez',
       notas: 'nota',
+      rubro: 'Construcción',
+      cantidadTrabajadores: '30',
       encargado: 'Ana',
       correos: 'ana@x.com; Ana@X.com',
       telefono: '0981',
+      cargo: 'Recursos Humanos / Seguridad',
       principal: 'Sí',
     });
   });
@@ -123,9 +137,12 @@ describe('mapearFilasImportCrm — client rows → FilaImportCrm', () => {
       destinoComun: '',
       responsable: '',
       notas: '',
+      rubro: '',
+      cantidadTrabajadores: '',
       encargado: 'Luis',
       correos: 'luis@x.com',
       telefono: '',
+      cargo: '',
       principal: '',
     });
     expect(filas[1]?.empresa).toBe('');
@@ -351,6 +368,66 @@ describe('SqlServerCrmImportador — real HOLOMEDIC integration', () => {
       expect(job?.createdAt).toBeInstanceOf(Date);
     } finally {
       await pool.request().query(`DELETE FROM dbo.CRM_Importaciones WHERE archivoNombre = '${PROBE_XLSX}'`);
+    }
+  });
+});
+
+describe('SqlServerCrmImportador — panel fields round-trip (rediseno-crm-panel task 2.1)', () => {
+  it('create mode lands sector + cantidadTrabajadores on the empresa and cargo on the contactos', async () => {
+    const importador = new SqlServerCrmImportador(pool);
+    try {
+      await importador.ejecutarGrupo(
+        grupoCon('0000000000993', [
+          contacto('José Pérez', ['jose@x.com'], '0981 111 222', true, 'Médico ocupacional'),
+          contacto('Ana Díaz', ['ana@x.com']), // no cargo → NULL
+        ]),
+        'tester',
+      );
+
+      const empresa = await pool
+        .request()
+        .input('ruc', mssql.VarChar(30), '0000000000993')
+        .query(`SELECT sector, cantidadTrabajadores FROM dbo.CRM_Empresas WHERE rucNormalizado = @ruc`);
+      expect(empresa.recordset[0]).toEqual({ sector: 'Construcción', cantidadTrabajadores: 30 });
+
+      const contactos = await pool
+        .request()
+        .input('ruc', mssql.VarChar(30), '0000000000993')
+        .query(`SELECT c.nombre, c.cargo
+                FROM dbo.CRM_Contactos c
+                JOIN dbo.CRM_Empresas e ON e.id = c.empresaId
+                WHERE e.rucNormalizado = @ruc ORDER BY c.id`);
+      expect(contactos.recordset).toEqual([
+        { nombre: 'José Pérez', cargo: 'Médico ocupacional' },
+        { nombre: 'Ana Díaz', cargo: null },
+      ]);
+    } finally {
+      await pool.request().query(`DELETE FROM dbo.CRM_Empresas WHERE ${PROBE_KEY}`);
+    }
+  });
+
+  it('update mode refreshes sector and cantidadTrabajadores (empresa-level upsert semantics)', async () => {
+    const importador = new SqlServerCrmImportador(pool);
+    try {
+      await importador.ejecutarGrupo(
+        grupoCon('0000000000992', [contacto('José Pérez', ['jose@x.com'], null, true)]),
+        'tester1',
+      );
+
+      const grupoNuevo = {
+        ...grupoCon('0000000000992', [contacto('José Pérez', ['jose@x.com'])], [2]),
+        sector: 'Comercio y Tiendas' as const,
+        cantidadTrabajadores: 12,
+      };
+      await importador.ejecutarGrupo(grupoNuevo, 'tester2');
+
+      const empresa = await pool
+        .request()
+        .input('ruc', mssql.VarChar(30), '0000000000992')
+        .query(`SELECT sector, cantidadTrabajadores FROM dbo.CRM_Empresas WHERE rucNormalizado = @ruc`);
+      expect(empresa.recordset[0]).toEqual({ sector: 'Comercio y Tiendas', cantidadTrabajadores: 12 });
+    } finally {
+      await pool.request().query(`DELETE FROM dbo.CRM_Empresas WHERE ${PROBE_KEY}`);
     }
   });
 });

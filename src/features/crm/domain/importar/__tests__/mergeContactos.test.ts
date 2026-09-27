@@ -59,7 +59,7 @@ describe('planificarMergeContactos — D1 name-match merge rule', () => {
     expect(plan.advertencias).toEqual([]); // overlapping correos via name-match = union, never a warning
   });
 
-  it('no name match → new contacto, keeping nombre/teléfono/correos/principal as imported', () => {
+  it('no name match → new contacto, keeping nombre/teléfono/correos/cargo/principal as imported', () => {
     const existentes = [existente(1, 'Ana', '999', ['ana@x.com'])];
     const plan = planificarMergeContactos(
       existentes,
@@ -68,10 +68,29 @@ describe('planificarMergeContactos — D1 name-match merge rule', () => {
     );
 
     expect(plan.creaciones).toEqual([
-      { nombre: 'Luis Gómez', telefono: '555', correos: ['luis@x.com'], esPrincipal: true },
+      { nombre: 'Luis Gómez', telefono: '555', correos: ['luis@x.com'], cargo: null, esPrincipal: true },
     ]);
     expect(plan.actualizaciones).toEqual([]);
     expect(plan.advertencias).toEqual([]);
+  });
+
+  it('no name match with a Cargo cell → the creation intent carries it for the upsert', () => {
+    const existentes = [existente(1, 'Ana', '999', ['ana@x.com'])];
+    const plan = planificarMergeContactos(
+      existentes,
+      [{ ...entrante('Luis Gómez', ['luis@x.com'], '555', true), cargo: 'Médico ocupacional' }],
+      9,
+    );
+
+    expect(plan.creaciones).toEqual([
+      {
+        nombre: 'Luis Gómez',
+        telefono: '555',
+        correos: ['luis@x.com'],
+        cargo: 'Médico ocupacional',
+        esPrincipal: true,
+      },
+    ]);
   });
 
   it('correo overlap WITHOUT name match is NOT a merge: the contacto is created AND a non-blocking warning is emitted', () => {

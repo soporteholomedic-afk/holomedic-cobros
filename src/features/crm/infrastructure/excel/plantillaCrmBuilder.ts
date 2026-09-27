@@ -49,15 +49,18 @@ const COLOR_REQUERIDO = 'FF075985'; // sky-800
 const ANCHOS: Record<string, number> = {
   empresa: 28,
   ruc: 16,
-  tipo: 12,
+  tipo: 16,
   origen: 12,
   proyectoObra: 24,
   destinoComun: 20,
   responsable: 18,
   notas: 32,
+  rubro: 22,
+  cantidadTrabajadores: 14,
   encargado: 24,
   correos: 32,
   telefono: 16,
+  cargo: 26,
   principal: 12,
 };
 
@@ -73,7 +76,8 @@ const LINEAS_INSTRUCCIONES: readonly string[] = [
   '3. Escriba el RUC y el Teléfono como texto: las columnas ya tienen formato Texto para no perder ceros iniciales ni convertir los números a notación científica.',
   '4. Las columnas marcadas con asterisco (*) son obligatorias: Empresa, RUC, Tipo, Encargado y Correos.',
   '5. Si el RUC ya existe, la importación actualiza la empresa y sus contactos; no se duplica ninguna empresa ni contacto.',
-  '6. Use los menús desplegables de las columnas Tipo y Origen para elegir valores válidos.',
+  '6. Use los menús desplegables de las columnas Tipo, Origen y Rubro para elegir valores válidos.',
+  '7. Tipo usa el vocabulario del panel: "Cliente Nuevo" o "Posible Cliente".',
 ];
 
 /**

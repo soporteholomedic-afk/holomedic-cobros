@@ -25,10 +25,16 @@
  *   marked contacto wins (pr3 `resolverContactos` semantics); with no
  *   mark at all, the FIRST listed contacto is principal.
  */
-import type { Origen, TipoEmpresa } from '../entities';
+import type { Origen, SectorCrm, TipoEmpresa } from '../entities';
+import { SECTORES_CRM } from '../entities';
 import { normalizarCorreo, normalizarNombre, normalizarRuc } from '../normalizar';
 
-import { COLUMNAS_IMPORT_CRM, ORIGEN_POR_ETIQUETA, type FilaImportCrm } from './columnas';
+import {
+  COLUMNAS_IMPORT_CRM,
+  ORIGEN_POR_ETIQUETA,
+  TIPO_POR_ETIQUETA,
+  type FilaImportCrm,
+} from './columnas';
 
 /** Row-level error as surfaced to the admin (Spanish, app language). */
 export interface ErrorFilaImport {
@@ -46,6 +52,8 @@ export interface ContactoImportado {
   /** Normalized (trim + lowercase), deduped, first-seen order. */
   correos: string[];
   esPrincipal: boolean;
+  /** Operational role (panel alta); null = empty cell. Optional so older fakes stay valid. */
+  cargo?: string | null;
 }
 
 /** A validated, conflict-free empresa group ready for the pr6 upsert. */
@@ -59,6 +67,10 @@ export interface GrupoEmpresaImportado {
   destinoComun: string | null;
   responsable: string | null;
   notas: string | null;
+  /** Panel rubro (SECTORES_CRM label; display form = storage form). */
+  sector: SectorCrm | null;
+  /** Head-count for the OcupaCare offering; null = empty cell. */
+  cantidadTrabajadores: number | null;
   contactos: ContactoImportado[];
   /** Sheet fila numbers of the rows this group was built from. */
   filas: number[];
@@ -87,16 +99,24 @@ const CLAVES_EMPRESA = [
   'destinoComun',
   'responsable',
   'notas',
+  'rubro',
+  'cantidadTrabajadores',
 ] as const satisfies readonly (keyof FilaImportCrm)[];
 
 /** clave → Excel header, derived from the ONE shared column constant. */
 const ENCABEZADOS = new Map(COLUMNAS_IMPORT_CRM.map((c) => [c.clave, c.encabezado]));
 
-/** RUC/DNI values use literal option strings shared with the CHECK constraints. */
-const VALORES_TIPO: readonly string[] = ['Cliente', 'Prospecto'];
+/** Accepted Tipo cells — the shared label map keys (panel vocabulary + legacy). */
+const ETIQUETAS_TIPO: readonly string[] = [...TIPO_POR_ETIQUETA.keys()];
 
 /** Accepted Origen cells — the shared label map keys (new vocabulary + legacy English). */
 const ETIQUETAS_ORIGEN: readonly string[] = [...ORIGEN_POR_ETIQUETA.keys()];
+
+/** Sector message derived from the ONE sector list (anti-drift). */
+const MENSAJE_RUBRO = `"Rubro" debe ser uno de: ${SECTORES_CRM.join(', ')}`;
+
+/** 1+ digits — 0 and negatives rejected by the caller's numeric check. */
+const PATRON_ENTERO = /^\d+$/;
 
 interface FilaValida {
   fila: number;
@@ -112,10 +132,27 @@ const opcional = (valor: string): string | null => {
   return recortado === '' ? null : recortado;
 };
 
+/** Excel Tipo cell → domain value ("" → null). Validated rows always hit the map. */
+function resolverTipo(valor: string): TipoEmpresa {
+  return TIPO_POR_ETIQUETA.get(valor.trim()) ?? 'Prospecto';
+}
+
 /** Excel Origen cell → domain value ("" → null). Validated rows always hit the map. */
 function resolverOrigen(valor: string): Origen | null {
   const recortado = valor.trim();
   return recortado === '' ? null : (ORIGEN_POR_ETIQUETA.get(recortado) ?? null);
+}
+
+/** Excel Rubro cell → SECTORES_CRM label ("" → null; trimmed storage form). */
+function resolverRubro(valor: string): SectorCrm | null {
+  const recortado = valor.trim();
+  return recortado === '' ? null : (recortado as SectorCrm);
+}
+
+/** Excel Trabajadores cell → positive integer ("" → null; validated rows always parse). */
+function resolverTrabajadores(valor: string): number | null {
+  const recortado = valor.trim();
+  return recortado === '' ? null : Number(recortado);
 }
 
 /** Split the ";"-separated cell into normalized deduped correos (order-preserving). */
@@ -146,13 +183,30 @@ function validarFila(fila: number, f: FilaImportCrm): ErrorFilaImport[] {
 
   if (f.tipo.trim() === '') {
     errores.push(errorFila(fila, 'tipo', '"Tipo" es obligatorio'));
-  } else if (!VALORES_TIPO.includes(f.tipo.trim())) {
-    errores.push(errorFila(fila, 'tipo', '"Tipo" debe ser "Cliente" o "Prospecto"'));
+  } else if (!ETIQUETAS_TIPO.includes(f.tipo.trim())) {
+    errores.push(errorFila(fila, 'tipo', '"Tipo" debe ser "Cliente Nuevo" o "Posible Cliente"'));
   }
 
   if (f.origen.trim() !== '' && !ETIQUETAS_ORIGEN.includes(f.origen.trim())) {
     errores.push(
       errorFila(fila, 'origen', '"Origen" debe ser "Nos contactaron" o "Los buscamos"'),
+    );
+  }
+
+  if (f.rubro.trim() !== '' && !SECTORES_CRM.includes(f.rubro.trim() as SectorCrm)) {
+    errores.push(errorFila(fila, 'rubro', MENSAJE_RUBRO));
+  }
+
+  if (
+    f.cantidadTrabajadores.trim() !== '' &&
+    (!PATRON_ENTERO.test(f.cantidadTrabajadores.trim()) || Number(f.cantidadTrabajadores.trim()) === 0)
+  ) {
+    errores.push(
+      errorFila(
+        fila,
+        'cantidadTrabajadores',
+        '"Cantidad de Trabajadores" debe ser un número entero mayor a 0',
+      ),
     );
   }
 
@@ -208,6 +262,7 @@ function colapsarContactos(filas: readonly FilaValida[]): ContactoImportado[] {
     nombre: string;
     telefono: string | null;
     correos: string[];
+    cargo: string | null;
     marcadaPrincipal: boolean;
   }
 
@@ -216,6 +271,7 @@ function colapsarContactos(filas: readonly FilaValida[]): ContactoImportado[] {
     const llave = normalizarNombre(fv.raw.encargado);
     const correosFila = partirCorreos(fv.raw.correos);
     const telefonoFila = opcional(fv.raw.telefono);
+    const cargoFila = opcional(fv.raw.cargo);
     const marcada = fv.raw.principal.trim() === 'Sí';
     const existente = porNombre.get(llave);
     if (!existente) {
@@ -223,6 +279,7 @@ function colapsarContactos(filas: readonly FilaValida[]): ContactoImportado[] {
         nombre: fv.raw.encargado.trim().replace(/\s+/g, ' '),
         telefono: telefonoFila,
         correos: [...correosFila],
+        cargo: cargoFila,
         marcadaPrincipal: marcada,
       });
       continue;
@@ -231,6 +288,7 @@ function colapsarContactos(filas: readonly FilaValida[]): ContactoImportado[] {
       if (!existente.correos.includes(correo)) existente.correos.push(correo);
     }
     if (existente.telefono === null && telefonoFila !== null) existente.telefono = telefonoFila;
+    if (existente.cargo === null && cargoFila !== null) existente.cargo = cargoFila;
     if (marcada) existente.marcadaPrincipal = true;
   }
 
@@ -241,6 +299,7 @@ function colapsarContactos(filas: readonly FilaValida[]): ContactoImportado[] {
     nombre: p.nombre,
     telefono: p.telefono,
     correos: p.correos,
+    cargo: p.cargo,
     esPrincipal: indice === indicePrincipal,
   }));
 }
@@ -320,12 +379,14 @@ export function validarImportacion(
     grupos.push({
       ruc,
       razonSocial: g.empresa.trim(),
-      tipo: g.tipo.trim() as TipoEmpresa,
+      tipo: resolverTipo(g.tipo),
       origen: resolverOrigen(g.origen),
       proyectoObra: opcional(g.proyectoObra),
       destinoComun: opcional(g.destinoComun),
       responsable: opcional(g.responsable),
       notas: opcional(g.notas),
+      sector: resolverRubro(g.rubro),
+      cantidadTrabajadores: resolverTrabajadores(g.cantidadTrabajadores),
       contactos: colapsarContactos(consistentes),
       filas: consistentes.map((fv) => fv.fila),
     });
