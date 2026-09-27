@@ -4,17 +4,17 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 
 /**
- * NavCrm — the CRM section navigation (post-verify UX remediation).
- * Renders the product owner's commercial flow in order: a vendedor
- * opens "Cola de hoy", enters an empresa's detail from the registry or
- * the queue, and registers the send/transition; an admin additionally
- * manages cartera, imports new companies and reviews productivity.
+ * NavCrm — the CRM section navigation (rediseno-crm-panel task 11.3).
+ * The retired Cola de hoy / Mi cartera views expose NO entry (spec
+ * "Retirement of Superseded Views"): the operator panel at /crm is the
+ * single operator surface, so the flow is Empresas → (panel) and an
+ * admin additionally manages imports and reviews productivity.
  *
  * Presentation-only: the /crm layout reads the session server-side and
- * passes `permisos` down (cartera/page.tsx precedent), so this client
- * component stays free of session fetching. The proxy (RUTAS_PROTEGIDAS)
- * owns authorization — hiding Importar without `crm_admin` is wayfinding,
- * not a security boundary.
+ * passes `permisos` down, so this client component stays free of
+ * session fetching. The proxy (RUTAS_PROTEGIDAS) owns authorization —
+ * hiding Importar without `crm_admin` is wayfinding, not a security
+ * boundary.
  */
 
 interface SeccionCrm {
@@ -22,9 +22,10 @@ interface SeccionCrm {
   label: string;
   /**
    * Extra route prefix this section owns, for sections whose page tree
-   * lives OUTSIDE their own href: the registry root is /crm (exact), but
-   * the detail pages /crm/empresas/[id] belong to it too. Sections
-   * without a prefix match their href and its subroutes.
+   * lives OUTSIDE their own href: the panel root is /crm (exact), but
+   * the legacy /crm/empresas/* deep links (now redirect stubs) land
+   * under it too. Sections without a prefix match their href and its
+   * subroutes.
    */
   prefijo?: string;
   /** Optional elevation required to see the entry. */
@@ -33,8 +34,6 @@ interface SeccionCrm {
 
 const SECCIONES: readonly SeccionCrm[] = [
   { href: '/crm', label: 'Empresas', prefijo: '/crm/empresas' },
-  { href: '/crm/cola', label: 'Cola de hoy' },
-  { href: '/crm/cartera', label: 'Mi cartera' },
   { href: '/crm/importar', label: 'Importar', permiso: 'crm_admin' },
   { href: '/crm/productividad', label: 'Productividad' },
 ];
