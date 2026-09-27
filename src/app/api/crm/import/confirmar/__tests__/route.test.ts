@@ -216,7 +216,7 @@ describe('POST /api/crm/import/confirmar — execution', () => {
 
     const errores: ErrorFilaImport[] = body.resultado.errores;
     expect(errores).toEqual([
-      { fila: 3, columna: 'Tipo', mensaje: '"Tipo" debe ser "Cliente" o "Prospecto"' },
+      { fila: 3, columna: 'Tipo', mensaje: '"Tipo" debe ser "Cliente Nuevo" o "Posible Cliente"' },
     ]);
     expect(body.resultado.totalFilas).toBe(2);
     expect(body.resultado.filasValidas).toBe(1);

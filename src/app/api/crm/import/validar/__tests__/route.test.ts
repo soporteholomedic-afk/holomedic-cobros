@@ -258,7 +258,7 @@ describe('POST /api/crm/import/validar — preview', () => {
     expect(errores[0]).toMatchObject({
       fila: 3,
       columna: 'Tipo',
-      mensaje: '"Tipo" debe ser "Cliente" o "Prospecto"',
+      mensaje: '"Tipo" debe ser "Cliente Nuevo" o "Posible Cliente"',
     });
     expect(errores[1]?.fila).toBe(4);
     expect(errores[1]?.columna).toBe('RUC');
