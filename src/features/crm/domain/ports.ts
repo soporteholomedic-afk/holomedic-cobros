@@ -6,6 +6,7 @@ import type {
   CrearEmpresaInput,
   Empresa,
   PipelineEmpresa,
+  SectorCrm,
   TipoEmpresa,
 } from './entities';
 import type { ErrorFilaImport, GrupoEmpresaImportado } from './importar/validarImportacion';
@@ -32,6 +33,16 @@ export interface CrmEmpresaRepositoryPort {
   listar(filtros?: FiltrosEmpresas): Promise<Empresa[]>;
   obtenerPorId(id: number): Promise<Empresa | null>;
   actualizar(id: number, cambios: ActualizarEmpresaInput): Promise<Empresa | null>;
+  /**
+   * Upsert ONE operational contacto by (empresaId, cargo) — crm-ux
+   * redesign (DatosSolicitados capture). Optional: only the SQL
+   * adapter implements it; test fakes stay valid without it.
+   */
+  guardarContactoOperativo?(
+    empresaId: number,
+    cargo: string,
+    dato: { nombre: string | null; correo: string | null },
+  ): Promise<void>;
 }
 
 /**
@@ -133,6 +144,15 @@ export interface CambiarTipoDatos {
 export interface CandidatoCola extends PipelineEmpresa {
   razonSocial: string;
   responsable: string | null;
+  /**
+   * Principal encargado display fields (crm-ux redesign — the "who
+   * to write" on the board cards): nombre and first correo of the
+   * exactly-one-principal contacto, null when the empresa has none.
+   * Optional so non-SQL fakes stay valid; the SQL adapter always set
+   * them (principal = first esPrincipal, else first listed).
+   */
+  contactoNombre?: string | null;
+  contactoCorreo?: string | null;
 }
 
 /**
@@ -370,4 +390,130 @@ export interface CrmAsignacionesRepositoryPort {
   registrarAsignacion(datos: AsignacionAPersistir): Promise<void>;
   /** Assignment history for one empresa, newest first (spec G5). */
   listarAsignaciones(empresaId: number): Promise<AsignacionHistorial[]>;
+}
+
+// ---------------------------------------------------------------------------
+// Email sequencing ports (rediseno-crm-panel, design D3/D5) — the SMTP
+// dispatch and its durable send-log are different concerns, so they get
+// separate ports: `EnviadorCorreoCrmPort` wraps the app-wide sendEmail
+// utility behind a domain contract (purpose 'crm'), and
+// `CrmEnviosCorreoRepositoryPort` owns the CRM_EnviosCorreos rows. The
+// SQL Server adapter implements the repository port on the SAME
+// SqlServerPipelineRepository class (ADR-3 one-class-many-ports).
+// ---------------------------------------------------------------------------
+
+/** The 5 CRM templates (design D5; CHECK-backed in CRM_EnviosCorreos). */
+export type PlantillaCrmKey =
+  | 'carta_presentacion'
+  | 'seguimiento_1'
+  | 'seguimiento_2'
+  | 'seguimiento_3'
+  | 'reactivacion_3m';
+
+/** Everything the template render + SMTP send need for ONE dispatch. */
+export interface EnvioCrmCorreo {
+  /** Normalized principal-contacto address (the only recipient in v1). */
+  destinatario: string;
+  plantilla: PlantillaCrmKey;
+  /** Interpolation values for the verbatim template copy. */
+  empresa: string;
+  contacto: string;
+  sector: string | null;
+  trabajadores: number | null;
+}
+
+/**
+ * Typed SMTP outcome (design D5): the adapter surfaces the app-wide
+ * sendEmail error codes verbatim — the use case turns the failure arm
+ * into a FALLIDO log row and NEVER advances the machine.
+ */
+export type ResultadoEnvioCrm =
+  | { ok: true; messageId: string }
+  | { ok: false; error: 'SMTP_AUTH_ERROR' | 'SMTP_TIMEOUT' | 'SMTP_ERROR'; detalle: string };
+
+/** Outbound port for the CRM SMTP dispatch (purpose 'crm', dedicated sender). */
+export interface EnviadorCorreoCrmPort {
+  enviar(datos: EnvioCrmCorreo): Promise<ResultadoEnvioCrm>;
+}
+
+/** One CRM_EnviosCorreos write (design D3 columns). */
+export interface FilaEnvioCorreoAudit {
+  empresaId: number;
+  /** Addressee contacto when known; NULL = resolve failed after send. */
+  contactoId: number | null;
+  plantilla: PlantillaCrmKey;
+  destinatario: string;
+  messageId: string | null;
+  estado: 'ENVIADO' | 'FALLIDO';
+  errorInfo: string | null;
+  usuario: string;
+}
+
+/** One CRM_EnviosCorreos row as READ for the ficha timeline (spec OP-6). */
+export interface EnvioCorreoHistorial {
+  id: number;
+  plantilla: PlantillaCrmKey;
+  destinatario: string;
+  estado: 'ENVIADO' | 'FALLIDO';
+  createdAt: string;
+}
+
+/**
+ * Outbound port for the per-email dispatch log (spec crm-email-sequencing
+ * send-log persistence: template key, recipient, message id, timestamp
+ * + acting user, every dispatched email).
+ */
+export interface CrmEnviosCorreoRepositoryPort {
+  /** Insert ONE dispatch row (ENVIADO or FALLIDO); returns the BIGINT id. */
+  registrar(fila: FilaEnvioCorreoAudit): Promise<number>;
+  /** Send-log for one empresa, newest first (ficha timeline). */
+  listarPorEmpresa(empresaId: number): Promise<EnvioCorreoHistorial[]>;
+}
+
+// ---------------------------------------------------------------------------
+// Panel read port (rediseno-crm-panel task 7.1, design D4) — the ONE-fetch
+// aggregate the /crm panel renders from. Its own port (ADR-3
+// one-class-many-ports; the send-log precedent) because the read is a
+// distinct capability: every empresa LEFT JOIN its pipeline projection, so
+// pipeline-less rows still appear (derivation row 0). Implemented by the
+// same SqlServerPipelineRepository class.
+// ---------------------------------------------------------------------------
+
+/**
+ * One panel row (design D4): the empresa display fields + pipeline
+ * projection + principal contacto. All pipeline fields are null when the
+ * empresa has no CRM_Pipeline row (origen null) — the exact shape
+ * `EntradaEstadoPanel` maps to derivation row 0 (sin_carta). DATE columns
+ * cross as `YYYY-MM-DD` strings (adapter-owned mapping, pipeline
+ * precedent).
+ */
+export interface FilaPanelCrm {
+  empresaId: number;
+  razonSocial: string;
+  /** Raw RUC — the panel search matches it client-side (spec OP-3). */
+  ruc: string;
+  tipo: TipoEmpresa;
+  responsable: string | null;
+  sector: SectorCrm | null;
+  cantidadTrabajadores: number | null;
+  createdAt: string;
+  /** Pipeline projection — all seven machine fields null without a row. */
+  flujo: Flujo | null;
+  etapa: Etapa | null;
+  ciclo: number | null;
+  enviosCiclo: number | null;
+  fechaCicloInicio: string | null;
+  fechaUltimoEnvio: string | null;
+  descansoHasta: string | null;
+  rechazadoHasta: string | null;
+  motivoRechazo: string | null;
+  /** Principal contacto (esPrincipal DESC, id — listarCandidatosCola rule). */
+  contactoNombre: string | null;
+  contactoCargo: string | null;
+  contactoCorreo: string | null;
+}
+
+export interface CrmPanelRepositoryPort {
+  /** Every empresa with its panel projection, ordered by id (stable). */
+  listarEmpresasPanel(): Promise<FilaPanelCrm[]>;
 }

@@ -6,7 +6,12 @@ import { getHolomedicPool } from '@/lib/db';
 import type { CrearEmpresaInput } from '../../../domain/entities';
 import { NotFoundError } from '../../../domain/errors';
 import { estadoInicial } from '../../../domain/maquinaEstados';
-import type { EnvioCadenciaAPersistir, TransicionAPersistir } from '../../../domain/ports';
+import type {
+  EnvioCadenciaAPersistir,
+  FilaEnvioCorreoAudit,
+  FilaPanelCrm,
+  TransicionAPersistir,
+} from '../../../domain/ports';
 import { SqlServerEmpresaRepository } from '../sqlServerEmpresaRepository';
 import { SqlServerPipelineRepository } from '../sqlServerPipelineRepository';
 import { loadEnvLocal } from './loadEnvLocal';
@@ -741,6 +746,9 @@ describe('SqlServerPipelineRepository — listarCandidatosCola (tasks pr13/WU2 q
         flujo: 'INBOUND',
         etapa: 'SEGUIMIENTO',
         enviosCiclo: 1,
+        // Crm-ux redesign: the principal encargado rides the queue row.
+        contactoNombre: 'Ana Probe',
+        contactoCorreo: 'ana@pipeline.test',
       });
       expect(typeof deProbe[0]?.razonSocial).toBe('string');
     } finally {
@@ -914,7 +922,9 @@ describe('SqlServerPipelineRepository — productivity count reads (tasks pr16/W
 
       const conteos = await pipelines.contarActividadesPorUsuario('2026-09-01', '2026-09-30');
 
-      expect(conteos).toEqual([
+      // Probe-scoped: the global query also sees REAL usage rows.
+      const deProbe = conteos.filter((c) => c.usuario === 'jperez' || c.usuario === 'mgarcia');
+      expect(deProbe).toEqual([
         { usuario: 'jperez', total: 2 },
         { usuario: 'mgarcia', total: 1 },
       ]);
@@ -929,7 +939,7 @@ describe('SqlServerPipelineRepository — productivity count reads (tasks pr16/W
       await insertarActividad(empresa.id, 'jperez', '2026-09-05');
       await insertarActividad(empresa.id, 'mgarcia', '2026-09-06');
 
-      const conteos = await pipelines.contarActividadesPorUsuario('2026-09-01', '2026-09-30', 'jperez');
+            const conteos = await pipelines.contarActividadesPorUsuario('2026-09-01', '2026-09-30', 'jperez');
 
       expect(conteos).toEqual([{ usuario: 'jperez', total: 1 }]);
     } finally {
@@ -948,12 +958,17 @@ describe('SqlServerPipelineRepository — productivity count reads (tasks pr16/W
 
       const conteos = await pipelines.contarResultadosPorUsuario('2026-09-01', '2026-09-30');
 
-      expect(conteos).toHaveLength(3);
+      // Scope to the PROBE usuarios: the query is global and the
+      // shared DB now carries REAL usage rows (any user's September
+      // activity would otherwise break the count — the assertion's
+      // intent is the per-tipo breakdown, not global emptiness).
+      const deProbe = conteos.filter((c) => c.usuario === 'jperez' || c.usuario === 'mgarcia');
+      expect(deProbe).toHaveLength(3);
       // Within-user row order follows the DB collation (accent-
       // insensitive) — the aggregation downstream is order-insensitive,
       // so compare as a set keyed by (usuario, tipo).
       expect(
-        new Map(conteos.map((c) => [`${c.usuario}|${c.tipo}`, c.total])),
+        new Map(deProbe.map((c) => [`${c.usuario}|${c.tipo}`, c.total])),
       ).toEqual(
         new Map([
           ['jperez|CotizaciónEnviada', 2],
@@ -972,5 +987,275 @@ describe('SqlServerPipelineRepository — productivity count reads (tasks pr16/W
 
     expect(conteosActividades).toEqual([]);
     expect(conteosResultados).toEqual([]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// CRM_EnviosCorreos send-log port (rediseno-crm-panel task 4.2, design D3):
+// one INSERT per dispatch (ENVIADO or FALLIDO) + the newest-first read for
+// the ficha timeline. The SAME adapter class gains the port (ADR-3) — the
+// BIGINT id crosses tedious as a string and leaves as a number.
+// ---------------------------------------------------------------------------
+
+describe('SqlServerPipelineRepository — CRM_EnviosCorreos send-log port (task 4.2)', () => {
+  function filaEnvio(overrides: Partial<FilaEnvioCorreoAudit>): FilaEnvioCorreoAudit {
+    return {
+      empresaId: 1,
+      contactoId: null,
+      plantilla: 'carta_presentacion',
+      destinatario: 'rrhh@acme.com',
+      messageId: '<carta-1@holomedic.com>',
+      estado: 'ENVIADO',
+      errorInfo: null,
+      usuario: 'jperez',
+      ...overrides,
+    };
+  }
+
+  it('registrar lands an ENVIADO row with its messageId and returns the BIGINT id as number', async () => {
+    try {
+      const empresa = await empresas.crear(inputCon('Inbound'));
+
+      const id = await pipelines.registrar(
+        filaEnvio({ empresaId: empresa.id, contactoId: null }),
+      );
+      expect(id).toBeGreaterThan(0);
+
+      const filas = await pool
+        .request()
+        .input('empresaId', mssql.Int, empresa.id)
+        .query(`SELECT plantilla, destinatario, messageId, estado, errorInfo, usuario
+                FROM dbo.CRM_EnviosCorreos WHERE empresaId = @empresaId`);
+      expect(filas.recordset).toHaveLength(1);
+      expect(filas.recordset[0]).toMatchObject({
+        plantilla: 'carta_presentacion',
+        destinatario: 'rrhh@acme.com',
+        messageId: '<carta-1@holomedic.com>',
+        estado: 'ENVIADO',
+        errorInfo: null,
+        usuario: 'jperez',
+      });
+    } finally {
+      await pool.request().query(`DELETE FROM dbo.CRM_Empresas WHERE ${PROBE_KEY}`);
+    }
+  });
+
+  it('registrar lands a FALLIDO row carrying errorInfo and NULL messageId (SMTP failure audit)', async () => {
+    try {
+      const empresa = await empresas.crear(inputCon('Inbound'));
+
+      const id = await pipelines.registrar(
+        filaEnvio({
+          empresaId: empresa.id,
+          plantilla: 'seguimiento_1',
+          estado: 'FALLIDO',
+          messageId: null,
+          errorInfo: 'SMTP_AUTH_ERROR: SMTP authentication failed',
+        }),
+      );
+      expect(id).toBeGreaterThan(0);
+
+      const fila = await pool
+        .request()
+        .input('empresaId', mssql.Int, empresa.id)
+        .query(`SELECT estado, messageId, errorInfo FROM dbo.CRM_EnviosCorreos WHERE empresaId = @empresaId`);
+      expect(fila.recordset[0]).toMatchObject({
+        estado: 'FALLIDO',
+        messageId: null,
+        errorInfo: 'SMTP_AUTH_ERROR: SMTP authentication failed',
+      });
+    } finally {
+      await pool.request().query(`DELETE FROM dbo.CRM_Empresas WHERE ${PROBE_KEY}`);
+    }
+  });
+
+  it('listarPorEmpresa returns the send-log newest-first with numeric ids (ficha timeline order)', async () => {
+    try {
+      const empresa = await empresas.crear(inputCon('Inbound'));
+
+      await pipelines.registrar(filaEnvio({ empresaId: empresa.id }));
+      await pipelines.registrar(
+        filaEnvio({
+          empresaId: empresa.id,
+          plantilla: 'seguimiento_1',
+          estado: 'FALLIDO',
+          messageId: null,
+          errorInfo: 'SMTP_TIMEOUT: SMTP connection timed out',
+        }),
+      );
+
+      const historial = await pipelines.listarPorEmpresa(empresa.id);
+      expect(historial).toHaveLength(2);
+      // Newest first — higher id wins even within the same timestamp tick.
+      expect(historial[0]?.plantilla).toBe('seguimiento_1');
+      expect(historial[1]?.plantilla).toBe('carta_presentacion');
+      expect(historial[0]!.id).toBeGreaterThan(historial[1]!.id);
+      expect(typeof historial[0]?.id).toBe('number');
+      expect(historial[0]).toMatchObject({ estado: 'FALLIDO', destinatario: 'rrhh@acme.com' });
+      expect(typeof historial[0]?.createdAt).toBe('string');
+      expect(new Date(historial[0]?.createdAt ?? '').toString()).not.toBe('Invalid Date');
+    } finally {
+      await pool.request().query(`DELETE FROM dbo.CRM_Empresas WHERE ${PROBE_KEY}`);
+    }
+  });
+
+  it('a fresh empresa has an EMPTY send-log (no rows invented)', async () => {
+    try {
+      const empresa = await empresas.crear(inputCon('Inbound'));
+      expect(await pipelines.listarPorEmpresa(empresa.id)).toEqual([]);
+    } finally {
+      await pool.request().query(`DELETE FROM dbo.CRM_Empresas WHERE ${PROBE_KEY}`);
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Panel read (rediseno-crm-panel task 7.1, design D4): ONE query joining
+// every CRM_Empresas row LEFT JOIN its CRM_Pipeline projection plus the
+// principal contacto (nombre + cargo) and first correo. Pipeline-less
+// empresas (origen null) MUST still appear — all pipeline fields null —
+// because derivation row 0 (sin_carta) is exactly that shape (D1).
+// ---------------------------------------------------------------------------
+
+describe('SqlServerPipelineRepository — listarEmpresasPanel (task 7.1, design D4)', () => {
+  function limpiar(): Promise<unknown> {
+    return pool.request().query(`DELETE FROM dbo.CRM_Empresas WHERE ${PROBE_KEY}`);
+  }
+
+  it('returns every empresa with its pipeline projection, sector/trabajadores and principal contacto', async () => {
+    try {
+      const conPipeline = await empresas.crear({
+        ruc: PROBE_RUCS[0] as string,
+        razonSocial: 'Probe Panel SA',
+        tipo: 'Prospecto',
+        origen: 'Inbound',
+        sector: 'Construcción',
+        cantidadTrabajadores: 45,
+        contactos: [
+          { nombre: 'Ana Probe', cargo: 'Recursos Humanos / Seguridad', correos: ['ana@panel.test'] },
+        ],
+      });
+      await pool
+        .request()
+        .input('empresaId', mssql.Int, conPipeline.id).query(`
+          UPDATE dbo.CRM_Pipeline
+          SET flujo = 'OUTBOUND', etapa = 'CADENCIA', ciclo = 1, enviosCiclo = 2,
+              fechaUltimoEnvio = '2026-06-01'
+          WHERE empresaId = @empresaId
+        `);
+
+      const filas = await pipelines.listarEmpresasPanel();
+      const fila: FilaPanelCrm | undefined = filas.find((f) => f.empresaId === conPipeline.id);
+
+      expect(fila).toEqual({
+        empresaId: conPipeline.id,
+        razonSocial: 'Probe Panel SA',
+        ruc: PROBE_RUCS[0],
+        tipo: 'Prospecto',
+        responsable: null,
+        sector: 'Construcción',
+        cantidadTrabajadores: 45,
+        createdAt: expect.any(String),
+        flujo: 'OUTBOUND',
+        etapa: 'CADENCIA',
+        ciclo: 1,
+        enviosCiclo: 2,
+        fechaCicloInicio: null,
+        fechaUltimoEnvio: '2026-06-01',
+        descansoHasta: null,
+        rechazadoHasta: null,
+        motivoRechazo: null,
+        contactoNombre: 'Ana Probe',
+        contactoCargo: 'Recursos Humanos / Seguridad',
+        contactoCorreo: 'ana@panel.test',
+      });
+    } finally {
+      await limpiar();
+    }
+  });
+
+  it('includes pipeline-less empresas with ALL pipeline fields null (derivation row 0 shape)', async () => {
+    try {
+      const sinOrigen = await empresas.crear({
+        ...inputCon(null),
+        ruc: PROBE_RUCS[1] as string,
+        razonSocial: 'Probe Panel SA',
+      });
+
+      const filas = await pipelines.listarEmpresasPanel();
+      const fila = filas.find((f) => f.empresaId === sinOrigen.id);
+
+      expect(fila).toEqual({
+        empresaId: sinOrigen.id,
+        razonSocial: 'Probe Panel SA',
+        ruc: PROBE_RUCS[1],
+        tipo: 'Prospecto',
+        responsable: null,
+        sector: null,
+        cantidadTrabajadores: null,
+        createdAt: expect.any(String),
+        flujo: null,
+        etapa: null,
+        ciclo: null,
+        enviosCiclo: null,
+        fechaCicloInicio: null,
+        fechaUltimoEnvio: null,
+        descansoHasta: null,
+        rechazadoHasta: null,
+        motivoRechazo: null,
+        contactoNombre: 'Ana Probe',
+        contactoCargo: null,
+        contactoCorreo: 'ana@pipeline.test',
+      });
+    } finally {
+      await limpiar();
+    }
+  });
+
+  it('includes an empresa without contactos with null contacto fields (legacy/import rows)', async () => {
+    try {
+      const sinContactos = await empresas.crear({
+        ...inputCon('Outbound'),
+        razonSocial: 'Probe Panel SA',
+        contactos: [],
+      });
+
+      const fila = (await pipelines.listarEmpresasPanel()).find(
+        (f) => f.empresaId === sinContactos.id,
+      );
+      expect(fila).not.toBeUndefined();
+      expect(fila?.contactoNombre).toBeNull();
+      expect(fila?.contactoCargo).toBeNull();
+      expect(fila?.contactoCorreo).toBeNull();
+    } finally {
+      await limpiar();
+    }
+  });
+
+  it('resolves the PRINCIPAL contacto even when listed second (esPrincipal DESC, id)', async () => {
+    try {
+      const empresa = await empresas.crear({
+        ...inputCon('Inbound'),
+        razonSocial: 'Probe Panel SA',
+        contactos: [
+          { nombre: 'Secundaria', correos: ['sec@panel.test'] },
+          { nombre: 'Principal', esPrincipal: true, cargo: 'Administrador', correos: ['prin@panel.test'] },
+        ],
+      });
+
+      const fila = (await pipelines.listarEmpresasPanel()).find((f) => f.empresaId === empresa.id);
+      expect(fila).toMatchObject({
+        contactoNombre: 'Principal',
+        contactoCargo: 'Administrador',
+        contactoCorreo: 'prin@panel.test',
+      });
+    } finally {
+      await limpiar();
+    }
+  });
+
+  it('returns no probe rows once the suite cleaned up (live read, no cache)', async () => {
+    const filas = await pipelines.listarEmpresasPanel();
+    expect(filas.filter((f) => f.razonSocial === 'Probe Panel SA')).toHaveLength(0);
   });
 });

@@ -53,9 +53,12 @@ function filaValida(ruc: string, encargado: string): FilaImportCrm {
     destinoComun: '',
     responsable: '',
     notas: '',
+    rubro: '',
+    cantidadTrabajadores: '',
     encargado,
     correos: `${encargado.toLowerCase().replace(/\s+/g, '.')}@x.com`,
     telefono: '',
+    cargo: '',
     principal: '',
   };
 }

@@ -43,6 +43,8 @@ export interface PlanContactoCreacion {
   nombre: string;
   telefono: string | null;
   correos: string[];
+  /** Operational role (panel); undefined = the incoming contacto had none. */
+  cargo?: string | null;
   esPrincipal: boolean;
 }
 
@@ -100,6 +102,7 @@ export function planificarMergeContactos(
       nombre: entrante.nombre,
       telefono: entrante.telefono,
       correos: entrante.correos,
+      cargo: entrante.cargo ?? null,
       esPrincipal: entrante.esPrincipal,
     });
   }

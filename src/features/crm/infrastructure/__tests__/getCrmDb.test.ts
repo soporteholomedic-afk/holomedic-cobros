@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest';
 
+import type { CrmEnviosCorreoRepositoryPort, CrmPanelRepositoryPort } from '../../domain/ports';
 import { __setCrmDbForTests, getCrmDb, type CrmDb } from '../getCrmDb';
 
 /**
@@ -47,6 +48,25 @@ describe('getCrmDb() test seam', () => {
     expect(second).not.toBe(first);
     await expect(second).resolves.toBe(secondDb);
     await expect(first).resolves.toBe(firstDb);
+  });
+
+  it('exposes the send-log port on the container surface (task 4.2, design D3)', async () => {
+    const envios: CrmEnviosCorreoRepositoryPort = {
+      registrar: async () => 7,
+      listarPorEmpresa: async () => [],
+    };
+    __setCrmDbForTests({ ...makeFakeDb('envios'), envios } as CrmDb);
+    const db = await getCrmDb();
+    expect(db.envios).toBe(envios);
+  });
+
+  it('exposes the panel read port on the container surface (task 7.1, design D4)', async () => {
+    const panel: CrmPanelRepositoryPort = {
+      listarEmpresasPanel: async () => [],
+    };
+    __setCrmDbForTests({ ...makeFakeDb('panel'), panel } as CrmDb);
+    const db = await getCrmDb();
+    expect(db.panel).toBe(panel);
   });
   // NOTE: there is deliberately no test for the `null`-clear → rebuild
   // path: the rebuild is the REAL connection path (getHolomedicPool +

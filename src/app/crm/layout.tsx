@@ -19,7 +19,7 @@ export default async function CrmLayout({ children }: { children: React.ReactNod
 
   return (
     <>
-      <div className="mx-auto max-w-6xl px-6 pt-6">
+      <div className="px-6 pt-6">
         <NavCrm permisos={permisos} />
       </div>
       {children}

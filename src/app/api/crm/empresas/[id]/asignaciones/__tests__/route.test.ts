@@ -81,6 +81,8 @@ function setDb(
     handoffs: {} as never,
     actividades: {} as never,
     asignaciones,
+    envios: {} as never,
+    panel: {} as never,
   } satisfies CrmDb);
 }
 

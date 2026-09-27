@@ -7,6 +7,15 @@ vi.mock('@/lib/auth', () => ({
   getSession: mockGetSession,
 }));
 
+// ---- Mock auth identity resolution (cartera route precedent) ----
+// session.sub 'u-1' resolves to login name 'juana' — the currency
+// CRM_Empresas.responsable stores.
+
+const mockGetUsuarioDb = vi.hoisted(() => vi.fn());
+vi.mock('@/features/auth/infrastructure/getUsuarioDb', () => ({
+  getUsuarioDb: mockGetUsuarioDb,
+}));
+
 // ---- Import under test (after mocks) ----
 
 import { GET, POST } from '../route';
@@ -63,6 +72,8 @@ function setDb(repo: CrmEmpresaRepositoryPort): void {
     handoffs: {} as never,
     actividades: {} as never,
     asignaciones: {} as never,
+    envios: {} as never,
+    panel: {} as never,
   } satisfies CrmDb);
 }
 
@@ -79,6 +90,8 @@ function jsonPost(body: unknown): Request {
 beforeEach(() => {
   vi.clearAllMocks();
   mockGetSession.mockReset();
+  mockGetUsuarioDb.mockReset();
+  mockGetUsuarioDb.mockResolvedValue({ getById: vi.fn().mockResolvedValue({ usuario: 'juana' }) });
 });
 
 afterEach(() => {
@@ -185,8 +198,47 @@ describe('POST /api/crm/empresas', () => {
     expect(body.code).toBe('UNAUTHORIZED');
   });
 
-  it('returns 403 when only crm is held — writes require crm_admin in-route', async () => {
+  it('auto-assigns a crm-only session to its LOGIN NAME (201) — the board quick-capture', async () => {
     mockGetSession.mockResolvedValue({ ...sessionBase, permisos: ['crm'] });
+    const crear = vi.fn().mockResolvedValue(empresa);
+    setDb(makeFakeRepo({ crear }));
+
+    const response = await POST(jsonPost(payload));
+    const body = await response.json();
+
+    expect(response.status).toBe(201);
+    expect(crear).toHaveBeenCalledWith(expect.objectContaining({ responsable: 'juana' }));
+    expect(body.success).toBe(true);
+    expect(body.empresa).toEqual(empresa);
+  });
+
+  it('returns 401 when the session user no longer resolves (deleted after login)', async () => {
+    mockGetSession.mockResolvedValue({ ...sessionBase, permisos: ['crm'] });
+    mockGetUsuarioDb.mockResolvedValue({ getById: vi.fn().mockResolvedValue(null) });
+    setDb(makeFakeRepo());
+
+    const response = await POST(jsonPost(payload));
+    const body = await response.json();
+
+    expect(response.status).toBe(401);
+    expect(body.code).toBe('UNAUTHORIZED');
+  });
+
+  it('returns 403 when a crm-only session tries to assign a foreign responsable', async () => {
+    mockGetSession.mockResolvedValue({ ...sessionBase, permisos: ['crm'] });
+    const crear = vi.fn();
+    setDb(makeFakeRepo({ crear }));
+
+    const response = await POST(jsonPost({ ...payload, responsable: 'otro-usuario' }));
+    const body = await response.json();
+
+    expect(response.status).toBe(403);
+    expect(body.code).toBe('FORBIDDEN');
+    expect(crear).not.toHaveBeenCalled();
+  });
+
+  it('returns 403 when no crm permiso is held at all', async () => {
+    mockGetSession.mockResolvedValue({ ...sessionBase, permisos: ['cobranza'] });
     setDb(makeFakeRepo());
 
     const response = await POST(jsonPost(payload));
@@ -209,11 +261,23 @@ describe('POST /api/crm/empresas', () => {
       expect.objectContaining({
         ruc: ' 900-123456 ',
         razonSocial: 'Constructora X',
+        responsable: null,
         contactos: [expect.objectContaining({ nombre: 'Ana', esPrincipal: true })],
       }),
     );
     expect(body.success).toBe(true);
     expect(body.empresa).toEqual(empresa);
+  });
+
+  it('lets an admin choose any responsable (passthrough, no self-assignment forcing)', async () => {
+    mockGetSession.mockResolvedValue({ ...sessionBase, permisos: ['crm', 'crm_admin'] });
+    const crear = vi.fn().mockResolvedValue(empresa);
+    setDb(makeFakeRepo({ crear }));
+
+    const response = await POST(jsonPost({ ...payload, responsable: 'jperez' }));
+
+    expect(response.status).toBe(201);
+    expect(crear).toHaveBeenCalledWith(expect.objectContaining({ responsable: 'jperez' }));
   });
 
   it('maps ConflictError (duplicate normalized RUC) to 409 CONFLICT_ERROR', async () => {
@@ -278,5 +342,74 @@ describe('POST /api/crm/empresas', () => {
 
     expect(response.status).toBe(500);
     expect(body.code).toBe('INTERNAL_ERROR');
+  });
+
+  // ---- Alta-panel contract (task 10.1, rediseno-crm-panel) ----
+
+  it('round-trips sector, cantidadTrabajadores and contacto.cargo into the use case (alta modal)', async () => {
+    mockGetSession.mockResolvedValue({ ...sessionBase, permisos: ['crm'] });
+    const crear = vi.fn().mockResolvedValue(empresa);
+    setDb(makeFakeRepo({ crear }));
+
+    const response = await POST(
+      jsonPost({
+        ...payload,
+        sector: 'Construcción',
+        cantidadTrabajadores: 30,
+        contactos: [
+          { nombre: 'Ana', cargo: 'Recursos Humanos / Seguridad', correos: ['ana@x.com'] },
+        ],
+      }),
+    );
+
+    expect(response.status).toBe(201);
+    expect(crear).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sector: 'Construcción',
+        cantidadTrabajadores: 30,
+        contactos: [expect.objectContaining({ cargo: 'Recursos Humanos / Seguridad' })],
+      }),
+    );
+  });
+
+  it('maps the absent alta fields to null — pre-panel payloads stay valid', async () => {
+    mockGetSession.mockResolvedValue({ ...sessionBase, permisos: ['crm'] });
+    const crear = vi.fn().mockResolvedValue(empresa);
+    setDb(makeFakeRepo({ crear }));
+
+    const response = await POST(jsonPost(payload));
+
+    expect(response.status).toBe(201);
+    expect(crear).toHaveBeenCalledWith(
+      expect.objectContaining({ sector: null, cantidadTrabajadores: null }),
+    );
+  });
+
+  it('returns 400 VALIDATION_ERROR for a sector outside the six-value domain', async () => {
+    mockGetSession.mockResolvedValue({ ...sessionBase, permisos: ['crm'] });
+    const crear = vi.fn();
+    setDb(makeFakeRepo({ crear }));
+
+    const response = await POST(jsonPost({ ...payload, sector: 'Tecnología' }));
+    const body = await response.json();
+
+    expect(response.status).toBe(400);
+    expect(body.code).toBe('VALIDATION_ERROR');
+    expect(crear).not.toHaveBeenCalled();
+  });
+
+  it('returns 400 VALIDATION_ERROR for a non-integer or sub-1 cantidadTrabajadores', async () => {
+    mockGetSession.mockResolvedValue({ ...sessionBase, permisos: ['crm'] });
+    const crear = vi.fn();
+    setDb(makeFakeRepo({ crear }));
+
+    for (const cantidadTrabajadores of [12.5, 0, -3]) {
+      const response = await POST(jsonPost({ ...payload, cantidadTrabajadores }));
+      const body = await response.json();
+
+      expect(response.status, `falló con ${String(cantidadTrabajadores)}`).toBe(400);
+      expect(body.code, `falló con ${String(cantidadTrabajadores)}`).toBe('VALIDATION_ERROR');
+    }
+    expect(crear).not.toHaveBeenCalled();
   });
 });

@@ -53,14 +53,14 @@ function makeFakePipeline(overrides: Partial<CrmPipelineRepositoryPort> = {}): C
   };
 }
 
-function makeFakeEmpresas(): CrmDb['empresas'] {
-  return { crear: vi.fn(), listar: vi.fn(), obtenerPorId: vi.fn(), actualizar: vi.fn() };
+function makeFakeEmpresas(overrides: Partial<CrmDb['empresas']> = {}): CrmDb['empresas'] {
+  return { crear: vi.fn(), listar: vi.fn(), obtenerPorId: vi.fn(), actualizar: vi.fn(), ...overrides };
 }
 
-function setDb(pipeline: CrmPipelineRepositoryPort): void {
+function setDb(pipeline: CrmPipelineRepositoryPort, empresas: CrmDb['empresas'] = makeFakeEmpresas()): void {
   __setCrmDbForTests({
     pool: {} as never,
-    empresas: makeFakeEmpresas(),
+    empresas,
     importador: {} as never,
     pipeline,
     transiciones: {} as never,
@@ -68,6 +68,8 @@ function setDb(pipeline: CrmPipelineRepositoryPort): void {
     handoffs: {} as never,
     actividades: {} as never,
     asignaciones: {} as never,
+    envios: {} as never,
+    panel: {} as never,
     } satisfies CrmDb);
 }
 
@@ -141,6 +143,60 @@ describe('POST /api/crm/empresas/[id]/transiciones', () => {
         estadoPrevio: { flujo: 'INBOUND', etapa: 'REGISTRADO' },
       }),
     );
+  });
+
+  it('T11 DatosSolicitados with datos: upserts operational contactos BEFORE the transition and rides the resumen motivo', async () => {
+    mockGetSession.mockResolvedValue(crmSession);
+    const guardar = vi.fn().mockResolvedValue(undefined);
+    const pipeline = makeFakePipeline({
+      obtenerPorEmpresaId: vi.fn().mockResolvedValue(filaPipeline({ flujo: 'OUTBOUND', etapa: 'ACEPTADO' })),
+    });
+    setDb(pipeline, makeFakeEmpresas({ guardarContactoOperativo: guardar }));
+
+    const response = await POST(
+      jsonPost('42', {
+        evento: 'DatosSolicitados',
+        datos: {
+          facturacion: { encargado: 'Ana López', correo: 'fact@x.com' },
+          administrador: { correo: 'admin@x.com' },
+        },
+      }),
+      routeContext('42'),
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.success).toBe(true);
+    expect(body.estado).toEqual({ flujo: 'OUTBOUND', etapa: 'DATOS' });
+    // Two filled pairs upserted (médico ocupacional skipped — empty).
+    expect(guardar).toHaveBeenCalledTimes(2);
+    expect(guardar).toHaveBeenCalledWith(42, 'Facturación', { nombre: 'Ana López', correo: 'fact@x.com' });
+    expect(guardar).toHaveBeenCalledWith(42, 'Administrador', { nombre: null, correo: 'admin@x.com' });
+    // Contactos BEFORE the transition (retry-safe ordering).
+    expect(guardar.mock.invocationCallOrder[0]).toBeLessThan(
+      vi.mocked(pipeline.registrarTransicion).mock.invocationCallOrder[0],
+    );
+    // The compact resumen rides the audit motivo.
+    expect(pipeline.registrarTransicion).toHaveBeenCalledWith(
+      expect.objectContaining({
+        evento: 'DatosSolicitados',
+        motivo: 'Facturación: Ana López (fact@x.com) · Administrador: admin@x.com',
+      }),
+    );
+  });
+
+  it('rejects datos with a non-DatosSolicitados event (400)', async () => {
+    mockGetSession.mockResolvedValue(crmSession);
+    setDb(makeFakePipeline());
+
+    const response = await POST(
+      jsonPost('42', { evento: 'CotizaciónEnviada', datos: { facturacion: { correo: 'a@x.com' } } }),
+      routeContext('42'),
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(400);
+    expect(body.code).toBe('VALIDATION_ERROR');
   });
 
   it('maps an illegal move (TransicionInvalidaError) to 400 with the Spanish message verbatim', async () => {

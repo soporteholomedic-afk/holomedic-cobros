@@ -6,8 +6,9 @@ import type { DetalleEmpresa } from '../../application/obtenerDetalleEmpresa';
 
 /**
  * useEmpresaDetalle(id) — client hook that loads the detail read model
- * (empresa aggregate + pipeline row + transition/handoff histories,
- * tasks pr11/WU1) from `/api/crm/empresas/[id]/detalle`.
+ * (empresa aggregate + pipeline row + transition/handoff histories +
+ * send-log rows, tasks pr11/WU1 + rediseno-crm-panel task 7.3) from
+ * `/api/crm/empresas/[id]/detalle`.
  *
  * Status machine (useEmpresas model):
  *   'loading' — request in flight (initial load or retry/refresh)
@@ -57,7 +58,8 @@ function isDetalleSuccess(v: unknown): v is { success: true } & DetalleEmpresa {
     isEmpresaValida(obj.empresa) &&
     (obj.pipeline === null || typeof obj.pipeline === 'object') &&
     Array.isArray(obj.transiciones) &&
-    Array.isArray(obj.handoffs)
+    Array.isArray(obj.handoffs) &&
+    Array.isArray(obj.envios)
   );
 }
 
@@ -109,6 +111,7 @@ export function useEmpresaDetalle(id: number): UseEmpresaDetalleResult {
           pipeline: json.pipeline,
           transiciones: json.transiciones,
           handoffs: json.handoffs,
+          envios: json.envios,
         });
       } catch (err: unknown) {
         if (requestId !== requestIdRef.current || !mountedRef.current) return;

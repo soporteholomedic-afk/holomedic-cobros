@@ -9,15 +9,21 @@ import type {
   ConteoActividadUsuario,
   ConteoResultadoUsuario,
   CrmActividadesRepositoryPort,
+  CrmEnviosCorreoRepositoryPort,
   CrmHandoffsRepositoryPort,
+  CrmPanelRepositoryPort,
   CrmPipelineRepositoryPort,
   CrmResultadosRepositoryPort,
   CrmTransicionesRepositoryPort,
   EnvioCadenciaAPersistir,
+  EnvioCorreoHistorial,
+  FilaEnvioCorreoAudit,
   FilaHandoffAudit,
+  FilaPanelCrm,
   FilaResultadoAudit,
   FilaTransicionAudit,
   HandoffHistorial,
+  PlantillaCrmKey,
   TransicionAPersistir,
   TransicionHistorial,
 } from '../../domain/ports';
@@ -79,6 +85,15 @@ interface FilaHandoffLeida {
   createdAt: Date;
 }
 
+/** CRM_EnviosCorreos read row — BIGINT id crosses tedious as a string. */
+interface FilaEnvioLeida {
+  id: number | string;
+  plantilla: PlantillaCrmKey;
+  destinatario: string;
+  estado: EnvioCorreoHistorial['estado'];
+  createdAt: Date;
+}
+
 /** Both `ConnectionPool` and `Transaction` expose `.request()`. */
 interface RequestSource {
   request(): mssql.Request;
@@ -112,7 +127,9 @@ export class SqlServerPipelineRepository
     CrmTransicionesRepositoryPort,
     CrmResultadosRepositoryPort,
     CrmHandoffsRepositoryPort,
-    CrmActividadesRepositoryPort
+    CrmActividadesRepositoryPort,
+    CrmEnviosCorreoRepositoryPort,
+    CrmPanelRepositoryPort
 {
   constructor(private readonly pool: mssql.ConnectionPool) {}
 
@@ -132,23 +149,135 @@ export class SqlServerPipelineRepository
    * join lands on the CRM_Empresas PK — one derived-on-request scan,
    * no background jobs. Pipeline-less empresas (origen null) have no
    * row to join, so they cannot appear.
+   *
+   * Crm-ux redesign: two OUTER APPLYs ride along the principal
+   * encargado (nombre + first correo — the "who to write" the board
+   * cards show). The ORDER mirrors the app-side resolverContactos:
+   * first esPrincipal DESC, then first listed (id) — TOP 1 per row,
+   * still one round trip.
    */
   async listarCandidatosCola(): Promise<CandidatoCola[]> {
     const result = await this.pool.request().query(`
       SELECT p.empresaId, p.flujo, p.etapa, p.ciclo, p.enviosCiclo,
              p.fechaCicloInicio, p.fechaUltimoEnvio, p.descansoHasta,
              p.rechazadoHasta, p.motivoRechazo, p.updatedBy, p.updatedAt,
-             e.razonSocial, e.responsable
+             e.razonSocial, e.responsable,
+             ct.nombre AS contactoNombre, cr.correo AS contactoCorreo
       FROM dbo.CRM_Pipeline p
       JOIN dbo.CRM_Empresas e ON e.id = p.empresaId
+      OUTER APPLY (
+        SELECT TOP 1 c.id, c.nombre
+        FROM dbo.CRM_Contactos c
+        WHERE c.empresaId = e.id
+        ORDER BY c.esPrincipal DESC, c.id
+      ) ct
+      OUTER APPLY (
+        SELECT TOP 1 co.correo
+        FROM dbo.CRM_Correos co
+        WHERE co.contactoId = ct.id
+        ORDER BY co.id
+      ) cr
     `);
-    return (result.recordset as (PipelineRow & { razonSocial: string; responsable: string | null })[]).map(
-      (row) => ({
-        ...mapearFila(row),
-        razonSocial: row.razonSocial,
-        responsable: row.responsable,
-      }),
-    );
+    return (
+      result.recordset as (PipelineRow & {
+        razonSocial: string;
+        responsable: string | null;
+        contactoNombre: string | null;
+        contactoCorreo: string | null;
+      })[]
+    ).map((row) => ({
+      ...mapearFila(row),
+      razonSocial: row.razonSocial,
+      responsable: row.responsable,
+      contactoNombre: row.contactoNombre,
+      contactoCorreo: row.contactoCorreo,
+    }));
+  }
+
+  /**
+   * The panel read (rediseno-crm-panel task 7.1, design D4): ONE query —
+   * every CRM_Empresas row LEFT JOIN its CRM_Pipeline projection plus the
+   * principal contacto (nombre + cargo) and its first correo. The LEFT
+   * JOIN (not the queue's inner JOIN) keeps pipeline-less empresas in the
+   * result with all pipeline fields null — derivation row 0 (sin_carta)
+   * is exactly that shape (design D1). The OUTER APPLYs reuse the
+   * listarCandidatosCola contact rule (esPrincipal DESC, then first
+   * listed), extended with cargo (D6). KPIs, tab counts, search and
+   * status derivation happen CLIENT-SIDE from this single fetch — no
+   * per-tab endpoints.
+   */
+  async listarEmpresasPanel(): Promise<FilaPanelCrm[]> {
+    const result = await this.pool.request().query(`
+      SELECT e.id AS empresaId, e.razonSocial, e.ruc, e.tipo, e.responsable,
+             e.sector, e.cantidadTrabajadores, e.createdAt,
+             p.flujo, p.etapa, p.ciclo, p.enviosCiclo,
+             p.fechaCicloInicio, p.fechaUltimoEnvio, p.descansoHasta,
+             p.rechazadoHasta, p.motivoRechazo,
+             ct.nombre AS contactoNombre, ct.cargo AS contactoCargo,
+             cr.correo AS contactoCorreo
+      FROM dbo.CRM_Empresas e
+      LEFT JOIN dbo.CRM_Pipeline p ON p.empresaId = e.id
+      OUTER APPLY (
+        SELECT TOP 1 c.id, c.nombre, c.cargo
+        FROM dbo.CRM_Contactos c
+        WHERE c.empresaId = e.id
+        ORDER BY c.esPrincipal DESC, c.id
+      ) ct
+      OUTER APPLY (
+        SELECT TOP 1 co.correo
+        FROM dbo.CRM_Correos co
+        WHERE co.contactoId = ct.id
+        ORDER BY co.id
+      ) cr
+      ORDER BY e.id
+    `);
+    return (
+      result.recordset as {
+        empresaId: number;
+        razonSocial: string;
+        ruc: string;
+        tipo: string;
+        responsable: string | null;
+        sector: string | null;
+        cantidadTrabajadores: number | null;
+        createdAt: Date;
+        flujo: string | null;
+        etapa: string | null;
+        ciclo: number | null;
+        enviosCiclo: number | null;
+        fechaCicloInicio: Date | null;
+        fechaUltimoEnvio: Date | null;
+        descansoHasta: Date | null;
+        rechazadoHasta: Date | null;
+        motivoRechazo: string | null;
+        contactoNombre: string | null;
+        contactoCargo: string | null;
+        contactoCorreo: string | null;
+      }[]
+    ).map((row) => ({
+      empresaId: row.empresaId,
+      razonSocial: row.razonSocial,
+      ruc: row.ruc,
+      // tipo/sector are CHECK-constrained columns; the casts only refine
+      // the driver's strings to the domain unions (contarResultados precedent).
+      tipo: row.tipo as FilaPanelCrm['tipo'],
+      responsable: row.responsable,
+      sector: row.sector as FilaPanelCrm['sector'],
+      cantidadTrabajadores: row.cantidadTrabajadores,
+      createdAt: row.createdAt.toISOString(),
+      flujo: (row.flujo as FilaPanelCrm['flujo']) ?? null,
+      etapa: (row.etapa as FilaPanelCrm['etapa']) ?? null,
+      ciclo: row.ciclo,
+      enviosCiclo: row.enviosCiclo,
+      fechaCicloInicio: fechaOnly(row.fechaCicloInicio),
+      fechaUltimoEnvio: fechaOnly(row.fechaUltimoEnvio),
+      descansoHasta: fechaOnly(row.descansoHasta),
+      rechazadoHasta: fechaOnly(row.rechazadoHasta),
+      motivoRechazo: row.motivoRechazo,
+      contactoNombre: row.contactoNombre,
+      contactoCargo: row.contactoCargo,
+      contactoCorreo: row.contactoCorreo,
+    }));
   }
 
   async registrarTransicion(datos: TransicionAPersistir): Promise<PipelineEmpresa> {
@@ -364,10 +493,37 @@ export class SqlServerPipelineRepository
     }));
   }
 
+  /**
+   * Send-log read for the ficha timeline (rediseno-crm-panel task 4.2,
+   * design D3): one empresa's CRM_EnviosCorreos rows newest-first, riding
+   * IX_CRM_EnviosCorreos_EmpresaFecha(empresaId, createdAt DESC). The id
+   * tiebreak keeps identical-timestamp inserts in true dispatch order.
+   */
+  async listarPorEmpresa(empresaId: number): Promise<EnvioCorreoHistorial[]> {
+    const result = await this.pool
+      .request()
+      .input('empresaId', mssql.Int, empresaId).query(`
+        SELECT id, plantilla, destinatario, estado, createdAt
+        FROM dbo.CRM_EnviosCorreos
+        WHERE empresaId = @empresaId
+        ORDER BY createdAt DESC, id DESC
+      `);
+    return (result.recordset as FilaEnvioLeida[]).map((row) => ({
+      id: Number(row.id),
+      plantilla: row.plantilla,
+      destinatario: row.destinatario,
+      estado: row.estado,
+      createdAt: row.createdAt.toISOString(),
+    }));
+  }
+
   async registrar(fila: FilaTransicionAudit): Promise<number>;
   async registrar(fila: FilaResultadoAudit): Promise<number>;
   async registrar(fila: FilaHandoffAudit): Promise<number>;
-  async registrar(fila: FilaTransicionAudit | FilaResultadoAudit | FilaHandoffAudit): Promise<number> {
+  async registrar(fila: FilaEnvioCorreoAudit): Promise<number>;
+  async registrar(
+    fila: FilaTransicionAudit | FilaResultadoAudit | FilaHandoffAudit | FilaEnvioCorreoAudit,
+  ): Promise<number> {
     if ('flujoNuevo' in fila) {
       const result = await this.pool
         .request()
@@ -396,6 +552,24 @@ export class SqlServerPipelineRepository
           INSERT INTO dbo.CRM_Resultados (empresaId, tipo, usuario, fecha)
           OUTPUT INSERTED.id
           VALUES (@empresaId, @tipo, @usuario, @fecha)
+        `);
+      return this.extraerId(result);
+    }
+    if ('plantilla' in fila) {
+      const result = await this.pool
+        .request()
+        .input('empresaId', mssql.Int, fila.empresaId)
+        .input('contactoId', mssql.Int, fila.contactoId)
+        .input('plantilla', mssql.VarChar(40), fila.plantilla)
+        .input('destinatario', mssql.VarChar(320), fila.destinatario)
+        .input('messageId', mssql.NVarChar(200), fila.messageId)
+        .input('estado', mssql.VarChar(10), fila.estado)
+        .input('errorInfo', mssql.NVarChar(500), fila.errorInfo)
+        .input('usuario', mssql.NVarChar(200), fila.usuario).query(`
+          INSERT INTO dbo.CRM_EnviosCorreos
+            (empresaId, contactoId, plantilla, destinatario, messageId, estado, errorInfo, usuario)
+          OUTPUT INSERTED.id
+          VALUES (@empresaId, @contactoId, @plantilla, @destinatario, @messageId, @estado, @errorInfo, @usuario)
         `);
       return this.extraerId(result);
     }

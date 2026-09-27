@@ -4,8 +4,8 @@
  * string (`fechaHoy` bridges Clock → string at the boundary).
  *
  * Weekly window: proximo = fechaUltimoEnvio + 7d exact; an ACTIVE
- * stage (SEGUIMIENTO | CADENCIA) is vencida when enviosCiclo < 3 and
- * proximo ≤ hoy. 3-strike: an agotada INBOUND/SEGUIMIENTO asks the
+ * stage (SEGUIMIENTO | CADENCIA) is vencida when enviosCiclo < 4 and
+ * proximo ≤ hoy. 4-strike: an agotada INBOUND/SEGUIMIENTO asks the
  * user for a decision (T13/T14 fork); the OUTBOUND rest (T8→T9) and
  * the rejection cooldown (T14→T15) share `agregarMeses`' DATEADD
  * month math. The queue (pr13) is the union of these four predicates,
@@ -23,8 +23,12 @@ import type { Clock } from './ports';
 /** Weekly cadence window (design §3: "proximo = fechaUltimoEnvio + 7 días"). */
 const DIAS_POR_SEMANA = 7;
 
-/** Sends per cycle before the 3-strike exit (T8 auto / T13-T14 fork). */
-export const ENVIOS_POR_CICLO = 3;
+/**
+ * Sends per cycle before the 3-month pausa (T8 auto / T13-T14 fork).
+ * rediseno-crm-panel decision 6: the carta counts as envío #1, so the
+ * cycle is carta + semanas 1-3 = FOUR sends before the exit.
+ */
+export const ENVIOS_POR_CICLO = 4;
 
 /** Stages where the weekly cadence is ACTIVE (design D3 table). */
 function esEtapaCadenciaActiva(etapa: PipelineEmpresa['etapa']): boolean {
@@ -87,7 +91,7 @@ export function proximoEnvio(fechaUltimoEnvio: string): string {
 
 /**
  * The weekly follow-up is DUE today: an ACTIVE cadence stage
- * (SEGUIMIENTO | CADENCIA) with fewer than 3 sends in the cycle whose
+ * (SEGUIMIENTO | CADENCIA) with fewer than 4 sends in the cycle whose
  * next send date has arrived (proximo ≤ hoy — stays due until the user
  * logs the send, so it surfaces exactly once per week).
  */
@@ -101,9 +105,9 @@ export function estaVencidaHoy(p: PipelineEmpresa, hoy: string): boolean {
 }
 
 /**
- * 3-strike fork flag (spec G4 inbound no-response): an INBOUND
- * seguimiento that burned its 3 sends needs a USER decision — move to
- * Outbound (T13) or reject (T14). NOT fired for OUTBOUND, whose 3rd
+ * 4-strike fork flag (design D2 outbound/inbound asymmetry): an INBOUND
+ * seguimiento that burned its 4 sends needs a USER decision — move to
+ * Outbound (T13) or reject (T14). NOT fired for OUTBOUND, whose 4th
  * strike transitions to DESCANSO automatically (deliberate asymmetry).
  */
 export function requiereDecision(p: PipelineEmpresa): boolean {
@@ -126,6 +130,23 @@ export function esReinicioDeCadencia(p: PipelineEmpresa, hoy: string): boolean {
  */
 export function esReactivable(p: PipelineEmpresa, hoy: string): boolean {
   return p.etapa === 'RECHAZADO' && p.rechazadoHasta !== null && p.rechazadoHasta <= hoy;
+}
+
+/**
+ * Freshly taken/created empresa awaiting its FIRST contacto (crm-ux
+ * redesign). NOT keyed on fechaUltimoEnvio: the CRM_Pipeline column
+ * carries a schema DEFAULT (creation day), so "never sent" is never
+ * NULL in stored rows. The honest signals are the STAGE and the
+ * counters: REGISTRADO (inbound birth, T1) and NUEVO (outbound birth,
+ * T6) exist precisely to await the first contacto; a SEGUIMIENTO/
+ * CADENCIA row with zero sends in the cycle was taken over mid-flow
+ * and nobody has written to it yet. Post-win stages (PRESENTACION…
+ * DATOS) move through their own events and DESCANSO/RECHAZADO have
+ * their own cooldown lifecycle — none of them wait for a first send.
+ */
+export function esperaPrimerContacto(p: PipelineEmpresa): boolean {
+  if (p.etapa === 'REGISTRADO' || p.etapa === 'NUEVO') return true;
+  return esEtapaCadenciaActiva(p.etapa) && p.enviosCiclo === 0;
 }
 
 /** The four queue sections (design §3) — a row lands in at most one. */

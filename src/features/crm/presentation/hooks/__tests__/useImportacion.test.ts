@@ -17,9 +17,12 @@ function fila(clave: Partial<FilaImportCrm> = {}): FilaImportCrm {
     destinoComun: '',
     responsable: '',
     notas: '',
+    rubro: '',
+    cantidadTrabajadores: '',
     encargado: 'Ana',
     correos: 'ana@x.com',
     telefono: '',
+    cargo: '',
     principal: '',
     ...clave,
   };

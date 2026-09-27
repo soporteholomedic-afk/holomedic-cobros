@@ -24,7 +24,7 @@ import {
  * load round-trip), asserting what a consumer actually reads back.
  */
 
-/** Literal PRD-rev-3 header row (double lock: constant drift also fails). */
+/** Literal header row (double lock: constant drift also fails). */
 const ENCABEZADOS_ESPERADOS = [
   'Empresa*',
   'RUC*',
@@ -34,9 +34,12 @@ const ENCABEZADOS_ESPERADOS = [
   'Destino Común',
   'Responsable',
   'Notas',
+  'Rubro',
+  'Cantidad de Trabajadores',
   'Encargado*',
   'Correos*',
   'Teléfono',
+  'Cargo',
   'Principal',
 ] as const;
 
@@ -212,12 +215,16 @@ describe('plantilla CRM — data validation dropdowns', () => {
     expect(validacion(clave, FILAS_CON_VALIDACION + 2)?.type).toBeUndefined();
   }
 
-  it('offers only Cliente/Prospecto in the Tipo column', () => {
+  it('offers only the operator vocabulary (Cliente Nuevo / Posible Cliente) in the Tipo column', () => {
     validarDesplegable('tipo');
   });
 
-  it('offers only Inbound/Outbound in the Origen column', () => {
+  it('offers the Origen dropdown unchanged', () => {
     validarDesplegable('origen');
+  });
+
+  it('offers exactly the six SECTORES_CRM values in the Rubro column', () => {
+    validarDesplegable('rubro');
   });
 
   it('derives the Principal dropdown from the shared constant options', () => {
@@ -305,9 +312,9 @@ describe('plantilla CRM — Instrucciones sheet', () => {
     expect(texto).toMatch(/no se duplica/i);
   });
 
-  it('points users to the Tipo and Origen dropdowns', () => {
+  it('points users to the Tipo, Origen and Rubro dropdowns', () => {
     const texto = textoInstrucciones();
     expect(texto).toMatch(/desplegable/i);
-    expect(texto).toMatch(/Tipo y Origen/i);
+    expect(texto).toMatch(/Tipo, Origen y Rubro/i);
   });
 });

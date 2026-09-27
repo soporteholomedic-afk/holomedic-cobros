@@ -31,15 +31,18 @@ const ENCABEZADOS_PLANTILLA = COLUMNAS_IMPORT_CRM.map((columna) =>
 const FILA_VALORES: (string | number)[] = [
   'Constructora X',
   ' 900-123456 ',
-  'Cliente',
+  'Cliente Nuevo',
   'Inbound',
   'Obra San Isidro',
   'Lima',
   'jperez',
   'Cliente histórico',
+  'Minería y Energía',
+  45,
   'Ana',
   'ana@x.com; luis@x.com',
   '987654321',
+  'Recursos Humanos / Seguridad',
   'Sí',
 ];
 
@@ -55,15 +58,18 @@ describe('parsearPlantillaCrm', () => {
     expect(filas[0]).toEqual({
       empresa: 'Constructora X',
       ruc: ' 900-123456 ',
-      tipo: 'Cliente',
+      tipo: 'Cliente Nuevo',
       origen: 'Inbound',
       proyectoObra: 'Obra San Isidro',
       destinoComun: 'Lima',
       responsable: 'jperez',
       notas: 'Cliente histórico',
+      rubro: 'Minería y Energía',
+      cantidadTrabajadores: '45', // numeric cell → raw text
       encargado: 'Ana',
       correos: 'ana@x.com; luis@x.com',
       telefono: '987654321',
+      cargo: 'Recursos Humanos / Seguridad',
       principal: 'Sí',
     });
   });

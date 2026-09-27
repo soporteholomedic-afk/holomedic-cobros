@@ -56,7 +56,8 @@ describe('CrmLayout', () => {
 
     render(await CrmLayout({ children: <p>contenido de la pagina</p> }));
 
-    expect(screen.getByRole('link', { name: 'Cola de hoy' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Empresas' })).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Cola de hoy' })).not.toBeInTheDocument();
     expect(screen.queryByRole('link', { name: 'Importar' })).not.toBeInTheDocument();
     expect(screen.getByText('contenido de la pagina')).toBeInTheDocument();
   });

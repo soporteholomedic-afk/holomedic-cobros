@@ -137,4 +137,27 @@ describe('CrearEmpresaUseCase', () => {
       useCase.execute(makeInput({ contactos: [{ nombre: '  ', correos: ['a@x.com'] }] })),
     ).rejects.toBeInstanceOf(ValidationError);
   });
+
+  it('round-trips the normalization fields: sector, cantidadTrabajadores and contacto cargo', async () => {
+    const repo = new InMemoryCrmEmpresaRepository();
+    const useCase = new CrearEmpresaUseCase(repo);
+
+    const empresa = await useCase.execute(
+      makeInput({
+        sector: 'Construcción',
+        cantidadTrabajadores: 30,
+        contactos: [
+          { nombre: 'María González', cargo: 'Recursos Humanos / Seguridad', correos: ['maria@parana.com.py'] },
+        ],
+      }),
+    );
+    const releida = await repo.obtenerPorId(empresa.id);
+
+    expect(empresa.sector).toBe('Construcción');
+    expect(empresa.cantidadTrabajadores).toBe(30);
+    expect(empresa.contactos[0]?.cargo).toBe('Recursos Humanos / Seguridad');
+    expect(releida?.sector).toBe('Construcción');
+    expect(releida?.cantidadTrabajadores).toBe(30);
+    expect(releida?.contactos[0]?.cargo).toBe('Recursos Humanos / Seguridad');
+  });
 });

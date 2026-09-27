@@ -48,6 +48,20 @@ import * as mssql from 'mssql';
  *   owner (single-owner invariant) and this table is the history. The
  *   assignment write (empresa UPDATE + event INSERT) lands in ONE
  *   `withCrmTransaction` (design §2d).
+ * - `CRM_EnviosCorreos` (rediseno-crm-panel, design D3) — the per-email
+ *   dispatch log: template key, recipient, messageId, ENVIADO/FALLIDO
+ *   outcome and error info. Deliberately separate from the
+ *   operator-facing `CRM_Actividades` history (different concern, own
+ *   5-key plantilla catalog). Empresa FK CASCADE; contacto FK is
+ *   integrity-only (NO ACTION — the two-cascade-paths rule).
+ *
+ * Normalization columns (rediseno-crm-panel, design D6): additive and
+ * nullable, carried by the CREATE blocks for fresh installs and added
+ * by their own `sys.columns` gates for pre-existing databases (auth
+ * `correo` precedent): `CRM_Empresas.sector` NVARCHAR(60),
+ * `CRM_Empresas.cantidadTrabajadores` INT, `CRM_Contactos.cargo`
+ * NVARCHAR(120). Existing rows keep NULL — no backfill here; the
+ * one-off logged normalization script owns that.
  *
  * Conventions (design §2): INT IDENTITY PKs for registry tables,
  * BIGINT for high-volume history rows, `DATETIME2(0) DEFAULT
@@ -76,6 +90,8 @@ BEGIN
     destinoComun    NVARCHAR(200)  NULL,
     notas           NVARCHAR(MAX)  NULL,
     responsable     NVARCHAR(200)  NULL,
+    sector          NVARCHAR(60)   NULL,
+    cantidadTrabajadores INT       NULL,
     createdBy       NVARCHAR(200)  NULL,
     createdAt       DATETIME2(0)   NOT NULL DEFAULT SYSDATETIME(),
     updatedBy       NVARCHAR(200)  NULL,
@@ -90,6 +106,7 @@ BEGIN
     nombre            NVARCHAR(200) NOT NULL,
     nombreNormalizado VARCHAR(200)  NOT NULL,
     telefono          VARCHAR(30)   NULL,
+    cargo             NVARCHAR(120) NULL,
     esPrincipal       BIT           NOT NULL DEFAULT 0,
     createdAt         DATETIME2(0)  NOT NULL DEFAULT SYSDATETIME(),
     updatedAt         DATETIME2(0)  NOT NULL DEFAULT SYSDATETIME(),
@@ -215,6 +232,41 @@ BEGIN
     CONSTRAINT FK_CRM_Asignaciones_Empresa FOREIGN KEY (empresaId) REFERENCES dbo.CRM_Empresas (id) ON DELETE CASCADE
   );
 END;
+IF NOT EXISTS (SELECT 1 FROM sys.tables WHERE name = 'CRM_EnviosCorreos' AND schema_id = SCHEMA_ID('dbo'))
+BEGIN
+  CREATE TABLE dbo.CRM_EnviosCorreos (
+    id           BIGINT         IDENTITY(1,1) NOT NULL PRIMARY KEY,
+    empresaId    INT            NOT NULL CONSTRAINT FK_CRM_EnviosCorreos_Empresa REFERENCES dbo.CRM_Empresas (id) ON DELETE CASCADE,
+    -- NO ACTION on the contacto FK (Actividades precedent: SQL Server
+    -- forbids two cascade paths to the empresa graph; the empresa
+    -- cascade already removes the dispatch rows).
+    contactoId   INT            NULL CONSTRAINT FK_CRM_EnviosCorreos_Contacto REFERENCES dbo.CRM_Contactos (id) ON DELETE NO ACTION,
+    plantilla    VARCHAR(40)    NOT NULL CONSTRAINT CK_CRM_EnviosCorreos_Plantilla CHECK (plantilla IN ('carta_presentacion','seguimiento_1','seguimiento_2','seguimiento_3','reactivacion_3m')),
+    destinatario VARCHAR(320)   NOT NULL,
+    messageId    NVARCHAR(200)  NULL,
+    estado       VARCHAR(10)    NOT NULL CONSTRAINT CK_CRM_EnviosCorreos_Estado CHECK (estado IN ('ENVIADO','FALLIDO')),
+    errorInfo    NVARCHAR(500)  NULL,
+    usuario      NVARCHAR(200)  NOT NULL,
+    createdAt    DATETIME2(0)   NOT NULL DEFAULT SYSDATETIME()
+  );
+END;
+
+-- Normalization columns (rediseno-crm-panel, design D6): gated,
+-- additive, nullable — no-ops on fresh installs (the CREATE blocks
+-- above already carry them) and on databases where a column was
+-- applied out-of-band (sys.columns gate sees it and skips).
+IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('dbo.CRM_Empresas') AND name = 'sector')
+BEGIN
+  ALTER TABLE dbo.CRM_Empresas ADD sector NVARCHAR(60) NULL;
+END;
+IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('dbo.CRM_Empresas') AND name = 'cantidadTrabajadores')
+BEGIN
+  ALTER TABLE dbo.CRM_Empresas ADD cantidadTrabajadores INT NULL;
+END;
+IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('dbo.CRM_Contactos') AND name = 'cargo')
+BEGIN
+  ALTER TABLE dbo.CRM_Contactos ADD cargo NVARCHAR(120) NULL;
+END;
 IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'UX_CRM_Contactos_Principal' AND object_id = OBJECT_ID('dbo.CRM_Contactos'))
 BEGIN
   CREATE UNIQUE INDEX UX_CRM_Contactos_Principal
@@ -284,6 +336,13 @@ BEGIN
   -- empresa, newest first with actor + timestamp).
   CREATE INDEX IX_CRM_Asignaciones_EmpresaFecha
     ON dbo.CRM_Asignaciones (empresaId, createdAt DESC);
+END;
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_CRM_EnviosCorreos_EmpresaFecha' AND object_id = OBJECT_ID('dbo.CRM_EnviosCorreos'))
+BEGIN
+  -- Send-log reads (design D3/D4): the ficha timeline and the panel's
+  -- "first correo" lookup scan per-empresa dispatches, newest first.
+  CREATE INDEX IX_CRM_EnviosCorreos_EmpresaFecha
+    ON dbo.CRM_EnviosCorreos (empresaId, createdAt DESC);
 END;
 `;
 
