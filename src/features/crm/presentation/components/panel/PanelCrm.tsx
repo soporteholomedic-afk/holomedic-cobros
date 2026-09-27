@@ -1,7 +1,6 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { useRouter } from 'next/navigation';
 
 import {
   enviarCorreoEmpresa,
@@ -14,6 +13,7 @@ import type { AccionFila } from '../../estadoPanel';
 import { Buscador } from './Buscador';
 import { FlowExplainer } from './FlowExplainer';
 import { KpiCards } from './KpiCards';
+import { ModalAltaEmpresa } from './ModalAltaEmpresa';
 import { ModalFichaEmpresa, plantillaSiguienteDeEstado } from './ModalFichaEmpresa';
 import { SeccionSecuenciaCorreos } from './ModalPreviewCorreo';
 import { ModalRespuesta } from './ModalRespuesta';
@@ -38,11 +38,16 @@ import { TabsFiltro } from './TabsFiltro';
  * rides the T14 transition; buttons disable in flight (refresh-after,
  * ficha pattern) and API errors surface in a panel alert. The Secuencia
  * Completa de Correos section mounts below the table (mock order) and
- * owns its preview modal. Only the alta CTA remains interim navigation
- * until ModalAltaEmpresa (task 10.2).
+ * owns its preview modal.
+ *
+ * Wiring (batch 15 — task 10.2): the alta CTA (header + empty state)
+ * opens ModalAltaEmpresa — the LAST interim seam retired. Its success
+ * closes the modal and refreshes the panel; a carta dispatch failure
+ * still lands the alta (persist-before-dispatch) and surfaces the
+ * warning in the same panel alert, pointing at the row's "Enviar
+ * carta" retry.
  */
 export function PanelCrm() {
-  const router = useRouter();
   const { panel, status, error, retry } = usePanelCrm();
   const [tab, setTab] = useState<TabPanel>('todas');
   const [busqueda, setBusqueda] = useState('');
@@ -56,6 +61,7 @@ export function PanelCrm() {
   // API failures surface in a panel-level alert (ficha precedent).
   const [empresaEnCurso, setEmpresaEnCurso] = useState<number | null>(null);
   const [errorAccion, setErrorAccion] = useState<string | null>(null);
+  const [altaAbierta, setAltaAbierta] = useState(false);
 
   const filasFiltradas = useMemo(
     () => (panel === null ? [] : filtrarFilas(panel.filas, tab, busqueda)),
@@ -63,8 +69,10 @@ export function PanelCrm() {
   );
 
   function anotarEmpresa(): void {
-    // Interim: alta page until ModalAltaEmpresa (task 10.2).
-    router.push('/crm/empresas/nueva');
+    // ModalAltaEmpresa since batch 15 (task 10.2) — the interim
+    // /crm/empresas/nueva navigation is retired; the old page goes in
+    // Phase 5 (task 11.1).
+    setAltaAbierta(true);
   }
 
   function abrirRespuesta(
@@ -210,6 +218,23 @@ export function PanelCrm() {
           onExito={() => {
             setRespuesta(null);
             retry(); // refresh-after: badges/KPIs re-derive from fresh data
+          }}
+        />
+      )}
+
+      {altaAbierta && (
+        <ModalAltaEmpresa
+          onSalir={() => setAltaAbierta(false)}
+          onExito={(empresa, advertenciaCarta) => {
+            setAltaAbierta(false);
+            if (advertenciaCarta !== null) {
+              // The alta LANDED (persist-before-dispatch): the empresa
+              // sits in Falta carta and its row button is the retry.
+              setErrorAccion(
+                `${empresa.razonSocial} quedó registrada, pero no se pudo enviar la carta: ${advertenciaCarta}. Usa "Enviar carta" en su fila para reintentar.`,
+              );
+            }
+            retry(); // refresh-after: the new row enters the derivation
           }}
         />
       )}

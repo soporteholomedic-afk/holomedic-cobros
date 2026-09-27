@@ -318,7 +318,7 @@ describe('PanelCrm — panel montado', () => {
     expect(screen.queryByText('Minera B')).not.toBeInTheDocument();
   });
 
-  it('navigates to the alta page from the empty-state CTA when filters match nothing', async () => {
+  it('opens the alta modal from the empty-state CTA when filters match nothing', async () => {
     mockPanel();
     render(<PanelCrm />);
 
@@ -328,16 +328,78 @@ describe('PanelCrm — panel montado', () => {
 
     expect(screen.getByText('No hay empresas que mostrar')).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: '+ Anotar Empresa' }));
-    expect(pushMock).toHaveBeenCalledWith('/crm/empresas/nueva');
+    expect(await screen.findByRole('dialog', { name: 'Anotar Nueva Empresa' })).toBeInTheDocument();
+    expect(pushMock).not.toHaveBeenCalled();
   });
 
-  it('navigates to the alta page from the header CTA', async () => {
+  it('opens the alta modal from the header CTA', async () => {
     mockPanel();
     render(<PanelCrm />);
 
     await screen.findByRole('table');
     await userEvent.click(screen.getByRole('button', { name: 'Anotar Nueva Empresa' }));
-    expect(pushMock).toHaveBeenCalledWith('/crm/empresas/nueva');
+    expect(
+      await screen.findByRole('dialog', { name: 'Anotar Nueva Empresa' }),
+    ).toBeInTheDocument();
+    expect(pushMock).not.toHaveBeenCalled();
+  });
+
+  it('closes the alta modal and refreshes the panel after a successful alta', async () => {
+    const { urlsPanel } = mockRutas();
+    // POST /api/crm/empresas (persist) — the carta rides the envios branch.
+    const fetchReal = fetchMock.getMockImplementation();
+    fetchMock.mockImplementation((input: RequestInfo | URL, init?: RequestInit) => {
+      if (String(input) === '/api/crm/empresas' && (init?.method ?? 'GET') === 'POST') {
+        return Promise.resolve(
+          new Response(
+            JSON.stringify({
+              success: true,
+              empresa: {
+                id: 99,
+                ruc: '20489561234',
+                rucNormalizado: '20489561234',
+                razonSocial: 'Constructora Los Andes',
+                tipo: 'Cliente',
+                origen: 'Inbound',
+                proyectoObra: null,
+                destinoComun: null,
+                notas: null,
+                responsable: null,
+                contactos: [],
+                createdAt: '2026-09-27T00:00:00.000Z',
+                updatedAt: '2026-09-27T00:00:00.000Z',
+              },
+            }),
+            { status: 201 },
+          ),
+        );
+      }
+      return fetchReal?.(input, init) ?? Promise.reject(new Error('sin mock'));
+    });
+    render(<PanelCrm />);
+
+    await screen.findByRole('table');
+    await userEvent.click(screen.getByRole('button', { name: 'Anotar Nueva Empresa' }));
+    const dialogo = await screen.findByRole('dialog', { name: 'Anotar Nueva Empresa' });
+    await userEvent.type(
+      within(dialogo).getByLabelText('Nombre de la Empresa *'),
+      'Constructora Los Andes',
+    );
+    await userEvent.type(within(dialogo).getByLabelText('RUC o Identificación *'), '20489561234');
+    await userEvent.type(within(dialogo).getByLabelText('Persona de Contacto *'), 'Carlos Mendoza');
+    await userEvent.type(
+      within(dialogo).getByLabelText('Correo Electrónico *'),
+      'carlos@andes.com',
+    );
+    await userEvent.click(
+      within(dialogo).getByRole('button', { name: 'Guardar y Empezar' }),
+    );
+
+    await waitFor(() =>
+      expect(screen.queryByRole('dialog', { name: 'Anotar Nueva Empresa' })).not.toBeInTheDocument(),
+    );
+    // Refresh-after: the new row lands via a second /api/crm/panel read.
+    await waitFor(() => expect(urlsPanel.length).toBe(2));
   });
 });
 
