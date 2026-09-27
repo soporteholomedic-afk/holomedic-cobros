@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { ArrowRight, Clock, Mail, Plus, RefreshCw, Send, ThumbsDown, ThumbsUp, X } from 'lucide-react';
 
 import type { DetalleEmpresa } from '../../../application/obtenerDetalleEmpresa';
+import { enviarCorreoEmpresa } from '../../accionesFila';
 import { PLANTILLAS_CORREO } from '../../../domain/plantillasCorreo';
 import type { EnvioCorreoHistorial, PlantillaCrmKey } from '../../../domain/ports';
 import { useEmpresaDetalle, type UseEmpresaDetalleResult } from '../../hooks/useEmpresaDetalle';
@@ -31,11 +32,6 @@ export interface ModalFichaEmpresaProps {
   derivada: FilaDerivadaPanel;
   onSalir: () => void;
   onRegistrarRespuesta: (preseleccion: 'positivo' | 'negativo') => void;
-}
-
-/** Pure — the single source of the request URL (useTransicion precedent). */
-export function buildEnviosPath(empresaId: number): string {
-  return `/api/crm/empresas/${empresaId}/envios`;
 }
 
 /**
@@ -165,24 +161,13 @@ export function ModalFichaEmpresa({
     if (plantillaSiguiente === null || enviando) return;
     setEnviando(true);
     setErrorEnvio(null);
-    try {
-      const response = await fetch(buildEnviosPath(fila.empresaId), {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ plantilla: plantillaSiguiente }),
-      });
-      const json: unknown = await response.json().catch(() => ({}));
-      if (!response.ok) {
-        const apiError = (json as { error?: unknown }).error;
-        setErrorEnvio(typeof apiError === 'string' ? apiError : `HTTP ${response.status}`);
-        return;
-      }
+    const resultado = await enviarCorreoEmpresa(fila.empresaId, plantillaSiguiente);
+    if (resultado.ok) {
       detalleHook.refresh();
-    } catch {
-      setErrorEnvio('Error de red');
-    } finally {
-      setEnviando(false);
+    } else {
+      setErrorEnvio(resultado.error);
     }
+    setEnviando(false);
   }
 
   return (
