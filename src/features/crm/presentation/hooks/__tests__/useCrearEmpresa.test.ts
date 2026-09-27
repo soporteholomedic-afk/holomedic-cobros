@@ -4,10 +4,13 @@ import { act, renderHook, waitFor } from '@testing-library/react';
 import {
   MENSAJE_RUC_DUPLICADO,
   RUTA_API_EMPRESAS,
+  buildAltaEmpresaInput,
   buildCrearEmpresaInput,
   mapearErrorCreacion,
+  mapearTipoRegistro,
   partirCorreosFormulario,
   useCrearEmpresa,
+  type CamposAltaEmpresa,
   type FormularioEmpresaState,
 } from '../useCrearEmpresa';
 import type { Empresa } from '../../../domain/entities';
@@ -151,6 +154,207 @@ describe('mapearErrorCreacion', () => {
 
   it('falls back to the HTTP status when the body has no usable error', () => {
     expect(mapearErrorCreacion({}, 500)).toBe('HTTP 500');
+  });
+});
+
+// ---- Alta del panel (task 10.2, rediseno-crm-panel) ----
+
+describe('mapearTipoRegistro', () => {
+  it('maps "Cliente Nuevo" to the Cliente/Inbound door (already asked for a quote)', () => {
+    expect(mapearTipoRegistro('Cliente Nuevo')).toEqual({ tipo: 'Cliente', origen: 'Inbound' });
+  });
+
+  it('maps "Posible Cliente" to the Prospecto/Outbound door (we contact them)', () => {
+    expect(mapearTipoRegistro('Posible Cliente')).toEqual({ tipo: 'Prospecto', origen: 'Outbound' });
+  });
+});
+
+describe('buildAltaEmpresaInput', () => {
+  const CAMPOS_BASE: CamposAltaEmpresa = {
+    tipoRegistro: 'Cliente Nuevo',
+    razonSocial: '  Constructora Los Andes  ',
+    ruc: ' 20489561234 ',
+    contacto: '  Carlos Mendoza  ',
+    cargo: 'Recursos Humanos / Seguridad',
+    correo: ' CARLOS@Andes.com ',
+    telefono: ' 987 654 321 ',
+    sector: 'Construcción',
+    cantidadTrabajadores: 30,
+  };
+
+  it('builds the single-principal contacto with the radio-mapped tipo+origen, trimmed fields and a normalized correo', () => {
+    expect(buildAltaEmpresaInput(CAMPOS_BASE)).toEqual({
+      ruc: '20489561234',
+      razonSocial: 'Constructora Los Andes',
+      tipo: 'Cliente',
+      origen: 'Inbound',
+      sector: 'Construcción',
+      cantidadTrabajadores: 30,
+      contactos: [
+        {
+          nombre: 'Carlos Mendoza',
+          cargo: 'Recursos Humanos / Seguridad',
+          telefono: '987 654 321',
+          esPrincipal: true,
+          correos: ['carlos@andes.com'],
+        },
+      ],
+    });
+  });
+
+  it('maps blank cargo/telefono to null and the other radio door through the same builder', () => {
+    const input = buildAltaEmpresaInput({
+      ...CAMPOS_BASE,
+      tipoRegistro: 'Posible Cliente',
+      cargo: '   ',
+      telefono: '',
+      cantidadTrabajadores: null,
+    });
+
+    expect(input.tipo).toBe('Prospecto');
+    expect(input.origen).toBe('Outbound');
+    expect(input.cantidadTrabajadores).toBeNull();
+    expect(input.contactos[0]?.cargo).toBeNull();
+    expect(input.contactos[0]?.telefono).toBeNull();
+  });
+
+  it('throws the Spanish invariant when the contacto correo is blank (the form guards it first)', () => {
+    expect(() => buildAltaEmpresaInput({ ...CAMPOS_BASE, correo: '   ' })).toThrow(
+      'Ingresa el correo electrónico del contacto.',
+    );
+  });
+});
+
+describe('useCrearEmpresa — crearEnPanel (persist-first + carta opcional)', () => {
+  const INPUT = buildCrearEmpresaInput(ESTADO_BASE);
+
+  function mockDosRutas(
+    respuestaPersistir: () => Response,
+    respuestaEnvios: () => Response | Promise<Response>,
+  ): void {
+    fetchMock.mockImplementation((input: RequestInfo | URL) => {
+      if (String(input) === RUTA_API_EMPRESAS) return Promise.resolve(respuestaPersistir());
+      return Promise.resolve(respuestaEnvios());
+    });
+  }
+
+  it('persists FIRST, then POSTs the carta to the shared envios path (same seam as the row button)', async () => {
+    const empresa = makeEmpresa();
+    const llamadas: Array<{ url: string; init: RequestInit }> = [];
+    fetchMock.mockImplementation((input: RequestInfo | URL, init?: RequestInit) => {
+      llamadas.push({ url: String(input), init: init ?? {} });
+      if (String(input) === RUTA_API_EMPRESAS) {
+        return Promise.resolve(
+          new Response(JSON.stringify({ success: true, empresa }), { status: 201 }),
+        );
+      }
+      return Promise.resolve(new Response(JSON.stringify({ success: true }), { status: 201 }));
+    });
+
+    const { result } = renderHook(() => useCrearEmpresa());
+    let resultado: Awaited<ReturnType<typeof result.current.crearEnPanel>> | undefined;
+
+    await act(async () => {
+      resultado = await result.current.crearEnPanel(INPUT, { enviarCarta: true });
+    });
+
+    expect(resultado).toEqual({ ok: true, empresa, advertenciaCarta: null });
+    expect(llamadas.map((l) => l.url)).toEqual([
+      RUTA_API_EMPRESAS,
+      `/api/crm/empresas/${empresa.id}/envios`,
+    ]);
+    expect(JSON.parse(String(llamadas[1]?.init.body))).toEqual({
+      plantilla: 'carta_presentacion',
+    });
+    expect(result.current.enCurso).toBe(false);
+  });
+
+  it('skips the envios call entirely when the carta checkbox is OFF', async () => {
+    const empresa = makeEmpresa();
+    fetchMock.mockImplementation((input: RequestInfo | URL) => {
+      if (String(input) === RUTA_API_EMPRESAS) {
+        return Promise.resolve(
+          new Response(JSON.stringify({ success: true, empresa }), { status: 201 }),
+        );
+      }
+      return Promise.reject(new Error('no debe llamarse'));
+    });
+
+    const { result } = renderHook(() => useCrearEmpresa());
+    let resultado: Awaited<ReturnType<typeof result.current.crearEnPanel>> | undefined;
+
+    await act(async () => {
+      resultado = await result.current.crearEnPanel(INPUT, { enviarCarta: false });
+    });
+
+    expect(resultado).toEqual({ ok: true, empresa, advertenciaCarta: null });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps the empresa (ok) and surfaces the SMTP error verbatim as advertenciaCarta', async () => {
+    mockDosRutas(
+      () =>
+        new Response(JSON.stringify({ success: true, empresa: makeEmpresa() }), { status: 201 }),
+      () =>
+        new Response(
+          JSON.stringify({ success: false, error: 'Error de envío: SMTP_AUTH_ERROR' }),
+          { status: 502 },
+        ),
+    );
+
+    const { result } = renderHook(() => useCrearEmpresa());
+    let resultado: Awaited<ReturnType<typeof result.current.crearEnPanel>> | undefined;
+
+    await act(async () => {
+      resultado = await result.current.crearEnPanel(INPUT, { enviarCarta: true });
+    });
+
+    expect(resultado).toEqual({
+      ok: true,
+      empresa: makeEmpresa(),
+      advertenciaCarta: 'Error de envío: SMTP_AUTH_ERROR',
+    });
+  });
+
+  it('returns the persist error and never attempts the carta when the alta fails', async () => {
+    mockDosRutas(
+      () =>
+        new Response(
+          JSON.stringify({ success: false, error: 'RUC', code: 'CONFLICT_ERROR' }),
+          { status: 409 },
+        ),
+      () => Promise.reject(new Error('no debe llamarse')),
+    );
+
+    const { result } = renderHook(() => useCrearEmpresa());
+    let resultado: Awaited<ReturnType<typeof result.current.crearEnPanel>> | undefined;
+
+    await act(async () => {
+      resultado = await result.current.crearEnPanel(INPUT, { enviarCarta: true });
+    });
+
+    expect(resultado).toEqual({ ok: false, empresa: null, error: MENSAJE_RUC_DUPLICADO });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('holds enCurso across BOTH steps (persist + carta), releasing only at the end', async () => {
+    mockDosRutas(
+      () => new Response(JSON.stringify({ success: true, empresa: makeEmpresa() }), { status: 201 }),
+      () => new Response(JSON.stringify({ success: true }), { status: 201 }),
+    );
+
+    const { result } = renderHook(() => useCrearEmpresa());
+
+    let pendiente: Promise<Awaited<ReturnType<typeof result.current.crearEnPanel>>>;
+    act(() => {
+      pendiente = result.current.crearEnPanel(INPUT, { enviarCarta: true });
+    });
+    await waitFor(() => expect(result.current.enCurso).toBe(true));
+
+    await act(async () => {
+      await pendiente;
+    });
+    expect(result.current.enCurso).toBe(false);
   });
 });
 
