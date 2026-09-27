@@ -11,8 +11,11 @@ import { buildCrmError, mapCrmError, type CrmErrorResponse } from '../../errorRe
  * the detail page's read model in ONE request: the empresa aggregate
  * (pr4 GET stays untouched for the registry list) plus the pipeline
  * row and the audit histories (transiciones who/when/from/to + handoffs)
- * the timeline renders. `pipeline` is null for pipeline-less empresas
- * (origen null) — that is a 200 with empty histories, NOT a 404.
+ * the timeline renders — with the send-log rows (CRM_EnviosCorreos,
+ * rediseno-crm-panel task 7.3) riding the same payload for the ficha
+ * timeline (transiciones ∪ envios). `pipeline` is null for
+ * pipeline-less empresas (origen null) — that is a 200 with empty
+ * histories, NOT a 404.
  *
  * Errors: typed `CrmErrorResponse` codes (see errorResponse.ts).
  */
@@ -44,8 +47,8 @@ export async function GET(
       return buildCrmError('VALIDATION_ERROR', '"id" debe ser un número entero positivo', 400);
     }
 
-    const { empresas, pipeline } = await getCrmDb();
-    const detalle = await new ObtenerDetalleEmpresaUseCase(empresas, pipeline).execute(id);
+    const { empresas, pipeline, envios } = await getCrmDb();
+    const detalle = await new ObtenerDetalleEmpresaUseCase(empresas, pipeline, envios).execute(id);
     return NextResponse.json({ success: true, ...detalle });
   } catch (error) {
     return mapCrmError('crm empresas [id] detalle GET', error);

@@ -13,7 +13,12 @@ import { GET } from '../route';
 import { __setCrmDbForTests, type CrmDb } from '@/features/crm/infrastructure/getCrmDb';
 import type { CrmEmpresaRepositoryPort, CrmPipelineRepositoryPort } from '@/features/crm/domain/ports';
 import type { Empresa, PipelineEmpresa } from '@/features/crm/domain/entities';
-import type { HandoffHistorial, TransicionHistorial } from '@/features/crm/domain/ports';
+import type {
+  CrmEnviosCorreoRepositoryPort,
+  EnvioCorreoHistorial,
+  HandoffHistorial,
+  TransicionHistorial,
+} from '@/features/crm/domain/ports';
 
 // ---- Fixtures ----
 
@@ -79,6 +84,14 @@ const handoff: HandoffHistorial = {
   createdAt: '2026-09-02T00:00:00.000Z',
 };
 
+const envio: EnvioCorreoHistorial = {
+  id: 5,
+  plantilla: 'carta_presentacion',
+  destinatario: 'ana@x.com',
+  estado: 'ENVIADO',
+  createdAt: '2026-09-03T00:00:00.000Z',
+};
+
 function makeFakeEmpresas(overrides: Partial<CrmEmpresaRepositoryPort> = {}): CrmEmpresaRepositoryPort {
   return {
     crear: vi.fn(),
@@ -101,7 +114,21 @@ function makeFakePipeline(overrides: Partial<CrmPipelineRepositoryPort> = {}): C
   };
 }
 
-function setDb(empresas: CrmEmpresaRepositoryPort, pipeline: CrmPipelineRepositoryPort): void {
+function makeFakeEnvios(
+  overrides: Partial<CrmEnviosCorreoRepositoryPort> = {},
+): CrmEnviosCorreoRepositoryPort {
+  return {
+    registrar: vi.fn(),
+    listarPorEmpresa: vi.fn().mockResolvedValue([envio]),
+    ...overrides,
+  };
+}
+
+function setDb(
+  empresas: CrmEmpresaRepositoryPort,
+  pipeline: CrmPipelineRepositoryPort,
+  envios: CrmEnviosCorreoRepositoryPort = makeFakeEnvios(),
+): void {
   __setCrmDbForTests({
     pool: {} as never,
     empresas,
@@ -112,9 +139,9 @@ function setDb(empresas: CrmEmpresaRepositoryPort, pipeline: CrmPipelineReposito
     handoffs: {} as never,
     actividades: {} as never,
     asignaciones: {} as never,
-    envios: {} as never,
+    envios,
     panel: {} as never,
-    } satisfies CrmDb);
+  } satisfies CrmDb);
 }
 
 const sessionBase = { sub: 'u-1', nombre: 'Juana Perez', area: 'ventas' };
@@ -175,9 +202,10 @@ describe('GET /api/crm/empresas/[id]/detalle', () => {
     expect(obtenerPorId).not.toHaveBeenCalled();
   });
 
-  it('returns 200 with the full detail read model (aggregate + pipeline + history)', async () => {
+  it('returns 200 with the full detail read model (aggregate + pipeline + history + envios)', async () => {
     mockGetSession.mockResolvedValue(crmSession);
     const obtenerPorId = vi.fn().mockResolvedValue(empresa);
+    const listarPorEmpresa = vi.fn().mockResolvedValue([envio]);
     setDb(
       makeFakeEmpresas({ obtenerPorId }),
       makeFakePipeline({
@@ -186,6 +214,7 @@ describe('GET /api/crm/empresas/[id]/detalle', () => {
         listarHandoffs: vi.fn().mockResolvedValue([handoff]),
         listarCandidatosCola: vi.fn().mockResolvedValue([]),
       }),
+      makeFakeEnvios({ listarPorEmpresa }),
     );
 
     const response = await getDetalle('42');
@@ -197,6 +226,8 @@ describe('GET /api/crm/empresas/[id]/detalle', () => {
     expect(body.pipeline).toEqual(pipeline);
     expect(body.transiciones).toEqual([transicion]);
     expect(body.handoffs).toEqual([handoff]);
+    expect(body.envios).toEqual([envio]);
+    expect(listarPorEmpresa).toHaveBeenCalledWith(42);
   });
 
   it('returns 200 with pipeline null and empty histories for a pipeline-less empresa', async () => {
@@ -209,6 +240,7 @@ describe('GET /api/crm/empresas/[id]/detalle', () => {
         listarHandoffs: vi.fn().mockResolvedValue([]),
         listarCandidatosCola: vi.fn().mockResolvedValue([]),
       }),
+      makeFakeEnvios({ listarPorEmpresa: vi.fn().mockResolvedValue([]) }),
     );
 
     const response = await getDetalle('42');
@@ -218,6 +250,7 @@ describe('GET /api/crm/empresas/[id]/detalle', () => {
     expect(body.pipeline).toBeNull();
     expect(body.transiciones).toEqual([]);
     expect(body.handoffs).toEqual([]);
+    expect(body.envios).toEqual([]);
   });
 
   it('returns 404 NOT_FOUND_ERROR when the empresa does not exist', async () => {

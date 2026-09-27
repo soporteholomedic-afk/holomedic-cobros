@@ -47,6 +47,7 @@ const detalle: DetalleEmpresa = {
   },
   transiciones: [],
   handoffs: [],
+  envios: [],
 };
 
 const fetchMock = vi.fn();

@@ -13,6 +13,7 @@ function makeDetalle(overrides: {
   pipeline?: DetalleEmpresa['pipeline'];
   transiciones?: DetalleEmpresa['transiciones'];
   handoffs?: DetalleEmpresa['handoffs'];
+  envios?: DetalleEmpresa['envios'];
 } = {}): DetalleEmpresa {
   return {
     empresa: {
@@ -88,6 +89,7 @@ function makeDetalle(overrides: {
         createdAt: '2026-09-15T12:00:00.000Z',
       },
     ],
+    envios: [],
     ...overrides,
   };
 }
