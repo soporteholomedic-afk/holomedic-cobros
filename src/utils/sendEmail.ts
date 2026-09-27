@@ -13,7 +13,12 @@ export interface EmailAttachment {
   cid?: string;
 }
 
-export type Purpose = 'consolidados' | 'facturacion' | 'cobranza';
+/**
+ * Dispatch purposes. 'crm' (rediseno-crm-panel design D5) is the CRM
+ * panel's dedicated sender — SMTP_USER_CRM / SMTP_PASS_CRM, resolved by
+ * the same uniform rule, with NO cross-purpose fallback.
+ */
+export type Purpose = 'consolidados' | 'facturacion' | 'cobranza' | 'crm';
 
 export interface SendEmailParams {
   to: string[];
