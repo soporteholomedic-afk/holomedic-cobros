@@ -21,12 +21,43 @@ import {
   useComponentsContext,
   type FormattingToolbarProps,
 } from '@blocknote/react';
-import { BlockNoteView } from '@blocknote/mantine';
+import { BlockNoteView, type Theme } from '@blocknote/mantine';
 import '@blocknote/mantine/style.css';
 import '@blocknote/core/fonts/inter.css';
 
 import { CellBackgroundColorButton } from './CellBackgroundColorButton';
 import { buildTableCellColorCSS } from './tableCellColors';
+
+const BLOCKNOTE_THEME: { light: Theme; dark: Theme } = {
+  light: {
+    borderRadius: 8,
+    colors: {
+      editor: { text: '#0f172a', background: '#ffffff' },
+      menu: { text: '#0f172a', background: '#ffffff' },
+      tooltip: { text: '#f8fafc', background: '#0f172a' },
+      hovered: { text: '#0f172a', background: '#f1f5f9' },
+      selected: { text: '#0f172a', background: '#e0f2fe' },
+      disabled: { text: '#64748b', background: '#f8fafc' },
+      border: '#cbd5e1',
+      shadow: 'rgba(15, 23, 42, 0.12)',
+      sideMenu: '#475569',
+    },
+  },
+  dark: {
+    borderRadius: 8,
+    colors: {
+      editor: { text: '#f1f5f9', background: '#0f172a' },
+      menu: { text: '#f1f5f9', background: '#1e293b' },
+      tooltip: { text: '#0f172a', background: '#e2e8f0' },
+      hovered: { text: '#f1f5f9', background: '#334155' },
+      selected: { text: '#f1f5f9', background: '#075985' },
+      disabled: { text: '#94a3b8', background: '#1e293b' },
+      border: '#475569',
+      shadow: 'rgba(2, 6, 23, 0.45)',
+      sideMenu: '#cbd5e1',
+    },
+  },
+};
 
 /**
  * Custom formatting toolbar that extends the default items with the cell
@@ -253,12 +284,12 @@ export const BlockNoteEditorView = forwardRef<
   );
 
   return (
-    <div data-testid="blocknote-editor" className="bn-container">
+    <div data-testid="blocknote-editor" className="bn-container min-w-0 overflow-hidden rounded-xl border border-slate-300 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-900">
       <style>{buildTableCellColorCSS()}</style>
       <BlockNoteView
         editor={editor}
         onChange={onChange}
-        theme="light"
+        theme={BLOCKNOTE_THEME}
         formattingToolbar={false}
       >
         <FormattingToolbarController

@@ -45,11 +45,11 @@ export function TokenPalette({ areaConfig, onPickTable }: TokenPaletteProps) {
     <aside
       data-testid="token-palette"
       aria-label={`Paleta de tokens — ${areaConfig.label}`}
-      className="space-y-4"
+      className="min-w-0 space-y-5 rounded-xl border border-slate-200 bg-slate-50/80 p-4 dark:border-slate-800 dark:bg-slate-900/60 sm:p-5"
     >
       {areaConfig.availableTokens.map((category) => (
-        <section key={category.category}>
-          <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-2">
+        <section key={category.category} className="min-w-0">
+          <h3 className="mb-2 border-b border-slate-200 pb-2 text-xs font-semibold uppercase tracking-wider text-slate-600 dark:border-slate-700 dark:text-slate-300">
             {category.category}
           </h3>
           <ul className="flex flex-wrap gap-2">
@@ -60,7 +60,7 @@ export function TokenPalette({ areaConfig, onPickTable }: TokenPaletteProps) {
                     type="button"
                     onClick={() => onPickTable(token)}
                     aria-label={`Insertar tabla ${token.label}`}
-                    className="cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400 rounded-md"
+                    className="cursor-pointer rounded-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-50 dark:focus-visible:ring-sky-400 dark:focus-visible:ring-offset-slate-900"
                   >
                     <TokenChip
                       label={token.label}
@@ -100,7 +100,7 @@ function DraggableSimpleChip({ token }: { token: TokenDef }) {
       {...attributes}
       data-testid={`palette-chip-${token.key}`}
       style={{ opacity: isDragging ? 0.4 : 1 }}
-      className="cursor-grab active:cursor-grabbing"
+      className="cursor-grab rounded-lg active:cursor-grabbing focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-50 dark:focus-visible:ring-sky-400 dark:focus-visible:ring-offset-slate-900 touch-none"
     >
       <TokenChip label={token.label} attrs={attrs} />
     </div>

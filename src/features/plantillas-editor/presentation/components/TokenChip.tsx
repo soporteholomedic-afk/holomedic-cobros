@@ -49,9 +49,9 @@ export function TokenChip({ label, attrs, className }: TokenChipProps) {
       data-token-chip=""
       {...dataAttrs}
       className={
-        'inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium ' +
-        'bg-sky-100 text-sky-800 dark:bg-sky-900/40 dark:text-sky-200 ' +
-        'select-none cursor-default align-middle ' +
+        'inline-flex max-w-full items-center rounded-md border border-sky-200 bg-sky-50 px-2 py-1 text-xs font-semibold leading-5 text-sky-900 ' +
+        'dark:border-sky-700/80 dark:bg-sky-950/70 dark:text-sky-100 ' +
+        'select-none cursor-default align-middle break-words [overflow-wrap:anywhere] ' +
         (className ?? '')
       }
     >

@@ -33,6 +33,7 @@ const mockInsertInlineContent = vi.hoisted(() => vi.fn());
 const mockReplaceBlocks = vi.hoisted(() => vi.fn());
 const mockUpdateBlock = vi.hoisted(() => vi.fn());
 const mockFocus = vi.hoisted(() => vi.fn());
+const mockBlockNoteTheme = vi.hoisted(() => vi.fn());
 
 const mockEditor = {
   document: [] as unknown[],
@@ -98,9 +99,10 @@ vi.mock('@blocknote/react', () => ({
 }));
 
 vi.mock('@blocknote/mantine', () => ({
-  BlockNoteView: ({ children }: { children?: React.ReactNode }) => (
-    <div data-testid="blocknote-view-mock">{children}</div>
-  ),
+  BlockNoteView: ({ children, theme }: { children?: React.ReactNode; theme?: unknown }) => {
+    mockBlockNoteTheme(theme);
+    return <div data-testid="blocknote-view-mock">{children}</div>;
+  },
 }));
 
 vi.mock('@blocknote/core', () => ({
@@ -336,9 +338,15 @@ describe('BlockNoteEditorView', () => {
   });
 
   describe('rendering', () => {
-    it('renders the BlockNote view', () => {
+    it('renders the BlockNote view with matching light and dark editor surfaces', () => {
       renderView();
       expect(screen.getByTestId('blocknote-view-mock')).toBeInTheDocument();
+      const theme = mockBlockNoteTheme.mock.calls[0]?.[0] as {
+        light: { colors: { editor: { background: string; text: string } } };
+        dark: { colors: { editor: { background: string; text: string } } };
+      };
+      expect(theme.light.colors.editor).toEqual({ background: '#ffffff', text: '#0f172a' });
+      expect(theme.dark.colors.editor).toEqual({ background: '#0f172a', text: '#f1f5f9' });
     });
   });
 });

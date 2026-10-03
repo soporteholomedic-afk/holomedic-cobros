@@ -64,6 +64,7 @@ describe('SubjectTokenInput', () => {
     it('renders just an empty input for the empty subject', () => {
       renderInput('');
       expect(screen.getByRole('textbox', { name: /asunto/i })).toHaveValue('');
+      expect(screen.getByRole('group', { name: 'Asunto' }).className).toContain('dark:bg-slate-950');
       expect(screen.queryByRole('img')).not.toBeInTheDocument();
     });
 
