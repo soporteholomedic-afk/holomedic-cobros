@@ -56,6 +56,29 @@ const PLANTILLAS = {
   ],
 };
 
+// Two-template variant for the selection regression suite: the user
+// must be able to switch away from the auto-selected first template.
+const PLANTILLAS_MULTI = {
+  spitches: [
+    {
+      id: 't1',
+      area: 'valoraciones',
+      type: 'company',
+      name: 'Valorización estándar',
+      subject: 'Valorización {{empresa}} — {{periodo}}',
+      bodyHtml: '<p>Estimados {{empresa}} (RUC {{ruc}}), periodo {{periodo}}, total {{total}} {{moneda}}.</p>',
+    },
+    {
+      id: 't2',
+      area: 'valoraciones',
+      type: 'company',
+      name: 'Recordatorio de deuda',
+      subject: 'SEGUNDO {{empresa}} — {{periodo}}',
+      bodyHtml: '<p>SEGUNDO cuerpo {{empresa}} total {{total}} {{moneda}}.</p>',
+    },
+  ],
+};
+
 // Firma-bearing variant for the deferred-firma race suite: {{firma}} is
 // baked as the [Falta configurar firma] fallback while the
 // GET /api/plantillas/firma fetch is pending.
@@ -201,6 +224,37 @@ describe('EnviarValoracionesModal', () => {
     expect(preview!.textContent).toContain('01/01/2026 al 31/01/2026');
     expect(preview!.textContent).toContain('SOLES');
     expect(preview!.innerHTML).not.toContain('{{');
+  });
+
+  it('switching templates: the dropdown follows the choice and the body re-interpolates (selection regression)', async () => {
+    mockFetch([
+      { url: '/api/plantillas', status: 200, body: PLANTILLAS_MULTI },
+      { url: '/api/valoraciones/contactos', status: 200, body: { success: true, nroRuc: '20123456789', contacto: CONTACTO } },
+    ]);
+    render(renderModal());
+
+    // Auto-select picks the FIRST template.
+    const subject = await screen.findByLabelText('Asunto');
+    await waitFor(() =>
+      expect((subject as HTMLInputElement).value).toBe(
+        'Valorización EMPRESA DEMO S.A.C. — 01/01/2026 al 31/01/2026',
+      ),
+    );
+    const combo = screen.getByRole('combobox') as HTMLSelectElement;
+    expect(combo.value).toBe('t1');
+
+    // User switches to the second template...
+    fireEvent.change(combo, { target: { value: 't2' } });
+
+    // ...the dropdown STAYS on the user's choice (it used to snap back to
+    // the first option because the composer never passed selectedId)...
+    await waitFor(() => expect(combo.value).toBe('t2'));
+    // ...and the subject/body re-interpolate with the NEW template.
+    await waitFor(() =>
+      expect((subject as HTMLInputElement).value).toBe(
+        'SEGUNDO EMPRESA DEMO S.A.C. — 01/01/2026 al 31/01/2026',
+      ),
+    );
   });
 
   it('sends via /api/valoraciones/send with both attachments by default; toggling PDF drops the flag (M-R4)', async () => {

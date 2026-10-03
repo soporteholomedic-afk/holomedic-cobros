@@ -77,6 +77,10 @@ export function EnviarValoracionesModal({
   const [bodyHtml, setBodyHtml] = useState('');
   const [adjuntarPdf, setAdjuntarPdf] = useState(true);
   const [adjuntarExcel, setAdjuntarExcel] = useState(true);
+  // Selected template id, echoed back into SpitchSelector's controlled
+  // <select>. Without it the dropdown snaps back to the first option on
+  // every change (EmailEditor parity — selection regression).
+  const [selectedSpitchId, setSelectedSpitchId] = useState<string | null>(null);
 
   // Escape-to-close (overlay click is handled on the backdrop element).
   useEffect(() => {
@@ -117,6 +121,7 @@ export function EnviarValoracionesModal({
       // Event-driven interpolation (CobranzaEmailComposer precedent):
       // subject/body are edit-transient state, re-interpolated only when a
       // template is selected.
+      setSelectedSpitchId(spitch.id);
       const ctx: InterpolationContext = {
         companyName: cliNombre ?? '',
         patientNames: [],
@@ -236,7 +241,12 @@ export function EnviarValoracionesModal({
             <label className="text-sm font-medium text-slate-700 dark:text-slate-200">
               Plantilla
             </label>
-            <SpitchSelector target="company" onSelect={handleSpitchSelect} area={AREA} />
+            <SpitchSelector
+              target="company"
+              area={AREA}
+              selectedId={selectedSpitchId ?? undefined}
+              onSelect={handleSpitchSelect}
+            />
           </div>
 
           {/* Recipients (prefill or manual) */}
