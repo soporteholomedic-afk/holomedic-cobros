@@ -11,11 +11,9 @@ import { usePanelCrm } from '../../hooks/usePanelCrm';
 import { filtrarFilas, type FilaDerivadaPanel, type TabPanel } from '../../panelDerivado';
 import type { AccionFila } from '../../estadoPanel';
 import { Buscador } from './Buscador';
-import { FlowExplainer } from './FlowExplainer';
 import { KpiCards } from './KpiCards';
 import { ModalAltaEmpresa } from './ModalAltaEmpresa';
 import { ModalFichaEmpresa, plantillaSiguienteDeEstado } from './ModalFichaEmpresa';
-import { SeccionSecuenciaCorreos } from './ModalPreviewCorreo';
 import { ModalRespuesta } from './ModalRespuesta';
 import { TablaEmpresas } from './TablaEmpresas';
 import { TabsFiltro } from './TabsFiltro';
@@ -24,10 +22,9 @@ import { TabsFiltro } from './TabsFiltro';
  * PanelCrm (task 8.2, design D4, spec OP-1..OP-3) — the operator panel
  * orchestrator. Owns the tab + search state, re-runs the pure
  * `filtrarFilas` over the ONE derivation `usePanelCrm` produced, and
- * composes the tested leaves (KpiCards, FlowExplainer, TabsFiltro,
- * Buscador, TablaEmpresas) — zero classification here. Loading and
- * error follow the ColaHoy/EmpresaList pattern (spinner / alert +
- * Reintentar).
+ * composes the tested leaves (KpiCards, TabsFiltro, Buscador,
+ * TablaEmpresas) — zero classification here. Loading and error follow
+ * the ColaHoy/EmpresaList pattern (spinner / alert + Reintentar).
  *
  * Wiring (batch 14 — tasks 9.x closure + decision 13): ver_ficha
  * (eye/empresa name) opens ModalFichaEmpresa; ¿Respondió? and the
@@ -36,9 +33,7 @@ import { TabsFiltro } from './TabsFiltro';
  * The send row actions (Enviar carta / +1 Sem / Reactivar ya) POST the
  * next template through the shared `accionesFila` seam and "Pausar 3m"
  * rides the T14 transition; buttons disable in flight (refresh-after,
- * ficha pattern) and API errors surface in a panel alert. The Secuencia
- * Completa de Correos section mounts below the table (mock order) and
- * owns its preview modal.
+ * ficha pattern) and API errors surface in a panel alert.
  *
  * Wiring (batch 15 — task 10.2): the alta CTA (header + empty state)
  * opens ModalAltaEmpresa — the LAST interim seam retired. Its success
@@ -169,7 +164,6 @@ export function PanelCrm() {
       {status === 'ready' && panel !== null && (
         <>
           <KpiCards conteos={panel.conteos} />
-          <FlowExplainer />
           <div className="overflow-hidden rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm">
             <div className="flex flex-col gap-4 border-b border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/20 p-4 md:flex-row md:items-center md:justify-between">
               <TabsFiltro conteos={panel.conteos} activa={tab} onSeleccionar={setTab} />
@@ -192,8 +186,6 @@ export function PanelCrm() {
               {errorAccion}
             </p>
           )}
-
-          <SeccionSecuenciaCorreos />
         </>
       )}
 

@@ -18,8 +18,7 @@ import type { FilaPanelCrm } from '../../../domain/ports';
  * preselect; success refreshes the panel); the send row actions POST
  * the next template through the shared accionesFila seam, "Pausar 3m"
  * rides the T14 transition, the in-flight row's buttons disable and
- * API errors surface in a panel alert. The Secuencia Completa section
- * mounts below the table and owns its preview modal. Only the alta CTA
+ * API errors surface in a panel alert. Only the alta CTA
  * remains interim navigation until ModalAltaEmpresa (task 10.2).
  */
 
@@ -480,28 +479,6 @@ describe('PanelCrm — costuras de modales 9.x (batch 14)', () => {
     expect(
       screen.queryByRole('dialog', { name: 'Registrar Respuesta del Cliente' }),
     ).not.toBeInTheDocument();
-  });
-
-  it('mounts the Secuencia Completa section and opens its preview modal from a card', async () => {
-    mockRutas();
-    render(<PanelCrm />);
-
-    expect(await screen.findByRole('table')).toBeInTheDocument();
-    expect(
-      screen.getByText(
-        'Secuencia Completa de Correos (Incluye Reactivación tras 3 Meses)',
-      ),
-    ).toBeInTheDocument();
-
-    await userEvent.click(screen.getByRole('button', { name: /1\. Carta de Presentación/ }));
-
-    const dialogo = await screen.findByRole('dialog', { name: 'Vista del Mensaje' });
-    expect(dialogo).toBeInTheDocument();
-
-    await userEvent.click(
-      within(dialogo).getByRole('button', { name: 'Entendido, cerrar' }),
-    );
-    expect(screen.queryByRole('dialog', { name: 'Vista del Mensaje' })).not.toBeInTheDocument();
   });
 });
 
