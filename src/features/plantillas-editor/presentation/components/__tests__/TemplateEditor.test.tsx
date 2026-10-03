@@ -106,6 +106,20 @@ describe('TemplateEditor', () => {
     });
   });
 
+  it('exposes a structured configuration and labeled composition area', async () => {
+    await renderEditor();
+
+    expect(screen.getByRole('heading', { level: 1, name: 'Editor de plantillas' })).toBeInTheDocument();
+    const configuration = screen.getByRole('region', { name: 'Configuración de la plantilla' });
+    expect(within(configuration).getByRole('combobox', { name: 'Plantilla' })).toBeInTheDocument();
+    expect(within(configuration).getByRole('textbox', { name: 'Nombre de la plantilla' })).toBeInTheDocument();
+    expect(screen.getByRole('region', { name: 'Contenido del correo' })).toBeInTheDocument();
+    expect(screen.getByRole('region', { name: 'Cuerpo del correo' })).toContainElement(screen.getByTestId('editor-view-mock'));
+    expect(screen.getByRole('button', { name: 'Previsualizar' })).toHaveAttribute('aria-pressed', 'false');
+    fireEvent.click(screen.getByRole('button', { name: 'Previsualizar' }));
+    expect(screen.getByRole('button', { name: 'Ocultar previsualización' })).toHaveAttribute('aria-pressed', 'true');
+  });
+
   describe('selecting a template loads its body + subject (spec: Round-trip body load)', () => {
     it('calls editorView.loadHtml with the template bodyHtml and fills the subject', async () => {
       const tpl = makeTemplate({
