@@ -319,7 +319,15 @@ export function CobranzaEmailComposer({ client, onClose, onSuccess }: CobranzaEm
                   <label className="text-sm font-medium text-slate-700 dark:text-slate-200">
                     Plantilla de Cobranza
                   </label>
-                  <SpitchSelector area="cobranza" target="company" onSelect={handleSpitchSelect} />
+                  {/* selectedId echoes the choice back into the controlled
+                      <select> — without it the dropdown snaps back to the
+                      first template on every change (EmailEditor parity). */}
+                  <SpitchSelector
+                    area="cobranza"
+                    target="company"
+                    selectedId={selectedSpitch?.id}
+                    onSelect={handleSpitchSelect}
+                  />
                 </div>
               }
               bodySlot={
