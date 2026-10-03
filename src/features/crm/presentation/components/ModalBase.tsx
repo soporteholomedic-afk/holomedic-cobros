@@ -24,16 +24,16 @@ export function ModalBase({ titulo, onSalir, children }: ModalBaseProps) {
         role="dialog"
         aria-modal="true"
         aria-label={titulo}
-        className="w-full max-w-md rounded-xl border border-slate-200 bg-white p-6 shadow-lg"
+        className="w-full max-w-md rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-6 shadow-lg"
         onClick={(event) => event.stopPropagation()}
       >
-        <h2 className="mb-4 text-lg font-semibold text-slate-800">{titulo}</h2>
+        <h2 className="mb-4 text-lg font-semibold text-slate-800 dark:text-white">{titulo}</h2>
         {children}
         <div className="mt-5 flex justify-end gap-2">
           <button
             type="button"
             onClick={onSalir}
-            className="rounded-lg border border-slate-300 px-4 py-2 text-sm text-slate-600 hover:bg-slate-50"
+            className="rounded-lg border border-slate-300 dark:border-slate-700 px-4 py-2 text-sm text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800/50"
           >
             Cancelar
           </button>

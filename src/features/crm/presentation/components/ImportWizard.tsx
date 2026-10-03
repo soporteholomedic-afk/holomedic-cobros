@@ -57,9 +57,9 @@ export function ImportWizard() {
   return (
     <section aria-label="Importación de empresas" className="space-y-4">
       {paso === 1 && (
-        <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+        <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-6 shadow-sm">
           <h2 className="text-lg font-semibold">Subir archivo</h2>
-          <p className="mt-1 text-sm text-slate-500">
+          <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
             Cada fila representa un encargado; para varias empresas, repita el RUC.
           </p>
           <div className="mt-4 flex flex-wrap items-center gap-3">
@@ -69,18 +69,18 @@ export function ImportWizard() {
               accept=".xlsx"
               onChange={alSeleccionarArchivo}
               disabled={ocupado}
-              className="rounded-lg border border-slate-300 px-3 py-2 text-sm file:mr-3 file:rounded-md file:border-0 file:bg-sky-600 file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-white hover:file:bg-sky-700"
+              className="rounded-lg border border-slate-300 dark:border-slate-700 dark:text-slate-100 px-3 py-2 text-sm file:mr-3 file:rounded-md file:border-0 file:bg-sky-600 file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-white hover:file:bg-sky-700"
             />
             <a
               href="/api/crm/import/plantilla"
               download
-              className="rounded-lg border border-sky-600 px-4 py-2 text-sm font-medium text-sky-700 hover:bg-sky-50"
+              className="rounded-lg border border-sky-600 px-4 py-2 text-sm font-medium text-sky-700 dark:text-sky-300 hover:bg-sky-50 dark:hover:bg-sky-950/40"
             >
               Descargar plantilla
             </a>
           </div>
           {ocupado && (
-            <div role="status" className="mt-4 flex items-center gap-3 text-sm text-slate-500">
+            <div role="status" className="mt-4 flex items-center gap-3 text-sm text-slate-500 dark:text-slate-400">
               <div className="h-5 w-5 animate-spin rounded-full border-2 border-sky-600 border-t-transparent" />
               {leyendo ? 'Leyendo archivo…' : 'Validando en el servidor…'}
             </div>
@@ -89,26 +89,26 @@ export function ImportWizard() {
       )}
 
       {paso === 2 && vistaPrevia && (
-        <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+        <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-6 shadow-sm">
           <h2 className="text-lg font-semibold">Vista previa</h2>
-          <div className="mt-3 flex flex-wrap gap-x-6 gap-y-1 text-sm text-slate-600">
+          <div className="mt-3 flex flex-wrap gap-x-6 gap-y-1 text-sm text-slate-600 dark:text-slate-400">
             <span>
-              Filas totales: <span className="font-medium text-slate-800">{vistaPrevia.totalFilas}</span>
+              Filas totales: <span className="font-medium text-slate-800 dark:text-slate-200">{vistaPrevia.totalFilas}</span>
             </span>
             <span>
-              Filas válidas: <span className="font-medium text-slate-800">{vistaPrevia.filasValidas}</span>
+              Filas válidas: <span className="font-medium text-slate-800 dark:text-slate-200">{vistaPrevia.filasValidas}</span>
             </span>
             <span>
-              Empresas: <span className="font-medium text-slate-800">{vistaPrevia.empresas.length}</span>
+              Empresas: <span className="font-medium text-slate-800 dark:text-slate-200">{vistaPrevia.empresas.length}</span>
             </span>
           </div>
 
           {vistaPrevia.empresas.length > 0 && (
-            <ul className="mt-3 divide-y divide-slate-100 rounded-lg border border-slate-100">
+            <ul className="mt-3 divide-y divide-slate-100 dark:divide-slate-800/60 rounded-lg border border-slate-100 dark:border-slate-800/60">
               {vistaPrevia.empresas.map((empresa) => (
                 <li key={empresa.ruc} className="flex items-center justify-between px-3 py-2 text-sm">
-                  <span className="font-medium text-slate-800">{empresa.razonSocial}</span>
-                  <span className="text-slate-500">
+                  <span className="font-medium text-slate-800 dark:text-slate-200">{empresa.razonSocial}</span>
+                  <span className="text-slate-500 dark:text-slate-400">
                     RUC {empresa.ruc} · {empresa.contactos.length}{' '}
                     {empresa.contactos.length === 1 ? 'contacto' : 'contactos'}
                   </span>
@@ -118,28 +118,28 @@ export function ImportWizard() {
           )}
 
           {vistaPrevia.errores.length > 0 ? (
-            <div className="mt-4 overflow-hidden rounded-lg border border-amber-200">
+            <div className="mt-4 overflow-hidden rounded-lg border border-amber-200 dark:border-amber-900/50">
               <table className="w-full text-left text-sm">
-                <thead className="bg-amber-50 text-xs uppercase tracking-wide text-amber-700">
+                <thead className="bg-amber-50 dark:bg-amber-950/40 text-xs uppercase tracking-wide text-amber-700 dark:text-amber-400">
                   <tr>
                     <th scope="col" className="px-3 py-2">Fila</th>
                     <th scope="col" className="px-3 py-2">Columna</th>
                     <th scope="col" className="px-3 py-2">Mensaje</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-amber-100">
+                <tbody className="divide-y divide-amber-100 dark:divide-amber-900/40">
                   {vistaPrevia.errores.map((errorFila, indice) => (
                     <tr key={`${errorFila.fila}-${errorFila.columna}-${indice}`}>
                       <td className="px-3 py-2 font-mono text-xs">{errorFila.fila}</td>
                       <td className="px-3 py-2">{errorFila.columna}</td>
-                      <td className="px-3 py-2 text-slate-600">{errorFila.mensaje}</td>
+                      <td className="px-3 py-2 text-slate-600 dark:text-slate-400">{errorFila.mensaje}</td>
                     </tr>
                   ))}
                 </tbody>
               </table>
             </div>
           ) : (
-            <p className="mt-4 text-sm text-emerald-700">Sin errores de validación.</p>
+            <p className="mt-4 text-sm text-emerald-700 dark:text-emerald-400">Sin errores de validación.</p>
           )}
 
           <div className="mt-5 flex flex-wrap gap-3">
@@ -155,7 +155,7 @@ export function ImportWizard() {
               type="button"
               onClick={cancelar}
               disabled={status === 'confirmando'}
-              className="rounded-lg border border-slate-300 px-4 py-2 text-sm text-slate-600 hover:bg-slate-50 disabled:opacity-60"
+              className="rounded-lg border border-slate-300 dark:border-slate-700 px-4 py-2 text-sm text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800/50 disabled:opacity-60"
             >
               Cancelar
             </button>
@@ -164,35 +164,35 @@ export function ImportWizard() {
       )}
 
       {paso === 3 && resultado && (
-        <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+        <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-6 shadow-sm">
           <h2 className="text-lg font-semibold">Resultado</h2>
-          <p className="mt-1 text-sm text-emerald-700">
+          <p className="mt-1 text-sm text-emerald-700 dark:text-emerald-400">
             Importación registrada (n.º {resultado.importacionId}).
           </p>
           <dl className="mt-4 grid grid-cols-2 gap-3 text-sm sm:grid-cols-3">
-            <div className="rounded-lg bg-slate-50 p-3">
-              <dt className="text-slate-500">Empresas creadas:</dt>
-              <dd className="text-lg font-semibold text-slate-800">{resultado.empresasCreadas}</dd>
+            <div className="rounded-lg bg-slate-50 dark:bg-slate-950/40 p-3">
+              <dt className="text-slate-500 dark:text-slate-400">Empresas creadas:</dt>
+              <dd className="text-lg font-semibold text-slate-800 dark:text-slate-200">{resultado.empresasCreadas}</dd>
             </div>
-            <div className="rounded-lg bg-slate-50 p-3">
-              <dt className="text-slate-500">Empresas actualizadas:</dt>
-              <dd className="text-lg font-semibold text-slate-800">{resultado.empresasActualizadas}</dd>
+            <div className="rounded-lg bg-slate-50 dark:bg-slate-950/40 p-3">
+              <dt className="text-slate-500 dark:text-slate-400">Empresas actualizadas:</dt>
+              <dd className="text-lg font-semibold text-slate-800 dark:text-slate-200">{resultado.empresasActualizadas}</dd>
             </div>
-            <div className="rounded-lg bg-slate-50 p-3">
-              <dt className="text-slate-500">Contactos creados:</dt>
-              <dd className="text-lg font-semibold text-slate-800">{resultado.contactosCreados}</dd>
+            <div className="rounded-lg bg-slate-50 dark:bg-slate-950/40 p-3">
+              <dt className="text-slate-500 dark:text-slate-400">Contactos creados:</dt>
+              <dd className="text-lg font-semibold text-slate-800 dark:text-slate-200">{resultado.contactosCreados}</dd>
             </div>
-            <div className="rounded-lg bg-slate-50 p-3">
-              <dt className="text-slate-500">Contactos actualizados:</dt>
-              <dd className="text-lg font-semibold text-slate-800">{resultado.contactosActualizados}</dd>
+            <div className="rounded-lg bg-slate-50 dark:bg-slate-950/40 p-3">
+              <dt className="text-slate-500 dark:text-slate-400">Contactos actualizados:</dt>
+              <dd className="text-lg font-semibold text-slate-800 dark:text-slate-200">{resultado.contactosActualizados}</dd>
             </div>
-            <div className="rounded-lg bg-slate-50 p-3">
-              <dt className="text-slate-500">Errores:</dt>
-              <dd className="text-lg font-semibold text-slate-800">{resultado.errores.length}</dd>
+            <div className="rounded-lg bg-slate-50 dark:bg-slate-950/40 p-3">
+              <dt className="text-slate-500 dark:text-slate-400">Errores:</dt>
+              <dd className="text-lg font-semibold text-slate-800 dark:text-slate-200">{resultado.errores.length}</dd>
             </div>
-            <div className="rounded-lg bg-slate-50 p-3">
-              <dt className="text-slate-500">Advertencias:</dt>
-              <dd className="text-lg font-semibold text-slate-800">{resultado.advertencias.length}</dd>
+            <div className="rounded-lg bg-slate-50 dark:bg-slate-950/40 p-3">
+              <dt className="text-slate-500 dark:text-slate-400">Advertencias:</dt>
+              <dd className="text-lg font-semibold text-slate-800 dark:text-slate-200">{resultado.advertencias.length}</dd>
             </div>
           </dl>
           <button
@@ -206,7 +206,7 @@ export function ImportWizard() {
       )}
 
       {errorArchivo && (
-        <div role="alert" className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+        <div role="alert" className="rounded-xl border border-red-200 dark:border-red-900/50 bg-red-50 dark:bg-red-950/40 p-4 text-sm text-red-700 dark:text-red-400">
           {errorArchivo}
         </div>
       )}
@@ -214,13 +214,13 @@ export function ImportWizard() {
       {status === 'error' && error && (
         <div
           role="alert"
-          className="flex items-center justify-between rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700"
+          className="flex items-center justify-between rounded-xl border border-red-200 dark:border-red-900/50 bg-red-50 dark:bg-red-950/40 p-4 text-sm text-red-700 dark:text-red-400"
         >
           <span>{error}</span>
           <button
             type="button"
             onClick={() => void reintentar()}
-            className="rounded-lg border border-red-300 px-3 py-1.5 font-medium text-red-700 hover:bg-red-100"
+            className="rounded-lg border border-red-300 dark:border-red-800/60 px-3 py-1.5 font-medium text-red-700 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/30"
           >
             Reintentar
           </button>

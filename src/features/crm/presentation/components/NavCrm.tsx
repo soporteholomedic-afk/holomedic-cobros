@@ -65,7 +65,7 @@ export function NavCrm({ permisos }: NavCrmProps) {
               className={`rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
                 activa
                   ? 'bg-sky-600 text-white shadow-sm'
-                  : 'text-slate-600 hover:bg-sky-50 hover:text-sky-700'
+                  : 'text-slate-600 hover:bg-sky-50 hover:text-sky-700 dark:text-slate-400 dark:hover:bg-sky-950/40 dark:hover:text-sky-300'
               }`}
             >
               {seccion.label}

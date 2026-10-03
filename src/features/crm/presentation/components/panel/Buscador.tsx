@@ -29,7 +29,7 @@ export function Buscador({ valor, onCambiar }: BuscadorProps) {
         placeholder="Buscar por nombre de empresa o persona..."
         value={valor}
         onChange={(evento) => onCambiar(evento.target.value)}
-        className="w-full rounded-lg border border-slate-200 bg-white py-2 pl-9 pr-4 text-xs transition focus:border-transparent focus:outline-none focus:ring-2 focus:ring-teal-500 sm:text-sm"
+        className="w-full rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 dark:text-slate-100 dark:placeholder-slate-500 py-2 pl-9 pr-4 text-xs transition focus:border-transparent focus:outline-none focus:ring-2 focus:ring-teal-500 sm:text-sm"
       />
     </div>
   );

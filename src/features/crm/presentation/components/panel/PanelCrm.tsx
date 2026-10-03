@@ -125,8 +125,8 @@ export function PanelCrm() {
       <header className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <div className="flex items-center gap-2">
-            <h1 className="text-2xl font-semibold text-slate-900">CRM</h1>
-            <span className="rounded-full border border-teal-200 bg-teal-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-teal-700">
+            <h1 className="text-2xl font-semibold text-slate-900 dark:text-white">CRM</h1>
+            <span className="rounded-full border border-teal-200 dark:border-teal-900/50 bg-teal-50 dark:bg-teal-950/40 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-teal-700 dark:text-teal-300">
               Panel Sencillo
             </span>
           </div>
@@ -146,20 +146,20 @@ export function PanelCrm() {
       {status === 'loading' && (
         <div role="status" className="flex items-center justify-center py-16">
           <div className="h-8 w-8 animate-spin rounded-full border-4 border-teal-600 border-t-transparent" />
-          <span className="ml-3 text-sm text-slate-500">Cargando panel…</span>
+          <span className="ml-3 text-sm text-slate-500 dark:text-slate-400">Cargando panel…</span>
         </div>
       )}
 
       {status === 'error' && (
         <div
           role="alert"
-          className="flex items-center justify-between rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700"
+          className="flex items-center justify-between rounded-xl border border-red-200 dark:border-red-900/50 bg-red-50 dark:bg-red-950/40 p-4 text-sm text-red-700 dark:text-red-400"
         >
           <span>{error ?? 'Error al cargar el panel'}</span>
           <button
             type="button"
             onClick={retry}
-            className="rounded-lg border border-red-300 px-3 py-1.5 font-medium text-red-700 hover:bg-red-100"
+            className="rounded-lg border border-red-300 dark:border-red-800/60 px-3 py-1.5 font-medium text-red-700 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/30"
           >
             Reintentar
           </button>
@@ -170,8 +170,8 @@ export function PanelCrm() {
         <>
           <KpiCards conteos={panel.conteos} />
           <FlowExplainer />
-          <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-            <div className="flex flex-col gap-4 border-b border-slate-200 bg-slate-50/50 p-4 md:flex-row md:items-center md:justify-between">
+          <div className="overflow-hidden rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm">
+            <div className="flex flex-col gap-4 border-b border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/20 p-4 md:flex-row md:items-center md:justify-between">
               <TabsFiltro conteos={panel.conteos} activa={tab} onSeleccionar={setTab} />
               <Buscador valor={busqueda} onCambiar={setBusqueda} />
             </div>
@@ -187,7 +187,7 @@ export function PanelCrm() {
           {errorAccion !== null && (
             <p
               role="alert"
-              className="rounded-xl border border-red-200 bg-red-50 p-3 text-xs font-medium text-red-700"
+              className="rounded-xl border border-red-200 dark:border-red-900/50 bg-red-50 dark:bg-red-950/40 p-3 text-xs font-medium text-red-700 dark:text-red-400"
             >
               {errorAccion}
             </p>

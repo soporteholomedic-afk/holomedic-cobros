@@ -134,12 +134,12 @@ function NodoTimeline({ nodo }: { nodo: NodoLineaTiempo }) {
       >
         <Icono className="h-3.5 w-3.5" aria-hidden="true" />
       </div>
-      <div className="flex-1 rounded-xl border border-slate-200/70 bg-slate-50 p-2.5">
+      <div className="flex-1 rounded-xl border border-slate-200/70 dark:border-slate-800/60 bg-slate-50 dark:bg-slate-950/40 p-2.5">
         <div className="mb-1 flex items-center justify-between">
-          <span className="font-bold text-slate-800">{nodo.titulo}</span>
+          <span className="font-bold text-slate-800 dark:text-slate-200">{nodo.titulo}</span>
           <span className="text-[11px] text-slate-400">{nodo.fecha}</span>
         </div>
-        <p className="text-xs text-slate-600">{nodo.detalle}</p>
+        <p className="text-xs text-slate-600 dark:text-slate-400">{nodo.detalle}</p>
       </div>
     </div>
   );
@@ -176,12 +176,12 @@ export function ModalFichaEmpresa({
         role="dialog"
         aria-modal="true"
         aria-label={`Ficha de ${fila.razonSocial}`}
-        className="flex max-h-[90vh] w-full max-w-xl flex-col overflow-hidden rounded-2xl border border-slate-100 bg-white shadow-2xl"
+        className="flex max-h-[90vh] w-full max-w-xl flex-col overflow-hidden rounded-2xl border border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-2xl"
       >
-        <div className="flex items-center justify-between border-b border-slate-200 bg-slate-50 p-5">
+        <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950/30 p-5">
           <div>
-            <h3 className="text-base font-bold text-slate-900">{fila.razonSocial}</h3>
-            <p className="text-xs text-slate-500">
+            <h3 className="text-base font-bold text-slate-900 dark:text-white">{fila.razonSocial}</h3>
+            <p className="text-xs text-slate-500 dark:text-slate-400">
               RUC: {fila.ruc} • {ETIQUETA_TIPO[fila.tipo]}
             </p>
           </div>
@@ -189,7 +189,7 @@ export function ModalFichaEmpresa({
             type="button"
             onClick={onSalir}
             aria-label="Cerrar ficha"
-            className="rounded-lg p-1 text-slate-400 transition hover:text-slate-600"
+            className="rounded-lg p-1 text-slate-400 transition hover:text-slate-600 dark:hover:text-slate-200"
           >
             <X className="h-5 w-5" aria-hidden="true" />
           </button>
@@ -197,21 +197,21 @@ export function ModalFichaEmpresa({
 
         <div className="space-y-5 overflow-y-auto p-5">
           <div className="grid grid-cols-2 gap-3 text-xs">
-            <div className="rounded-xl border border-slate-100 bg-slate-50 p-3">
-              <span className="block font-medium text-slate-500">Contacto</span>
-              <span className="mt-0.5 block text-sm font-bold text-slate-800">
+            <div className="rounded-xl border border-slate-100 dark:border-slate-800/60 bg-slate-50 dark:bg-slate-950/40 p-3">
+              <span className="block font-medium text-slate-500 dark:text-slate-400">Contacto</span>
+              <span className="mt-0.5 block text-sm font-bold text-slate-800 dark:text-slate-200">
                 {fila.contactoNombre ?? 'Sin contacto registrado'}
               </span>
-              <span className="text-xs text-slate-500">
+              <span className="text-xs text-slate-500 dark:text-slate-400">
                 {fila.contactoCargo ?? 'Sin cargo'} • {fila.contactoCorreo ?? 'sin correo'}
               </span>
             </div>
-            <div className="rounded-xl border border-slate-100 bg-slate-50 p-3">
-              <span className="block font-medium text-slate-500">Rubro y Trabajadores</span>
-              <span className="mt-0.5 block text-sm font-bold text-slate-800">
+            <div className="rounded-xl border border-slate-100 dark:border-slate-800/60 bg-slate-50 dark:bg-slate-950/40 p-3">
+              <span className="block font-medium text-slate-500 dark:text-slate-400">Rubro y Trabajadores</span>
+              <span className="mt-0.5 block text-sm font-bold text-slate-800 dark:text-slate-200">
                 {fila.sector ?? 'Sin rubro'}
               </span>
-              <span className="text-xs text-slate-500">
+              <span className="text-xs text-slate-500 dark:text-slate-400">
                 {fila.cantidadTrabajadores !== null
                   ? `${fila.cantidadTrabajadores} trabajadores estimados`
                   : 'Cantidad sin registrar'}
@@ -220,19 +220,19 @@ export function ModalFichaEmpresa({
           </div>
 
           <div>
-            <h4 className="mb-3 text-xs font-bold uppercase tracking-wider text-slate-500">
+            <h4 className="mb-3 text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
               Historial de correos enviados
             </h4>
             {detalleHook.status === 'loading' && (
-              <p className="text-xs text-slate-500">Cargando historial…</p>
+              <p className="text-xs text-slate-500 dark:text-slate-400">Cargando historial…</p>
             )}
             {detalleHook.status === 'error' && (
-              <p role="alert" className="text-xs text-red-600">
+              <p role="alert" className="text-xs text-red-600 dark:text-red-400">
                 {detalleHook.error ?? 'No se pudo cargar el historial'}
               </p>
             )}
             {detalleHook.status === 'ready' && detalleHook.detalle !== null && (
-              <div className="relative space-y-3 before:absolute before:bottom-2 before:left-3.5 before:top-2 before:w-0.5 before:bg-slate-200">
+              <div className="relative space-y-3 before:absolute before:bottom-2 before:left-3.5 before:top-2 before:w-0.5 before:bg-slate-200 dark:before:bg-slate-800">
                 {construirLineaTiempo(detalleHook.detalle).map((nodo) => (
                   <NodoTimeline key={nodo.clave} nodo={nodo} />
                 ))}
@@ -240,14 +240,14 @@ export function ModalFichaEmpresa({
             )}
           </div>
 
-          <div className="space-y-2.5 rounded-xl border border-slate-200 bg-slate-50 p-4">
+          <div className="space-y-2.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950/40 p-4">
             <div className="flex items-center justify-between">
-              <h4 className="text-xs font-bold text-slate-900">
+              <h4 className="text-xs font-bold text-slate-900 dark:text-white">
                 ¿El cliente ya contestó por teléfono, WhatsApp o correo?
               </h4>
-              <span className="text-[11px] text-slate-500">Detiene los envíos automáticos</span>
+              <span className="text-[11px] text-slate-500 dark:text-slate-400">Detiene los envíos automáticos</span>
             </div>
-            <p className="text-xs text-slate-600">
+            <p className="text-xs text-slate-600 dark:text-slate-400">
               Registra su respuesta para saber de inmediato si tiene interés o si prefiere no
               continuar:
             </p>
@@ -271,30 +271,30 @@ export function ModalFichaEmpresa({
                 Respuesta Negativa (No le interesa)
               </button>
             </div>
-            <div className="flex justify-end border-t border-slate-200 pt-2">
+            <div className="flex justify-end border-t border-slate-200 dark:border-slate-800 pt-2">
               <button
                 type="button"
                 disabled={respondio || plantillaSiguiente === null || enviando}
                 onClick={() => void enviarSiguiente()}
-                className="flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-50"
+                className="flex items-center gap-1.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-1.5 text-xs font-medium text-slate-700 dark:text-slate-200 transition hover:bg-slate-100 dark:hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <Send className="h-3.5 w-3.5 text-amber-500" aria-hidden="true" />
                 {enviando ? 'Enviando…' : 'Enviar el siguiente correo de recordatorio ahora'}
               </button>
             </div>
             {errorEnvio !== null && (
-              <p role="alert" className="rounded-lg border border-red-200 bg-red-50 p-2 text-xs text-red-700">
+              <p role="alert" className="rounded-lg border border-red-200 dark:border-red-900/50 bg-red-50 dark:bg-red-950/40 p-2 text-xs text-red-700 dark:text-red-400">
                 {errorEnvio}
               </p>
             )}
           </div>
         </div>
 
-        <div className="flex justify-end border-t border-slate-200 bg-slate-50 p-4">
+        <div className="flex justify-end border-t border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950/30 p-4">
           <button
             type="button"
             onClick={onSalir}
-            className="rounded-lg px-4 py-2 text-xs font-medium text-slate-600 transition hover:bg-slate-200"
+            className="rounded-lg px-4 py-2 text-xs font-medium text-slate-600 dark:text-slate-400 transition hover:bg-slate-200 dark:hover:bg-slate-800"
           >
             Cerrar
           </button>

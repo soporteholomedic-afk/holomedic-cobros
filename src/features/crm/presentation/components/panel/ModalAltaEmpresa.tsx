@@ -42,8 +42,8 @@ export interface ModalAltaEmpresaProps {
 }
 
 const claseCampo =
-  'w-full rounded-lg border border-slate-300 px-3 py-2 text-xs outline-none focus:ring-2 focus:ring-teal-500';
-const claseEtiqueta = 'mb-1 block text-xs font-medium text-slate-700';
+  'w-full rounded-lg border border-slate-300 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100 dark:placeholder-slate-500 px-3 py-2 text-xs outline-none focus:ring-2 focus:ring-teal-500';
+const claseEtiqueta = 'mb-1 block text-xs font-medium text-slate-700 dark:text-slate-200';
 
 function CampoTexto({
   id,
@@ -132,20 +132,20 @@ export function ModalAltaEmpresa({ onSalir, onExito }: ModalAltaEmpresaProps) {
         role="dialog"
         aria-modal="true"
         aria-label="Anotar Nueva Empresa"
-        className="w-full max-w-lg overflow-hidden rounded-2xl border border-slate-100 bg-white shadow-2xl"
+        className="w-full max-w-lg overflow-hidden rounded-2xl border border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-2xl"
       >
-        <div className="flex items-center justify-between border-b border-slate-200 bg-slate-50/70 p-5">
+        <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-950/40 p-5">
           <div className="flex items-center space-x-2.5">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-teal-100 font-bold text-teal-700">
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-teal-100 dark:bg-teal-950/40 font-bold text-teal-700 dark:text-teal-300">
               <Building className="h-4 w-4" aria-hidden="true" />
             </div>
-            <h3 className="text-base font-bold text-slate-900">Anotar Nueva Empresa</h3>
+            <h3 className="text-base font-bold text-slate-900 dark:text-white">Anotar Nueva Empresa</h3>
           </div>
           <button
             type="button"
             onClick={onSalir}
             aria-label="Cerrar alta"
-            className="rounded-lg p-1 text-slate-400 transition hover:text-slate-600"
+            className="rounded-lg p-1 text-slate-400 transition hover:text-slate-600 dark:hover:text-slate-200"
           >
             <X className="h-5 w-5" aria-hidden="true" />
           </button>
@@ -153,11 +153,11 @@ export function ModalAltaEmpresa({ onSalir, onExito }: ModalAltaEmpresaProps) {
 
         <form onSubmit={enviar} className="space-y-4 p-5">
           <div>
-            <span className="mb-1.5 block text-xs font-semibold uppercase text-slate-500">
+            <span className="mb-1.5 block text-xs font-semibold uppercase text-slate-500 dark:text-slate-400">
               ¿Qué tipo de contacto es?
             </span>
             <div className="grid grid-cols-2 gap-3">
-              <label className="flex cursor-pointer items-center rounded-xl border border-slate-200 p-3 transition hover:bg-slate-50 has-[:checked]:border-teal-600 has-[:checked]:bg-teal-50/40">
+              <label className="flex cursor-pointer items-center rounded-xl border border-slate-200 dark:border-slate-800 p-3 transition hover:bg-slate-50 dark:hover:bg-slate-800/50 has-[:checked]:border-teal-600 has-[:checked]:bg-teal-50/40 dark:has-[:checked]:bg-teal-950/20">
                 <input
                   type="radio"
                   name="tipo-registro"
@@ -167,13 +167,13 @@ export function ModalAltaEmpresa({ onSalir, onExito }: ModalAltaEmpresaProps) {
                   className="mr-2.5 text-teal-600 focus:ring-teal-500"
                 />
                 <span>
-                  <span className="block text-xs font-bold text-slate-800">Cliente Nuevo</span>
-                  <span className="block text-[11px] text-slate-500">
+                  <span className="block text-xs font-bold text-slate-800 dark:text-slate-200">Cliente Nuevo</span>
+                  <span className="block text-[11px] text-slate-500 dark:text-slate-400">
                     Ya pidió informes o cotización
                   </span>
                 </span>
               </label>
-              <label className="flex cursor-pointer items-center rounded-xl border border-slate-200 p-3 transition hover:bg-slate-50 has-[:checked]:border-teal-600 has-[:checked]:bg-teal-50/40">
+              <label className="flex cursor-pointer items-center rounded-xl border border-slate-200 dark:border-slate-800 p-3 transition hover:bg-slate-50 dark:hover:bg-slate-800/50 has-[:checked]:border-teal-600 has-[:checked]:bg-teal-50/40 dark:has-[:checked]:bg-teal-950/20">
                 <input
                   type="radio"
                   name="tipo-registro"
@@ -183,8 +183,8 @@ export function ModalAltaEmpresa({ onSalir, onExito }: ModalAltaEmpresaProps) {
                   className="mr-2.5 text-teal-600 focus:ring-teal-500"
                 />
                 <span>
-                  <span className="block text-xs font-bold text-slate-800">Posible Cliente</span>
-                  <span className="block text-[11px] text-slate-500">
+                  <span className="block text-xs font-bold text-slate-800 dark:text-slate-200">Posible Cliente</span>
+                  <span className="block text-[11px] text-slate-500 dark:text-slate-400">
                     Empresa que queremos contactar
                   </span>
                 </span>
@@ -258,7 +258,7 @@ export function ModalAltaEmpresa({ onSalir, onExito }: ModalAltaEmpresaProps) {
                 id="alta-sector"
                 value={sector}
                 onChange={(e) => setSector(e.target.value as SectorCrm)}
-                className={`${claseCampo} bg-white`}
+                className={`${claseCampo} bg-white dark:bg-slate-950`}
               >
                 {SECTORES_CRM.map((opcion) => (
                   <option key={opcion} value={opcion}>
@@ -282,8 +282,8 @@ export function ModalAltaEmpresa({ onSalir, onExito }: ModalAltaEmpresaProps) {
             </div>
           </div>
 
-          <div className="flex items-center justify-between border-t border-slate-100 pt-2">
-            <label className="flex cursor-pointer items-center text-xs text-slate-600">
+          <div className="flex items-center justify-between border-t border-slate-100 dark:border-slate-800/60 pt-2">
+            <label className="flex cursor-pointer items-center text-xs text-slate-600 dark:text-slate-400">
               <input
                 type="checkbox"
                 checked={enviarCarta}
@@ -297,7 +297,7 @@ export function ModalAltaEmpresa({ onSalir, onExito }: ModalAltaEmpresaProps) {
           {error !== null && (
             <p
               role="alert"
-              className="rounded-lg border border-red-200 bg-red-50 p-3 text-xs text-red-700"
+              className="rounded-lg border border-red-200 dark:border-red-900/50 bg-red-50 dark:bg-red-950/40 p-3 text-xs text-red-700 dark:text-red-400"
             >
               {error}
             </p>
@@ -307,7 +307,7 @@ export function ModalAltaEmpresa({ onSalir, onExito }: ModalAltaEmpresaProps) {
             <button
               type="button"
               onClick={onSalir}
-              className="rounded-lg px-4 py-2 text-xs font-medium text-slate-600 transition hover:bg-slate-100"
+              className="rounded-lg px-4 py-2 text-xs font-medium text-slate-600 dark:text-slate-400 transition hover:bg-slate-100 dark:hover:bg-slate-800/50"
             >
               Cancelar
             </button>

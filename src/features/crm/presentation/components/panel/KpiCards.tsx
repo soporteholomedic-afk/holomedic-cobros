@@ -47,10 +47,10 @@ export function KpiCards({ conteos }: KpiCardsProps) {
       subtitulo: `${conteos.clientes} clientes / ${conteos.posibles} posibles`,
       icono: Building2,
       tono: {
-        etiqueta: 'text-slate-500',
-        valor: 'text-slate-900',
-        subtitulo: 'text-slate-500',
-        icono: 'bg-slate-100 text-slate-600',
+        etiqueta: 'text-slate-500 dark:text-slate-400',
+        valor: 'text-slate-900 dark:text-white',
+        subtitulo: 'text-slate-500 dark:text-slate-400',
+        icono: 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300',
       },
       ancha: true,
     },
@@ -60,10 +60,10 @@ export function KpiCards({ conteos }: KpiCardsProps) {
       subtitulo: '1 correo por semana',
       icono: Hourglass,
       tono: {
-        etiqueta: 'text-slate-500',
-        valor: 'text-amber-600',
-        subtitulo: 'text-amber-700',
-        icono: 'bg-amber-50 text-amber-600',
+        etiqueta: 'text-slate-500 dark:text-slate-400',
+        valor: 'text-amber-600 dark:text-amber-400',
+        subtitulo: 'text-amber-700 dark:text-amber-400',
+        icono: 'bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400',
       },
     },
     {
@@ -72,10 +72,10 @@ export function KpiCards({ conteos }: KpiCardsProps) {
       subtitulo: 'Tienen interés / Cotizan',
       icono: ThumbsUp,
       tono: {
-        etiqueta: 'text-emerald-700',
-        valor: 'text-emerald-600',
-        subtitulo: 'text-emerald-800',
-        icono: 'bg-emerald-100 text-emerald-700',
+        etiqueta: 'text-emerald-700 dark:text-emerald-400',
+        valor: 'text-emerald-600 dark:text-emerald-400',
+        subtitulo: 'text-emerald-800 dark:text-emerald-300',
+        icono: 'bg-emerald-100 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400',
       },
       punto: 'bg-emerald-500',
     },
@@ -85,10 +85,10 @@ export function KpiCards({ conteos }: KpiCardsProps) {
       subtitulo: 'No desean por ahora',
       icono: ThumbsDown,
       tono: {
-        etiqueta: 'text-rose-700',
-        valor: 'text-rose-600',
-        subtitulo: 'text-rose-700',
-        icono: 'bg-rose-100 text-rose-700',
+        etiqueta: 'text-rose-700 dark:text-rose-400',
+        valor: 'text-rose-600 dark:text-rose-400',
+        subtitulo: 'text-rose-700 dark:text-rose-400',
+        icono: 'bg-rose-100 dark:bg-rose-950/40 text-rose-700 dark:text-rose-400',
       },
       punto: 'bg-rose-500',
     },
@@ -98,10 +98,10 @@ export function KpiCards({ conteos }: KpiCardsProps) {
       subtitulo: 'Vuelven el próx. trimestre',
       icono: Timer,
       tono: {
-        etiqueta: 'text-purple-700',
-        valor: 'text-purple-700',
-        subtitulo: 'text-purple-600',
-        icono: 'bg-purple-100 text-purple-700',
+        etiqueta: 'text-purple-700 dark:text-purple-300',
+        valor: 'text-purple-700 dark:text-purple-300',
+        subtitulo: 'text-purple-600 dark:text-purple-400',
+        icono: 'bg-purple-100 dark:bg-purple-950/40 text-purple-700 dark:text-purple-300',
       },
       punto: 'bg-purple-500',
     },
@@ -111,10 +111,10 @@ export function KpiCards({ conteos }: KpiCardsProps) {
       subtitulo: 'Recién anotados',
       icono: MailPlus,
       tono: {
-        etiqueta: 'text-slate-500',
-        valor: 'text-slate-700',
-        subtitulo: 'text-slate-500',
-        icono: 'bg-slate-100 text-slate-500',
+        etiqueta: 'text-slate-500 dark:text-slate-400',
+        valor: 'text-slate-700 dark:text-slate-200',
+        subtitulo: 'text-slate-500 dark:text-slate-400',
+        icono: 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400',
       },
     },
   ];
@@ -127,7 +127,7 @@ export function KpiCards({ conteos }: KpiCardsProps) {
       {tarjetas.map(({ etiqueta, valor, subtitulo, icono: Icono, tono, punto, ancha }) => (
         <div
           key={etiqueta}
-          className={`flex items-center justify-between rounded-2xl border border-slate-200 bg-white p-4 shadow-xs${
+          className={`flex items-center justify-between rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 shadow-xs${
             ancha ? ' col-span-2 sm:col-span-1' : ''
           }`}
         >

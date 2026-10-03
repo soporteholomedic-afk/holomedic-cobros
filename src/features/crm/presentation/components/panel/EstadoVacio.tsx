@@ -17,11 +17,11 @@ export interface EstadoVacioProps {
 export function EstadoVacio({ onAnotar }: EstadoVacioProps) {
   return (
     <div className="py-12 text-center">
-      <div className="mx-auto mb-3 flex h-16 w-16 items-center justify-center rounded-full bg-slate-100 text-slate-400">
+      <div className="mx-auto mb-3 flex h-16 w-16 items-center justify-center rounded-full bg-slate-100 dark:bg-slate-800 text-slate-400">
         <Inbox className="h-8 w-8" aria-hidden="true" />
       </div>
-      <h4 className="text-sm font-semibold text-slate-700">No hay empresas que mostrar</h4>
-      <p className="mx-auto mt-1 max-w-sm text-xs text-slate-500">
+      <h4 className="text-sm font-semibold text-slate-700 dark:text-slate-200">No hay empresas que mostrar</h4>
+      <p className="mx-auto mt-1 max-w-sm text-xs text-slate-500 dark:text-slate-400">
         Prueba quitando los filtros o registra una nueva empresa para empezar.
       </p>
       <button

@@ -81,30 +81,30 @@ export function ModalRespuesta({
         role="dialog"
         aria-modal="true"
         aria-label="Registrar Respuesta del Cliente"
-        className="w-full max-w-md space-y-4 overflow-hidden rounded-2xl border border-slate-100 bg-white p-5 shadow-2xl"
+        className="w-full max-w-md space-y-4 overflow-hidden rounded-2xl border border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 shadow-2xl"
       >
-        <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+        <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
           <div className="flex items-center space-x-2.5">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-teal-100 font-bold text-teal-700">
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-teal-100 dark:bg-teal-950/40 font-bold text-teal-700 dark:text-teal-300">
               <MessageSquare className="h-4 w-4" aria-hidden="true" />
             </div>
             <div>
-              <h3 className="text-sm font-bold text-slate-900">Registrar Respuesta del Cliente</h3>
-              <p className="text-xs font-medium text-slate-500">{nombreEmpresa}</p>
+              <h3 className="text-sm font-bold text-slate-900 dark:text-white">Registrar Respuesta del Cliente</h3>
+              <p className="text-xs font-medium text-slate-500 dark:text-slate-400">{nombreEmpresa}</p>
             </div>
           </div>
           <button
             type="button"
             onClick={onSalir}
             aria-label="Cerrar respuesta"
-            className="rounded-lg p-1 text-slate-400 transition hover:text-slate-600"
+            className="rounded-lg p-1 text-slate-400 transition hover:text-slate-600 dark:hover:text-slate-200"
           >
             <X className="h-5 w-5" aria-hidden="true" />
           </button>
         </div>
 
-        <div className="flex items-start gap-2.5 rounded-xl border border-purple-200 bg-purple-50 p-3 text-xs leading-relaxed text-purple-900">
-          <Info className="mt-0.5 h-4 w-4 shrink-0 text-purple-600" aria-hidden="true" />
+        <div className="flex items-start gap-2.5 rounded-xl border border-purple-200 dark:border-purple-900/50 bg-purple-50 dark:bg-purple-950/40 p-3 text-xs leading-relaxed text-purple-900 dark:text-purple-300">
+          <Info className="mt-0.5 h-4 w-4 shrink-0 text-purple-600 dark:text-purple-400" aria-hidden="true" />
           <span>
             <strong>Regla automática:</strong> Si el cliente responde que <strong>no tiene
             interés</strong>, se detendrán los correos de inmediato y la empresa pasará a una{' '}
@@ -115,12 +115,12 @@ export function ModalRespuesta({
 
         <form onSubmit={enviar} className="space-y-4">
           <div className="space-y-2.5">
-            <span className="block text-xs font-semibold uppercase text-slate-500">
+            <span className="block text-xs font-semibold uppercase text-slate-500 dark:text-slate-400">
               Tipo de Respuesta:
             </span>
 
             <div className="grid grid-cols-1 gap-2.5">
-              <label className="flex cursor-pointer items-start rounded-xl border-2 border-slate-200 p-3 transition hover:border-emerald-300 hover:bg-emerald-50/40 has-[:checked]:border-emerald-600 has-[:checked]:bg-emerald-50">
+              <label className="flex cursor-pointer items-start rounded-xl border-2 border-slate-200 dark:border-slate-800 p-3 transition hover:border-emerald-300 dark:hover:border-emerald-800/60 hover:bg-emerald-50/40 dark:hover:bg-emerald-950/20 has-[:checked]:border-emerald-600 has-[:checked]:bg-emerald-50 dark:has-[:checked]:bg-emerald-950/30">
                 <input
                   type="radio"
                   name="tipo-respuesta"
@@ -130,17 +130,17 @@ export function ModalRespuesta({
                   className="mr-3 mt-0.5 text-emerald-600 focus:ring-emerald-500"
                 />
                 <span>
-                  <span className="flex items-center gap-1.5 text-xs font-bold text-emerald-800">
+                  <span className="flex items-center gap-1.5 text-xs font-bold text-emerald-800 dark:text-emerald-300">
                     <ThumbsUp className="h-3.5 w-3.5" aria-hidden="true" />
                     Respuesta Positiva (Tiene interés)
                   </span>
-                  <span className="mt-0.5 block text-[11px] text-slate-600">
+                  <span className="mt-0.5 block text-[11px] text-slate-600 dark:text-slate-400">
                     Pide cotización, información de paquetes o coordinar chequeos.
                   </span>
                 </span>
               </label>
 
-              <label className="flex cursor-pointer items-start rounded-xl border-2 border-slate-200 p-3 transition hover:border-rose-300 hover:bg-rose-50/40 has-[:checked]:border-purple-600 has-[:checked]:bg-purple-50/60">
+              <label className="flex cursor-pointer items-start rounded-xl border-2 border-slate-200 dark:border-slate-800 p-3 transition hover:border-rose-300 dark:hover:border-rose-800/60 hover:bg-rose-50/40 dark:hover:bg-rose-950/20 has-[:checked]:border-purple-600 has-[:checked]:bg-purple-50/60 dark:has-[:checked]:bg-purple-950/30">
                 <input
                   type="radio"
                   name="tipo-respuesta"
@@ -150,11 +150,11 @@ export function ModalRespuesta({
                   className="mr-3 mt-0.5 text-purple-600 focus:ring-purple-500"
                 />
                 <span>
-                  <span className="flex items-center gap-1.5 text-xs font-bold text-purple-900">
-                    <Clock className="h-3.5 w-3.5 text-purple-600" aria-hidden="true" />
+                  <span className="flex items-center gap-1.5 text-xs font-bold text-purple-900 dark:text-purple-300">
+                    <Clock className="h-3.5 w-3.5 text-purple-600 dark:text-purple-400" aria-hidden="true" />
                     No tiene interés &rarr; Pausar por 3 meses
                   </span>
-                  <span className="mt-0.5 block text-[11px] text-slate-600">
+                  <span className="mt-0.5 block text-[11px] text-slate-600 dark:text-slate-400">
                     Ya tienen clínica o no necesitan ahora. Se reactivará en 3 meses.
                   </span>
                 </span>
@@ -165,7 +165,7 @@ export function ModalRespuesta({
           <div>
             <label
               htmlFor="nota-respuesta"
-              className="mb-1 block text-xs font-medium text-slate-700"
+              className="mb-1 block text-xs font-medium text-slate-700 dark:text-slate-200"
             >
               Comentario o nota (opcional):
             </label>
@@ -175,24 +175,24 @@ export function ModalRespuesta({
               onChange={(e) => setNota(e.target.value)}
               rows={2}
               placeholder="Ej. Indicó que ya tienen contrato firmado hasta noviembre..."
-              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-xs outline-none focus:ring-2 focus:ring-teal-500"
+              className="w-full rounded-lg border border-slate-300 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100 dark:placeholder-slate-500 px-3 py-2 text-xs outline-none focus:ring-2 focus:ring-teal-500"
             />
           </div>
 
           {error !== null && (
             <p
               role="alert"
-              className="rounded-lg border border-red-200 bg-red-50 p-3 text-xs text-red-700"
+              className="rounded-lg border border-red-200 dark:border-red-900/50 bg-red-50 dark:bg-red-950/40 p-3 text-xs text-red-700 dark:text-red-400"
             >
               {error}
             </p>
           )}
 
-          <div className="flex justify-end space-x-2 border-t border-slate-100 pt-2">
+          <div className="flex justify-end space-x-2 border-t border-slate-100 dark:border-slate-800 pt-2">
             <button
               type="button"
               onClick={onSalir}
-              className="rounded-lg px-3 py-2 text-xs font-medium text-slate-600 transition hover:bg-slate-100"
+              className="rounded-lg px-3 py-2 text-xs font-medium text-slate-600 dark:text-slate-400 transition hover:bg-slate-100 dark:hover:bg-slate-800/50"
             >
               Cancelar
             </button>

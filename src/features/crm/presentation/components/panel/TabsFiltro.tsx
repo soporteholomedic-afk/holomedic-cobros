@@ -44,7 +44,7 @@ export function TabsFiltro({ conteos, activa, onSeleccionar }: TabsFiltroProps) 
             className={`shrink-0 whitespace-nowrap rounded-lg px-3 py-1.5 font-medium transition ${
               activaTab
                 ? 'bg-teal-600 text-white shadow-xs'
-                : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+                : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800/50 hover:text-slate-900 dark:hover:text-slate-200'
             }`}
           >
             {etiqueta} ({CONTEO_POR_TAB[clave](conteos)})

@@ -29,25 +29,25 @@ export function ProductividadTable({ periodoInicial }: { periodoInicial: Periodo
 
   return (
     <section aria-label="Productividad" className="space-y-4">
-      <div className="flex flex-wrap items-end gap-4 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-        <label className="flex flex-col gap-1 text-sm text-slate-600">
+      <div className="flex flex-wrap items-end gap-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 shadow-sm">
+        <label className="flex flex-col gap-1 text-sm text-slate-600 dark:text-slate-400">
           Desde
           <input
             type="date"
             aria-label="Desde"
             value={periodo.desde}
             onChange={(e) => setPeriodo((prev) => ({ ...prev, desde: e.target.value }))}
-            className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm text-slate-800 focus:border-sky-500 focus:outline-none focus:ring-sky-500"
+            className="rounded-lg border border-slate-300 dark:border-slate-700 dark:bg-slate-950 px-3 py-1.5 text-sm text-slate-800 dark:text-slate-200 focus:border-sky-500 focus:outline-none focus:ring-sky-500"
           />
         </label>
-        <label className="flex flex-col gap-1 text-sm text-slate-600">
+        <label className="flex flex-col gap-1 text-sm text-slate-600 dark:text-slate-400">
           Hasta
           <input
             type="date"
             aria-label="Hasta"
             value={periodo.hasta}
             onChange={(e) => setPeriodo((prev) => ({ ...prev, hasta: e.target.value }))}
-            className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm text-slate-800 focus:border-sky-500 focus:outline-none focus:ring-sky-500"
+            className="rounded-lg border border-slate-300 dark:border-slate-700 dark:bg-slate-950 px-3 py-1.5 text-sm text-slate-800 dark:text-slate-200 focus:border-sky-500 focus:outline-none focus:ring-sky-500"
           />
         </label>
         <button
@@ -63,7 +63,7 @@ export function ProductividadTable({ periodoInicial }: { periodoInicial: Periodo
       {errorExportacion && (
         <div
           role="alert"
-          className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700"
+          className="rounded-xl border border-red-200 dark:border-red-900/50 bg-red-50 dark:bg-red-950/40 p-4 text-sm text-red-700 dark:text-red-400"
         >
           {errorExportacion}
         </div>
@@ -72,13 +72,13 @@ export function ProductividadTable({ periodoInicial }: { periodoInicial: Periodo
       {status === 'error' && (
         <div
           role="alert"
-          className="flex items-center justify-between rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700"
+          className="flex items-center justify-between rounded-xl border border-red-200 dark:border-red-900/50 bg-red-50 dark:bg-red-950/40 p-4 text-sm text-red-700 dark:text-red-400"
         >
           <span>{error ?? 'Error al cargar la productividad'}</span>
           <button
             type="button"
             onClick={retry}
-            className="rounded-lg border border-red-300 px-3 py-1.5 font-medium text-red-700 hover:bg-red-100"
+            className="rounded-lg border border-red-300 dark:border-red-800/60 px-3 py-1.5 font-medium text-red-700 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/30"
           >
             Reintentar
           </button>
@@ -88,20 +88,20 @@ export function ProductividadTable({ periodoInicial }: { periodoInicial: Periodo
       {status === 'loading' && (
         <div role="status" className="flex items-center justify-center py-12">
           <div className="h-8 w-8 animate-spin rounded-full border-4 border-sky-600 border-t-transparent" />
-          <span className="ml-3 text-sm text-slate-500">Cargando productividad…</span>
+          <span className="ml-3 text-sm text-slate-500 dark:text-slate-400">Cargando productividad…</span>
         </div>
       )}
 
       {status === 'ready' && filas.length === 0 && (
-        <p className="rounded-xl border border-slate-200 bg-white p-6 text-sm text-slate-500 shadow-sm">
+        <p className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-6 text-sm text-slate-500 dark:text-slate-400 shadow-sm">
           Sin datos de productividad en el período seleccionado.
         </p>
       )}
 
       {status === 'ready' && filas.length > 0 && (
-        <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm">
+        <div className="overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm">
           <table className="w-full text-left text-sm">
-            <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
+            <thead className="bg-slate-50 dark:bg-slate-950/30 text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">
               <tr>
                 <th scope="col" className="px-4 py-3">Usuario</th>
                 <th scope="col" className="px-4 py-3">Actividades</th>
@@ -113,14 +113,14 @@ export function ProductividadTable({ periodoInicial }: { periodoInicial: Periodo
                 ))}
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-100">
+            <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60">
               {filas.map((fila) => (
-                <tr key={fila.usuario} className="hover:bg-slate-50">
-                  <td className="px-4 py-3 font-medium text-slate-800">{fila.usuario}</td>
-                  <td className="px-4 py-3 text-slate-600">{fila.actividades}</td>
-                  <td className="px-4 py-3 text-slate-600">{fila.resultados}</td>
+                <tr key={fila.usuario} className="hover:bg-slate-50 dark:hover:bg-slate-800/50">
+                  <td className="px-4 py-3 font-medium text-slate-800 dark:text-slate-200">{fila.usuario}</td>
+                  <td className="px-4 py-3 text-slate-600 dark:text-slate-400">{fila.actividades}</td>
+                  <td className="px-4 py-3 text-slate-600 dark:text-slate-400">{fila.resultados}</td>
                   {COLUMNAS_EVENTO.map((evento) => (
-                    <td key={evento} className="px-4 py-3 text-slate-600">
+                    <td key={evento} className="px-4 py-3 text-slate-600 dark:text-slate-400">
                       {fila.porEvento[evento]}
                     </td>
                   ))}

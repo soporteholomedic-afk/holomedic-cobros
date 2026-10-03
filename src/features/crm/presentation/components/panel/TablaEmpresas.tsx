@@ -65,7 +65,7 @@ function InsigniaEstado({ derivada }: { derivada: FilaDerivadaPanel }) {
       ? (derivada.etiquetaEtapaAvanzada ?? '')
       : ETIQUETA_ESTADO[derivada.estado];
   return (
-    <span className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-full border border-slate-200 bg-white px-2.5 py-1 text-xs font-semibold text-slate-700">
+    <span className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-full border border-slate-200 dark:border-slate-700/50 bg-white dark:bg-slate-800 px-2.5 py-1 text-xs font-semibold text-slate-700 dark:text-slate-300">
       <span className="h-1.5 w-1.5 rounded-full bg-teal-500" aria-hidden="true" />
       {etiqueta}
     </span>
@@ -79,11 +79,11 @@ function CeldaEmpresa({ fila, onAccion }: { fila: FilaPanelCrm; onAccion: () => 
         <button
           type="button"
           onClick={onAccion}
-          className="text-xs font-bold text-slate-900 transition hover:text-teal-600 sm:text-sm"
+          className="text-xs font-bold text-slate-900 dark:text-slate-200 transition hover:text-teal-600 dark:hover:text-teal-400 sm:text-sm"
         >
           {fila.razonSocial}
         </button>
-        <div className="flex items-center gap-2 text-[11px] text-slate-500">
+        <div className="flex items-center gap-2 text-[11px] text-slate-500 dark:text-slate-400">
           <span>RUC: {fila.ruc}</span>
           {fila.cantidadTrabajadores !== null && (
             <>
@@ -103,12 +103,12 @@ function CeldaContacto({ fila }: { fila: FilaPanelCrm }) {
   }
   return (
     <div>
-      <p className="text-xs font-medium text-slate-800">{fila.contactoNombre}</p>
+      <p className="text-xs font-medium text-slate-800 dark:text-slate-200">{fila.contactoNombre}</p>
       {fila.contactoCargo !== null && (
-        <p className="text-[11px] text-slate-500">{fila.contactoCargo}</p>
+        <p className="text-[11px] text-slate-500 dark:text-slate-400">{fila.contactoCargo}</p>
       )}
       {fila.sector !== null && (
-        <span className="mt-1 inline-block rounded bg-slate-100 px-2 py-0.5 text-[10px] font-medium text-slate-600">
+        <span className="mt-1 inline-block rounded bg-slate-100 dark:bg-slate-800 px-2 py-0.5 text-[10px] font-medium text-slate-600 dark:text-slate-300">
           {fila.sector}
         </span>
       )}
@@ -138,7 +138,7 @@ function CeldaAcciones({
               title="Ver ficha"
               disabled={enCurso}
               onClick={() => onAccion(accion)}
-              className="rounded-lg p-1.5 text-slate-500 transition hover:bg-slate-100 hover:text-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
+              className="rounded-lg p-1.5 text-slate-500 dark:text-slate-400 transition hover:bg-slate-100 dark:hover:bg-slate-800/50 hover:text-slate-800 dark:hover:text-slate-200 disabled:cursor-not-allowed disabled:opacity-50"
             >
               <Eye className="h-4 w-4" aria-hidden="true" />
             </button>
@@ -150,7 +150,7 @@ function CeldaAcciones({
             type="button"
             disabled={enCurso}
             onClick={() => onAccion(accion)}
-            className="rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-700 shadow-2xs transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-50"
+            className="rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-2.5 py-1.5 text-xs font-semibold text-slate-700 dark:text-slate-200 shadow-2xs transition hover:bg-slate-100 dark:hover:bg-slate-800/50 disabled:cursor-not-allowed disabled:opacity-50"
           >
             {ETIQUETA_ACCION[accion]}
           </button>
@@ -174,7 +174,7 @@ export function TablaEmpresas({
       ) : (
         <div className="overflow-x-auto">
           <table className="w-full text-left text-sm">
-            <thead className="border-b border-slate-200 bg-slate-50 text-[11px] font-semibold uppercase tracking-wider text-slate-500">
+            <thead className="border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950/30 text-[11px] font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
               <tr>
                 <th scope="col" className="px-5 py-3.5">Empresa</th>
                 <th scope="col" className="px-4 py-3.5">Persona de Contacto</th>
@@ -184,9 +184,9 @@ export function TablaEmpresas({
                 <th scope="col" className="px-5 py-3.5 text-right">¿Qué deseas hacer?</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-100">
+            <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60">
               {filas.map((derivada) => (
-                <tr key={derivada.fila.empresaId} className="border-b border-slate-100 transition hover:bg-slate-50/80">
+                <tr key={derivada.fila.empresaId} className="border-b border-slate-100 dark:border-slate-800/60 transition hover:bg-slate-50/80 dark:hover:bg-slate-800/50">
                   <td className="px-5 py-3.5">
                     <CeldaEmpresa
                       fila={derivada.fila}
@@ -197,7 +197,7 @@ export function TablaEmpresas({
                     <CeldaContacto fila={derivada.fila} />
                   </td>
                   <td className="px-4 py-3.5">
-                    <span className="inline-flex items-center rounded-full border border-purple-200 bg-purple-50 px-2.5 py-0.5 text-xs font-semibold text-purple-700">
+                    <span className="inline-flex items-center rounded-full border border-purple-200 dark:border-purple-900/50 bg-purple-50 dark:bg-purple-950/40 px-2.5 py-0.5 text-xs font-semibold text-purple-700 dark:text-purple-300">
                       {ETIQUETA_TIPO[derivada.fila.tipo]}
                     </span>
                   </td>
@@ -207,7 +207,7 @@ export function TablaEmpresas({
                   <td className="px-4 py-3.5 text-xs">
                     {derivada.proximo.principal !== null && (
                       <div data-testid="proximo-paso">
-                        <span className="block font-medium text-slate-700">
+                        <span className="block font-medium text-slate-700 dark:text-slate-200">
                           {derivada.proximo.principal}
                         </span>
                         {derivada.proximo.secundario !== null && (
@@ -231,7 +231,7 @@ export function TablaEmpresas({
           </table>
         </div>
       )}
-      <div className="flex flex-col items-center justify-between gap-2 border-t border-slate-200 bg-slate-50 px-5 py-3 text-xs text-slate-500 sm:flex-row">
+      <div className="flex flex-col items-center justify-between gap-2 border-t border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950/30 px-5 py-3 text-xs text-slate-500 dark:text-slate-400 sm:flex-row">
         <div className="flex items-center gap-2">
           <span className="inline-block h-2.5 w-2.5 rounded-full bg-purple-500" aria-hidden="true" />
           <span>
