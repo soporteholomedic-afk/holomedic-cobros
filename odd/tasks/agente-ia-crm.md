@@ -110,8 +110,12 @@ Cada entregable es un hito **demoable de punta a punta** y cierra con work-unit 
   - [x] T2 Webhook /api/webhooks/kapso (HMAC + idempotencia + ack<10s + async) — commit `94d8e51`
   - [x] T3 Permiso crm_conversaciones + RUTAS_PROTEGIDAS + nav — commit `ee80452`
   - [x] T4 API bandeja + EnviadorWhatsappCrmPort (Kapso real + modo simulado) + simulador de entrada — commits `d2dd964` (SDK) + `b65fed7`
-  - [ ] T5 Vista /crm/conversaciones (bandeja estilo WhatsApp)
-  - [ ] T6 Verificación final + sync SDK + doc + revisión RDD
+  - [x] T5 Vista /crm/conversaciones (bandeja estilo WhatsApp) — commit `409f3ff`
+  - [ ] T6 Verificación final + sync SDK + doc + revisión RDD — suite E1 89/89 ✓ · tsc ✓ · build ✓ · sync SDK 65 archivos ✓ · RDD on
+
+**Cómo demorar E1 (modo simulado, sin Kapso)**: 1) `pnpm dev` → entrar a `/crm/conversaciones` (usuario con permiso `crm_conversaciones`). 2) El panel "Simulador de entrada — modo simulado" (arriba de la lista) → teléfono `0981 234 567` + texto → Enviar. 3) El mensaje aparece en la bandeja; si el teléfono matchea 1 contacto existente se autovincula (TOMADA_HUMANO), sino queda PENDIENTE_VINCULACION → panel de vinculación (asociar o crear). 4) Responder a mano desde el hilo → burbuja OUT/HUMANO. 5) Webhook real: `POST /api/webhooks/kapso` con headers `X-Webhook-Signature` (HMAC-SHA256 hex del raw body con `KAPSO_WEBHOOK_SECRET`) + `X-Idempotency-Key` → mismo circuito; replay no duplica; firma inválida → 401. Al llegar Kapso real: setear `KAPSO_MODO=real` + `KAPSO_API_KEY` + `KAPSO_PHONE_NUMBER_ID` + `KAPSO_WEBHOOK_SECRET` en `.env.local` y registrar el webhook en Kapso.
+
+**Limitaciones conocidas E1**: preview del último mensaje ausente en la lista (opcional, se suma en E2/E3); "Crear contacto" del panel de vinculación usa `GET /api/crm/empresas` que exige permiso `crm` además de `crm_conversaciones`; test de integración preexistente `sqlServerEmpresaRepository.test.ts` falla contra la DB dev compartida por datos reales acumulados (ajeno a este feature).
 - [ ] E2 — La Guía responde (memoria + RAG + autonomía básica)
 - [ ] E3 — Ayuda humana y trabajo en paralelo
 - [ ] E4 — Cierre autónomo + vistas de configuración
