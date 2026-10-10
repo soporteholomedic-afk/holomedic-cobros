@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
+import type { RepFacturacion } from '../../../domain/entities';
 import { makeRepFacturacion } from '../../../domain/fixtures';
-import { agruparPorDestino } from '../../../domain/agrupacion';
 import {
   MEMBRETE_HOLOMEDIC,
   buildValoracionHtml,
@@ -17,19 +17,16 @@ function buildInput(overrides: Partial<ValoracionPdfInput> = {}): ValoracionPdfI
     fecFin: '2026-01-31',
     moneda: 'SOLES',
     fechaEmision: '27/08/2026',
-    grupos: agruparPorDestino(
-      [
-        makeRepFacturacion({ DesDes: 'SEDE NORTE', VVtaMN: 1000, Simbol: 's/.' }),
-        makeRepFacturacion({
-          DesDes: 'SEDE NORTE',
-          VVtaMN: 500,
-          DesTCh: 'PERIODICO',
-          Simbol: 's/.',
-        }),
-        makeRepFacturacion({ DesDes: 'SEDE SUR', VVtaMN: 200, Simbol: 's/.' }),
-      ],
-      1,
-    ),
+    rows: [
+      makeRepFacturacion({ DesDes: 'SEDE NORTE', VVtaMN: 1000, Simbol: 's/.' }),
+      makeRepFacturacion({
+        DesDes: 'SEDE NORTE',
+        VVtaMN: 500,
+        DesTCh: 'PERIODICO',
+        Simbol: 's/.',
+      }),
+      makeRepFacturacion({ DesDes: 'SEDE SUR', VVtaMN: 200, Simbol: 's/.' }),
+    ],
     ...overrides,
   };
 }
@@ -52,21 +49,30 @@ describe('buildValoracionHtml', () => {
     expect(html).toContain('27/08/2026');
   });
 
-  it('renders per-group tables with SubTotal, IGV 18% and Total using the row Simbol', () => {
+  it('renders ONE global footer with SubTotal, IGV 18% and Total over ALL rows', () => {
     const html = buildValoracionHtml(buildInput());
-    expect(html).toContain('SEDE NORTE');
-    expect(html).toContain('SEDE SUR');
-    // SEDE NORTE: 1000 + 500 = 1500 → IGV 270 → Total 1770.
-    expect(html).toContain('1,500.00');
-    expect(html).toContain('270.00');
-    expect(html).toContain('1,770.00');
-    // SEDE SUR: 200 → 36 → 236.
-    expect(html).toContain('236.00');
+    // 1000 + 500 + 200 = 1700 → IGV 306 → Total 2,006 (single table, Opción A).
+    expect(html).toContain('1,700.00');
+    expect(html).toContain('306.00');
+    expect(html).toContain('2,006.00');
     // Amounts carry the row's currency symbol.
     expect(html).toContain('s/.');
+    // Exactly one footer block in the whole document.
+    expect(html.split('<tfoot>')).toHaveLength(2);
   });
 
-  it('declares A4 LANDSCAPE page sizing so 13 wide columns fit (U6)', () => {
+  it('renders each row’s destino as a cell value', () => {
+    const html = buildValoracionHtml(buildInput());
+    expect(html).toMatch(/<td[^>]*>SEDE NORTE<\/td>/);
+    expect(html).toMatch(/<td[^>]*>SEDE SUR<\/td>/);
+  });
+
+  it('renders NO per-destino headings (single continuous table, Opción A)', () => {
+    const html = buildValoracionHtml(buildInput());
+    expect(html).not.toContain('<h2');
+  });
+
+  it('declares A4 LANDSCAPE page sizing so 14 wide columns fit (U6)', () => {
     const html = buildValoracionHtml(buildInput());
     expect(html).toContain('@page');
     expect(html).toContain('size: A4 landscape');
@@ -74,66 +80,60 @@ describe('buildValoracionHtml', () => {
     expect(html).toContain('display: table-header-group');
   });
 
-  it('renders EXACTLY the 13 required columns in the required order (U6)', () => {
+  it('renders EXACTLY ONE thead with the 14 required columns in order (U6 + Destino)', () => {
     const html = buildValoracionHtml(buildInput());
     const theads = html.split('<thead>').slice(1).map((t) => t.split('</thead>')[0]);
-    // One thead per destino group — EVERY group table carries the contract.
-    expect(theads.length).toBeGreaterThanOrEqual(2);
-    const columnas = (thead: string): string[] =>
-      [...thead.matchAll(/<th[^>]*>([^<]*)<\/th>/g)].map((m) => m[1]);
-    for (const thead of theads) {
-      expect(columnas(thead)).toEqual([
-        'N°. Ficha',
-        'Doc. Iden',
-        '¿Conv.?',
-        'N° Conv',
-        'Nombres',
-        'Ocupación',
-        'Fecha examen',
-        'Tipo examen',
-        'CR',
-        'Anexo 7D',
-        'Solicitado Por',
-        'Costos',
-        'Doc.Fac',
-      ]);
-    }
+    expect(theads).toHaveLength(1);
+    const columnas = [...theads[0].matchAll(/<th[^>]*>([^<]*)<\/th>/g)].map((m) => m[1]);
+    expect(columnas).toEqual([
+      'N°. Ficha',
+      'Doc. Iden',
+      '¿Conv.?',
+      'N° Conv',
+      'Nombres',
+      'Ocupación',
+      'Fecha examen',
+      'Tipo examen',
+      'CR',
+      'Anexo 7D',
+      'Destino',
+      'Solicitado Por',
+      'Costos',
+      'Doc.Fac',
+    ]);
   });
 
-  it('maps the 13 columns from real RepFacturacion fields (U6 mapping)', () => {
+  it('maps the 14 columns from real RepFacturacion fields (U6 mapping)', () => {
     const html = buildValoracionHtml(
       buildInput({
-        grupos: agruparPorDestino(
-          [
-            makeRepFacturacion({
-              DesDes: 'SEDE NORTE',
-              IdAten: '000123',
-              ItemEx: 4,
-              NroDId: 'DNI 46145583',
-              IndCon: true,
-              IdConv: 'C-777',
-              Pacien: 'CANCINO CUEVA NOELIA',
-              DesPue: 'ANALISTA',
-              FecAte: '2026-01-15T00:00:00.000Z',
-              DesTCh: 'PREOCUPACIONAL',
-              CenCos: 'CC-001',
-              Anex7D: 'S',
-              Solici: 'SOLICITANTE DEMO',
-              VVtaMN: 100,
-              Simbol: 's/.',
-              NumDov: 45678,
-            }),
-            makeRepFacturacion({
-              DesDes: 'SEDE NORTE',
-              IndCon: false,
-              NumDov: null,
-              Pacien: 'SIN FACTURA PAC',
-              VVtaMN: 50,
-              Simbol: 's/.',
-            }),
-          ],
-          1,
-        ),
+        rows: [
+          makeRepFacturacion({
+            DesDes: 'SEDE NORTE',
+            IdAten: '000123',
+            ItemEx: 4,
+            NroDId: 'DNI 46145583',
+            IndCon: true,
+            IdConv: 'C-777',
+            Pacien: 'CANCINO CUEVA NOELIA',
+            DesPue: 'ANALISTA',
+            FecAte: '2026-01-15T00:00:00.000Z',
+            DesTCh: 'PREOCUPACIONAL',
+            CenCos: 'CC-001',
+            Anex7D: 'S',
+            Solici: 'SOLICITANTE DEMO',
+            VVtaMN: 100,
+            Simbol: 's/.',
+            NumDov: 45678,
+          }),
+          makeRepFacturacion({
+            DesDes: 'SEDE NORTE',
+            IndCon: false,
+            NumDov: null,
+            Pacien: 'SIN FACTURA PAC',
+            VVtaMN: 50,
+            Simbol: 's/.',
+          }),
+        ],
       }),
     );
     // Row 1: every mapped cell present.
@@ -147,6 +147,8 @@ describe('buildValoracionHtml', () => {
     expect(html).toContain('CC-001');
     expect(html).toContain('SOLICITANTE DEMO');
     expect(html).toContain('45678');
+    // Destino column mapped from DesDes (after CR/Anexo 7D per the contract).
+    expect(html).toMatch(/<td[^>]*>SEDE NORTE<\/td>/);
     // ¿Conv.? renders SIGLA's S/N convention.
     expect(html).toMatch(/<td[^>]*>S<\/td>/);
     expect(html).toMatch(/<td[^>]*>N<\/td>/);
@@ -157,14 +159,20 @@ describe('buildValoracionHtml', () => {
     expect(html).not.toContain('>null<');
   });
 
+  it('renders SIN DESTINO when DesDes is blank (same semantics as the grouping)', () => {
+    const rows: RepFacturacion[] = [
+      makeRepFacturacion({ DesDes: '', VVtaMN: 10 }),
+      makeRepFacturacion({ DesDes: '   ', VVtaMN: 20 }),
+    ];
+    const html = buildValoracionHtml(buildInput({ rows }));
+    expect(html.match(/<td[^>]*>SIN DESTINO<\/td>/g)).toHaveLength(2);
+  });
+
   it('escapes HTML-sensitive characters in dynamic values', () => {
     const html = buildValoracionHtml(
       buildInput({
         cliente: { nombre: 'ACME <CORP> & "HIJOS"', ruc: '' },
-        grupos: agruparPorDestino(
-          [makeRepFacturacion({ DesDes: 'NORTE & SUR', Pacien: 'PÉREZ <PAC>' })],
-          1,
-        ),
+        rows: [makeRepFacturacion({ DesDes: 'NORTE & SUR', Pacien: 'PÉREZ <PAC>' })],
       }),
     );
     expect(html).not.toContain('ACME <CORP>');

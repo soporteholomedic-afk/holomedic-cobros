@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 
-import { agruparPorDestino, agruparPorEmpresa, esVentaCero, round2, ventaPorMoneda, IGV_PORCENTAJE } from '../agrupacion';
+import { agruparPorDestino, agruparPorEmpresa, destinoDe, esVentaCero, round2, ventaPorMoneda, IGV_PORCENTAJE } from '../agrupacion';
 import { makeRepFacturacion } from '../fixtures';
 
 describe('round2', () => {
@@ -166,6 +166,17 @@ describe('filter + agruparPorEmpresa composition — counts derive from the filt
     expect(visibles).toHaveLength(2);
     expect(grupos).toHaveLength(1);
     expect(grupos[0].cantidad).toBe(visibles.length);
+  });
+});
+
+describe('destinoDe — destino label for the PDF Destino column (single table, Opción A)', () => {
+  it('returns the trimmed DesDes', () => {
+    expect(destinoDe(makeRepFacturacion({ DesDes: '  SEDE NORTE  ' }))).toBe('SEDE NORTE');
+  });
+
+  it('falls back to SIN DESTINO for blank/whitespace DesDes', () => {
+    expect(destinoDe(makeRepFacturacion({ DesDes: '' }))).toBe('SIN DESTINO');
+    expect(destinoDe(makeRepFacturacion({ DesDes: '   ' }))).toBe('SIN DESTINO');
   });
 });
 

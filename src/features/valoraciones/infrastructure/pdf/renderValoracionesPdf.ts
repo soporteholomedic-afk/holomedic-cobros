@@ -1,4 +1,4 @@
-import { agruparPorDestino, nombreEmpresa } from '../../domain/agrupacion';
+import { nombreEmpresa } from '../../domain/agrupacion';
 import type { ValoracionesFilter } from '../../domain/entities';
 import type { ISiglaValoracionesRepository } from '../../domain/ports';
 import {
@@ -18,9 +18,10 @@ import { MEMBRETE_HOLOMEDIC, buildValoracionHtml } from './template';
  * (email attachment) MUST regenerate IDENTICAL bytes from the posted
  * filter — this function is that single truth. Re-queries the SP (D4),
  * optionally scopes the rows to one empresa group key (U6: the per-row
- * export buttons act ONLY on their row's empresa), groups by destino,
- * renders the membretado A4 LANDSCAPE HTML and prints it through the
- * shared printer (footer numbering via the factory default overrides).
+ * export buttons act ONLY on their row's empresa), renders the flat rows
+ * as ONE continuous membretado A4 LANDSCAPE table (user-approved layout,
+ * Opción A — no per-destino grouping) and prints it through the shared
+ * printer (footer numbering via the factory default overrides).
  */
 
 /** Logo data URI from the shared cached reader ('' → text-only membrete). */
@@ -60,7 +61,7 @@ export async function renderValoracionesPdf(
     fecFin: filtro.fecFin,
     moneda: filtro.codMon === 2 ? 'DOLARES' : 'SOLES',
     fechaEmision: fechaEmisionHoy(),
-    grupos: agruparPorDestino(rows, filtro.codMon),
+    rows,
   });
 
   return getValoracionesPdfPrinter().print(html);

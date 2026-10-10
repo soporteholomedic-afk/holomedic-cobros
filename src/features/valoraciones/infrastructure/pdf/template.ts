@@ -1,7 +1,6 @@
 import type { CodigoMoneda, RepFacturacion } from '../../domain/entities';
 import { MONEDAS } from '../../domain/entities';
-import type { DestinoGrupo } from '../../domain/agrupacion';
-import { ventaPorMoneda } from '../../domain/agrupacion';
+import { destinoDe, totalesDe, ventaPorMoneda } from '../../domain/agrupacion';
 import { MEMBRETE_HOLOMEDIC, type Membrete } from '../clientHeaderResolver';
 
 // The institutional membrete now lives in the shared clientHeaderResolver
@@ -12,20 +11,26 @@ export type { Membrete };
 
 /**
  * Pure HTML template for the membretado A4 LANDSCAPE valorización report
- * (REQ-03 E-R1/E-R2, slice 2; landscape + 13 columns per the U6 user fix).
- * Everything renders from the input — no IO, no network (the logo travels
- * as a data URI), fully deterministic.
+ * (REQ-03 E-R1/E-R2, slice 2; landscape per the U6 user fix). Everything
+ * renders from the input — no IO, no network (the logo travels as a data
+ * URI), fully deterministic.
  *
  * Multi-page pagination (spike 2.0 outcome): `@page { size: A4 landscape }`
  * drives the page breaks (`preferCSSPageSize` is on in EdgePrinter); page
  * numbering comes from the printer's footer overrides, NOT from CSS margin
  * boxes (unsupported in Chromium).
  *
- * U6 column contract (exact, 13): N°. Ficha | Doc. Iden | ¿Conv.? | N° Conv
+ * U6 column contract (exact, 14): N°. Ficha | Doc. Iden | ¿Conv.? | N° Conv
  * | Nombres | Ocupación | Fecha examen | Tipo examen | CR | Anexo 7D |
- * Solicitado Por | Costos | Doc.Fac — mapped from `RepFacturacion`:
+ * Destino | Solicitado Por | Costos | Doc.Fac — mapped from `RepFacturacion`:
  * IdAten-ItemEx, NroDId, IndCon(S/N), IdConv, Pacien, DesPue, FecAte,
- * DesTCh, CenCos, Anex7D, Solici, moneda-aware venta + Simbol, NumDov.
+ * DesTCh, CenCos, Anex7D, DesDes (`destinoDe`), Solici, moneda-aware venta
+ * + Simbol, NumDov.
+ *
+ * Single continuous table (user-approved layout, Opción A): ALL rows in
+ * original query order — no per-destino headings, no per-group tables, no
+ * per-group subtotals; ONE global `tfoot` (SubTotal / IGV 18% / Total over
+ * all rows via `totalesDe`).
  */
 
 export interface ValoracionPdfInput {
@@ -39,8 +44,8 @@ export interface ValoracionPdfInput {
   moneda: string;
   /** Emission date, pre-formatted `dd/MM/yyyy`. */
   fechaEmision: string;
-  /** Destino groups (the row's `Simbol` labels every amount). */
-  grupos: DestinoGrupo[];
+  /** Flat rows in original query order (the row's `Simbol` labels every amount). */
+  rows: RepFacturacion[];
 }
 
 /** Escape HTML-sensitive characters — SP data is untrusted for markup. */
@@ -84,16 +89,17 @@ function filaHtml(row: RepFacturacion, codMon: CodigoMoneda): string {
           <td>${escapeHtml(row.DesTCh)}</td>
           <td>${escapeHtml(row.CenCos)}</td>
           <td style="text-align:center;">${escapeHtml(row.Anex7D)}</td>
+          <td>${escapeHtml(destinoDe(row))}</td>
           <td>${escapeHtml(row.Solici)}</td>
           <td style="text-align:right; white-space:nowrap;">${escapeHtml(row.Simbol)} ${monto(ventaPorMoneda(row, codMon))}</td>
           <td style="text-align:right; white-space:nowrap;">${escapeHtml(docFac)}</td>
         </tr>`;
 }
 
-function grupoHtml(grupo: DestinoGrupo, codMon: CodigoMoneda): string {
-  const filas = grupo.rows.map((row) => filaHtml(row, codMon)).join('\n');
-  return `      <h2 style="font-size:12.5px; margin:14px 0 4px; color:#0f172a;">${escapeHtml(grupo.destino)}</h2>
-      <table>
+function tablaHtml(rows: RepFacturacion[], codMon: CodigoMoneda): string {
+  const filas = rows.map((row) => filaHtml(row, codMon)).join('\n');
+  const totales = totalesDe(rows, codMon);
+  return `      <table>
         <thead>
           <tr>
             <th style="white-space:nowrap;">N°. Ficha</th>
@@ -106,6 +112,7 @@ function grupoHtml(grupo: DestinoGrupo, codMon: CodigoMoneda): string {
             <th>Tipo examen</th>
             <th>CR</th>
             <th>Anexo 7D</th>
+            <th>Destino</th>
             <th>Solicitado Por</th>
             <th style="text-align:right;">Costos</th>
             <th style="text-align:right;">Doc.Fac</th>
@@ -116,16 +123,16 @@ ${filas}
         </tbody>
         <tfoot>
           <tr class="totales">
-            <td colspan="12" style="text-align:right;">SubTotal</td>
-            <td style="text-align:right;">${escapeHtml(grupo.simbol)} ${monto(grupo.subtotal)}</td>
+            <td colspan="13" style="text-align:right;">SubTotal</td>
+            <td style="text-align:right;">${escapeHtml(totales.simbol)} ${monto(totales.subtotal)}</td>
           </tr>
           <tr class="totales">
-            <td colspan="12" style="text-align:right;">IGV 18%</td>
-            <td style="text-align:right;">${escapeHtml(grupo.simbol)} ${monto(grupo.igv)}</td>
+            <td colspan="13" style="text-align:right;">IGV 18%</td>
+            <td style="text-align:right;">${escapeHtml(totales.simbol)} ${monto(totales.igv)}</td>
           </tr>
           <tr class="total-final">
-            <td colspan="12" style="text-align:right;">Total</td>
-            <td style="text-align:right;">${escapeHtml(grupo.simbol)} ${monto(grupo.total)}</td>
+            <td colspan="13" style="text-align:right;">Total</td>
+            <td style="text-align:right;">${escapeHtml(totales.simbol)} ${monto(totales.total)}</td>
           </tr>
         </tfoot>
       </table>`;
@@ -137,12 +144,12 @@ function codMonDesdeMoneda(moneda: string): CodigoMoneda {
 
 /**
  * Build the full offline HTML document. Pure and deterministic — the
- * caller supplies the logo data URI and the grouped rows.
+ * caller supplies the logo data URI and the flat rows in query order.
  */
 export function buildValoracionHtml(input: ValoracionPdfInput): string {
   const { membrete } = input;
   const codMon = codMonDesdeMoneda(input.moneda);
-  const grupos = input.grupos.map((g) => grupoHtml(g, codMon)).join('\n');
+  const tabla = tablaHtml(input.rows, codMon);
   const direccion = membrete.direccion?.trim();
   const telefono = membrete.telefono?.trim();
 
@@ -198,7 +205,7 @@ ${clienteHtml}
     <tr><td style="color:#64748b;">Fecha de emisi&oacute;n</td><td>${escapeHtml(input.fechaEmision)}</td></tr>
   </table>
 
-${grupos}
+${tabla}
 </body>
 </html>`;
 }
