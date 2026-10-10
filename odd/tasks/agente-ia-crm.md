@@ -107,7 +107,7 @@ Cada entregable es un hito **demoable de punta a punta** y cierra con work-unit 
 
 - [ ] E1 — Canal y conversaciones
   - [x] T1 Esquema CRM_Conversaciones/CRM_Mensajes + dominio (E.164) + repos + wiring — commit `dee1d09`
-  - [ ] T2 Webhook /api/webhooks/kapso (HMAC + idempotencia + ack<10s + async)
+  - [x] T2 Webhook /api/webhooks/kapso (HMAC + idempotencia + ack<10s + async) — commit `94d8e51`
   - [ ] T3 Permiso crm_conversaciones + RUTAS_PROTEGIDAS + nav
   - [ ] T4 API bandeja + EnviadorWhatsappCrmPort (Kapso real + modo simulado) + simulador de entrada
   - [ ] T5 Vista /crm/conversaciones (bandeja estilo WhatsApp)
