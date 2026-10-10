@@ -54,10 +54,13 @@ export function normalizarCorreo(correo: string): string {
  * Free text → E.164 (agente-ia-crm E1). Strips spaces/hyphens/
  * parentheses/dots, then classifies: already international ('+' or
  * the '00' dialing prefix, 8–15 digits), local PY with the national
- * trunk '0' ('0981 234 567' → '+595981234567'), local PY móvil
+ * trunk '0' ('0981 234 567' → '+595981234567'), WhatsApp 'from' PY
+ * sin '+' (T2: '595981234567' → '+595981234567'), local PY móvil
  * without '0' (9–10 digits starting with 9) or fijo without '0'
- * (7–8 digits starting with 2/3). Total and never throws: every
- * unparsable shape → null.
+ * (7–8 digits starting with 2/3), y como último fallback cualquier
+ * bloque internacional de 8–15 dígitos con primer dígito ≠ 0
+ * (T2: '12125551234' EEUU → '+12125551234'). Total and never
+ * throws: every unparsable shape → null.
  */
 export function normalizarTelefonoE164(entrada: string): string | null {
   const limpio = entrada.replace(/[\s\-().]/g, '');
@@ -80,6 +83,12 @@ export function normalizarTelefonoE164(entrada: string): string | null {
     if (local.length < 7 || local.length > 10) return null;
     return `+595${local}`;
   }
+  // WhatsApp 'from' PY sin '+' (formato Kapso/Meta, agente-ia-crm T2):
+  // dígitos internacionales que ya traen el país ('595981234567' —
+  // '595' + 6–10 locales = 9–13 dígitos totales).
+  if (limpio.startsWith('595') && limpio.length >= 9 && limpio.length <= 13) {
+    return `+${limpio}`;
+  }
   // Móvil PY without the trunk '0' ('981234567').
   if (limpio.startsWith('9') && limpio.length >= 9 && limpio.length <= 10) {
     return `+595${limpio}`;
@@ -88,7 +97,10 @@ export function normalizarTelefonoE164(entrada: string): string | null {
   if ((limpio.startsWith('2') || limpio.startsWith('3')) && limpio.length >= 7 && limpio.length <= 8) {
     return `+595${limpio}`;
   }
-  return null;
+  // Último fallback (T2): internacional tal cual sin '+' — bloque de
+  // 8–15 dígitos, primer dígito ≠ 0 (garantizado: el tronco '0' ya se
+  // resolvió arriba y devuelve null fuera de rango).
+  return internacionalE164(limpio);
 }
 
 /** 8–15 dígitos (E.164), sin cero inicial tras el '+' (ITU invalid). */

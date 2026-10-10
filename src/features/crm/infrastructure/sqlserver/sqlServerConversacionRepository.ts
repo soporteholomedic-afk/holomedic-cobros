@@ -1,5 +1,6 @@
 import * as mssql from 'mssql';
 
+import { normalizarTelefonoE164, telefonoDigitosClave } from '../../domain/normalizar';
 import type {
   CanalConversacion,
   ConversacionCrm,
@@ -7,6 +8,7 @@ import type {
 } from '../../domain/entities';
 import type {
   BuscarConversacionCanal,
+  CandidatoVinculacion,
   ConversacionCrmRepository,
   FiltrosConversaciones,
   VincularConversacionDatos,
@@ -220,5 +222,50 @@ export class SqlServerConversacionRepository implements ConversacionCrmRepositor
       .query(
         'UPDATE dbo.CRM_Conversaciones SET noLeidos = 0, actualizadoEn = SYSDATETIME() WHERE id = @id',
       );
+  }
+
+  async registrarActividad(id: number): Promise<void> {
+    await this.pool
+      .request()
+      .input('id', mssql.Int, id)
+      .query(
+        `UPDATE dbo.CRM_Conversaciones
+         SET ultimoMensajeEn = SYSDATETIME(), noLeidos = noLeidos + 1, actualizadoEn = SYSDATETIME()
+         WHERE id = @id`,
+      );
+  }
+
+  async buscarCandidatosVinculacion(telefonoE164: string): Promise<CandidatoVinculacion[]> {
+    const result = await this.pool.request().query(`
+      SELECT c.id, c.empresaId, c.nombre, c.telefono, e.razonSocial
+      FROM dbo.CRM_Contactos c
+      JOIN dbo.CRM_Empresas e ON e.id = c.empresaId
+      WHERE c.telefono IS NOT NULL
+    `);
+    const claveEntrante = telefonoDigitosClave(telefonoE164);
+    // teléfono es texto libre: la comparación se hace en TS tras
+    // normalizar ambos lados (normalizarTelefonoE164 + digitos clave).
+    // Optimizable con una columna normalizada si la tabla crece.
+    const candidatos: CandidatoVinculacion[] = [];
+    for (const row of result.recordset as Array<{
+      id: number;
+      empresaId: number;
+      nombre: string;
+      telefono: string;
+      razonSocial: string;
+    }>) {
+      const e164 = normalizarTelefonoE164(row.telefono);
+      if (e164 === null) continue;
+      if (telefonoDigitosClave(e164) === claveEntrante) {
+        candidatos.push({
+          empresaId: row.empresaId,
+          contactoId: row.id,
+          nombreContacto: row.nombre,
+          razonSocial: row.razonSocial,
+          telefono: row.telefono,
+        });
+      }
+    }
+    return candidatos;
   }
 }

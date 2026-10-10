@@ -563,6 +563,21 @@ export interface VincularConversacionDatos {
 }
 
 /**
+ * One CRM_Contactos row (joined to its empresa) whose free-text phone
+ * matches the incoming E.164 — the autovinculación candidate list
+ * (agente-ia-crm T2). The adapter normalizes both sides in TS because
+ * CRM_Contactos.telefono is free text; a normalized column is the
+ * documented optimization if the table grows.
+ */
+export interface CandidatoVinculacion {
+  empresaId: number;
+  contactoId: number;
+  nombreContacto: string;
+  razonSocial: string;
+  telefono: string;
+}
+
+/**
  * Outbound port for the conversation lifecycle (CRM_Conversaciones).
  * `buscarPorCanal` returns the most recent row matching the canal key
  * (the filtered unique indexes keep it unique in practice; the ORDER
@@ -583,6 +598,20 @@ export interface ConversacionCrmRepository {
     asignadaA?: string | null,
   ): Promise<ConversacionCrm | null>;
   marcarMensajesLeidos(id: number): Promise<void>;
+  /**
+   * Inbound-activity tick (agente-ia-crm T2): ultimoMensajeEn = now
+   * and noLeidos + 1 in ONE write — the webhook use case calls it
+   * after persisting each IN message.
+   */
+  registrarActividad(id: number): Promise<void>;
+  /**
+   * Autovinculación candidates (T2): contactos whose free-text phone
+   * normalizes to the SAME digit key as the incoming E.164. The SQL
+   * fetches every contacto with telefono (the match runs in TS —
+   * free-text column, see CandidatoVinculacion for the optimization
+   * note); an empty telefono is not searchable at all.
+   */
+  buscarCandidatosVinculacion(telefonoE164: string): Promise<CandidatoVinculacion[]>;
 }
 
 /** Backward (older-first) pagination window for the thread read. */
