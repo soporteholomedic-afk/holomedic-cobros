@@ -206,3 +206,117 @@ export interface Asignacion {
   actorUsuario: string;
   createdAt: string;
 }
+
+// ---- Conversaciones del agente IA (agente-ia-crm, E1) ----
+
+/** Canal de entrada (E1 WhatsApp vía Kapso; EMAIL llega en E5). */
+export type CanalConversacion = 'WHATSAPP' | 'EMAIL';
+
+/**
+ * The conversation lifecycle (agente-ia-crm decision 6; CHECK-backed
+ * in CRM_Conversaciones): PENDIENTE_VINCULACION at birth (sin match
+ * de contacto), ACTIVA_IA while la Guía answers alone,
+ * REQUIERE_HUMANO when she escalates, TOMADA_HUMANO once an operator
+ * takes over, PAUSADA (retención/kill switch) and CERRADA.
+ */
+export type EstadoConversacion =
+  | 'ACTIVA_IA'
+  | 'REQUIERE_HUMANO'
+  | 'TOMADA_HUMANO'
+  | 'PAUSADA'
+  | 'PENDIENTE_VINCULACION'
+  | 'CERRADA';
+
+/** Who authored one message: the client, la Guía (IA) or an operator. */
+export type EmisorMensaje = 'CLIENTE' | 'IA' | 'HUMANO';
+
+/** Quién gestiona la conversación: la Guía sola o un humano. */
+export type ModoConversacion = 'IA' | 'HUMANO';
+
+/** Direccion del mensaje respecto al CRM (inbound / outbound). */
+export type DireccionMensaje = 'IN' | 'OUT';
+
+/** Tipo de payload (WhatsApp text/media/template). */
+export type TipoMensajeCrm = 'TEXTO' | 'MEDIA' | 'PLANTILLA';
+
+/** Resultado del envío por el canal (mensajes OUT); null = pendiente/IN. */
+export type EstadoEnvioMensaje = 'ENVIADO' | 'FALLIDO';
+
+/**
+ * One CRM_Conversaciones row — the E1 foundation table: the channel
+ * thread identified per canal by its remote id (`identificadorCanal`)
+ * or the normalized E.164 `telefono`, optionally vinculado to the
+ * registry (`empresaId`/`contactoId`, NULL until vinculacion). All
+ * timestamps cross as ISO strings (DATETIME2(0), adapter-mapped).
+ */
+export interface ConversacionCrm {
+  id: number;
+  empresaId: number | null;
+  contactoId: number | null;
+  canal: CanalConversacion;
+  /** Normalized E.164 of the remote (domain normalizarTelefonoE164). */
+  telefono: string | null;
+  /** Canal-scoped remote id (e.g. Kapso from_user_id). */
+  identificadorCanal: string | null;
+  estado: EstadoConversacion;
+  asignadaA: string | null;
+  modo: ModoConversacion;
+  ultimoMensajeEn: string | null;
+  noLeidos: number;
+  creadoEn: string;
+  actualizadoEn: string;
+}
+
+/**
+ * One CRM_Mensajes row — the auditable thread item (E1).
+ * `fuentes`/`score`/`modelo` are the E2 RAG audit columns, nullable
+ * from day one so E2 adds no DDL.
+ */
+export interface MensajeCrm {
+  id: number;
+  conversacionId: number;
+  direccion: DireccionMensaje;
+  emisor: EmisorMensaje;
+  cuerpo: string;
+  tipo: TipoMensajeCrm;
+  canal: CanalConversacion;
+  /** WhatsApp message id (dedup/rastreabilidad del canal). */
+  wamid: string | null;
+  /** Webhook X-Idempotency-Key — unique filtered index backs dedup. */
+  idempotenciaKey: string | null;
+  estadoEnvio: EstadoEnvioMensaje | null;
+  fuentes: string | null;
+  score: number | null;
+  modelo: string | null;
+  creadoEn: string;
+}
+
+// ---- Input DTOs (conversaciones, agente-ia-crm E1) ----
+
+export interface CrearConversacionInput {
+  canal: CanalConversacion;
+  /** Normalized E.164 (the webhook flow derives it before persisting). */
+  telefono?: string | null;
+  identificadorCanal?: string | null;
+  empresaId?: number | null;
+  contactoId?: number | null;
+  /** Defaults to PENDIENTE_VINCULACION (sin match de contacto). */
+  estado?: EstadoConversacion;
+  modo?: ModoConversacion;
+  asignadaA?: string | null;
+}
+
+export interface CrearMensajeInput {
+  conversacionId: number;
+  direccion: DireccionMensaje;
+  emisor: EmisorMensaje;
+  cuerpo: string;
+  tipo?: TipoMensajeCrm;
+  canal?: CanalConversacion;
+  wamid?: string | null;
+  idempotenciaKey?: string | null;
+  estadoEnvio?: EstadoEnvioMensaje | null;
+  fuentes?: string | null;
+  score?: number | null;
+  modelo?: string | null;
+}

@@ -3,8 +3,14 @@ import type {
   Flujo,
   AccionAsignacion,
   ActualizarEmpresaInput,
+  CanalConversacion,
+  ConversacionCrm,
+  CrearConversacionInput,
   CrearEmpresaInput,
+  CrearMensajeInput,
   Empresa,
+  EstadoConversacion,
+  MensajeCrm,
   PipelineEmpresa,
   SectorCrm,
   TipoEmpresa,
@@ -516,4 +522,87 @@ export interface FilaPanelCrm {
 export interface CrmPanelRepositoryPort {
   /** Every empresa with its panel projection, ordered by id (stable). */
   listarEmpresasPanel(): Promise<FilaPanelCrm[]>;
+}
+
+// ---------------------------------------------------------------------------
+// Conversaciones ports (agente-ia-crm E1) — the channel foundation: the
+// webhook flow and the bandeja read/operate the CRM_Conversaciones /
+// CRM_Mensajes rows through these two contracts. Separate ports because
+// they are separate capabilities (thread persistence vs conversation
+// lifecycle); one SQL adapter implements each (ADR-3 one-class-one-port
+// here — no cross-table write composes both yet).
+// ---------------------------------------------------------------------------
+
+/**
+ * Lookup key for the inbound-routing match: exactly one of the two
+ * (the webhook prefers telefono — the vinculación key — and falls
+ * back to the canal-scoped remote id).
+ */
+export interface BuscarConversacionCanal {
+  identificadorCanal?: string;
+  telefono?: string;
+}
+
+/** Bandeja filters (E1): live search over the display fields + paging. */
+export interface FiltrosConversaciones {
+  /** Free-text match over empresa.razonSocial / contacto.nombre / telefono. */
+  busqueda?: string;
+  estado?: EstadoConversacion;
+  limite?: number;
+  offset?: number;
+}
+
+/** The vinculación payload (E1: asociar a empresa/contacto existentes). */
+export interface VincularConversacionDatos {
+  empresaId: number;
+  contactoId: number;
+  /** Optional re-key (e.g. the operator corrected the phone). */
+  telefono?: string;
+  /** Optional state change in the same write (defaults: unchanged). */
+  estado?: EstadoConversacion;
+}
+
+/**
+ * Outbound port for the conversation lifecycle (CRM_Conversaciones).
+ * `buscarPorCanal` returns the most recent row matching the canal key
+ * (the filtered unique indexes keep it unique in practice; the ORDER
+ * BY is the determinism backstop). Every write touches `actualizadoEn`.
+ */
+export interface ConversacionCrmRepository {
+  crear(datos: CrearConversacionInput): Promise<ConversacionCrm>;
+  obtenerPorId(id: number): Promise<ConversacionCrm | null>;
+  buscarPorCanal(
+    canal: CanalConversacion,
+    clave: BuscarConversacionCanal,
+  ): Promise<ConversacionCrm | null>;
+  listar(filtros?: FiltrosConversaciones): Promise<ConversacionCrm[]>;
+  vincular(id: number, datos: VincularConversacionDatos): Promise<ConversacionCrm | null>;
+  actualizarEstado(
+    id: number,
+    estado: EstadoConversacion,
+    asignadaA?: string | null,
+  ): Promise<ConversacionCrm | null>;
+  marcarMensajesLeidos(id: number): Promise<void>;
+}
+
+/** Backward (older-first) pagination window for the thread read. */
+export interface ListarMensajesOpciones {
+  limite: number;
+  /** Exclusive cursor: return rows with id < antesDeId (page 1: omit). */
+  antesDeId?: number;
+}
+
+/**
+ * Outbound port for the thread rows (CRM_Mensajes). `existePor…`
+ * backs the webhook X-Idempotency-Key dedup (checked BEFORE insert;
+ * the filtered unique index is the race backstop). `listarPor…`
+ * pages the hilo newest-first (DESC) — the view renders reversed.
+ */
+export interface MensajeCrmRepository {
+  crear(datos: CrearMensajeInput): Promise<MensajeCrm>;
+  existePorIdempotenciaKey(key: string): Promise<boolean>;
+  listarPorConversacion(
+    conversacionId: number,
+    opciones: ListarMensajesOpciones,
+  ): Promise<MensajeCrm[]>;
 }

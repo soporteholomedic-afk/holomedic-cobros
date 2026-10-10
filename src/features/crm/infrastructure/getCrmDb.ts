@@ -6,8 +6,11 @@ import { migrate } from './sqlserver/migrate';
 import { SqlServerEmpresaRepository } from './sqlserver/sqlServerEmpresaRepository';
 import { SqlServerPipelineRepository } from './sqlserver/sqlServerPipelineRepository';
 import { SqlServerAsignacionesRepository } from './sqlserver/sqlServerAsignacionesRepository';
+import { SqlServerConversacionRepository } from './sqlserver/sqlServerConversacionRepository';
+import { SqlServerMensajeRepository } from './sqlserver/sqlServerMensajeRepository';
 import { SqlServerCrmImportador } from './importar/importadorCrm';
 import type {
+  ConversacionCrmRepository,
   CrmActividadesRepositoryPort,
   CrmAsignacionesRepositoryPort,
   CrmEmpresaRepositoryPort,
@@ -18,6 +21,7 @@ import type {
   CrmPipelineRepositoryPort,
   CrmResultadosRepositoryPort,
   CrmTransicionesRepositoryPort,
+  MensajeCrmRepository,
 } from '../domain/ports';
 
 /**
@@ -69,6 +73,17 @@ export interface CrmDb {
    * adapter instance implements this port too (ADR-3).
    */
   panel: CrmPanelRepositoryPort;
+  /**
+   * Conversation adapter (agente-ia-crm E1): the CRM_Conversaciones
+   * lifecycle (bandeja, vinculación, estado) on the same migrated
+   * pool. Optional (Contacto.cargo precedent) so pre-existing
+   * route-test containers stay valid; the real factory ALWAYS
+   * provides it — E1+ call sites consume it through getCrmDb().
+   */
+  conversaciones?: ConversacionCrmRepository;
+  /** Thread adapter (agente-ia-crm E1): the CRM_Mensajes rows (same
+   * optional-for-fakes rule as conversaciones). */
+  mensajes?: MensajeCrmRepository;
 }
 
 let cached: Promise<CrmDb> | null = null;
@@ -98,6 +113,8 @@ export function getCrmDb(): Promise<CrmDb> {
       asignaciones: new SqlServerAsignacionesRepository(pool),
       envios: pipelines,
       panel: pipelines,
+      conversaciones: new SqlServerConversacionRepository(pool),
+      mensajes: new SqlServerMensajeRepository(pool),
     };
   })();
   return cached;

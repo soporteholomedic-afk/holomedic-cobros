@@ -41,3 +41,83 @@ export function normalizarNombre(nombre: string): string {
 export function normalizarCorreo(correo: string): string {
   return correo.trim().toLowerCase();
 }
+
+// ---------------------------------------------------------------------------
+// Phone normalization (agente-ia-crm E1) — free-text phones live in
+// CRM_Contactos.telefono today; the canal (E1 riesgo 2) needs ONE
+// canonical key to route inbound WhatsApp messages to a conversation
+// and to vincular it with the matching CRM_Contactos row. That key is
+// E.164 Paraguay, persisted in CRM_Conversaciones.telefono.
+// ---------------------------------------------------------------------------
+
+/**
+ * Free text → E.164 (agente-ia-crm E1). Strips spaces/hyphens/
+ * parentheses/dots, then classifies: already international ('+' or
+ * the '00' dialing prefix, 8–15 digits), local PY with the national
+ * trunk '0' ('0981 234 567' → '+595981234567'), local PY móvil
+ * without '0' (9–10 digits starting with 9) or fijo without '0'
+ * (7–8 digits starting with 2/3). Total and never throws: every
+ * unparsable shape → null.
+ */
+export function normalizarTelefonoE164(entrada: string): string | null {
+  const limpio = entrada.replace(/[\s\-().]/g, '');
+  if (limpio === '') return null;
+
+  if (limpio.startsWith('+')) {
+    return internacionalE164(limpio.slice(1));
+  }
+  // '00' international dialing prefix (Paraguay telecom habit):
+  // '00595…' means the same as '+595…'.
+  if (limpio.startsWith('00')) {
+    return internacionalE164(limpio.slice(2));
+  }
+  if (!/^\d+$/.test(limpio)) return null;
+
+  // Local PY with the national trunk '0' → '+595' + digits without it
+  // ('0981 234 567' → '+595981234567', '0211234567' → '+595211234567').
+  if (limpio.startsWith('0')) {
+    const local = limpio.slice(1);
+    if (local.length < 7 || local.length > 10) return null;
+    return `+595${local}`;
+  }
+  // Móvil PY without the trunk '0' ('981234567').
+  if (limpio.startsWith('9') && limpio.length >= 9 && limpio.length <= 10) {
+    return `+595${limpio}`;
+  }
+  // Fijo PY without the trunk '0' ('29112345' — interior 7–8 dígitos).
+  if ((limpio.startsWith('2') || limpio.startsWith('3')) && limpio.length >= 7 && limpio.length <= 8) {
+    return `+595${limpio}`;
+  }
+  return null;
+}
+
+/** 8–15 dígitos (E.164), sin cero inicial tras el '+' (ITU invalid). */
+function internacionalE164(digitos: string): string | null {
+  if (!/^\d+$/.test(digitos)) return null;
+  if (digitos.startsWith('0')) return null;
+  if (digitos.length < 8 || digitos.length > 15) return null;
+  return `+${digitos}`;
+}
+
+/**
+ * Matching key: pure digits, no '+' ('+595981234567' →
+ * '595981234567'). Works on free text too ('(0981) 234-567' →
+ * '0981234567') — used for comparisons, NOT for storage (that is
+ * always the normalized E.164).
+ */
+export function telefonoDigitosClave(telefono: string): string {
+  return telefono.replace(/[^0-9]/g, '');
+}
+
+/**
+ * Compare one free-text CRM_Contactos phone against one canonical
+ * E.164: both sides are normalized to E.164 first (so a local trunk
+ * '0' matches the stored '+595…' form), then compared by digit key.
+ * Null normalization on either side → false.
+ */
+export function telefonosCoinciden(telefonoLibre: string, e164: string): boolean {
+  const a = normalizarTelefonoE164(telefonoLibre);
+  const b = normalizarTelefonoE164(e164);
+  if (a === null || b === null) return false;
+  return telefonoDigitosClave(a) === telefonoDigitosClave(b);
+}

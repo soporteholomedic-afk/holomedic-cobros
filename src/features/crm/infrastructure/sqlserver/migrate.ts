@@ -54,6 +54,21 @@ import * as mssql from 'mssql';
  *   operator-facing `CRM_Actividades` history (different concern, own
  *   5-key plantilla catalog). Empresa FK CASCADE; contacto FK is
  *   integrity-only (NO ACTION — the two-cascade-paths rule).
+ * - `CRM_Conversaciones` (agente-ia-crm E1) — one row per channel
+ *   thread: canal-scoped remote identity (`identificadorCanal`, e.g.
+ *   Kapso from_user_id) OR the normalized E.164 `telefono` (the
+ *   vinculación key), optionally linked to the registry
+ *   (`empresaId`/`contactoId`, NULL until vinculada). Two filtered
+ *   unique indexes keep one conversation per canal+key; the inbox
+ *   scans (estado, ultimoMensajeEn DESC). Empresa FK SET NULL —
+ *   conversations are channel data, they SURVIVE empresa deletion;
+ *   contacto FK is integrity-only (NO ACTION — see the inline note).
+ * - `CRM_Mensajes` (agente-ia-crm E1) — the auditable thread item
+ *   (direccion IN/OUT, emisor CLIENTE/IA/HUMANO). `idempotenciaKey`
+ *   backs the webhook X-Idempotency-Key dedup via a filtered unique
+ *   index; `fuentes`/`score`/`modelo` are the E2 RAG audit columns,
+ *   nullable from day one so E2 adds no DDL. BIGINT id (high-volume
+ *   history, Transiciones precedent).
  *
  * Normalization columns (rediseno-crm-panel, design D6): additive and
  * nullable, carried by the CREATE blocks for fresh installs and added
@@ -250,6 +265,50 @@ BEGIN
     createdAt    DATETIME2(0)   NOT NULL DEFAULT SYSDATETIME()
   );
 END;
+IF NOT EXISTS (SELECT 1 FROM sys.tables WHERE name = 'CRM_Conversaciones' AND schema_id = SCHEMA_ID('dbo'))
+BEGIN
+  CREATE TABLE dbo.CRM_Conversaciones (
+    id                 INT            IDENTITY(1,1) NOT NULL PRIMARY KEY,
+    -- SET NULL on empresa: the conversation survives the empresa's
+    -- deletion (channel data, not empresa-owned data).
+    empresaId          INT            NULL CONSTRAINT FK_CRM_Conversaciones_Empresa REFERENCES dbo.CRM_Empresas (id) ON DELETE SET NULL,
+    -- NO ACTION on the contacto FK (Actividades/EnviosCorreos
+    -- precedent): SQL Server forbids two cascade paths — an empresa
+    -- DELETE already reaches this table via the SET NULL above and
+    -- again through Contactos (CASCADE), which raises error 1785 at
+    -- CREATE time if this FK also carries a referential action.
+    contactoId         INT            NULL CONSTRAINT FK_CRM_Conversaciones_Contacto REFERENCES dbo.CRM_Contactos (id) ON DELETE NO ACTION,
+    canal              NVARCHAR(20)   NOT NULL DEFAULT 'WHATSAPP' CONSTRAINT CK_CRM_Conversaciones_Canal CHECK (canal IN ('WHATSAPP','EMAIL')),
+    telefono           VARCHAR(20)    NULL,
+    identificadorCanal VARCHAR(64)    NULL,
+    estado             VARCHAR(24)    NOT NULL DEFAULT 'PENDIENTE_VINCULACION' CONSTRAINT CK_CRM_Conversaciones_Estado CHECK (estado IN ('ACTIVA_IA','REQUIERE_HUMANO','TOMADA_HUMANO','PAUSADA','PENDIENTE_VINCULACION','CERRADA')),
+    asignadaA          NVARCHAR(200)  NULL,
+    modo               NVARCHAR(10)   NOT NULL DEFAULT 'IA' CONSTRAINT CK_CRM_Conversaciones_Modo CHECK (modo IN ('IA','HUMANO')),
+    ultimoMensajeEn    DATETIME2(0)   NULL,
+    noLeidos           INT            NOT NULL DEFAULT 0,
+    creadoEn           DATETIME2(0)   NOT NULL DEFAULT SYSDATETIME(),
+    actualizadoEn      DATETIME2(0)   NOT NULL DEFAULT SYSDATETIME()
+  );
+END;
+IF NOT EXISTS (SELECT 1 FROM sys.tables WHERE name = 'CRM_Mensajes' AND schema_id = SCHEMA_ID('dbo'))
+BEGIN
+  CREATE TABLE dbo.CRM_Mensajes (
+    id              BIGINT          IDENTITY(1,1) NOT NULL PRIMARY KEY,
+    conversacionId  INT             NOT NULL CONSTRAINT FK_CRM_Mensajes_Conversacion REFERENCES dbo.CRM_Conversaciones (id) ON DELETE CASCADE,
+    direccion       VARCHAR(3)      NOT NULL CONSTRAINT CK_CRM_Mensajes_Direccion CHECK (direccion IN ('IN','OUT')),
+    emisor          VARCHAR(10)     NOT NULL CONSTRAINT CK_CRM_Mensajes_Emisor CHECK (emisor IN ('CLIENTE','IA','HUMANO')),
+    cuerpo          NVARCHAR(4000)  NOT NULL,
+    tipo            NVARCHAR(12)    NOT NULL DEFAULT 'TEXTO' CONSTRAINT CK_CRM_Mensajes_Tipo CHECK (tipo IN ('TEXTO','MEDIA','PLANTILLA')),
+    canal           NVARCHAR(20)    NOT NULL DEFAULT 'WHATSAPP',
+    wamid           VARCHAR(128)    NULL,
+    idempotenciaKey VARCHAR(128)    NULL,
+    estadoEnvio     VARCHAR(10)     NULL CONSTRAINT CK_CRM_Mensajes_EstadoEnvio CHECK (estadoEnvio IN ('ENVIADO','FALLIDO')),
+    fuentes         NVARCHAR(MAX)   NULL,
+    score           DECIMAL(4,3)    NULL,
+    modelo          NVARCHAR(60)    NULL,
+    creadoEn        DATETIME2(0)    NOT NULL DEFAULT SYSDATETIME()
+  );
+END;
 
 -- Normalization columns (rediseno-crm-panel, design D6): gated,
 -- additive, nullable — no-ops on fresh installs (the CREATE blocks
@@ -343,6 +402,45 @@ BEGIN
   -- "first correo" lookup scan per-empresa dispatches, newest first.
   CREATE INDEX IX_CRM_EnviosCorreos_EmpresaFecha
     ON dbo.CRM_EnviosCorreos (empresaId, createdAt DESC);
+END;
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'UX_CRM_Conversaciones_CanalIdentificador' AND object_id = OBJECT_ID('dbo.CRM_Conversaciones'))
+BEGIN
+  -- Inbound routing by canal-scoped remote id (E1: one thread per
+  -- Kapso from_user_id); filtered so legacy NULL rows never collide.
+  CREATE UNIQUE INDEX UX_CRM_Conversaciones_CanalIdentificador
+    ON dbo.CRM_Conversaciones (canal, identificadorCanal)
+    WHERE identificadorCanal IS NOT NULL;
+END;
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'UX_CRM_Conversaciones_CanalTelefono' AND object_id = OBJECT_ID('dbo.CRM_Conversaciones'))
+BEGIN
+  -- Inbound routing by E.164 (the vinculación key): one thread per
+  -- canal+telefono; filtered so NULL phones never collide.
+  CREATE UNIQUE INDEX UX_CRM_Conversaciones_CanalTelefono
+    ON dbo.CRM_Conversaciones (canal, telefono)
+    WHERE telefono IS NOT NULL;
+END;
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_CRM_Conversaciones_EstadoUltimo' AND object_id = OBJECT_ID('dbo.CRM_Conversaciones'))
+BEGIN
+  -- Bandeja scan (E1): the inbox groups by estado and orders by the
+  -- last message timestamp, newest first.
+  CREATE INDEX IX_CRM_Conversaciones_EstadoUltimo
+    ON dbo.CRM_Conversaciones (estado, ultimoMensajeEn DESC);
+END;
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'UX_CRM_Mensajes_Idempotencia' AND object_id = OBJECT_ID('dbo.CRM_Mensajes'))
+BEGIN
+  -- Webhook dedup backstop (E1): the app checks
+  -- existePorIdempotenciaKey BEFORE insert; this filtered unique
+  -- index makes a racing duplicate impossible to persist.
+  CREATE UNIQUE INDEX UX_CRM_Mensajes_Idempotencia
+    ON dbo.CRM_Mensajes (idempotenciaKey)
+    WHERE idempotenciaKey IS NOT NULL;
+END;
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_CRM_Mensajes_ConversacionHilo' AND object_id = OBJECT_ID('dbo.CRM_Mensajes'))
+BEGIN
+  -- Thread read (E1): one page of one conversation, id DESC, with the
+  -- antesDeId cursor walking backwards through the same index.
+  CREATE INDEX IX_CRM_Mensajes_ConversacionHilo
+    ON dbo.CRM_Mensajes (conversacionId, id DESC);
 END;
 `;
 
