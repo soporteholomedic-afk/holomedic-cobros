@@ -36,9 +36,15 @@ vi.mock('@/features/envio-resultados/presentation/components/SpitchSelector', ()
   SpitchSelector: (props: {
     area: string;
     target: string;
+    selectedId?: string;
     onSelect: (spitch: unknown) => void;
   }) => (
-    <div data-testid="spitch-selector-mock" data-area={props.area} data-target={props.target}>
+    <div
+      data-testid="spitch-selector-mock"
+      data-area={props.area}
+      data-target={props.target}
+      data-selected-id={props.selectedId ?? ''}
+    >
       <button
         type="button"
         data-testid="spitch-mock-select"
@@ -276,6 +282,25 @@ describe('CobranzaEmailComposer', () => {
     const selector = screen.getByTestId('spitch-selector-mock');
     expect(selector.getAttribute('data-area')).toBe('cobranza');
     expect(selector.getAttribute('data-target')).toBe('company');
+  });
+
+  it('pasa selectedId a SpitchSelector para que el dropdown siga la plantilla elegida (regresión de selección)', async () => {
+    stubFetchRouter();
+
+    renderComposer();
+
+    // Nothing selected yet — the selector resolves its own display value.
+    const selector = screen.getByTestId('spitch-selector-mock');
+    expect(selector.getAttribute('data-selected-id')).toBe('');
+
+    selectTemplate();
+
+    // The composer echoes the chosen template id back so the controlled
+    // <select> stays on the user's choice instead of snapping back to
+    // the first option (the "no me deja cambiar la plantilla" bug).
+    await waitFor(() =>
+      expect(selector.getAttribute('data-selected-id')).toBe(SAMPLE_SPITCH.id),
+    );
   });
 
   it('al seleccionar plantilla interpola en tiempo real con la firma compuesta del servidor inlined en {{firma}}', async () => {

@@ -257,158 +257,196 @@ export function TemplateEditor({ areaConfig, templates }: TemplateEditorProps) {
   return (
     <ClientOnly>
       <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
-        <div className="grid grid-cols-1 lg:grid-cols-[16rem_1fr] gap-6 p-6">
-          {/* ===== LEFT: Token palette ===== */}
-          <TokenPalette areaConfig={areaConfig} onPickTable={handlePickTable} />
+        <main className="mx-auto w-full max-w-7xl px-4 py-6 text-slate-900 dark:text-slate-100 sm:px-6 lg:py-8">
+          <header className="mb-6 border-b border-slate-200 pb-5 dark:border-slate-700">
+            <p className="mb-1 text-sm font-medium text-sky-700 dark:text-sky-300">{areaConfig.label}</p>
+            <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">Editor de plantillas</h1>
+            <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600 dark:text-slate-300">
+              Configura el correo, arrastra variables al asunto o al cuerpo y comprueba el resultado antes de guardar.
+            </p>
+          </header>
 
-        {/* ===== RIGHT: Editor form ===== */}
-        <div className="space-y-4">
-          {/* Template selector + name + type */}
-          <div className="flex flex-wrap items-end gap-3">
-            <div className="space-y-1">
-              <label htmlFor="template-select" className="block text-xs font-semibold uppercase tracking-wider text-slate-500">
-                Plantilla
-              </label>
-              <select
-                id="template-select"
-                aria-label="Plantilla"
-                value={selectedTemplateId}
-                onChange={(e) => handleSelectTemplate(e.target.value)}
-                className="rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-2 text-sm"
-              >
-                <option value="">— Nueva plantilla —</option>
-                {templates.map((t) => (
-                  <option key={t.id} value={t.id}>
-                    {t.name}
-                  </option>
-                ))}
-              </select>
+          <div className="grid min-w-0 gap-6 lg:grid-cols-[minmax(0,16rem)_minmax(0,1fr)] lg:items-start">
+            <div className="min-w-0 rounded-xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-800/60">
+              <h2 className="mb-1 text-base font-semibold">Variables disponibles</h2>
+              <p className="mb-4 text-sm leading-5 text-slate-600 dark:text-slate-300">
+                Arrastra una variable al asunto o al cuerpo. Para insertar una tabla, elige sus columnas.
+              </p>
+              <TokenPalette areaConfig={areaConfig} onPickTable={handlePickTable} />
             </div>
-            <div className="flex-1 min-w-[12rem] space-y-1">
-              <label htmlFor="template-name" className="block text-xs font-semibold uppercase tracking-wider text-slate-500">
-                Nombre
-              </label>
-              <input
-                id="template-name"
-                aria-label="Nombre de la plantilla"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                className="w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-2 text-sm"
-                placeholder="Nombre de la plantilla"
-              />
-            </div>
-            <div className="space-y-1">
-              <label htmlFor="template-type" className="block text-xs font-semibold uppercase tracking-wider text-slate-500">
-                Tipo
-              </label>
-              <select
-                id="template-type"
-                aria-label="Tipo"
-                value={type}
-                onChange={(e) => setType(e.target.value as SpitchType)}
-                className="rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-2 text-sm"
-              >
-                {SPITCH_TYPES.map((t) => (
-                  <option key={t} value={t}>
-                    {t === 'company' ? 'Empresa' : 'Paciente'}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <label className="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-200">
-              <input
-                type="checkbox"
-                checked={isDefault}
-                onChange={(e) => setIsDefault(e.target.checked)}
-              />
-              Por defecto
-            </label>
-          </div>
 
-          {/* Subject (dnd drop target) */}
-          <SubjectDropZone>
-            <SubjectTokenInput
-              ref={subjectInputRef}
-              value={subject}
-              onChange={setSubject}
-              areaConfig={areaConfig}
-            />
-          </SubjectDropZone>
-
-          {/* Body editor (dnd drop target) */}
-          <BodyDropZone className="rounded-lg border border-slate-200 dark:border-slate-700 p-2 min-h-[20rem]">
-            {isClient ? (
-              <Suspense
-                fallback={
-                  <div data-testid="editor-loading" className="text-sm text-slate-400 p-4">
-                    Cargando editor…
+            <div className="min-w-0 space-y-6">
+              <section aria-labelledby="template-config-heading" className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-800/60 sm:p-6">
+                <div className="mb-5">
+                  <h2 id="template-config-heading" className="text-lg font-semibold">Configuración de la plantilla</h2>
+                  <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">Selecciona una plantilla existente o crea una nueva.</p>
+                </div>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div className="min-w-0 space-y-1.5">
+                    <label htmlFor="template-select" className="block text-sm font-medium text-slate-700 dark:text-slate-200">
+                      Plantilla
+                    </label>
+                    <select
+                      id="template-select"
+                      value={selectedTemplateId}
+                      onChange={(e) => handleSelectTemplate(e.target.value)}
+                      className="min-h-11 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus-visible:border-sky-600 focus-visible:ring-2 focus-visible:ring-sky-500 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100"
+                    >
+                      <option value="">— Nueva plantilla —</option>
+                      {templates.map((t) => (
+                        <option key={t.id} value={t.id}>
+                          {t.name}
+                        </option>
+                      ))}
+                    </select>
                   </div>
-                }
-              >
-                <BlockNoteEditorViewLazy
-                  ref={editorViewRef}
-                  areaConfig={areaConfig}
-                  onChange={() => {
-                    /* dirty tracking — PR 4 can wire finer-grained change detection */
-                  }}
-                  onTokenClick={(attrs) => {
-                    // Edit-in-place: re-open the picker for an existing table chip.
-                    if (attrs.key === 'tabla' && attrs.table) {
-                      const table = areaConfig.predefinedTables.find((t) => t.name === attrs.table);
-                      if (table) {
-                        setPicker({ mode: 'edit', table, editAttrs: attrs });
-                      }
-                    }
-                  }}
-                />
-              </Suspense>
-            ) : (
-              <div data-testid="editor-loading" className="text-sm text-slate-400 p-4">
-                Cargando editor…
+                  <div className="min-w-0 space-y-1.5">
+                    <label htmlFor="template-name" className="block text-sm font-medium text-slate-700 dark:text-slate-200">
+                      Nombre de la plantilla
+                    </label>
+                    <input
+                      id="template-name"
+                      value={name}
+                      onChange={(e) => setName(e.target.value)}
+                      className="min-h-11 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus-visible:border-sky-600 focus-visible:ring-2 focus-visible:ring-sky-500 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100"
+                      placeholder="Nombre de la plantilla"
+                    />
+                  </div>
+                  <div className="min-w-0 space-y-1.5">
+                    <label htmlFor="template-type" className="block text-sm font-medium text-slate-700 dark:text-slate-200">
+                      Tipo
+                    </label>
+                    <select
+                      id="template-type"
+                      value={type}
+                      onChange={(e) => setType(e.target.value as SpitchType)}
+                      className="min-h-11 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus-visible:border-sky-600 focus-visible:ring-2 focus-visible:ring-sky-500 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100"
+                    >
+                      {SPITCH_TYPES.map((t) => (
+                        <option key={t} value={t}>
+                          {t === 'company' ? 'Empresa' : 'Paciente'}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <label className="flex min-h-11 items-center gap-3 self-end rounded-lg px-2 text-sm text-slate-700 focus-within:ring-2 focus-within:ring-sky-500 dark:text-slate-200">
+                    <input
+                      type="checkbox"
+                      className="size-4 accent-sky-600 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-500"
+                      checked={isDefault}
+                      onChange={(e) => setIsDefault(e.target.checked)}
+                    />
+                    Por defecto
+                  </label>
+                </div>
+              </section>
+
+              <section aria-labelledby="template-content-heading" className="min-w-0 rounded-xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-800/60 sm:p-6">
+                <h2 id="template-content-heading" className="text-lg font-semibold">Contenido del correo</h2>
+                <p className="mt-1 mb-5 text-sm text-slate-600 dark:text-slate-300">Redacta el asunto y el mensaje usando las variables disponibles.</p>
+                <div className="space-y-5">
+                  <div>
+                    <h3 className="mb-2 text-sm font-medium text-slate-700 dark:text-slate-200">Asunto</h3>
+                    {/* Subject (dnd drop target) */}
+                    <SubjectDropZone>
+                      <SubjectTokenInput
+                        ref={subjectInputRef}
+                        value={subject}
+                        onChange={setSubject}
+                        areaConfig={areaConfig}
+                      />
+                    </SubjectDropZone>
+                  </div>
+
+                  <section aria-labelledby="template-body-heading" className="min-w-0">
+                    <h3 id="template-body-heading" className="mb-2 text-sm font-medium text-slate-700 dark:text-slate-200">Cuerpo del correo</h3>
+                    {/* Body editor (dnd drop target) */}
+                    <BodyDropZone className="min-h-[20rem] min-w-0 rounded-lg border border-slate-300 bg-white p-2 focus-within:ring-2 focus-within:ring-sky-500 dark:border-slate-600 dark:bg-slate-900">
+                      {isClient ? (
+                        <Suspense
+                          fallback={
+                            <div data-testid="editor-loading" className="p-4 text-sm text-slate-500 dark:text-slate-300">
+                              Cargando editor…
+                            </div>
+                          }
+                        >
+                          <BlockNoteEditorViewLazy
+                            ref={editorViewRef}
+                            areaConfig={areaConfig}
+                            onChange={() => {
+                              /* dirty tracking — PR 4 can wire finer-grained change detection */
+                            }}
+                            onTokenClick={(attrs) => {
+                              // Edit-in-place: re-open the picker for an existing table chip.
+                              if (attrs.key === 'tabla' && attrs.table) {
+                                const table = areaConfig.predefinedTables.find((t) => t.name === attrs.table);
+                                if (table) {
+                                  setPicker({ mode: 'edit', table, editAttrs: attrs });
+                                }
+                              }
+                            }}
+                          />
+                        </Suspense>
+                      ) : (
+                        <div data-testid="editor-loading" className="p-4 text-sm text-slate-500 dark:text-slate-300">
+                          Cargando editor…
+                        </div>
+                      )}
+                    </BodyDropZone>
+                  </section>
+                </div>
+              </section>
+
+              {/* Save + Preview buttons */}
+              <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-800/60 sm:p-5">
+                <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
+                  <button
+                    type="button"
+                    onClick={handleSave}
+                    disabled={saving || !name.trim() || !subject.trim()}
+                    className="min-h-11 rounded-lg bg-sky-600 px-5 py-2 text-sm font-semibold text-white hover:bg-sky-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-500 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-sky-500 dark:text-slate-950 dark:hover:bg-sky-400"
+                  >
+                    {saving ? 'Guardando…' : 'Guardar'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleTogglePreview}
+                    aria-pressed={showPreview}
+                    className="min-h-11 rounded-lg border border-slate-300 px-5 py-2 text-sm font-medium text-slate-800 hover:bg-slate-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-500 dark:border-slate-600 dark:text-slate-100 dark:hover:bg-slate-700"
+                  >
+                    {showPreview ? 'Ocultar previsualización' : 'Previsualizar'}
+                  </button>
+                </div>
+                {!name.trim() || !subject.trim() ? (
+                  <p className="mt-3 text-sm text-slate-600 dark:text-slate-300">Completa el nombre y el asunto para guardar.</p>
+                ) : null}
+                {saveMessage && (
+                  <p role="status" className="mt-3 text-sm text-emerald-700 dark:text-emerald-300">
+                    {saveMessage}
+                  </p>
+                )}
+                {saveError && (
+                  <p role="alert" className="mt-3 text-sm text-red-700 dark:text-red-300">
+                    {saveError}
+                  </p>
+                )}
               </div>
-            )}
-          </BodyDropZone>
 
-          {/* Save + Preview buttons */}
-          <div className="flex items-center gap-3">
-            <button
-              type="button"
-              onClick={handleSave}
-              disabled={saving || !name.trim() || !subject.trim()}
-              className="px-4 py-2 rounded-lg bg-sky-600 text-white text-sm font-medium hover:bg-sky-700 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {saving ? 'Guardando…' : 'Guardar'}
-            </button>
-            <button
-              type="button"
-              onClick={handleTogglePreview}
-              className="px-4 py-2 rounded-lg border border-slate-300 dark:border-slate-600 text-sm font-medium hover:bg-slate-50 dark:hover:bg-slate-800"
-            >
-              {showPreview ? 'Ocultar previsualización' : 'Previsualizar'}
-            </button>
-            {saveMessage && (
-              <span role="status" className="text-sm text-emerald-600 dark:text-emerald-400">
-                {saveMessage}
-              </span>
-            )}
-            {saveError && (
-              <span role="alert" className="text-sm text-red-600 dark:text-red-400">
-                {saveError}
-              </span>
-            )}
+              {/* Preview iframe (sandboxed) */}
+              {showPreview && (
+                <section aria-labelledby="template-preview-heading" className="min-w-0 space-y-3">
+                  <h2 id="template-preview-heading" className="text-lg font-semibold">Vista previa</h2>
+                  <iframe
+                    title="Vista previa del correo"
+                    srcDoc={previewHtml}
+                    sandbox=""
+                    className="min-h-[24rem] w-full rounded-lg border border-slate-200 bg-white dark:border-slate-700"
+                  />
+                </section>
+              )}
+            </div>
           </div>
-
-          {/* Preview iframe (sandboxed) */}
-          {showPreview && (
-            <iframe
-              title="Vista previa del correo"
-              srcDoc={previewHtml}
-              sandbox=""
-              className="w-full min-h-[24rem] rounded-lg border border-slate-200 dark:border-slate-700 bg-white"
-            />
-          )}
-        </div>
-      </div>
+        </main>
 
       {/* Column picker popover (modal overlay) */}
       {picker && (

@@ -61,6 +61,14 @@ describe('TokenChip', () => {
     expect(chip?.getAttribute('contenteditable')).not.toBe('true');
   });
 
+  it('uses readable paired light and dark token styling', () => {
+    render(<TokenChip label="Documento de facturación extenso" attrs={{ key: 'factura' }} />);
+    const chip = screen.getByText('Documento de facturación extenso');
+    expect(chip.className).toContain('bg-sky-50');
+    expect(chip.className).toContain('dark:bg-sky-950/70');
+    expect(chip.className).toContain('[overflow-wrap:anywhere]');
+  });
+
   it('renders without attrs (label-only is valid for palette display)', () => {
     // The palette renders chips from TokenDef (which has the label but not
     // yet a fully-formed TokenAttrs — cols are chosen in the picker). So

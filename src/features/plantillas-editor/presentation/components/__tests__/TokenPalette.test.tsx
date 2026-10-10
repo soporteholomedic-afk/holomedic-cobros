@@ -157,7 +157,7 @@ describe('TokenPalette', () => {
       ).not.toBeInTheDocument();
     });
 
-    it('groups tokens by category (category headings render as headings)', () => {
+    it('groups tokens in a theme-aware, responsive palette surface', () => {
       renderPalette({ areaConfig: consolidadosConfig });
       // Headings are <h3> → role="heading". The "Empresa" heading coexists
       // with the "Empresa" chip because their roles differ.
@@ -166,6 +166,8 @@ describe('TokenPalette', () => {
       ).toBeInTheDocument();
       expect(screen.getByRole('heading', { name: 'Firma' })).toBeInTheDocument();
       expect(screen.getByRole('heading', { name: 'Tablas' })).toBeInTheDocument();
+      expect(screen.getByTestId('token-palette').className).toContain('dark:bg-slate-900/60');
+      expect(screen.getByTestId('token-palette').className).toContain('min-w-0');
     });
   });
 

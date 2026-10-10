@@ -110,7 +110,7 @@ export const SubjectTokenInput = forwardRef<
     <div
       role="group"
       aria-label="Asunto"
-      className="flex flex-wrap items-center gap-1 w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-2 py-1.5 focus-within:border-sky-500 focus-within:ring-2 focus-within:ring-sky-200 dark:focus-within:ring-sky-900 outline-none transition-colors min-h-[2.5rem]"
+      className="flex min-w-0 w-full flex-wrap items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-2 transition-colors focus-within:border-sky-500 focus-within:ring-2 focus-within:ring-sky-300 dark:border-slate-700 dark:bg-slate-950 dark:focus-within:border-sky-400 dark:focus-within:ring-sky-800 min-h-11"
     >
       {segments.map((seg, i) => {
         const isTail = i === segments.length - 1;
@@ -132,7 +132,7 @@ export const SubjectTokenInput = forwardRef<
               value={seg.value}
               onChange={(e) => handleTailChange(e.target.value)}
               onKeyDown={handleTailKeyDown}
-              className="flex-1 min-w-[8rem] bg-transparent outline-none text-sm text-slate-900 dark:text-slate-100"
+              className="min-w-[min(8rem,100%)] flex-1 bg-transparent py-1 text-sm text-slate-900 outline-none placeholder:text-slate-500 dark:text-slate-100 dark:placeholder:text-slate-400"
               placeholder="Asunto del correo…"
             />
           );
@@ -140,7 +140,7 @@ export const SubjectTokenInput = forwardRef<
         return (
           <span
             key={`txt-${i}`}
-            className="text-sm text-slate-900 dark:text-slate-100 whitespace-pre"
+            className="whitespace-pre-wrap text-sm text-slate-900 dark:text-slate-100"
           >
             {seg.value}
           </span>
