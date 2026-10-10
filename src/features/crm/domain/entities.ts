@@ -268,6 +268,17 @@ export interface ConversacionCrm {
 }
 
 /**
+ * One CRM_Conversaciones row WIDENED with the display fields the
+ * bandeja renders (agente-ia-crm E1): the joined empresa razonSocial
+ * and contacto nombre. Both null while PENDIENTE_VINCULACION — the
+ * adapter's `listar` derives them from the LEFT JOINs.
+ */
+export interface ConversacionListada extends ConversacionCrm {
+  razonSocial: string | null;
+  nombreContacto: string | null;
+}
+
+/**
  * One CRM_Mensajes row — the auditable thread item (E1).
  * `fuentes`/`score`/`modelo` are the E2 RAG audit columns, nullable
  * from day one so E2 adds no DDL.

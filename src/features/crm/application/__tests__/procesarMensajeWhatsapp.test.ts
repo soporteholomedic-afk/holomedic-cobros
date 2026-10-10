@@ -3,12 +3,14 @@ import { describe, expect, it } from 'vitest';
 import type {
   BuscarConversacionCanal,
   CandidatoVinculacion,
+  ContactoConEmpresa,
   ConversacionCrmRepository,
   MensajeCrmRepository,
 } from '../../domain/ports';
 import type {
   CanalConversacion,
   ConversacionCrm,
+  ConversacionListada,
   CrearConversacionInput,
   CrearMensajeInput,
   MensajeCrm,
@@ -80,7 +82,7 @@ class FakeConversaciones implements ConversacionCrmRepository {
     return fila ? structuredClone(fila) : null;
   }
 
-  async listar(): Promise<ConversacionCrm[]> {
+  async listar(): Promise<{ items: ConversacionListada[]; total: number }> {
     throw new Error('no requerido en este fake');
   }
 
@@ -114,6 +116,14 @@ class FakeConversaciones implements ConversacionCrmRepository {
     fila.ultimoMensajeEn = new Date().toISOString();
     fila.noLeidos += 1;
     fila.actualizadoEn = fila.ultimoMensajeEn;
+  }
+
+  async crearContacto(): Promise<{ contactoId: number }> {
+    throw new Error('no requerido en este fake');
+  }
+
+  async obtenerContactoPorId(): Promise<ContactoConEmpresa | null> {
+    throw new Error('no requerido en este fake');
   }
 }
 

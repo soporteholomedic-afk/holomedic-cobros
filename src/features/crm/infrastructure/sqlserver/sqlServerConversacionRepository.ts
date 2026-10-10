@@ -1,16 +1,19 @@
 import * as mssql from 'mssql';
 
-import { normalizarTelefonoE164, telefonoDigitosClave } from '../../domain/normalizar';
+import { normalizarNombre, normalizarTelefonoE164, telefonoDigitosClave } from '../../domain/normalizar';
 import type {
   CanalConversacion,
   ConversacionCrm,
+  ConversacionListada,
   CrearConversacionInput,
 } from '../../domain/entities';
 import type {
   BuscarConversacionCanal,
   CandidatoVinculacion,
+  ContactoConEmpresa,
   ConversacionCrmRepository,
   FiltrosConversaciones,
+  ListadoConversaciones,
   VincularConversacionDatos,
 } from '../../domain/ports';
 
@@ -131,7 +134,7 @@ export class SqlServerConversacionRepository implements ConversacionCrmRepositor
     return row ? mapearConversacion(row) : null;
   }
 
-  async listar(filtros?: FiltrosConversaciones): Promise<ConversacionCrm[]> {
+  async listar(filtros?: FiltrosConversaciones): Promise<ListadoConversaciones> {
     const clauses: string[] = [];
     const request = this.pool.request();
     const busqueda = filtros?.busqueda?.trim();
@@ -149,10 +152,21 @@ export class SqlServerConversacionRepository implements ConversacionCrmRepositor
     const limite = filtros?.limite ?? 50;
     const offset = filtros?.offset ?? 0;
 
+    // Misma WHERE/JOINs para la página y para el total: la vista pagina
+    // con el count exacto bajo los mismos filtros.
+    const conteo = await request.query(`
+      SELECT COUNT(*) AS total
+      FROM dbo.CRM_Conversaciones c
+      LEFT JOIN dbo.CRM_Empresas emp ON emp.id = c.empresaId
+      LEFT JOIN dbo.CRM_Contactos con ON con.id = c.contactoId
+      ${where}
+    `);
+    const total = Number((conteo.recordset as { total: number }[])[0]?.total ?? 0);
+
     const result = await request
       .input('limite', mssql.Int, limite)
       .input('offset', mssql.Int, offset).query(`
-        SELECT ${COLUMNAS}
+        SELECT ${COLUMNAS}, emp.razonSocial, con.nombre AS nombreContacto
         FROM dbo.CRM_Conversaciones c
         LEFT JOIN dbo.CRM_Empresas emp ON emp.id = c.empresaId
         LEFT JOIN dbo.CRM_Contactos con ON con.id = c.contactoId
@@ -160,7 +174,14 @@ export class SqlServerConversacionRepository implements ConversacionCrmRepositor
         ORDER BY c.ultimoMensajeEn DESC, c.id DESC
         OFFSET @offset ROWS FETCH NEXT @limite ROWS ONLY
       `);
-    return (result.recordset as ConversacionRow[]).map(mapearConversacion);
+    const items: ConversacionListada[] = (
+      result.recordset as Array<ConversacionRow & { razonSocial: string | null; nombreContacto: string | null }>
+    ).map((row) => ({
+      ...mapearConversacion(row),
+      razonSocial: row.razonSocial,
+      nombreContacto: row.nombreContacto,
+    }));
+    return { items, total };
   }
 
   async vincular(
@@ -224,13 +245,16 @@ export class SqlServerConversacionRepository implements ConversacionCrmRepositor
       );
   }
 
-  async registrarActividad(id: number): Promise<void> {
+  async registrarActividad(id: number, direccion: 'IN' | 'OUT' = 'IN'): Promise<void> {
+    // noLeidos crece SOLO en IN (E1): la respuesta del operador no debe
+    // inflar su propio badge; ambos avanzan ultimoMensajeEn.
+    const incrementoNoLeidos = direccion === 'IN' ? ', noLeidos = noLeidos + 1' : '';
     await this.pool
       .request()
       .input('id', mssql.Int, id)
       .query(
         `UPDATE dbo.CRM_Conversaciones
-         SET ultimoMensajeEn = SYSDATETIME(), noLeidos = noLeidos + 1, actualizadoEn = SYSDATETIME()
+         SET ultimoMensajeEn = SYSDATETIME()${incrementoNoLeidos}, actualizadoEn = SYSDATETIME()
          WHERE id = @id`,
       );
   }
@@ -267,5 +291,62 @@ export class SqlServerConversacionRepository implements ConversacionCrmRepositor
       }
     }
     return candidatos;
+  }
+
+  async crearContacto(
+    empresaId: number,
+    datos: { nombre: string; cargo?: string | null },
+  ): Promise<{ contactoId: number }> {
+    // nombreNormalizado se DERIVA acá (normalizarNombre — UQ_CRM_Contactos_
+    // EmpresaNombre), nunca se confía del request; telefono queda null
+    // (la vinculación re-keyea la CONVERSACIÓN, no el contacto). Espejo
+    // del INSERT del importador (importadorCrm.ts), sin esPrincipal.
+    try {
+      const inserted = await this.pool
+        .request()
+        .input('empresaId', mssql.Int, empresaId)
+        .input('nombre', mssql.NVarChar(200), datos.nombre)
+        .input('nombreNormalizado', mssql.VarChar(200), normalizarNombre(datos.nombre))
+        .input('cargo', mssql.NVarChar(120), datos.cargo ?? null).query(`
+          INSERT INTO dbo.CRM_Contactos (empresaId, nombre, nombreNormalizado, telefono, cargo, esPrincipal)
+          OUTPUT INSERTED.id
+          VALUES (@empresaId, @nombre, @nombreNormalizado, NULL, @cargo, 0)
+        `);
+      const contactoId = (inserted.recordset as { id: number }[])[0]?.id;
+      if (contactoId === undefined) throw new Error('INSERT de CRM_Contactos no devolvió id');
+      return { contactoId };
+    } catch (err: unknown) {
+      throw mapearConflictoUnico(err);
+    }
+  }
+
+  async obtenerContactoPorId(contactoId: number): Promise<ContactoConEmpresa | null> {
+    const result = await this.pool
+      .request()
+      .input('contactoId', mssql.Int, contactoId)
+      .query(`
+        SELECT c.id AS contactoId, c.empresaId, c.nombre, c.telefono, e.razonSocial
+        FROM dbo.CRM_Contactos c
+        LEFT JOIN dbo.CRM_Empresas e ON e.id = c.empresaId
+        WHERE c.id = @contactoId
+      `);
+    const row = (
+      result.recordset as Array<{
+        contactoId: number;
+        empresaId: number;
+        nombre: string;
+        telefono: string | null;
+        razonSocial: string | null;
+      }>
+    )[0];
+    return row
+      ? {
+          contactoId: row.contactoId,
+          empresaId: row.empresaId,
+          nombreContacto: row.nombre,
+          razonSocial: row.razonSocial,
+          telefono: row.telefono,
+        }
+      : null;
   }
 }

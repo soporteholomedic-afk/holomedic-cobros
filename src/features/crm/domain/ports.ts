@@ -5,6 +5,7 @@ import type {
   ActualizarEmpresaInput,
   CanalConversacion,
   ConversacionCrm,
+  ConversacionListada,
   CrearConversacionInput,
   CrearEmpresaInput,
   CrearMensajeInput,
@@ -442,6 +443,41 @@ export interface EnviadorCorreoCrmPort {
   enviar(datos: EnvioCrmCorreo): Promise<ResultadoEnvioCrm>;
 }
 
+// ---------------------------------------------------------------------------
+// WhatsApp outbound port (agente-ia-crm E1) — the mirror of
+// EnviadorCorreoCrmPort for the Kapso canal: the use cases depend on
+// this contract, and TWO adapters implement it (the real Kapso SDK
+// adapter and the simulator selected by KAPSO_MODO — see
+// infrastructure/whatsapp/crearEnviadorWhatsapp.ts).
+// ---------------------------------------------------------------------------
+
+/** One outbound WhatsApp text (the reply the bandeja sends). */
+export interface EnvioWhatsappCrm {
+  /** Normalized E.164 with '+' (the conversation's stored telefono). */
+  telefonoE164: string;
+  /** Verbatim text body (≤4000 chars — NVARCHAR(4000) in CRM_Mensajes). */
+  cuerpo: string;
+}
+
+/**
+ * Typed WhatsApp send outcome (E1): the adapter maps every failure
+ * to ONE of these codes — the responder use case turns the failure
+ * arm into a FALLIDO audit row and returns ok:false instead of
+ * throwing (the bandeja must show the failed attempt).
+ */
+export type ResultadoEnvioWhatsapp =
+  | { ok: true; wamid: string }
+  | {
+      ok: false;
+      error: 'KAPSO_NO_CONFIGURADO' | 'KAPSO_AUTH_ERROR' | 'KAPSO_TIMEOUT' | 'KAPSO_ERROR';
+      detalle: string;
+    };
+
+/** Outbound port for the CRM WhatsApp dispatch (Kapso canal, E1). */
+export interface EnviadorWhatsappCrmPort {
+  enviar(datos: EnvioWhatsappCrm): Promise<ResultadoEnvioWhatsapp>;
+}
+
 /** One CRM_EnviosCorreos write (design D3 columns). */
 export interface FilaEnvioCorreoAudit {
   empresaId: number;
@@ -552,6 +588,16 @@ export interface FiltrosConversaciones {
   offset?: number;
 }
 
+/**
+ * Bandeja page (E1): the widened rows plus the TOTAL under the same
+ * filters (count query) so the view can paginate without a second
+ * unfiltered fetch.
+ */
+export interface ListadoConversaciones {
+  items: ConversacionListada[];
+  total: number;
+}
+
 /** The vinculación payload (E1: asociar a empresa/contacto existentes). */
 export interface VincularConversacionDatos {
   empresaId: number;
@@ -578,6 +624,20 @@ export interface CandidatoVinculacion {
 }
 
 /**
+ * One CRM_Contactos row joined to its empresa, as read by the
+ * operator vinculación flow (E1): `obtenerContactoPorId` resolves the
+ * contacto's OWN empresaId (the authoritative link — never trusted
+ * from the request) and the display fields the bandeja shows.
+ */
+export interface ContactoConEmpresa {
+  contactoId: number;
+  empresaId: number;
+  nombreContacto: string;
+  razonSocial: string | null;
+  telefono: string | null;
+}
+
+/**
  * Outbound port for the conversation lifecycle (CRM_Conversaciones).
  * `buscarPorCanal` returns the most recent row matching the canal key
  * (the filtered unique indexes keep it unique in practice; the ORDER
@@ -590,7 +650,7 @@ export interface ConversacionCrmRepository {
     canal: CanalConversacion,
     clave: BuscarConversacionCanal,
   ): Promise<ConversacionCrm | null>;
-  listar(filtros?: FiltrosConversaciones): Promise<ConversacionCrm[]>;
+  listar(filtros?: FiltrosConversaciones): Promise<ListadoConversaciones>;
   vincular(id: number, datos: VincularConversacionDatos): Promise<ConversacionCrm | null>;
   actualizarEstado(
     id: number,
@@ -599,11 +659,12 @@ export interface ConversacionCrmRepository {
   ): Promise<ConversacionCrm | null>;
   marcarMensajesLeidos(id: number): Promise<void>;
   /**
-   * Inbound-activity tick (agente-ia-crm T2): ultimoMensajeEn = now
-   * and noLeidos + 1 in ONE write — the webhook use case calls it
-   * after persisting each IN message.
+   * Inbound/outbound-activity tick (agente-ia-crm E1): ultimoMensajeEn
+   * = now in every direction; noLeidos + 1 ONLY for 'IN' (an operator
+   * reply does not grow its own unread badge). Defaults to 'IN' so the
+   * T2 webhook call site stays the same.
    */
-  registrarActividad(id: number): Promise<void>;
+  registrarActividad(id: number, direccion?: 'IN' | 'OUT'): Promise<void>;
   /**
    * Autovinculación candidates (T2): contactos whose free-text phone
    * normalizes to the SAME digit key as the incoming E.164. The SQL
@@ -612,6 +673,18 @@ export interface ConversacionCrmRepository {
    * note); an empty telefono is not searchable at all.
    */
   buscarCandidatosVinculacion(telefonoE164: string): Promise<CandidatoVinculacion[]>;
+  /**
+   * Vincular-creando (E1): INSERT one CRM_Contactos (nombreNormalizado
+   * derived by the adapter — never trusted) and return its identity.
+   * telefono stays null: the vinculación flow re-keys the CONVERSATION
+   * phone, not the contacto.
+   */
+  crearContacto(
+    empresaId: number,
+    datos: { nombre: string; cargo?: string | null },
+  ): Promise<{ contactoId: number }>;
+  /** The contacto + its empresa for modo asociar (E1). */
+  obtenerContactoPorId(contactoId: number): Promise<ContactoConEmpresa | null>;
 }
 
 /** Backward (older-first) pagination window for the thread read. */

@@ -114,12 +114,14 @@ function makeConversaciones(
     crear: crearMock,
     obtenerPorId: vi.fn(async (): Promise<ConversacionCrm | null> => null),
     buscarPorCanal: vi.fn(async (): Promise<ConversacionCrm | null> => null),
-    listar: vi.fn(async (): Promise<ConversacionCrm[]> => []),
+    listar: vi.fn(async (): Promise<{ items: never[]; total: number }> => ({ items: [], total: 0 })),
     vincular: vi.fn(async (): Promise<ConversacionCrm | null> => null),
     actualizarEstado: vi.fn(async (): Promise<ConversacionCrm | null> => null),
     marcarMensajesLeidos: vi.fn(async (): Promise<void> => undefined),
     registrarActividad: vi.fn(async (): Promise<void> => undefined),
     buscarCandidatosVinculacion: vi.fn(async (): Promise<CandidatoVinculacion[]> => candidatos),
+    crearContacto: vi.fn(async (): Promise<{ contactoId: number }> => ({ contactoId: 1 })),
+    obtenerContactoPorId: vi.fn(async (): Promise<null> => null),
   };
 }
 
