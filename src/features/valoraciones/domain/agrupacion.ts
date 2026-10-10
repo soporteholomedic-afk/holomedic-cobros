@@ -88,6 +88,14 @@ export function agruparPorEmpresa(
     .map(([empresa, groupRows]) => ({ empresa, ...totalesDe(groupRows, codMon) }));
 }
 
+/**
+ * Destino label for a row: trimmed `DesDes`, falling back to
+ * `SIN DESTINO` when blank (the single-table PDF's Destino column).
+ */
+export function destinoDe(row: RepFacturacion): string {
+  return row.DesDes?.trim() || SIN_DESTINO;
+}
+
 /** A destino group (PDF export, spec E-R2): key + moneda-aware totals. */
 export interface DestinoGrupo extends GrupoTotales {
   destino: string;
@@ -105,7 +113,7 @@ export function agruparPorDestino(
   const groups = new Map<string, RepFacturacion[]>();
 
   for (const row of rows) {
-    const key = row.DesDes?.trim() || SIN_DESTINO;
+    const key = destinoDe(row);
     const existing = groups.get(key);
     if (existing) {
       existing.push(row);

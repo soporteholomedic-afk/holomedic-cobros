@@ -4,7 +4,6 @@ import { PDFDocument } from 'pdf-lib';
 
 import { EdgePrinter, resolveEdgeExecutablePath } from '@/features/musculoesqueletica-pdf/infrastructure/printer/edgePrinter';
 import { makeRepFacturacion } from '../../../domain/fixtures';
-import { agruparPorDestino } from '../../../domain/agrupacion';
 import { HtmlValoracionPdfPrinter } from '../HtmlValoracionPdfPrinter';
 import { MEMBRETE_HOLOMEDIC, buildValoracionHtml } from '../template';
 
@@ -68,7 +67,7 @@ describe.skipIf(!edgeAvailable)('real Edge valoraciones PDF harness', () => {
       fecFin: '2026-01-31',
       moneda: 'SOLES',
       fechaEmision: '27/08/2026',
-      grupos: agruparPorDestino(rows, 1),
+      rows,
     });
 
     const printer = new HtmlValoracionPdfPrinter(new EdgePrinter());
