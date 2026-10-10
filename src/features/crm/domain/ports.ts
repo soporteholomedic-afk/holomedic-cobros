@@ -685,6 +685,18 @@ export interface ConversacionCrmRepository {
   ): Promise<{ contactoId: number }>;
   /** The contacto + its empresa for modo asociar (E1). */
   obtenerContactoPorId(contactoId: number): Promise<ContactoConEmpresa | null>;
+  /**
+   * Free-text contacto search for the operator vinculación panel
+   * (E1 PanelVinculacion): LIKE over contacto.nombre /
+   * empresa.razonSocial (JOIN CRM_Contactos × CRM_Empresas), TOP
+   * `limite` (default 20) by razón social then nombre. Optional for
+   * the same reason as `guardarContactoOperativo?`: only the SQL
+   * adapter implements it; test fakes stay valid without it.
+   */
+  buscarContactosTexto?(
+    busqueda: string,
+    limite?: number,
+  ): Promise<ContactoConEmpresa[]>;
 }
 
 /** Backward (older-first) pagination window for the thread read. */

@@ -349,4 +349,40 @@ export class SqlServerConversacionRepository implements ConversacionCrmRepositor
         }
       : null;
   }
+
+  async buscarContactosTexto(
+    busqueda: string,
+    limite = 20,
+  ): Promise<ContactoConEmpresa[]> {
+    // Buscador del panel de vinculación (E1): LIKE sobre nombre /
+    // razón social — INNER JOIN porque un candidato SIN empresa no es
+    // vinculable. TOP parametrizado; collation case-insensitive
+    // (listar precedent).
+    const result = await this.pool
+      .request()
+      .input('busqueda', mssql.NVarChar(200), `%${busqueda.trim()}%`)
+      .input('limite', mssql.Int, limite)
+      .query(`
+        SELECT TOP (@limite) c.id AS contactoId, c.empresaId, c.nombre, c.telefono, e.razonSocial
+        FROM dbo.CRM_Contactos c
+        JOIN dbo.CRM_Empresas e ON e.id = c.empresaId
+        WHERE c.nombre LIKE @busqueda OR e.razonSocial LIKE @busqueda
+        ORDER BY e.razonSocial, c.nombre
+      `);
+    return (
+      result.recordset as Array<{
+        contactoId: number;
+        empresaId: number;
+        nombre: string;
+        telefono: string | null;
+        razonSocial: string | null;
+      }>
+    ).map((row) => ({
+      contactoId: row.contactoId,
+      empresaId: row.empresaId,
+      nombreContacto: row.nombre,
+      razonSocial: row.razonSocial,
+      telefono: row.telefono,
+    }));
+  }
 }

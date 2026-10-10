@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 
 import { getSession } from '@/lib/auth';
 import { getCrmDb } from '@/features/crm/infrastructure/getCrmDb';
+import { esModoSimulado } from '@/features/crm/infrastructure/whatsapp/crearEnviadorWhatsapp';
 import { ListarConversacionesUseCase } from '@/features/crm/application/listarConversaciones';
 import type { ConversacionListada } from '@/features/crm/domain/entities';
 import type { EstadoConversacion } from '@/features/crm/domain/entities';
@@ -13,7 +14,10 @@ import { buildCrmError, mapCrmError, type CrmErrorResponse } from '../empresas/e
  * agente-ia-crm E1) — the bandeja list: one page of conversations
  * widened with razonSocial/nombreContacto (LEFT JOINs in the adapter)
  * plus the TOTAL under the same filters so the view paginates without
- * a second unfiltered fetch.
+ * a second unfiltered fetch. The body also carries `modoSimulado`
+ * (esModoSimulado — KAPSO_MODO) so the view can show the inbound
+ * simulator card WITHOUT ever reading process.env client-side (the
+ * route is the single authority on the canal mode).
  *
  * Query params: `busqueda` (empresa/contacto/teléfono), `estado` (one
  * of the 6 lifecycle values), `offset` (≥0), `limite` (1–100, default
@@ -24,6 +28,8 @@ interface ListSuccess {
   success: true;
   conversaciones: ConversacionListada[];
   total: number;
+  /** true while the canal runs SIMULADO (KAPSO_MODO !== 'real'). */
+  modoSimulado: boolean;
 }
 
 const ESTADOS: readonly EstadoConversacion[] = [
@@ -105,6 +111,7 @@ export async function GET(
       success: true,
       conversaciones: listado.items,
       total: listado.total,
+      modoSimulado: esModoSimulado(),
     });
   } catch (error) {
     return mapCrmError('crm conversaciones GET', error);
