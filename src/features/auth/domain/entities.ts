@@ -21,6 +21,11 @@ export const PERMISOS = [
   // as asistencia/asistencia_admin — no implication between them.
   'crm',
   'crm_admin',
+  // agente-ia-crm (E1): dedicated gate for the conversations view
+  // (/crm/conversaciones + /api/crm/conversaciones). Separate from
+  // plain `crm` so conversation access can be granted or revoked on
+  // its own — same additive pattern as crm_admin.
+  'crm_conversaciones',
 ] as const;
 
 export type Permiso = (typeof PERMISOS)[number];

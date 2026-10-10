@@ -54,6 +54,14 @@ export const RUTAS_PROTEGIDAS: RutaProtegida[] = [
   // sessions on the import surface (design D2, firma_correo pattern).
   { path: '/crm/importar',        permiso: 'crm_admin',        label: 'Importar Empresas CRM' },
   { path: '/api/crm/import',      permiso: 'crm_admin',        label: 'API Importación CRM' },
+  // agente-ia-crm (E1): the conversations surface has its OWN permiso.
+  // Both entries are LONGER prefixes than `/crm` and `/api/crm`, so
+  // longest-first startsWith matching gates them independently of the
+  // generic crm entries (firma_correo pattern); order below is kept
+  // specific-before-generic for consistency, though the sort makes it
+  // moot.
+  { path: '/crm/conversaciones',     permiso: 'crm_conversaciones', label: 'Conversaciones' },
+  { path: '/api/crm/conversaciones', permiso: 'crm_conversaciones', label: 'Conversaciones' },
   { path: '/api/crm',             permiso: 'crm',              label: 'API CRM' },
   { path: '/crm',                 permiso: 'crm',              label: 'CRM' },
 ];

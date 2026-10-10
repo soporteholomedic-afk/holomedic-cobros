@@ -29,11 +29,12 @@ interface SeccionCrm {
    */
   prefijo?: string;
   /** Optional elevation required to see the entry. */
-  permiso?: 'crm_admin';
+  permiso?: 'crm_admin' | 'crm_conversaciones';
 }
 
 const SECCIONES: readonly SeccionCrm[] = [
   { href: '/crm', label: 'Empresas', prefijo: '/crm/empresas' },
+  { href: '/crm/conversaciones', label: 'Conversaciones', permiso: 'crm_conversaciones' },
   { href: '/crm/importar', label: 'Importar', permiso: 'crm_admin' },
   { href: '/crm/productividad', label: 'Productividad' },
 ];
