@@ -1,4 +1,5 @@
 import type {
+  EntradaConocimiento,
   Etapa,
   Flujo,
   AccionAsignacion,
@@ -724,4 +725,26 @@ export interface MensajeCrmRepository {
     conversacionId: number,
     opciones: ListarMensajesOpciones,
   ): Promise<MensajeCrm[]>;
+}
+
+// ---------------------------------------------------------------------------
+// Knowledge-base port (agente-ia-crm E2·T1) — the curated KB la Guía
+// answers from. Read-only by design in E2: the ranking use case only
+// needs the prefilter; the CRUD editor arrives in E5. One SQL adapter
+// implements it (SqlServerConocimientoRepository).
+// ---------------------------------------------------------------------------
+
+/**
+ * Outbound port for the knowledge base (CRM_Conocimiento).
+ * `buscarPorTexto` is the RAG PREFILTER only — a case-insensitive
+ * LIKE over titulo/contenido with properly escaped wildcards (E1
+ * lesson); term-overlap ranking and vigencia filtering live in the
+ * application layer (recuperarConocimiento). Both reads only ever
+ * return activo entries.
+ */
+export interface ConocimientoCrmRepository {
+  /** Every active entry, id-ordered (the E5 editor stats base). */
+  listarActivas(): Promise<EntradaConocimiento[]>;
+  /** Active entries whose titulo/contenido match the escaped text. */
+  buscarPorTexto(texto: string): Promise<EntradaConocimiento[]>;
 }

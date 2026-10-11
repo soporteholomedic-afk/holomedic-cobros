@@ -1,6 +1,6 @@
 # Feature: agente-ia-crm — La Guía (agente IA de conversaciones del CRM)
 
-> Estado: **plan aprobado — sin implementar** · Creado: 2026-10-10
+> Estado: **E1 completo y revisado (promovido a develop) · E2 en curso** · Creado: 2026-10-10
 > Registro maestro de diseño: Engram tópico `agente-ia-crm` (obs 825, revisiones al día).
 > Prototipos visuales: `http://172.16.10.20:1226/` (index · mockup · flujo-guia · configuracion).
 
@@ -127,7 +127,27 @@ El candidato completo (51 archivos) excedió el presupuesto de contexto (`lens_c
 **Cómo demorar E1 (modo simulado, sin Kapso)**: 1) `pnpm dev` → entrar a `/crm/conversaciones` (usuario con permiso `crm_conversaciones`). 2) El panel "Simulador de entrada — modo simulado" (arriba de la lista) → teléfono `0981 234 567` + texto → Enviar. 3) El mensaje aparece en la bandeja; si el teléfono matchea 1 contacto existente se autovincula (TOMADA_HUMANO), sino queda PENDIENTE_VINCULACION → panel de vinculación (asociar o crear). 4) Responder a mano desde el hilo → burbuja OUT/HUMANO. 5) Webhook real: `POST /api/webhooks/kapso` con headers `X-Webhook-Signature` (HMAC-SHA256 hex del raw body con `KAPSO_WEBHOOK_SECRET`) + `X-Idempotency-Key` → mismo circuito; replay no duplica; firma inválida → 401. Al llegar Kapso real: setear `KAPSO_MODO=real` + `KAPSO_API_KEY` + `KAPSO_PHONE_NUMBER_ID` + `KAPSO_WEBHOOK_SECRET` en `.env.local` y registrar el webhook en Kapso.
 
 **Limitaciones conocidas E1**: preview del último mensaje ausente en la lista (opcional, se suma en E2/E3); "Crear contacto" del panel de vinculación usa `GET /api/crm/empresas` que exige permiso `crm` además de `crm_conversaciones`; test de integración preexistente `sqlServerEmpresaRepository.test.ts` falla contra la DB dev compartida por datos reales acumulados (ajeno a este feature).
-- [ ] E2 — La Guía responde (memoria + RAG + autonomía básica)
+- [ ] E2 — La Guía responde (memoria + RAG + autonomía básica) — **EN CURSO** (branch `feature/agente-ia-crm-e2` desde develop dd02c03)
+
+  **Decisiones E2 (arquitecto, 2026-10-10)**:
+  - **Nacimiento IA**: las conversaciones nuevas nacen `ACTIVA_IA` (modo IA) — reemplaza el default E1 `TOMADA_HUMANO`; la vinculación (auto o manual) preserva `ACTIVA_IA`.
+  - **Toma implícita**: una respuesta manual del humano en `ACTIVA_IA`/`REQUIERE_HUMANO` pasa la conversación a `TOMADA_HUMANO` (E3 formaliza tomar/devolver/escalar).
+  - **Cola durable**: `CRM_AgenteTareas` (dedup UNIQUE conversación+mensaje+tipo; claim `UPDATE … OUTPUT`; PENDIENTE/PROCESANDO/COMPLETADA/FALLIDA con reintentos). Disparo best-effort inmediato tras persistir + barredor lazy (setInterval 20s, singleton Node) como backstop. El webhook sigue ack<10s SIN trabajo LLM dentro.
+  - **Config por env (bootstrap hasta E4)**: `LLM_BASE_URL`/`LLM_API_KEY`/`LLM_MODELO` (default `glm-5.3-flash` @ `https://api.z.ai/api/paas/v4/`), `AGENTE_HABILITADO` (kill switch provisorio), `AGENTE_UMBRAL_CONF` (.60), `AGENTE_MAX_INTERCAMBIOS` (8), `AGENTE_HORARIO_DESDE/HASTA` (8/18), `AGENTE_TEXTO_ESCALADO`. E4 los mueve a DB + admin UI.
+  - **Generador simulado**: sin `LLM_API_KEY` en dev → adapter simulado determinista (DoD demo sin API key); prod sin config → fail-closed tipado (patrón KAPSO_MODO). Llegada la key: solo env vars.
+  - **Destilación** = 2ª llamada LLM tipada (`hecho_cliente`/`acuerdo`/`compromiso`/`preferencia`/`objecion`) post-envío + pin de acuerdos; en modo simulado, destilador determinista. Idempotencia por `operation_id`.
+  - **PII**: teléfonos enmascarados antes de ir al modelo; solo consulta + cola corta del hilo (últimos N) + recall viajan al LLM.
+  - **Ranking KB** en aplicación (solapamiento de términos + vigencia); el repo SQL hace prefilter LIKE escapado (lección E1: escapar `%_[`).
+  - **Datos de prueba**: autorización explícita del usuario (2026-10-10) para llenar y quitar datos en la DB dev — scripts con `--apply`/`--limpiar` y probes autolimpiados.
+
+  - [x] E2·T1 KB: tabla `CRM_Conocimiento` + port/repo SQL (lectura + prefilter LIKE) + ranking top-k en aplicación + script siembra `scripts/crm-sembrar-conocimiento.mjs` (dry-run default, `--apply`, `--limpiar`; contenido Holomedic desde docs del repo) — 12 entradas sembradas; 28 tests (13 ranking + 10 script + 5 integración DB real) ✓
+  - [ ] E2·T2 Memoria: `MemoriaConversacionPort` + adapter HTTP Engram `:7438` (contexto/buscar/guardar/pinear, project explícito, `operation_id`, timeout) + factory (fail-closed prod, simulado dev)
+  - [ ] E2·T3 LLM: `GeneradorRespuestaPort` (generar + destilar) + adapter OpenAI-compatible + simulado determinista + factory fail-closed (patrón KAPSO)
+  - [ ] E2·T4 Motor: use case `generarRespuestaAgente` (recall memoria+KB, prompt PII-safe, guardrails umbral/scope/límite/horario/kill switch, envío outbox-lite emisor IA con fuentes/score/modelo, escalado → `REQUIERE_HUMANO` + mensaje seguro, destilación+pin, registrarActividad)
+  - [ ] E2·T5 Cola+integración: `CRM_AgenteTareas` + repo (crearSiNoExiste/reclamar/completar/fallar) + hook post-persist en `procesarMensajeWhatsapp` + barredor lazy + nacimientos `ACTIVA_IA` + toma implícita en `responderConversacion`
+  - [ ] E2·T6 UI: burbujas IA con score+fuentes ("La Guía"), preview último mensaje en lista, guard `PENDIENTE` en `esMensajeCrm`
+  - [ ] E2·T7 Verificación final: suite scoped + tsc + build + sync SDK + docs módulo + demo DoD (simulador: cubierto→responde con fuentes; fuera de scope→escalado `REQUIERE_HUMANO`; memorias destiladas/pineadas visibles)
+  - [ ] E2·T8 (deuda E1, opcional): columna `telefonoNormalizado` en `CRM_Contactos` + backfill + uso en candidatos de vinculación (resuelve R3-scan-tabla-completa)
 - [ ] E3 — Ayuda humana y trabajo en paralelo
 - [ ] E4 — Cierre autónomo + vistas de configuración
 - [ ] E5 — Conocimiento, calidad y canal email

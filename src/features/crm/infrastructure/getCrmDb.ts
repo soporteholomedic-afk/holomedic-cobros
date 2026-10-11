@@ -8,6 +8,7 @@ import { SqlServerPipelineRepository } from './sqlserver/sqlServerPipelineReposi
 import { SqlServerAsignacionesRepository } from './sqlserver/sqlServerAsignacionesRepository';
 import { SqlServerConversacionRepository } from './sqlserver/sqlServerConversacionRepository';
 import { SqlServerMensajeRepository } from './sqlserver/sqlServerMensajeRepository';
+import { SqlServerConocimientoRepository } from './sqlserver/sqlServerConocimientoRepository';
 import { SqlServerCrmImportador } from './importar/importadorCrm';
 import type {
   ConversacionCrmRepository,
@@ -21,6 +22,7 @@ import type {
   CrmPipelineRepositoryPort,
   CrmResultadosRepositoryPort,
   CrmTransicionesRepositoryPort,
+  ConocimientoCrmRepository,
   MensajeCrmRepository,
 } from '../domain/ports';
 
@@ -84,6 +86,13 @@ export interface CrmDb {
   /** Thread adapter (agente-ia-crm E1): the CRM_Mensajes rows (same
    * optional-for-fakes rule as conversaciones). */
   mensajes?: MensajeCrmRepository;
+  /**
+   * Knowledge-base adapter (agente-ia-crm E2·T1): the read-only
+   * CRM_Conocimiento prefilter la Guía ranks from (same
+   * optional-for-fakes rule as conversaciones/mensajes; the E5
+   * editor adds the write side).
+   */
+  conocimiento?: ConocimientoCrmRepository;
 }
 
 let cached: Promise<CrmDb> | null = null;
@@ -115,6 +124,7 @@ export function getCrmDb(): Promise<CrmDb> {
       panel: pipelines,
       conversaciones: new SqlServerConversacionRepository(pool),
       mensajes: new SqlServerMensajeRepository(pool),
+      conocimiento: new SqlServerConocimientoRepository(pool),
     };
   })();
   return cached;

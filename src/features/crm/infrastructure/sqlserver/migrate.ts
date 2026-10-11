@@ -69,6 +69,15 @@ import * as mssql from 'mssql';
  *   index; `fuentes`/`score`/`modelo` are the E2 RAG audit columns,
  *   nullable from day one so E2 adds no DDL. BIGINT id (high-volume
  *   history, Transiciones precedent).
+ * - `CRM_Conocimiento` (agente-ia-crm E2·T1) — the curated knowledge
+ *   base la Guía answers from: titulo/contenido (NVARCHAR(MAX)),
+ *   comma-separated `etiquetas`, an inclusive `vigenciaDesde`/
+ *   `vigenciaHasta` window (NULL = unbounded) and a soft `activo`
+ *   switch the RAG prefilter respects. Deliberately FK-free — the KB
+ *   is GLOBAL (not empresa-owned); the E5 editor owns its CRUD.
+ *   `creadoEn` stamps SYSUTCDATETIME() (unlike the SYSDATETIME()
+ *   registry precedent): the E2 ranking compares vigencia against an
+ *   injected UTC `ahora`, so storage and comparison share one clock.
  *
  * Normalization columns (rediseno-crm-panel, design D6): additive and
  * nullable, carried by the CREATE blocks for fresh installs and added
@@ -309,6 +318,29 @@ BEGIN
     creadoEn        DATETIME2(0)    NOT NULL DEFAULT SYSDATETIME()
   );
 END;
+IF NOT EXISTS (SELECT 1 FROM sys.tables WHERE name = 'CRM_Conocimiento' AND schema_id = SCHEMA_ID('dbo'))
+BEGIN
+  CREATE TABLE dbo.CRM_Conocimiento (
+    id              INT            IDENTITY(1,1) NOT NULL PRIMARY KEY,
+    titulo          NVARCHAR(200)  NOT NULL,
+    contenido       NVARCHAR(MAX)  NOT NULL,
+    -- Comma-separated topic tags (CSV; '' = untagged). No unique
+    -- constraint on titulo: idempotency belongs to the seed script's
+    -- WHERE NOT EXISTS, not to the schema (E5 editor may want
+    -- near-duplicate drafts while curating).
+    etiquetas       NVARCHAR(300)  NOT NULL DEFAULT '',
+    -- Inclusive validity window (NULL = unbounded on that side);
+    -- enforced in the application ranking, not as a CHECK — windows
+    -- are business policy, not row integrity.
+    vigenciaDesde   DATETIME2      NULL,
+    vigenciaHasta   DATETIME2      NULL,
+    activo          BIT            NOT NULL DEFAULT 1,
+    -- UTC stamps (E2 ranking clock); actualizadoEn starts NULL and
+    -- only the E5 editor writes it (read-only table until then).
+    creadoEn        DATETIME2      NOT NULL DEFAULT SYSUTCDATETIME(),
+    actualizadoEn   DATETIME2      NULL
+  );
+END;
 
 -- Normalization columns (rediseno-crm-panel, design D6): gated,
 -- additive, nullable — no-ops on fresh installs (the CREATE blocks
@@ -441,6 +473,13 @@ BEGIN
   -- antesDeId cursor walking backwards through the same index.
   CREATE INDEX IX_CRM_Mensajes_ConversacionHilo
     ON dbo.CRM_Mensajes (conversacionId, id DESC);
+END;
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_CRM_Conocimiento_Activo' AND object_id = OBJECT_ID('dbo.CRM_Conocimiento'))
+BEGIN
+  -- KB reads (E2·T1): listarActivas and the RAG prefilter only ever
+  -- scan activo = 1 rows — the E5 editor's inactive drafts never pay.
+  CREATE INDEX IX_CRM_Conocimiento_Activo
+    ON dbo.CRM_Conocimiento (activo);
 END;
 IF EXISTS (SELECT 1 FROM sys.check_constraints WHERE name = 'CK_CRM_Mensajes_EstadoEnvio' AND parent_object_id = OBJECT_ID('dbo.CRM_Mensajes') AND definition NOT LIKE '%PENDIENTE%')
 -- Outbox-lite (R4): widen once the old 2-value CHECK (needs PENDIENTE intent rows).

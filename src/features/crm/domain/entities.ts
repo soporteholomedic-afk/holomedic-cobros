@@ -331,3 +331,28 @@ export interface CrearMensajeInput {
   score?: number | null;
   modelo?: string | null;
 }
+
+// ---- Base de conocimiento (agente-ia-crm, E2) ----
+
+/**
+ * One CRM_Conocimiento row — the curated KB la Guía answers from
+ * (E2·T1). `etiquetas` crosses the boundary as a trimmed string[]
+ * (CSV in storage, adapter-mapped); vigencia is an inclusive window
+ * (NULL = unbounded on that side) and `activo` is the soft on/off
+ * the RAG prefilter respects. Timestamps stay as `Date` (unlike the
+ * conversación ISO strings): the ranking compares them against an
+ * injected `ahora`, never crossing to the presentation layer.
+ */
+export interface EntradaConocimiento {
+  id: number;
+  titulo: string;
+  contenido: string;
+  /** Topic tags (CSV in storage, trimmed non-empty after mapping). */
+  etiquetas: string[];
+  /** Inclusive window start; NULL = always valid from the past. */
+  vigenciaDesde: Date | null;
+  /** Inclusive window end; NULL = no expiry. */
+  vigenciaHasta: Date | null;
+  /** Soft on/off — inactive entries never reach the RAG prefilter. */
+  activo: boolean;
+}
