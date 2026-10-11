@@ -28,6 +28,28 @@ import type {
 /** Kapso proxy endpoint (docs.kapso.ai — WhatsApp via Kapso, ~2 min setup). */
 const KAPSO_BASE_URL = 'https://api.kapso.ai/meta/whatsapp';
 
+/** Per-send timeout (ms); KAPSO_TIMEOUT_MS overrides, default 15 s. */
+const KAPSO_TIMEOUT_MS_DEFAULT = 15000;
+
+function leerKapsoTimeoutMs(): number {
+  const crudo = process.env.KAPSO_TIMEOUT_MS;
+  if (crudo === undefined || crudo === '') return KAPSO_TIMEOUT_MS_DEFAULT;
+  const parseado = Number(crudo);
+  if (!Number.isFinite(parseado) || parseado <= 0) return KAPSO_TIMEOUT_MS_DEFAULT;
+  return parseado;
+}
+
+/**
+ * Timeout mechanism (R4-kapso-no-timeout): the SDK v0.3.0 exposes NO
+ * signal/timeout/requestTimeout option (WhatsAppClientConfig and
+ * RequestOptions, verified in node_modules/@kapso/whatsapp-cloud-api/
+ * dist/index.d.ts), so each send races the SDK promise against a
+ * private timer. When the timer wins it rejects with a TimeoutError
+ * that esTimeout() maps to KAPSO_TIMEOUT. The underlying fetch keeps
+ * running (this SDK cannot be aborted), but the operator's request no
+ * longer blocks on a hung API. The late SDK rejection is swallowed
+ * with a no-op catch so it never surfaces as unhandled.
+
 /** Redacted, user-safe rendering of an unknown thrown value. */
 function detalleDe(error: unknown): string {
   if (error instanceof Error) return error.message;
@@ -41,6 +63,24 @@ function esTimeout(error: unknown): boolean {
     if (causa instanceof Error && /ETIMEDOUT|ECONNTIMEOUT/i.test(causa.message)) return true;
   }
   return false;
+}
+
+async function conTimeout<T>(promesa: Promise<T>, timeoutMs: number): Promise<T> {
+  // El perdedor del race nunca queda como unhandled rejection.
+  promesa.catch(() => undefined);
+  let temporizador: ReturnType<typeof setTimeout> | undefined;
+  const vencimiento = new Promise<never>((_, reject) => {
+    temporizador = setTimeout(() => {
+      const error = new Error(`Kapso no respondió en ${timeoutMs} ms (KAPSO_TIMEOUT_MS)`);
+      error.name = 'TimeoutError';
+      reject(error);
+    }, timeoutMs);
+  });
+  try {
+    return await Promise.race([promesa, vencimiento]);
+  } finally {
+    clearTimeout(temporizador);
+  }
 }
 
 export class EnviadorKapsoWhatsapp implements EnviadorWhatsappCrmPort {
@@ -62,11 +102,14 @@ export class EnviadorKapsoWhatsapp implements EnviadorWhatsappCrmPort {
     }
 
     try {
-      const respuesta = await this.client.messages.sendText({
-        phoneNumberId,
-        to: datos.telefonoE164,
-        body: datos.cuerpo,
-      });
+      const respuesta = await conTimeout(
+        this.client.messages.sendText({
+          phoneNumberId,
+          to: datos.telefonoE164,
+          body: datos.cuerpo,
+        }),
+        leerKapsoTimeoutMs(),
+      );
       const wamid = respuesta.messages[0]?.id;
       if (wamid === undefined || wamid === '') {
         return {

@@ -9,6 +9,7 @@ import {
   type ResultadoSimulacion,
 } from '@/features/crm/application/simularMensajeEntrante';
 import { buildCrmError, mapCrmError, type CrmErrorResponse } from '../../empresas/errorResponse';
+import { esModoSimulado } from '@/features/crm/infrastructure/whatsapp/crearEnviadorWhatsapp';
 
 /**
  * `POST /api/crm/conversaciones/simular` (permiso
@@ -18,9 +19,12 @@ import { buildCrmError, mapCrmError, type CrmErrorResponse } from '../../empresa
  * runs the REAL pipeline (ingesta → vinculación → bandeja).
  *
  * Body: `{telefono, texto}` — telefono accepts free text (E.164
- * normalization runs inside). Answers 403 SIMULACION_DESACTIVADA
- * whenever KAPSO_MODO === 'real': the simulator must be impossible in
- * production.
+ * normalization runs inside). The route exists ONLY while the
+ * simulated mode is active (esModoSimulado: KAPSO_MODO=simulado
+ * explícito, o sin MODO en desarrollo) — otherwise 404 before any
+ * auth/body/db work (remediation R1-ruta-simular-siempre-presente:
+ * un dev tool no debe ser descubrible cuando no aplica; alinea con
+ * la tarjeta simulador que el GET lista muestra con el mismo flag).
  *
  * NOTA: ruta SOLO-DEV, removible cuando Kapso esté configurado y el
  * modo real sea el default. El segmento estático `simular` convive
@@ -44,6 +48,12 @@ function esSimularBody(v: unknown): v is { telefono: string; texto: string } {
 export async function POST(
   request: Request,
 ): Promise<NextResponse<SimularSuccess | CrmErrorResponse>> {
+  // Dev-only tool: existe SOLO con modo simulado activo (mismo flag
+  // que la tarjeta del UI) — si no, 404 antes de tocar sesión/
+  // cuerpo/DB: indescubrible cuando no aplica.
+  if (!esModoSimulado()) {
+    return buildCrmError('NOT_FOUND_ERROR', 'No encontrado', 404);
+  }
   try {
     const session = await getSession();
     if (!session) return buildCrmError('UNAUTHORIZED', 'No autenticado', 401);
