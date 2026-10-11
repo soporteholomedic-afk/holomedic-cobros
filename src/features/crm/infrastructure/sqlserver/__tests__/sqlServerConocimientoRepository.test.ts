@@ -128,63 +128,74 @@ describe('SqlServerConocimientoRepository (integración, filas probe propias)', 
     }
   });
 
-  it('buscarPorTexto: prefilter LIKE sobre titulo y contenido', async () => {
+  it('buscarPorTexto: prefilter por TÉRMINOS sobre titulo y contenido', async () => {
     try {
+      // Tokens únicos por probe: con OR por término, cualquier término
+      // compartido une filas (incluida la KB sembrada real) — el
+      // aislamiento se logra con tokens aleatorios, no con frases.
       const idTitulo = await insertarProbe({
-        titulo: `${MARCA} certificados`,
+        titulo: `${MARCA} certificados ${SUFIJO}a`,
         contenido: 'nada relevante aqui',
       });
       const idContenido = await insertarProbe({
         titulo: `${MARCA} otro`,
-        contenido: `habla de examenes ocupacionales ${SUFIJO} en el cuerpo`,
+        contenido: `habla de examenes ocupacionales ${SUFIJO}b en el cuerpo`,
       });
 
-      const porTitulo = await repo.buscarPorTexto(`${MARCA} certificados`);
+      const porTitulo = await repo.buscarPorTexto(`${SUFIJO}a`);
       expect(porTitulo.map((e) => e.id)).toEqual([idTitulo]);
 
-      const porContenido = await repo.buscarPorTexto(`ocupacionales ${SUFIJO}`);
+      const porContenido = await repo.buscarPorTexto(`${SUFIJO}b`);
       expect(porContenido.map((e) => e.id)).toEqual([idContenido]);
 
-      // Texto vacío → [] sin llegar a la base.
+      // Texto vacío (o sin términos útiles) → [] sin tocar la base.
       expect(await repo.buscarPorTexto('   ')).toEqual([]);
+      expect(await repo.buscarPorTexto('% _ !')).toEqual([]);
     } finally {
       await limpiarProbe();
     }
   });
 
-  it('buscarPorTexto escapa comodines: % y _ literales matchean SOLO lo literal', async () => {
+  it('buscarPorTexto por TÉRMINOS: pregunta natural que NO contiene frases literales de la KB (regresión ensayo live E2·T5)', async () => {
     try {
-      // A lleva '%' INMEDIATAMENTE antes del sufijo (regresión del '%'
-      // inicial del pattern) y '_' literal en descuento_premium.
+      // La frase completa como LIKE devolvía SIEMPRE vacío: una pregunta
+      // real jamás contiene la frase literal de la entrada. Un SOLO
+      // término compartido («certificados») debe alcanzar para traer la
+      // fila como candidata (el ranking fino vive en la aplicación).
+      // NOTA: la KB sembrada real puede aparecer en el resultado (OR por
+      // término) — se afirma PERTENENCIA, no igualdad exacta.
+      const idPregunta = await insertarProbe({
+        titulo: `${MARCA} certificados médicos ${SUFIJO}c`,
+        contenido: 'entrega en 24 horas',
+      });
+
+      const pregunta = await repo.buscarPorTexto(
+        'Hola, ¿cuánto tardan los certificados médicos?',
+      );
+      const ids = new Set(pregunta.map((e) => e.id));
+      expect(ids.has(idPregunta)).toBe(true);
+    } finally {
+      await limpiarProbe();
+    }
+  });
+
+  it('buscarPorTexto: comodines de la consulta son INERTES (el split por términos los elimina); los literales de la fila siguen siendo encontrables', async () => {
+    try {
+      // Con el prefilter por términos, '%', '_' y demás no-alfanuméricos
+      // de la CONSULTA nunca llegan al LIKE (no hay pattern injection
+      // posible); los '%' y '_' LITERALES de la fila se encuentran por
+      // sus términos alfanuméricos.
       const idConComodines = await insertarProbe({
-        titulo: `${MARCA} 50%${SUFIJO} descuento_premium`,
+        titulo: `${MARCA} 50%${SUFIJO}w descuento_premium`,
         contenido: 'contenido con % y _ literales',
       });
-      const idLimpio = await insertarProbe({
-        titulo: `${MARCA} limpio`,
-        contenido: 'texto completamente normal',
-      });
 
-      // Base: ambas filas son visibles bajo el sufijo propio.
-      const base = await repo.buscarPorTexto(SUFIJO);
-      const idsBase = new Set(base.map((e) => e.id));
-      expect(idsBase.has(idConComodines)).toBe(true);
-      expect(idsBase.has(idLimpio)).toBe(true);
+      const encontrados = await repo.buscarPorTexto(`50%${SUFIJO}w`);
+      const ids = new Set(encontrados.map((e) => e.id));
+      expect(ids.has(idConComodines)).toBe(true);
 
-      // REGRESIÓN '%': un '%' inicial de la consulta matchea SOLO la fila
-      // con '%' LITERAL justo antes del sufijo — con el escape roto el
-      // pattern '%%sufijo%' traería TAMBIÉN la fila limpia.
-      const conPorcentaje = await repo.buscarPorTexto(`%${SUFIJO}`);
-      const idsCon = new Set(conPorcentaje.map((e) => e.id));
-      expect(idsCon.has(idConComodines)).toBe(true);
-      expect(idsCon.has(idLimpio)).toBe(false);
-
-      // REGRESIÓN '_': 'l_mpio' con '_' literal no matchea 'limpio' —
-      // con el escape roto '_' sería comodín de un carácter.
-      const conGuionBajo = await repo.buscarPorTexto(`l_mpio ${SUFIJO}`);
-      const idsGuion = new Set(conGuionBajo.map((e) => e.id));
-      expect(idsGuion.has(idLimpio)).toBe(false);
-      expect(idsGuion.has(idConComodines)).toBe(false);
+      // Solo comodines → sin términos → [] sin tocar la base.
+      expect(await repo.buscarPorTexto('%%%')).toEqual([]);
     } finally {
       await limpiarProbe();
     }

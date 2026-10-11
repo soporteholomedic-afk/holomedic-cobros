@@ -341,6 +341,18 @@ describe('MemoriaEngramHttp — buscar (E2·T2)', () => {
       new MemoriaEngramHttp({ urlBase: URL_BASE }).buscar('probe', 3, 7, 10),
     ).rejects.toMatchObject({ codigo: 'MEMORIA_RESPUESTA_INVALIDA' });
   });
+
+  it('/search 404 unknown_project → [] (empresa nueva — mismo criterio que /context)', async () => {
+    stubFetch({
+      'GET /search': [
+        { status: 404, cuerpo: { code: 'unknown_project', error: 'project not found' } },
+      ],
+    });
+
+    await expect(
+      new MemoriaEngramHttp({ urlBase: URL_BASE }).buscar('probe', 3, 7, 10),
+    ).resolves.toEqual([]);
+  });
 });
 
 describe('MemoriaEngramHttp — contexto (E2·T2)', () => {
@@ -401,6 +413,24 @@ describe('MemoriaEngramHttp — contexto (E2·T2)', () => {
     await expect(new MemoriaEngramHttp({ urlBase: URL_BASE }).contexto(3)).rejects.toMatchObject(
       { codigo: 'MEMORIA_RESPUESTA_INVALIDA' },
     );
+  });
+
+  it('404 unknown_project → memoria vacía [] (empresa nueva sin proyecto aún — regresión del ensayo live E2·T5)', async () => {
+    stubFetch({
+      'GET /context': [
+        { status: 404, cuerpo: { code: 'unknown_project', error: 'project "crm-emp-3" not found' } },
+      ],
+    });
+
+    await expect(new MemoriaEngramHttp({ urlBase: URL_BASE }).contexto(3)).resolves.toEqual([]);
+  });
+
+  it('404 con OTRO cuerpo → MEMORIA_ERROR (no todo 404 es vacío)', async () => {
+    stubFetch({ 'GET /context': [{ status: 404, cuerpo: { error: 'nope' } }] });
+
+    await expect(new MemoriaEngramHttp({ urlBase: URL_BASE }).contexto(3)).rejects.toMatchObject({
+      codigo: 'MEMORIA_ERROR',
+    });
   });
 });
 

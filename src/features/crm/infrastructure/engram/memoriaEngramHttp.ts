@@ -194,6 +194,10 @@ export class MemoriaEngramHttp implements MemoriaConversacionPort {
       'GET',
       `/context?project=${encodeURIComponent(proyecto)}`,
     );
+    // 404 unknown_project es el estado vacío NORMAL de una empresa
+    // nueva (sin proyecto Engram hasta el primer guardar) — memoria
+    // vacía, no un error. Verificado en vivo contra Engram 3.3.2.
+    if (await this.esProyectoVacio(respuesta)) return [];
     this.exigirOk(respuesta, '/context');
     const datos = await this.leerJson<{ context?: unknown }>(respuesta, '/context');
     if (datos === null || typeof datos !== 'object' || typeof datos.context !== 'string') {
@@ -218,6 +222,8 @@ export class MemoriaEngramHttp implements MemoriaConversacionPort {
       limit: String(limite),
     });
     const respuesta = await this.llamar('GET', `/search?${parametros.toString()}`);
+    // Igual que /context: proyecto inexistente = memoria vacía.
+    if (await this.esProyectoVacio(respuesta)) return [];
     this.exigirOk(respuesta, '/search');
     const filas = await this.leerJson<unknown>(respuesta, '/search');
     if (Array.isArray(filas) === false) {
@@ -354,6 +360,22 @@ export class MemoriaEngramHttp implements MemoriaConversacionPort {
         'MEMORIA_ERROR',
         `Engram respondió HTTP ${respuesta.status} en ${ruta}`,
       );
+    }
+  }
+
+  /**
+   * 404 + code "unknown_project" es el estado vacío legítimo (la
+   * empresa aún no tiene proyecto Engram — recién se crea al primer
+   * guardar). Lee el cuerpo (único consumidor en esta vía 404) y
+   * decide vacío-vs-error; cualquier otro 404 sigue siendo error.
+   */
+  private async esProyectoVacio(respuesta: Response): Promise<boolean> {
+    if (respuesta.status !== 404) return false;
+    try {
+      const cuerpo = (await respuesta.json()) as { code?: unknown };
+      return cuerpo.code === 'unknown_project';
+    } catch {
+      return false;
     }
   }
 
