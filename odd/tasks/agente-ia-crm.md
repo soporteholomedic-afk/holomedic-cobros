@@ -1,6 +1,6 @@
 # Feature: agente-ia-crm — La Guía (agente IA de conversaciones del CRM)
 
-> Estado: **E1 completo y revisado (promovido a develop) · E2 en curso** · Creado: 2026-10-10
+> Estado: **E1–E3 completos y revisados (RDD 3/3, 4/4, 7/7) · E4 nuevo (cerebro de calidad) desbloqueado** · Creado: 2026-10-10 · Plan ampliado a 6 entregables: 2026-10-11
 > Registro maestro de diseño: Engram tópico `agente-ia-crm` (obs 825, revisiones al día).
 > Prototipos visuales: `http://172.16.10.20:1226/` (index · mockup · flujo-guia · configuracion).
 
@@ -19,7 +19,7 @@ Cuando entre un chat (WhatsApp vía Kapso primero; email después), **la Guía l
 
 ---
 
-## Los 5 entregables
+## Los 6 entregables
 
 Cada entregable es un hito **demoable de punta a punta** y cierra con work-unit commits (Conventional Commits) sobre feature branch desde `develop`. Test-first en todo cambio de comportamiento (tests por archivo modificado, nunca globales en modo apply).
 
@@ -47,7 +47,7 @@ Cada entregable es un hito **demoable de punta a punta** y cierra con work-unit 
 
 - Motor de respuesta (worker async): recall acotado → `GET /context` (pineados) + `GET /search` en `chat:<id>` y `empresa:<id>` de Engram `:7438` + top-k de KB + cola del hilo; generación con fuentes y score; guardrails (umbral .60, scope solo-KB, límite intercambios, horario).
 - Memoria Engram: port `MemoriaConversacionPort` + adapter HTTP (siempre `project` explícito; `operation_id` idempotente); destilación post-envío tipada (`hecho_cliente`, `acuerdo`, `compromiso`, `preferencia`, `objecion`); pin de acuerdos.
-- KB semilla: carga inicial de entradas (script SQL) — el editor viene en E5.
+- KB semilla: carga inicial de entradas (script SQL) — el editor viene en E6.
 - Auditoría en `CRM_Mensajes` (fuentes, score, modelo) y registro de la actividad de respuesta en el pipeline (solo lo que la máquina ya deriva).
 - Vista: hilo muestra emisor IA con score + fuentes; estados ACTIVA_IA / REQUIERE_HUMANO en bandeja.
 
@@ -65,7 +65,18 @@ Cada entregable es un hito **demoable de punta a punta** y cierra con work-unit 
 
 **Demo (DoD)**: guion del mockup en vivo: escribís en tu chat → llega notificación → indicación → la Guía retoma → volvés con borrador intacto → la ficha muestra el dato extraído automáticamente.
 
-### E4 — Cierre autónomo del trato + vistas de configuración
+### E4 — Cerebro de calidad: cómo contesta la Guía (prompt, memorias y conocimiento subible) — *NUEVO, insertado 2026-10-11 por decisión del usuario*
+
+**Qué**: el foco pasa al CÓMO responde. **Modificar y mejorar iterativamente el prompt del agente es parte explícita del entregable**, junto con el jale de memorias con calidad, respuestas medibles, y que una persona pueda subir información a la plataforma para que el agente la use.
+
+- **Prompt v2 modular y versionado**: reescribir el armado del prompt (system base + bloques condicionales: contactoNuevo, indicación activa, memorias disponibles, hit/miss de KB) en vez de string monolítico · persona y tono (español profesional cálido de venta de salud ocupacional, Holomedic) · formato WhatsApp (respuestas cortas, sin markdown crudo, bullets simples, 1 emoji máx) · reglas duras anti-invención (responder SOLO con KB + memoria + indicación; nunca inventar precios/plazos/descuentos; datos sensibles jamás) · cierre con pregunta/CTA cuando corresponde · indicación humana = máxima prioridad. `promptVersion` auditada junto a modelo/score/fuentes en `CRM_Mensajes` — cada mejora del prompt queda registrada y comparable. **Golden set** de preguntas reales Holomedic para medir cada cambio de prompt (regresión de comportamiento).
+- **Calidad del recall (cómo jala las memorias)**: ranking híbrido (léxico FTS + frescura + sesión) con dedup de observaciones y presupuesto de contexto por bloque (pineados / empresa / chat) · destilación v2 (observaciones autocontenidas, títulos accionables, disciplina de pineado) · síntesis corrida del propio hilo como memoria de trabajo (además de la cola de mensajes).
+- **Calidad de respuesta medible**: auto-evaluación de fidelidad a fuentes (self-score del propio modelo, registrado en el mensaje) · marcar respuesta deficiente desde el hilo (1 click) → hueco de KB enlazado (la curación completa llega con el editor de E6) · panel mínimo de métricas de calidad (score promedio, % respuestas con fuente, escalados, intervenciones humanas).
+- **Información subible por la persona**: carga de conocimiento desde la plataforma — pegar texto Y subir archivos (PDF/TXT/DOCX) → ingesta asíncrona (limpieza + chunking) → entradas en `CRM_Conocimiento` con origen SUBIDO, etiquetas sugeridas, vigencia opcional y activación · vista mínima de carga con estado de procesamiento (el editor CRUD completo sigue en E6) · todo lo subido entra al mismo RAG y el agente lo usa de inmediato.
+
+**Demo (DoD)**: se sube un PDF con condiciones comerciales → la Guía responde una pregunta sobre ese contenido citándolo → se marca una respuesta débil → queda el hueco enlazado → se mejora el prompt (bump de `promptVersion`) y la misma pregunta responde mejor, ambas versiones auditadas en el hilo → las memorias muestran recall relevante sin duplicados.
+
+### E5 — Cierre autónomo del trato + vistas de configuración *(ex E4)*
 
 **Qué**: la Guía cierra sola y el admin opera todo el sistema (prototipo `configuracion.html` hecho real).
 
@@ -75,12 +86,12 @@ Cada entregable es un hito **demoable de punta a punta** y cierra con work-unit 
 
 **Demo (DoD)**: flujo completo `flujo-guia.html` en vivo (ingreso → gestión → un pedido de ayuda → cierre solo con etapa y tipo cambiando) + admin configurando el canal desde cero y probando el kill switch.
 
-### E5 — Conocimiento, calidad y canal email
+### E6 — Conocimiento (editor), curación, canal email y retención *(ex E5)*
 
 **Qué**: la sostenibilidad: curación de KB, circuito de calidad, retención y el segundo canal.
 
-- Editor `/admin/crm/conocimiento` (patrón `plantillas-editor`): CRUD con vigencia (desde/hasta), etiquetas por tema, activación, stats de uso/calidad por entrada.
-- Circuito de calidad: marcar respuesta deficiente en el hilo → hueco de KB (cola admin) → curación → la respuesta mejora.
+- Editor `/admin/crm/conocimiento` (patrón `plantillas-editor`): CRUD con vigencia (desde/hasta), etiquetas por tema, activación, stats de uso/calidad por entrada (incluye lo subido en E4).
+- Cola de curación de huecos de KB (los nacidos del marcado de E4) → curación → la respuesta mejora; cierra el circuito de calidad.
 - Canal **email**: entrada (ingesta de respuestas del buzón crm) y salida multi-canal desde la misma conversación; datos de canal en `CRM_Conversaciones`/`CRM_Mensajes` ya modelados en E1.
 - Job de retención: chat cerrado + 12 meses → purga Engram (`engram delete project --hard`) + log de purgas; corrección humana de memorias (DELETE puntual) desde la vista.
 - Métricas de productividad: intervenciones humanas por conversación, tratos cerrados por la Guía, tiempo de respuesta.
@@ -100,7 +111,7 @@ Cada entregable es un hito **demoable de punta a punta** y cierra con work-unit 
 
 1. Aprobación de plantillas en Meta (lead time externo) — mitigar pidiéndolas durante E1.
 2. Números de teléfono en texto libre hoy → normalización E.164 obligatoria en E1 (vinculación).
-3. FTS5 léxico (no vectorial) para memoria: depende de disciplina de destilación; evaluar hybrid en E5 si el recall falla.
+3. FTS5 léxico (no vectorial) para memoria: depende de disciplina de destilación; el hybrid se construye en E4 (nuevo) — si el recall sigue fallando, evaluar embeddings allí.
 4. LLM del motor (E2): definir proveedor/modelo + presupuesto de tokens antes de arrancar E2.
 
 ## Registro de avance
@@ -133,7 +144,7 @@ El candidato completo (51 archivos) excedió el presupuesto de contexto (`lens_c
   - **Nacimiento IA**: las conversaciones nuevas nacen `ACTIVA_IA` (modo IA) — reemplaza el default E1 `TOMADA_HUMANO`; la vinculación (auto o manual) preserva `ACTIVA_IA`.
   - **Toma implícita**: una respuesta manual del humano en `ACTIVA_IA`/`REQUIERE_HUMANO` pasa la conversación a `TOMADA_HUMANO` (E3 formaliza tomar/devolver/escalar).
   - **Cola durable**: `CRM_AgenteTareas` (dedup UNIQUE conversación+mensaje+tipo; claim `UPDATE … OUTPUT`; PENDIENTE/PROCESANDO/COMPLETADA/FALLIDA con reintentos). Disparo best-effort inmediato tras persistir + barredor lazy (setInterval 20s, singleton Node) como backstop. El webhook sigue ack<10s SIN trabajo LLM dentro.
-  - **Config por env (bootstrap hasta E4)**: `LLM_BASE_URL`/`LLM_API_KEY`/`LLM_MODELO` (default `glm-5.3-flash` @ `https://api.z.ai/api/paas/v4/`), `AGENTE_HABILITADO` (kill switch provisorio), `AGENTE_UMBRAL_CONF` (.60), `AGENTE_MAX_INTERCAMBIOS` (8), `AGENTE_HORARIO_DESDE/HASTA` (8/18), `AGENTE_TEXTO_ESCALADO`. E4 los mueve a DB + admin UI.
+  - **Config por env (bootstrap hasta E5 — renumerado)**: `LLM_BASE_URL`/`LLM_API_KEY`/`LLM_MODELO` (default `glm-5.3-flash` @ `https://api.z.ai/api/paas/v4/`), `AGENTE_HABILITADO` (kill switch provisorio), `AGENTE_UMBRAL_CONF` (.60), `AGENTE_MAX_INTERCAMBIOS` (8), `AGENTE_HORARIO_DESDE/HASTA` (8/18), `AGENTE_TEXTO_ESCALADO`. E5 (ex E4) los mueve a DB + admin UI.
   - **Generador simulado**: sin `LLM_API_KEY` en dev → adapter simulado determinista (DoD demo sin API key); prod sin config → fail-closed tipado (patrón KAPSO_MODO). Llegada la key: solo env vars.
   - **Destilación** = 2ª llamada LLM tipada (`hecho_cliente`/`acuerdo`/`compromiso`/`preferencia`/`objecion`) post-envío + pin de acuerdos; en modo simulado, destilador determinista. Idempotencia por `operation_id`.
   - **PII**: teléfonos enmascarados antes de ir al modelo; solo consulta + cola corta del hilo (últimos N) + recall viajan al LLM.
@@ -179,7 +190,7 @@ Todos los hallazgos son advisory informativos NO bloqueantes (ninguna correcció
 
 **Decisiones E3 (arquitecto, sobre diseño locked + `temp/diagrama-flujo/mockup.html`)**:
 - **Solicitud de ayuda persistida**: tabla `CRM_SolicitudesAyuda` (conversacionId, mensajeId, consulta, terminosBuscados JSON, score, estado PENDIENTE/RESUELTA, indicacion, resueltaPor, timestamps). El motor la crea al escalar (hoy esos datos se pierden); la tarjeta del hilo la lee de acá.
-- **Indicación**: use case `aplicarIndicacion` — valida PENDIENTE → guarda observación pineada tipo `indicacion_humana` (nuevo literal en `TipoObservacionDestilada`) en scope chat → crea candidato de hueco (`CRM_ConocimientoHuecos`: consulta, terminos, estado ABIERTO; la cola admin viene en E5) → marca RESUELTA → encola tarea `RESPONDER_CON_INDICACION` (payload {solicitudId, indicacion}); el motor re-corre con la indicación inyectada prominentemente en el prompt (además del pin de memoria). Toast "✓ Indicación guardada — la Guía continúa con el cliente".
+- **Indicación**: use case `aplicarIndicacion` — valida PENDIENTE → guarda observación pineada tipo `indicacion_humana` (nuevo literal en `TipoObservacionDestilada`) en scope chat → crea candidato de hueco (`CRM_ConocimientoHuecos`: consulta, terminos, estado ABIERTO; la cola admin viene en E6) → marca RESUELTA → encola tarea `RESPONDER_CON_INDICACION` (payload {solicitudId, indicacion}); el motor re-corre con la indicación inyectada prominentemente en el prompt (además del pin de memoria). Toast "✓ Indicación guardada — la Guía continúa con el cliente".
 - **Ficha viva**: extracción piggyback en la destilación (misma llamada LLM, JSON tipado ampliado: cargo/trabajadores/sedes) → tabla `CRM_ExtraccionesFicha` (contactoId/empresaId nullable, campo, valor, origen IA/HUMANO, confirmado, actualizadoEn). Confirmar promueve a columna canónica cuando existe (`contacto.cargo`, `empresa.cantidadTrabajadores`); `sedes` queda como dato de ficha (sin columna canónica). Pendiente se muestra "— por detectar —" con tag 🤖 en lo extraído.
 - **Memorias**: port gana `eliminar(id)` + `despinear(id)` (editar = eliminar+guardar); API proxy por conversación. **Verificar soporte DELETE del Engram :7438 antes de T3** (riesgo del scout).
 - **Tomar/devolver/escalar**: tomar explícito (→ TOMADA_HUMANO + asignadaA + modo HUMANO) y devolver (TOMADA_HUMANO→ACTIVA_IA + re-encolar GENERAR_RESPUESTA solo si hay mensaje IN sin OUT posterior); escalar = asignar `asignadaA` a otro usuario con permiso (nuevo GET usuarios-asignables, id+nombre). `asignadaA` recibe su primer escritor real.
@@ -211,13 +222,14 @@ El candidato completo (92 rutas/~12.700 líneas) excedió `lens_context_budget_e
 **Commits E3** (branch `feature/agente-ia-crm-e3`, base develop `20fde7c`): `05eb08b` T1 persistencia · `b3b19fa` T2 motor+indicación · `0c839cb` T3 APIs operador · `d99ceb2` T4 ficha viva · `e20745c`+`60073f9`+`a9990f6` T5 UI patrón de ayuda (backend+componentes+integración, **doble split del commit original 3bfc918 autorizado por el usuario 2026-10-11** para las rebanadas de la revisión RDD; árbol final idéntico, diff 0 vs backup) · `658bf5c` T6 notificaciones globales · docs. Total ~12.700 líneas, ~490 tests nuevos.
 
 **Limitaciones conocidas E3**: usuarios-asignables no filtra usuarios inactivos (el admin gestiva altas/bajas; seguimiento); `pineada` de memorias se infiere por título vía /context (títulos duplicados en el mismo proyecto marcarían ambos — Engram 3.3.2 no expone pinned por fila); editar memoria = eliminar+guardar (sin update HTTP en Engram 3.3.2); sin contador vivo de intercambios (chip muestra el límite).
-- [ ] E4 — Cierre autónomo + vistas de configuración
-- [ ] E5 — Conocimiento, calidad y canal email
+- [ ] E4 — Cerebro de calidad: prompt v2 modular+versionado con golden set · recall híbrido de memorias + destilación v2 · auto-score + marcado de respuesta deficiente + métricas · información subible (texto y PDF/TXT/DOCX → CRM_Conocimiento origen SUBIDO) — *NUEVO 2026-10-11, insertado entre E3 y el ex-E4 por decisión del usuario*
+- [ ] E5 — Cierre autónomo + vistas de configuración (ex E4)
+- [ ] E6 — Conocimiento (editor+curación de huecos), canal email y retención (ex E5)
 
 ## E2 — Decisión LLM (bloqueada 2026-10-11, revisada 2× por el usuario)
 
 - **DESARROLLO Y PRODUCCIÓN usan la API de GLM**: Z.ai `glm-5.3-flash` (`https://api.z.ai/api/paas/v4/`, $0.15/$0.50 por 1M → ~$0.60/mes). Mismo modelo en todo el ciclo — sin sorpresas de comportamiento entre ambientes.
-- **Google Gemini**: SOLO como opción seleccionable desde la **configuración de la plataforma** (E4, `/admin/crm/configuracion`): key CIFRADA + probar conexión + proveedor/modelo cambiables desde el admin SIN redeployar. Endpoint compatible-OpenAI: `https://generativelanguage.googleapis.com/v1beta/openai/`.
-- **Arquitectura**: único adapter OpenAI-compatible (`GeneradorRespuestaPort`); proveedor/modelo/key = CONFIGURACIÓN (DB + admin UI en E4); env solo bootstrap (key Z.ai para dev; prod sin config → fail-closed, patrón KAPSO_MODO).
+- **Google Gemini**: SOLO como opción seleccionable desde la **configuración de la plataforma** (E5, `/admin/crm/configuracion` — ex E4): key CIFRADA + probar conexión + proveedor/modelo cambiables desde el admin SIN redeployar. Endpoint compatible-OpenAI: `https://generativelanguage.googleapis.com/v1beta/openai/`.
+- **Arquitectura**: único adapter OpenAI-compatible (`GeneradorRespuestaPort`); proveedor/modelo/key = CONFIGURACIÓN (DB + admin UI en E5 — ex E4); env solo bootstrap (key Z.ai para dev; prod sin config → fail-closed, patrón KAPSO_MODO).
 - **Pendiente usuario**: API keys — Z.ai (dev+prod) y Google AI (para cargar en la config) — no bloquea la construcción (tests con fakes).
 - Presupuesto estimado: ~1.000 resp/mes ≈ 3M tokens entrada + 0,3M salida → GLM ~$0.60/mes.
