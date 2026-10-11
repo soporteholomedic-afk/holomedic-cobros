@@ -13,11 +13,12 @@ import { crearEnviadorWhatsapp } from '../whatsapp/crearEnviadorWhatsapp';
  *   getCrmDb()  →  tareas (CRM_AgenteTareas)          the durable queue
  *              →  conversaciones + mensajes            thread + lifecycle
  *              →  conocimiento (CRM_Conocimiento)      the RAG prefilter
+ *              →  empresas (CRM_Empresas)              E2·T9 identification match
  *   crearMemoriaConversacion()  →  memoria (Engram)    conversation memory
  *   crearGeneradorRespuesta()   →  generador (LLM)     answer + distillation
  *   crearEnviadorWhatsapp()     →  whatsapp (Kapso)    the outbound canal
  *
- * Those six dependencies assemble the E2 motor
+ * Those seven dependencies assemble the E2 motor
  * (GenerarRespuestaAgenteUseCase), and the motor plus the queue form
  * ProcesarTareasAgenteUseCase — the drain the sweeper
  * (iniciarBarredorTareas) and the route triggers call
@@ -48,6 +49,7 @@ export function crearProcesadorTareasAgente(): ProcesadorTareasAgente {
         memoria: crearMemoriaConversacion(),
         generador: crearGeneradorRespuesta(),
         whatsapp: crearEnviadorWhatsapp(),
+        empresas: db.empresas,
       });
       const useCase = new ProcesarTareasAgenteUseCase({ tareas: db.tareas, motor });
       return useCase.ejecutar(limite);

@@ -6,14 +6,17 @@ import type {
   ConocimientoCrmRepository,
   ContactoConEmpresa,
   ConversacionCrmRepository,
+  CrmEmpresaRepositoryPort,
   EnviadorWhatsappCrmPort,
   EnvioWhatsappCrm,
+  FiltrosEmpresas,
   GeneradorRespuestaPort,
   ListarMensajesOpciones,
   MemoriaConversacionPort,
   MensajeCrmRepository,
   ResultadoEnvioWhatsapp,
   EntradaGuardarMemoria,
+  VincularConversacionDatos,
 } from '../../domain/ports';
 import type {
   CanalConversacion,
@@ -23,11 +26,14 @@ import type {
   CrearMensajeInput,
   DireccionMensaje,
   EmisorMensaje,
+  Empresa,
   EntradaConocimiento,
   EntradaDestilacion,
   EntradaGenerarRespuesta,
   EstadoConversacion,
+  IdentificacionExtraida,
   MensajeCrm,
+  ModoConversacion,
   ObservacionDestilada,
   ObservacionMemoria,
   RespuestaGenerada,
@@ -61,12 +67,26 @@ import { crearConfigAgente, type ConfigAgente } from '../configAgente';
  * - Distillation runs only on RESPONDIDO, only with empresaId,
  *   best-effort (memory failures warn with codigo/conversacionId only
  *   and never change the result).
+ * - E2·T9 unlinked attendance: PENDIENTE_VINCULACION (empresaId /
+ *   contactoId null) runs the SAME engine — contactoNuevo:true into the
+ *   generator, NO memory recall and NO distillation — and after a
+ *   RESPONDIDO send extracts the identification best-effort; when the
+ *   named empresa EXACTLY matches ONE CRM_Empresas row (normalized:
+ *   trim/lowercase/strip-diacritics) it creates the contacto, vincula
+ *   (estado ACTIVA_IA) and pins modo IA. TOMADA_HUMANO / CERRADA /
+ *   PAUSADA / REQUIERE_HUMANO stay no-ops. Any identification failure
+ *   (throw, 0 or >1 exact matches, empresas dep absent) leaves the
+ *   already-sent outcome untouched.
  */
 
 class FakeConversaciones implements ConversacionCrmRepository {
   filas: ConversacionCrm[] = [];
   actividades: Array<{ id: number; direccion: 'IN' | 'OUT' }> = [];
   cambiosEstado: Array<{ id: number; estado: EstadoConversacion }> = [];
+  vinculaciones: Array<{ id: number; datos: VincularConversacionDatos }> = [];
+  contactosCreados: Array<{ empresaId: number; datos: { nombre: string } }> = [];
+  cambiosModo: Array<{ id: number; modo: ModoConversacion }> = [];
+  private siguienteContactoId = 500;
 
   sembrar(fila: ConversacionCrm): void {
     this.filas.push(fila);
@@ -118,8 +138,16 @@ class FakeConversaciones implements ConversacionCrmRepository {
     throw new Error('no requerido en este fake');
   }
 
-  async vincular(): Promise<ConversacionCrm | null> {
-    throw new Error('no requerido en este fake');
+  async vincular(id: number, datos: VincularConversacionDatos): Promise<ConversacionCrm | null> {
+    this.vinculaciones.push({ id, datos: structuredClone(datos) });
+    const fila = this.filas.find((f) => f.id === id);
+    if (fila === undefined) return null;
+    fila.empresaId = datos.empresaId;
+    fila.contactoId = datos.contactoId;
+    if (datos.telefono !== undefined) fila.telefono = datos.telefono;
+    if (datos.estado !== undefined) fila.estado = datos.estado;
+    fila.actualizadoEn = new Date().toISOString();
+    return structuredClone(fila);
   }
 
   async actualizarEstado(id: number, estado: EstadoConversacion): Promise<ConversacionCrm | null> {
@@ -139,8 +167,21 @@ class FakeConversaciones implements ConversacionCrmRepository {
     throw new Error('no requerido en este fake');
   }
 
-  async crearContacto(): Promise<{ contactoId: number }> {
-    throw new Error('no requerido en este fake');
+  async crearContacto(
+    empresaId: number,
+    datos: { nombre: string; cargo?: string | null },
+  ): Promise<{ contactoId: number }> {
+    this.contactosCreados.push({ empresaId, datos: { nombre: datos.nombre } });
+    return { contactoId: this.siguienteContactoId++ };
+  }
+
+  async actualizarModo(id: number, modo: ModoConversacion): Promise<ConversacionCrm | null> {
+    this.cambiosModo.push({ id, modo });
+    const fila = this.filas.find((f) => f.id === id);
+    if (fila === undefined) return null;
+    fila.modo = modo;
+    fila.actualizadoEn = new Date().toISOString();
+    return structuredClone(fila);
   }
 
   async obtenerContactoPorId(): Promise<ContactoConEmpresa | null> {
@@ -269,6 +310,9 @@ class FakeMemoria implements MemoriaConversacionPort {
 class FakeGenerador implements GeneradorRespuestaPort {
   entradasGenerar: EntradaGenerarRespuesta[] = [];
   entradasDestilar: EntradaDestilacion[] = [];
+  entradasIdentificar: Array<{ consulta: string; respuesta: string }> = [];
+  identificacion: IdentificacionExtraida | null = { nombre: null, empresa: null };
+  falloIdentificar: Error | null = null;
   respuesta: RespuestaGenerada = {
     texto: 'El examen incluye examen médico, audiometría y espirometría.',
     scoreConfianza: 0.9,
@@ -288,6 +332,15 @@ class FakeGenerador implements GeneradorRespuestaPort {
     this.entradasDestilar.push(structuredClone(entrada));
     return structuredClone(this.observaciones);
   }
+
+  async extraerIdentificacion(entrada: {
+    consulta: string;
+    respuesta: string;
+  }): Promise<IdentificacionExtraida | null> {
+    this.entradasIdentificar.push(structuredClone(entrada));
+    if (this.falloIdentificar !== null) throw this.falloIdentificar;
+    return structuredClone(this.identificacion);
+  }
 }
 
 class FakeWhatsApp implements EnviadorWhatsappCrmPort {
@@ -297,6 +350,28 @@ class FakeWhatsApp implements EnviadorWhatsappCrmPort {
   async enviar(datos: EnvioWhatsappCrm): Promise<ResultadoEnvioWhatsapp> {
     this.envios.push(structuredClone(datos));
     return structuredClone(this.resultado);
+  }
+}
+
+class FakeEmpresas implements CrmEmpresaRepositoryPort {
+  filas: Empresa[] = [];
+  consultas: FiltrosEmpresas[] = [];
+
+  async listar(filtros?: FiltrosEmpresas): Promise<Empresa[]> {
+    this.consultas.push(structuredClone(filtros ?? {}));
+    return structuredClone(this.filas);
+  }
+
+  async crear(): Promise<Empresa> {
+    throw new Error('no requerido en este fake');
+  }
+
+  async obtenerPorId(): Promise<Empresa | null> {
+    throw new Error('no requerido en este fake');
+  }
+
+  async actualizar(): Promise<Empresa | null> {
+    throw new Error('no requerido en este fake');
   }
 }
 
@@ -316,6 +391,35 @@ function conversacionActiva(sobres: Partial<ConversacionCrm> = {}): Conversacion
     noLeidos: 1,
     creadoEn: ahora,
     actualizadoEn: ahora,
+    ...sobres,
+  };
+}
+
+/** Unlinked conversation (E2·T9): born PENDIENTE_VINCULACION, no empresa/contacto. */
+function conversacionDesvinculada(sobres: Partial<ConversacionCrm> = {}): ConversacionCrm {
+  return conversacionActiva({
+    empresaId: null,
+    contactoId: null,
+    estado: 'PENDIENTE_VINCULACION',
+    ...sobres,
+  });
+}
+
+function empresaCrm(sobres: Partial<Empresa> = {}): Empresa {
+  return {
+    id: 7,
+    ruc: '80012345-6',
+    rucNormalizado: '800123456',
+    razonSocial: 'Constructora X S.A.',
+    tipo: 'Cliente',
+    origen: null,
+    proyectoObra: null,
+    destinoComun: null,
+    notas: null,
+    responsable: null,
+    contactos: [],
+    createdAt: '2026-01-01T00:00:00.000Z',
+    updatedAt: '2026-01-01T00:00:00.000Z',
     ...sobres,
   };
 }
@@ -380,6 +484,11 @@ interface OverridesFakes {
   envio?: ResultadoEnvioWhatsapp;
   config?: Partial<ConfigAgente>;
   falloGuardar?: Error;
+  identificacion?: IdentificacionExtraida | null;
+  falloIdentificar?: Error;
+  empresasFilas?: Empresa[];
+  /** true = motor construido SIN el dep empresas (E2·T9 opcional). */
+  sinEmpresas?: boolean;
 }
 
 function crearFakes(overrides: OverridesFakes = {}): {
@@ -389,6 +498,7 @@ function crearFakes(overrides: OverridesFakes = {}): {
   memoria: FakeMemoria;
   generador: FakeGenerador;
   whatsapp: FakeWhatsApp;
+  empresas: FakeEmpresas | null;
   useCase: GenerarRespuestaAgenteUseCase;
 } {
   const conversaciones = new FakeConversaciones();
@@ -406,8 +516,12 @@ function crearFakes(overrides: OverridesFakes = {}): {
   const generador = new FakeGenerador();
   Object.assign(generador.respuesta, overrides.respuesta ?? {});
   generador.observaciones = overrides.observaciones ?? [];
+  generador.identificacion = overrides.identificacion ?? { nombre: null, empresa: null };
+  generador.falloIdentificar = overrides.falloIdentificar ?? null;
   const whatsapp = new FakeWhatsApp();
   if (overrides.envio !== undefined) whatsapp.resultado = overrides.envio;
+  const empresas = new FakeEmpresas();
+  empresas.filas = overrides.empresasFilas ?? [];
   const config: ConfigAgente = { ...crearConfigAgente({}), ...overrides.config };
   const useCase = new GenerarRespuestaAgenteUseCase({
     conversaciones,
@@ -416,9 +530,10 @@ function crearFakes(overrides: OverridesFakes = {}): {
     memoria,
     generador,
     whatsapp,
+    ...(overrides.sinEmpresas === true ? {} : { empresas }),
     config,
   });
-  return { conversaciones, mensajes, conocimiento, memoria, generador, whatsapp, useCase };
+  return { conversaciones, mensajes, conocimiento, memoria, generador, whatsapp, empresas, useCase };
 }
 
 function sinEfectos(fakes: {
@@ -428,18 +543,24 @@ function sinEfectos(fakes: {
   memoria: FakeMemoria;
   generador: FakeGenerador;
   whatsapp: FakeWhatsApp;
+  empresas: FakeEmpresas | null;
 }): void {
   expect(fakes.mensajes.escritas).toEqual([]);
   expect(fakes.whatsapp.envios).toEqual([]);
   expect(fakes.generador.entradasGenerar).toEqual([]);
   expect(fakes.generador.entradasDestilar).toEqual([]);
+  expect(fakes.generador.entradasIdentificar).toEqual([]);
   expect(fakes.memoria.guardadas).toEqual([]);
   expect(fakes.memoria.pineadas).toEqual([]);
   expect(fakes.conversaciones.actividades).toEqual([]);
   expect(fakes.conversaciones.cambiosEstado).toEqual([]);
+  expect(fakes.conversaciones.vinculaciones).toEqual([]);
+  expect(fakes.conversaciones.contactosCreados).toEqual([]);
+  expect(fakes.conversaciones.cambiosModo).toEqual([]);
   expect(fakes.conocimiento.consultas).toEqual([]);
   expect(fakes.memoria.contextos).toEqual([]);
   expect(fakes.memoria.busquedas).toEqual([]);
+  if (fakes.empresas !== null) expect(fakes.empresas.consultas).toEqual([]);
 }
 
 
@@ -472,6 +593,17 @@ describe('GenerarRespuestaAgenteUseCase — no-ops con cero efectos (E2·T4)', (
 
     expect(resultado.resultado).toBe('CONVERSACION_NO_ACTIVA_IA');
     sinEfectos(fakes);
+  });
+
+  it('estados TOMADA_HUMANO / PAUSADA / CERRADA → CONVERSACION_NO_ACTIVA_IA (E2·T9: solo estados IA-atendidos)', async () => {
+    for (const estado of ['TOMADA_HUMANO', 'PAUSADA', 'CERRADA'] as const) {
+      const fakes = crearFakes({ conversacion: conversacionActiva({ estado }) });
+
+      const resultado = await fakes.useCase.ejecutar(1, AHORA);
+
+      expect(resultado.resultado).toBe('CONVERSACION_NO_ACTIVA_IA');
+      sinEfectos(fakes);
+    }
   });
 
   it('agente deshabilitado (kill switch) → AGENTE_DESHABILITADO sin efectos', async () => {
@@ -652,6 +784,8 @@ describe('GenerarRespuestaAgenteUseCase — happy path RESPONDIDO (E2·T4)', () 
 
     // Entrada al generador: proyecciones de conocimiento/memoria.
     const entrada = fakes.generador.entradasGenerar[0];
+    expect(entrada?.contactoNuevo).toBe(false);
+    expect(fakes.generador.entradasIdentificar).toEqual([]);
     expect(entrada?.conocimiento).toEqual([
       { id: 7, titulo: 'Examen ocupacional', contenido: 'Incluye examen médico, audiometría y espirometría.' },
     ]);
@@ -778,6 +912,216 @@ describe('GenerarRespuestaAgenteUseCase — destilación post-envío (E2·T4)', 
     expect(fakes.memoria.busquedas).toEqual([]);
     expect(fakes.generador.entradasDestilar).toEqual([]);
     expect(fakes.memoria.guardadas).toEqual([]);
+  });
+});
+
+describe('GenerarRespuestaAgenteUseCase — conversación desvinculada (E2·T9)', () => {
+  const TEXTO_RESPUESTA = 'El examen incluye examen médico, audiometría y espirometría.';
+
+  it('PENDIENTE_VINCULACION → RESPONDIDO con contactoNuevo true, recall de conocimiento, SIN memoria ni destilación, extraerIdentificacion llamado', async () => {
+    const fakes = crearFakes({
+      conversacion: conversacionDesvinculada(),
+      identificacion: { nombre: null, empresa: null },
+    });
+
+    const resultado = await fakes.useCase.ejecutar(1, AHORA);
+
+    expect(resultado.resultado).toBe('RESPONDIDO');
+    expect(resultado.mensajeId).toBe(1000);
+    // El KB responde igual (preguntas genéricas tempranas) — la memoria no.
+    expect(fakes.conocimiento.consultas).toEqual([CONSULTA]);
+    expect(fakes.generador.entradasGenerar[0]?.contactoNuevo).toBe(true);
+    expect(fakes.memoria.contextos).toEqual([]);
+    expect(fakes.memoria.busquedas).toEqual([]);
+    expect(fakes.generador.entradasDestilar).toEqual([]);
+    expect(fakes.memoria.guardadas).toEqual([]);
+    // Identificación best-effort post-envío con la consulta ORIGINAL y el texto enviado.
+    expect(fakes.generador.entradasIdentificar).toEqual([
+      { consulta: CONSULTA, respuesta: TEXTO_RESPUESTA },
+    ]);
+    // Sin empresa extraída → cero efectos de vinculación, estado intacto.
+    expect(fakes.conversaciones.contactosCreados).toEqual([]);
+    expect(fakes.conversaciones.vinculaciones).toEqual([]);
+    expect(fakes.conversaciones.cambiosModo).toEqual([]);
+    expect(fakes.conversaciones.filas[0]).toMatchObject({
+      estado: 'PENDIENTE_VINCULACION',
+      empresaId: null,
+      contactoId: null,
+    });
+  });
+
+  it('extraerIdentificacion → null: nada se vincula y el resultado no cambia', async () => {
+    const fakes = crearFakes({
+      conversacion: conversacionDesvinculada(),
+      identificacion: null,
+    });
+
+    const resultado = await fakes.useCase.ejecutar(1, AHORA);
+
+    expect(resultado.resultado).toBe('RESPONDIDO');
+    expect(fakes.conversaciones.contactosCreados).toEqual([]);
+    expect(fakes.conversaciones.vinculaciones).toEqual([]);
+  });
+
+  it('empresa nombrada con UN match EXACTO normalizado → crea contacto, vincula ACTIVA_IA y fija modo IA', async () => {
+    const fakes = crearFakes({
+      conversacion: conversacionDesvinculada(),
+      identificacion: { nombre: 'Ana Giménez', empresa: '  Constructora X S.A.  ' },
+      empresasFilas: [empresaCrm()],
+    });
+
+    const resultado = await fakes.useCase.ejecutar(1, AHORA);
+
+    expect(resultado.resultado).toBe('RESPONDIDO');
+    // La búsqueda viaja NORMALIZADA (trim + lowercase + sin diacríticos).
+    expect(fakes.empresas?.consultas).toEqual([{ q: 'constructora x s.a.' }]);
+    expect(fakes.conversaciones.contactosCreados).toEqual([
+      { empresaId: 7, datos: { nombre: 'Ana Giménez' } },
+    ]);
+    expect(fakes.conversaciones.vinculaciones).toEqual([
+      { id: 1, datos: { empresaId: 7, contactoId: 500, estado: 'ACTIVA_IA' } },
+    ]);
+    expect(fakes.conversaciones.cambiosModo).toEqual([{ id: 1, modo: 'IA' }]);
+    expect(fakes.conversaciones.filas[0]).toMatchObject({
+      estado: 'ACTIVA_IA',
+      modo: 'IA',
+      empresaId: 7,
+      contactoId: 500,
+    });
+    expect(fakes.conversaciones.cambiosEstado).toEqual([]);
+  });
+
+  it('diacríticos: Construcción ≡ Construccion tras normalizar ambos lados', async () => {
+    const fakes = crearFakes({
+      conversacion: conversacionDesvinculada(),
+      identificacion: { nombre: 'Ana', empresa: 'Construcción X' },
+      empresasFilas: [empresaCrm({ razonSocial: 'Construccion X' })],
+    });
+
+    await fakes.useCase.ejecutar(1, AHORA);
+
+    expect(fakes.conversaciones.vinculaciones).toHaveLength(1);
+    expect(fakes.conversaciones.vinculaciones[0]?.datos.empresaId).toBe(7);
+  });
+
+  it('nombre null pero empresa con match → contacto nace como Contacto WhatsApp', async () => {
+    const fakes = crearFakes({
+      conversacion: conversacionDesvinculada(),
+      identificacion: { nombre: null, empresa: 'Constructora X S.A.' },
+      empresasFilas: [empresaCrm()],
+    });
+
+    await fakes.useCase.ejecutar(1, AHORA);
+
+    expect(fakes.conversaciones.contactosCreados).toEqual([
+      { empresaId: 7, datos: { nombre: 'Contacto WhatsApp' } },
+    ]);
+    expect(fakes.conversaciones.vinculaciones).toHaveLength(1);
+  });
+
+  it('2 empresas con el MISMO razonSocial → ambiguo: NADA se vincula', async () => {
+    const fakes = crearFakes({
+      conversacion: conversacionDesvinculada(),
+      identificacion: { nombre: 'Ana', empresa: 'Constructora X S.A.' },
+      empresasFilas: [empresaCrm(), empresaCrm({ id: 8, ruc: '90011122-3', rucNormalizado: '900111223' })],
+    });
+
+    const resultado = await fakes.useCase.ejecutar(1, AHORA);
+
+    expect(resultado.resultado).toBe('RESPONDIDO');
+    expect(fakes.conversaciones.contactosCreados).toEqual([]);
+    expect(fakes.conversaciones.vinculaciones).toEqual([]);
+    expect(fakes.conversaciones.cambiosModo).toEqual([]);
+    expect(fakes.conversaciones.filas[0]?.estado).toBe('PENDIENTE_VINCULACION');
+  });
+
+  it('0 resultados de la búsqueda → nada se vincula (sigue recolectando)', async () => {
+    const fakes = crearFakes({
+      conversacion: conversacionDesvinculada(),
+      identificacion: { nombre: 'Ana', empresa: 'Empresa Inexistente' },
+      empresasFilas: [],
+    });
+
+    const resultado = await fakes.useCase.ejecutar(1, AHORA);
+
+    expect(resultado.resultado).toBe('RESPONDIDO');
+    expect(fakes.conversaciones.contactosCreados).toEqual([]);
+    expect(fakes.conversaciones.vinculaciones).toEqual([]);
+  });
+
+  it('match PARCIAL no alcanza: la fila devuelta no coincide EXACTO → nada se vincula', async () => {
+    const fakes = crearFakes({
+      conversacion: conversacionDesvinculada(),
+      identificacion: { nombre: 'Ana', empresa: 'Constructora X' },
+      empresasFilas: [empresaCrm({ razonSocial: 'Constructora X S.A.' })],
+    });
+
+    await fakes.useCase.ejecutar(1, AHORA);
+
+    expect(fakes.conversaciones.contactosCreados).toEqual([]);
+    expect(fakes.conversaciones.vinculaciones).toEqual([]);
+  });
+
+  it('dep empresas AUSENTE → identificación corre pero sin efectos de vinculación (opcional E2·T9)', async () => {
+    const fakes = crearFakes({
+      conversacion: conversacionDesvinculada(),
+      identificacion: { nombre: 'Ana', empresa: 'Constructora X S.A.' },
+      sinEmpresas: true,
+    });
+
+    const resultado = await fakes.useCase.ejecutar(1, AHORA);
+
+    expect(resultado.resultado).toBe('RESPONDIDO');
+    expect(fakes.generador.entradasIdentificar).toHaveLength(1);
+    expect(fakes.conversaciones.contactosCreados).toEqual([]);
+    expect(fakes.conversaciones.vinculaciones).toEqual([]);
+  });
+
+  it('extraerIdentificacion revienta → best-effort: sigue RESPONDIDO y warn con codigo+id, sin cuerpos', async () => {
+    const fallo = Object.assign(new Error('boom'), { codigo: 'GENERADOR_TIMEOUT' });
+    const fakes = crearFakes({
+      conversacion: conversacionDesvinculada(),
+      falloIdentificar: fallo,
+    });
+
+    const resultado = await fakes.useCase.ejecutar(1, AHORA);
+
+    expect(resultado.resultado).toBe('RESPONDIDO');
+    expect(fakes.conversaciones.contactosCreados).toEqual([]);
+    expect(fakes.conversaciones.vinculaciones).toEqual([]);
+    expect(console.warn).toHaveBeenCalled();
+    const salida = JSON.stringify((console.warn as ReturnType<typeof vi.fn>).mock.calls);
+    expect(salida).toContain('GENERADOR_TIMEOUT');
+    expect(salida).toContain('"conversacionId":1');
+    expect(salida).not.toContain('Constructora');
+    expect(salida).not.toContain(CONSULTA);
+  });
+
+  it('escalado en desvinculada → texto seguro + REQUIERE_HUMANO, SIN identificación ni vinculación', async () => {
+    const fakes = crearFakes({
+      conversacion: conversacionDesvinculada(),
+      respuesta: { scoreConfianza: 0.3 },
+      identificacion: { nombre: 'Ana', empresa: 'Constructora X S.A.' },
+      empresasFilas: [empresaCrm()],
+    });
+
+    const resultado = await fakes.useCase.ejecutar(1, AHORA);
+
+    expect(resultado.resultado).toBe('ESCALADO');
+    expect(fakes.whatsapp.envios[0]?.cuerpo).toContain('persona del equipo');
+    expect(fakes.conversaciones.cambiosEstado).toEqual([{ id: 1, estado: 'REQUIERE_HUMANO' }]);
+    expect(fakes.generador.entradasIdentificar).toEqual([]);
+    expect(fakes.conversaciones.contactosCreados).toEqual([]);
+    expect(fakes.conversaciones.vinculaciones).toEqual([]);
+  });
+
+  it('conversación ya vinculada (contactoId presente) → extraerIdentificacion NO se llama', async () => {
+    const fakes = crearFakes({ identificacion: { nombre: 'Ana', empresa: 'Constructora X S.A.' } });
+
+    await fakes.useCase.ejecutar(1, AHORA);
+
+    expect(fakes.generador.entradasIdentificar).toEqual([]);
+    expect(fakes.empresas?.consultas).toEqual([]);
   });
 });
 

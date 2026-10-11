@@ -1,5 +1,8 @@
 import type {
+  Empresa,
+  EstadoConversacion,
   FragmentoMemoria,
+  IdentificacionExtraida,
   MensajeCrm,
   MensajeHistorialGeneracion,
   ObservacionDestilada,
@@ -8,6 +11,7 @@ import type {
 import type {
   ConocimientoCrmRepository,
   ConversacionCrmRepository,
+  CrmEmpresaRepositoryPort,
   EnviadorWhatsappCrmPort,
   GeneradorRespuestaPort,
   ListarMensajesOpciones,
@@ -42,11 +46,33 @@ import { recuperarConocimiento } from './recuperarConocimiento';
  * another LLM call and could double-send).
  *
  * Zero-side-effect no-ops, in guard order: missing conversation,
- * estado !== ACTIVA_IA, kill switch, out of hours, no phone on the
+ * estado not IA-attended, kill switch, out of hours, no phone on the
  * conversation (the responderConversacion SIN_TELEFONO guard — an
- * ACTIVA_IA row without its E.164 key has nothing to answer to), and
+ * attended row without its E.164 key has nothing to answer to), and
  * no IN/CLIENTE message to answer. Each returns BEFORE any recall,
- * LLM call or write.
+ * LLM call or write. The CONVERSACION_NO_ACTIVA_IA result code means
+ * exactly "not IA-attended" (missing row, TOMADA_HUMANO, PAUSADA,
+ * CERRADA, REQUIERE_HUMANO, sin teléfono or nothing to answer).
+ *
+ * E2·T9 — unlinked attendance + progressive identification:
+ * PENDIENTE_VINCULACION conversations (0 or >1 phone candidates, no
+ * empresa/contacto) run the SAME engine: the knowledge recall still
+ * fires (KB answers cover early generic questions), the generator
+ * gets contactoNuevo:true (its prompt gathers nombre/empresa
+ * naturally), memory recall and distillation stay SKIPPED (the
+ * memory port requires empresaId) — and AFTER a successful RESPONDIDO
+ * send the engine extracts the identification best-effort
+ * (generador.extraerIdentificacion). When the stated empresa
+ * EXACTLY matches ONE CRM_Empresas row (normalized: trim, lowercase,
+ * strip diacritics) it creates the contacto (stated nombre, fallback
+ * 'Contacto WhatsApp'), vincula with estado ACTIVA_IA and pins modo
+ * IA — mirroring vincularConversacion (repo vincular never touches
+ * modo). 0 or >1 exact matches (or the optional empresas dep absent)
+ * → nothing: the chat keeps collecting and the operator can still
+ * link manually via the E1 panel. Any identification error only
+ * warns (id-level logs) — the already-sent answer is the durable
+ * truth. An unlinked ESCALADO keeps today's behavior (safe text +
+ * REQUIERE_HUMANO, no vinculación side effects).
  *
  * PII: phone numbers are masked with '[teléfono]' ONLY inside the
  * LLM input (consulta + historial); every persisted, sent and
@@ -80,12 +106,30 @@ export interface GeneradorRespuestaAgenteDeps {
   memoria: MemoriaConversacionPort;
   generador: GeneradorRespuestaPort;
   whatsapp: EnviadorWhatsappCrmPort;
+  /**
+   * E2·T9 progressive identification: the empresa registry the
+   * auto-vinculación matches against. OPTIONAL (guardarContacto
+   * Operativo precedent) — out-of-surface fakes and older call sites
+   * stay valid; without it the engine still attends unlinked
+   * conversations, it just cannot auto-vincular.
+   */
+  empresas?: CrmEmpresaRepositoryPort;
   /** Defaults to crearConfigAgente() (env-derived). */
   config?: ConfigAgente;
 }
 
 /** Thread page size for the whole-thread load (hilo precedent: 50). */
 const LIMITE_PAGINA_HILO = 50;
+
+/**
+ * The ONLY estados the engine attends (E2·T9): linked ACTIVA_IA plus
+ * unlinked PENDIENTE_VINCULACION — la Guía answers while the
+ * vinculación fills in progressively.
+ */
+const ESTADOS_ATENDIDOS_IA: ReadonlySet<EstadoConversacion> = new Set([
+  'ACTIVA_IA',
+  'PENDIENTE_VINCULACION',
+]);
 
 /** A digit run shorter than this is not treated as a phone number. */
 const MINIMO_DIGITOS_TELEFONO = 8;
@@ -120,6 +164,19 @@ function esFueraDeHorario(ahora: Date, desde: number, hasta: number): boolean {
   return horaLocal < desde || horaLocal >= hasta;
 }
 
+/**
+ * Normalize a company name for the EXACT auto-vinculación match
+ * (E2·T9): trim + lowercase + strip diacritics ('Construcción' ≡
+ * 'Construccion'). No other folding — 'X S.A.' ≠ 'X'.
+ */
+function normalizarNombreEmpresa(texto: string): string {
+  return texto
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim()
+    .toLowerCase();
+}
+
 /** Typed error code for logs — never the message (bodies are PII). */
 function codigoDeError(error: unknown): string {
   if (typeof error === 'object' && error !== null) {
@@ -144,9 +201,11 @@ export class GenerarRespuestaAgenteUseCase {
       score: null,
     });
 
-    // 1. Only an ACTIVA_IA conversation belongs to the engine.
+    // 1. Only IA-attended conversations belong to the engine: ACTIVA_IA
+    //    (linked) or PENDIENTE_VINCULACION (E2·T9 unlinked). Every
+    //    other estado is a zero-side-effect no-op.
     const conversacion = await this.deps.conversaciones.obtenerPorId(conversacionId);
-    if (conversacion === null || conversacion.estado !== 'ACTIVA_IA') {
+    if (conversacion === null || !ESTADOS_ATENDIDOS_IA.has(conversacion.estado)) {
       return sinEfectos('CONVERSACION_NO_ACTIVA_IA');
     }
 
@@ -218,6 +277,9 @@ export class GenerarRespuestaAgenteUseCase {
 
       respuesta = await this.deps.generador.generarRespuesta({
         consulta: enmascararTelefonos(consultaOriginal),
+        // E2·T9: unlinked conversations ask for nombre/empresa in the
+        // answer itself (progressive identification).
+        contactoNuevo: conversacion.empresaId === null,
         historial,
         conocimiento: conocimiento.map((rankeada) => ({
           id: rankeada.entrada.id,
@@ -341,6 +403,19 @@ export class GenerarRespuestaAgenteUseCase {
       });
     }
 
+    // 14. Progressive identification (E2·T9) — ONLY on RESPONDIDO and
+    //     ONLY while the conversation has no contacto: best-effort
+    //     extraction of the stated nombre/empresa and, on ONE exact
+    //     normalized match, the auto-vinculación. Never throws — the
+    //     sent answer is the durable truth.
+    if (responder && conversacion.contactoId === null) {
+      await this.identificarYVincular({
+        consultaOriginal,
+        textoFinal,
+        conversacionId: conversacion.id,
+      });
+    }
+
     return {
       conversacionId,
       resultado: responder ? 'RESPONDIDO' : 'ESCALADO',
@@ -416,6 +491,99 @@ export class GenerarRespuestaAgenteUseCase {
           codigo: codigoDeError(errorGuardar),
         });
       }
+    }
+  }
+
+  /**
+   * Post-send progressive identification (E2·T9): extract the
+   * nombre/empresa the client STATED in the just-sent exchange and,
+   * when the empresa EXACTLY matches ONE CRM_Empresas row (normalized
+   * on both sides), create the contacto + vincular (ACTIVA_IA) + pin
+   * modo IA — the vincularConversacion mirror (repo vincular never
+   * touches modo). Every failure — extraction throw, listing error,
+   * 0 or >1 exact matches, empresas dep absent, write error — only
+   * warns with codigo + conversation id (bodies and company names are
+   * never logged) and leaves the already-sent outcome untouched: the
+   * chat keeps collecting and the operator can link manually anytime.
+   */
+  private async identificarYVincular(params: {
+    consultaOriginal: string;
+    textoFinal: string;
+    conversacionId: number;
+  }): Promise<void> {
+    let identificacion: IdentificacionExtraida | null;
+    try {
+      identificacion = await this.deps.generador.extraerIdentificacion({
+        consulta: params.consultaOriginal,
+        respuesta: params.textoFinal,
+      });
+    } catch (errorIdentificar) {
+      console.warn('[generarRespuestaAgente] extracción de identificación falló', {
+        conversacionId: params.conversacionId,
+        codigo: codigoDeError(errorIdentificar),
+      });
+      return;
+    }
+    if (identificacion === null) return;
+
+    const empresaBuscada = identificacion.empresa;
+    if (empresaBuscada === null || empresaBuscada.trim() === '') return;
+    const normalizada = normalizarNombreEmpresa(empresaBuscada);
+    if (normalizada === '') return;
+
+    // Optional capability (E2·T9): without the registry dep there is
+    // nothing to match against — keep attending, keep collecting.
+    if (this.deps.empresas === undefined) return;
+
+    let candidatas: Empresa[];
+    try {
+      candidatas = await this.deps.empresas.listar({ q: normalizada });
+    } catch (errorListar) {
+      console.warn('[generarRespuestaAgente] búsqueda de empresas para vinculación falló', {
+        conversacionId: params.conversacionId,
+        codigo: codigoDeError(errorListar),
+      });
+      return;
+    }
+    // EXACT normalized match only — fuzzy listing rows never vinculate.
+    const exactas = candidatas.filter(
+      (candidata) => normalizarNombreEmpresa(candidata.razonSocial) === normalizada,
+    );
+    if (exactas.length !== 1) {
+      // id-level log only (no company names — client-named PII).
+      console.log('[generarRespuestaAgente] identificación sin vínculo único', {
+        conversacionId: params.conversacionId,
+        coincidenciasExactas: exactas.length,
+      });
+      return;
+    }
+
+    const empresa = exactas[0];
+    if (empresa === undefined) return;
+    const nombre =
+      identificacion.nombre !== null && identificacion.nombre.trim() !== ''
+        ? identificacion.nombre.trim()
+        : 'Contacto WhatsApp';
+    try {
+      const { contactoId } = await this.deps.conversaciones.crearContacto(empresa.id, { nombre });
+      await this.deps.conversaciones.vincular(params.conversacionId, {
+        empresaId: empresa.id,
+        contactoId,
+        estado: 'ACTIVA_IA',
+      });
+      // Mirror of vincularConversacion: repo vincular never touches
+      // modo — the flip rides its own call (absent capability: skip).
+      await this.deps.conversaciones.actualizarModo?.(params.conversacionId, 'IA');
+      console.log('[generarRespuestaAgente] conversación auto-vinculada', {
+        conversacionId: params.conversacionId,
+        empresaId: empresa.id,
+        contactoId,
+      });
+    } catch (errorVincular) {
+      console.warn('[generarRespuestaAgente] auto-vinculación falló', {
+        conversacionId: params.conversacionId,
+        codigo: codigoDeError(errorVincular),
+      });
     }
   }
 }

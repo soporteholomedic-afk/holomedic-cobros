@@ -22,6 +22,7 @@ import type { EntradaGenerarRespuesta } from '../../../domain/entities';
 
 const ENTRADA: EntradaGenerarRespuesta = {
   consulta: 'c',
+  contactoNuevo: false,
   historial: [],
   conocimiento: [],
   memorias: [],
@@ -148,6 +149,13 @@ describe('crearGeneradorRespuesta — selección de adapter (E2·T3)', () => {
     await expect(generador.destilar({ consulta: 'c', respuesta: 'r' })).rejects.toMatchObject({
       codigo: 'GENERADOR_NO_CONFIGURADA',
     });
+    // E2·T9: la identificación también falla cerrada.
+    await expect(
+      generador.extraerIdentificacion({ consulta: 'c', respuesta: 'r' }),
+    ).rejects.toBeInstanceOf(ErrorGeneradorCrm);
+    await expect(
+      generador.extraerIdentificacion({ consulta: 'c', respuesta: 'r' }),
+    ).rejects.toMatchObject({ codigo: 'GENERADOR_NO_CONFIGURADA' });
 
     // Una segunda construcción NO repite el error.
     crearGeneradorRespuesta();

@@ -15,14 +15,17 @@ import type {
  * counters. Transport concerns (HMAC, raw body, batching) stay in
  * the route.
  *
- * E2·T5: an IN/CLIENTE message persisted on an ACTIVA_IA
- * conversation enqueues ONE GENERAR_RESPUESTA task — a fast
- * idempotent DB write AWAITED before the webhook ack so a lost task
- * can never strand the message; the slow LLM work never runs inline
- * (the sweeper/route trigger drains the queue in the background).
- * New conversations with EXACTLY ONE candidato are born ACTIVA_IA
- * (E2 decision: conversations are born IA-managed) — 0 or >1
- * candidates still fall to PENDIENTE_VINCULACION.
+ * E2·T5: an IN/CLIENTE message persisted on an IA-ATTENDED
+ * conversation (ACTIVA_IA or — E2·T9 — PENDIENTE_VINCULACION)
+ * enqueues ONE GENERAR_RESPUESTA task — a fast idempotent DB write
+ * AWAITED before the webhook ack so a lost task can never strand the
+ * message; the slow LLM work never runs inline (the sweeper/route
+ * trigger drains the queue in the background). New conversations
+ * with EXACTLY ONE candidato are born ACTIVA_IA (E2 decision:
+ * conversations are born IA-managed) — 0 or >1 candidates fall to
+ * PENDIENTE_VINCULACION, still modo 'IA' (E2·T9: la Guía attends
+ * unlinked conversations too and fills the vinculación in
+ * progressively; the operator can always link manually via E1).
  */
 
 /** The Kapso payload (snake_case verbatim) once it passed the guard. */
@@ -99,7 +102,7 @@ export interface ResultadoProcesarMensaje {
   /**
    * The CRM_AgenteTareas id enqueued for this message (E2·T5), null
    * when no task applies: duplicate, or a conversation the IA does
-   * not manage (anything but ACTIVA_IA).
+   * not attend (anything but ACTIVA_IA / PENDIENTE_VINCULACION).
    */
   tareaAgenteId: number | null;
 }
@@ -174,11 +177,14 @@ export class ProcesarMensajeWhatsappUseCase {
         // Sin teléfono identificable también cae aquí (telefono e
         // identificadorCanal null): el índice único filtrado tolera
         // NULL y la vista de vinculación (T5) la resuelve después.
+        // E2·T9: nace modo IA EXPLÍCITO — la Guía atiende también sin
+        // vínculo (la vinculación se completa progresivamente).
         conversacion = await this.deps.conversaciones.crear({
           canal: 'WHATSAPP',
           telefono,
           identificadorCanal,
           estado: 'PENDIENTE_VINCULACION',
+          modo: 'IA',
         });
       }
     }
@@ -219,17 +225,20 @@ export class ProcesarMensajeWhatsappUseCase {
     }
 
     // 5b. E2·T5 durable-queue hook: the IN message just persisted on
-    //     an ACTIVA_IA conversation enqueues ONE GENERAR_RESPUESTA
-    //     task for it (this use case only ever persists IN/CLIENTE
-    //     rows, so the message condition is structural). Placed
-    //     BEFORE registrarActividad: the task must exist regardless
-    //     of the counter tick's outcome — both are fast DB writes
-    //     awaited before the ack, and crearSiNoExiste is idempotent
-    //     on (conversacionId, mensajeId, tipo) so a replayed delivery
-    //     never double-enqueues. Errors propagate → 503 → Kapso
-    //     retry (dedup absorbs it).
+    //     an IA-ATTENDED conversation (ACTIVA_IA or, since E2·T9,
+    //     PENDIENTE_VINCULACION — la Guía answers unlinked threads
+    //     too) enqueues ONE GENERAR_RESPUESTA task for it (this use
+    //     case only ever persists IN/CLIENTE rows, so the message
+    //     condition is structural). Placed BEFORE registrarActividad:
+    //     the task must exist regardless of the counter tick's outcome
+    //     — both are fast DB writes awaited before the ack, and
+    //     crearSiNoExiste is idempotent on (conversacionId, mensajeId,
+    //     tipo) so a replayed delivery never double-enqueues. Errors
+    //     propagate → 503 → Kapso retry (dedup absorbs it).
     let tareaAgenteId: number | null = null;
-    if (this.deps.tareas !== undefined && conversacion.estado === 'ACTIVA_IA') {
+    const esAtendidaPorIa =
+      conversacion.estado === 'ACTIVA_IA' || conversacion.estado === 'PENDIENTE_VINCULACION';
+    if (this.deps.tareas !== undefined && esAtendidaPorIa) {
       const tarea = await this.deps.tareas.crearSiNoExiste({
         conversacionId: conversacion.id,
         mensajeId: mensaje.id,

@@ -1,9 +1,11 @@
 import type {
   EntradaConocimiento,
   EntradaDestilacion,
+  EntradaExtraerIdentificacion,
   EntradaGenerarRespuesta,
   Etapa,
   Flujo,
+  IdentificacionExtraida,
   AccionAsignacion,
   ActualizarEmpresaInput,
   CanalConversacion,
@@ -879,6 +881,18 @@ export interface GeneradorRespuestaPort {
    * marks agreements/commitments to pin in the conversation memory.
    */
   destilar(entrada: EntradaDestilacion): Promise<ObservacionDestilada[]>;
+  /**
+   * Extract the nombre/empresa the client STATED in one exchange
+   * (E2·T9, post-send progressive identification): null FIELDS mean
+   * "not said"; a null RETURN means "nothing usable" (the simulator
+   * always returns null — identification is exercised only by the
+   * real adapter; motor tests mock the port). Adapters never deduce
+   * or invent — only what the client explicitly wrote. Errors map to
+   * ErrorGeneradorCrm like every other method.
+   */
+  extraerIdentificacion(
+    entrada: EntradaExtraerIdentificacion,
+  ): Promise<IdentificacionExtraida | null>;
 }
 
 // ---------------------------------------------------------------------------

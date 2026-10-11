@@ -90,6 +90,7 @@ function crearAdapter(overrides: Partial<ConstructorParameters<typeof GeneradorO
 
 const ENTRADA: EntradaGenerarRespuesta = {
   consulta: '¿Qué incluye el examen médico ocupacional?',
+  contactoNuevo: false,
   historial: [{ emisor: 'CLIENTE', texto: 'Hola, buenas tardes' }],
   conocimiento: [
     { id: 7, titulo: 'Examen ocupacional', contenido: 'Incluye examen médico, audiometría y espirometría.' },
@@ -192,6 +193,46 @@ describe('GeneradorOpenAiCompatible — pedido HTTP (E2·T3)', () => {
     expect(sistema).toMatch(/JSON/);
     expect(sistema).toContain('idsConocimiento');
     expect(sistema).toContain('enScope');
+  });
+
+  it('el system prompt SIEMPRE lleva la cláusula de saludos/cortesía (E2·T9)', async () => {
+    const { llamadas } = stubFetch([{ status: 200, contenido: JSON_LIMPIO }]);
+
+    await crearAdapter().generarRespuesta(ENTRADA);
+
+    const sistema = cuerpoDe(llamadas[0]!).messages[0]?.content ?? '';
+    expect(sistema).toContain(
+      'Los saludos, agradecimientos y cortesía general SIEMPRE se responden',
+    );
+    expect(sistema).toContain(
+      'solo derivás a un humano las consultas de NEGOCIO que no puedas responder',
+    );
+  });
+
+  it('contactoNuevo true → sección CONTACTO NUEVO al final del mensaje de usuario (E2·T9)', async () => {
+    const { llamadas } = stubFetch([{ status: 200, contenido: JSON_LIMPIO }]);
+
+    await crearAdapter().generarRespuesta({ ...ENTRADA, contactoNuevo: true });
+
+    const usuario = cuerpoDe(llamadas[0]!).messages[1]?.content ?? '';
+    expect(usuario).toContain('CONTACTO NUEVO:');
+    expect(usuario).toContain('esta persona no está registrada');
+    expect(usuario).toContain('preguntá su nombre y la empresa que representa');
+    expect(usuario).toContain('agradecé los datos cuando los dé');
+    // Las secciones estándar siguen presentes.
+    expect(usuario).toContain('CONSULTA:');
+    expect(usuario).toContain('MEMORIAS:');
+    // La sección va AL FINAL (después de MEMORIAS).
+    expect(usuario.lastIndexOf('CONTACTO NUEVO:')).toBeGreaterThan(usuario.lastIndexOf('MEMORIAS:'));
+  });
+
+  it('contactoNuevo false → SIN sección CONTACTO NUEVO', async () => {
+    const { llamadas } = stubFetch([{ status: 200, contenido: JSON_LIMPIO }]);
+
+    await crearAdapter().generarRespuesta(ENTRADA);
+
+    const usuario = cuerpoDe(llamadas[0]!).messages[1]?.content ?? '';
+    expect(usuario).not.toContain('CONTACTO NUEVO:');
   });
 
   it('destilar manda CONSULTA y RESPUESTA rotuladas al mismo endpoint', async () => {
@@ -508,6 +549,104 @@ describe('GeneradorOpenAiCompatible — destilar (E2·T3)', () => {
     const codigo = await codigoDeError(crearAdapter().destilar({ consulta: 'c', respuesta: 'r' }));
 
     expect(codigo).toBe('GENERADOR_RESPUESTA_INVALIDA');
+  });
+});
+
+describe('GeneradorOpenAiCompatible — extraerIdentificacion (E2·T9)', () => {
+  it('JSON limpio → {nombre, empresa} tipados con UN solo pedido; CONSULTA/RESPUESTA rotuladas', async () => {
+    const { llamadas } = stubFetch([
+      { status: 200, contenido: JSON.stringify({ nombre: '  Ana Giménez ', empresa: 'Constructora X S.A.' }) },
+    ]);
+
+    const identificacion = await crearAdapter().extraerIdentificacion({
+      consulta: 'Hola, soy Ana de Constructora X',
+      respuesta: '¡Gracias Ana!',
+    });
+
+    expect(llamadas).toHaveLength(1);
+    expect(llamadas[0]?.url).toBe(`${URL_BASE}/chat/completions`);
+    const mensajes = cuerpoDe(llamadas[0]!).messages;
+    expect(mensajes).toHaveLength(2);
+    expect(mensajes[0]?.role).toBe('system');
+    expect(mensajes[1]?.content).toContain('CONSULTA:');
+    expect(mensajes[1]?.content).toContain('Hola, soy Ana de Constructora X');
+    expect(mensajes[1]?.content).toContain('RESPUESTA:');
+    expect(mensajes[1]?.content).toContain('¡Gracias Ana!');
+    // Trim de ambos campos.
+    expect(identificacion).toEqual({ nombre: 'Ana Giménez', empresa: 'Constructora X S.A.' });
+  });
+
+  it('campos null → {nombre: null, empresa: null} válido, sin reintento', async () => {
+    const { llamadas } = stubFetch([
+      { status: 200, contenido: JSON.stringify({ nombre: null, empresa: null }) },
+    ]);
+
+    const identificacion = await crearAdapter().extraerIdentificacion({ consulta: 'Hola', respuesta: '¡Hola!' });
+
+    expect(identificacion).toEqual({ nombre: null, empresa: null });
+    expect(llamadas).toHaveLength(1);
+  });
+
+  it('JSON inválido → UN reintento con nudge y el segundo intento gana', async () => {
+    const { llamadas } = stubFetch([
+      { status: 200, contenido: 'La persona no dijo su nombre todavía.' },
+      { status: 200, contenido: JSON.stringify({ nombre: 'Beto', empresa: null }) },
+    ]);
+
+    const identificacion = await crearAdapter().extraerIdentificacion({ consulta: 'c', respuesta: 'r' });
+
+    expect(llamadas).toHaveLength(2);
+    expect(cuerpoDe(llamadas[1]!).messages).toHaveLength(3);
+    expect(cuerpoDe(llamadas[1]!).messages[2]?.content).toBe(
+      'Respondé únicamente con JSON válido, sin texto adicional.',
+    );
+    expect(identificacion).toEqual({ nombre: 'Beto', empresa: null });
+  });
+
+  it('JSON inválido dos veces → GENERADOR_RESPUESTA_INVALIDA (exactamente 2 pedidos)', async () => {
+    const { llamadas } = stubFetch([
+      { status: 200, contenido: 'nope' },
+      { status: 200, contenido: 'tampoco { esto' },
+    ]);
+
+    const codigo = await codigoDeError(crearAdapter().extraerIdentificacion({ consulta: 'c', respuesta: 'r' }));
+
+    expect(codigo).toBe('GENERADOR_RESPUESTA_INVALIDA');
+    expect(llamadas).toHaveLength(2);
+  });
+
+  it('nombre y empresa se recortan a 120 caracteres tras el trim', async () => {
+    const largo = 'x'.repeat(300);
+    stubFetch([
+      { status: 200, contenido: JSON.stringify({ nombre: largo, empresa: largo }) },
+    ]);
+
+    const identificacion = await crearAdapter().extraerIdentificacion({ consulta: 'c', respuesta: 'r' });
+
+    expect(identificacion?.nombre).toHaveLength(120);
+    expect(identificacion?.empresa).toHaveLength(120);
+  });
+
+  it('tipos no-string se coercen a null por campo (sin inventar)', async () => {
+    stubFetch([
+      { status: 200, contenido: JSON.stringify({ nombre: 42, empresa: ['Constructora'] }) },
+    ]);
+
+    const identificacion = await crearAdapter().extraerIdentificacion({ consulta: 'c', respuesta: 'r' });
+
+    expect(identificacion).toEqual({ nombre: null, empresa: null });
+  });
+
+  it('array en vez de objeto → inválido (reintenta y falla igual)', async () => {
+    const { llamadas } = stubFetch([
+      { status: 200, contenido: '["Ana"]' },
+      { status: 200, contenido: '["Ana"]' },
+    ]);
+
+    const codigo = await codigoDeError(crearAdapter().extraerIdentificacion({ consulta: 'c', respuesta: 'r' }));
+
+    expect(codigo).toBe('GENERADOR_RESPUESTA_INVALIDA');
+    expect(llamadas).toHaveLength(2);
   });
 });
 

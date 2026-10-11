@@ -1,6 +1,7 @@
 import type {
   EntradaDestilacion,
   EntradaGenerarRespuesta,
+  IdentificacionExtraida,
   ObservacionDestilada,
   RespuestaGenerada,
 } from '../../domain/entities';
@@ -17,11 +18,18 @@ import type { GeneradorRespuestaPort } from '../../domain/ports';
  *   scoreConfianza 0.8, enScope true, citing that fragment's id.
  * - solo memorias → the FIRST memoria's contenido the same way, with
  *   NO knowledge ids (memories are not KB citations).
- * - both empty → escalation: enScope false, requiereAyudaHumana true,
- *   scoreConfianza 0.1, fixed safe deferral texto.
+ * - both empty + contactoNuevo (E2·T9) → a warm greeting that asks
+ *   for nombre/empresa in one natural question (scoreConfianza 0.7,
+ *   enScope true — an unlinked 'Hola' is ANSWERED, never escalated).
+ * - both empty + linked → escalation: enScope false,
+ *   requiereAyudaHumana true, scoreConfianza 0.1, fixed safe
+ *   deferral texto.
  * destilar emits exactly ONE hecho_cliente observation (first 8 words
  * of the consulta as titulo, consulta trimmed to 200 chars, never
- * pinear); an empty consulta distills to NOTHING. Every
+ * pinear); an empty consulta distills to NOTHING.
+ * extraerIdentificacion (E2·T9) ALWAYS returns null: identification
+ * is exercised only by the real adapter (the motor tests mock the
+ * port) — the simulator never fabricates a stated name/company. Every
  * RespuestaGenerada carries modelo 'simulado' (the motor's per-message
  * audit column must distinguish simulated answers offline).
  *
@@ -31,6 +39,8 @@ import type { GeneradorRespuestaPort } from '../../domain/ports';
 
 const TEXTO_DERIVACION =
   'Gracias por tu consulta. En breve te confirma una persona del equipo de Holomedic.';
+const TEXTO_SALUDO_CONTACTO_NUEVO =
+  '¡Hola! Qué gusto que nos escribas. Soy La Guía, de Holomedic. Para ayudarte mejor, ¿me contás tu nombre y de qué empresa nos contactás?';
 const PREFIJO_SEGURO = 'Información disponible: ';
 const LIMITE_TEXTO = 400;
 const LIMITE_TITULO_PALABRAS = 8;
@@ -38,6 +48,8 @@ const LIMITE_CONTENIDO_DESTILACION = 200;
 const TITULO_VACIO = 'Consulta cliente';
 /** Model name reported in RespuestaGenerada.modelo (audit). */
 const MODELO_SIMULADO = 'simulado';
+/** scoreConfianza of the contactoNuevo greeting (answered, not escalated). */
+const SCORE_SALUDO_CONTACTO_NUEVO = 0.7;
 
 /** Prompt fragment body → simulated texto (400-char cap, safe fallback). */
 function textoSimulado(contenido: string, titulo: string): string {
@@ -77,6 +89,19 @@ export class GeneradorSimulado implements GeneradorRespuestaPort {
         modelo: MODELO_SIMULADO,
       };
     }
+    // E2·T9: unlinked with nothing to recall — a greeting IS in scope:
+    // answer warmly and gather nombre/empresa (never an interrogation,
+    // never an escalation for a plain 'Hola').
+    if (entrada.contactoNuevo) {
+      return {
+        texto: TEXTO_SALUDO_CONTACTO_NUEVO,
+        scoreConfianza: SCORE_SALUDO_CONTACTO_NUEVO,
+        enScope: true,
+        requiereAyudaHumana: false,
+        idsConocimiento: [],
+        modelo: MODELO_SIMULADO,
+      };
+    }
     return {
       texto: TEXTO_DERIVACION,
       scoreConfianza: 0.1,
@@ -98,5 +123,12 @@ export class GeneradorSimulado implements GeneradorRespuestaPort {
         pinear: false,
       },
     ];
+  }
+
+  async extraerIdentificacion(): Promise<IdentificacionExtraida | null> {
+    // Documented contract (E2·T9): the simulator never fabricates a
+    // stated name/company — identification is exercised only by the
+    // real adapter (the motor tests mock the port).
+    return null;
   }
 }

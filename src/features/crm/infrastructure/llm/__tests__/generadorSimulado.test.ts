@@ -9,7 +9,10 @@ import type { EntradaGenerarRespuesta } from '../../../domain/entities';
  * API key. Three generarRespuesta branches (conocimiento → first
  * fragment; solo memorias → first memoria, NO knowledge ids; both
  * empty → escalation deferral) plus the single-observation destiler
- * (empty consulta → []).
+ * (empty consulta → []). E2·T9: contactoNuevo with NO recall → a warm
+ * greeting asking for nombre/empresa (answered, never escalated);
+ * extraerIdentificacion always null (identification is exercised only
+ * by the real adapter — motor tests mock the port).
  */
 
 const TEXTO_DERIVACION = 'Gracias por tu consulta. En breve te confirma una persona del equipo de Holomedic.';
@@ -25,6 +28,7 @@ describe('GeneradorSimulado — generarRespuesta (E2·T3)', () => {
 
     const respuesta = await generador.generarRespuesta({
       consulta: '¿Qué incluye el examen?',
+      contactoNuevo: false,
       historial: [],
       conocimiento: CONOCIMIENTO,
       memorias: [],
@@ -46,6 +50,7 @@ describe('GeneradorSimulado — generarRespuesta (E2·T3)', () => {
 
     const respuesta = await generador.generarRespuesta({
       consulta: 'c',
+      contactoNuevo: false,
       historial: [],
       conocimiento: [{ id: 1, titulo: 'T', contenido: largo }],
       memorias: [],
@@ -60,6 +65,7 @@ describe('GeneradorSimulado — generarRespuesta (E2·T3)', () => {
 
     const respuesta = await generador.generarRespuesta({
       consulta: 'c',
+      contactoNuevo: false,
       historial: [],
       conocimiento: [{ id: 3, titulo: 'Horarios', contenido: '   ' }],
       memorias: [],
@@ -73,6 +79,7 @@ describe('GeneradorSimulado — generarRespuesta (E2·T3)', () => {
 
     const respuesta = await generador.generarRespuesta({
       consulta: 'c',
+      contactoNuevo: false,
       historial: [],
       conocimiento: [],
       memorias: [
@@ -91,11 +98,12 @@ describe('GeneradorSimulado — generarRespuesta (E2·T3)', () => {
     });
   });
 
-  it('conocimiento y memorias vacíos → derivación exacta, enScope false, score 0.1, ayuda humana', async () => {
+  it('conocimiento y memorias vacíos (VINCULADO) → derivación exacta, enScope false, score 0.1, ayuda humana', async () => {
     const generador = new GeneradorSimulado();
 
     const respuesta = await generador.generarRespuesta({
       consulta: '¿Venden seguros de vida?',
+      contactoNuevo: false,
       historial: [],
       conocimiento: [],
       memorias: [],
@@ -109,6 +117,42 @@ describe('GeneradorSimulado — generarRespuesta (E2·T3)', () => {
       idsConocimiento: [],
       modelo: 'simulado',
     });
+  });
+
+  it('contactoNuevo sin recall → saludo cálido pidiendo nombre/empresa, score 0.7, enScope, SIN escalado (E2·T9)', async () => {
+    const generador = new GeneradorSimulado();
+
+    const respuesta = await generador.generarRespuesta({
+      consulta: 'Hola',
+      contactoNuevo: true,
+      historial: [],
+      conocimiento: [],
+      memorias: [],
+    });
+
+    expect(respuesta.scoreConfianza).toBe(0.7);
+    expect(respuesta.enScope).toBe(true);
+    expect(respuesta.requiereAyudaHumana).toBe(false);
+    expect(respuesta.idsConocimiento).toEqual([]);
+    expect(respuesta.modelo).toBe('simulado');
+    // El saludo pide nombre y empresa de forma natural (no un interrogatorio).
+    expect(respuesta.texto.toLowerCase()).toContain('nombre');
+    expect(respuesta.texto.toLowerCase()).toContain('empresa');
+  });
+
+  it('contactoNuevo CON conocimiento → responde el conocimiento igual (la rama de saludo es solo sin recall)', async () => {
+    const generador = new GeneradorSimulado();
+
+    const respuesta = await generador.generarRespuesta({
+      consulta: '¿Qué incluye el examen?',
+      contactoNuevo: true,
+      historial: [],
+      conocimiento: CONOCIMIENTO,
+      memorias: [],
+    });
+
+    expect(respuesta.texto).toBe('Incluye examen médico, audiometría y espirometría.');
+    expect(respuesta.idsConocimiento).toEqual([7]);
   });
 });
 
@@ -143,5 +187,17 @@ describe('GeneradorSimulado — destilar (E2·T3)', () => {
 
     expect(await generador.destilar({ consulta: '', respuesta: 'r' })).toEqual([]);
     expect(await generador.destilar({ consulta: '   ', respuesta: 'r' })).toEqual([]);
+  });
+});
+
+describe('GeneradorSimulado — extraerIdentificacion (E2·T9)', () => {
+  it('siempre null (documentado): la identificación se ejercita solo en el adapter real', async () => {
+    const generador = new GeneradorSimulado();
+
+    // Sin entrada: el simulador es un no-op documentado (nunca fabrica
+    // nombre/empresa declarados) — la firma del port lo tolera.
+    const identificacion = await generador.extraerIdentificacion();
+
+    expect(identificacion).toBeNull();
   });
 });

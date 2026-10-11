@@ -1,6 +1,8 @@
 import type {
   EntradaDestilacion,
+  EntradaExtraerIdentificacion,
   EntradaGenerarRespuesta,
+  IdentificacionExtraida,
   ObservacionDestilada,
   RespuestaGenerada,
   TipoObservacionDestilada,
@@ -28,6 +30,10 @@ import type { GeneradorRespuestaPort } from '../../domain/ports';
  *   DROPPED (not fatal — the model losing one item must not lose the
  *   exchange), titulo/contenido clamped to 60/300 chars, pinear kept
  *   true ONLY for acuerdo/compromiso.
+ * - extraerIdentificacion (E2·T9): one call, strict JSON
+ *   {"nombre": string|null, "empresa": string|null}; fields trimmed
+ *   and clamped to 120 chars, non-string fields coerce to null (the
+ *   model must never push us into inventing a name).
  * - A JSON-validity failure retries ONCE with a system nudge; the
  *   second failure throws GENERADOR_RESPUESTA_INVALIDA.
  *
@@ -93,6 +99,8 @@ const TIPOS_DESTILACION: readonly TipoObservacionDestilada[] = [
 
 const TITULO_DESTILACION_MAX = 60;
 const CONTENIDO_DESTILACION_MAX = 300;
+/** E2·T9: nombre/empresa clamp (a stated name/company is short). */
+const IDENTIFICACION_MAX_CARACTERES = 120;
 
 /** System nudge appended on the ONE JSON-validity retry. */
 const NUDGE_JSON = 'Respondé únicamente con JSON válido, sin texto adicional.';
@@ -102,6 +110,8 @@ const PROMPT_SISTEMA_GENERAR = [
   'Respondes ÚNICAMENTE con la información de los bloques CONOCIMIENTO y MEMORIAS provistos en el mensaje del usuario;',
   'si usas un fragmento de conocimiento, incluís su id en idsConocimiento.',
   'Tono cálido y cercano, respuesta concisa (máximo 120 palabras), texto plano apto para WhatsApp, sin markdown.',
+  'Los saludos, agradecimientos y cortesía general SIEMPRE se responden (enScope true, scoreConfianza alto):',
+  'solo derivás a un humano las consultas de NEGOCIO que no puedas responder con el CONOCIMIENTO y MEMORIAS provistos.',
   'Si la consulta no está cubierta por el CONOCIMIENTO ni las MEMORIAS, poné enScope=false y requiereAyudaHumana=true,',
   'y en texto una derivación corta y segura a una persona del equipo de Holomedic; nunca inventes información.',
   'scoreConfianza es tu confianza (entre 0 y 1) en que la respuesta está respaldada por lo provisto.',
@@ -119,6 +129,15 @@ const PROMPT_SISTEMA_DESTILAR = [
   '"contenido": string (máximo 300 caracteres), "pinear": boolean}]',
   '— pinear=true solo para acuerdos y compromisos.',
   'Si no hay nada duradero, respondé [].',
+].join(' ');
+
+const PROMPT_SISTEMA_IDENTIFICAR = [
+  'Eres el extractor de identificación de La Guía, la asistente de WhatsApp de Holomedic.',
+  'Del intercambio extraé, SOLO si el cliente los dijo explícitamente, su nombre y la empresa que representa;',
+  'si no los dijo, el valor es null. Nunca los deduzcas, completes ni inventes.',
+  'Respondé ÚNICAMENTE con JSON válido, sin texto adicional, con esta forma exacta:',
+  '{"nombre": string|null, "empresa": string|null}',
+  'y nada más.',
 ].join(' ');
 
 /** Redacted, user-safe rendering of an unknown thrown value. */
@@ -157,16 +176,29 @@ function mensajeUsuarioGenerar(entrada: EntradaGenerarRespuesta): string {
       : entrada.memorias
           .map((fragmento) => `[${fragmento.tipo}] ${fragmento.titulo}\n${fragmento.contenido}`)
           .join('\n\n');
-  return [
+  const secciones = [
     `CONSULTA:\n${entrada.consulta}`,
     `HISTORIAL:\n${historial}`,
     `CONOCIMIENTO:\n${conocimiento}`,
     `MEMORIAS:\n${memorias}`,
-  ].join('\n\n');
+  ];
+  // E2·T9: the progressive-identification instruction rides ONLY on
+  // unlinked conversations, as the LAST labeled section.
+  if (entrada.contactoNuevo) {
+    secciones.push(
+      'CONTACTO NUEVO: esta persona no está registrada. Además de responder su consulta, cuando sea NATURAL en la conversación (no un interrogatorio), preguntá su nombre y la empresa que representa cuando aún no los haya dicho; agradecé los datos cuando los dé.',
+    );
+  }
+  return secciones.join('\n\n');
 }
 
 /** Labeled user message for destilar (one exchange). */
 function mensajeUsuarioDestilar(entrada: EntradaDestilacion): string {
+  return `CONSULTA:\n${entrada.consulta}\n\nRESPUESTA:\n${entrada.respuesta}`;
+}
+
+/** Labeled user message for extraerIdentificacion (one exchange). */
+function mensajeUsuarioIdentificar(entrada: EntradaExtraerIdentificacion): string {
   return `CONSULTA:\n${entrada.consulta}\n\nRESPUESTA:\n${entrada.respuesta}`;
 }
 
@@ -276,6 +308,26 @@ function validarObservacionesDestiladas(valor: unknown): ObservacionDestilada[] 
   return observaciones;
 }
 
+/**
+ * Guard IdentificacionExtraida (E2·T9): a non-object top level is
+ * unsalvageable (null → retry); per FIELD, anything that is not a
+ * string coerces to null and strings are trimmed + clamped to 120
+ * (empty → null) — the model must never push us into inventing a
+ * name or company.
+ */
+function validarIdentificacion(valor: unknown): IdentificacionExtraida | null {
+  if (valor === null || typeof valor !== 'object' || Array.isArray(valor)) return null;
+  const crudo = valor as Record<string, unknown>;
+  return { nombre: textoIdentificacionONulo(crudo.nombre), empresa: textoIdentificacionONulo(crudo.empresa) };
+}
+
+/** string → trim + clamp 120 (empty → null); anything else → null. */
+function textoIdentificacionONulo(valor: unknown): string | null {
+  if (typeof valor !== 'string') return null;
+  const recortado = valor.trim().slice(0, IDENTIFICACION_MAX_CARACTERES);
+  return recortado === '' ? null : recortado;
+}
+
 export class GeneradorOpenAiCompatible implements GeneradorRespuestaPort {
   private readonly urlBase: string;
   private readonly apiKey: string;
@@ -317,6 +369,19 @@ export class GeneradorOpenAiCompatible implements GeneradorRespuestaPort {
       ],
       validarObservacionesDestiladas,
       'observaciones destiladas',
+    );
+  }
+
+  async extraerIdentificacion(
+    entrada: EntradaExtraerIdentificacion,
+  ): Promise<IdentificacionExtraida | null> {
+    return this.pedirJson(
+      [
+        { role: 'system', content: PROMPT_SISTEMA_IDENTIFICAR },
+        { role: 'user', content: mensajeUsuarioIdentificar(entrada) },
+      ],
+      validarIdentificacion,
+      'una identificación',
     );
   }
 

@@ -453,6 +453,13 @@ export interface FragmentoMemoria {
 /** Structured input for one respuesta generation (E2·T3). */
 export interface EntradaGenerarRespuesta {
   consulta: string;
+  /**
+   * E2·T9: this conversation has no empresa/contacto yet — the
+   * adapter asks for nombre/empresa NATURALLY in its answer
+   * (progressive identification). REQUIRED flag: explicit at every
+   * constructor, never guessed.
+   */
+  contactoNuevo: boolean;
   /** Recent thread tail, as provided by the motor (last-first order). */
   historial: MensajeHistorialGeneracion[];
   conocimiento: FragmentoConocimiento[];
@@ -482,6 +489,21 @@ export interface RespuestaGenerada {
 export interface EntradaDestilacion {
   consulta: string;
   respuesta: string;
+}
+
+/** One client↔Guía exchange to scan for STATED identification (E2·T9). */
+export interface EntradaExtraerIdentificacion {
+  consulta: string;
+  respuesta: string;
+}
+
+/**
+ * The identification the client STATED in one exchange (E2·T9):
+ * null fields mean "not said" — adapters never deduce or invent.
+ */
+export interface IdentificacionExtraida {
+  nombre: string | null;
+  empresa: string | null;
 }
 
 /**

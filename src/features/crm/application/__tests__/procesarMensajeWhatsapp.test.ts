@@ -29,12 +29,14 @@ import { ProcesarMensajeWhatsappUseCase, type MensajeEntranteWhatsapp } from '..
  *   is born PENDIENTE_VINCULACION — unless exactly ONE candidate
  *   contacto matches the E.164, then it is born vinculada ACTIVA_IA
  *   (E2 decision: conversations are born IA-managed, modo IA); 0 or
- *   >1 candidates never autovinculate.
- * - E2·T5 hook: an IN/CLIENTE message persisted on an ACTIVA_IA
- *   conversation enqueues ONE GENERAR_RESPUESTA task (idempotent on
+ *   >1 candidates never autovinculate — E2·T9: they are still born
+ *   modo IA and IA-attended.
+ * - E2·T5 hook (+E2·T9): an IN/CLIENTE message persisted on an
+ *   IA-ATTENDED conversation (ACTIVA_IA OR PENDIENTE_VINCULACION)
+ *   enqueues ONE GENERAR_RESPUESTA task (idempotent on
  *   the conversacionId+mensajeId+tipo triple) and surfaces its id as
- *   tareaAgenteId; every other born/existing estado → tareaAgenteId
- *   null, nothing enqueued.
+ *   tareaAgenteId; every other estado → tareaAgenteId null, nothing
+ *   enqueued.
  * - BSUID-less payloads (no from / from_user_id) still process, with
  *   telefono and identificadorCanal both null.
  * - Message body: text → verbatim TEXTO; any other type → `[type]`
@@ -261,7 +263,7 @@ const candidatoUnico: CandidatoVinculacion = {
 };
 
 describe('ProcesarMensajeWhatsappUseCase — ingesta whatsapp.message.received (T2)', () => {
-  it('happy path texto: crea conversación PENDIENTE_VINCULACION y mensaje IN/CLIENTE/TEXTO', async () => {
+  it('happy path texto: crea conversación PENDIENTE_VINCULACION modo IA y mensaje IN/CLIENTE/TEXTO', async () => {
     const { conversaciones, mensajes, tareas, useCase } = crearSuite();
 
     const resultado = await useCase.ejecutar(eventoTexto());
@@ -271,16 +273,22 @@ describe('ProcesarMensajeWhatsappUseCase — ingesta whatsapp.message.received (
       mensajeId: 1,
       vinculado: false,
       duplicado: false,
-      tareaAgenteId: null,
+      // E2·T9: la desvinculada también es IA-atendida → tarea creada.
+      tareaAgenteId: 1,
     });
-    // PENDIENTE_VINCULACION: nada en la cola del agente.
-    expect(tareas.creaciones).toEqual([]);
+    expect(tareas.creaciones).toEqual([
+      { conversacionId: 1, mensajeId: 1, tipo: 'GENERAR_RESPUESTA' },
+    ]);
     expect(conversaciones.filas).toHaveLength(1);
     expect(conversaciones.filas[0]).toMatchObject({
       canal: 'WHATSAPP',
       telefono: '+595981234567',
       identificadorCanal: 'US.13491208655302741918',
       estado: 'PENDIENTE_VINCULACION',
+      // E2·T9: nace modo IA EXPLÍCITO (la Guía atiende también sin vínculo).
+      modo: 'IA',
+      empresaId: null,
+      contactoId: null,
     });
     expect(mensajes.escritas).toHaveLength(1);
     expect(mensajes.escritas[0]).toMatchObject({
@@ -309,6 +317,7 @@ describe('ProcesarMensajeWhatsappUseCase — ingesta whatsapp.message.received (
       telefono: null,
       identificadorCanal: null,
       estado: 'PENDIENTE_VINCULACION',
+      modo: 'IA',
     });
     // type text sin body → cuerpo '[text]', tipo MEDIA
     expect(mensajes.escritas[0]).toMatchObject({ cuerpo: '[text]', tipo: 'MEDIA' });
@@ -335,7 +344,7 @@ describe('ProcesarMensajeWhatsappUseCase — ingesta whatsapp.message.received (
     ]);
   });
 
-  it('más de 1 candidato → NO autovincula: nace PENDIENTE_VINCULACION', async () => {
+  it('más de 1 candidato → NO autovincula: nace PENDIENTE_VINCULACION modo IA y CON tarea (E2·T9)', async () => {
     const { conversaciones, tareas, useCase } = crearSuite([
       candidatoUnico,
       { ...candidatoUnico, contactoId: 43, nombreContacto: 'Beto', telefono: '0981 234 567' },
@@ -344,18 +353,40 @@ describe('ProcesarMensajeWhatsappUseCase — ingesta whatsapp.message.received (
     const resultado = await useCase.ejecutar(eventoTexto());
 
     expect(resultado.vinculado).toBe(false);
-    expect(resultado.tareaAgenteId).toBeNull();
+    expect(resultado.tareaAgenteId).toBe(1);
     expect(conversaciones.filas[0]).toMatchObject({
       empresaId: null,
       contactoId: null,
       estado: 'PENDIENTE_VINCULACION',
+      modo: 'IA',
     });
-    expect(tareas.creaciones).toEqual([]);
+    // E2·T9: ambigua para autovincular, atendible para la Guía.
+    expect(tareas.creaciones).toEqual([
+      { conversacionId: 1, mensajeId: 1, tipo: 'GENERAR_RESPUESTA' },
+    ]);
   });
 
   it('mensaje IN sobre conversación existente ACTIVA_IA → encola tarea para ese mensaje', async () => {
     const { conversaciones, tareas, useCase } = crearSuite();
     const existente = sembrarConversacion(conversaciones, { estado: 'ACTIVA_IA', modo: 'IA' });
+
+    const resultado = await useCase.ejecutar(eventoTexto());
+
+    expect(resultado.conversacionId).toBe(existente.id);
+    expect(resultado.tareaAgenteId).toBe(1);
+    expect(tareas.creaciones).toEqual([
+      { conversacionId: existente.id, mensajeId: resultado.mensajeId, tipo: 'GENERAR_RESPUESTA' },
+    ]);
+  });
+
+  it('mensaje IN sobre conversación existente PENDIENTE_VINCULACION → encola tarea (E2·T9)', async () => {
+    const { conversaciones, tareas, useCase } = crearSuite();
+    const existente = sembrarConversacion(conversaciones, {
+      estado: 'PENDIENTE_VINCULACION',
+      modo: 'IA',
+      empresaId: null,
+      contactoId: null,
+    });
 
     const resultado = await useCase.ejecutar(eventoTexto());
 
@@ -376,7 +407,7 @@ describe('ProcesarMensajeWhatsappUseCase — ingesta whatsapp.message.received (
     expect(tareas.creaciones).toEqual([]);
   });
 
-  it('idempotenciaKey repetida → duplicado:true early, sin segunda escritura ni lookup ni tarea', async () => {
+  it('idempotenciaKey repetida → duplicado:true early, sin segunda escritura ni lookup ni tarea extra', async () => {
     const { conversaciones, mensajes, tareas, useCase } = crearSuite();
     const evento = eventoTexto();
 
@@ -388,7 +419,8 @@ describe('ProcesarMensajeWhatsappUseCase — ingesta whatsapp.message.received (
     expect(segundo.tareaAgenteId).toBeNull();
     expect(mensajes.escritas).toHaveLength(1);
     expect(conversaciones.filas).toHaveLength(1);
-    expect(tareas.creaciones).toEqual([]);
+    // La primera entrega encoló SU tarea (E2·T9); la repetida no agrega otra.
+    expect(tareas.creaciones).toHaveLength(1);
   });
 
   it('segundo mensaje IN sobre la misma ACTIVA_IA → una tarea POR mensaje (triples distintos)', async () => {

@@ -28,7 +28,9 @@ import { GeneradorSimulado } from './generadorSimulado';
 /**
  * Fail-closed adapter (production without LLM_API_KEY): every method
  * rejects with the same typed code — the E2 motor turns the rejection
- * into a safe deferral/escalation instead of a fabricated answer.
+ * into a safe deferral/escalation instead of a fabricated answer
+ * (extraerIdentificacion included: E2·T9 identification fails closed
+ * too — no auto-vinculación on a fabricated name).
  */
 class GeneradorFailClosed implements GeneradorRespuestaPort {
   async generarRespuesta(): Promise<never> {
@@ -36,6 +38,10 @@ class GeneradorFailClosed implements GeneradorRespuestaPort {
   }
 
   async destilar(): Promise<never> {
+    throw this.error();
+  }
+
+  async extraerIdentificacion(): Promise<never> {
     throw this.error();
   }
 
