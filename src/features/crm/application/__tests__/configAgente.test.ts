@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'vitest';
 
-import { crearConfigAgente, type ConfigAgente } from '../configAgente';
+import {
+  MAX_MEMORIAS_CHAT,
+  MAX_MEMORIAS_EMPRESA,
+  MAX_MEMORIAS_PINEADOS,
+  TOP_K_MEMORIA,
+  crearConfigAgente,
+  type ConfigAgente,
+} from '../configAgente';
 
 /**
  * Agent engine configuration contract (agente-ia-crm E2·T4):
@@ -113,6 +120,15 @@ describe('crearConfigAgente — AGENTE_HABILITADO (kill switch, E2·T4)', () => 
     for (const valor of ['0', 'false', 'no', 'off', 'banana', ' ']) {
       expect(crearConfigAgente({ AGENTE_HABILITADO: valor }).habilitado).toBe(false);
     }
+  });
+});
+
+describe('presupuestos de memoria (E4·T3)', () => {
+  it('TOP_K_MEMORIA sube a 10 candidatos de buscar; presupuestos por bloque 3 pineados / 3 empresa / 5 chat', () => {
+    expect(TOP_K_MEMORIA).toBe(10);
+    expect(MAX_MEMORIAS_PINEADOS).toBe(3);
+    expect(MAX_MEMORIAS_EMPRESA).toBe(3);
+    expect(MAX_MEMORIAS_CHAT).toBe(5);
   });
 });
 

@@ -176,8 +176,15 @@ export function mensajeUsuarioGenerar(entrada: EntradaGenerarRespuesta): string 
       `INDICACIÓN DEL OPERADOR (prioridad máxima — seguila estrictamente al redactar tu respuesta):\n${indicacion}`,
     );
   }
+  secciones.push(`CONSULTA:\n${entrada.consulta}`);
+  // E4·T3: the thread synthesis rides between CONSULTA and HISTORIAL
+  // — ONLY when non-empty (never a "(vacío)" placeholder; absent
+  // field ⇒ the section does not exist at all).
+  const sintesisHilo = entrada.sintesisHilo?.trim() ?? '';
+  if (sintesisHilo !== '') {
+    secciones.push(`SINTESIS DEL HILO:\n${sintesisHilo}`);
+  }
   secciones.push(
-    `CONSULTA:\n${entrada.consulta}`,
     `HISTORIAL:\n${historial}`,
     `CONOCIMIENTO:\n${conocimiento}`,
     `MEMORIAS:\n${memorias}`,

@@ -735,6 +735,14 @@ export interface EntradaGenerarRespuesta {
   conocimiento: FragmentoConocimiento[];
   memorias: FragmentoMemoria[];
   /**
+   * E4·T3: compact thread synthesis the motor derives from the SAME
+   * masked historial the prompt gets plus the chat-level ranked
+   * memories — rendered as the SINTESIS DEL HILO section between
+   * CONSULTA and HISTORIAL. Optional (backward compatible): absent
+   * or blank ⇒ the section is omitted entirely, never "(vacío)".
+   */
+  sintesisHilo?: string;
+  /**
    * E3·T2: the operator's instruction from a RESUELTA help request —
    * the human already authorized THIS answer (the motor skips the
    * scope/umbral gate), so the adapter gives it MAXIMUM priority

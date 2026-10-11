@@ -36,8 +36,20 @@ export interface ConfigAgente {
 
 /** KB fragments loaded into the prompt per answer (T1 ranker top-k). */
 export const TOP_K_CONOCIMIENTO = 4;
-/** Memory fragments loaded into the prompt per answer (contexto + buscar). */
-export const TOP_K_MEMORIA = 5;
+/**
+ * Memory SEARCH candidates fetched per answer before ranking (E4·T3):
+ * `rankearMemorias` scores, deduplicates and budgets them down to the
+ * MAX_MEMORIAS_* budgets — fetch wide, keep few. Pinned context comes
+ * separately via `contexto` (MAX_MEMORIAS_PINEADOS).
+ * context comes separately via `contexto` (MAX_MEMORIAS_PINEADOS).
+ */
+export const TOP_K_MEMORIA = 10;
+/** Pinned observations always loaded into the prompt per answer (E4·T3). */
+export const MAX_MEMORIAS_PINEADOS = 3;
+/** Max empresa-level search hits in the prompt per answer (E4·T3). */
+export const MAX_MEMORIAS_EMPRESA = 3;
+/** Max chat-level search hits in the prompt per answer (E4·T3). */
+export const MAX_MEMORIAS_CHAT = 5;
 /** Max thread messages projected into the prompt (oldest→newest tail). */
 export const MAX_HISTORIAL = 10;
 

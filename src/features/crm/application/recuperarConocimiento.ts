@@ -28,7 +28,7 @@ const STOPWORDS_ES = new Set([
 ]);
 
 /** Lowercase → strip diacritics (NFD) → split on non-alphanumerics → drop stopwords. */
-function normalizarTerminos(texto: string): string[] {
+export function normalizarTerminos(texto: string): string[] {
   return texto
     .toLowerCase()
     .normalize('NFD')

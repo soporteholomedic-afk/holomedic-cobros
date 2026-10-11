@@ -8,6 +8,7 @@ import type {
   MensajeCrm,
   MensajeHistorialGeneracion,
   ObservacionDestilada,
+  ObservacionMemoria,
   RespuestaGenerada,
   ResultadoDestilacion,
 } from '../domain/entities';
@@ -24,12 +25,17 @@ import type {
 import {
   crearConfigAgente,
   MAX_HISTORIAL,
+  MAX_MEMORIAS_CHAT,
+  MAX_MEMORIAS_EMPRESA,
+  MAX_MEMORIAS_PINEADOS,
   TOP_K_CONOCIMIENTO,
   TOP_K_MEMORIA,
   type ConfigAgente,
 } from './configAgente';
 import { PROMPT_VERSION } from './prompt/promptGeneracion';
+import { rankearMemorias } from './rankearMemorias';
 import { recuperarConocimiento } from './recuperarConocimiento';
+import { sintetizarHilo } from './sintetizarHilo';
 
 /**
  * The AI response engine (agente-ia-crm E2·T4) — la Guía answers one
@@ -352,6 +358,7 @@ export class GenerarRespuestaAgenteUseCase {
       );
 
       let memorias: FragmentoMemoria[] = [];
+      let memoriasChat: ObservacionMemoria[] = [];
       if (conversacion.empresaId !== null && memoriaActiva) {
         const contexto = await this.deps.memoria.contexto(conversacion.empresaId);
         const hallazgos = await this.deps.memoria.buscar(
@@ -360,17 +367,40 @@ export class GenerarRespuestaAgenteUseCase {
           conversacion.id,
           TOP_K_MEMORIA,
         );
-        memorias = [...contexto, ...hallazgos].map((observacion) => ({
+        // E4·T3: hybrid recall — the pinned + search candidates are
+        // SCORED (lexical ×2 + freshness + chat proximity + pin
+        // boost), deduplicated and budgeted per block BEFORE the
+        // prompt. Ranking replaces the naive [...contexto,
+        // ...hallazgos] merge; pineados always survive their block.
+        const rankeadas = rankearMemorias({
+          consulta: consultaOriginal,
+          pineados: contexto,
+          hallazgos,
+          ahora,
+          presupuestos: {
+            pineados: MAX_MEMORIAS_PINEADOS,
+            empresa: MAX_MEMORIAS_EMPRESA,
+            chat: MAX_MEMORIAS_CHAT,
+          },
+        });
+        memorias = rankeadas.map((observacion) => ({
           tipo: observacion.tipo,
           titulo: observacion.titulo,
           contenido: observacion.contenido,
         }));
+        memoriasChat = rankeadas.filter((observacion) => observacion.nivel === 'chat');
       }
 
       const historial: MensajeHistorialGeneracion[] = hiloDesc
         .slice(0, MAX_HISTORIAL)
         .reverse()
         .map((mensaje) => ({ emisor: mensaje.emisor, texto: enmascararTelefonos(mensaje.cuerpo) }));
+
+      // E4·T3: compact thread synthesis from the SAME masked
+      // historial the prompt receives — with the memory opt-out (or
+      // no empresa) it carries counts + last client ask only (no
+      // "Temas tratados" line).
+      const sintesisHilo = sintetizarHilo({ historial, memoriasChat });
 
       respuesta = await this.deps.generador.generarRespuesta({
         consulta: enmascararTelefonos(consultaOriginal),
@@ -384,6 +414,9 @@ export class GenerarRespuestaAgenteUseCase {
           contenido: rankeada.entrada.contenido,
         })),
         memorias,
+        // E4·T3: the synthesis rides between CONSULTA and HISTORIAL
+        // in the rendered prompt (see mensajeUsuarioGenerar).
+        sintesisHilo,
         // E3·T2: the operator instruction rides the LLM input masked
         // like every other body (PII policy — consulta precedent).
         indicacionHumana: conIndicacion ? enmascararTelefonos(indicacion) : undefined,

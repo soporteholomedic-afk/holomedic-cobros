@@ -202,6 +202,35 @@ describe('promptGeneracion — mensaje de usuario (contrato E2·T3 intacto)', ()
     expect(identificar.user).toContain('RESPUESTA:\n¡Gracias Ana!');
   });
 
+  it('sintesisHilo presente → sección SINTESIS DEL HILO entre CONSULTA y HISTORIAL (E4·T3)', () => {
+    const user = mensajeUsuarioGenerar(
+      entrada({
+        sintesisHilo:
+          'Intercambios: 2 del cliente, 2 de la Guía.\nTemas tratados: Turnos de tarde.',
+      }),
+    );
+    expect(user).toContain(
+      'SINTESIS DEL HILO:\nIntercambios: 2 del cliente, 2 de la Guía.\nTemas tratados: Turnos de tarde.',
+    );
+    const pos = (marca: string): number => {
+      const indice = user.indexOf(marca);
+      expect(indice).toBeGreaterThanOrEqual(0);
+      return indice;
+    };
+    expect(pos('CONSULTA:')).toBeLessThan(pos('SINTESIS DEL HILO:'));
+    expect(pos('SINTESIS DEL HILO:')).toBeLessThan(pos('HISTORIAL:'));
+  });
+
+  it('sintesisHilo ausente o en blanco → sección omitida por completo (sin "(vacío)")', () => {
+    const ausente = mensajeUsuarioGenerar(entrada());
+    expect(ausente).not.toContain('SINTESIS DEL HILO');
+    // Sin sección intermedia, CONSULTA empalma directo con HISTORIAL.
+    expect(ausente).toContain('ocupacional?\n\nHISTORIAL:');
+
+    const enBlanco = mensajeUsuarioGenerar(entrada({ sintesisHilo: '   ' }));
+    expect(enBlanco).not.toContain('SINTESIS DEL HILO');
+  });
+
   it('destilación e identificación conservan el system v1 verbatim (la reescritura es otra tarea)', () => {
     const destilar = armarPromptDestilacion({ consulta: 'c', respuesta: 'r' });
     expect(destilar.system).toContain('Eres el distilador de La Guía');

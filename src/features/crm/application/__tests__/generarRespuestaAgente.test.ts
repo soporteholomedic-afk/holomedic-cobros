@@ -894,7 +894,7 @@ describe('GenerarRespuestaAgenteUseCase — happy path RESPONDIDO (E2·T4)', () 
     expect(fakes.conocimiento.consultas).toEqual([CONSULTA]);
     expect(fakes.memoria.contextos).toEqual([7]);
     expect(fakes.memoria.busquedas).toEqual([
-      { consulta: CONSULTA, empresaId: 7, conversacionId: 1, limite: 5 },
+      { consulta: CONSULTA, empresaId: 7, conversacionId: 1, limite: 10 },
     ]);
 
     // Entrada al generador: proyecciones de conocimiento/memoria.
@@ -1725,5 +1725,105 @@ describe('GenerarRespuestaAgenteUseCase — promptVersion en la auditoría (E4·
     expect(resultado.resultado).toBe('ESCALADO');
     expect(fakes.mensajes.escritas[0]?.score).toBe(0.4);
     expect(fakes.mensajes.escritas[0]?.promptVersion).toBe('v2');
+  });
+});
+
+describe('GenerarRespuestaAgenteUseCase — recall híbrido + síntesis del hilo (E4·T3)', () => {
+  const DIA_MS = 24 * 60 * 60 * 1000;
+
+  it('pide 10 candidatos a buscar y mete al prompt el ranking por bloques (no la unión cruda)', async () => {
+    const fakes = crearFakes();
+    // Pineado irrelevante (epoch, id 0 — como cruza `contexto`) que
+    // IGUAL sobrevive; buscar devuelve el chat fuerte ÚLTIMO para
+    // probar que el ranking reordena la unión cruda.
+    fakes.memoria.contextoObservaciones = [
+      {
+        id: 0,
+        nivel: 'empresa',
+        tipo: 'acuerdo',
+        titulo: 'Acuerdo de turnos',
+        contenido: 'El cliente acordó turnos de tarde para su personal.',
+        creadoEn: new Date(0),
+      },
+    ];
+    fakes.memoria.busquedaObservaciones = [
+      {
+        id: 201,
+        nivel: 'empresa',
+        tipo: 'preferencia',
+        titulo: 'Prefiere facturación mensual',
+        contenido: 'Prefiere recibir la facturación mensual.',
+        creadoEn: new Date(AHORA.getTime() - 180 * DIA_MS),
+      },
+      {
+        id: 203,
+        nivel: 'chat',
+        tipo: 'objecion',
+        titulo: 'Precio de la audiometría',
+        contenido: 'Preguntó cuánto cuesta la audiometría.',
+        creadoEn: new Date(AHORA.getTime() - 3 * DIA_MS),
+      },
+      {
+        id: 202,
+        nivel: 'chat',
+        tipo: 'hecho_cliente',
+        titulo: 'Examen ocupacional',
+        contenido: 'Consultó por el examen ocupacional para 12 trabajadores.',
+        creadoEn: new Date(AHORA.getTime() - 1 * DIA_MS),
+      },
+    ];
+
+    const resultado = await fakes.useCase.ejecutar(1, AHORA);
+
+    expect(resultado.resultado).toBe('RESPONDIDO');
+    // Candidatos ampliados: el límite de buscar subió a 10.
+    expect(fakes.memoria.busquedas).toEqual([
+      { consulta: CONSULTA, empresaId: 7, conversacionId: 1, limite: 10 },
+    ]);
+
+    // Entrada al generador: bloques pineados → empresa → chat, cada
+    // uno por score desc. La unión cruda habría dado [200, 201, 203,
+    // 202]; el ranking deja el chat fuerte (202) primero en su bloque.
+    const entrada = fakes.generador.entradasGenerar[0];
+    expect(entrada?.memorias).toEqual([
+      { tipo: 'acuerdo', titulo: 'Acuerdo de turnos', contenido: 'El cliente acordó turnos de tarde para su personal.' },
+      { tipo: 'preferencia', titulo: 'Prefiere facturación mensual', contenido: 'Prefiere recibir la facturación mensual.' },
+      { tipo: 'hecho_cliente', titulo: 'Examen ocupacional', contenido: 'Consultó por el examen ocupacional para 12 trabajadores.' },
+      { tipo: 'objecion', titulo: 'Precio de la audiometría', contenido: 'Preguntó cuánto cuesta la audiometría.' },
+    ]);
+
+    // Síntesis del hilo: conteos + temas (solo chat-ranked, viejo→
+    // nuevo) + último pedido.
+    expect(entrada?.sintesisHilo).toBe(
+      'Intercambios: 1 del cliente, 0 de la Guía.\n' +
+        'Temas tratados: Precio de la audiometría; Examen ocupacional.\n' +
+        'Último pedido del cliente: ¿Qué incluye el examen ocupacional?',
+    );
+  });
+
+  it('memoriaActiva=false → sin memorias y síntesis solo con historial (sin "Temas tratados")', async () => {
+    const fakes = crearFakes({ conversacion: conversacionActiva({ memoriaActiva: false }) });
+    fakes.memoria.busquedaObservaciones = [
+      {
+        id: 202,
+        nivel: 'chat',
+        tipo: 'hecho_cliente',
+        titulo: 'Examen ocupacional',
+        contenido: 'Consultó por el examen ocupacional para 12 trabajadores.',
+        creadoEn: new Date(AHORA.getTime() - 1 * DIA_MS),
+      },
+    ];
+
+    const resultado = await fakes.useCase.ejecutar(1, AHORA);
+
+    expect(resultado.resultado).toBe('RESPONDIDO');
+    expect(fakes.memoria.contextos).toEqual([]);
+    expect(fakes.memoria.busquedas).toEqual([]);
+    const entrada = fakes.generador.entradasGenerar[0];
+    expect(entrada?.memorias).toEqual([]);
+    expect(entrada?.sintesisHilo).toBe(
+      'Intercambios: 1 del cliente, 0 de la Guía.\n' +
+        'Último pedido del cliente: ¿Qué incluye el examen ocupacional?',
+    );
   });
 });
