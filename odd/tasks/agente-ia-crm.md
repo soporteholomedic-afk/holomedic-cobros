@@ -160,6 +160,12 @@ El candidato completo (58 rutas) excedió `lens_context_budget_exceeded` → div
 
 Todos los hallazgos son advisory informativos NO bloqueantes (ninguna corrección exigida) — seguimiento futuro agrupado, no bloquea promoción.
 
+  - [x] E2·T9 (corrección en vivo del usuario): atender números desconocidos — born `PENDIENTE_VINCULACION` con modo IA + tareas IA para ambos estados + motor acepta no-vinculadas (contactoNuevo en el prompt: junta nombre/empresa naturalmente) + saludos/cortesía SIEMPRE respondidos (adiós escalado por «Hola») + identificación best-effort post-envío (`extraerIdentificacion` → match exacto único de `CRM_Empresas` → crearContacto+vincular+ACTIVA_IA; 0/>1 matches sin efecto, panel del operador sigue disponible) — 122 tests ✓ — commit `d0a3ed6` (branch `feature/agente-ia-crm-e2-1`)
+
+### E2.1 — notas de operación (2026-10-11)
+- **Z.ai saldo agotado** (error 1113 «Insufficient balance», mapeado a HTTP 429) tras las corridas de revisión + humo: `LLM_API_KEY` quedó COMENTADA en `.env.local` → el generador simulado atiende (incluye el flujo de contacto nuevo). Al recargar: descomentar la key y reiniciar → GLM real retoma (verificado en vivo antes de agotarse: respuesta con fuentes + escalado correcto).
+- Demo activa en DB: empresa `DEMO MEMORIA LA GUÍA SA` (id 4055, contacto María Demo `+598 99 471 2233`) + memoria ficticia tipada en Engram `crm-emp-4055` (acuerdo/compromiso pineados). Limpieza cuando termine: `engram delete project crm-emp-4055 --hard` + baja de la empresa.
+
 ### E2 — COMPLETO (2026-10-11)
 
 **Commits** (branch `feature/agente-ia-crm-e2`, base develop `dd02c03`): `329b1ea` T1 KB · `001eba3` T2 memoria Engram · `ca4c57e` T3 generador LLM · `b7f0502` T4 motor+guardrails · `e17a22a` T5 cola durable+nacimientos+toma implícita · `7b129ce` fixes del ensayo live (Engram 404 vacío + prefilter por términos) · `5e65d5b` T6 UI · `8c4be49` docs. Total ~9.900 líneas nuevas, ~290 tests nuevos.
