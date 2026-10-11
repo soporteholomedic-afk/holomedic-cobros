@@ -7,6 +7,7 @@ import { formatearFecha } from '../../etiquetas';
 import {
   ETIQUETA_ESTADO_CONVERSACION,
   iniciales,
+  previsualizarUltimoMensaje,
   tituloFilaConversacion,
 } from './guards';
 
@@ -20,6 +21,10 @@ import {
  * razón social + discrete estado chip + time + unread badge (> 0).
  * Visual tokens copied from panel/ (PanelCrm card, Buscador input,
  * InsigniaEstado chip) — slate/teal, WhatsApp-dark stays in the mock.
+ * E2·T6: each row also previews the LAST message (glifo de emisor +
+ * cuerpo truncado, visually quiet — quieter than the razón social)
+ * sourced from listar()'s OUTER APPLY columns; rows without messages
+ * show no preview line.
  */
 
 export interface ListaConversacionesProps {
@@ -54,6 +59,10 @@ function FilaConversacion({
   onSeleccionar: (id: number) => void;
 }) {
   const titulo = tituloFilaConversacion(conversacion);
+  const previa = previsualizarUltimoMensaje(
+    conversacion.ultimoMensajeCuerpo ?? null,
+    conversacion.ultimoMensajeEmisor ?? null,
+  );
   return (
     <button
       type="button"
@@ -95,6 +104,11 @@ function FilaConversacion({
             </span>
           ) : null}
         </span>
+        {previa !== null && (
+          <span className="mt-0.5 block truncate text-xs text-slate-400 dark:text-slate-500">
+            {previa}
+          </span>
+        )}
         <span className="mt-1 flex items-center gap-2">
           <ChipEstado estado={conversacion.estado} />
         </span>

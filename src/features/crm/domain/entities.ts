@@ -272,10 +272,17 @@ export interface ConversacionCrm {
  * bandeja renders (agente-ia-crm E1): the joined empresa razonSocial
  * and contacto nombre. Both null while PENDIENTE_VINCULACION — the
  * adapter's `listar` derives them from the LEFT JOINs.
+ *
+ * E2·T6 preview: the LAST message body (adapter caps it at 120 chars)
+ * and its emisor — both null when the conversation has no messages
+ * yet (OUTER APPLY). Optional so pre-E2 payloads and non-SQL fakes
+ * stay valid without them.
  */
 export interface ConversacionListada extends ConversacionCrm {
   razonSocial: string | null;
   nombreContacto: string | null;
+  ultimoMensajeCuerpo?: string | null;
+  ultimoMensajeEmisor?: EmisorMensaje | null;
 }
 
 /**

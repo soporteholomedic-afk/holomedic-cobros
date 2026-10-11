@@ -6,7 +6,7 @@ import { ArrowLeft, Send } from 'lucide-react';
 import type { ConversacionListada, MensajeCrm } from '../../../domain/entities';
 import { useHiloConversacion } from '../../hooks/useHiloConversacion';
 import { formatearFecha } from '../../etiquetas';
-import { ETIQUETA_ESTADO_CONVERSACION, formatearTelefono, iniciales, tituloFilaConversacion } from './guards';
+import { ETIQUETA_ESTADO_CONVERSACION, formatearTelefono, iniciales, parsearTitulosFuentes, tituloFilaConversacion } from './guards';
 import { PanelVinculacion } from './PanelVinculacion';
 
 /**
@@ -34,36 +34,67 @@ export interface HiloConversacionProps {
 
 const ETIQUETA_EMISOR: Record<MensajeCrm['emisor'], string> = {
   CLIENTE: 'Cliente',
-  IA: 'La Guía',
+  IA: '🤖 La Guía',
   HUMANO: 'Operador',
 };
 
 function Burbuja({ mensaje }: { mensaje: MensajeCrm }) {
   const esOut = mensaje.direccion === 'OUT';
+  // OUT+IA se distingue (E2·T6): tinte índigo en vez del teal del
+  // operador — la respuesta de La Guía se reconoce de un vistazo.
+  const esIa = esOut && mensaje.emisor === 'IA';
+  const fondo = esIa
+    ? 'self-end bg-indigo-600 text-white dark:bg-indigo-700'
+    : esOut
+      ? 'self-end bg-teal-600 text-white dark:bg-teal-700'
+      : 'self-start border border-slate-200 dark:border-slate-700/50 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200';
+  const tonoSuave = esIa
+    ? 'text-indigo-100'
+    : esOut
+      ? 'text-teal-100'
+      : 'text-slate-400 dark:text-slate-500';
+  // Parse defensivo por render (sin estado): JSON garbage → [] y el
+  // affordance simplemente no aparece (contrato de parsearTitulosFuentes).
+  const titulosFuentes = esIa ? parsearTitulosFuentes(mensaje.fuentes) : [];
   return (
     <div
-      className={`flex max-w-[80%] flex-col rounded-2xl px-3.5 py-2 text-sm shadow-sm ${
-        esOut
-          ? 'self-end bg-teal-600 text-white dark:bg-teal-700'
-          : 'self-start border border-slate-200 dark:border-slate-700/50 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200'
-      }`}
+      className={`flex max-w-[80%] flex-col rounded-2xl px-3.5 py-2 text-sm shadow-sm ${fondo}`}
     >
-      <span
-        className={`mb-0.5 text-[10px] font-bold uppercase tracking-wide ${
-          esOut ? 'text-teal-100' : 'text-slate-400 dark:text-slate-500'
-        }`}
-      >
+      <span className={`mb-0.5 text-[10px] font-bold uppercase tracking-wide ${tonoSuave}`}>
         {ETIQUETA_EMISOR[mensaje.emisor]}
       </span>
       <span className="whitespace-pre-wrap break-words">{mensaje.cuerpo}</span>
-      <span
-        className={`mt-1 text-right text-[10px] ${
-          esOut ? 'text-teal-100' : 'text-slate-400 dark:text-slate-500'
-        }`}
-      >
-        {formatearFecha(mensaje.creadoEn).split(' ')[1]}
-        {mensaje.estadoEnvio === 'FALLIDO' ? ' · envío fallido' : ''}
-      </span>
+      {(mensaje.score !== null && esIa) || titulosFuentes.length > 0 ? (
+        <span className="mt-1 flex flex-wrap items-center gap-1.5">
+          {esIa && mensaje.score !== null && (
+            <span className="inline-flex items-center rounded-full bg-white/20 px-2 py-0.5 text-[10px] font-semibold">
+              confianza {mensaje.score.toFixed(2)}
+            </span>
+          )}
+          {titulosFuentes.length > 0 && (
+            <details className="w-fit">
+              <summary className="inline-flex cursor-pointer select-none items-center rounded-full bg-white/20 px-2 py-0.5 text-[10px] font-semibold">
+                Fuentes ({titulosFuentes.length})
+              </summary>
+              <ul className="mt-1 list-disc pl-4 text-[11px] leading-snug">
+                {titulosFuentes.map((titulo, indice) => (
+                  <li key={`${indice}-${titulo}`}>{titulo}</li>
+                ))}
+              </ul>
+            </details>
+          )}
+        </span>
+      ) : null}
+      {/* PENDIENTE (outbox en vuelo, E2): ni hora ni wamid — un estado
+          sutil de enviando; FALLIDO mantiene el marcado de error. */}
+      {mensaje.estadoEnvio === 'PENDIENTE' ? (
+        <span className={`mt-1 text-right text-[10px] italic ${tonoSuave}`}>enviando…</span>
+      ) : (
+        <span className={`mt-1 text-right text-[10px] ${tonoSuave}`}>
+          {formatearFecha(mensaje.creadoEn).split(' ')[1]}
+          {mensaje.estadoEnvio === 'FALLIDO' ? ' · envío fallido' : ''}
+        </span>
+      )}
     </div>
   );
 }

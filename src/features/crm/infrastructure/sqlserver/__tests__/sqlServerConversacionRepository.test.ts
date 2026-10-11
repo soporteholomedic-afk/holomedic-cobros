@@ -283,6 +283,45 @@ describe('SqlServerConversacionRepository (integración, filas probe propias)', 
     }
   });
 
+  it('listar: preview del último mensaje (OUTER APPLY TOP 1) — último id gana, sin mensajes → null', async () => {
+    try {
+      const alfa = await crearFixtureVinculada('ACTIVA_IA');
+      const beta = await crearFixtureVinculada('PAUSADA');
+      // Tres mensajes en alfa: IN, OUT IA y OUT IA MÁS NUEVO — el preview
+      // debe reflejar SOLO el último por id (mismo criterio que el hilo).
+      const cuerpos = [
+        { direccion: 'IN', emisor: 'CLIENTE', cuerpo: `Consulta inicial ${SUFIJO}` },
+        { direccion: 'OUT', emisor: 'IA', cuerpo: `Te confirmo el turno ${SUFIJO}` },
+        { direccion: 'OUT', emisor: 'IA', cuerpo: `Recordatorio final ${SUFIJO}` },
+      ];
+      for (const c of cuerpos) {
+        await pool
+          .request()
+          .input('conversacionId', mssql.Int, alfa.conversacionId)
+          .input('direccion', mssql.VarChar(3), c.direccion)
+          .input('emisor', mssql.VarChar(10), c.emisor)
+          .input('cuerpo', mssql.NVarChar(4000), c.cuerpo)
+          .query(`
+            INSERT INTO dbo.CRM_Mensajes (conversacionId, direccion, emisor, cuerpo)
+            VALUES (@conversacionId, @direccion, @emisor, @cuerpo)
+          `);
+      }
+
+      const pagina = await repo.listar({ busqueda: SUFIJO });
+      const filaAlfa = pagina.items.find((c) => c.id === alfa.conversacionId);
+      const filaBeta = pagina.items.find((c) => c.id === beta.conversacionId);
+
+      // El preview matchea el último mensaje sembrado (≤120 chars → exacto).
+      expect(filaAlfa?.ultimoMensajeCuerpo).toBe(`Recordatorio final ${SUFIJO}`);
+      expect(filaAlfa?.ultimoMensajeEmisor).toBe('IA');
+      // Beta no tiene mensajes: OUTER APPLY sin filas → NULL, null-safe.
+      expect(filaBeta?.ultimoMensajeCuerpo).toBeNull();
+      expect(filaBeta?.ultimoMensajeEmisor).toBeNull();
+    } finally {
+      await limpiarProbe();
+    }
+  });
+
   it('vincular asocia empresa+contacto (+estado/telefono); id inexistente → null', async () => {
     try {
       const empresaId = await crearEmpresaProbe(`Probe Vinc ${SUFIJO} SA`);

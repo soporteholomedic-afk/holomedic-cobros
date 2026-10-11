@@ -176,25 +176,47 @@ export class SqlServerConversacionRepository implements ConversacionCrmRepositor
     // página, así página y total nunca divergen (los dos roundtrips
     // previos podían derivar entre el COUNT y el SELECT). La firma
     // {items, total} se mantiene; 0 filas → total 0.
+    //
+    // E2·T6 preview: OUTER APPLY TOP (1) por id DESC resuelve el
+    // último mensaje de cada fila (mismo criterio de orden que el
+    // hilo) en el mismo roundtrip; LEFT(…,120) evita cruzar cuerpos
+    // NVARCHAR(4000) completos a la lista. Conversación sin mensajes
+    // → columnas NULL (null-safe en el mapping).
     const result = await request
       .input('limite', mssql.Int, limite)
       .input('offset', mssql.Int, offset).query(`
         SELECT ${COLUMNAS_CON_ALIAS}, emp.razonSocial, con.nombre AS nombreContacto,
+               LEFT(ult.cuerpo, 120) AS ultimoMensajeCuerpo,
+               ult.emisor AS ultimoMensajeEmisor,
                COUNT(*) OVER() AS total
         FROM dbo.CRM_Conversaciones c
         LEFT JOIN dbo.CRM_Empresas emp ON emp.id = c.empresaId
         LEFT JOIN dbo.CRM_Contactos con ON con.id = c.contactoId
+        OUTER APPLY (
+          SELECT TOP (1) m.cuerpo, m.emisor
+          FROM dbo.CRM_Mensajes m
+          WHERE m.conversacionId = c.id
+          ORDER BY m.id DESC
+        ) ult
         ${where}
         ORDER BY c.ultimoMensajeEn DESC, c.id DESC
         OFFSET @offset ROWS FETCH NEXT @limite ROWS ONLY
       `);
     const filas = result.recordset as Array<
-      ConversacionRow & { razonSocial: string | null; nombreContacto: string | null; total: number }
+      ConversacionRow & {
+        razonSocial: string | null;
+        nombreContacto: string | null;
+        ultimoMensajeCuerpo: string | null;
+        ultimoMensajeEmisor: string | null;
+        total: number;
+      }
     >;
     const items: ConversacionListada[] = filas.map((row) => ({
       ...mapearConversacion(row),
       razonSocial: row.razonSocial,
       nombreContacto: row.nombreContacto,
+      ultimoMensajeCuerpo: row.ultimoMensajeCuerpo,
+      ultimoMensajeEmisor: row.ultimoMensajeEmisor as ConversacionListada['ultimoMensajeEmisor'],
     }));
     return { items, total: filas.length > 0 ? Number(filas[0]?.total ?? 0) : 0 };
   }

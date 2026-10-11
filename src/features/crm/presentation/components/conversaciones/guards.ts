@@ -2,6 +2,7 @@ import type {
   CanalConversacion,
   ConversacionCrm,
   ConversacionListada,
+  EmisorMensaje,
   EstadoConversacion,
   MensajeCrm,
 } from '../../../domain/entities';
@@ -43,6 +44,17 @@ function esNumeroNulable(v: unknown): v is number | null {
   return v === null || esNumero(v);
 }
 
+function esCadenaOpcional(v: unknown): v is string | null | undefined {
+  return v === undefined || v === null || typeof v === 'string';
+}
+
+const EMISORES_MENSAJE: readonly string[] = ['CLIENTE', 'IA', 'HUMANO'];
+
+/** Optional emisor for the list preview: undefined/null or the closed union. */
+function esEmisorOpcional(v: unknown): v is EmisorMensaje | null | undefined {
+  return v === undefined || v === null || (typeof v === 'string' && EMISORES_MENSAJE.includes(v));
+}
+
 /** Core row guard — every field ConversacionCrm declares. */
 export function esConversacionCrm(v: unknown): v is ConversacionCrm {
   if (typeof v !== 'object' || v === null) return false;
@@ -64,11 +76,18 @@ export function esConversacionCrm(v: unknown): v is ConversacionCrm {
   );
 }
 
-/** Bandeja row: the core row widened with the two display joins. */
+/** Bandeja row: the core row widened with the display joins (E1) and
+ * the optional last-message preview (E2·T6) — omitted fields pass so
+ * pre-E2 payloads and fakes stay valid. */
 export function esConversacionListada(v: unknown): v is ConversacionListada {
   if (!esConversacionCrm(v)) return false;
   const obj = v as unknown as Record<string, unknown>;
-  return esCadenaNulable(obj.razonSocial) && esCadenaNulable(obj.nombreContacto);
+  return (
+    esCadenaNulable(obj.razonSocial) &&
+    esCadenaNulable(obj.nombreContacto) &&
+    esCadenaOpcional(obj.ultimoMensajeCuerpo) &&
+    esEmisorOpcional(obj.ultimoMensajeEmisor)
+  );
 }
 
 /** One thread message row. */
@@ -88,7 +107,9 @@ export function esMensajeCrm(v: unknown): v is MensajeCrm {
     (obj.estadoEnvio === null ||
       obj.estadoEnvio === undefined ||
       obj.estadoEnvio === 'ENVIADO' ||
-      obj.estadoEnvio === 'FALLIDO') &&
+      obj.estadoEnvio === 'FALLIDO' ||
+      // E2·T6: PENDIENTE = outbox IA row visible while the send is in flight.
+      obj.estadoEnvio === 'PENDIENTE') &&
     esCadenaNulable(obj.fuentes) &&
     (obj.score === null || obj.score === undefined || typeof obj.score === 'number') &&
     esCadenaNulable(obj.modelo) &&
@@ -151,6 +172,58 @@ export function esCandidatosContacto(v: unknown): v is {
 }
 
 // ---- Display helpers (pure) ----
+
+/**
+ * Parse the IA message's `fuentes` JSON (E2 RAG cites,
+ * [{id, tipo:'KB', titulo}]) into the titulos the bubble lists.
+ * Defensive by contract: garbage/non-array JSON → [], entries without
+ * a string titulo are dropped — the affordance hides, never crashes.
+ */
+export function parsearTitulosFuentes(fuentes: string | null): string[] {
+  if (fuentes === null || fuentes === '') return [];
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(fuentes);
+  } catch {
+    return [];
+  }
+  if (!Array.isArray(parsed)) return [];
+  return parsed.flatMap((entrada) =>
+    typeof entrada === 'object' && entrada !== null && typeof (entrada as Record<string, unknown>).titulo === 'string'
+      ? [(entrada as { titulo: string }).titulo]
+      : [],
+  );
+}
+
+/** Preview cut length (chars of cuerpo, glyph excluded — E2·T6). */
+export const LARGO_PREVIA_MENSAJE = 60;
+
+const GLIFO_EMISOR: Record<EmisorMensaje, string> = {
+  CLIENTE: '',
+  IA: '🤖 ',
+  HUMANO: '👤 ',
+};
+
+/**
+ * Last-message preview for the bandeja row (E2·T6): emisor glyph
+ * ('' cliente / '🤖 ' La Guía / '👤 ' operador) + cuerpo with
+ * whitespace collapsed, cut at LARGO_PREVIA_MENSAJE chars with an
+ * ellipsis. null/blank cuerpo → null (no preview line).
+ */
+export function previsualizarUltimoMensaje(
+  cuerpo: string | null,
+  emisor: EmisorMensaje | null,
+): string | null {
+  if (cuerpo === null) return null;
+  const texto = cuerpo.replace(/\s+/g, ' ').trim();
+  if (texto === '') return null;
+  const glifo = emisor === null ? '' : GLIFO_EMISOR[emisor];
+  const recortado =
+    texto.length > LARGO_PREVIA_MENSAJE
+      ? `${texto.slice(0, LARGO_PREVIA_MENSAJE - 1)}…`
+      : texto;
+  return glifo + recortado;
+}
 
 /**
  * '+595981234567' → '+595 981 234 567': digits grouped in threes from
