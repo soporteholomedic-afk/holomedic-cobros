@@ -132,10 +132,10 @@ El candidato completo (51 archivos) excedió el presupuesto de contexto (`lens_c
 - [ ] E4 — Cierre autónomo + vistas de configuración
 - [ ] E5 — Conocimiento, calidad y canal email
 
-## E2 — Decisión LLM (bloqueada 2026-10-11)
+## E2 — Decisión LLM (bloqueada 2026-10-11, REVISADA mismo día por el usuario)
 
-- **Producción**: Google Gemini `gemini-3.8-flash` vía capa OpenAI-compatible (`https://generativelanguage.googleapis.com/v1beta/openai/`).
-- **Simulación/testing**: Z.ai `glm-5.3-flash` (`https://api.z.ai/api/paas/v4/`, $0.15/$0.50 por 1M → ~$0.60/mes al volumen de demo).
-- **Switch**: `LLM_MODO=simulacion|produccion` (default dev → simulación; prod sin config → fail-closed, patrón KAPSO_MODO). Un único adapter OpenAI-compatible (`GeneradorRespuestaPort`): proveedor swappable por env sin tocar código.
-- **Pendiente usuario**: API keys (Z.ai para demo en vivo; Google AI para producción) — no bloquea la construcción (tests con fakes).
-- Presupuesto estimado: ~1.000 resp/mes ≈ 3M tokens entrada + 0,3M salida → Gemini prod ~$3.4/mes.
+- **PRODUCCIÓN**: Z.ai `glm-5.3-flash` (`https://api.z.ai/api/paas/v4/`, $0.15/$0.50 por 1M → ~$0.60/mes al volumen estimado).
+- **Google Gemini**: su API key se administra desde la **configuración de la plataforma** (E4, `/admin/crm/configuracion`): key CIFRADA + probar conexión + proveedor/modelo seleccionables desde el admin SIN redeployar (Gemini queda como opción configurable, no como default). Endpoint compatible-OpenAI: `https://generativelanguage.googleapis.com/v1beta/openai/`.
+- **Arquitectura**: único adapter OpenAI-compatible (`GeneradorRespuestaPort`); proveedor/modelo/key = CONFIGURACIÓN (DB + admin UI en E4); env solo bootstrap de dev (`LLM_MODO`, defaults simulación en dev; prod sin config → fail-closed, patrón KAPSO_MODO).
+- **Pendiente usuario**: API keys — Z.ai (producción) y Google AI (para cargar en la config) — no bloquea la construcción (tests con fakes).
+- Presupuesto estimado: ~1.000 resp/mes ≈ 3M tokens entrada + 0,3M salida → GLM prod ~$0.60/mes; Gemini como opción ~$3.4/mes si se selecciona.
