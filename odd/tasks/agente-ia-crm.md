@@ -109,16 +109,15 @@ Cada entregable es un hito **demoable de punta a punta** y cierra con work-unit 
 El candidato completo (51 archivos) excedió el presupuesto de contexto (`lens_context_budget_exceeded`) → dividido en 3 rebanadas encadenadas (decisión del usuario 2026-10-11), revisadas en worktrees dedicados:
 - **Rebanada A** f794a2e..94d8e51 (T1+T2: esquema+dominio+webhook) — **APROVADA** (línea `review-8344e417cd1670f5`, ack quemado). Halló 1 CRITICAL (R3: ack antes de persistir → pérdida de mensajes en fallo async) corregido en `25037fc` (persist-before-ack + 503 para reintento de Kapso + backstop de carrera 2601/2627, 179 líneas diff). Advisory NO bloqueantes (seguimiento futuro): R3-adapters-sql-sin-tests (WARNING), R3-clave-batch-inconsistente (WARNING), R3-cuerpo-truncado-silencioso (SUGGESTION), R3-scan-tabla-completa-candidatos (WARNING).
 - **Rebanada B** 94d8e51..b65fed7 (T3+T4: permisos+backend bandeja) — **APROVADA** vía línea sucesora `review-37741e99f78e5c42` (ack quemado) tras recover scope_changed. Halló 1 CRITICAL (R4: send-then-persist sin idempotencia de salida → duplicados al cliente) corregido en `5bd9e27` (outbox-lite: intención PENDIENTE→enviar→confirmar ENVIADO/FALLIDO + actualizarEnvio + CHECK 3 valores, 170 líneas diff). El recover nativo directo falló por base-ref inconsistente del proveedor; la transacción sucesora fresca consumó la recuperación. Advisory NO bloqueantes: 17 hallazgos informativos (ver lineage review-37741e99f78e5c42; destacados: kapso-no-timeout, default-simulado-silent, hilo-read-write-coupling, lenient-id-parse).
-- **Rebanada C** b65fed7..52b2174 (T5: UI+docs) — pendiente.
-- **Rebanada C** b65fed7..52b2174 (T5: UI+docs) — pendiente.
+- **Rebanada C** b65fed7..52b2174 (T5: UI+docs) — **APROVADA** (línea `review-9b110dc0fee9ba27`, ack quemado, sin correcciones). Advisory NO bloqueantes: R3-cobertura-hilo-vinculacion (WARNING), R3-estado-composer-de-fila (SUGGESTION), R3-like-wildcards-sin-escape (WARNING), R3-simular-refetch-sin-await (SUGGESTION).
 
-- [ ] E1 — Canal y conversaciones
+- [x] E1 — Canal y conversaciones — **COMPLETO y REVISADO** (3/3 rebanadas aprobadas; fixes R3 `25037fc` + R4 `5bd9e27` integrados; branch `feature/agente-ia-crm` lista para promoción a develop/master por decisión del usuario)
   - [x] T1 Esquema CRM_Conversaciones/CRM_Mensajes + dominio (E.164) + repos + wiring — commit `dee1d09`
   - [x] T2 Webhook /api/webhooks/kapso (HMAC + idempotencia + ack<10s + async) — commit `94d8e51`
   - [x] T3 Permiso crm_conversaciones + RUTAS_PROTEGIDAS + nav — commit `ee80452`
   - [x] T4 API bandeja + EnviadorWhatsappCrmPort (Kapso real + modo simulado) + simulador de entrada — commits `d2dd964` (SDK) + `b65fed7`
   - [x] T5 Vista /crm/conversaciones (bandeja estilo WhatsApp) — commit `409f3ff`
-  - [ ] T6 Verificación final + sync SDK + doc + revisión RDD — suite E1 89/89 ✓ · tsc ✓ · build ✓ · sync SDK 65 archivos ✓ · RDD on
+  - [x] T6 Verificación final + sync SDK + doc + revisión RDD — suite E1 89/89 ✓ · tsc ✓ · build ✓ · sync SDK ✓ (3 corridas) · revisión nativa 3/3 rebanadas APROBADAS
 
 **Cómo demorar E1 (modo simulado, sin Kapso)**: 1) `pnpm dev` → entrar a `/crm/conversaciones` (usuario con permiso `crm_conversaciones`). 2) El panel "Simulador de entrada — modo simulado" (arriba de la lista) → teléfono `0981 234 567` + texto → Enviar. 3) El mensaje aparece en la bandeja; si el teléfono matchea 1 contacto existente se autovincula (TOMADA_HUMANO), sino queda PENDIENTE_VINCULACION → panel de vinculación (asociar o crear). 4) Responder a mano desde el hilo → burbuja OUT/HUMANO. 5) Webhook real: `POST /api/webhooks/kapso` con headers `X-Webhook-Signature` (HMAC-SHA256 hex del raw body con `KAPSO_WEBHOOK_SECRET`) + `X-Idempotency-Key` → mismo circuito; replay no duplica; firma inválida → 401. Al llegar Kapso real: setear `KAPSO_MODO=real` + `KAPSO_API_KEY` + `KAPSO_PHONE_NUMBER_ID` + `KAPSO_WEBHOOK_SECRET` en `.env.local` y registrar el webhook en Kapso.
 
