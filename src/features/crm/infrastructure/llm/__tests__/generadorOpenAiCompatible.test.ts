@@ -295,6 +295,72 @@ describe('GeneradorOpenAiCompatible — indicación humana (E3·T2)', () => {
   });
 });
 
+describe('GeneradorOpenAiCompatible — prompts modulares (E4·T1, transport-only)', () => {
+  it('generar: el system proviene del builder v2 — bloques hit de KB y memoria presentes, sin fuera de cobertura', async () => {
+    const { llamadas } = stubFetch([{ status: 200, contenido: JSON_LIMPIO }]);
+
+    await crearAdapter().generarRespuesta(ENTRADA);
+
+    const sistema = cuerpoDe(llamadas[0]!).messages[0]?.content ?? '';
+    expect(sistema).toContain('La Guía');
+    expect(sistema).toContain('fragmentos [id N]');
+    expect(sistema).toContain('MEMORIA PREVIA');
+    expect(sistema).not.toContain('FUERA DE COBERTURA');
+    expect(sistema).not.toContain('PRIMERA INTERACCIÓN');
+  });
+
+  it('generar: CONOCIMIENTO vacío → el system lleva el bloque FUERA DE COBERTURA del builder', async () => {
+    const { llamadas } = stubFetch([{ status: 200, contenido: JSON_LIMPIO }]);
+
+    await crearAdapter().generarRespuesta({ ...ENTRADA, conocimiento: [] });
+
+    const sistema = cuerpoDe(llamadas[0]!).messages[0]?.content ?? '';
+    expect(sistema).toContain('FUERA DE COBERTURA');
+    expect(sistema).not.toContain('fragmentos [id N]');
+  });
+
+  it('generar: indicación humana → el system lleva el bloque PRIORIDAD MÁXIMA del builder', async () => {
+    const { llamadas } = stubFetch([{ status: 200, contenido: JSON_LIMPIO }]);
+
+    await crearAdapter().generarRespuesta({
+      ...ENTRADA,
+      indicacionHumana: 'Confirmale el examen del viernes a las 9.',
+    });
+
+    const sistema = cuerpoDe(llamadas[0]!).messages[0]?.content ?? '';
+    expect(sistema).toContain('PRIORIDAD MÁXIMA');
+  });
+
+  it('generar: contactoNuevo → el system lleva el bloque PRESENTACIÓN INICIAL del builder', async () => {
+    const { llamadas } = stubFetch([{ status: 200, contenido: JSON_LIMPIO }]);
+
+    await crearAdapter().generarRespuesta({ ...ENTRADA, contactoNuevo: true });
+
+    const sistema = cuerpoDe(llamadas[0]!).messages[0]?.content ?? '';
+    expect(sistema).toContain('PRESENTACIÓN INICIAL');
+  });
+
+  it('destilar: system v1 verbatim del módulo de prompts (regresión — la reescritura es otra tarea)', async () => {
+    const { llamadas } = stubFetch([{ status: 200, contenido: '[]' }]);
+
+    await crearAdapter().destilar({ consulta: 'c', respuesta: 'r' });
+
+    const sistema = cuerpoDe(llamadas[0]!).messages[0]?.content ?? '';
+    expect(sistema).toContain('Eres el distilador de La Guía');
+  });
+
+  it('extraerIdentificacion: system v1 verbatim del módulo de prompts (regresión)', async () => {
+    const { llamadas } = stubFetch([
+      { status: 200, contenido: JSON.stringify({ nombre: null, empresa: null }) },
+    ]);
+
+    await crearAdapter().extraerIdentificacion({ consulta: 'c', respuesta: 'r' });
+
+    const sistema = cuerpoDe(llamadas[0]!).messages[0]?.content ?? '';
+    expect(sistema).toContain('Eres el extractor de identificación de La Guía');
+  });
+});
+
 describe('GeneradorOpenAiCompatible — parseo y saneo (E2·T3)', () => {
   it('JSON limpio → RespuestaGenerada tal cual, ids filtrados a los provistos', async () => {
     stubFetch([{ status: 200, contenido: JSON_LIMPIO }]);

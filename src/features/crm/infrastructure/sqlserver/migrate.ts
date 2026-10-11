@@ -349,6 +349,11 @@ BEGIN
     fuentes         NVARCHAR(MAX)   NULL,
     score           DECIMAL(4,3)    NULL,
     modelo          NVARCHAR(60)    NULL,
+    -- E4 (agente-ia-crm): prompt audit — which prompt version produced
+    -- this IA message ('v2' today; application/prompt/promptGeneracion).
+    -- Nullable like score/modelo: NULL on non-IA rows and on the
+    -- no-generation escalations.
+    promptVersion   NVARCHAR(20)    NULL,
     creadoEn        DATETIME2(0)    NOT NULL DEFAULT SYSDATETIME()
   );
 END;
@@ -494,6 +499,15 @@ BEGIN
   -- out of the Engram memory). Guarded column add (telefonoNormalizado
   -- precedent): no-op on fresh installs (the CREATE above carries it).
   ALTER TABLE dbo.CRM_Conversaciones ADD memoriaActiva BIT NOT NULL DEFAULT 1;
+END;
+IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('dbo.CRM_Mensajes') AND name = 'promptVersion')
+BEGIN
+  -- E4 (agente-ia-crm): prompt audit column — which prompt version
+  -- produced this IA message ('v2' today; score/modelo presence
+  -- pattern: NULL when no generation happened). Guarded column add
+  -- (memoriaActiva precedent): no-op on fresh installs (the CREATE
+  -- above carries it).
+  ALTER TABLE dbo.CRM_Mensajes ADD promptVersion NVARCHAR(20) NULL;
 END;
 IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'UX_CRM_Contactos_Principal' AND object_id = OBJECT_ID('dbo.CRM_Contactos'))
 BEGIN

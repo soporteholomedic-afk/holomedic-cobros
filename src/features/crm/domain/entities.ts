@@ -315,6 +315,14 @@ export interface MensajeCrm {
   fuentes: string | null;
   score: number | null;
   modelo: string | null;
+  /**
+   * E4·T1: which prompt version produced this IA message ('v2' today;
+   * application/prompt/promptGeneracion). OPTIONAL like
+   * ultimoMensajeCuerpo — pre-E4 fakes/payloads stay valid without
+   * it; NULL follows the score/modelo pattern (only a generation
+   * stamps it, the limit escalation without LLM does not).
+   */
+  promptVersion?: string | null;
   creadoEn: string;
 }
 
@@ -346,6 +354,8 @@ export interface CrearMensajeInput {
   fuentes?: string | null;
   score?: number | null;
   modelo?: string | null;
+  /** E4·T1: prompt version audit ('v2' today) — only a generation stamps it. */
+  promptVersion?: string | null;
 }
 
 // ---- Solicitudes de ayuda, huecos de KB y ficha (agente-ia-crm, E3) ----

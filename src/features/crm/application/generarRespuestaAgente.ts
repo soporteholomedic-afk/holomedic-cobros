@@ -28,6 +28,7 @@ import {
   TOP_K_MEMORIA,
   type ConfigAgente,
 } from './configAgente';
+import { PROMPT_VERSION } from './prompt/promptGeneracion';
 import { recuperarConocimiento } from './recuperarConocimiento';
 
 /**
@@ -411,9 +412,12 @@ export class GenerarRespuestaAgenteUseCase {
       respuesta !== null && responder ? respuesta.texto : this.config.textoEscalado;
     // Audit: null score/modelo ONLY on the limit escalation (no
     // generation happened); a confidence-based escalation still audits
-    // the score the model reported.
+    // the score the model reported. E4·T1: promptVersion follows the
+    // SAME presence/absence pattern — 'v2' whenever a generation ran,
+    // null when no LLM call happened.
     const score = respuesta !== null ? respuesta.scoreConfianza : null;
     const modelo = respuesta !== null ? respuesta.modelo : null;
+    const promptVersion = respuesta !== null ? PROMPT_VERSION : null;
     // E3·T2 widens the audit union: KB citations plus the human
     // indicación marker ({id} present only on KB rows).
     const fuentesAuditoria: Array<{
@@ -448,6 +452,7 @@ export class GenerarRespuestaAgenteUseCase {
       fuentes: fuentesJson,
       score,
       modelo,
+      promptVersion,
     });
 
     const envio = await this.deps.whatsapp.enviar({

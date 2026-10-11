@@ -112,11 +112,38 @@ describe('SqlServerMensajeRepository (integración, filas probe propias)', () =>
         fuentes: null,
         score: null,
         modelo: null,
+        promptVersion: null,
       });
       expect(mensaje.creadoEn).toBeTruthy();
 
       expect(await repoMensajes.existePorIdempotenciaKey(key)).toBe(true);
       expect(await repoMensajes.existePorIdempotenciaKey(keyProbe())).toBe(false);
+    } finally {
+      await limpiarProbe();
+    }
+  });
+
+  it('crear roundtrip promptVersion (E4·T1): se guarda y se lee igual que score/modelo', async () => {
+    try {
+      const conversacionId = await crearConversacionProbe();
+
+      const mensaje = await repoMensajes.crear({
+        conversacionId,
+        direccion: 'OUT',
+        emisor: 'IA',
+        cuerpo: 'El examen incluye examen médico y audiometría.',
+        estadoEnvio: 'PENDIENTE',
+        fuentes: '[{"id":7,"tipo":"KB","titulo":"Examen ocupacional"}]',
+        score: 0.9,
+        modelo: 'glm-test',
+        promptVersion: 'v2',
+      });
+
+      expect(mensaje.promptVersion).toBe('v2');
+
+      const hilo = await repoMensajes.listarPorConversacion(conversacionId, { limite: 10 });
+      expect(hilo).toHaveLength(1);
+      expect(hilo[0]?.promptVersion).toBe('v2');
     } finally {
       await limpiarProbe();
     }

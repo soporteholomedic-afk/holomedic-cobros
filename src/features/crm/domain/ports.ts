@@ -1003,10 +1003,11 @@ export interface MemoriaConversacionPort {
 // ---------------------------------------------------------------------------
 // LLM response-generator port (agente-ia-crm E2·T3) — la Guía's brain:
 // answer generation + post-send distillation. STRUCTURED IN /
-// STRUCTURED OUT: callers pass typed input and get typed output — the
-// adapter owns ALL prompt engineering (system/user message building,
-// Spanish wording, JSON strictness); the application layer never
-// builds nor sees a prompt. Implemented by the OpenAI-compatible HTTP
+// STRUCTURED OUT: callers pass typed input and get typed output.
+// E4·T1: the prompt engineering lives in the application module
+// application/prompt/promptGeneracion (system/user building, Spanish
+// wording, JSON strictness of the REQUEST); the adapters are pure
+// transport over it. Implemented by the OpenAI-compatible HTTP
 // adapter (GeneradorOpenAiCompatible), the deterministic offline
 // simulator (GeneradorSimulado) and the fail-closed adapter the
 // factory selects in production without LLM_API_KEY (every method

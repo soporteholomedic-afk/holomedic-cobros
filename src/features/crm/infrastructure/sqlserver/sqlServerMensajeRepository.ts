@@ -32,11 +32,12 @@ interface MensajeRow {
   fuentes: string | null;
   score: number | null;
   modelo: string | null;
+  promptVersion: string | null;
   creadoEn: Date;
 }
 
 const COLUMNAS = `id, conversacionId, direccion, emisor, cuerpo, tipo, canal, wamid,
-                  idempotenciaKey, estadoEnvio, fuentes, score, modelo, creadoEn`;
+                  idempotenciaKey, estadoEnvio, fuentes, score, modelo, promptVersion, creadoEn`;
 
 function mapearMensaje(row: MensajeRow): MensajeCrm {
   return {
@@ -53,6 +54,7 @@ function mapearMensaje(row: MensajeRow): MensajeCrm {
     fuentes: row.fuentes,
     score: row.score,
     modelo: row.modelo,
+    promptVersion: row.promptVersion,
     creadoEn: row.creadoEn.toISOString(),
   };
 }
@@ -75,13 +77,14 @@ export class SqlServerMensajeRepository implements MensajeCrmRepository {
         .input('estadoEnvio', mssql.VarChar(10), datos.estadoEnvio ?? null)
         .input('fuentes', mssql.NVarChar(mssql.MAX), datos.fuentes ?? null)
         .input('score', mssql.Decimal(4, 3), datos.score ?? null)
-        .input('modelo', mssql.NVarChar(60), datos.modelo ?? null).query(`
+        .input('modelo', mssql.NVarChar(60), datos.modelo ?? null)
+        .input('promptVersion', mssql.NVarChar(20), datos.promptVersion ?? null).query(`
           INSERT INTO dbo.CRM_Mensajes
             (conversacionId, direccion, emisor, cuerpo, tipo, canal, wamid,
-             idempotenciaKey, estadoEnvio, fuentes, score, modelo)
+             idempotenciaKey, estadoEnvio, fuentes, score, modelo, promptVersion)
           OUTPUT INSERTED.id
           VALUES (@conversacionId, @direccion, @emisor, @cuerpo, @tipo, @canal, @wamid,
-                  @idempotenciaKey, @estadoEnvio, @fuentes, @score, @modelo)
+                  @idempotenciaKey, @estadoEnvio, @fuentes, @score, @modelo, @promptVersion)
         `);
       const id = Number((inserted.recordset as { id: number | string }[])[0]?.id);
       if (!Number.isFinite(id)) throw new Error('INSERT de CRM_Mensajes no devolvió id');

@@ -396,6 +396,21 @@ describe('crm migrate() — HOLOMEDIC schema integration', () => {
     expect(porTabla.get('CRM_Contactos.cargo')?.tipo).toBe('nvarchar');
   });
 
+  it('adds the prompt audit column gated and nullable (CRM_Mensajes.promptVersion, agente-ia-crm E4·T1)', async () => {
+    const result = await pool.request().query<{ name: string; is_nullable: number; tipo: string; max_length: number }>(`
+      SELECT c.name, c.is_nullable, TYPE_NAME(c.user_type_id) AS tipo, c.max_length
+        FROM sys.columns c
+       WHERE c.object_id = OBJECT_ID('dbo.CRM_Mensajes') AND c.name = 'promptVersion'`);
+    // El doble migrate() del beforeAll ya ejercitó el guard (la columna
+    // existe y un segundo ADD habría reventado la corrida entera).
+    expect(result.recordset).toHaveLength(1);
+    const fila = result.recordset[0];
+    expect(Boolean(fila?.is_nullable)).toBe(true);
+    expect(fila?.tipo).toBe('nvarchar');
+    // NVARCHAR(20) → max_length 40 (2 bytes por carácter).
+    expect(fila?.max_length).toBe(40);
+  });
+
   it('creates the handoff audit index IX_CRM_Handoffs_EmpresaFecha', async () => {
     const names = await pool.request().query<NameRow>(`
       SELECT i.name

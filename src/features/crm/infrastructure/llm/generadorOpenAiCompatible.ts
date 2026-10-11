@@ -10,15 +10,22 @@ import type {
   TipoObservacionDestilada,
 } from '../../domain/entities';
 import type { GeneradorRespuestaPort } from '../../domain/ports';
+import {
+  armarPromptDestilacion,
+  armarPromptGeneracion,
+  armarPromptIdentificacion,
+} from '../../application/prompt/promptGeneracion';
 
 /**
  * OpenAI-compatible LLM adapter for GeneradorRespuestaPort
  * (agente-ia-crm E2·T3) — the ONE locked adapter behind every
  * provider (Z.ai GLM now, Gemini later via E4 platform config): one
  * POST {urlBase}/chat/completions per call with Bearer auth, an
- * AbortController deadline, temperature 0.2 and max_tokens. This
- * adapter owns ALL prompt engineering; the prompts are in SPANISH
- * because their outputs are client-facing Spanish WhatsApp answers.
+ * AbortController deadline, temperature 0.2 and max_tokens. E4·T1:
+ * this adapter is TRANSPORT-ONLY — the prompt engineering lives in
+ * the application module application/prompt/promptGeneracion (system
+ * in Spanish, because the outputs are client-facing Spanish WhatsApp
+ * answers) and each call assembles its system/user pair from there.
  *
  * Output handling: read choices[0].message.content (manually
  * narrowed), strip Markdown code fences, extract the FIRST balanced
@@ -114,45 +121,6 @@ const FICHA_MAX_CARACTERES = 500;
 /** System nudge appended on the ONE JSON-validity retry. */
 const NUDGE_JSON = 'Respondé únicamente con JSON válido, sin texto adicional.';
 
-const PROMPT_SISTEMA_GENERAR = [
-  'Eres La Guía, la asistente de WhatsApp de Holomedic.',
-  'Respondes ÚNICAMENTE con la información de los bloques CONOCIMIENTO y MEMORIAS provistos en el mensaje del usuario;',
-  'si usas un fragmento de conocimiento, incluís su id en idsConocimiento.',
-  'Tono cálido y cercano, respuesta concisa (máximo 120 palabras), texto plano apto para WhatsApp, sin markdown.',
-  'Los saludos, agradecimientos y cortesía general SIEMPRE se responden (enScope true, scoreConfianza alto):',
-  'solo derivás a un humano las consultas de NEGOCIO que no puedas responder con el CONOCIMIENTO y MEMORIAS provistos.',
-  'Si la consulta no está cubierta por el CONOCIMIENTO ni las MEMORIAS, poné enScope=false y requiereAyudaHumana=true,',
-  'y en texto una derivación corta y segura a una persona del equipo de Holomedic; nunca inventes información.',
-  'scoreConfianza es tu confianza (entre 0 y 1) en que la respuesta está respaldada por lo provisto.',
-  'Respondé ÚNICAMENTE con JSON válido, sin texto adicional, con esta forma exacta:',
-  '{"texto": string, "scoreConfianza": number, "enScope": boolean, "requiereAyudaHumana": boolean, "idsConocimiento": number[]}',
-  'y nada más.',
-].join(' ');
-
-const PROMPT_SISTEMA_DESTILAR = [
-  'Eres el distilador de La Guía, la asistente de WhatsApp de Holomedic.',
-  'Extraé del intercambio únicamente hechos duraderos: datos del cliente, acuerdos, compromisos, preferencias u objeciones;',
-  'ignorá saludos y charla pasajera.',
-  'Además extraé la ficha del contacto SOLO si el cliente la declaró explícitamente en el intercambio:',
-  'su cargo (cargo), la cantidad de trabajadores de su empresa (trabajadores, como texto) y la cantidad de sedes (sedes, como texto);',
-  'null cuando no aparezca. Nunca los deduzcas, completes ni inventes.',
-  'Respondé ÚNICAMENTE con JSON válido, sin texto adicional, con esta forma exacta:',
-  '{"observaciones": [{"tipo": "hecho_cliente"|"acuerdo"|"compromiso"|"preferencia"|"objecion", "titulo": string (máximo 60 caracteres),',
-  '"contenido": string (máximo 300 caracteres), "pinear": boolean}],',
-  '"ficha": {"cargo": string|null, "trabajadores": string|null, "sedes": string|null}}',
-  '— pinear=true solo para acuerdos y compromisos.',
-  'Si no hay nada duradero ni datos de ficha, respondé {"observaciones": [], "ficha": null}.',
-].join(' ');
-
-const PROMPT_SISTEMA_IDENTIFICAR = [
-  'Eres el extractor de identificación de La Guía, la asistente de WhatsApp de Holomedic.',
-  'Del intercambio extraé, SOLO si el cliente los dijo explícitamente, su nombre y la empresa que representa;',
-  'si no los dijo, el valor es null. Nunca los deduzcas, completes ni inventes.',
-  'Respondé ÚNICAMENTE con JSON válido, sin texto adicional, con esta forma exacta:',
-  '{"nombre": string|null, "empresa": string|null}',
-  'y nada más.',
-].join(' ');
-
 /** Redacted, user-safe rendering of an unknown thrown value. */
 function detalleDe(error: unknown): string {
   if (error instanceof Error) return error.message;
@@ -169,60 +137,6 @@ function acotar(valor: number, minimo: number, maximo: number): number {
 
 function esTipoDestilado(valor: unknown): valor is TipoObservacionDestilada {
   return typeof valor === 'string' && (TIPOS_DESTILACION as readonly string[]).includes(valor);
-}
-
-/** Labeled user message for generarRespuesta (PII-scrubbed upstream). */
-function mensajeUsuarioGenerar(entrada: EntradaGenerarRespuesta): string {
-  const historial =
-    entrada.historial.length === 0
-      ? '(vacío)'
-      : entrada.historial.map((mensaje) => `[${mensaje.emisor}] ${mensaje.texto}`).join('\n');
-  const conocimiento =
-    entrada.conocimiento.length === 0
-      ? '(vacío)'
-      : entrada.conocimiento
-          .map((fragmento) => `[id ${fragmento.id}] ${fragmento.titulo}\n${fragmento.contenido}`)
-          .join('\n\n');
-  const memorias =
-    entrada.memorias.length === 0
-      ? '(vacío)'
-      : entrada.memorias
-          .map((fragmento) => `[${fragmento.tipo}] ${fragmento.titulo}\n${fragmento.contenido}`)
-          .join('\n\n');
-  const secciones: string[] = [];
-  // E3·T2: the operator instruction opens the message — MAXIMUM
-  // priority, before everything else (a human already vouched for
-  // this answer; the motor masked it upstream like every body).
-  const indicacion = entrada.indicacionHumana?.trim() ?? '';
-  if (indicacion !== '') {
-    secciones.push(
-      `INDICACIÓN DEL OPERADOR (prioridad máxima — seguila estrictamente al redactar tu respuesta):\n${indicacion}`,
-    );
-  }
-  secciones.push(
-    `CONSULTA:\n${entrada.consulta}`,
-    `HISTORIAL:\n${historial}`,
-    `CONOCIMIENTO:\n${conocimiento}`,
-    `MEMORIAS:\n${memorias}`,
-  );
-  // E2·T9: the progressive-identification instruction rides ONLY on
-  // unlinked conversations, as the LAST labeled section.
-  if (entrada.contactoNuevo) {
-    secciones.push(
-      'CONTACTO NUEVO: esta persona no está registrada. Además de responder su consulta, cuando sea NATURAL en la conversación (no un interrogatorio), preguntá su nombre y la empresa que representa cuando aún no los haya dicho; agradecé los datos cuando los dé.',
-    );
-  }
-  return secciones.join('\n\n');
-}
-
-/** Labeled user message for destilar (one exchange). */
-function mensajeUsuarioDestilar(entrada: EntradaDestilacion): string {
-  return `CONSULTA:\n${entrada.consulta}\n\nRESPUESTA:\n${entrada.respuesta}`;
-}
-
-/** Labeled user message for extraerIdentificacion (one exchange). */
-function mensajeUsuarioIdentificar(entrada: EntradaExtraerIdentificacion): string {
-  return `CONSULTA:\n${entrada.consulta}\n\nRESPUESTA:\n${entrada.respuesta}`;
 }
 
 /**
@@ -425,10 +339,11 @@ export class GeneradorOpenAiCompatible implements GeneradorRespuestaPort {
 
   async generarRespuesta(entrada: EntradaGenerarRespuesta): Promise<RespuestaGenerada> {
     const idsValidos = new Set(entrada.conocimiento.map((fragmento) => fragmento.id));
+    const prompt = armarPromptGeneracion(entrada);
     return this.pedirJson(
       [
-        { role: 'system', content: PROMPT_SISTEMA_GENERAR },
-        { role: 'user', content: mensajeUsuarioGenerar(entrada) },
+        { role: 'system', content: prompt.system },
+        { role: 'user', content: prompt.user },
       ],
       (valor) => validarRespuestaGenerada(valor, idsValidos, this.modelo),
       'una respuesta',
@@ -436,10 +351,11 @@ export class GeneradorOpenAiCompatible implements GeneradorRespuestaPort {
   }
 
   async destilar(entrada: EntradaDestilacion): Promise<ResultadoDestilacion> {
+    const prompt = armarPromptDestilacion(entrada);
     return this.pedirJson(
       [
-        { role: 'system', content: PROMPT_SISTEMA_DESTILAR },
-        { role: 'user', content: mensajeUsuarioDestilar(entrada) },
+        { role: 'system', content: prompt.system },
+        { role: 'user', content: prompt.user },
       ],
       validarResultadoDestilacion,
       'observaciones destiladas',
@@ -449,10 +365,11 @@ export class GeneradorOpenAiCompatible implements GeneradorRespuestaPort {
   async extraerIdentificacion(
     entrada: EntradaExtraerIdentificacion,
   ): Promise<IdentificacionExtraida | null> {
+    const prompt = armarPromptIdentificacion(entrada);
     return this.pedirJson(
       [
-        { role: 'system', content: PROMPT_SISTEMA_IDENTIFICAR },
-        { role: 'user', content: mensajeUsuarioIdentificar(entrada) },
+        { role: 'system', content: prompt.system },
+        { role: 'user', content: prompt.user },
       ],
       validarIdentificacion,
       'una identificación',

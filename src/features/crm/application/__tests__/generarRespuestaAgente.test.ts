@@ -327,6 +327,7 @@ class FakeMensajes implements MensajeCrmRepository {
       fuentes: datos.fuentes ?? null,
       score: datos.score ?? null,
       modelo: datos.modelo ?? null,
+      promptVersion: datos.promptVersion ?? null,
       creadoEn: new Date().toISOString(),
     };
     this.escritas.push(structuredClone(datos));
@@ -905,7 +906,8 @@ describe('GenerarRespuestaAgenteUseCase — happy path RESPONDIDO (E2·T4)', () 
     ]);
 
     // Fila creada: OUT/IA/TEXTO/WHATSAPP PENDIENTE con score/modelo/fuentes
-    // (ids desconocidos saltados — solo el 7 tiene título del recall).
+    // (ids desconocidos saltados — solo el 7 tiene título del recall)
+    // y promptVersion v2 (E4·T1).
     expect(fakes.mensajes.escritas).toHaveLength(1);
     expect(fakes.mensajes.escritas[0]).toEqual({
       conversacionId: 1,
@@ -920,6 +922,7 @@ describe('GenerarRespuestaAgenteUseCase — happy path RESPONDIDO (E2·T4)', () 
       fuentes: JSON.stringify([{ id: 7, tipo: 'KB', titulo: 'Examen ocupacional' }]),
       score: 0.9,
       modelo: 'modelo-prueba',
+      promptVersion: 'v2',
     });
 
     // Envío + confirmación + actividad OUT una sola vez; estado intacto.
@@ -1682,5 +1685,45 @@ describe('enmascararTelefonos (E2·T4)', () => {
     expect(enmascararTelefonos('fijos: (021) 555-1234 y cel +595981234567!')).toBe(
       'fijos: [teléfono] y cel [teléfono]!',
     );
+  });
+});
+
+describe('GenerarRespuestaAgenteUseCase — promptVersion en la auditoría (E4·T1)', () => {
+  it('respuesta IA → el mensaje creado lleva promptVersion v2 (junto a score/modelo)', async () => {
+    const fakes = crearFakes();
+
+    const resultado = await fakes.useCase.ejecutar(1, AHORA);
+
+    expect(resultado.resultado).toBe('RESPONDIDO');
+    expect(fakes.mensajes.escritas[0]?.emisor).toBe('IA');
+    expect(fakes.mensajes.escritas[0]?.score).not.toBeNull();
+    expect(fakes.mensajes.escritas[0]?.modelo).not.toBeNull();
+    expect(fakes.mensajes.escritas[0]?.promptVersion).toBe('v2');
+  });
+
+  it('escalado por límite SIN generación → promptVersion null (mismo patrón que score/modelo)', async () => {
+    const hilo: MensajeCrm[] = [
+      mensajeDeHilo(1, 'IA', 'OUT', 'respuesta 1'),
+      mensajeDeHilo(2, 'CLIENTE', 'IN', CONSULTA),
+    ];
+    const fakes = crearFakes({ hilo, config: { maxIntercambios: 1 } });
+
+    const resultado = await fakes.useCase.ejecutar(1, AHORA);
+
+    expect(resultado.resultado).toBe('ESCALADO');
+    expect(fakes.generador.entradasGenerar).toEqual([]);
+    expect(fakes.mensajes.escritas[0]?.score).toBeNull();
+    expect(fakes.mensajes.escritas[0]?.modelo).toBeNull();
+    expect(fakes.mensajes.escritas[0]?.promptVersion).toBeNull();
+  });
+
+  it('escalado CON generación (score bajo) → promptVersion v2 igual (hubo generación)', async () => {
+    const fakes = crearFakes({ respuesta: { scoreConfianza: 0.4 } });
+
+    const resultado = await fakes.useCase.ejecutar(1, AHORA);
+
+    expect(resultado.resultado).toBe('ESCALADO');
+    expect(fakes.mensajes.escritas[0]?.score).toBe(0.4);
+    expect(fakes.mensajes.escritas[0]?.promptVersion).toBe('v2');
   });
 });
