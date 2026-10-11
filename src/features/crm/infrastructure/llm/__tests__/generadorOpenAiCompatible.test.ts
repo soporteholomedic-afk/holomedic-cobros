@@ -340,13 +340,19 @@ describe('GeneradorOpenAiCompatible — prompts modulares (E4·T1, transport-onl
     expect(sistema).toContain('PRESENTACIÓN INICIAL');
   });
 
-  it('destilar: system v1 verbatim del módulo de prompts (regresión — la reescritura es otra tarea)', async () => {
+  it('destilar: system v2 del módulo de prompts con la disciplina E4·T4 y el contrato JSON/ficha', async () => {
     const { llamadas } = stubFetch([{ status: 200, contenido: '[]' }]);
 
     await crearAdapter().destilar({ consulta: 'c', respuesta: 'r' });
 
     const sistema = cuerpoDe(llamadas[0]!).messages[0]?.content ?? '';
     expect(sistema).toContain('Eres el distilador de La Guía');
+    expect(sistema).toContain('AUTOCONTENIDA');
+    expect(sistema).toContain('máximo 8 palabras');
+    expect(sistema).toContain('JAMÁS pinees hechos informativos ni preferencias');
+    expect(sistema).toContain('resultados médicos, documentos, sueldos');
+    expect(sistema).toContain('copialos literal del hilo');
+    expect(sistema).toContain('"ficha": {"cargo": string|null, "trabajadores": string|null, "sedes": string|null}}');
   });
 
   it('extraerIdentificacion: system v1 verbatim del módulo de prompts (regresión)', async () => {
@@ -651,8 +657,8 @@ describe('GeneradorOpenAiCompatible — destilar (E2·T3)', () => {
     expect(observaciones).toEqual([]);
   });
 
-  it('respuesta no-array dos veces → GENERADOR_RESPUESTA_INVALIDA', async () => {
-    stubFetch([
+  it('respuesta no-array dos veces → GENERADOR_RESPUESTA_INVALIDA (con nudge en el reintento)', async () => {
+    const { llamadas } = stubFetch([
       { status: 200, contenido: '{"tipo":"acuerdo"}' },
       { status: 200, contenido: '{"tipo":"acuerdo"}' },
     ]);
@@ -660,6 +666,33 @@ describe('GeneradorOpenAiCompatible — destilar (E2·T3)', () => {
     const codigo = await codigoDeError(crearAdapter().destilar({ consulta: 'c', respuesta: 'r' }));
 
     expect(codigo).toBe('GENERADOR_RESPUESTA_INVALIDA');
+    // El reintento de destilar lleva el MISMO nudge de JSON que generar.
+    const reintento = cuerpoDe(llamadas[1]!).messages;
+    expect(reintento).toHaveLength(3);
+    expect(reintento[2]?.role).toBe('system');
+    expect(reintento[2]?.content).toBe('Respondé únicamente con JSON válido, sin texto adicional.');
+  });
+
+  it('destilar: JSON en prosa → UN reintento con nudge de sistema y el segundo intento gana', async () => {
+    const { llamadas } = stubFetch([
+      { status: 200, contenido: 'Disculpá, no encontré nada que destilar.' },
+      {
+        status: 200,
+        contenido: JSON.stringify([
+          { tipo: 'acuerdo', titulo: 'Examen el martes', contenido: 'Examen acordado para el martes 10.', pinear: true },
+        ]),
+      },
+    ]);
+
+    const observaciones = await crearAdapter().destilar({ consulta: 'c', respuesta: 'r' });
+
+    expect(llamadas).toHaveLength(2);
+    const mensajes = cuerpoDe(llamadas[1]!).messages;
+    expect(mensajes).toHaveLength(3);
+    expect(mensajes[2]?.role).toBe('system');
+    expect(mensajes[2]?.content).toBe('Respondé únicamente con JSON válido, sin texto adicional.');
+    expect(observaciones[0]?.tipo).toBe('acuerdo');
+    expect(observaciones[0]?.pinear).toBe(true);
   });
 });
 

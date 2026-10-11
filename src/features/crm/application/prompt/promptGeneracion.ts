@@ -23,17 +23,21 @@ import type {
  * sections render "(vacío)") — the wire contract with the model and
  * every existing test stays intact.
  *
- * Destilación e identificación remain v1 VERBATIM: their builders
- * only relocate the E2/E3 system strings here (the v2 distillation
- * rewrite is a later task), each signed with its own version const
- * so the audit column (CRM_Mensajes.promptVersion) can tell them
- * apart.
+ * Destilación firma v2 desde E4·T4: MISMA forma de salida JSON
+ * (observaciones + ficha), MISMO user CONSULTA/RESPUESTA y MISMA
+ * extracción de hechos duraderos que v1, con la disciplina nueva
+ * añadida como bloques al estilo del generar v2: autocontención,
+ * títulos accionables, disciplina de pineado, cero datos sensibles y
+ * fidelidad literal de montos/fechas. Identificación remains v1
+ * VERBATIM (its rewrite is a later task), each builder signed with
+ * its own version const so the audit column
+ * (CRM_Mensajes.promptVersion) can tell them apart.
  */
 
 /** Prompt version of the generación builder (audited per IA message). */
 export const PROMPT_VERSION = 'v2';
-/** Prompt version of the destilación builder (relocated v1, unchanged). */
-export const PROMPT_VERSION_DESTILACION = 'v1';
+/** Prompt version of the destilación builder (v2 discipline, E4·T4). */
+export const PROMPT_VERSION_DESTILACION = 'v2';
 /** Prompt version of the identificación builder (relocated v1, unchanged). */
 export const PROMPT_VERSION_IDENTIFICACION = 'v1';
 
@@ -122,14 +126,53 @@ const BLOQUE_MEMORIAS_MISS = [
   'empezá de cero sin dar por sabido ningún dato anterior.',
 ].join(' ');
 
-/** v1 system prompt (E3·T4 verbatim) — relocated only, do NOT rewrite here. */
-const PROMPT_SISTEMA_DESTILAR_V1 = [
+/** v2 destilación — base block: persona + what counts as durable (v1 kept). */
+const BASE_DESTILACION_V2 = [
   'Eres el distilador de La Guía, la asistente de WhatsApp de Holomedic.',
   'Extraé del intercambio únicamente hechos duraderos: datos del cliente, acuerdos, compromisos, preferencias u objeciones;',
   'ignorá saludos y charla pasajera.',
+].join(' ');
+
+/** v2 destilación block: the ficha rides the SAME call (E3·T4, v1 kept). */
+const BLOQUE_FICHA_DESTILACION_V2 = [
   'Además extraé la ficha del contacto SOLO si el cliente la declaró explícitamente en el intercambio:',
   'su cargo (cargo), la cantidad de trabajadores de su empresa (trabajadores, como texto) y la cantidad de sedes (sedes, como texto);',
   'null cuando no aparezca. Nunca los deduzcas, completes ni inventes.',
+].join(' ');
+
+/** v2 destilación block: observaciones must stand alone (E4·T4). */
+const BLOQUE_AUTOCONTENCION_V2 = [
+  'Cada observación debe ser AUTOCONTENIDA: debe poder entenderse SIN leer la conversación.',
+  'Incluí siempre el sujeto (nombres de personas y empresas tal como aparecen en el hilo) y suficiente contexto:',
+  '"María Pérez de Acme confirma visita viernes 15", nunca "acepta la visita".',
+].join(' ');
+
+/** v2 destilación block: scannable action-oriented titles (E4·T4). */
+const BLOQUE_TITULOS_V2 = [
+  'Los títulos son ACCIONABLES: máximo 8 palabras, con sujeto y verbo, pensados para escanear una lista de un vistazo',
+  '("María Pérez: visita viernes 15 confirmada").',
+].join(' ');
+
+/** v2 destilación block: pinear ONLY party-binding agreements (E4·T4). */
+const BLOQUE_PINEADO_V2 = [
+  'Disciplina de pineado: pinear=true SOLO para acuerdos o compromisos que obligan a una parte',
+  '(fechas, montos, confirmaciones de servicio);',
+  'JAMÁS pinees hechos informativos ni preferencias.',
+].join(' ');
+
+/** v2 destilación block: sensitive data never reaches memory (E4·T4). */
+const BLOQUE_SENSIBLES_V2 = [
+  'Nada de datos sensibles en memoria (resultados médicos, documentos, sueldos):',
+  'si aparecen en el hilo, NO los destiles.',
+].join(' ');
+
+/** v2 destilación block: amounts/dates copied literally (E4·T4). */
+const BLOQUE_FIDELIDAD_V2 = [
+  'Fidelidad: no parafrasees montos ni fechas — copialos literal del hilo.',
+].join(' ');
+
+/** JSON output contract — unchanged since E3·T4 (the adapter guards it). */
+const CONTRATO_JSON_DESTILACION = [
   'Respondé ÚNICAMENTE con JSON válido, sin texto adicional, con esta forma exacta:',
   '{"observaciones": [{"tipo": "hecho_cliente"|"acuerdo"|"compromiso"|"preferencia"|"objecion", "titulo": string (máximo 60 caracteres),',
   '"contenido": string (máximo 300 caracteres), "pinear": boolean}],',
@@ -199,7 +242,7 @@ export function mensajeUsuarioGenerar(entrada: EntradaGenerarRespuesta): string 
   return secciones.join('\n\n');
 }
 
-/** Labeled user message for destilar (one exchange) — v1 verbatim. */
+/** Labeled user message for destilar (one exchange) — unchanged since v1. */
 function mensajeUsuarioDestilar(entrada: EntradaDestilacion): string {
   return `CONSULTA:\n${entrada.consulta}\n\nRESPUESTA:\n${entrada.respuesta}`;
 }
@@ -230,13 +273,27 @@ export function armarPromptGeneracion(entrada: EntradaGenerarRespuesta): PromptA
   return { system: bloques.join('\n\n'), user: mensajeUsuarioGenerar(entrada), version: PROMPT_VERSION };
 }
 
-/** Assemble the v1 destilación prompt (relocated verbatim; do NOT rewrite here). */
+/**
+ * Assemble the v2 destilación prompt (E4·T4): the v1 base (persona,
+ * durable-fact catalog) plus the new discipline blocks (autocontención,
+ * títulos accionables, disciplina de pineado, datos sensibles,
+ * fidelidad literal), closed by the UNCHANGED strict-JSON contract with
+ * the ficha (same shape the adapter guards, so the NUDGE retry keeps
+ * working untouched); the user message stays the labeled
+ * CONSULTA/RESPUESTA exchange.
+ */
 export function armarPromptDestilacion(entrada: EntradaDestilacion): PromptArmado {
-  return {
-    system: PROMPT_SISTEMA_DESTILAR_V1,
-    user: mensajeUsuarioDestilar(entrada),
-    version: PROMPT_VERSION_DESTILACION,
-  };
+  const bloques: string[] = [
+    BASE_DESTILACION_V2,
+    BLOQUE_AUTOCONTENCION_V2,
+    BLOQUE_TITULOS_V2,
+    BLOQUE_PINEADO_V2,
+    BLOQUE_SENSIBLES_V2,
+    BLOQUE_FIDELIDAD_V2,
+    BLOQUE_FICHA_DESTILACION_V2,
+    CONTRATO_JSON_DESTILACION,
+  ];
+  return { system: bloques.join('\n\n'), user: mensajeUsuarioDestilar(entrada), version: PROMPT_VERSION_DESTILACION };
 }
 
 /** Assemble the v1 identificación prompt (relocated verbatim; do NOT rewrite here). */

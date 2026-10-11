@@ -21,8 +21,9 @@ import {
  * CONSULTA → HISTORIAL → CONOCIMIENTO → MEMORIAS → CONTACTO NUEVO,
  * "[id N] titulo\ncontenido" formats, "(vacío)" for empty sections)
  * so the wire contract with the model and every existing test stays
- * intact. Destilación e identificación remain v1 VERBATIM (their v2
- * rewrite is a later task): this module only relocates them.
+ * intact. Destilación firma v2 desde E4·T4 (misma forma de salida JSON
+ * con ficha, más la disciplina de autocontención/títulos/pineado/
+ * sensibles/fidelidad); identificación remains v1 VERBATIM.
  */
 
 function entrada(overrides: Partial<EntradaGenerarRespuesta> = {}): EntradaGenerarRespuesta {
@@ -48,16 +49,16 @@ function entrada(overrides: Partial<EntradaGenerarRespuesta> = {}): EntradaGener
   };
 }
 
-describe('promptGeneracion — versiones (E4·T1)', () => {
-  it('generación firma v2; destilación e identificación siguen en v1', () => {
+describe('promptGeneracion — versiones (E4·T1, destilación v2 E4·T4)', () => {
+  it('generación y destilación firman v2; identificación sigue en v1', () => {
     expect(PROMPT_VERSION).toBe('v2');
-    expect(PROMPT_VERSION_DESTILACION).toBe('v1');
+    expect(PROMPT_VERSION_DESTILACION).toBe('v2');
     expect(PROMPT_VERSION_IDENTIFICACION).toBe('v1');
   });
 
-  it('cada armado lleva su versión (generación v2, destilación/identificación v1)', () => {
+  it('cada armado lleva su versión (generación/destilación v2, identificación v1)', () => {
     expect(armarPromptGeneracion(entrada()).version).toBe('v2');
-    expect(armarPromptDestilacion({ consulta: 'c', respuesta: 'r' }).version).toBe('v1');
+    expect(armarPromptDestilacion({ consulta: 'c', respuesta: 'r' }).version).toBe('v2');
     expect(armarPromptIdentificacion({ consulta: 'c', respuesta: 'r' }).version).toBe('v1');
   });
 });
@@ -189,7 +190,7 @@ describe('promptGeneracion — mensaje de usuario (contrato E2·T3 intacto)', ()
     expect(armado.user).toBe(mensajeUsuarioGenerar(dato));
   });
 
-  it('destilación e identificación mantienen sus users CONSULTA/RESPUESTA verbatim (v1)', () => {
+  it('destilación e identificación mantienen sus users CONSULTA/RESPUESTA verbatim (contrato intacto)', () => {
     const destilar = armarPromptDestilacion({ consulta: '¿Hacemos el martes?', respuesta: 'Sí, agendado.' });
     expect(destilar.user).toContain('CONSULTA:\n¿Hacemos el martes?');
     expect(destilar.user).toContain('RESPUESTA:\nSí, agendado.');
@@ -231,16 +232,75 @@ describe('promptGeneracion — mensaje de usuario (contrato E2·T3 intacto)', ()
     expect(enBlanco).not.toContain('SINTESIS DEL HILO');
   });
 
-  it('destilación e identificación conservan el system v1 verbatim (la reescritura es otra tarea)', () => {
-    const destilar = armarPromptDestilacion({ consulta: 'c', respuesta: 'r' });
-    expect(destilar.system).toContain('Eres el distilador de La Guía');
-    expect(destilar.system).toContain('ficha');
-    expect(destilar.system).toContain('cargo');
-    expect(destilar.system).toContain('trabajadores');
-    expect(destilar.system).toContain('sedes');
-
+  it('identificación conserva su system v1 verbatim (la reescritura es otra tarea)', () => {
     const identificar = armarPromptIdentificacion({ consulta: 'c', respuesta: 'r' });
     expect(identificar.system).toContain('Eres el extractor de identificación de La Guía');
     expect(identificar.system).toContain('{"nombre": string|null, "empresa": string|null}');
+  });
+});
+
+describe('promptGeneracion — destilación v2 (E4·T4)', () => {
+  it('persona distilador y catálogo de hechos duraderos intactos (regresión v1)', () => {
+    const { system } = armarPromptDestilacion({ consulta: 'c', respuesta: 'r' });
+    expect(system).toContain('Eres el distilador de La Guía');
+    expect(system).toContain('datos del cliente, acuerdos, compromisos, preferencias u objeciones');
+    expect(system).toContain('ignorá saludos y charla pasajera');
+  });
+
+  it('regresión: contrato JSON EXACTO con ficha, JSON estricto y caso vacío (misma forma que v1)', () => {
+    const { system } = armarPromptDestilacion({ consulta: 'c', respuesta: 'r' });
+    expect(system).toContain('Respondé ÚNICAMENTE con JSON válido, sin texto adicional');
+    expect(system).toContain(
+      '{"observaciones": [{"tipo": "hecho_cliente"|"acuerdo"|"compromiso"|"preferencia"|"objecion", "titulo": string (máximo 60 caracteres),',
+    );
+    expect(system).toContain('"contenido": string (máximo 300 caracteres), "pinear": boolean}],');
+    expect(system).toContain(
+      '"ficha": {"cargo": string|null, "trabajadores": string|null, "sedes": string|null}}',
+    );
+    expect(system).toContain(
+      'Si no hay nada duradero ni datos de ficha, respondé {"observaciones": [], "ficha": null}.',
+    );
+  });
+
+  it('regresión: la ficha se pide en la MISMA llamada (cargo/trabajadores/sedes, nunca deducir)', () => {
+    const { system } = armarPromptDestilacion({ consulta: 'c', respuesta: 'r' });
+    expect(system).toContain('la ficha del contacto SOLO si el cliente la declaró explícitamente');
+    expect(system).toContain('Nunca los deduzcas, completes ni inventes');
+  });
+
+  it('autocontención: cada observación se entiende SIN la conversación, con sujeto y contexto', () => {
+    const { system } = armarPromptDestilacion({ consulta: 'c', respuesta: 'r' });
+    expect(system).toContain('AUTOCONTENIDA');
+    expect(system).toContain('SIN leer la conversación');
+    expect(system).toContain('el sujeto (nombres de personas y empresas tal como aparecen');
+    expect(system).toContain('"María Pérez de Acme confirma visita viernes 15"');
+    expect(system).toContain('nunca "acepta la visita"');
+  });
+
+  it('títulos accionables: máximo 8 palabras, con sujeto y verbo, escaneables', () => {
+    const { system } = armarPromptDestilacion({ consulta: 'c', respuesta: 'r' });
+    expect(system).toContain('ACCIONABLES');
+    expect(system).toContain('máximo 8 palabras');
+    expect(system).toContain('sujeto y verbo');
+    expect(system).toContain('"María Pérez: visita viernes 15 confirmada"');
+  });
+
+  it('disciplina de pineado: SOLO obligaciones de una parte; jamás hechos informativos ni preferencias', () => {
+    const { system } = armarPromptDestilacion({ consulta: 'c', respuesta: 'r' });
+    expect(system).toContain('pinear=true SOLO');
+    expect(system).toContain('fechas, montos, confirmaciones de servicio');
+    expect(system).toContain('JAMÁS pinees hechos informativos ni preferencias');
+  });
+
+  it('nada de datos sensibles en memoria: resultados médicos, documentos, sueldos NO se destilan', () => {
+    const { system } = armarPromptDestilacion({ consulta: 'c', respuesta: 'r' });
+    expect(system).toContain('resultados médicos, documentos, sueldos');
+    expect(system).toContain('NO los destiles');
+  });
+
+  it('fidelidad: montos y fechas se copian LITERAL del hilo, sin parafrasear', () => {
+    const { system } = armarPromptDestilacion({ consulta: 'c', respuesta: 'r' });
+    expect(system).toContain('no parafrasees montos ni fechas');
+    expect(system).toContain('copialos literal del hilo');
   });
 });

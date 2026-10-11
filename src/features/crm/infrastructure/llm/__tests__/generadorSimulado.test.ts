@@ -156,8 +156,8 @@ describe('GeneradorSimulado — generarRespuesta (E2·T3)', () => {
   });
 });
 
-describe('GeneradorSimulado — destilar (E2·T3)', () => {
-  it('exactamente UNA observación hecho_cliente: título = primeras 8 palabras, contenido = consulta (≤200), pinear false', async () => {
+describe('GeneradorSimulado — destilar (E2·T3, disciplina v2 E4·T4)', () => {
+  it('exactamente UNA observación hecho_cliente: título AUTOCONTENIDO con sujeto, ≤8 palabras, pinear false', async () => {
     const generador = new GeneradorSimulado();
     const consulta = 'uno dos tres cuatro cinco seis siete ocho nueve diez';
 
@@ -166,11 +166,52 @@ describe('GeneradorSimulado — destilar (E2·T3)', () => {
     expect(observaciones).toEqual([
       {
         tipo: 'hecho_cliente',
-        titulo: 'uno dos tres cuatro cinco seis siete ocho',
+        titulo: 'Cliente: uno dos tres cuatro cinco seis siete',
         contenido: consulta,
         pinear: false,
       },
     ]);
+  });
+
+  it('sujeto derivable de la consulta («soy Ana») → el título abre con el nombre, no con «Cliente»', async () => {
+    const generador = new GeneradorSimulado();
+
+    const observaciones = await generador.destilar({
+      consulta: 'Hola, soy Ana de Constructora X, ¿me pasan precios?',
+      respuesta: 'r',
+    });
+
+    expect(observaciones[0]?.titulo).toBe('Ana: Hola, soy Ana de Constructora X, ¿me');
+    // Autocontención: el título se entiende sin leer el intercambio.
+    expect(observaciones[0]?.titulo.startsWith('Ana: ')).toBe(true);
+  });
+
+  it('«me llamo» también deriva el sujeto; sin marca de nombre el sujeto es Cliente (determinista)', async () => {
+    const generador = new GeneradorSimulado();
+
+    const conMeLlamo = await generador.destilar({
+      consulta: 'Buenas, me llamo Roa, somos 40 personas',
+      respuesta: 'r',
+    });
+    expect(conMeLlamo[0]?.titulo.startsWith('Roa: ')).toBe(true);
+
+    const sinMarca = await generador.destilar({
+      consulta: 'Necesito un examen para el lunes',
+      respuesta: 'r',
+    });
+    expect(sinMarca[0]?.titulo.startsWith('Cliente: ')).toBe(true);
+  });
+
+  it('disciplina de pineado: JAMÁS pina un hecho informativo, aunque el hilo hable de acuerdos', async () => {
+    const generador = new GeneradorSimulado();
+
+    const observaciones = await generador.destilar({
+      consulta: 'Quedamos en el martes 10, ¿no? Mi rubro es minería',
+      respuesta: 'Sí, quedó agendado para el martes 10.',
+    });
+
+    expect(observaciones[0]?.tipo).toBe('hecho_cliente');
+    expect(observaciones[0]?.pinear).toBe(false);
   });
 
   it('consulta mayor a 200 caracteres → contenido recortado a 200', async () => {
@@ -270,7 +311,7 @@ describe('GeneradorSimulado — ficha de la destilación (E3·T4)', () => {
     expect(resultado).toEqual([
       {
         tipo: 'hecho_cliente',
-        titulo: '¿Qué incluye el examen ocupacional?',
+        titulo: 'Cliente: ¿Qué incluye el examen ocupacional?',
         contenido: '¿Qué incluye el examen ocupacional?',
         pinear: false,
       },

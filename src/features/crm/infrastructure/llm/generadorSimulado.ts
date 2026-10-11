@@ -3,7 +3,6 @@ import type {
   EntradaGenerarRespuesta,
   FichaDestilada,
   IdentificacionExtraida,
-  ObservacionDestilada,
   RespuestaGenerada,
   ResultadoDestilacion,
 } from '../../domain/entities';
@@ -30,9 +29,17 @@ import type { GeneradorRespuestaPort } from '../../domain/ports';
  * - both empty + linked → escalation: enScope false,
  *   requiereAyudaHumana true, scoreConfianza 0.1, fixed safe
  *   deferral texto.
- * destilar emits exactly ONE hecho_cliente observation (first 8 words
- * of the consulta as titulo, consulta trimmed to 200 chars, never
- * pinear); an empty consulta distills to NOTHING. E3·T4: the SAME
+ * destilar emits exactly ONE hecho_cliente observation; an empty
+ * consulta distills to NOTHING. E4·T4 (destilación v2 discipline):
+ * the titulo is SELF-CONTAINED — "Sujeto: primeras palabras de la
+ * consulta", ≤8 words counting the subject — where Sujeto is the
+ * client's stated name when derivable from the consulta itself
+ * (capitalized token right after "soy" / "me llamo" / "habla",
+ * case-sensitive so cargos like "el Dueño" never match), else the
+ * literal "Cliente"; contenido stays the consulta trimmed to 200
+ * chars; pinear is ALWAYS false (an informational hecho_cliente never
+ * pins — the v2 discipline reserves pins for party-binding
+ * acuerdos/compromisos, which the simulator never emits). E3·T4: the SAME
  * call attaches a `ficha` block via deterministic heuristics over
  * the EXCHANGE text (consulta + respuesta) — /(\d+)\s*(personas|
  * trabajadores|empleados|gente)/i → trabajadores, /(\d+)\s*sede/i →
@@ -60,11 +67,12 @@ const PREFIJO_SEGURO = 'Información disponible: ';
 /** E3·T2 deterministic relay prefix (offline demo shows the indicación). */
 const PREFIJO_INDICACION = '(simulado) Conforme a la indicación de nuestro equipo: ';
 const LIMITE_TEXTO = 400;
+/** E4·T4: máximo de palabras del título destilado, CONTANDO el sujeto. */
 const LIMITE_TITULO_PALABRAS = 8;
 const LIMITE_CONTENIDO_DESTILACION = 200;
 /** E3·T2 indicación clamp inside the simulated texto. */
 const LIMITE_INDICACION = 200;
-const TITULO_VACIO = 'Consulta cliente';
+const SUJETO_POR_DEFECTO = 'Cliente';
 /** Model name reported in RespuestaGenerada.modelo (audit). */
 const MODELO_SIMULADO = 'simulado';
 /** scoreConfianza of the contactoNuevo greeting (answered, not escalated). */
@@ -107,11 +115,27 @@ function textoSimulado(contenido: string, titulo: string): string {
   return `${PREFIJO_SEGURO}${titulo}`.slice(0, LIMITE_TEXTO);
 }
 
-/** First 8 whitespace-separated words of the consulta (deterministic). */
-function tituloDeConsulta(consulta: string): string {
+/**
+ * E4·T4: nombre PROPIO declarado en la consulta — un token iniciado en
+ * mayúscula inmediatamente después de "soy" / "me llamo" / "habla"
+ * (case-sensitive: "soy el Dueño" NO matchea porque "el" va en
+ * minúscula — un cargo no es un nombre). Sin marca → undefined y el
+ * título cae al sujeto por defecto.
+ */
+const PATRON_NOMBRE_PROPIO =
+  /(?:^|[\s,.;:!?¿¡"'])(?:soy|me llamo|habla)\s+([A-ZÁÉÍÓÚÜÑ][A-Za-zÁÉÍÓÚÜÑáéíóúüñ]*)/;
+
+/**
+ * E4·T4: título AUTOCONTENIDO determinista — "Sujeto: primeras palabras
+ * de la consulta", con LIMITE_TITULO_PALABRAS palabras CONTANDO el
+ * sujeto (1 token), así el título se escanea y se entiende sin leer el
+ * intercambio.
+ */
+function tituloDestilado(consulta: string): string {
+  const sujeto = PATRON_NOMBRE_PROPIO.exec(consulta)?.[1] ?? SUJETO_POR_DEFECTO;
   const palabras = consulta.split(/\s+/).filter((palabra) => palabra !== '');
-  if (palabras.length === 0) return TITULO_VACIO;
-  return palabras.slice(0, LIMITE_TITULO_PALABRAS).join(' ');
+  const cupo = Math.max(1, LIMITE_TITULO_PALABRAS - 1);
+  return [`${sujeto}:`, ...palabras.slice(0, cupo)].join(' ');
 }
 
 export class GeneradorSimulado implements GeneradorRespuestaPort {
@@ -179,10 +203,12 @@ export class GeneradorSimulado implements GeneradorRespuestaPort {
     if (consulta === '') return [];
     // E3·T4: la misma llamada lleva la ficha (heurísticas sobre el
     // intercambio completo); sin datos la propiedad queda ausente.
+    // E4·T4: título AUTOCONTENIDO (sujeto siempre presente) y pinear
+    // false SIEMPRE — un hecho informativo jamás se pinea.
     const resultado = [
       {
         tipo: 'hecho_cliente',
-        titulo: tituloDeConsulta(consulta),
+        titulo: tituloDestilado(consulta),
         contenido: consulta.slice(0, LIMITE_CONTENIDO_DESTILACION),
         pinear: false,
       },
