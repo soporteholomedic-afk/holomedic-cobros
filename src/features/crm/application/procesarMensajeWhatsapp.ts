@@ -1,4 +1,5 @@
 import { normalizarTelefonoE164 } from '../domain/normalizar';
+import type { CrearMensajeInput, MensajeCrm } from '../domain/entities';
 import type { ConversacionCrmRepository, MensajeCrmRepository } from '../domain/ports';
 
 /**
@@ -77,8 +78,8 @@ export class ProcesarMensajeWhatsappUseCase {
 
   async ejecutar(evento: MensajeEntranteWhatsapp): Promise<ResultadoProcesarMensaje> {
     // 1. Dedup early: a seen key never re-routes nor re-writes (the
-    //    filtered unique index is the race backstop for the window
-    //    between the route's fast check and this insert).
+    //    filtered unique index remains the race backstop for the
+    //    window between this check and the insert).
     if (await this.deps.mensajes.existePorIdempotenciaKey(evento.idempotenciaKey)) {
       return { conversacionId: null, mensajeId: null, vinculado: false, duplicado: true };
     }
@@ -138,7 +139,11 @@ export class ProcesarMensajeWhatsappUseCase {
     const esTexto = typeof cuerpoTexto === 'string' && cuerpoTexto !== '';
 
     // 5. Persist the IN message (CLIENTE emisor; estadoEnvio null = IN).
-    const mensaje = await this.deps.mensajes.crear({
+    // Race backstop: dos deliveries de la misma clave pasan ambos el
+    // dedup y pierden solo acá — el índice único (2601/2627) rechaza
+    // al perdedor → duplicado SIN re-bump del contador (registrarActividad
+    // queda después del insert). Otro error se propaga → 503 → retry.
+    const nuevoMensaje: CrearMensajeInput = {
       conversacionId: conversacion.id,
       direccion: 'IN',
       emisor: 'CLIENTE',
@@ -148,7 +153,14 @@ export class ProcesarMensajeWhatsappUseCase {
       wamid: message.id,
       idempotenciaKey: evento.idempotenciaKey,
       estadoEnvio: null,
-    });
+    };
+    let mensaje: MensajeCrm;
+    try {
+      mensaje = await this.deps.mensajes.crear(nuevoMensaje);
+    } catch (err: unknown) {
+      if (!esViolacionIndiceUnico(err)) throw err;
+      return { conversacionId: null, mensajeId: null, vinculado: false, duplicado: true };
+    }
 
     // 6. Bandeja counters: ultimoMensajeEn = ahora, noLeidos + 1.
     await this.deps.conversaciones.registrarActividad(conversacion.id);
@@ -160,4 +172,11 @@ export class ProcesarMensajeWhatsappUseCase {
       duplicado: false,
     };
   }
+}
+
+/** SQL Server unique-index violation on idempotenciaKey: 2601/2627. */
+function esViolacionIndiceUnico(err: unknown): boolean {
+  if (typeof err !== 'object' || err === null) return false;
+  const numero = (err as { number?: unknown }).number;
+  return numero === 2601 || numero === 2627;
 }

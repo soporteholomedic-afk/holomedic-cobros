@@ -1,12 +1,11 @@
 import { createHmac, timingSafeEqual } from 'node:crypto';
 
-import { NextResponse, after } from 'next/server';
+import { NextResponse } from 'next/server';
 
 import { getCrmDb } from '@/features/crm/infrastructure/getCrmDb';
 import {
   ProcesarMensajeWhatsappUseCase,
   esMensajeWhatsappRecibido,
-  type MensajeWhatsappRecibido,
 } from '@/features/crm/application/procesarMensajeWhatsapp';
 
 /**
@@ -21,26 +20,15 @@ import {
  *   event processed), X-Webhook-Signature (hex, sin prefijo `sha256=`),
  *   X-Idempotency-Key (uuid; the replay dedup key), optional
  *   X-Webhook-Batch: true → the body is `{type, batch, data[], …}`.
- * - the 200 ack must land inside 10s or Kapso retries: everything
- *   heavier than the fast idempotencia check is scheduled via
- *   `after()` (Next 16) and never blocks the response.
+ * - E1 processing (dedup → route → persist → counters) is fast DB
+ *   I/O, AWAITED in the request BEFORE the 200 ack; on failure the
+ *   response is 503 PROCESAMIENTO_FALLIDO → Kapso retries (at-least-
+ *   once, idempotent via the X-Idempotency-Key dedup). The E2 AI
+ *   engine (slow LLM work) needs its own durable queue, not this.
  *
  * Fail closed: a missing secret answers 503 — never processes
  * unsigned. No secrets and no message bodies in logs.
  */
-
-/** Trabajo async en vuelo (solo el fallback fuera del runtime de Next). */
-const trabajosEnVuelo = new Set<Promise<void>>();
-
-/**
- * Test seam: cuando el handler corre FUERA del runtime de Next
- * (vitest invoca POST directo), `after()` no tiene request scope y
- * lanza — el fallback corre el trabajo detached y lo trackea acá para
- * que los tests puedan esperar la escritura antes de asertar.
- */
-export function __esperarProcesamientoKapso(): Promise<void> {
-  return Promise.all([...trabajosEnVuelo]).then(() => undefined);
-}
 
 function firmaValida(recibida: string, rawBody: string, secret: string): boolean {
   const esperada = createHmac('sha256', secret).update(rawBody).digest('hex');
@@ -49,19 +37,6 @@ function firmaValida(recibida: string, rawBody: string, secret: string): boolean
   // timingSafeEqual exige igual longitud: el chequeo previo no filtra
   // información temporal del prefijo compartido.
   return a.length === b.length && timingSafeEqual(a, b);
-}
-
-function programarTrabajo(trabajo: () => Promise<void>): void {
-  try {
-    // Runtime de Next: corre DESPUÉS de flushear el ack (<10s).
-    after(trabajo);
-  } catch {
-    // Fuera de request scope (tests / simulador): detached + tracked.
-    const promesa = trabajo().finally(() => {
-      trabajosEnVuelo.delete(promesa);
-    });
-    trabajosEnVuelo.add(promesa);
-  }
 }
 
 function esEnvelopeBatch(v: unknown): v is { data: unknown[] } {
@@ -120,11 +95,8 @@ export async function POST(request: Request): Promise<Response> {
     mensajes: db.mensajes,
   });
 
-  // Dedup check rápido ANTES del ack (Kapso espera <10s); la escritura
-  // va async. El use case re-chequea y el índice único filtrado es el
-  // backstop de la carrera entre ambos.
+  // El dedup vive DENTRO del use case, awaited antes del ack: fallo → 503 y reintento.
   const claveHeader = request.headers.get('x-idempotency-key');
-  const trabajos: Array<{ key: string; wamid: string; payload: MensajeWhatsappRecibido }> = [];
   let procesados = 0;
   let duplicados = 0;
   for (const payload of payloads) {
@@ -139,28 +111,21 @@ export async function POST(request: Request): Promise<Response> {
         : claveHeader !== null
           ? `${claveHeader}:${wamid}`
           : wamid;
-    if (await db.mensajes.existePorIdempotenciaKey(key)) {
-      duplicados += 1;
-      continue;
+    try {
+      const resultado = await useCase.ejecutar({ idempotenciaKey: key, message: payload.message });
+      if (resultado.duplicado) duplicados += 1; else procesados += 1;
+    } catch (err: unknown) {
+      // Sin cuerpos ni secretos: solo el wamid y el mensaje de error.
+      console.error('[kapso-webhook] error procesando mensaje', {
+        wamid,
+        error: err instanceof Error ? err.message : String(err),
+      });
+      return NextResponse.json(
+        { success: false, error: 'PROCESAMIENTO_FALLIDO' },
+        { status: 503 },
+      );
     }
-    procesados += 1;
-    trabajos.push({ key, wamid, payload });
   }
-
-  programarTrabajo(async () => {
-    for (const { key, wamid, payload } of trabajos) {
-      try {
-        await useCase.ejecutar({ idempotenciaKey: key, message: payload.message });
-      } catch (err: unknown) {
-        // Contexto sin cuerpos ni secretos; el ack ya salió — Kapso
-        // reintenta ante fallo real (at-least-once + dedup).
-        console.error('[kapso-webhook] error procesando mensaje', {
-          wamid,
-          error: err instanceof Error ? err.message : String(err),
-        });
-      }
-    }
-  });
 
   return NextResponse.json({ success: true, procesados, duplicados });
 }

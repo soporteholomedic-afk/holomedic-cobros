@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 // ---- Import under test ----
 
-import { POST, __esperarProcesamientoKapso } from './route';
+import { POST } from './route';
 import { __setCrmDbForTests, type CrmDb } from '@/features/crm/infrastructure/getCrmDb';
 import type {
   CandidatoVinculacion,
@@ -25,12 +25,12 @@ import type {
  * - Fail closed: missing KAPSO_WEBHOOK_SECRET → 503; missing/wrong
  *   X-Webhook-Signature → 401; broken JSON with a VALID signature →
  *   400 (the signature is over bytes, not semantics).
- * - Ack first: 200 {procesados, duplicados} returns immediately; the
- *   write happens after (observed via __esperarProcesamientoKapso —
- *   in the vitest process `after()` has no request scope and the
- *   route falls back to a tracked detached promise).
- * - Idempotencia: the fast existePorIdempotenciaKey check runs before
- *   the ack, so a replay of the same X-Idempotency-Key answers
+ * - Persist before ack: the awaited processing completes BEFORE POST
+ *   resolves — the write is observable right after awaiting the
+ *   response; a failure answers 503 PROCESAMIENTO_FALLIDO, which is
+ *   what makes Kapso retry (at-least-once; dedup absorbs the replay).
+ * - Idempotencia: the dedup lives INSIDE the use case (awaited before
+ *   the ack), so a replay of the same X-Idempotency-Key answers
  *   duplicados:1 without a second write.
  * - Batch envelope (X-Webhook-Batch: true, body.data[]) processes
  *   every payload; unrelated events ack procesados:0 untouched.
@@ -187,9 +187,7 @@ beforeEach(() => {
   process.env.KAPSO_WEBHOOK_SECRET = SECRET;
 });
 
-afterEach(async () => {
-  // Drena cualquier trabajo async agendado antes de desconectar el fake.
-  await __esperarProcesamientoKapso();
+afterEach(() => {
   __setCrmDbForTests(null);
   delete process.env.KAPSO_WEBHOOK_SECRET;
 });
@@ -220,8 +218,6 @@ describe('POST /api/webhooks/kapso — configuración y firma', () => {
       requestPost(payloadTexto(), { 'x-webhook-signature': 'deadbeef'.repeat(8) }),
     );
     const body = await response.json();
-    await __esperarProcesamientoKapso();
-
     expect(response.status).toBe(401);
     expect(body).toEqual({ success: false, error: 'FIRMA_INVALIDA' });
     expect(mensajes.escritas).toHaveLength(0);
@@ -241,8 +237,6 @@ describe('POST /api/webhooks/kapso — configuración y firma', () => {
       }),
     );
     const body = await response.json();
-    await __esperarProcesamientoKapso();
-
     expect(response.status).toBe(401);
     expect(body).toEqual({ success: false, error: 'FIRMA_INVALIDA' });
     expect(mensajes.escritas).toHaveLength(0);
@@ -264,21 +258,17 @@ describe('POST /api/webhooks/kapso — configuración y firma', () => {
 
 // ---- Procesamiento, ack e idempotencia ----
 
-describe('POST /api/webhooks/kapso — ack, procesamiento async e idempotencia', () => {
-  it('firma válida → 200 {procesados:1} inmediato y el mensaje persiste async', async () => {
+describe('POST /api/webhooks/kapso — ack, procesamiento e idempotencia', () => {
+  it('firma válida → 200 {procesados:1} con el mensaje ya persistido (antes del ack)', async () => {
     const conversaciones = makeConversaciones();
     const mensajes = makeMensajes();
     setDb(conversaciones, mensajes);
 
     const response = await POST(requestPost(payloadTexto()));
     const body = await response.json();
-    // El ack llega ANTES de que exista la escritura (procesamiento async).
+    // El procesamiento se AWATEA: al resolverse POST ya está escrita.
     expect(response.status).toBe(200);
     expect(body).toEqual({ success: true, procesados: 1, duplicados: 0 });
-    expect(mensajes.escritas).toHaveLength(0);
-
-    await __esperarProcesamientoKapso();
-
     expect(mensajes.escritas).toHaveLength(1);
     expect(mensajes.escritas[0]).toMatchObject({
       direccion: 'IN',
@@ -301,16 +291,24 @@ describe('POST /api/webhooks/kapso — ack, procesamiento async e idempotencia',
     const primera = await POST(requestPost(payloadTexto()));
     const primeraBody = await primera.json();
     expect(primeraBody).toEqual({ success: true, procesados: 1, duplicados: 0 });
-    await __esperarProcesamientoKapso();
-
     const segunda = await POST(requestPost(payloadTexto()));
     const segundaBody = await segunda.json();
-    await __esperarProcesamientoKapso();
-
     expect(segunda.status).toBe(200);
     expect(segundaBody).toEqual({ success: true, procesados: 0, duplicados: 1 });
     expect(mensajes.escritas).toHaveLength(1);
     expect(conversaciones.crearMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('repo falla al crear el mensaje → 503 PROCESAMIENTO_FALLIDO (Kapso reintenta)', async () => {
+    const mensajes = makeMensajes();
+    vi.spyOn(mensajes, 'crear').mockRejectedValue(new Error('ECONNREFUSED'));
+    setDb(makeConversaciones(), mensajes);
+
+    const response = await POST(requestPost(payloadTexto()));
+    const body = await response.json();
+    // El 503 (no un 200) es lo que dispara el reintento de Kapso.
+    expect(response.status).toBe(503);
+    expect(body).toEqual({ success: false, error: 'PROCESAMIENTO_FALLIDO' });
   });
 
   it('batch envelope con 2 payloads → procesados:2 (claves únicas por wamid)', async () => {
@@ -326,8 +324,6 @@ describe('POST /api/webhooks/kapso — ack, procesamiento async e idempotencia',
     });
     const response = await POST(requestPost(raw, { 'x-webhook-batch': 'true' }));
     const body = await response.json();
-    await __esperarProcesamientoKapso();
-
     expect(response.status).toBe(200);
     expect(body).toEqual({ success: true, procesados: 2, duplicados: 0 });
     expect(mensajes.escritas).toHaveLength(2);
@@ -346,8 +342,6 @@ describe('POST /api/webhooks/kapso — ack, procesamiento async e idempotencia',
       requestPost(payloadTexto(), { 'x-webhook-event': 'whatsapp.message.status' }),
     );
     const body = await response.json();
-    await __esperarProcesamientoKapso();
-
     expect(response.status).toBe(200);
     expect(body).toEqual({ success: true, procesados: 0, duplicados: 0 });
     expect(mensajes.escritas).toHaveLength(0);

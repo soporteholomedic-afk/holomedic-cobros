@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import type {
   BuscarConversacionCanal,
@@ -291,6 +291,29 @@ describe('ProcesarMensajeWhatsappUseCase — ingesta whatsapp.message.received (
     expect(segundo).toMatchObject({ duplicado: true, conversacionId: null, mensajeId: null });
     expect(mensajes.escritas).toHaveLength(1);
     expect(conversaciones.filas).toHaveLength(1);
+  });
+
+  it('mensajes.crear viola el índice único (2601) → duplicado:true sin re-bump del contador', async () => {
+    const { conversaciones, mensajes, useCase } = crearSuite();
+    vi.spyOn(mensajes, 'crear').mockRejectedValueOnce(
+      Object.assign(new Error('Violation of UNIQUE KEY constraint'), { number: 2601 }),
+    );
+
+    const resultado = await useCase.ejecutar(eventoTexto());
+
+    expect(resultado).toEqual({ conversacionId: null, mensajeId: null, vinculado: false, duplicado: true });
+    expect(mensajes.escritas).toHaveLength(0);
+    // registrarActividad queda después del insert perdedor: no re-bump.
+    expect(conversaciones.filas[0].noLeidos).toBe(0);
+    expect(conversaciones.filas[0].ultimoMensajeEn).toBeNull();
+  });
+
+  it('mensajes.crear lanza error genérico → se propaga (la ruta responde 503 y Kapso reintenta)', async () => {
+    const { mensajes, useCase } = crearSuite();
+    vi.spyOn(mensajes, 'crear').mockRejectedValueOnce(new Error('ECONNREFUSED'));
+
+    await expect(useCase.ejecutar(eventoTexto())).rejects.toThrow('ECONNREFUSED');
+    expect(mensajes.escritas).toHaveLength(0);
   });
 
   it('type audio → cuerpo "[audio]" tipo MEDIA', async () => {
