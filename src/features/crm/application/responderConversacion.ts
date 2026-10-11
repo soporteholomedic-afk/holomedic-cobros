@@ -7,14 +7,14 @@ import type {
 
 /**
  * ResponderConversacionUseCase (agente-ia-crm E1) — ONE manual reply
- * from the bandeja: validate → send through the WhatsApp port →
- * persist the OUT mensaje (ENVIADO or FALLIDO) → registrarActividad
- * OUT (ultimoMensajeEn advances, noLeidos does NOT grow). The send
+ * from the bandeja, outbox-lite (R4): validate → persist OUT intent
+ * PENDIENTE → send → confirm (ENVIADO o FALLIDO) → registrarActividad OUT. The send
  * adapters are selected by KAPSO_MODO (real Kapso vs simulador).
  *
- * Failure contract: a send failure is NEVER thrown — the mensaje is
- * still persisted as FALLIDO (auditoría) and the use case returns
- * {ok:false, error} so the bandeja can render the failed attempt.
+ * Failure contract: a send failure NEVER throws — best-effort FALLIDO +
+ * {ok:false} (retry safe: that send truly failed). An intent-persist
+ * failure propagates. A post-send confirmation failure → ok:true +
+ * CONFIRMACION_FALLIDA (fila PENDIENTE: el envío SUCEDIÓ, reintentar duplicaría).
  * Validation/state failures (cuerpo, conversación, cerrada, teléfono)
  * return {ok:false} too without any write — the route maps each code
  * to its HTTP status.
@@ -35,7 +35,7 @@ export type ErrorResponderConversacion =
     };
 
 export type ResultadoResponderConversacion =
-  | { ok: true; mensaje: MensajeCrm }
+  | { ok: true; mensaje: MensajeCrm; advertencia?: 'CONFIRMACION_FALLIDA' }
   | { ok: false; error: ErrorResponderConversacion };
 
 export interface ResponderConversacionDeps {
@@ -89,13 +89,7 @@ export class ResponderConversacionUseCase {
       };
     }
 
-    // 4. Envío por el canal (Kapso real o simulador según KAPSO_MODO).
-    const envio = await this.deps.whatsapp.enviar({
-      telefonoE164: conversacion.telefono,
-      cuerpo,
-    });
-
-    // 5. Persistencia SIEMPRE (auditoría): ENVIADO con wamid o FALLIDO.
+    // Fase 1 (outbox-lite R4): persist PENDIENTE antes de enviar — si falla, propaga (nada salió).
     const mensaje = await this.deps.mensajes.crear({
       conversacionId: conversacion.id,
       direccion: 'OUT',
@@ -103,15 +97,34 @@ export class ResponderConversacionUseCase {
       cuerpo,
       tipo: 'TEXTO',
       canal: 'WHATSAPP',
-      wamid: envio.ok ? envio.wamid : null,
-      estadoEnvio: envio.ok ? 'ENVIADO' : 'FALLIDO',
+      wamid: null,
+      idempotenciaKey: null,
+      estadoEnvio: 'PENDIENTE',
     });
 
-    // 6. Bandeja tick OUT: ultimoMensajeEn avanza, noLeidos no crece.
-    await this.deps.conversaciones.registrarActividad(conversacion.id, 'OUT');
+    const envio = await this.deps.whatsapp.enviar({ telefonoE164: conversacion.telefono, cuerpo });
 
-    return envio.ok
-      ? { ok: true, mensaje }
-      : { ok: false, error: { code: envio.error, detalle: envio.detalle } };
+    if (envio.ok) {
+      try {
+        const confirmado = await this.deps.mensajes.actualizarEnvio(mensaje.id, {
+          estadoEnvio: 'ENVIADO',
+          wamid: envio.wamid,
+        });
+        await this.deps.conversaciones.registrarActividad(conversacion.id, 'OUT');
+        return { ok: true, mensaje: confirmado ?? { ...mensaje, estadoEnvio: 'ENVIADO', wamid: envio.wamid } };
+      } catch (error) {
+        // El envío SUCEDIÓ — solo falló confirmar: la fila queda PENDIENTE, no reintentar.
+        console.error('[responderConversacion] confirmación post-envío falló', { mensajeId: mensaje.id, wamid: envio.wamid, error });
+        return { ok: true, mensaje, advertencia: 'CONFIRMACION_FALLIDA' };
+      }
+    }
+
+    // Envío fallido: best-effort FALLIDO (reintentar es seguro, nada salió) — su fallo no enmascara el del canal.
+    try {
+      await this.deps.mensajes.actualizarEnvio(mensaje.id, { estadoEnvio: 'FALLIDO' });
+    } catch (errorMarcado) {
+      console.error('[responderConversacion] marcado FALLIDO falló', { mensajeId: mensaje.id, error: errorMarcado });
+    }
+    return { ok: false, error: { code: envio.error, detalle: envio.detalle } };
   }
 }

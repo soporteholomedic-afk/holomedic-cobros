@@ -302,7 +302,7 @@ BEGIN
     canal           NVARCHAR(20)    NOT NULL DEFAULT 'WHATSAPP',
     wamid           VARCHAR(128)    NULL,
     idempotenciaKey VARCHAR(128)    NULL,
-    estadoEnvio     VARCHAR(10)     NULL CONSTRAINT CK_CRM_Mensajes_EstadoEnvio CHECK (estadoEnvio IN ('ENVIADO','FALLIDO')),
+    estadoEnvio     VARCHAR(10)     NULL CONSTRAINT CK_CRM_Mensajes_EstadoEnvio CHECK (estadoEnvio IN ('PENDIENTE','ENVIADO','FALLIDO')),
     fuentes         NVARCHAR(MAX)   NULL,
     score           DECIMAL(4,3)    NULL,
     modelo          NVARCHAR(60)    NULL,
@@ -441,6 +441,12 @@ BEGIN
   -- antesDeId cursor walking backwards through the same index.
   CREATE INDEX IX_CRM_Mensajes_ConversacionHilo
     ON dbo.CRM_Mensajes (conversacionId, id DESC);
+END;
+IF EXISTS (SELECT 1 FROM sys.check_constraints WHERE name = 'CK_CRM_Mensajes_EstadoEnvio' AND parent_object_id = OBJECT_ID('dbo.CRM_Mensajes') AND definition NOT LIKE '%PENDIENTE%')
+-- Outbox-lite (R4): widen once the old 2-value CHECK (needs PENDIENTE intent rows).
+BEGIN
+  ALTER TABLE dbo.CRM_Mensajes DROP CONSTRAINT CK_CRM_Mensajes_EstadoEnvio;
+  ALTER TABLE dbo.CRM_Mensajes ADD CONSTRAINT CK_CRM_Mensajes_EstadoEnvio CHECK (estadoEnvio IN ('PENDIENTE','ENVIADO','FALLIDO'));
 END;
 `;
 

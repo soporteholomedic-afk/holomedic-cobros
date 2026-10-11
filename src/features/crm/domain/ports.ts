@@ -714,6 +714,11 @@ export interface ListarMensajesOpciones {
  */
 export interface MensajeCrmRepository {
   crear(datos: CrearMensajeInput): Promise<MensajeCrm>;
+  /** Outbox-lite (R4): flip ONE OUT row a 'ENVIADO' (wamid) o 'FALLIDO'; null si no existe. */
+  actualizarEnvio(
+    id: number,
+    datos: { estadoEnvio: 'ENVIADO' | 'FALLIDO'; wamid?: string | null },
+  ): Promise<MensajeCrm | null>;
   existePorIdempotenciaKey(key: string): Promise<boolean>;
   listarPorConversacion(
     conversacionId: number,

@@ -154,6 +154,7 @@ class FakeMensajes implements MensajeCrmRepository {
   async listarPorConversacion(): Promise<MensajeCrm[]> {
     throw new Error('no requerido en este fake');
   }
+  async actualizarEnvio(): Promise<null> { throw new Error('no requerido en este fake'); }
 }
 
 function crearSuite(): {

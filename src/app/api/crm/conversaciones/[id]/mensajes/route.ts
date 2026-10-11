@@ -14,9 +14,9 @@ import { buildCrmError, mapCrmError, type CrmErrorResponse } from '../../../empr
  * `POST /api/crm/conversaciones/[id]/mensajes` (permiso
  * `crm_conversaciones`, agente-ia-crm E1) — ONE manual reply from the
  * bandeja. Body: `{cuerpo}`. The use case owns the whole contract:
- * validate → send (Kapso real o simulador según KAPSO_MODO) →
- * persist (ENVIADO o FALLIDO — a send failure is STILL audited) →
- * registrarActividad OUT.
+ * validate → persist intent (PENDIENTE) → send (Kapso real o simulador
+ * según KAPSO_MODO) → confirm (ENVIADO o FALLIDO; confirmación fallida
+ * → 201 con advertencia CONFIRMACION_FALLIDA) → registrarActividad OUT.
  *
  * A failed outcome answers with the typed code:
  * - CUERPO_INVALIDO → 400 · SIN_TELEFONO → 409 ·
@@ -28,6 +28,8 @@ import { buildCrmError, mapCrmError, type CrmErrorResponse } from '../../../empr
 interface ResponderSuccess {
   success: true;
   mensaje: MensajeCrm;
+  /** R4 outbox-lite: el envío salió pero la confirmación ENVIADO/wamid no. */
+  advertencia?: 'CONFIRMACION_FALLIDA';
 }
 
 interface ResponderFailure {
@@ -103,7 +105,9 @@ export async function POST(
     }).ejecutar({ conversacionId: id, cuerpo: body.cuerpo });
 
     if (resultado.ok) {
-      return NextResponse.json({ success: true, mensaje: resultado.mensaje }, { status: 201 });
+      const exito: ResponderSuccess = { success: true, mensaje: resultado.mensaje };
+      if (resultado.advertencia !== undefined) exito.advertencia = resultado.advertencia;
+      return NextResponse.json(exito, { status: 201 });
     }
     const code = resultado.error.code;
     const detalle = 'detalle' in resultado.error ? resultado.error.detalle : undefined;

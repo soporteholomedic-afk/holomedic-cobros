@@ -158,6 +158,7 @@ function makeMensajes(): MensajeCrmRepository & {
     }),
     existePorIdempotenciaKey: vi.fn(async (key: string): Promise<boolean> => claves.has(key)),
     listarPorConversacion: vi.fn(async (): Promise<MensajeCrm[]> => []),
+    actualizarEnvio: vi.fn(async (): Promise<null> => null),
   };
 }
 

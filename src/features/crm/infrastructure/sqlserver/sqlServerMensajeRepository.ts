@@ -11,7 +11,7 @@ import { mapearConflictoUnico } from './conflictos';
  * `existePorIdempotenciaKey` BEFORE inserting and the filtered unique
  * index UX_CRM_Mensajes_Idempotencia is the race backstop (mapped to
  * the typed ConflictError via the shared mapearConflictoUnico).
- * Insert-only by contract — the conversation counters
+ * Inserts + the ONE outbox-lite UPDATE (actualizarEnvio) — the conversation counters
  * (ultimoMensajeEn / noLeidos) are the webhook use case's explicit
  * writes, never a hidden side effect here. BIGINT ids cross tedious
  * as strings (Asignaciones precedent); the adapter maps them.
@@ -99,6 +99,20 @@ export class SqlServerMensajeRepository implements MensajeCrmRepository {
         'SELECT TOP (1) 1 AS presente FROM dbo.CRM_Mensajes WHERE idempotenciaKey = @idempotenciaKey',
       );
     return (result.recordset as { presente: number }[]).length > 0;
+  }
+
+  async actualizarEnvio(
+    id: number,
+    datos: { estadoEnvio: 'ENVIADO' | 'FALLIDO'; wamid?: string | null },
+  ): Promise<MensajeCrm | null> {
+    const result = await this.pool
+      .request()
+      .input('id', mssql.BigInt, id)
+      .input('estadoEnvio', mssql.VarChar(10), datos.estadoEnvio)
+      .input('wamid', mssql.VarChar(128), datos.wamid ?? null)
+      .query('UPDATE dbo.CRM_Mensajes SET estadoEnvio = @estadoEnvio, wamid = @wamid OUTPUT INSERTED.id WHERE id = @id');
+    const actualizado = (result.recordset as { id: number | string }[])[0];
+    return actualizado === undefined ? null : this.obtenerPorId(Number(actualizado.id));
   }
 
   async listarPorConversacion(

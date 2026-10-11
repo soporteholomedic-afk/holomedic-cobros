@@ -239,8 +239,8 @@ export type DireccionMensaje = 'IN' | 'OUT';
 /** Tipo de payload (WhatsApp text/media/template). */
 export type TipoMensajeCrm = 'TEXTO' | 'MEDIA' | 'PLANTILLA';
 
-/** Resultado del envío por el canal (mensajes OUT); null = pendiente/IN. */
-export type EstadoEnvioMensaje = 'ENVIADO' | 'FALLIDO';
+/** Send outcome (mensajes OUT, outbox-lite R4): PENDIENTE = intent persistido sin confirmar; null = IN. */
+export type EstadoEnvioMensaje = 'PENDIENTE' | 'ENVIADO' | 'FALLIDO';
 
 /**
  * One CRM_Conversaciones row — the E1 foundation table: the channel

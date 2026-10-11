@@ -161,6 +161,7 @@ class FakeMensajes implements MensajeCrmRepository {
   async listarPorConversacion(): Promise<MensajeCrm[]> {
     throw new Error('no requerido en este fake');
   }
+  async actualizarEnvio(): Promise<null> { throw new Error('no requerido en este fake'); }
 }
 
 function eventoTexto(sobres: Partial<MensajeEntranteWhatsapp['message']> = {}, key = 'uuid-1'): MensajeEntranteWhatsapp {
