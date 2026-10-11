@@ -169,6 +169,15 @@ Ranking (`recuperarConocimiento`): prefilter LIKE **por términos** (NFD, >2 cha
 - **API consumida**: `GET /context` (solo el bloque pineados) + `GET /search` para el recall; `save` con `operation_id` idempotente + poll de commit; `PUT /observations/{id}/pin`. Un 404 `unknown_project` es el estado vacío normal de una empresa nueva, no un error.
 - **Retención**: 12 meses — el job de purga llega en E5.
 
+## Golden set del prompt (E4)
+
+`src/features/crm/application/prompt/goldenSet/` es la vara para medir cada iteración del prompt: un corpus de 13 preguntas típicas de Holomedic (`casos.ts`, etiquetado con `PROMPT_GOLDEN_VERSION`) + un evaluador determinista puro (`evaluarRespuestaGolden.ts`) que puntúa cada respuesta por cobertura de términos clave (`termino_faltante`), no-invención — nada de precios/cifras que no estén en las fuentes del caso (`dato_inventado`, `termino_prohibido`, con whitelist de los números que las propias fuentes ya traen) —, formato WhatsApp (`formato_*`, `largo_excesivo`) y presencia (`respuesta_vacia`, `respuesta_corta`). Dos niveles de ejecución:
+
+- **CI (siempre)**: `pnpm vitest run src/features/crm/application/prompt/__tests__/goldenSet.test.ts` — cada caso contra el builder v2 (verifica que la entrada arma exactamente los bloques condicionales esperados) y contra el generador simulado (determinista), sin red ni API key. El evaluador debe dar **cero falsos positivos** con el simulado: si un caso falla legítimamente, se corrige el CASO o la precisión del evaluador, jamás el comportamiento del simulado.
+- **Live (opcional, no falla en CI)**: con `E4_GOLDEN_LIVE=1` **y** `LLM_API_KEY` seteadas, la misma suite corre los casos contra el LLM real vía `crearGeneradorRespuesta()` (config del env, igual que la factory) e imprime la tabla `resumenGolden` al final. Sin saldo (hoy, Z.ai) la suite se saltea en silencio.
+
+Regla de iteración: **cada cambio de prompt = bump de `PROMPT_VERSION` (y de `PROMPT_GOLDEN_VERSION` si cambia el corpus o sus expectativas) + golden en verde antes de commitear.** Un caso fallido señala la edición: `termino_faltante` → el prompt no está logrando citar la fuente esperada (revisá el bloque condicional o la regla de uso del CONOCIMIENTO); `dato_inventado`/`termino_prohibido` → la respuesta promete datos sin respaldo (endurecé la regla anti-invención); `formato_*`/`largo_excesivo` → violación del contrato WhatsApp; `respuesta_corta`/`respuesta_vacia` → la Guía dejó de responder (o escaló una cortesía). Los fragmentos de KB y memorias de los casos son fixtures autocontenidos escritos a mano — el golden set nunca lee la base.
+
 ## Demo (DoD de E2)
 
 1. `pnpm dev` y sembrar la KB: `node scripts/crm-sembrar-conocimiento.mjs` (dry-run) → `--apply`.
