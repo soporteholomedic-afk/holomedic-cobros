@@ -132,10 +132,10 @@ El candidato completo (51 archivos) excedió el presupuesto de contexto (`lens_c
 - [ ] E4 — Cierre autónomo + vistas de configuración
 - [ ] E5 — Conocimiento, calidad y canal email
 
-## E2 — Decisión LLM (bloqueada 2026-10-11, REVISADA mismo día por el usuario)
+## E2 — Decisión LLM (bloqueada 2026-10-11, revisada 2× por el usuario)
 
-- **PRODUCCIÓN**: Z.ai `glm-5.3-flash` (`https://api.z.ai/api/paas/v4/`, $0.15/$0.50 por 1M → ~$0.60/mes al volumen estimado).
-- **Google Gemini**: su API key se administra desde la **configuración de la plataforma** (E4, `/admin/crm/configuracion`): key CIFRADA + probar conexión + proveedor/modelo seleccionables desde el admin SIN redeployar (Gemini queda como opción configurable, no como default). Endpoint compatible-OpenAI: `https://generativelanguage.googleapis.com/v1beta/openai/`.
-- **Arquitectura**: único adapter OpenAI-compatible (`GeneradorRespuestaPort`); proveedor/modelo/key = CONFIGURACIÓN (DB + admin UI en E4); env solo bootstrap de dev (`LLM_MODO`, defaults simulación en dev; prod sin config → fail-closed, patrón KAPSO_MODO).
-- **Pendiente usuario**: API keys — Z.ai (producción) y Google AI (para cargar en la config) — no bloquea la construcción (tests con fakes).
-- Presupuesto estimado: ~1.000 resp/mes ≈ 3M tokens entrada + 0,3M salida → GLM prod ~$0.60/mes; Gemini como opción ~$3.4/mes si se selecciona.
+- **DESARROLLO Y PRODUCCIÓN usan la API de GLM**: Z.ai `glm-5.3-flash` (`https://api.z.ai/api/paas/v4/`, $0.15/$0.50 por 1M → ~$0.60/mes). Mismo modelo en todo el ciclo — sin sorpresas de comportamiento entre ambientes.
+- **Google Gemini**: SOLO como opción seleccionable desde la **configuración de la plataforma** (E4, `/admin/crm/configuracion`): key CIFRADA + probar conexión + proveedor/modelo cambiables desde el admin SIN redeployar. Endpoint compatible-OpenAI: `https://generativelanguage.googleapis.com/v1beta/openai/`.
+- **Arquitectura**: único adapter OpenAI-compatible (`GeneradorRespuestaPort`); proveedor/modelo/key = CONFIGURACIÓN (DB + admin UI en E4); env solo bootstrap (key Z.ai para dev; prod sin config → fail-closed, patrón KAPSO_MODO).
+- **Pendiente usuario**: API keys — Z.ai (dev+prod) y Google AI (para cargar en la config) — no bloquea la construcción (tests con fakes).
+- Presupuesto estimado: ~1.000 resp/mes ≈ 3M tokens entrada + 0,3M salida → GLM ~$0.60/mes.
