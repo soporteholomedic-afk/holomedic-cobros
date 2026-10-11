@@ -1,10 +1,10 @@
 # Módulo crm-conversaciones-agente (la Guía)
 
-> Ubicación: `src/features/crm/` · Rutas que drenan la cola: `POST /api/webhooks/kapso`, `POST /api/crm/conversaciones/simular`, `POST /api/crm/conversaciones/[id]/vincular` · Bandeja del operador: [crm-conversaciones](./crm-conversaciones.md)
+> Ubicación: `src/features/crm/` · Rutas que drenan la cola: `POST /api/webhooks/kapso`, `POST /api/crm/conversaciones/simular`, `POST /api/crm/conversaciones/[id]/vincular`, `POST /api/crm/conversaciones/[id]/indicacion` · Bandeja del operador: [crm-conversaciones](./crm-conversaciones.md)
 
 ## Qué es
 
-La Guía es el agente IA del CRM: responde **sola** las conversaciones en estado `ACTIVA_IA` por WhatsApp, apoyada en la base de conocimiento curada (`CRM_Conocimiento`) y la memoria episódica (Engram). Cuando no puede responder con confianza, **deriva**: envía un texto seguro y pasa la conversación a `REQUIERE_HUMANO`. No cierra tratos ni negocia condiciones — el cierre comercial es alcance de E4 (ver [Limitaciones](#limitaciones-de-e2)).
+La Guía es el agente IA del CRM: responde **sola** las conversaciones en estado `ACTIVA_IA` por WhatsApp, apoyada en la base de conocimiento curada (`CRM_Conocimiento`) y la memoria episódica (Engram). Cuando no puede responder con confianza, **deriva**: envía un texto seguro y pasa la conversación a `REQUIERE_HUMANO`. No cierra tratos ni negocia condiciones — el cierre comercial es alcance de E4 (ver [Limitaciones](#limitaciones-de-e2)). E3 agrega el **patrón de ayuda**: la derivación queda persistida como solicitud, el operador responde con una indicación y la Guía retoma (ver [Patrón de ayuda](#patrón-de-ayuda-e3)).
 
 ## Circuito
 
@@ -35,9 +35,81 @@ Un `PROCESANDO` reclamado hace más de 5 minutos se considera de un run muerto y
 | `PENDIENTE_VINCULACION` | Nace así un mensaje nuevo con 0 o >1 contactos candidatos (E1); el operador vincula desde la bandeja |
 | `ACTIVA_IA` | **Born IA** — nace así todo mensaje con exactamente 1 candidato, y toda vinculación manual |
 | `REQUIERE_HUMANO` | **Escalado por el motor**, tras enviar el texto seguro (score < umbral, fuera de scope, pide humano, o límite de intercambios) |
-| `TOMADA_HUMANO` | **Toma implícita** — respuesta manual exitosa del operador desde `ACTIVA_IA` o `REQUIERE_HUMANO` (`responderConversacion`) |
+| `TOMADA_HUMANO` | **Toma implícita** — respuesta manual exitosa del operador desde `ACTIVA_IA` o `REQUIERE_HUMANO` (`responderConversacion`); E3 agrega la toma **explícita** (`tomar`) y la devolución (`devolver` → `ACTIVA_IA`) |
 | `PAUSADA` | Reservada (retención / kill switch) — sin flujo activo todavía |
 | `CERRADA` | Cierre de la conversación; `responderConversacion` la rechaza con `CONVERSACION_CERRADA` |
+
+## Patrón de ayuda (E3)
+
+Cuando la Guía deriva, deja registro durable y el operador la **instruye** — nunca escribe la respuesta del cliente por ella.
+
+### Solicitud de ayuda y tarjeta de indicación
+
+Al escalar, el motor persiste una fila `CRM_SolicitudesAyuda` **PENDIENTE** (mejor-esfuerzo, nunca apilada): la `consulta` que derrotó al RAG, los `terminosBuscados` del prefilter y el `score` auditado. La bandeja la muestra en la **tarjeta de ayuda** al pie del hilo (`TarjetaAyuda`): consulta citada, términos como chips y el score, con **un** campo para la indicación.
+
+`POST /api/crm/conversaciones/[id]/indicacion` (`aplicarIndicacion`) aplica la indicación en este orden: memoria best-effort primero (observación `indicacion_humana` del chat, **pineada** — enriquecimiento, nunca dependencia), luego tres escrituras CORE: hueco de KB `ABIERTO`, solicitud `RESUELTA` (con `indicacion` y `resueltaPor`) y tarea idempotente `RESPONDER_CON_INDICACION`. Tras aplicar, la ruta drena la cola fire-and-forget — la Guía retoma en el acto.
+
+### Reanudación (`RESPONDER_CON_INDICACION`)
+
+El worker relee la indicación desde la fila resuelta (fuente de verdad durable) y la pasa al motor. Semántica cerrada: la indicación **autoriza contenido, no ventanas de autonomía** — el gate scope/umbral se salta solo para esa respuesta, y una conversación que llegó como `REQUIERE_HUMANO` vuelve a `ACTIVA_IA` (retoma). El mensaje OUT lleva el marker `{tipo:'indicacion_humana'}` en su JSON de `fuentes` — la auditoría siempre muestra de dónde salió la autoridad.
+
+### Ficha viva
+
+La destilación de cada intercambio puede extraer datos de ficha (`cargo`, `trabajadores`, `sedes`) a `CRM_ExtraccionesFicha` con origen `IA` y sin confirmar. La ficha del hilo (`FichaContacto` + `GET …/ficha`) fusiona: **la columna canónica gana si está seteada**; si no, la última extracción. El operador confirma (`POST …/ficha` con `{campo, valor}`): cae fila `HUMANO` confirmada en la **misma** clave del upsert y promociona a la columna canónica — por eso **el confirmado humano siempre gana**: una re-extracción IA posterior nunca la pisa.
+
+| Campo | Llave de la fila | Promoción al confirmar |
+|---|---|---|
+| `cargo` | `contactoId` | `CRM_Contactos.cargo` |
+| `trabajadores` | `empresaId` | `CRM_Empresas.cantidadTrabajadores` (entero ≥ 1) |
+| `sedes` | `empresaId` | ninguna — solo ficha (diseño cerrado) |
+
+### Memorias del chat
+
+`GET|POST /api/crm/conversaciones/[id]/memorias` — el panel del operador (`MemoriasPanel`) lista TODAS las observaciones del proyecto Engram de la empresa (sesión incluida, para acotar por conversación) y permite **pinear**, **eliminar** (soft-delete, scope por proyecto) y **guardar** manual (observación nueva). Editar una memoria = eliminar + guardar — no hay update in-place por diseño.
+
+### Ajustes por chat
+
+`GET|POST /api/crm/conversaciones/[id]/ajustes` — el único setting por conversación es `memoriaActiva` (toggle de privacidad): en `false` la Guía no lee ni escribe memoria Engram para ese hilo (ni recall ni destilación); el recall de KB queda intacto. El GET también devuelve chips de solo-lectura con la config **pública** del agente (umbral, máx. intercambios, horario) — nada secreto cruza.
+
+### Tomar / devolver / escalar
+
+- **tomar** (`POST …/tomar`): `ACTIVA_IA | REQUIERE_HUMANO` → `TOMADA_HUMANO`, con `asignadaA` = login del operador (no el sub opaco) y `modo` `HUMANO`.
+- **devolver** (`POST …/devolver`): → `ACTIVA_IA` + `asignadaA` NULL + `modo` `IA`. Si el último mensaje IN quedó **sin** respuesta posterior, se re-encola una tarea `GENERAR_RESPUESTA` idempotente — un IN ya respondido no se re-encola jamás.
+- **escalar** (`POST …/escalar` con `{usuarioId}`): reasigna la conversación tomada a **otro** operador (queda `TOMADA_HUMANO`); el target debe ser un usuario asignable con permiso `crm_conversaciones`.
+
+### Notificaciones
+
+`GET /api/crm/conversaciones/notificaciones` — conteos (`requiereAyuda`, `pendienteVinculacion`, `total`, `ultimaActividad`) en un solo roundtrip + detalle top-5 de escaladas (etiqueta + consulta pendiente). El Sidebar hace poll cada 15 s (pestaña oculta no polea; un fallo silencioso conserva el último resumen): badge sobre el ícono, **toasts de una sola vez por solicitud** («La Guía necesita tu ayuda · <etiqueta>», ~80 chars de la consulta) y deep-link «Ver conversación» que abre la bandeja en ese hilo.
+
+### Huecos de conocimiento (KB)
+
+Cada indicación aplicada deja una fila `CRM_ConocimientoHuecos` `ABIERTO`: la consulta que la KB no pudo responder + los términos buscados, enlazada a la solicitud (`origenSolicitudId`, sobrevive con SET NULL). Es la **cola del curador**: el admin de triage llega en E5 (curar → nueva entrada `CRM_Conocimiento`; descartar).
+
+### Rutas nuevas de E3
+
+| Método y ruta | Uso |
+|---|---|
+| `GET /api/crm/conversaciones/notificaciones` | Resumen + detalle top-5 para badge y toasts |
+| `POST /api/crm/conversaciones/[id]/indicacion` | Aplicar la indicación a la solicitud pendiente |
+| `POST /api/crm/conversaciones/[id]/tomar` | Toma explícita (asignadaA = login) |
+| `POST /api/crm/conversaciones/[id]/devolver` | Devolución a la Guía (+ re-encola si hay IN sin respuesta) |
+| `POST /api/crm/conversaciones/[id]/escalar` | Reasignar a otro operador |
+| `GET \| POST /api/crm/conversaciones/[id]/ficha` | Leer la ficha fusionada / confirmar un dato (promociona) |
+| `GET \| POST /api/crm/conversaciones/[id]/memorias` | Listar / gestionar (pinear, eliminar, guardar) |
+| `GET \| POST /api/crm/conversaciones/[id]/ajustes` | Leer ajustes+chips / toggle `memoriaActiva` |
+
+Todas piden permiso `crm_conversaciones` y devuelven `CrmErrorResponse` tipado (404 conversación, 400 body, 409 estado/solicitud).
+
+### Esquema que agrega E3
+
+| Tabla / columna | Uso |
+|---|---|
+| `CRM_SolicitudesAyuda` | Solicitud por escalado: `PENDIENTE` → `RESUELTA` (indicación + resueltaPor) |
+| `CRM_ConocimientoHuecos` | Hueco de KB `ABIERTO` → `CURADO`/`DESCARTADO` (E5) |
+| `CRM_ExtraccionesFicha` | Filas de ficha por campo, origen `IA`/`HUMANO` + `confirmado` |
+| `CRM_Conversaciones.asignadaA` / `.modo` / `.memoriaActiva` | Ciclo humano y toggle de privacidad |
+
+E3 **no agrega variables de entorno**: reutiliza `ENGRAM_CRM_*`, los guardrails del agente y `AGENTE_TEXTO_ESCALADO` (el texto seguro que acompaña cada solicitud).
 
 ## Configuración
 
@@ -112,8 +184,8 @@ Ranking (`recuperarConocimiento`): prefilter LIKE **por términos** (NFD, >2 cha
 - **LLM simulado sin key**: determinista — cita el mejor fragmento KB; no conversa de verdad.
 - **Score del simulado fijo en `.8`** (y `.1` al escalar sin recall): no mide confianza real.
 - **Horario duro**: la ventana es muro, no soft limit.
-- **Sin editor de KB**: `CRM_Conocimiento` es de solo lectura hasta E5 (el script de siembra es la única vía).
-- **Sin tomar/devolver explícitos**: solo la toma implícita al responder manual; los botones llegan en E3.
+- **Sin editor de KB**: `CRM_Conocimiento` es de solo lectura hasta E5 (el script de siembra es la única vía); los huecos `ABIERTO` de E3 esperan esa cola.
+- ~~**Sin tomar/devolver explícitos**~~: resuelto en E3 — `tomar`/`devolver`/`escalar` con `asignadaA`.
 
 ## Observabilidad
 
