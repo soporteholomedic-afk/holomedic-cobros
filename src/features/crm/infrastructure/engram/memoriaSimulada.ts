@@ -1,6 +1,7 @@
 import type {
   NivelMemoria,
   ObservacionMemoria,
+  ObservacionMemoriaEnLista,
   ResultadoGuardarMemoria,
 } from '../../domain/entities';
 import type { EntradaGuardarMemoria, MemoriaConversacionPort } from '../../domain/ports';
@@ -95,6 +96,37 @@ export class MemoriaSimulada implements MemoriaConversacionPort {
     const entrada = this.entradas.find((candidata) => candidata.id === id);
     if (entrada === undefined) return;
     entrada.pineada = true;
+  }
+
+  /** E3·T3: raw session reconstructed from the stored scoping fields. */
+  private sesionDe(entrada: EntradaMemoriaSimulada): string {
+    return entrada.nivel === 'empresa' ? 'empresa' : `chat-${entrada.conversacionId}`;
+  }
+
+  async listarPorProyecto(empresaId: number): Promise<ObservacionMemoriaEnLista[]> {
+    return this.entradas
+      .filter((entrada) => entrada.empresaId === empresaId)
+      .map((entrada) => ({
+        id: entrada.id,
+        sesion: this.sesionDe(entrada),
+        tipo: entrada.tipo,
+        titulo: entrada.titulo,
+        contenido: entrada.contenido,
+        creadoEn: entrada.creadoEn,
+      }));
+  }
+
+  /**
+   * E3·T3: soft-remove the (id, empresaId) entry — the project guard
+   * mirrors expected_project: a foreign id or an id of ANOTHER empresa
+   * removes nothing (no-op, the dev fake never crashes — pinear
+   * precedent).
+   */
+  async eliminar(id: number, empresaId: number): Promise<void> {
+    const indice = this.entradas.findIndex(
+      (entrada) => entrada.id === id && entrada.empresaId === empresaId,
+    );
+    if (indice !== -1) this.entradas.splice(indice, 1);
   }
 
   private aObservacion(entrada: EntradaMemoriaSimulada): ObservacionMemoria {

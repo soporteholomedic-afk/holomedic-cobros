@@ -1,6 +1,7 @@
 import type {
   NivelMemoria,
   ObservacionMemoria,
+  ObservacionMemoriaEnLista,
   ResultadoGuardarMemoria,
 } from '../../domain/entities';
 import type { EntradaGuardarMemoria, MemoriaConversacionPort } from '../../domain/ports';
@@ -44,7 +45,10 @@ export type CodigoErrorMemoria =
   | 'MEMORIA_NO_CONFIGURADA'
   | 'MEMORIA_TIMEOUT'
   | 'MEMORIA_ERROR'
-  | 'MEMORIA_RESPUESTA_INVALIDA';
+  | 'MEMORIA_RESPUESTA_INVALIDA'
+  /** E3·T3: the operator delete targeted an observation the project
+   * does not hold (HTTP 404 on DELETE /observations/{id}). */
+  | 'MEMORIA_NO_ENCONTRADA';
 
 /** One typed memory failure: `codigo` drives the caller's handling. */
 export class ErrorMemoriaCrm extends Error {
@@ -299,6 +303,73 @@ export class MemoriaEngramHttp implements MemoriaConversacionPort {
   }
 
   /**
+   * E3·T3 operator listing: EVERY observation of the empresa's
+   * project — GET /observations?project=<proj> (verified contract:
+   * rows array with id/sync_id/session_id/type/title/content/project/
+   * scope/created_at/updated_at). NO session filter here (unlike
+   * buscar): the caller scopes rows to its own conversation — so the
+   * raw session_id crosses as `sesion`. unknown_project 404 → []
+   * (empty memory, same rule as /search and /context).
+   */
+  async listarPorProyecto(empresaId: number): Promise<ObservacionMemoriaEnLista[]> {
+    const proyecto = proyectoDeEmpresa(empresaId);
+    const respuesta = await this.llamar(
+      'GET',
+      `/observations?project=${encodeURIComponent(proyecto)}`,
+    );
+    if (await this.esProyectoVacio(respuesta)) return [];
+    this.exigirOk(respuesta, '/observations');
+    const filas = await this.leerJson<unknown>(respuesta, '/observations');
+    if (Array.isArray(filas) === false) {
+      throw new ErrorMemoriaCrm('MEMORIA_RESPUESTA_INVALIDA', '/observations no devolvió un array');
+    }
+
+    const observaciones: ObservacionMemoriaEnLista[] = [];
+    for (const fila of filas) {
+      if (esFilaBusqueda(fila) === false) {
+        throw new ErrorMemoriaCrm(
+          'MEMORIA_RESPUESTA_INVALIDA',
+          'fila de /observations con forma inesperada (id/session_id/type/title/content)',
+        );
+      }
+      observaciones.push({
+        id: fila.id,
+        sesion: fila.session_id,
+        tipo: fila.type,
+        titulo: fila.title,
+        contenido: fila.content,
+        creadoEn: parsearFechaEngram(fila.created_at),
+      });
+    }
+    return observaciones;
+  }
+
+  /**
+   * E3·T3 operator delete: soft-delete ONE observation, project-scoped
+   * — DELETE /observations/{id}?expected_project=<proj> (verified
+   * contract: 200 {"status":"deleted"}; &hard=true would hard-delete,
+   * deliberately NOT used — the operator delete is recoverable).
+   * 404 → MEMORIA_NO_ENCONTRADA; any other failure (incl. 401/403)
+   * maps like every endpoint — MEMORIA_ERROR whose detalle carries the
+   * status and route ONLY (the Bearer token lives in the header and is
+   * NEVER logged).
+   */
+  async eliminar(id: number, empresaId: number): Promise<void> {
+    const proyecto = proyectoDeEmpresa(empresaId);
+    const respuesta = await this.llamar(
+      'DELETE',
+      `/observations/${id}?expected_project=${encodeURIComponent(proyecto)}`,
+    );
+    if (respuesta.status === 404) {
+      throw new ErrorMemoriaCrm(
+        'MEMORIA_NO_ENCONTRADA',
+        `la observación ${id} no existe en el proyecto ${proyecto}`,
+      );
+    }
+    this.exigirOk(respuesta, `/observations/${id}`);
+  }
+
+  /**
    * Bounded poll of the save-result endpoint: 404 = not yet committed
    * (keep trying, 250 ms apart, max 8 tries ≈ 2 s), 200 = committed
    * (per contract), anything else = MEMORIA_ERROR. Exhausted poll is
@@ -323,7 +394,7 @@ export class MemoriaEngramHttp implements MemoriaConversacionPort {
 
   /** One HTTP call with its own AbortController deadline + Bearer auth. */
   private async llamar(
-    metodo: 'GET' | 'POST' | 'PUT',
+    metodo: 'GET' | 'POST' | 'PUT' | 'DELETE',
     ruta: string,
     cuerpo?: unknown,
   ): Promise<Response> {

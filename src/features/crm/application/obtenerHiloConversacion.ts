@@ -1,5 +1,5 @@
 import { NotFoundError } from '../domain/errors';
-import type { ConversacionCrm, MensajeCrm } from '../domain/entities';
+import type { ConversacionCrm, MensajeCrm, SolicitudAyuda } from '../domain/entities';
 import type { ConversacionCrmRepository, MensajeCrmRepository } from '../domain/ports';
 
 /**
@@ -27,6 +27,14 @@ export interface HiloConversacion {
   conversacion: ConversacionCrm;
   /** Oldest-first (delivery order) — the port pages newest-first. */
   mensajes: MensajeCrm[];
+  /**
+   * E3·T3 (additive): the conversation's PENDIENTE help request, if
+   * any — the indicación prompt the bandeja renders. The USE CASE
+   * always sets it; the type keeps it optional so pre-E3 consumers
+   * (and the route's manual field-by-field response) stay valid —
+   * undefined ≡ no help pending.
+   */
+  solicitudAyuda?: SolicitudAyuda | null;
 }
 
 export interface ObtenerHiloConversacionDeps {
@@ -56,6 +64,18 @@ export class ObtenerHiloConversacionUseCase {
       await this.deps.conversaciones.marcarMensajesLeidos(conversacionId);
     }
 
-    return { conversacion, mensajes };
+    // E3·T3: la solicitud de ayuda PENDIENTE viaja con el hilo (la
+    // bandera "indicación" del bandeja). Capacidad opcional del
+    // puerto — ausente ⇔ null. .call(repo, …): el método opcional se
+    // lee del puerto, así que corre bound a él (aplicarIndicacion
+    // precedent — un `this` desprendido leería estado de undefined).
+    const repo = this.deps.conversaciones;
+    const obtenerPendiente = repo.obtenerSolicitudAyudaPendiente;
+    const solicitudAyuda =
+      obtenerPendiente === undefined
+        ? null
+        : await obtenerPendiente.call(repo, conversacionId);
+
+    return { conversacion, mensajes, solicitudAyuda };
   }
 }

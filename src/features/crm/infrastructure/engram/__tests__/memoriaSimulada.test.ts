@@ -156,3 +156,51 @@ describe('MemoriaSimulada — contexto y pinear (E2·T2)', () => {
     await expect(memoria.contexto(3)).resolves.toHaveLength(1);
   });
 });
+
+describe('MemoriaSimulada — listarPorProyecto/eliminar (E3·T3)', () => {
+  it('listarPorProyecto devuelve TODAS las filas de la empresa con la sesión cruda (sin filtro de conversación)', async () => {
+    const memoria = new MemoriaSimulada();
+    await memoria.guardar({ ...ENTRADA_CHAT, operationId: 'op-a' });
+    await memoria.guardar({
+      ...ENTRADA_CHAT,
+      conversacionId: 9,
+      operationId: 'op-b',
+      titulo: 'Otro chat',
+    });
+    await memoria.guardar({
+      ...ENTRADA_CHAT,
+      nivel: 'empresa',
+      operationId: 'op-c',
+      titulo: 'Dato empresa',
+    });
+    await memoria.guardar({
+      ...ENTRADA_CHAT,
+      empresaId: 4,
+      operationId: 'op-d',
+      titulo: 'Otra empresa',
+    });
+
+    const filas = await memoria.listarPorProyecto(3);
+
+    // Las tres de la empresa 3 (ambos chats + empresa), sin la de la 4.
+    expect(filas.map((fila) => fila.sesion)).toEqual(['chat-7', 'chat-9', 'empresa']);
+    expect(filas.every((fila) => typeof fila.id === 'number' && fila.id > 0)).toBe(true);
+  });
+
+  it('eliminar quita la fila (id + empresa correctos); id ajeno o de otra empresa → sin efecto', async () => {
+    const memoria = new MemoriaSimulada();
+    const propia = await memoria.guardar({ ...ENTRADA_CHAT, operationId: 'op-a' });
+    const ajena = await memoria.guardar({
+      ...ENTRADA_CHAT,
+      empresaId: 4,
+      operationId: 'op-b',
+    });
+
+    await memoria.eliminar(propia.id, 3);
+    // El id de la empresa 4 no se borra pidiéndolo para la 3 (guard de proyecto).
+    await memoria.eliminar(ajena.id, 3);
+
+    await expect(memoria.listarPorProyecto(3)).resolves.toHaveLength(0);
+    await expect(memoria.listarPorProyecto(4)).resolves.toHaveLength(1);
+  });
+});

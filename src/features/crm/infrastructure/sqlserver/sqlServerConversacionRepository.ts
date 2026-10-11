@@ -16,6 +16,7 @@ import type {
   BuscarConversacionCanal,
   CandidatoVinculacion,
   ContactoConEmpresa,
+  ConteoResumenConversaciones,
   ConversacionCrmRepository,
   FiltrosConversaciones,
   ListadoConversaciones,
@@ -604,6 +605,43 @@ export class SqlServerConversacionRepository implements ConversacionCrmRepositor
       razonSocial: row.razonSocial,
       telefono: row.telefono,
     }));
+  }
+
+  /**
+   * E3·T3 notification badge: ONE SELECT with conditional COUNTs +
+   * MAX(ultimoMensajeEn) over CRM_Conversaciones — single roundtrip,
+   * no per-estado query. The conditional estado COUNTs are covered by
+   * IX_CRM_Conversaciones_EstadoUltimo (estado leading key; the table
+   * is small by construction — one row per channel thread — so even a
+   * full scan would be trivial). SUM over an empty table is NULL →
+   * ISNULL(...,0); COUNT(*) and MAX are naturally 0/NULL.
+   */
+  async contarResumen(): Promise<ConteoResumenConversaciones> {
+    const result = await this.pool.request().query(`
+      SELECT
+        COUNT(*) AS total,
+        ISNULL(SUM(CASE WHEN estado = 'REQUIERE_HUMANO' THEN 1 ELSE 0 END), 0) AS requiereAyuda,
+        ISNULL(SUM(CASE WHEN estado = 'PENDIENTE_VINCULACION' THEN 1 ELSE 0 END), 0) AS pendienteVinculacion,
+        MAX(ultimoMensajeEn) AS ultimaActividad
+      FROM dbo.CRM_Conversaciones
+    `);
+    const fila = (
+      result.recordset as Array<{
+        total: number;
+        requiereAyuda: number;
+        pendienteVinculacion: number;
+        ultimaActividad: Date | null;
+      }>
+    )[0];
+    if (fila === undefined) {
+      throw new Error('el COUNT de resumen de conversaciones no devolvió filas');
+    }
+    return {
+      requiereAyuda: Number(fila.requiereAyuda),
+      pendienteVinculacion: Number(fila.pendienteVinculacion),
+      total: Number(fila.total),
+      ultimaActividad: fila.ultimaActividad ?? null,
+    };
   }
 
   // ---- E3 (agente-ia-crm): solicitudes de ayuda humana ----

@@ -12,6 +12,7 @@ import type {
   ConversacionListada,
   CrearConversacionInput,
   MensajeCrm,
+  SolicitudAyuda,
 } from '../../domain/entities';
 import {
   ConversacionNoEncontradaError,
@@ -245,5 +246,67 @@ describe('ObtenerHiloConversacionUseCase — lectura del hilo de la bandeja (E1)
     const suitePaginar = crearSuite();
     suitePaginar.mensajes.falloListar = falloPaginar;
     await expect(suitePaginar.useCase.ejecutar(1)).rejects.toThrow(falloPaginar);
+  });
+});
+
+describe('ObtenerHiloConversacionUseCase — solicitudAyuda (E3·T3, extensión aditiva)', () => {
+  const SOLICITUD: SolicitudAyuda = {
+    id: 11,
+    conversacionId: 1,
+    mensajeId: 55,
+    consulta: '¿Hacen exámenes los sábados?',
+    terminosBuscados: ['hacen', 'examenes', 'sabados'],
+    score: 0.3,
+    estado: 'PENDIENTE',
+    indicacion: null,
+    resueltaPor: null,
+    creadoEn: new Date(2026, 5, 15, 9, 0, 0),
+    resueltaEn: null,
+  };
+
+  it('con una solicitud PENDIENTE viaja con el hilo (la bandera de indicación del bandeja)', async () => {
+    const mensajes = new FakeMensajes();
+    mensajes.sembrar(mensajeBase({ id: 1 }));
+    const repo = Object.assign(new FakeConversaciones(), {
+      // Capacidad E3 presente: el método existe en el repo real.
+      obtenerSolicitudAyudaPendiente: async (): Promise<SolicitudAyuda> =>
+        structuredClone(SOLICITUD),
+    });
+    repo.sembrar(conversacionBase());
+    const useCaseConSolicitud = new ObtenerHiloConversacionUseCase({
+      conversaciones: repo,
+      mensajes,
+    });
+
+    const hilo = await useCaseConSolicitud.ejecutar(1);
+
+    expect(hilo.solicitudAyuda).toEqual(SOLICITUD);
+    expect(hilo.mensajes.map((m) => m.id)).toEqual([1]);
+  });
+
+  it('capacidad presente pero SIN pendiente → solicitudAyuda null (nada que indicar)', async () => {
+    const mensajes = new FakeMensajes();
+    mensajes.sembrar(mensajeBase({ id: 1 }));
+    const repo = Object.assign(new FakeConversaciones(), {
+      obtenerSolicitudAyudaPendiente: async (): Promise<SolicitudAyuda | null> => null,
+    });
+    repo.sembrar(conversacionBase());
+    const useCase = new ObtenerHiloConversacionUseCase({
+      conversaciones: repo,
+      mensajes,
+    });
+
+    const hilo = await useCase.ejecutar(1);
+
+    expect(hilo.solicitudAyuda).toBeNull();
+  });
+
+  it('repo sin la capacidad (pre-E3) → solicitudAyuda null, sin romper el contrato del hilo', async () => {
+    const { mensajes, useCase } = crearSuite();
+    mensajes.sembrar(mensajeBase({ id: 1 }));
+
+    const hilo = await useCase.ejecutar(1);
+
+    expect(hilo.solicitudAyuda).toBeNull();
   });
 });

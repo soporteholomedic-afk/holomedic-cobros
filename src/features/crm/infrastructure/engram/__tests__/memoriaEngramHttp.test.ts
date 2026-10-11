@@ -520,3 +520,128 @@ describe('MemoriaEngramHttp — errores tipados (E2·T2)', () => {
     });
   });
 });
+
+describe('MemoriaEngramHttp — listarPorProyecto (E3·T3)', () => {
+  const FILA_OBS = (id: number, session_id: string, created_at: string) => ({
+    id,
+    sync_id: `sync-${id}`,
+    session_id,
+    type: 'hecho_cliente',
+    title: `titulo ${id}`,
+    content: `contenido ${id}`,
+    project: 'crm-emp-3',
+    scope: 'project',
+    created_at,
+    updated_at: created_at,
+  });
+
+  it('GET /observations?project=<proj> con la sesion CRUDO (el caller filtra por conversación)', async () => {
+    const { llamadas } = stubFetch({
+      'GET /observations': [
+        {
+          status: 200,
+          cuerpo: [
+            FILA_OBS(11, 'chat-7', '2026-10-11 04:04:41'),
+            FILA_OBS(12, 'empresa', '2026-10-11 05:06:07'),
+          ],
+        },
+      ],
+    });
+
+    const filas = await new MemoriaEngramHttp({ urlBase: URL_BASE }).listarPorProyecto(3);
+
+    // Sin filtro de sesión aquí: el use case decide el alcance
+    // (chat propio + empresa) — la fila cruda lleva la sesión.
+    expect(filas).toEqual([
+      {
+        id: 11,
+        sesion: 'chat-7',
+        tipo: 'hecho_cliente',
+        titulo: 'titulo 11',
+        contenido: 'contenido 11',
+        creadoEn: new Date('2026-10-11T04:04:41.000Z'),
+      },
+      {
+        id: 12,
+        sesion: 'empresa',
+        tipo: 'hecho_cliente',
+        titulo: 'titulo 12',
+        contenido: 'contenido 12',
+        creadoEn: new Date('2026-10-11T05:06:07.000Z'),
+      },
+    ]);
+    expect(llamadas[0]!.url).toBe(`${URL_BASE}/observations?project=crm-emp-3`);
+  });
+
+  it('404 unknown_project → [] (empresa sin proyecto Engram = memoria vacía, igual que /search)', async () => {
+    stubFetch({
+      'GET /observations': [{ status: 404, cuerpo: { code: 'unknown_project' } }],
+    });
+
+    await expect(new MemoriaEngramHttp({ urlBase: URL_BASE }).listarPorProyecto(3)).resolves.toEqual(
+      [],
+    );
+  });
+
+  it('sin array → MEMORIA_RESPUESTA_INVALIDA; fila con forma inesperada → MEMORIA_RESPUESTA_INVALIDA', async () => {
+    stubFetch({ 'GET /observations': [{ status: 200, cuerpo: { error: 'boom' } }] });
+    await expect(
+      new MemoriaEngramHttp({ urlBase: URL_BASE }).listarPorProyecto(3),
+    ).rejects.toMatchObject({ codigo: 'MEMORIA_RESPUESTA_INVALIDA' });
+
+    stubFetch({
+      'GET /observations': [{ status: 200, cuerpo: [{ id: 'x', session_id: 1 }] }],
+    });
+    await expect(
+      new MemoriaEngramHttp({ urlBase: URL_BASE }).listarPorProyecto(3),
+    ).rejects.toMatchObject({ codigo: 'MEMORIA_RESPUESTA_INVALIDA' });
+  });
+});
+
+describe('MemoriaEngramHttp — eliminar (E3·T3)', () => {
+  it('DELETE /observations/{id}?expected_project=<proj> — 200 {"status":"deleted"} → void', async () => {
+    const { llamadas } = stubFetch({
+      'DELETE /observations/11': [{ status: 200, cuerpo: { status: 'deleted' } }],
+    });
+
+    await expect(new MemoriaEngramHttp({ urlBase: URL_BASE }).eliminar(11, 3)).resolves.toBeUndefined();
+
+    expect(llamadas).toHaveLength(1);
+    expect(llamadas[0]!.metodo).toBe('DELETE');
+    expect(llamadas[0]!.url).toBe(
+      `${URL_BASE}/observations/11?expected_project=crm-emp-3`,
+    );
+  });
+
+  it('404 → MEMORIA_NO_ENCONTRADA (la observación no existe en ese proyecto)', async () => {
+    stubFetch({
+      'DELETE /observations/99': [{ status: 404, cuerpo: { error: 'not found' } }],
+    });
+
+    await expect(new MemoriaEngramHttp({ urlBase: URL_BASE }).eliminar(99, 3)).rejects.toMatchObject({
+      codigo: 'MEMORIA_NO_ENCONTRADA',
+    });
+  });
+
+  it('401/403 → MEMORIA_ERROR con detalle SIN token (el token viaja en header, jamás en logs)', async () => {
+    const detalleToken = 'sekret-token-value';
+    stubFetch({
+      'DELETE /observations/11': [
+        { status: 401, cuerpo: { error: 'unauthorized' } },
+        { status: 403, cuerpo: { error: 'forbidden' } },
+      ],
+    });
+    const memoria = new MemoriaEngramHttp({ urlBase: URL_BASE, token: detalleToken });
+
+    try {
+      await memoria.eliminar(11, 3);
+      expect.unreachable('debió rechazar con MEMORIA_ERROR');
+    } catch (error) {
+      expect(error).toBeInstanceOf(ErrorMemoriaCrm);
+      const detalle = (error as ErrorMemoriaCrm).detalle;
+      expect(detalle).not.toContain(detalleToken);
+      expect(detalle).toContain('401');
+    }
+    await expect(memoria.eliminar(11, 3)).rejects.toMatchObject({ codigo: 'MEMORIA_ERROR' });
+  });
+});

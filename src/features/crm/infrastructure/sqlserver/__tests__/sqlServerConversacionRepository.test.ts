@@ -833,5 +833,35 @@ describe('E3 (agente-ia-crm): asignación y memoria por conversación', () => {
       await limpiarProbe();
     }
   });
+
+  it('contarResumen cuenta por estado y MAX(ultimoMensajeEn) en UNA sola query (E3·T3)', async () => {
+    // Resiliente como el resto del suite: se apoya en filas probe
+    // PROPIAS — los conteos se comparan ANTES/DESPUÉS de crearlas, así
+    // las filas de otros runs/usuarios jamás afectan el assert.
+    try {
+      const antes = await repo.contarResumen();
+      expect(antes.total).toBeGreaterThanOrEqual(0);
+      expect(antes.requiereAyuda).toBeGreaterThanOrEqual(0);
+      expect(antes.pendienteVinculacion).toBeGreaterThanOrEqual(0);
+
+      const fixtureAyuda = await crearFixtureVinculada('REQUIERE_HUMANO');
+      const convPendiente = await repo.crear({
+        canal: 'WHATSAPP',
+        telefono: telefonoProbe(),
+        identificadorCanal: identificadorCanalProbe(),
+      });
+      conversacionesCreadas.add(convPendiente.id);
+
+      const despues = await repo.contarResumen();
+      expect(despues.total).toBe(antes.total + 2);
+      expect(despues.requiereAyuda).toBe(antes.requiereAyuda + 1);
+      expect(despues.pendienteVinculacion).toBe(antes.pendienteVinculacion + 1);
+      // MAX(ultimoMensajeEn) cruza como Date (la conversación recién
+      // tocada lleva su tick de registrarActividad/crear).
+      expect(despues.ultimaActividad).toBeInstanceOf(Date);
+    } finally {
+      await limpiarProbe();
+    }
+  });
 });
 

@@ -55,6 +55,10 @@ export async function GET(
       success: true,
       conversacion: hilo.conversacion,
       mensajes: hilo.mensajes,
+      // E3·T3: the pending help request feeds the thread's help card
+      // (what the client asked, what la Guía searched, score). The
+      // use case always resolves it; undefined only on legacy payloads.
+      solicitudAyuda: hilo.solicitudAyuda ?? null,
     });
   } catch (error) {
     return mapCrmError('crm conversaciones [id] GET', error);
