@@ -51,6 +51,12 @@ interface ConversacionRow {
 const COLUMNAS = `id, empresaId, contactoId, canal, telefono, identificadorCanal,
                   estado, asignadaA, modo, ultimoMensajeEn, noLeidos, creadoEn, actualizadoEn`;
 
+// listar() JOINea Empresas/Contactos: id/empresaId/telefono existen en
+// varias tablas del JOIN, así que las columnas DEBEN calificarse con el
+// alias c. (sin esto SQL Server responde "Ambiguous column name").
+const COLUMNAS_CON_ALIAS = `c.id, c.empresaId, c.contactoId, c.canal, c.telefono, c.identificadorCanal,
+                  c.estado, c.asignadaA, c.modo, c.ultimoMensajeEn, c.noLeidos, c.creadoEn, c.actualizadoEn`;
+
 function mapearConversacion(row: ConversacionRow): ConversacionCrm {
   return {
     id: row.id,
@@ -166,7 +172,7 @@ export class SqlServerConversacionRepository implements ConversacionCrmRepositor
     const result = await request
       .input('limite', mssql.Int, limite)
       .input('offset', mssql.Int, offset).query(`
-        SELECT ${COLUMNAS}, emp.razonSocial, con.nombre AS nombreContacto
+        SELECT ${COLUMNAS_CON_ALIAS}, emp.razonSocial, con.nombre AS nombreContacto
         FROM dbo.CRM_Conversaciones c
         LEFT JOIN dbo.CRM_Empresas emp ON emp.id = c.empresaId
         LEFT JOIN dbo.CRM_Contactos con ON con.id = c.contactoId
