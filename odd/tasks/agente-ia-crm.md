@@ -131,3 +131,11 @@ El candidato completo (51 archivos) excedió el presupuesto de contexto (`lens_c
 - [ ] E3 — Ayuda humana y trabajo en paralelo
 - [ ] E4 — Cierre autónomo + vistas de configuración
 - [ ] E5 — Conocimiento, calidad y canal email
+
+## E2 — Decisión LLM (bloqueada 2026-10-11)
+
+- **Producción**: Google Gemini `gemini-3.8-flash` vía capa OpenAI-compatible (`https://generativelanguage.googleapis.com/v1beta/openai/`).
+- **Simulación/testing**: Z.ai `glm-5.3-flash` (`https://api.z.ai/api/paas/v4/`, $0.15/$0.50 por 1M → ~$0.60/mes al volumen de demo).
+- **Switch**: `LLM_MODO=simulacion|produccion` (default dev → simulación; prod sin config → fail-closed, patrón KAPSO_MODO). Un único adapter OpenAI-compatible (`GeneradorRespuestaPort`): proveedor swappable por env sin tocar código.
+- **Pendiente usuario**: API keys (Z.ai para demo en vivo; Google AI para producción) — no bloquea la construcción (tests con fakes).
+- Presupuesto estimado: ~1.000 resp/mes ≈ 3M tokens entrada + 0,3M salida → Gemini prod ~$3.4/mes.
