@@ -2,8 +2,10 @@ import type {
   MemoriaLista,
   NivelMemoria,
   ObservacionMemoriaEnLista,
+  ResultadoGuardarMemoria,
+  TipoObservacionDestilada,
 } from '../domain/entities';
-import { NotFoundError } from '../domain/errors';
+import { NotFoundError, ValidationError } from '../domain/errors';
 import type { ConversacionCrmRepository, MemoriaConversacionPort } from '../domain/ports';
 
 import { ConversacionNoEncontradaError } from './obtenerHiloConversacion';
@@ -40,6 +42,18 @@ export class MemoriaAjenaError extends NotFoundError {
   constructor(mensaje: string) {
     super(mensaje);
     this.name = 'MemoriaAjenaError';
+  }
+}
+
+/**
+ * Typed 400 when a manual guardar targets a conversation without an
+ * empresa: there is no project (`crm-emp-<id>`) to scope the save to
+ * (route → 400, the panel disables the form in that state anyway).
+ */
+export class MemoriaSinEmpresaError extends ValidationError {
+  constructor(mensaje: string) {
+    super(mensaje);
+    this.name = 'MemoriaSinEmpresaError';
   }
 }
 
@@ -161,5 +175,65 @@ export class GestionarMemoriaConversacionUseCase {
     }
     await eliminar.call(this.deps.memoria, entrada.observacionId, empresaId);
     return { ok: true };
+  }
+}
+
+export interface GuardarMemoriaEntrada {
+  conversacionId: number;
+  /** 'chat' → session `chat-<conversacionId>`; 'empresa' → session 'empresa'. */
+  nivel: NivelMemoria;
+  tipo: TipoObservacionDestilada;
+  titulo: string;
+  contenido: string;
+}
+
+export interface GuardarMemoriaDeps {
+  conversaciones: Pick<ConversacionCrmRepository, 'obtenerPorId'>;
+  memoria: Pick<MemoriaConversacionPort, 'guardar'>;
+}
+
+/**
+ * GuardarMemoriaConversacionUseCase (agente-ia-crm E3·T5) — the
+ * operator's manual memory write behind "nueva memoria" and the
+ * edit flow (the panel composes EDITAR as eliminar + guardar — no
+ * update exists on the port). Requires the conversation's empresaId
+ * (typed 400 when unlinked: no project to scope to), trims titulo /
+ * contenido (blank → typed 400), and saves with the server-side
+ * operationId `manual-<randomUUID>` — a FRESH uuid per call, so a
+ * re-guardado after an edit never dedups against the row it replaced.
+ * NO auto-pin: pinning stays the operator's explicit per-row action
+ * (GestionarMemoriaConversacionUseCase).
+ */
+export class GuardarMemoriaConversacionUseCase {
+  constructor(private readonly deps: GuardarMemoriaDeps) {}
+
+  async ejecutar(entrada: GuardarMemoriaEntrada): Promise<ResultadoGuardarMemoria> {
+    const conversacion = await this.deps.conversaciones.obtenerPorId(entrada.conversacionId);
+    if (conversacion === null) throw new ConversacionNoEncontradaError();
+
+    if (conversacion.empresaId === null) {
+      throw new MemoriaSinEmpresaError(
+        'La conversación no tiene empresa vinculada: no hay dónde guardar la memoria',
+      );
+    }
+
+    const titulo = entrada.titulo.trim();
+    if (titulo === '') {
+      throw new ValidationError('La memoria requiere un titulo no vacío');
+    }
+    const contenido = entrada.contenido.trim();
+    if (contenido === '') {
+      throw new ValidationError('La memoria requiere un contenido no vacío');
+    }
+
+    return this.deps.memoria.guardar({
+      empresaId: conversacion.empresaId,
+      conversacionId: entrada.conversacionId,
+      nivel: entrada.nivel,
+      tipo: entrada.tipo,
+      titulo,
+      contenido,
+      operationId: `manual-${crypto.randomUUID()}`,
+    });
   }
 }

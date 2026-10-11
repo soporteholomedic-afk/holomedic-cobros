@@ -23,7 +23,6 @@ import type {
   MensajeCrm,
   ModoConversacion,
   NivelMemoria,
-  ObservacionDestilada,
   ObservacionMemoria,
   ObservacionMemoriaEnLista,
   OrigenDatoFicha,
@@ -753,6 +752,14 @@ export interface ConversacionCrmRepository {
    * gracefully (skip) when the capability is absent.
    */
   actualizarModo?(id: number, modo: ModoConversacion): Promise<ConversacionCrm | null>;
+  /**
+   * E3·T5 settings panel: flip ONLY the memoriaActiva column (the
+   * operator's privacy toggle) and return the re-read row — null when
+   * the id is absent (rowsAffected 0). Optional (actualizarModo
+   * precedent): only the SQL adapter implements it; application
+   * fakes stay valid without it.
+   */
+  actualizarMemoriaActiva?(id: number, activa: boolean): Promise<ConversacionCrm | null>;
   // ---- E3 (agente-ia-crm): help pattern, ficha, asignación ----
   /**
    * Persist ONE escalated help request (E3): the motor creates it

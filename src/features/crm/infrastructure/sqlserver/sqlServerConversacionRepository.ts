@@ -396,6 +396,24 @@ export class SqlServerConversacionRepository implements ConversacionCrmRepositor
   }
 
   /**
+   * E3·T5 settings panel: flip ONLY memoriaActiva (the privacy
+   * toggle) + actualizadoEn, then re-read the row (actualizarModo
+   * precedent — the returned ConversacionCrm is the post-write
+   * truth, never a stitched local copy).
+   */
+  async actualizarMemoriaActiva(id: number, activa: boolean): Promise<ConversacionCrm | null> {
+    const result = await this.pool
+      .request()
+      .input('id', mssql.Int, id)
+      .input('memoriaActiva', mssql.Bit, activa)
+      .query(
+        'UPDATE dbo.CRM_Conversaciones SET memoriaActiva = @memoriaActiva, actualizadoEn = SYSDATETIME() WHERE id = @id',
+      );
+    if ((result.rowsAffected[0] ?? 0) === 0) return null;
+    return this.obtenerPorId(id);
+  }
+
+  /**
    * Flip asignadaA + modo TOGETHER (E3 take/return handoff):
    * actualizarEstado moves estado (opt. asignadaA) and actualizarModo
    * moves modo — the operator take needs both columns in one write,

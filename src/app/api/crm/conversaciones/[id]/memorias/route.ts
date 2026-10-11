@@ -3,8 +3,10 @@ import { NextResponse } from 'next/server';
 import { getSession } from '@/lib/auth';
 import { getCrmDb } from '@/features/crm/infrastructure/getCrmDb';
 import { crearMemoriaConversacion } from '@/features/crm/infrastructure/engram/crearMemoriaConversacion';
+import type { NivelMemoria, TipoObservacionDestilada } from '@/features/crm/domain/entities';
 import {
   GestionarMemoriaConversacionUseCase,
+  GuardarMemoriaConversacionUseCase,
   ListarMemoriasConversacionUseCase,
 } from '@/features/crm/application/listarMemoriasConversacion';
 import { ErrorMemoriaCrm } from '@/features/crm/infrastructure/engram/memoriaEngramHttp';
@@ -19,12 +21,15 @@ import { parsearIdConversacion } from '../../_id';
  * GET: the conversation's memory list (own chat session + empresa
  * session, pineada flags). POST: `{observacionId, accion:
  * 'pinear'|'eliminar'}` — one observation managed with the ownership
- * guard inside the use case (foreign observation → typed 404).
+ * guard inside the use case (foreign observation → typed 404) — or
+ * (E3·T5) `{accion: 'guardar', nivel, tipo, titulo, contenido}` — the
+ * manual write behind "nueva memoria" / the edit flow, returning
+ * `{ok: true, id}`.
  *
  * Errors: typed `CrmErrorResponse` — conversación/observación ajena →
- * 404, body inválido → 400. ErrorMemoriaCrm (Engram upstream) maps to
- * 503 when the memory is simply not configured and 502 otherwise —
- * never a silent empty panel.
+ * 404, body inválido / sin empresa / campos en blanco → 400. ErrorMemoriaCrm
+ * (Engram upstream) maps to 503 when the memory is simply not
+ * configured and 502 otherwise — never a silent empty panel.
  */
 
 interface MemoriasSuccess {
@@ -47,6 +52,37 @@ function esGestionBody(v: unknown): v is { observacionId: number; accion: 'pinea
     Number.isInteger(obj.observacionId) &&
     (obj.observacionId as number) >= 1 &&
     (obj.accion === 'pinear' || obj.accion === 'eliminar')
+  );
+}
+
+const TIPOS_MEMORIA: readonly TipoObservacionDestilada[] = [
+  'hecho_cliente',
+  'acuerdo',
+  'compromiso',
+  'preferencia',
+  'objecion',
+  'indicacion_humana',
+];
+
+/** E3·T5 arm: `{accion: 'guardar', nivel, tipo, titulo, contenido}`. */
+function esGuardarBody(
+  v: unknown,
+): v is {
+  nivel: NivelMemoria;
+  tipo: TipoObservacionDestilada;
+  titulo: string;
+  contenido: string;
+} {
+  if (typeof v !== 'object' || v === null) return false;
+  const obj = v as Record<string, unknown>;
+  return (
+    (obj.nivel === 'chat' || obj.nivel === 'empresa') &&
+    typeof obj.tipo === 'string' &&
+    (TIPOS_MEMORIA as readonly string[]).includes(obj.tipo) &&
+    typeof obj.titulo === 'string' &&
+    obj.titulo.trim() !== '' &&
+    typeof obj.contenido === 'string' &&
+    obj.contenido.trim() !== ''
   );
 }
 
@@ -110,7 +146,7 @@ export async function GET(
 export async function POST(
   request: Request,
   ctx: { params: Promise<{ id: string }> },
-): Promise<NextResponse<{ ok: true } | MemoriaFailure | CrmErrorResponse>> {
+): Promise<NextResponse<{ ok: true } | { ok: true; id: number } | MemoriaFailure | CrmErrorResponse>> {
   try {
     const session = await getSession();
     if (!session) return buildCrmError('UNAUTHORIZED', 'No autenticado', 401);
@@ -130,16 +166,44 @@ export async function POST(
     } catch {
       return buildCrmError('VALIDATION_ERROR', 'El cuerpo debe ser JSON válido', 400);
     }
-    if (!esGestionBody(body)) {
-      return buildCrmError(
-        'VALIDATION_ERROR',
-        'Cuerpo inválido: se requiere {observacionId, accion: "pinear"|"eliminar"}',
-        400,
-      );
-    }
 
     const { conversaciones: repo } = await getCrmDb();
     if (!repo) return buildCrmError('INTERNAL_ERROR', 'CRM no configurado', 503);
+
+    // E3·T5 guardar arm: manual write (nueva memoria / editar).
+    if (typeof body === 'object' && body !== null && (body as Record<string, unknown>).accion === 'guardar') {
+      if (!esGuardarBody(body)) {
+        return buildCrmError(
+          'VALIDATION_ERROR',
+          'Cuerpo inválido: se requiere {accion: "guardar", nivel: "chat"|"empresa", tipo, titulo, contenido}',
+          400,
+        );
+      }
+      try {
+        const resultado = await new GuardarMemoriaConversacionUseCase({
+          conversaciones: repo,
+          memoria: crearMemoriaConversacion(),
+        }).ejecutar({
+          conversacionId: id,
+          nivel: body.nivel,
+          tipo: body.tipo,
+          titulo: body.titulo,
+          contenido: body.contenido,
+        });
+        return NextResponse.json({ ok: true, id: resultado.id });
+      } catch (error) {
+        if (error instanceof ErrorMemoriaCrm) return mapErrorMemoria(error);
+        throw error;
+      }
+    }
+
+    if (!esGestionBody(body)) {
+      return buildCrmError(
+        'VALIDATION_ERROR',
+        'Cuerpo inválido: se requiere {observacionId, accion: "pinear"|"eliminar"} o {accion: "guardar", …}',
+        400,
+      );
+    }
 
     try {
       await new GestionarMemoriaConversacionUseCase({

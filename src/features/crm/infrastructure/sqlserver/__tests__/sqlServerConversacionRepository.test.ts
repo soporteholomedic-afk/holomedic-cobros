@@ -868,6 +868,36 @@ describe('E3 (agente-ia-crm): asignación y memoria por conversación', () => {
     }
   });
 
+  it('actualizarMemoriaActiva fija SOLO esa columna y relee la fila (E3·T5)', async () => {
+    try {
+      const telefono = telefonoProbe();
+      const conv = await repo.crear({ canal: 'WHATSAPP', telefono, estado: 'ACTIVA_IA' });
+      conversacionesCreadas.add(conv.id);
+
+      // Apagar: devuelve la fila releída con el flip aplicado — y sin
+      // tocar estado/modo/asignadaA (el toggle es la ÚNICA escritura).
+      const apagada = await repo.actualizarMemoriaActiva(conv.id, false);
+      expect(apagada).toMatchObject({
+        id: conv.id,
+        memoriaActiva: false,
+        estado: 'ACTIVA_IA',
+        modo: 'IA',
+        asignadaA: null,
+      });
+      expect((await repo.obtenerPorId(conv.id))?.memoriaActiva).toBe(false);
+
+      // Round-trip de vuelta a true.
+      const encendida = await repo.actualizarMemoriaActiva(conv.id, true);
+      expect(encendida?.memoriaActiva).toBe(true);
+
+      // Id ausente → null (rowsAffected 0, actualizarModo precedent).
+      const ausente = await idInexistente('CRM_Conversaciones');
+      expect(await repo.actualizarMemoriaActiva(ausente, false)).toBeNull();
+    } finally {
+      await limpiarProbe();
+    }
+  });
+
   it('contarResumen cuenta por estado y MAX(ultimoMensajeEn) en UNA sola query (E3·T3)', async () => {
     // Resiliente como el resto del suite: se apoya en filas probe
     // PROPIAS — los conteos se comparan ANTES/DESPUÉS de crearlas, así

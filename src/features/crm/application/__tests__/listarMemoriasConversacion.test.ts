@@ -8,8 +8,10 @@ import type {
 import { ConversacionNoEncontradaError } from '../obtenerHiloConversacion';
 import {
   GestionarMemoriaConversacionUseCase,
+  GuardarMemoriaConversacionUseCase,
   ListarMemoriasConversacionUseCase,
   MemoriaAjenaError,
+  MemoriaSinEmpresaError,
 } from '../listarMemoriasConversacion';
 
 /**
@@ -278,6 +280,142 @@ describe('GestionarMemoriaConversacionUseCase — pinear/eliminar con guardia de
 
     await expect(
       useCase.ejecutar({ conversacionId: 99, observacionId: 101, accion: 'eliminar' }),
+    ).rejects.toThrow(ConversacionNoEncontradaError);
+  });
+});
+
+describe('GuardarMemoriaConversacionUseCase — memoria manual del operador (E3·T5)', () => {
+  /** Fake narrow: captura el guardar tal como el puerto lo recibe. */
+  class FakeMemoriaGuardar {
+    guardadas: Array<{
+      empresaId: number;
+      conversacionId: number;
+      nivel: string;
+      tipo: string;
+      titulo: string;
+      contenido: string;
+      operationId: string;
+    }> = [];
+
+    async guardar(entrada: {
+      empresaId: number;
+      conversacionId: number;
+      nivel: 'chat' | 'empresa';
+      tipo: string;
+      titulo: string;
+      contenido: string;
+      operationId: string;
+    }): Promise<{ id: number; estado: 'guardado' | 'comprometido' }> {
+      this.guardadas.push(entrada);
+      return { id: 555, estado: 'comprometido' };
+    }
+  }
+
+  function crearSuite(conversacion: Partial<ConversacionCrm> | null = {}): {
+    conversaciones: FakeConversacionesMemoria;
+    memoria: FakeMemoriaGuardar;
+    useCase: GuardarMemoriaConversacionUseCase;
+  } {
+    const conversaciones = new FakeConversacionesMemoria();
+    if (conversacion !== null) conversaciones.sembrar(conversacion);
+    const memoria = new FakeMemoriaGuardar();
+    const useCase = new GuardarMemoriaConversacionUseCase({ conversaciones, memoria });
+    return { conversaciones, memoria, useCase };
+  }
+
+  it('guarda en el proyecto de la empresa con operationId manual-<uuid> y SIN auto-pin', async () => {
+    const { memoria, useCase } = crearSuite();
+
+    const resultado = await useCase.ejecutar({
+      conversacionId: 1,
+      nivel: 'chat',
+      tipo: 'indicacion_humana',
+      titulo: 'Indicación humana',
+      contenido: 'Crédito fiscal 30 días: SÍ',
+    });
+
+    expect(resultado).toEqual({ id: 555, estado: 'comprometido' });
+    expect(memoria.guardadas).toHaveLength(1);
+    const entrada = memoria.guardadas[0]!;
+    expect(entrada.empresaId).toBe(7);
+    expect(entrada.conversacionId).toBe(1);
+    expect(entrada.nivel).toBe('chat');
+    expect(entrada.tipo).toBe('indicacion_humana');
+    expect(entrada.titulo).toBe('Indicación humana');
+    expect(entrada.contenido).toBe('Crédito fiscal 30 días: SÍ');
+    // Idempotencia manual: cada guardado lleva su propio operationId
+    // 'manual-<uuid>' (editable = eliminar + guardar NUEVO).
+    expect(entrada.operationId).toMatch(/^manual-[0-9a-f-]{36}$/);
+  });
+
+  it('nivel empresa → sesión fija empresa (misma llamada, nivel cruzado)', async () => {
+    const { memoria, useCase } = crearSuite();
+
+    await useCase.ejecutar({
+      conversacionId: 1,
+      nivel: 'empresa',
+      tipo: 'acuerdo',
+      titulo: 'Acuerdo de firmas',
+      contenido: 'Cronograma mensual',
+    });
+
+    expect(memoria.guardadas[0]?.nivel).toBe('empresa');
+  });
+
+  it('dos guardados → operationIds distintos (uuid por operación)', async () => {
+    const { memoria, useCase } = crearSuite();
+
+    await useCase.ejecutar({
+      conversacionId: 1,
+      nivel: 'chat',
+      tipo: 'acuerdo',
+      titulo: 'A',
+      contenido: 'C',
+    });
+    await useCase.ejecutar({
+      conversacionId: 1,
+      nivel: 'chat',
+      tipo: 'acuerdo',
+      titulo: 'B',
+      contenido: 'C',
+    });
+
+    const [primero, segundo] = memoria.guardadas;
+    expect(primero!.operationId).not.toBe(segundo!.operationId);
+  });
+
+  it('conversación sin empresa vinculada → MemoriaSinEmpresaError tipado (route → 400)', async () => {
+    const { memoria, useCase } = crearSuite({ empresaId: null });
+
+    await expect(
+      useCase.ejecutar({
+        conversacionId: 1,
+        nivel: 'chat',
+        tipo: 'acuerdo',
+        titulo: 'T',
+        contenido: 'C',
+      }),
+    ).rejects.toThrow(MemoriaSinEmpresaError);
+    expect(memoria.guardadas).toEqual([]);
+  });
+
+  it('titulo/contenido en blanco (trim) → ValidationError, sin escribir', async () => {
+    const { memoria, useCase } = crearSuite();
+
+    await expect(
+      useCase.ejecutar({ conversacionId: 1, nivel: 'chat', tipo: 'acuerdo', titulo: '   ', contenido: 'C' }),
+    ).rejects.toThrow(/titulo/);
+    await expect(
+      useCase.ejecutar({ conversacionId: 1, nivel: 'chat', tipo: 'acuerdo', titulo: 'T', contenido: '' }),
+    ).rejects.toThrow(/contenido/);
+    expect(memoria.guardadas).toEqual([]);
+  });
+
+  it('conversación inexistente → ConversacionNoEncontradaError tipado (route → 404)', async () => {
+    const { useCase } = crearSuite(null);
+
+    await expect(
+      useCase.ejecutar({ conversacionId: 99, nivel: 'chat', tipo: 'acuerdo', titulo: 'T', contenido: 'C' }),
     ).rejects.toThrow(ConversacionNoEncontradaError);
   });
 });
