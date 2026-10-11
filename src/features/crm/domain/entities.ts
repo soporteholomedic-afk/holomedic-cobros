@@ -458,7 +458,9 @@ export interface EntradaGenerarRespuesta {
  * covered by the provided conocimiento+memorias — the motor decides
  * escalation from that flag plus the confidence threshold, never
  * from the raw text alone; `idsConocimiento` cites only provided
- * fragment ids (adapters filter hallucinated ids).
+ * fragment ids (adapters filter hallucinated ids); `modelo` is the
+ * adapter's configured model name (the simulator reports
+ * 'simulado') — the motor stores it per message for audit.
  */
 export interface RespuestaGenerada {
   texto: string;
@@ -466,6 +468,7 @@ export interface RespuestaGenerada {
   enScope: boolean;
   requiereAyudaHumana: boolean;
   idsConocimiento: number[];
+  modelo: string;
 }
 
 /** One client↔Guía exchange to distill (E2·T3, post-send). */

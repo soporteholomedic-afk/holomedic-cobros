@@ -221,7 +221,16 @@ describe('GeneradorOpenAiCompatible — parseo y saneo (E2·T3)', () => {
       enScope: true,
       requiereAyudaHumana: false,
       idsConocimiento: [7],
+      modelo: 'glm-test',
     });
+  });
+
+  it('modelo refleja el nombre configurado del adapter (auditoría por mensaje)', async () => {
+    stubFetch([{ status: 200, contenido: JSON_LIMPIO }]);
+
+    const respuesta = await crearAdapter({ modelo: 'glm-otro' }).generarRespuesta(ENTRADA);
+
+    expect(respuesta.modelo).toBe('glm-otro');
   });
 
   it('JSON cercado con ```json se extrae igual', async () => {

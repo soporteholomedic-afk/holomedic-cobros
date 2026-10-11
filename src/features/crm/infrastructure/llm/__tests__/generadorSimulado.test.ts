@@ -36,6 +36,7 @@ describe('GeneradorSimulado — generarRespuesta (E2·T3)', () => {
       enScope: true,
       requiereAyudaHumana: false,
       idsConocimiento: [7],
+      modelo: 'simulado',
     });
   });
 
@@ -86,6 +87,7 @@ describe('GeneradorSimulado — generarRespuesta (E2·T3)', () => {
       enScope: true,
       requiereAyudaHumana: false,
       idsConocimiento: [],
+      modelo: 'simulado',
     });
   });
 
@@ -105,6 +107,7 @@ describe('GeneradorSimulado — generarRespuesta (E2·T3)', () => {
       enScope: false,
       requiereAyudaHumana: true,
       idsConocimiento: [],
+      modelo: 'simulado',
     });
   });
 });

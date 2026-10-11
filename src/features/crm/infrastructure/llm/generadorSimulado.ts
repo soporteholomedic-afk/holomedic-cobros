@@ -21,7 +21,9 @@ import type { GeneradorRespuestaPort } from '../../domain/ports';
  *   scoreConfianza 0.1, fixed safe deferral texto.
  * destilar emits exactly ONE hecho_cliente observation (first 8 words
  * of the consulta as titulo, consulta trimmed to 200 chars, never
- * pinear); an empty consulta distills to NOTHING.
+ * pinear); an empty consulta distills to NOTHING. Every
+ * RespuestaGenerada carries modelo 'simulado' (the motor's per-message
+ * audit column must distinguish simulated answers offline).
  *
  * Security: this fake keeps every input strictly in process memory
  * and logs NOTHING.
@@ -34,6 +36,8 @@ const LIMITE_TEXTO = 400;
 const LIMITE_TITULO_PALABRAS = 8;
 const LIMITE_CONTENIDO_DESTILACION = 200;
 const TITULO_VACIO = 'Consulta cliente';
+/** Model name reported in RespuestaGenerada.modelo (audit). */
+const MODELO_SIMULADO = 'simulado';
 
 /** Prompt fragment body → simulated texto (400-char cap, safe fallback). */
 function textoSimulado(contenido: string, titulo: string): string {
@@ -59,6 +63,7 @@ export class GeneradorSimulado implements GeneradorRespuestaPort {
         enScope: true,
         requiereAyudaHumana: false,
         idsConocimiento: [primerConocimiento.id],
+        modelo: MODELO_SIMULADO,
       };
     }
     const primeraMemoria = entrada.memorias[0];
@@ -69,6 +74,7 @@ export class GeneradorSimulado implements GeneradorRespuestaPort {
         enScope: true,
         requiereAyudaHumana: false,
         idsConocimiento: [],
+        modelo: MODELO_SIMULADO,
       };
     }
     return {
@@ -77,6 +83,7 @@ export class GeneradorSimulado implements GeneradorRespuestaPort {
       enScope: false,
       requiereAyudaHumana: true,
       idsConocimiento: [],
+      modelo: MODELO_SIMULADO,
     };
   }
 

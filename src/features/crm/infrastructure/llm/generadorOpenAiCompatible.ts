@@ -215,11 +215,14 @@ function extraerPrimerJson(contenido: string): string | null {
  * Guard RespuestaGenerada: texto must be a non-empty string,
  * scoreConfianza a finite number (clamped); missing booleans coerce
  * to the ESCALATION defaults; idsConocimiento keeps only provided
- * ids. Returns null when the value cannot be salvaged (→ retry).
+ * ids; `modelo` is stamped by the adapter from its own configured
+ * model name (never trusted from the wire). Returns null when the
+ * value cannot be salvaged (→ retry).
  */
 function validarRespuestaGenerada(
   valor: unknown,
   idsValidos: Set<number>,
+  modelo: string,
 ): RespuestaGenerada | null {
   if (valor === null || typeof valor !== 'object' || Array.isArray(valor)) return null;
   const crudo = valor as Record<string, unknown>;
@@ -242,6 +245,7 @@ function validarRespuestaGenerada(
     enScope,
     requiereAyudaHumana,
     idsConocimiento,
+    modelo,
   };
 }
 
@@ -300,7 +304,7 @@ export class GeneradorOpenAiCompatible implements GeneradorRespuestaPort {
         { role: 'system', content: PROMPT_SISTEMA_GENERAR },
         { role: 'user', content: mensajeUsuarioGenerar(entrada) },
       ],
-      (valor) => validarRespuestaGenerada(valor, idsValidos),
+      (valor) => validarRespuestaGenerada(valor, idsValidos, this.modelo),
       'una respuesta',
     );
   }
