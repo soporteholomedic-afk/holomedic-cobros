@@ -24,6 +24,10 @@ loadEnvLocal();
  * - listar: ONE query with COUNT(*) OVER() — total coherente with the
  *   page under the same filter, 0 rows → total 0 (R4 count-not-atomic).
  * - buscarCandidatosVinculacion: free-text phone match across empresas.
+ * - buscarCandidatosVinculacion E2·T8: exact seek on the new
+ *   telefonoNormalizado column (+ fallback over the un-normalized
+ *   subset only; the normalized column is authoritative — a drifted
+ *   normalizado never re-matches through the free-text fallback).
  * - The lifecycle writes (vincular, registrarActividad IN/OUT,
  *   marcarLeidos, crearContacto, buscarContactosTexto).
  */
@@ -90,16 +94,18 @@ async function crearContactoProbe(
   empresaId: number,
   nombre: string,
   telefono: string | null,
+  telefonoNormalizado: string | null = null,
 ): Promise<number> {
   const inserted = await pool
     .request()
     .input('empresaId', mssql.Int, empresaId)
     .input('nombre', mssql.NVarChar(200), nombre)
     .input('nombreNormalizado', mssql.VarChar(200), normalizarNombre(nombre))
-    .input('telefono', mssql.VarChar(30), telefono).query(`
-      INSERT INTO dbo.CRM_Contactos (empresaId, nombre, nombreNormalizado, telefono, esPrincipal)
+    .input('telefono', mssql.VarChar(30), telefono)
+    .input('telefonoNormalizado', mssql.VarChar(30), telefonoNormalizado).query(`
+      INSERT INTO dbo.CRM_Contactos (empresaId, nombre, nombreNormalizado, telefono, telefonoNormalizado, esPrincipal)
       OUTPUT INSERTED.id
-      VALUES (@empresaId, @nombre, @nombreNormalizado, @telefono, 0)
+      VALUES (@empresaId, @nombre, @nombreNormalizado, @telefono, @telefonoNormalizado, 0)
     `);
   const id = (inserted.recordset as { id: number }[])[0]?.id;
   if (id === undefined) throw new Error('INSERT probe de CRM_Contactos no devolvió id');
@@ -411,6 +417,59 @@ describe('SqlServerConversacionRepository (integración, filas probe propias)', 
       // Dígitos aleatorios de esta corrida: nadie más los tiene.
       const ninguno = await repo.buscarCandidatosVinculacion(`+595985${DIGITOS}999`);
       expect(ninguno).toEqual([]);
+    } finally {
+      await limpiarProbe();
+    }
+  });
+
+  it('buscarCandidatosVinculacion E2·T8: seek exacto por telefonoNormalizado + fallback texto-libre; sin match → []', async () => {
+    try {
+      // SEEK: dos contactos comparten el MISMO E.164 normalizado (la
+      // semántica de hoy se preserva: sin UNIQUE — ambos son candidatos)
+      // con textos libres formateados DISTINTOS del E.164. El seek
+      // exacto del índice los encuentra pese al formato del texto libre.
+      const e164Compartido = `+595981${DIGITOS}`;
+      const empresaSeekA = await crearEmpresaProbe(`Probe Seek A ${SUFIJO} SA`);
+      const empresaSeekB = await crearEmpresaProbe(`Probe Seek B ${SUFIJO} SA`);
+      const seekB = await crearContactoProbe(
+        empresaSeekB, `Seek B ${SUFIJO}`, `0981-${DIGITOS}`, e164Compartido,
+      );
+      const seekA = await crearContactoProbe(
+        empresaSeekA, `Seek A ${SUFIJO}`, `(0981) ${DIGITOS.slice(0, 3)} ${DIGITOS.slice(3)}`, e164Compartido,
+      );
+
+      // FALLBACK: normalizado NULL + texto libre con formato → match vía
+      // el scan texto-libre sobre el subconjunto SIN normalizar.
+      const e164Fallback = `+595982${DIGITOS}`;
+      const empresaFb = await crearEmpresaProbe(`Probe Fb ${SUFIJO} SA`);
+      const fb = await crearContactoProbe(empresaFb, `Fallback ${SUFIJO}`, `0982 ${DIGITOS}`, null);
+
+      // SIN MATCH: teléfono válido propio + normalizado propio — el
+      // número consultado no existe en ninguna fila.
+      const empresaSin = await crearEmpresaProbe(`Probe Sin ${SUFIJO} SA`);
+      await crearContactoProbe(empresaSin, `Sin ${SUFIJO}`, `0983 ${DIGITOS}`, `+595983${DIGITOS}`);
+
+      // DRIFT: normalizado fijado a OTRO valor aunque su texto libre
+      // normalizaría al consultado — la columna normalizada es
+      // autoritativa: el fallback SOLO cubre filas con normalizado NULL.
+      const empresaDrift = await crearEmpresaProbe(`Probe Drift ${SUFIJO} SA`);
+      await crearContactoProbe(empresaDrift, `Drift ${SUFIJO}`, `0984 ${DIGITOS}`, `+595986${DIGITOS}`);
+
+      const compartidos = await repo.buscarCandidatosVinculacion(e164Compartido);
+      expect(compartidos.map((c) => c.contactoId)).toEqual([seekA, seekB].sort((a, b) => a - b)); // orden id ASC
+      expect(compartidos.map((c) => c.empresaId).sort()).toEqual([empresaSeekA, empresaSeekB].sort());
+      expect(compartidos.every((c) => c.telefono !== e164Compartido)).toBe(true); // texto libre formateado distinto
+      expect(compartidos.every((c) => c.nombreContacto.includes('Seek'))).toBe(true);
+      expect(compartidos.every((c) => c.razonSocial.includes(SUFIJO))).toBe(true);
+
+      const porFallback = await repo.buscarCandidatosVinculacion(e164Fallback);
+      expect(porFallback.map((c) => c.contactoId)).toEqual([fb]);
+      expect(porFallback[0]?.telefono).toBe(`0982 ${DIGITOS}`);
+
+      // Nadie tiene estos números → []; y la fila drift NO vuelve por el
+      // fallback pese a que su texto libre normalizaría al consultado.
+      expect(await repo.buscarCandidatosVinculacion(`+595985${DIGITOS}`)).toEqual([]);
+      expect(await repo.buscarCandidatosVinculacion(`+595984${DIGITOS}`)).toEqual([]);
     } finally {
       await limpiarProbe();
     }

@@ -1,6 +1,6 @@
 import * as mssql from 'mssql';
 
-import { normalizarCorreo, normalizarNombre } from '../../domain/normalizar';
+import { normalizarCorreo, normalizarNombre, normalizarTelefonoE164 } from '../../domain/normalizar';
 import { estadoInicial } from '../../domain/maquinaEstados';
 import type { CrmImportadorPort, RegistroImportacion, ResultadoGrupoImport } from '../../domain/ports';
 import { planificarMergeContactos } from '../../domain/importar/mergeContactos';
@@ -57,6 +57,16 @@ interface ContactoAInsertar {
   correos: string[];
   /** Operational role (panel); null = none provided. */
   cargo?: string | null;
+}
+
+/**
+ * Derived telefonoNormalizado column value (agente-ia-crm E2·T8): the
+ * domain E.164 rule applied to the free-text phone — null when absent
+ * or not normalizable. Kept in lockstep with the contacto write so the
+ * index-seek path of buscarCandidatosVinculacion stays current.
+ */
+function telefonoNormalizadoDe(telefono: string | null | undefined): string | null {
+  return telefono != null ? normalizarTelefonoE164(telefono) : null;
 }
 
 export class SqlServerCrmImportador implements CrmImportadorPort {
@@ -189,12 +199,15 @@ export class SqlServerCrmImportador implements CrmImportadorPort {
     const plan = planificarMergeContactos(existentes, grupo.contactos, grupo.filas[0] ?? 0);
 
     for (const actualizacion of plan.actualizaciones) {
+      // E2·T8: telefono y telefonoNormalizado se re-derivan JUNTOS — un
+      // teléfono que deja de normalizar limpia el E.164 viejo (NULL).
       await tx
         .request()
         .input('id', mssql.Int, actualizacion.contactoId)
         .input('telefono', mssql.VarChar(30), actualizacion.telefono)
+        .input('telefonoNormalizado', mssql.VarChar(30), telefonoNormalizadoDe(actualizacion.telefono))
         .query(
-          'UPDATE dbo.CRM_Contactos SET telefono = @telefono, updatedAt = SYSDATETIME() WHERE id = @id',
+          'UPDATE dbo.CRM_Contactos SET telefono = @telefono, telefonoNormalizado = @telefonoNormalizado, updatedAt = SYSDATETIME() WHERE id = @id',
         );
       for (const correo of actualizacion.correosNuevos) {
         await this.insertarCorreo(tx, actualizacion.contactoId, correo);
@@ -260,11 +273,12 @@ export class SqlServerCrmImportador implements CrmImportadorPort {
       .input('nombre', mssql.NVarChar(200), contacto.nombre)
       .input('nombreNormalizado', mssql.VarChar(200), normalizarNombre(contacto.nombre))
       .input('telefono', mssql.VarChar(30), contacto.telefono ?? null)
+      .input('telefonoNormalizado', mssql.VarChar(30), telefonoNormalizadoDe(contacto.telefono))
       .input('cargo', mssql.NVarChar(120), contacto.cargo ?? null)
       .input('esPrincipal', mssql.Bit, esPrincipal).query(`
-        INSERT INTO dbo.CRM_Contactos (empresaId, nombre, nombreNormalizado, telefono, cargo, esPrincipal)
+        INSERT INTO dbo.CRM_Contactos (empresaId, nombre, nombreNormalizado, telefono, telefonoNormalizado, cargo, esPrincipal)
         OUTPUT INSERTED.id
-        VALUES (@empresaId, @nombre, @nombreNormalizado, @telefono, @cargo, @esPrincipal)
+        VALUES (@empresaId, @nombre, @nombreNormalizado, @telefono, @telefonoNormalizado, @cargo, @esPrincipal)
       `);
     const contactoId = (inserted.recordset as EmpresaIdRow[])[0]?.id;
     if (contactoId === undefined) throw new Error('INSERT de CRM_Contactos no devolvió id');

@@ -100,6 +100,19 @@ import * as mssql from 'mssql';
  * NVARCHAR(120). Existing rows keep NULL — no backfill here; the
  * one-off logged normalization script owns that.
  *
+ * `CRM_Contactos.telefonoNormalizado` (agente-ia-crm E2·T8, E1
+ * advisory R3-scan-tabla-complea): VARCHAR(30) NULL E.164 key derived
+ * from the free-text `telefono` by the domain normalizer
+ * (normalizarTelefonoE164) on every write, plus the NON-unique
+ * filtered index `IX_CRM_Contactos_TelefonoNormalizado` —
+ * `buscarCandidatosVinculacion` seeks it exactly instead of scanning
+ * the free-text column. Deliberately NOT UNIQUE: two contactos may
+ * legitimately share a phone and BOTH surface as candidatos (same
+ * semantics as the old free-text scan). History is backfilled by the
+ * one-off logged script scripts/crm-normalizar-telefonos.mjs; rows
+ * still NULL keep matching through the repository's free-text
+ * fallback.
+ *
  * Conventions (design §2): INT IDENTITY PKs for registry tables,
  * BIGINT for high-volume history rows, `DATETIME2(0) DEFAULT
  * SYSDATETIME()` audit stamps (ADR-9, naive America/Lima wall clock —
@@ -143,6 +156,10 @@ BEGIN
     nombre            NVARCHAR(200) NOT NULL,
     nombreNormalizado VARCHAR(200)  NOT NULL,
     telefono          VARCHAR(30)   NULL,
+    -- E2·T8: E.164 derived from telefono on every write (domain
+    -- normalizarTelefonoE164); NULL = not yet normalized or not
+    -- normalizable. Index-seek key for buscarCandidatosVinculacion.
+    telefonoNormalizado VARCHAR(30) NULL,
     cargo             NVARCHAR(120) NULL,
     esPrincipal       BIT           NOT NULL DEFAULT 0,
     createdAt         DATETIME2(0)  NOT NULL DEFAULT SYSDATETIME(),
@@ -397,6 +414,10 @@ IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('dbo.CRM_Co
 BEGIN
   ALTER TABLE dbo.CRM_Contactos ADD cargo NVARCHAR(120) NULL;
 END;
+IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('dbo.CRM_Contactos') AND name = 'telefonoNormalizado')
+BEGIN
+  ALTER TABLE dbo.CRM_Contactos ADD telefonoNormalizado VARCHAR(30) NULL;
+END;
 IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'UX_CRM_Contactos_Principal' AND object_id = OBJECT_ID('dbo.CRM_Contactos'))
 BEGIN
   CREATE UNIQUE INDEX UX_CRM_Contactos_Principal
@@ -546,15 +567,39 @@ END;
 `;
 
 /**
+ * Post-ALTER batch (agente-ia-crm E2·T8): indexes over columns added
+ * by guarded ALTERs in SCHEMA_SQL. SQL Server compiles a whole batch
+ * against the PRE-batch schema, so a CREATE INDEX over a column ALTER
+ * ADDed earlier in the same batch fails with "Invalid column name" on
+ * databases where the table already exists (fresh installs dodge it
+ * through deferred resolution — the CREATE TABLE and the index share
+ * the first batch). A second batch gives the ALTER room to land first.
+ */
+const SCHEMA_SQL_POSTALTER = /* sql */ `
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_CRM_Contactos_TelefonoNormalizado' AND object_id = OBJECT_ID('dbo.CRM_Contactos'))
+BEGIN
+  -- Autovinculación seek (E2·T8): exact match on the normalized E.164
+  -- replaces the free-text table scan (E1 advisory R3). Filtered so
+  -- NULL (un-normalized) rows never enter; deliberately NOT unique —
+  -- two contactos may share a phone and both stay candidatos.
+  CREATE INDEX IX_CRM_Contactos_TelefonoNormalizado
+    ON dbo.CRM_Contactos (telefonoNormalizado)
+    WHERE telefonoNormalizado IS NOT NULL;
+END;
+`;
+
+/**
  * Run the CRM registry schema migration against a SQL Server
  * `HOLOMEDIC` connection pool. Idempotent (`IF NOT EXISTS`); safe to
  * call on every first connection (the `getCrmDb()` factory calls it
  * once at startup).
  *
- * Uses a single `request().batch(SCHEMA_SQL)` so the statement runs on
- * one connection — each `IF NOT EXISTS` guard is wrapped in
- * `BEGIN … END` so the parser accepts the DDL inside the conditional.
+ * Two batches: the main SCHEMA_SQL plus the post-ALTER batch for
+ * indexes over guarded-ALTER columns (see SCHEMA_SQL_POSTALTER). Each
+ * `IF NOT EXISTS` guard is wrapped in `BEGIN … END` so the parser
+ * accepts the DDL inside the conditional.
  */
 export async function migrate(pool: mssql.ConnectionPool): Promise<void> {
   await pool.request().batch(SCHEMA_SQL);
+  await pool.request().batch(SCHEMA_SQL_POSTALTER);
 }

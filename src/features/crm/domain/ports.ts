@@ -622,11 +622,13 @@ export interface VincularConversacionDatos {
 }
 
 /**
- * One CRM_Contactos row (joined to its empresa) whose free-text phone
- * matches the incoming E.164 — the autovinculación candidate list
- * (agente-ia-crm T2). The adapter normalizes both sides in TS because
- * CRM_Contactos.telefono is free text; a normalized column is the
- * documented optimization if the table grows.
+ * One CRM_Contactos row (joined to its empresa) whose phone matches the
+ * incoming E.164 — the autovinculación candidate list (agente-ia-crm
+ * T2). E2·T8: the match runs primarily as an EXACT seek on the new
+ * telefonoNormalizado column (derived from telefono by the domain
+ * normalizer on every write); rows not yet normalized fall back to the
+ * free-text match (normalize-both-sides in TS) over that un-normalized
+ * subset only — which shrinks to zero once the backfill script runs.
  */
 export interface CandidatoVinculacion {
   empresaId: number;
@@ -679,11 +681,14 @@ export interface ConversacionCrmRepository {
    */
   registrarActividad(id: number, direccion?: 'IN' | 'OUT'): Promise<void>;
   /**
-   * Autovinculación candidates (T2): contactos whose free-text phone
-   * normalizes to the SAME digit key as the incoming E.164. The SQL
-   * fetches every contacto with telefono (the match runs in TS —
-   * free-text column, see CandidatoVinculacion for the optimization
-   * note); an empty telefono is not searchable at all.
+   * Autovinculación candidates (T2): contactos whose phone resolves to
+   * the SAME E.164 as the incoming one. E2·T8: primary path = exact
+   * index seek on telefonoNormalizado (written by the importador and
+   * backfilled by scripts/crm-normalizar-telefonos.mjs); the free-text
+   * normalize-both-sides match survives ONLY for rows with
+   * telefonoNormalizado IS NULL (TOP-bounded — shrinks to zero after
+   * the backfill). One row per contacto, same fields, contactoId-ASC
+   * order; an empty telefono is not searchable at all.
    */
   buscarCandidatosVinculacion(telefonoE164: string): Promise<CandidatoVinculacion[]>;
   /**

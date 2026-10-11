@@ -86,6 +86,26 @@ function escaparLike(input: string): string {
   return input.replace(/[[%_]/g, (caracter) => `[${caracter}]`);
 }
 
+/** CRM_Contactos JOIN CRM_Empresas row as read by the candidate queries. */
+interface FilaCandidatoVinculacion {
+  id: number;
+  empresaId: number;
+  nombre: string;
+  telefono: string;
+  razonSocial: string;
+}
+
+/** Row → CandidatoVinculacion (same fields both query paths share). */
+function mapearCandidatoVinculacion(row: FilaCandidatoVinculacion): CandidatoVinculacion {
+  return {
+    empresaId: row.empresaId,
+    contactoId: row.id,
+    nombreContacto: row.nombre,
+    razonSocial: row.razonSocial,
+    telefono: row.telefono,
+  };
+}
+
 export class SqlServerConversacionRepository implements ConversacionCrmRepository {
   constructor(private readonly pool: mssql.ConnectionPool) {}
 
@@ -314,49 +334,74 @@ export class SqlServerConversacionRepository implements ConversacionCrmRepositor
   }
 
   async buscarCandidatosVinculacion(telefonoE164: string): Promise<CandidatoVinculacion[]> {
-    // Deuda E2 (documentada): la resolución COMPLETA es una columna de
-    // teléfono normalizada escrita por el feature de contactos + un
-    // índice sobre ella. Mientras tanto el match es texto-libre → E.164
-    // en TS y este SELECT lee TODOS los contactos con teléfono: el
-    // TOP acota la lectura (R3 scan-tabla-completa) y el warn señala
-    // el tope cuando se alcanza.
-    const TOPE_CANDIDATOS = 5000;
-    const result = await this.pool.request().query(`
-      SELECT TOP (${TOPE_CANDIDATOS}) c.id, c.empresaId, c.nombre, c.telefono, e.razonSocial
+    // E2·T8 (remediación del advisory E1 R3-scan-tabla-complea): la vía
+    // PRIMARIA es un seek exacto y tipado sobre CRM_Contactos.
+    // telefonoNormalizado (IX_CRM_Contactos_TelefonoNormalizado) — sin
+    // scan ni tope. El FALLBACK conserva la semántica texto-libre de
+    // hoy para las filas aún sin normalizar (telefonoNormalizado IS
+    // NULL): lectura TOP-acotada + match en TS. Una vez que
+    // scripts/crm-normalizar-telefonos.mjs --apply rellene el histórico
+    // y los escritores (importador) mantengan la columna al día, el
+    // subconjunto sin normalizar se encoge a CERO y el fallback deja
+    // de leer filas.
+    const e164 = normalizarTelefonoE164(telefonoE164);
+    if (e164 === null) return [];
+
+    // Seek exacto. El residual `telefono IS NOT NULL` protege el tipo
+    // `telefono: string` del candidato: los escritores y el backfill
+    // derivan la columna DESDE telefono, así que normalizado no-nulo
+    // implica telefono no-nulo (un drift manual no rompe el mapping).
+    // La columna normalizada es AUTORIZITATIVA: una fila con normalizado
+    // fijado a otro valor NUNCA re-matchea por el fallback.
+    const exactos = await this.pool
+      .request()
+      .input('telefonoNormalizado', mssql.VarChar(30), e164)
+      .query(`
+        SELECT c.id, c.empresaId, c.nombre, c.telefono, e.razonSocial
+        FROM dbo.CRM_Contactos c
+        JOIN dbo.CRM_Empresas e ON e.id = c.empresaId
+        WHERE c.telefonoNormalizado = @telefonoNormalizado AND c.telefono IS NOT NULL
+        ORDER BY c.id
+      `);
+
+    // Fallback texto-libre: SOLO el subconjunto sin normalizar (antes:
+    // toda la tabla con telefono). Mismo TOP + mismo match en TS que la
+    // versión E1 (normalizarTelefonoE164 + clave de dígitos).
+    const TOPE_FALLBACK = 5000;
+    const pendientes = await this.pool.request().query(`
+      SELECT TOP (${TOPE_FALLBACK}) c.id, c.empresaId, c.nombre, c.telefono, e.razonSocial
       FROM dbo.CRM_Contactos c
       JOIN dbo.CRM_Empresas e ON e.id = c.empresaId
-      WHERE c.telefono IS NOT NULL
+      WHERE c.telefonoNormalizado IS NULL AND c.telefono IS NOT NULL
+      ORDER BY c.id
     `);
-    const leidos = result.recordset as Array<{
-      id: number;
-      empresaId: number;
-      nombre: string;
-      telefono: string;
-      razonSocial: string;
-    }>;
-    if (leidos.length >= TOPE_CANDIDATOS) {
+    const leidos = pendientes.recordset as FilaCandidatoVinculacion[];
+    if (leidos.length >= TOPE_FALLBACK) {
       console.warn(
-        `buscarCandidatosVinculacion alcanzó el tope de ${TOPE_CANDIDATOS} contactos con teléfono; ` +
-          'la autovinculación puede perder candidatos: migre a la columna de teléfono normalizada (deuda E2).',
+        `buscarCandidatosVinculacion: el fallback texto-libre alcanzó el tope de ${TOPE_FALLBACK} ` +
+          'contactos SIN normalizar; la autovinculación puede perder candidatos: ejecute ' +
+          'scripts/crm-normalizar-telefonos.mjs --apply para encoger el subconjunto a cero.',
       );
     }
-    const claveEntrante = telefonoDigitosClave(telefonoE164);
-    // teléfono es texto libre: la comparación se hace en TS tras
-    // normalizar ambos lados (normalizarTelefonoE164 + digitos clave).
-    const candidatos: CandidatoVinculacion[] = [];
+    const claveEntrante = telefonoDigitosClave(e164);
+    const candidatos: CandidatoVinculacion[] = (
+      exactos.recordset as FilaCandidatoVinculacion[]
+    ).map(mapearCandidatoVinculacion);
+    // teléfono es texto libre: la comparación del fallback se hace en TS
+    // tras normalizar ambos lados (normalizarTelefonoE164 + digitos clave).
     for (const row of leidos) {
-      const e164 = normalizarTelefonoE164(row.telefono);
-      if (e164 === null) continue;
-      if (telefonoDigitosClave(e164) === claveEntrante) {
-        candidatos.push({
-          empresaId: row.empresaId,
-          contactoId: row.id,
-          nombreContacto: row.nombre,
-          razonSocial: row.razonSocial,
-          telefono: row.telefono,
-        });
+      const e164Fila = normalizarTelefonoE164(row.telefono);
+      if (e164Fila === null) continue;
+      if (telefonoDigitosClave(e164Fila) === claveEntrante) {
+        candidatos.push(mapearCandidatoVinculacion(row));
       }
     }
+    // Orden determinista id ASC — el orden de-facto de la versión E1
+    // (scan del índice clustered, sin ORDER BY explícito), ahora
+    // garantizado: ambas queries vienen ordenadas por id y la mezcla
+    // final se re-ordena por contactoId. Una fila por contacto, mismos
+    // campos — semántica de resultado idéntica a la de E1.
+    candidatos.sort((a, b) => a.contactoId - b.contactoId);
     return candidatos;
   }
 
@@ -366,8 +411,10 @@ export class SqlServerConversacionRepository implements ConversacionCrmRepositor
   ): Promise<{ contactoId: number }> {
     // nombreNormalizado se DERIVA acá (normalizarNombre — UQ_CRM_Contactos_
     // EmpresaNombre), nunca se confía del request; telefono queda null
-    // (la vinculación re-keyea la CONVERSACIÓN, no el contacto). Espejo
-    // del INSERT del importador (importadorCrm.ts), sin esPrincipal.
+    // (la vinculación re-keyea la CONVERSACIÓN, no el contacto) y por lo
+    // mismo telefonoNormalizado queda null por defecto — derivaría del
+    // telefono inexistente (E2·T8). Espejo del INSERT del importador
+    // (importadorCrm.ts), sin esPrincipal.
     try {
       const inserted = await this.pool
         .request()

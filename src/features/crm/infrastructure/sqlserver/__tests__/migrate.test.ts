@@ -159,9 +159,10 @@ describe('crm migrate() — HOLOMEDIC schema integration', () => {
     expect(after).toEqual(before);
     // 11 tables (3 registry + job + 3 pipeline + handoffs + activities
     // + asignaciones + envios-correos) + 15 key constraints (11 PK + 4 UQ)
-    // + 9 CHECKs + 11 FKs + 28 indexes (13 named + 4 backing the UQs
-    // + 11 clustered PKs).
-    expect(before).toHaveLength(11 + 15 + 9 + 11 + 28);
+    // + 9 CHECKs + 11 FKs + 29 indexes (14 named + 4 backing the UQs
+    // + 11 clustered PKs; +1 named = IX_CRM_Contactos_TelefonoNormalizado,
+    // agente-ia-crm E2·T8).
+    expect(before).toHaveLength(11 + 15 + 9 + 11 + 29);
     // Existing rows untouched: the additive migration performs no DML —
     // registry row counts are identical across the re-run.
     const empresas = await pool.request().query(`SELECT COUNT(*) AS n FROM dbo.CRM_Empresas`);

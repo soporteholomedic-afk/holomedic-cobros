@@ -190,7 +190,7 @@ describe('SqlServerCrmImportador — real HOLOMEDIC integration', () => {
       const contactos = await pool
         .request()
         .input('empresaId', mssql.Int, empresaRow?.id)
-        .query(`SELECT id, nombre, nombreNormalizado, telefono, esPrincipal
+        .query(`SELECT id, nombre, nombreNormalizado, telefono, telefonoNormalizado, esPrincipal
                 FROM dbo.CRM_Contactos WHERE empresaId = @empresaId ORDER BY id`);
       expect(contactos.recordset).toHaveLength(2);
       const jose = contactos.recordset[0];
@@ -198,8 +198,10 @@ describe('SqlServerCrmImportador — real HOLOMEDIC integration', () => {
       expect(jose?.nombre).toBe('José Pérez');
       expect(jose?.nombreNormalizado).toBe('jose perez'); // accent-stripped D1 merge key
       expect(jose?.telefono).toBe('0981 111 222');
+      expect(jose?.telefonoNormalizado).toBe('+595981111222'); // E2·T8: derived by the domain normalizer
       expect(jose?.esPrincipal).toBe(false);
       expect(ana?.esPrincipal).toBe(true); // marked 'Sí' in the group
+      expect(ana?.telefonoNormalizado).toBeNull(); // sin teléfono → NULL
 
       const correos = await pool
         .request()
@@ -232,7 +234,7 @@ describe('SqlServerCrmImportador — real HOLOMEDIC integration', () => {
       const contactos = await pool
         .request()
         .input('ruc', mssql.VarChar(30), '0000000000992')
-        .query(`SELECT c.id, c.nombre, c.telefono, c.esPrincipal, c.nombreNormalizado
+        .query(`SELECT c.id, c.nombre, c.telefono, c.telefonoNormalizado, c.esPrincipal, c.nombreNormalizado
                 FROM dbo.CRM_Contactos c
                 JOIN dbo.CRM_Empresas e ON e.id = c.empresaId
                 WHERE e.rucNormalizado = @ruc ORDER BY c.id`);
@@ -240,8 +242,10 @@ describe('SqlServerCrmImportador — real HOLOMEDIC integration', () => {
       const jose = contactos.recordset[0];
       const luis = contactos.recordset[1];
       expect(jose?.telefono).toBe('0999 888 777'); // overwritten (provided)
+      expect(jose?.telefonoNormalizado).toBe('+595999888777'); // E2·T8: re-derived on the merge UPDATE
       expect(jose?.esPrincipal).toBe(true); // preserved — import never displaces the principal
       expect(luis?.nombre).toBe('Luis Nuevo');
+      expect(luis?.telefonoNormalizado).toBeNull(); // sin teléfono → NULL
       expect(luis?.esPrincipal).toBe(false); // forced: exactly-one-principal stays with José
 
       const correosJose = await pool
@@ -255,6 +259,53 @@ describe('SqlServerCrmImportador — real HOLOMEDIC integration', () => {
         .input('ruc', mssql.VarChar(30), '0000000000992')
         .query('SELECT updatedBy FROM dbo.CRM_Empresas WHERE rucNormalizado = @ruc');
       expect(updatedBy.recordset[0]?.updatedBy).toBe('tester2');
+    } finally {
+      await pool.request().query(`DELETE FROM dbo.CRM_Empresas WHERE ${PROBE_KEY}`);
+    }
+  });
+
+  it('E2·T8: teléfono no normalizable → telefonoNormalizado NULL; un UPDATE que deja de normalizar limpia el valor viejo', async () => {
+    const importador = new SqlServerCrmImportador(pool);
+    try {
+      await importador.ejecutarGrupo(
+        grupoCon('0000000000993', [
+          contacto('José Pérez', ['jose@x.com'], '0981 111 222', true),
+          contacto('Tel Raro', ['raro@x.com'], '1234'), // 4 dígitos → no E.164
+        ]),
+        'tester',
+      );
+
+      const alCrear = await pool
+        .request()
+        .input('ruc', mssql.VarChar(30), '0000000000993')
+        .query(`SELECT c.nombre, c.telefono, c.telefonoNormalizado
+                FROM dbo.CRM_Contactos c
+                JOIN dbo.CRM_Empresas e ON e.id = c.empresaId
+                WHERE e.rucNormalizado = @ruc ORDER BY c.id`);
+      expect(alCrear.recordset).toEqual([
+        { nombre: 'José Pérez', telefono: '0981 111 222', telefonoNormalizado: '+595981111222' },
+        { nombre: 'Tel Raro', telefono: '1234', telefonoNormalizado: null }, // nunca un valor a medias
+      ]);
+
+      // El merge actualiza el teléfono de José a uno no normalizable:
+      // el E.164 viejo NO puede quedar huérfano — la columna se limpia.
+      await importador.ejecutarGrupo(
+        grupoCon('0000000000993', [contacto('José Pérez', ['jose@x.com'], '12', true)]),
+        'tester',
+      );
+
+      const alActualizar = await pool
+        .request()
+        .input('ruc', mssql.VarChar(30), '0000000000993')
+        .query(`SELECT c.nombre, c.telefono, c.telefonoNormalizado
+                FROM dbo.CRM_Contactos c
+                JOIN dbo.CRM_Empresas e ON e.id = c.empresaId
+                WHERE e.rucNormalizado = @ruc ORDER BY c.id`);
+      expect(alActualizar.recordset[0]).toEqual({
+        nombre: 'José Pérez',
+        telefono: '12',
+        telefonoNormalizado: null, // el '+595981111222' previo se re-deriva a NULL
+      });
     } finally {
       await pool.request().query(`DELETE FROM dbo.CRM_Empresas WHERE ${PROBE_KEY}`);
     }
