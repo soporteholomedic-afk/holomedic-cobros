@@ -36,4 +36,6 @@ Convención verificada en `envio-resultados` (`domain/ports.ts` → `SendResults
 | Módulo | Ubicación | Propósito | Rutas app principales |
 |---|---|---|---|
 | [envio-resultados](./envio-resultados.md) | `src/features/envio-resultados/` | Envío consolidado de resultados médicos por correo (adjuntos del share SIGLA + PDFs vía `SIGLA.PdfCli.exe`) con historial auditable | `/consolidados`, `/consolidados/envio-resultados`, `/consolidados/historial-envios` |
+| [crm-conversaciones](./crm-conversaciones.md) | `src/features/crm/` (conversaciones) | Bandeja de conversaciones WhatsApp estilo mensajero: webhook Kapso (HMAC + idempotencia), vinculación por teléfono, respuesta manual | `/crm/conversaciones` |
+| [crm-conversaciones-agente](./crm-conversaciones-agente.md) | `src/features/crm/` (agente) | La Guía: agente IA que responde solo conversaciones `ACTIVA_IA` (RAG sobre KB + memoria Engram, guardrails, cola durable `CRM_AgenteTareas`) y deriva a humanos | `/crm/conversaciones` |
 | [firma-correo](./firma-correo.md) | `src/features/firma-correo/` | Firma de correo HTML auto-servicio por usuario, inyectada en todos los correos salientes | `/admin/plantillas/firma` |
