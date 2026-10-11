@@ -105,6 +105,11 @@ Cada entregable es un hito **demoable de punta a punta** y cierra con work-unit 
 
 ## Registro de avance
 
+### Remediación de advisories (E1·T7, 2026-10-11)
+Los 25 hallazgos advisory quedaron atendidos (24 remediados + 1 verificado ya-resuelto). Commits: `9815d5a` (repos SQL: escape LIKE, COUNT(*) OVER atómico, wamid condicional, truncado explícito, + 14 tests integración DB real), `ee4f516` (timeout Kapso 15s vía race, fail-closed en prod sin config, ruta simular 404 fuera de modo simulado, PII log enmascarado, + 19 tests adapter/factory/ruta), `c54e418` (mensaje confirmado en respuesta, actividad best-effort separada, trim consistente, marcar-leído condicional, + tests hilo use case), `d81926c` (parsearIdConversacion estricto compartido en 4 rutas, await refetch simulador, +6 tests hook hilo), `c68fbe7` (clave dedup uniforme por wamid en single y batch). Notas: R3-estado-composer-de-fila ya estaba resuelto (referencia del reviewer desactualizada, verificado); R3-scan-tabla-completa MITIGADO (TOP 5000 + warn + deuda: resolución completa = columna telefonoNormalizado escrita por el feature de contactos, E2+). Verificación: 2891/2892 scoped (1 fallo preexistente ajeno sqlServerEmpresaRepository), tsc ✓, build ✓, sync SDK ✓.
+
+- [x] E1·T7 Remediación de los 25 advisories — completa
+
 ### Revisión nativa RDD (E1)
 El candidato completo (51 archivos) excedió el presupuesto de contexto (`lens_context_budget_exceeded`) → dividido en 3 rebanadas encadenadas (decisión del usuario 2026-10-11), revisadas en worktrees dedicados:
 - **Rebanada A** f794a2e..94d8e51 (T1+T2: esquema+dominio+webhook) — **APROVADA** (línea `review-8344e417cd1670f5`, ack quemado). Halló 1 CRITICAL (R3: ack antes de persistir → pérdida de mensajes en fallo async) corregido en `25037fc` (persist-before-ack + 503 para reintento de Kapso + backstop de carrera 2601/2627, 179 líneas diff). Advisory NO bloqueantes (seguimiento futuro): R3-adapters-sql-sin-tests (WARNING), R3-clave-batch-inconsistente (WARNING), R3-cuerpo-truncado-silencioso (SUGGESTION), R3-scan-tabla-completa-candidatos (WARNING).
