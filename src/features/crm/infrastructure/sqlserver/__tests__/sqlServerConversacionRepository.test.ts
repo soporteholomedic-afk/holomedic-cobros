@@ -4,6 +4,7 @@ import * as mssql from 'mssql';
 import { getCrmDb } from '@/features/crm/infrastructure/getCrmDb';
 
 import { normalizarNombre } from '../../../domain/normalizar';
+import { ConflictError, NotFoundError } from '../../../domain/errors';
 import { SqlServerConversacionRepository } from '../sqlServerConversacionRepository';
 import { loadEnvLocal } from './loadEnvLocal';
 
@@ -43,9 +44,25 @@ let secuencia = 0;
 
 const conversacionesCreadas = new Set<number>();
 const empresasCreadas = new Set<number>();
+// E3: extracciones de ficha (NO ACTION sobre contactos — no caen con
+// la conversación ni siempre con la empresa; se borran por id propio).
+const extraccionesCreadas = new Set<number>();
 
 /** Deletes ONLY what this run created — ids first, no LIKE over foreign data. */
 async function limpiarProbe(): Promise<void> {
+  // Extracciones PRIMERO: su FK a contactos es NO ACTION y bloquearía
+  // el DELETE de la empresa probe. El OBJECT_ID guarda la fase RED del
+  // ciclo TDD (la tabla aún no existe en la base cuando el test falla
+  // antes de implementarla).
+  if (extraccionesCreadas.size > 0) {
+    for (const id of extraccionesCreadas) {
+      await pool.request().input('id', mssql.BigInt, id).query(`
+        IF OBJECT_ID('dbo.CRM_ExtraccionesFicha') IS NOT NULL
+          DELETE FROM dbo.CRM_ExtraccionesFicha WHERE id = @id
+      `);
+    }
+    extraccionesCreadas.clear();
+  }
   // Conversaciones PRIMERO: su contactoId es FK NO ACTION y bloquearía
   // el DELETE de la empresa probe si quedara una fila apuntando. Los
   // mensajes caen solos por FK CASCADE.
@@ -113,7 +130,7 @@ async function crearContactoProbe(
 }
 
 /** One linked fixture row: empresa + contacto + conversación vinculada. */
-async function crearFixtureVinculada(estado: 'ACTIVA_IA' | 'PAUSADA' | 'TOMADA_HUMANO'): Promise<{
+async function crearFixtureVinculada(estado: 'ACTIVA_IA' | 'PAUSADA' | 'TOMADA_HUMANO' | 'REQUIERE_HUMANO'): Promise<{
   empresaId: number;
   contactoId: number;
   conversacionId: number;
@@ -524,3 +541,297 @@ describe('SqlServerConversacionRepository (integración, filas probe propias)', 
     }
   });
 });
+
+/** An id guaranteed absent RIGHT NOW from CRM_SolicitudesAyuda (max + delta). */
+async function idSolicitudInexistente(): Promise<number> {
+  const result = await pool.request().query('SELECT MAX(id) AS maximo FROM dbo.CRM_SolicitudesAyuda');
+  const maximo = (result.recordset as { maximo: number | null }[])[0]?.maximo ?? 0;
+  return maximo + 1000;
+}
+
+describe('E3 (agente-ia-crm): solicitudes de ayuda humana', () => {
+  it('lifecycle: crear → PENDIENTE con terminos/score/mensajeId; resolver → RESUELTA con indicacion/resueltaPor/resueltaEn', async () => {
+    try {
+      const fixture = await crearFixtureVinculada('REQUIERE_HUMANO');
+      const creada = await repo.crearSolicitudAyuda({
+        conversacionId: fixture.conversacionId,
+        mensajeId: null,
+        consulta: `¿Hacen certificados médicos para minería ${SUFIJO}?`,
+        terminosBuscados: ['certificados', 'minería'],
+        score: 0.42,
+      });
+      expect(creada).toMatchObject({
+        id: expect.any(Number),
+        conversacionId: fixture.conversacionId,
+        mensajeId: null,
+        consulta: `¿Hacen certificados médicos para minería ${SUFIJO}?`,
+        estado: 'PENDIENTE',
+        indicacion: null,
+        resueltaPor: null,
+        resueltaEn: null,
+      });
+      expect(creada.terminosBuscados).toEqual(['certificados', 'minería']);
+      expect(creada.score).toBeCloseTo(0.42);
+      expect(creada.creadoEn).toBeInstanceOf(Date);
+
+      // La pendiente de ESTA conversación es la recién creada; aún no
+      // hay resuelta ninguna.
+      const pendiente = await repo.obtenerSolicitudAyudaPendiente(fixture.conversacionId);
+      expect(pendiente?.id).toBe(creada.id);
+      expect(await repo.obtenerUltimaSolicitudResuelta(fixture.conversacionId)).toBeNull();
+
+      const resuelta = await repo.resolverSolicitudAyuda(
+        creada.id,
+        'Responder que sí, con precio de lista 2026',
+        'Operadora Probe',
+      );
+      expect(resuelta.id).toBe(creada.id);
+      expect(resuelta.estado).toBe('RESUELTA');
+      expect(resuelta.indicacion).toBe('Responder que sí, con precio de lista 2026');
+      expect(resuelta.resueltaPor).toBe('Operadora Probe');
+      expect(resuelta.resueltaEn).toBeInstanceOf(Date);
+
+      // Resuelta: la pendiente desaparece y la última resuelta es ella.
+      expect(await repo.obtenerSolicitudAyudaPendiente(fixture.conversacionId)).toBeNull();
+      const ultima = await repo.obtenerUltimaSolicitudResuelta(fixture.conversacionId);
+      expect(ultima?.id).toBe(creada.id);
+      expect(ultima?.indicacion).toBe('Responder que sí, con precio de lista 2026');
+
+      // mensajeId presente también hace round-trip (BIGINT sin FK).
+      const conMensaje = await repo.crearSolicitudAyuda({
+        conversacionId: fixture.conversacionId,
+        mensajeId: 987654321,
+        consulta: `Segunda consulta ${SUFIJO}`,
+        terminosBuscados: [],
+        score: null,
+      });
+      expect(conMensaje.mensajeId).toBe(987654321);
+      expect(conMensaje.terminosBuscados).toEqual([]);
+      expect(conMensaje.score).toBeNull();
+
+      // Conversación ajena sin solicitudes → null.
+      expect(await repo.obtenerSolicitudAyudaPendiente(await idInexistente('CRM_Conversaciones'))).toBeNull();
+    } finally {
+      await limpiarProbe();
+    }
+  });
+
+  it('resolver una solicitud ya RESUELTA → ConflictError tipado; id inexistente → NotFoundError tipado', async () => {
+    try {
+      const fixture = await crearFixtureVinculada('REQUIERE_HUMANO');
+      const creada = await repo.crearSolicitudAyuda({
+        conversacionId: fixture.conversacionId,
+        consulta: `Consulta a resolver dos veces ${SUFIJO}`,
+        terminosBuscados: ['consulta'],
+        score: 0.1,
+      });
+      await repo.resolverSolicitudAyuda(creada.id, 'primera indicación', 'Operadora Probe');
+
+      await expect(
+        repo.resolverSolicitudAyuda(creada.id, 'segunda indicación', 'Operadora Probe'),
+      ).rejects.toMatchObject({ name: 'ConflictError', code: 'CONFLICT_ERROR' });
+      await expect(
+        repo.resolverSolicitudAyuda(creada.id, 'segunda indicación', 'Operadora Probe'),
+      ).rejects.toBeInstanceOf(ConflictError);
+
+      await expect(
+        repo.resolverSolicitudAyuda(await idSolicitudInexistente(), 'indicación', 'Operadora Probe'),
+      ).rejects.toMatchObject({ name: 'NotFoundError', code: 'NOT_FOUND_ERROR' });
+      await expect(
+        repo.resolverSolicitudAyuda(await idSolicitudInexistente(), 'indicación', 'Operadora Probe'),
+      ).rejects.toBeInstanceOf(NotFoundError);
+    } finally {
+      await limpiarProbe();
+    }
+  });
+});
+
+describe('E3 (agente-ia-crm): extracciones de ficha (upsert IA vs HUMANO)', () => {
+  it('inserta y luego actualiza la MISMA fila (dedup contacto+empresa+campo con claves NULL)', async () => {
+    try {
+      const fixture = await crearFixtureVinculada('ACTIVA_IA');
+      const primera = await repo.upsertExtraccionFicha({
+        contactoId: fixture.contactoId,
+        empresaId: fixture.empresaId,
+        campo: 'cargo',
+        valor: 'Jefe de Compras',
+        origen: 'IA',
+        confirmado: false,
+      });
+      extraccionesCreadas.add(primera.id);
+      expect(primera).toMatchObject({
+        id: expect.any(Number),
+        contactoId: fixture.contactoId,
+        empresaId: fixture.empresaId,
+        campo: 'cargo',
+        valor: 'Jefe de Compras',
+        origen: 'IA',
+        confirmado: false,
+      });
+      expect(primera.actualizadoEn).toBeInstanceOf(Date);
+
+      // Re-extracción IA: MISMA fila, valor/origen/confirmado actualizados.
+      const segunda = await repo.upsertExtraccionFicha({
+        contactoId: fixture.contactoId,
+        empresaId: fixture.empresaId,
+        campo: 'cargo',
+        valor: 'Gerente de Compras',
+        origen: 'IA',
+        confirmado: false,
+      });
+      expect(segunda.id).toBe(primera.id);
+      expect(segunda.valor).toBe('Gerente de Compras');
+      expect(segunda.origen).toBe('IA');
+
+      // Una extracción con la clave contacto pero empresaId NULL es OTRA
+      // fila (dedup exacto por la tupla con NULLs — sin unique index).
+      const soloContacto = await repo.upsertExtraccionFicha({
+        contactoId: fixture.contactoId,
+        empresaId: null,
+        campo: 'cargo',
+        valor: 'Valor sin empresa',
+        origen: 'IA',
+        confirmado: false,
+      });
+      extraccionesCreadas.add(soloContacto.id);
+      expect(soloContacto.id).not.toBe(primera.id);
+    } finally {
+      await limpiarProbe();
+    }
+  });
+
+  it('la re-extracción IA NO sobrescribe una fila HUMANO confirmada (gana el humano)', async () => {
+    try {
+      const fixture = await crearFixtureVinculada('ACTIVA_IA');
+      const ia = await repo.upsertExtraccionFicha({
+        contactoId: fixture.contactoId,
+        empresaId: fixture.empresaId,
+        campo: 'trabajadores',
+        valor: '50',
+        origen: 'IA',
+        confirmado: false,
+      });
+      extraccionesCreadas.add(ia.id);
+
+      // Un humano corrige y confirma.
+      const humana = await repo.upsertExtraccionFicha({
+        contactoId: fixture.contactoId,
+        empresaId: fixture.empresaId,
+        campo: 'trabajadores',
+        valor: '120',
+        origen: 'HUMANO',
+        confirmado: true,
+      });
+      expect(humana.id).toBe(ia.id);
+      expect(humana).toMatchObject({ valor: '120', origen: 'HUMANO', confirmado: true });
+
+      // La IA re-extrae OTRO valor: la fila humana confirmada NO cambia
+      // (misma id, valor/origen/confirmado intactos, actualizadoEn intacto).
+      const iaDeNuevo = await repo.upsertExtraccionFicha({
+        contactoId: fixture.contactoId,
+        empresaId: fixture.empresaId,
+        campo: 'trabajadores',
+        valor: '200',
+        origen: 'IA',
+        confirmado: false,
+      });
+      expect(iaDeNuevo.id).toBe(ia.id);
+      expect(iaDeNuevo.valor).toBe('120');
+      expect(iaDeNuevo.origen).toBe('HUMANO');
+      expect(iaDeNuevo.confirmado).toBe(true);
+      expect(iaDeNuevo.actualizadoEn.getTime()).toBe(humana.actualizadoEn.getTime());
+    } finally {
+      await limpiarProbe();
+    }
+  });
+
+  it('listarExtraccionesFicha por contacto y por empresa; ambos null → []', async () => {
+    try {
+      const f1 = await crearFixtureVinculada('ACTIVA_IA');
+      const f2 = await crearFixtureVinculada('ACTIVA_IA');
+      const cargo = await repo.upsertExtraccionFicha({
+        contactoId: f1.contactoId, empresaId: f1.empresaId,
+        campo: 'cargo', valor: 'Compras', origen: 'IA', confirmado: false,
+      });
+      const sedes = await repo.upsertExtraccionFicha({
+        contactoId: f1.contactoId, empresaId: null,
+        campo: 'sedes', valor: '3', origen: 'IA', confirmado: false,
+      });
+      const trabajadores = await repo.upsertExtraccionFicha({
+        contactoId: null, empresaId: f1.empresaId,
+        campo: 'trabajadores', valor: '80', origen: 'IA', confirmado: false,
+      });
+      const ajena = await repo.upsertExtraccionFicha({
+        contactoId: f2.contactoId, empresaId: f2.empresaId,
+        campo: 'cargo', valor: 'Otro cargo', origen: 'IA', confirmado: false,
+      });
+      extraccionesCreadas.add(cargo.id);
+      extraccionesCreadas.add(sedes.id);
+      extraccionesCreadas.add(trabajadores.id);
+      extraccionesCreadas.add(ajena.id);
+
+      // Por contacto: filas cuya COLUMNA contactoId es la del f1 (la de
+      // empresa-only no entra por la empresa de f1).
+      const porContacto = await repo.listarExtraccionesFicha(f1.contactoId, null);
+      expect(porContacto.map((e) => e.id).sort()).toEqual([cargo.id, sedes.id].sort());
+
+      // Por empresa: filas cuya COLUMNA empresaId es la de f1.
+      const porEmpresa = await repo.listarExtraccionesFicha(null, f1.empresaId);
+      expect(porEmpresa.map((e) => e.id).sort()).toEqual([cargo.id, trabajadores.id].sort());
+
+      expect(await repo.listarExtraccionesFicha(null, null)).toEqual([]);
+    } finally {
+      await limpiarProbe();
+    }
+  });
+});
+
+describe('E3 (agente-ia-crm): asignación y memoria por conversación', () => {
+  it('actualizarAsignacion fija asignadaA + modo (round-trip ida y vuelta)', async () => {
+    try {
+      const fixture = await crearFixtureVinculada('REQUIERE_HUMANO');
+      expect((await repo.obtenerPorId(fixture.conversacionId))?.asignadaA).toBeNull();
+
+      await repo.actualizarAsignacion(fixture.conversacionId, 'soporte@holomedic.com.py', 'HUMANO');
+      expect(await repo.obtenerPorId(fixture.conversacionId)).toMatchObject({
+        asignadaA: 'soporte@holomedic.com.py',
+        modo: 'HUMANO',
+      });
+
+      // Devolución a la Guía: asignadaA vuelve a NULL.
+      await repo.actualizarAsignacion(fixture.conversacionId, null, 'IA');
+      expect(await repo.obtenerPorId(fixture.conversacionId)).toMatchObject({
+        asignadaA: null,
+        modo: 'IA',
+      });
+    } finally {
+      await limpiarProbe();
+    }
+  });
+
+  it('memoriaActiva nace true (DEFAULT 1) y el mapeo refleja el valor real de la columna', async () => {
+    try {
+      const telefono = telefonoProbe();
+      const conv = await repo.crear({ canal: 'WHATSAPP', telefono });
+      conversacionesCreadas.add(conv.id);
+      expect(conv.memoriaActiva).toBe(true);
+      expect((await repo.obtenerPorId(conv.id))?.memoriaActiva).toBe(true);
+
+      // El listar también la cruza (columna ampliada del JOIN).
+      const pagina = await repo.listar({ busqueda: telefono });
+      expect(pagina.items.find((c) => c.id === conv.id)?.memoriaActiva).toBe(true);
+
+      // Flip crudo de la columna (el toggle de UI llega en una tarea
+      // posterior de E3): prueba que el MAPEO lee la columna, no un 1
+      // hardcodeado.
+      await pool
+        .request()
+        .input('id', mssql.Int, conv.id)
+        .query('UPDATE dbo.CRM_Conversaciones SET memoriaActiva = 0 WHERE id = @id');
+      expect((await repo.obtenerPorId(conv.id))?.memoriaActiva).toBe(false);
+    } finally {
+      await limpiarProbe();
+    }
+  });
+});
+

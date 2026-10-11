@@ -325,6 +325,10 @@ BEGIN
     modo               NVARCHAR(10)   NOT NULL DEFAULT 'IA' CONSTRAINT CK_CRM_Conversaciones_Modo CHECK (modo IN ('IA','HUMANO')),
     ultimoMensajeEn    DATETIME2(0)   NULL,
     noLeidos           INT            NOT NULL DEFAULT 0,
+    -- E3 (agente-ia-crm): per-conversation memory toggle — 1 (DEFAULT)
+    -- = la Guía reads/writes the Engram memory for this thread, 0 =
+    -- privacy opt-out (the distiller skips the conversation).
+    memoriaActiva      BIT            NOT NULL DEFAULT 1,
     creadoEn           DATETIME2(0)   NOT NULL DEFAULT SYSDATETIME(),
     actualizadoEn      DATETIME2(0)   NOT NULL DEFAULT SYSDATETIME()
   );
@@ -382,7 +386,7 @@ BEGIN
     -- BIGINT: matches CRM_Mensajes.id (high-volume history,
     -- Transiciones precedent). No FK — header note.
     mensajeId       BIGINT         NOT NULL,
-    tipo            VARCHAR(30)    NOT NULL CONSTRAINT CK_CRM_AgenteTareas_Tipo CHECK (tipo IN ('GENERAR_RESPUESTA')),
+    tipo            VARCHAR(30)    NOT NULL CONSTRAINT CK_CRM_AgenteTareas_Tipo CHECK (tipo IN ('GENERAR_RESPUESTA','RESPONDER_CON_INDICACION')),
     estado          VARCHAR(20)    NOT NULL CONSTRAINT DF_CRM_AgenteTareas_Estado DEFAULT 'PENDIENTE' CONSTRAINT CK_CRM_AgenteTareas_Estado CHECK (estado IN ('PENDIENTE','PROCESANDO','COMPLETADA','FALLIDA')),
     intentos        INT            NOT NULL DEFAULT 0,
     error           NVARCHAR(MAX)  NULL,
@@ -395,6 +399,71 @@ BEGIN
     -- Idempotent creation: one task per (conversacion, mensaje,
     -- tipo) — a replayed webhook delivery never double-enqueues.
     CONSTRAINT UQ_CRM_AgenteTareas_ConversacionMensajeTipo UNIQUE (conversacionId, mensajeId, tipo)
+  );
+END;
+IF NOT EXISTS (SELECT 1 FROM sys.tables WHERE name = 'CRM_SolicitudesAyuda' AND schema_id = SCHEMA_ID('dbo'))
+BEGIN
+  CREATE TABLE dbo.CRM_SolicitudesAyuda (
+    id               BIGINT         IDENTITY(1,1) NOT NULL PRIMARY KEY,
+    -- CASCADE mirrors CRM_Mensajes/CRM_AgenteTareas: deleting the
+    -- conversation drops its help requests. A hueco referencing a
+    -- solicitud SURVIVES it (SET NULL on CRM_ConocimientoHuecos.
+    -- origenSolicitudId — the curation candidate outlives the chat).
+    -- INT: SQL Server error 1778 requires the FK column to match the
+    -- referenced column's type EXACTLY (CRM_Mensajes.conversacionId
+    -- precedent) — only the PK-side BIGINT tables (mensajes, this
+    -- table) take BIGINT keys.
+    conversacionId   INT            NOT NULL CONSTRAINT FK_CRM_SolicitudesAyuda_Conversacion REFERENCES dbo.CRM_Conversaciones (id) ON DELETE CASCADE,
+    -- BIGINT: matches CRM_Mensajes.id (high-volume history). NO FK —
+    -- CRM_AgenteTareas.mensajeId precedent (header note there).
+    mensajeId        BIGINT         NULL,
+    consulta         NVARCHAR(2000) NOT NULL,
+    -- JSON array of strings (terminosBuscados) — adapter (de)serializes.
+    terminosBuscados NVARCHAR(MAX)  NULL,
+    score            FLOAT          NULL,
+    estado           NVARCHAR(20)   NOT NULL DEFAULT 'PENDIENTE' CONSTRAINT CK_CRM_SolicitudesAyuda_Estado CHECK (estado IN ('PENDIENTE','RESUELTA')),
+    indicacion       NVARCHAR(2000) NULL,
+    resueltaPor      NVARCHAR(100)  NULL,
+    creadoEn         DATETIME2      NOT NULL DEFAULT SYSUTCDATETIME(),
+    resueltaEn       DATETIME2      NULL
+  );
+END;
+IF NOT EXISTS (SELECT 1 FROM sys.tables WHERE name = 'CRM_ConocimientoHuecos' AND schema_id = SCHEMA_ID('dbo'))
+BEGIN
+  CREATE TABLE dbo.CRM_ConocimientoHuecos (
+    id                BIGINT         IDENTITY(1,1) NOT NULL PRIMARY KEY,
+    consulta          NVARCHAR(2000) NOT NULL,
+    -- JSON array of strings (terminos) — adapter (de)serializes.
+    terminos          NVARCHAR(MAX)  NULL,
+    estado            NVARCHAR(20)   NOT NULL DEFAULT 'ABIERTO' CONSTRAINT CK_CRM_ConocimientoHuecos_Estado CHECK (estado IN ('ABIERTO','CURADO','DESCARTADO')),
+    -- SET NULL (Conversaciones.empresaId precedent): deleting the
+    -- solicitud (via the conversation CASCADE above) drops only the
+    -- provenance — the KB-gap candidate survives for curation (E5).
+    origenSolicitudId BIGINT         NULL CONSTRAINT FK_CRM_ConocimientoHuecos_Solicitud REFERENCES dbo.CRM_SolicitudesAyuda (id) ON DELETE SET NULL,
+    creadoEn          DATETIME2      NOT NULL DEFAULT SYSUTCDATETIME()
+  );
+END;
+IF NOT EXISTS (SELECT 1 FROM sys.tables WHERE name = 'CRM_ExtraccionesFicha' AND schema_id = SCHEMA_ID('dbo'))
+BEGIN
+  CREATE TABLE dbo.CRM_ExtraccionesFicha (
+    id            BIGINT         IDENTITY(1,1) NOT NULL PRIMARY KEY,
+    -- NO ACTION on the contacto FK (Actividades/EnviosCorreos
+    -- precedent): SQL Server forbids two cascade paths into the
+    -- empresa graph — the empresa CASCADE below already removes the
+    -- extraction rows when the empresa goes. Both FK columns are INT:
+    -- error 1778 demands an exact type match with the referenced
+    -- CRM_Contactos/CRM_Empresas INT ids (Actividades precedent).
+    contactoId    INT            NULL CONSTRAINT FK_CRM_ExtraccionesFicha_Contacto REFERENCES dbo.CRM_Contactos (id) ON DELETE NO ACTION,
+    empresaId     INT            NULL CONSTRAINT FK_CRM_ExtraccionesFicha_Empresa REFERENCES dbo.CRM_Empresas (id) ON DELETE CASCADE,
+    campo         NVARCHAR(50)   NOT NULL CONSTRAINT CK_CRM_ExtraccionesFicha_Campo CHECK (campo IN ('cargo','trabajadores','sedes')),
+    valor         NVARCHAR(500)  NOT NULL,
+    origen        NVARCHAR(10)   NOT NULL DEFAULT 'IA' CONSTRAINT CK_CRM_ExtraccionesFicha_Origen CHECK (origen IN ('IA','HUMANO')),
+    confirmado    BIT            NOT NULL DEFAULT 0,
+    actualizadoEn DATETIME2      NOT NULL DEFAULT SYSUTCDATETIME()
+    -- NO unique constraint on (contactoId, empresaId, campo): the
+    -- keys are NULLable and SQL Server unique indexes over NULL keys
+    -- are unreliable — the dedup is app-level (SELECT then
+    -- UPDATE/INSERT in the repository upsert).
   );
 END;
 
@@ -417,6 +486,14 @@ END;
 IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('dbo.CRM_Contactos') AND name = 'telefonoNormalizado')
 BEGIN
   ALTER TABLE dbo.CRM_Contactos ADD telefonoNormalizado VARCHAR(30) NULL;
+END;
+IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('dbo.CRM_Conversaciones') AND name = 'memoriaActiva')
+BEGIN
+  -- E3 (agente-ia-crm): per-conversation memory toggle — BIT NOT NULL
+  -- DEFAULT 1 (ON by default; the operator can opt the conversation
+  -- out of the Engram memory). Guarded column add (telefonoNormalizado
+  -- precedent): no-op on fresh installs (the CREATE above carries it).
+  ALTER TABLE dbo.CRM_Conversaciones ADD memoriaActiva BIT NOT NULL DEFAULT 1;
 END;
 IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'UX_CRM_Contactos_Principal' AND object_id = OBJECT_ID('dbo.CRM_Contactos'))
 BEGIN
@@ -550,6 +627,27 @@ BEGIN
     ON dbo.CRM_AgenteTareas (estado)
     INCLUDE (reclamadaEn, conversacionId, mensajeId, tipo, intentos);
 END;
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_CRM_SolicitudesAyuda_ConversacionEstado' AND object_id = OBJECT_ID('dbo.CRM_SolicitudesAyuda'))
+BEGIN
+  -- Help-pattern reads (E3): the bandeja resolves the conversation's
+  -- PENDIENTE solicitud and the operator panel lists open requests.
+  CREATE INDEX IX_CRM_SolicitudesAyuda_ConversacionEstado
+    ON dbo.CRM_SolicitudesAyuda (conversacionId, estado);
+END;
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_CRM_ExtraccionesFicha_Contacto' AND object_id = OBJECT_ID('dbo.CRM_ExtraccionesFicha'))
+BEGIN
+  -- Ficha reads (E3): the upsert dedup seek and
+  -- listarExtraccionesFicha(contactoId, …) seek on the contacto key.
+  CREATE INDEX IX_CRM_ExtraccionesFicha_Contacto
+    ON dbo.CRM_ExtraccionesFicha (contactoId);
+END;
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_CRM_ExtraccionesFicha_Empresa' AND object_id = OBJECT_ID('dbo.CRM_ExtraccionesFicha'))
+BEGIN
+  -- Ficha reads (E3): the upsert dedup seek and
+  -- listarExtraccionesFicha(…, empresaId) seek on the empresa key.
+  CREATE INDEX IX_CRM_ExtraccionesFicha_Empresa
+    ON dbo.CRM_ExtraccionesFicha (empresaId);
+END;
 IF NOT EXISTS (SELECT 1 FROM sys.default_constraints WHERE name = 'DF_CRM_AgenteTareas_Estado' AND parent_object_id = OBJECT_ID('dbo.CRM_AgenteTareas'))
 BEGIN
   -- E2·T5 correction: the very first run of the guarded CREATE block
@@ -563,6 +661,15 @@ IF EXISTS (SELECT 1 FROM sys.check_constraints WHERE name = 'CK_CRM_Mensajes_Est
 BEGIN
   ALTER TABLE dbo.CRM_Mensajes DROP CONSTRAINT CK_CRM_Mensajes_EstadoEnvio;
   ALTER TABLE dbo.CRM_Mensajes ADD CONSTRAINT CK_CRM_Mensajes_EstadoEnvio CHECK (estadoEnvio IN ('PENDIENTE','ENVIADO','FALLIDO'));
+END;
+IF EXISTS (SELECT 1 FROM sys.check_constraints WHERE name = 'CK_CRM_AgenteTareas_Tipo' AND parent_object_id = OBJECT_ID('dbo.CRM_AgenteTareas') AND definition NOT LIKE '%RESPONDER_CON_INDICACION%')
+-- Help pattern (E3): widen the E2 single-value CHECK — the domain
+-- union TipoTareaAgente now carries RESPONDER_CON_INDICACION (the
+-- motor re-reads the indicación from the resolved solicitud — no new
+-- TareaAgente fields). CK_CRM_Mensajes_EstadoEnvio widening precedent.
+BEGIN
+  ALTER TABLE dbo.CRM_AgenteTareas DROP CONSTRAINT CK_CRM_AgenteTareas_Tipo;
+  ALTER TABLE dbo.CRM_AgenteTareas ADD CONSTRAINT CK_CRM_AgenteTareas_Tipo CHECK (tipo IN ('GENERAR_RESPUESTA','RESPONDER_CON_INDICACION'));
 END;
 `;
 

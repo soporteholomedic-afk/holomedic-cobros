@@ -1,6 +1,6 @@
 import * as mssql from 'mssql';
 
-import type { EntradaConocimiento } from '../../domain/entities';
+import type { EntradaConocimiento, HuecoConocimiento } from '../../domain/entities';
 import type { ConocimientoCrmRepository } from '../../domain/ports';
 
 /**
@@ -11,7 +11,8 @@ import type { ConocimientoCrmRepository } from '../../domain/ports';
  * case-insensitive LIKE over titulo/contenido (database collation
  * precedent) whose wildcards are ALWAYS escaped (E1 lesson — a
  * client '%' must match a literal '%', never every row). Both reads
- * only ever return activo = 1 rows.
+ * only ever return activo = 1 rows. E3 appends `crearHueco`: the
+ * append-only KB-gap log over CRM_ConocimientoHuecos.
  */
 
 /** CRM_Conocimiento read row — DATETIME2 crosses tedious as Date. */
@@ -67,6 +68,41 @@ function mapearEntrada(row: ConocimientoRow): EntradaConocimiento {
   };
 }
 
+/** CRM_ConocimientoHuecos read row — DATETIME2 as Date; BIGINT ids cross tedious as string (TareaAgente precedent) → Number(). */
+interface HuecoRow {
+  id: number | string;
+  consulta: string;
+  terminos: string | null;
+  estado: string;
+  origenSolicitudId: number | string | null;
+  creadoEn: Date;
+}
+
+const COLUMNAS_HUECO = 'id, consulta, terminos, estado, origenSolicitudId, creadoEn';
+
+function mapearHueco(row: HuecoRow): HuecoConocimiento {
+  return {
+    id: Number(row.id),
+    consulta: row.consulta,
+    terminos: parsearTerminosJson(row.terminos),
+    estado: row.estado as HuecoConocimiento['estado'],
+    origenSolicitudId: row.origenSolicitudId === null ? null : Number(row.origenSolicitudId),
+    creadoEn: row.creadoEn,
+  };
+}
+
+/** JSON string array → string[]: malformed/non-array falls back to []. */
+function parsearTerminosJson(raw: string | null): string[] {
+  if (raw === null || raw === '') return [];
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter((termino): termino is string => typeof termino === 'string');
+  } catch {
+    return [];
+  }
+}
+
 /**
  * Escapa los comodines LIKE de SQL Server ('[' → '[[]', '%' → '[%]',
  * '_' → '[_]') ANTES de envolver el input en '%…%'. Sin esto, buscar
@@ -111,5 +147,34 @@ export class SqlServerConocimientoRepository implements ConocimientoCrmRepositor
       ORDER BY id
     `);
     return (result.recordset as ConocimientoRow[]).map(mapearEntrada);
+  }
+
+  // ---- E3 (agente-ia-crm): huecos de conocimiento ----
+
+  async crearHueco(entrada: {
+    consulta: string;
+    terminos: string[];
+    origenSolicitudId?: number | null;
+    estado?: HuecoConocimiento['estado'];
+  }): Promise<HuecoConocimiento> {
+    const inserted = await this.pool
+      .request()
+      .input('consulta', mssql.NVarChar(2000), entrada.consulta)
+      .input('terminos', mssql.NVarChar(mssql.MAX), JSON.stringify(entrada.terminos))
+      .input('estado', mssql.NVarChar(20), entrada.estado ?? 'ABIERTO')
+      .input('origenSolicitudId', mssql.BigInt, entrada.origenSolicitudId ?? null).query(`
+        INSERT INTO dbo.CRM_ConocimientoHuecos (consulta, terminos, estado, origenSolicitudId)
+        OUTPUT INSERTED.id
+        VALUES (@consulta, @terminos, @estado, @origenSolicitudId)
+      `);
+    const id = Number((inserted.recordset as { id: number | string }[])[0]?.id);
+    if (Number.isNaN(id)) throw new Error('INSERT de CRM_ConocimientoHuecos no devolvió id');
+    const releido = await this.pool
+      .request()
+      .input('id', mssql.BigInt, id)
+      .query(`SELECT ${COLUMNAS_HUECO} FROM dbo.CRM_ConocimientoHuecos WHERE id = @id`);
+    const row = (releido.recordset as HuecoRow[])[0];
+    if (!row) throw new Error('El hueco recién creado no pudo releerse');
+    return mapearHueco(row);
   }
 }

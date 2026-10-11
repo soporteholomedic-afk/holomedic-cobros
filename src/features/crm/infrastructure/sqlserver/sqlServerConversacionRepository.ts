@@ -1,11 +1,16 @@
 import * as mssql from 'mssql';
 
 import { normalizarNombre, normalizarTelefonoE164, telefonoDigitosClave } from '../../domain/normalizar';
+import { ConflictError, NotFoundError } from '../../domain/errors';
 import type {
+  CampoFicha,
   CanalConversacion,
   ConversacionCrm,
   ConversacionListada,
   CrearConversacionInput,
+  ExtraccionFicha,
+  OrigenDatoFicha,
+  SolicitudAyuda,
 } from '../../domain/entities';
 import type {
   BuscarConversacionCanal,
@@ -28,7 +33,10 @@ import { mapearConflictoUnico } from './conflictos';
  * backstops, mapped to the typed ConflictError via the shared
  * mapearConflictoUnico. Every write touches actualizadoEn. LIKE
  * filtering relies on the database's case-insensitive collation
- * (empresa registry precedent).
+ * (empresa registry precedent). E3 appends the help-pattern tables:
+ * CRM_SolicitudesAyuda (lifecycle + typed errors) and
+ * CRM_ExtraccionesFicha (app-level dedup upsert — the human-confirmed
+ * rule lives HERE, not in the schema).
  */
 
 /** CRM_Conversaciones read row — DATETIME2(0) crosses tedious as Date. */
@@ -42,6 +50,7 @@ interface ConversacionRow {
   estado: string;
   asignadaA: string | null;
   modo: string;
+  memoriaActiva: boolean;
   ultimoMensajeEn: Date | null;
   noLeidos: number;
   creadoEn: Date;
@@ -49,13 +58,13 @@ interface ConversacionRow {
 }
 
 const COLUMNAS = `id, empresaId, contactoId, canal, telefono, identificadorCanal,
-                  estado, asignadaA, modo, ultimoMensajeEn, noLeidos, creadoEn, actualizadoEn`;
+                  estado, asignadaA, modo, memoriaActiva, ultimoMensajeEn, noLeidos, creadoEn, actualizadoEn`;
 
 // listar() JOINea Empresas/Contactos: id/empresaId/telefono existen en
 // varias tablas del JOIN, así que las columnas DEBEN calificarse con el
 // alias c. (sin esto SQL Server responde "Ambiguous column name").
 const COLUMNAS_CON_ALIAS = `c.id, c.empresaId, c.contactoId, c.canal, c.telefono, c.identificadorCanal,
-                  c.estado, c.asignadaA, c.modo, c.ultimoMensajeEn, c.noLeidos, c.creadoEn, c.actualizadoEn`;
+                  c.estado, c.asignadaA, c.modo, c.memoriaActiva, c.ultimoMensajeEn, c.noLeidos, c.creadoEn, c.actualizadoEn`;
 
 function mapearConversacion(row: ConversacionRow): ConversacionCrm {
   return {
@@ -68,10 +77,84 @@ function mapearConversacion(row: ConversacionRow): ConversacionCrm {
     estado: row.estado as ConversacionCrm['estado'],
     asignadaA: row.asignadaA,
     modo: row.modo as ConversacionCrm['modo'],
+    memoriaActiva: row.memoriaActiva,
     ultimoMensajeEn: row.ultimoMensajeEn ? row.ultimoMensajeEn.toISOString() : null,
     noLeidos: row.noLeidos,
     creadoEn: row.creadoEn.toISOString(),
     actualizadoEn: row.actualizadoEn.toISOString(),
+  };
+}
+
+/** JSON string array → string[]: malformed/non-array falls back to []. */
+function parsearTerminosJson(raw: string | null): string[] {
+  if (raw === null || raw === '') return [];
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter((termino): termino is string => typeof termino === 'string');
+  } catch {
+    return [];
+  }
+}
+
+/** CRM_SolicitudesAyuda read row — DATETIME2 crosses tedious as Date; BIGINT ids cross as string (TareaAgente precedent) → Number(). */
+interface SolicitudAyudaRow {
+  id: number | string;
+  conversacionId: number;
+  mensajeId: number | string | null;
+  consulta: string;
+  terminosBuscados: string | null;
+  score: number | null;
+  estado: string;
+  indicacion: string | null;
+  resueltaPor: string | null;
+  creadoEn: Date;
+  resueltaEn: Date | null;
+}
+
+const COLUMNAS_SOLICITUD = `id, conversacionId, mensajeId, consulta, terminosBuscados,
+                             score, estado, indicacion, resueltaPor, creadoEn, resueltaEn`;
+
+function mapearSolicitudAyuda(row: SolicitudAyudaRow): SolicitudAyuda {
+  return {
+    id: Number(row.id),
+    conversacionId: row.conversacionId,
+    mensajeId: row.mensajeId === null ? null : Number(row.mensajeId),
+    consulta: row.consulta,
+    terminosBuscados: parsearTerminosJson(row.terminosBuscados),
+    score: row.score,
+    estado: row.estado as SolicitudAyuda['estado'],
+    indicacion: row.indicacion,
+    resueltaPor: row.resueltaPor,
+    creadoEn: row.creadoEn,
+    resueltaEn: row.resueltaEn,
+  };
+}
+
+/** CRM_ExtraccionesFicha read row — BIGINT id crosses tedious as string (TareaAgente precedent). */
+interface ExtraccionFichaRow {
+  id: number | string;
+  contactoId: number | null;
+  empresaId: number | null;
+  campo: string;
+  valor: string;
+  origen: string;
+  confirmado: boolean;
+  actualizadoEn: Date;
+}
+
+const COLUMNAS_EXTRACCION = 'id, contactoId, empresaId, campo, valor, origen, confirmado, actualizadoEn';
+
+function mapearExtraccionFicha(row: ExtraccionFichaRow): ExtraccionFicha {
+  return {
+    id: Number(row.id),
+    contactoId: row.contactoId,
+    empresaId: row.empresaId,
+    campo: row.campo as ExtraccionFicha['campo'],
+    valor: row.valor,
+    origen: row.origen as ExtraccionFicha['origen'],
+    confirmado: row.confirmado,
+    actualizadoEn: row.actualizadoEn,
   };
 }
 
@@ -120,11 +203,12 @@ export class SqlServerConversacionRepository implements ConversacionCrmRepositor
         .input('identificadorCanal', mssql.VarChar(64), datos.identificadorCanal ?? null)
         .input('estado', mssql.VarChar(24), datos.estado ?? 'PENDIENTE_VINCULACION')
         .input('asignadaA', mssql.NVarChar(200), datos.asignadaA ?? null)
-        .input('modo', mssql.NVarChar(10), datos.modo ?? 'IA').query(`
+        .input('modo', mssql.NVarChar(10), datos.modo ?? 'IA')
+        .input('memoriaActiva', mssql.Bit, 1).query(`
           INSERT INTO dbo.CRM_Conversaciones
-            (empresaId, contactoId, canal, telefono, identificadorCanal, estado, asignadaA, modo)
+            (empresaId, contactoId, canal, telefono, identificadorCanal, estado, asignadaA, modo, memoriaActiva)
           OUTPUT INSERTED.id
-          VALUES (@empresaId, @contactoId, @canal, @telefono, @identificadorCanal, @estado, @asignadaA, @modo)
+          VALUES (@empresaId, @contactoId, @canal, @telefono, @identificadorCanal, @estado, @asignadaA, @modo, @memoriaActiva)
         `);
       const id = (inserted.recordset as { id: number }[])[0]?.id;
       if (id === undefined) throw new Error('INSERT de CRM_Conversaciones no devolvió id');
@@ -308,6 +392,27 @@ export class SqlServerConversacionRepository implements ConversacionCrmRepositor
       );
     if ((result.rowsAffected[0] ?? 0) === 0) return null;
     return this.obtenerPorId(id);
+  }
+
+  /**
+   * Flip asignadaA + modo TOGETHER (E3 take/return handoff):
+   * actualizarEstado moves estado (opt. asignadaA) and actualizarModo
+   * moves modo — the operator take needs both columns in one write,
+   * and the return-to-IA needs asignadaA back to NULL.
+   */
+  async actualizarAsignacion(
+    id: number,
+    asignadaA: string | null,
+    modo: ConversacionCrm['modo'],
+  ): Promise<void> {
+    await this.pool
+      .request()
+      .input('id', mssql.Int, id)
+      .input('asignadaA', mssql.NVarChar(200), asignadaA)
+      .input('modo', mssql.NVarChar(10), modo)
+      .query(
+        'UPDATE dbo.CRM_Conversaciones SET asignadaA = @asignadaA, modo = @modo, actualizadoEn = SYSDATETIME() WHERE id = @id',
+      );
   }
 
   async marcarMensajesLeidos(id: number): Promise<void> {
@@ -499,5 +604,206 @@ export class SqlServerConversacionRepository implements ConversacionCrmRepositor
       razonSocial: row.razonSocial,
       telefono: row.telefono,
     }));
+  }
+
+  // ---- E3 (agente-ia-crm): solicitudes de ayuda humana ----
+
+  private async obtenerSolicitudPorId(id: number): Promise<SolicitudAyuda | null> {
+    const result = await this.pool
+      .request()
+      .input('id', mssql.BigInt, id)
+      .query(`SELECT ${COLUMNAS_SOLICITUD} FROM dbo.CRM_SolicitudesAyuda WHERE id = @id`);
+    const row = (result.recordset as SolicitudAyudaRow[])[0];
+    return row ? mapearSolicitudAyuda(row) : null;
+  }
+
+  async crearSolicitudAyuda(entrada: {
+    conversacionId: number;
+    mensajeId?: number | null;
+    consulta: string;
+    terminosBuscados: string[];
+    score: number | null;
+  }): Promise<SolicitudAyuda> {
+    const inserted = await this.pool
+      .request()
+      .input('conversacionId', mssql.Int, entrada.conversacionId)
+      .input('mensajeId', mssql.BigInt, entrada.mensajeId ?? null)
+      .input('consulta', mssql.NVarChar(2000), entrada.consulta)
+      .input('terminosBuscados', mssql.NVarChar(mssql.MAX), JSON.stringify(entrada.terminosBuscados))
+      .input('score', mssql.Float, entrada.score).query(`
+        INSERT INTO dbo.CRM_SolicitudesAyuda
+          (conversacionId, mensajeId, consulta, terminosBuscados, score)
+        OUTPUT INSERTED.id
+        VALUES (@conversacionId, @mensajeId, @consulta, @terminosBuscados, @score)
+      `);
+    const id = Number((inserted.recordset as { id: number | string }[])[0]?.id);
+    if (Number.isNaN(id)) throw new Error('INSERT de CRM_SolicitudesAyuda no devolvió id');
+    const solicitud = await this.obtenerSolicitudPorId(id);
+    if (!solicitud) throw new Error('La solicitud recién creada no pudo releerse');
+    return solicitud;
+  }
+
+  async obtenerSolicitudAyudaPendiente(conversacionId: number): Promise<SolicitudAyuda | null> {
+    const result = await this.pool
+      .request()
+      .input('conversacionId', mssql.Int, conversacionId).query(`
+        SELECT TOP (1) ${COLUMNAS_SOLICITUD}
+        FROM dbo.CRM_SolicitudesAyuda
+        WHERE conversacionId = @conversacionId AND estado = 'PENDIENTE'
+        ORDER BY id DESC
+      `);
+    const row = (result.recordset as SolicitudAyudaRow[])[0];
+    return row ? mapearSolicitudAyuda(row) : null;
+  }
+
+  async obtenerUltimaSolicitudResuelta(conversacionId: number): Promise<SolicitudAyuda | null> {
+    const result = await this.pool
+      .request()
+      .input('conversacionId', mssql.Int, conversacionId).query(`
+        SELECT TOP (1) ${COLUMNAS_SOLICITUD}
+        FROM dbo.CRM_SolicitudesAyuda
+        WHERE conversacionId = @conversacionId AND estado = 'RESUELTA'
+        ORDER BY resueltaEn DESC, id DESC
+      `);
+    const row = (result.recordset as SolicitudAyudaRow[])[0];
+    return row ? mapearSolicitudAyuda(row) : null;
+  }
+
+  async resolverSolicitudAyuda(
+    id: number,
+    indicacion: string,
+    resueltaPor: string,
+  ): Promise<SolicitudAyuda> {
+    // UPDATE condicional (WHERE estado = 'PENDIENTE'): sin ventana
+    // read-then-write — dos resoluciones concurrentes no pueden
+    // ganar; la que llega tarde cae en el ConflictError tipado.
+    const result = await this.pool
+      .request()
+      .input('id', mssql.BigInt, id)
+      .input('indicacion', mssql.NVarChar(2000), indicacion)
+      .input('resueltaPor', mssql.NVarChar(100), resueltaPor).query(`
+        UPDATE dbo.CRM_SolicitudesAyuda
+        SET estado = 'RESUELTA',
+            indicacion = @indicacion,
+            resueltaPor = @resueltaPor,
+            resueltaEn = SYSUTCDATETIME()
+        WHERE id = @id AND estado = 'PENDIENTE'
+      `);
+    if ((result.rowsAffected[0] ?? 0) === 0) {
+      const existente = await this.obtenerSolicitudPorId(id);
+      if (!existente) throw new NotFoundError('Solicitud de ayuda no encontrada');
+      throw new ConflictError('La solicitud de ayuda ya no está pendiente');
+    }
+    const resuelta = await this.obtenerSolicitudPorId(id);
+    if (!resuelta) throw new Error('La solicitud resuelta no pudo releerse');
+    return resuelta;
+  }
+
+  // ---- E3 (agente-ia-crm): extracciones de ficha ----
+
+  private async obtenerExtraccionPorId(id: number): Promise<ExtraccionFicha | null> {
+    const result = await this.pool
+      .request()
+      .input('id', mssql.BigInt, id)
+      .query(`SELECT ${COLUMNAS_EXTRACCION} FROM dbo.CRM_ExtraccionesFicha WHERE id = @id`);
+    const row = (result.recordset as ExtraccionFichaRow[])[0];
+    return row ? mapearExtraccionFicha(row) : null;
+  }
+
+  async upsertExtraccionFicha(extraccion: {
+    contactoId: number | null;
+    empresaId: number | null;
+    campo: CampoFicha;
+    valor: string;
+    origen: OrigenDatoFicha;
+    confirmado: boolean;
+  }): Promise<ExtraccionFicha> {
+    // Dedup app-level por (contactoId, empresaId, campo) — claves
+    // NULL-safe: en SQL 'NULL = NULL' jamás matchea, así que cada lado
+    // se compara con '= @param' O '(IS NULL AND @param IS NULL)'.
+    const existenteResult = await this.pool
+      .request()
+      .input('contactoId', mssql.Int, extraccion.contactoId)
+      .input('empresaId', mssql.Int, extraccion.empresaId)
+      .input('campo', mssql.NVarChar(50), extraccion.campo).query(`
+        SELECT ${COLUMNAS_EXTRACCION}
+        FROM dbo.CRM_ExtraccionesFicha
+        WHERE (contactoId = @contactoId OR (contactoId IS NULL AND @contactoId IS NULL))
+          AND (empresaId = @empresaId OR (empresaId IS NULL AND @empresaId IS NULL))
+          AND campo = @campo
+      `);
+    const existente = (existenteResult.recordset as ExtraccionFichaRow[])[0];
+
+    // REGLA E3: la re-extracción IA NUNCA sobrescribe una fila que el
+    // humano confirmó (confirmado = 1 AND origen 'HUMANO') — gana el
+    // humano; se devuelve la fila intacta sin tocar actualizadoEn.
+    if (
+      existente &&
+      existente.confirmado &&
+      existente.origen === 'HUMANO' &&
+      extraccion.origen === 'IA'
+    ) {
+      return mapearExtraccionFicha(existente);
+    }
+
+    if (existente) {
+      await this.pool
+        .request()
+        .input('id', mssql.BigInt, Number(existente.id))
+        .input('valor', mssql.NVarChar(500), extraccion.valor)
+        .input('origen', mssql.NVarChar(10), extraccion.origen)
+        .input('confirmado', mssql.Bit, extraccion.confirmado).query(`
+          UPDATE dbo.CRM_ExtraccionesFicha
+          SET valor = @valor, origen = @origen, confirmado = @confirmado, actualizadoEn = SYSUTCDATETIME()
+          WHERE id = @id
+        `);
+      const actualizada = await this.obtenerExtraccionPorId(Number(existente.id));
+      if (!actualizada) throw new Error('La extracción actualizada no pudo releerse');
+      return actualizada;
+    }
+
+    const inserted = await this.pool
+      .request()
+      .input('contactoId', mssql.Int, extraccion.contactoId)
+      .input('empresaId', mssql.Int, extraccion.empresaId)
+      .input('campo', mssql.NVarChar(50), extraccion.campo)
+      .input('valor', mssql.NVarChar(500), extraccion.valor)
+      .input('origen', mssql.NVarChar(10), extraccion.origen)
+      .input('confirmado', mssql.Bit, extraccion.confirmado).query(`
+        INSERT INTO dbo.CRM_ExtraccionesFicha (contactoId, empresaId, campo, valor, origen, confirmado)
+        OUTPUT INSERTED.id
+        VALUES (@contactoId, @empresaId, @campo, @valor, @origen, @confirmado)
+      `);
+    const id = Number((inserted.recordset as { id: number | string }[])[0]?.id);
+    if (Number.isNaN(id)) throw new Error('INSERT de CRM_ExtraccionesFicha no devolvió id');
+    const creada = await this.obtenerExtraccionPorId(id);
+    if (!creada) throw new Error('La extracción recién creada no pudo releerse');
+    return creada;
+  }
+
+  async listarExtraccionesFicha(
+    contactoId: number | null,
+    empresaId: number | null,
+  ): Promise<ExtraccionFicha[]> {
+    // Ambos null no identifican nada (la ficha SIEMPRE consulta por
+    // un contacto o por una empresa) — contrato: [] sin tocar la base.
+    if (contactoId === null && empresaId === null) return [];
+    const request = this.pool.request();
+    const condiciones: string[] = [];
+    if (contactoId !== null) {
+      request.input('contactoId', mssql.Int, contactoId);
+      condiciones.push('contactoId = @contactoId');
+    }
+    if (empresaId !== null) {
+      request.input('empresaId', mssql.Int, empresaId);
+      condiciones.push('empresaId = @empresaId');
+    }
+    const result = await request.query(`
+      SELECT ${COLUMNAS_EXTRACCION}
+      FROM dbo.CRM_ExtraccionesFicha
+      WHERE ${condiciones.join(' OR ')}
+      ORDER BY campo, id
+    `);
+    return (result.recordset as ExtraccionFichaRow[]).map(mapearExtraccionFicha);
   }
 }

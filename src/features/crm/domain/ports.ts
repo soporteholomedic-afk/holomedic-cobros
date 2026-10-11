@@ -8,6 +8,7 @@ import type {
   IdentificacionExtraida,
   AccionAsignacion,
   ActualizarEmpresaInput,
+  CampoFicha,
   CanalConversacion,
   ConversacionCrm,
   ConversacionListada,
@@ -16,16 +17,21 @@ import type {
   CrearMensajeInput,
   Empresa,
   EstadoConversacion,
+  EstadoHuecoConocimiento,
+  ExtraccionFicha,
+  HuecoConocimiento,
   MensajeCrm,
   ModoConversacion,
   NivelMemoria,
   ObservacionDestilada,
   ObservacionMemoria,
+  OrigenDatoFicha,
   PipelineEmpresa,
   RespuestaGenerada,
   ResultadoCrearTarea,
   ResultadoGuardarMemoria,
   SectorCrm,
+  SolicitudAyuda,
   TareaAgente,
   TipoEmpresa,
   TipoObservacionDestilada,
@@ -727,6 +733,70 @@ export interface ConversacionCrmRepository {
    * gracefully (skip) when the capability is absent.
    */
   actualizarModo?(id: number, modo: ModoConversacion): Promise<ConversacionCrm | null>;
+  // ---- E3 (agente-ia-crm): help pattern, ficha, asignación ----
+  /**
+   * Persist ONE escalated help request (E3): the motor creates it
+   * when the conversation moves to REQUIERE_HUMANO, carrying the
+   * consulta that defeated the RAG plus its terms/score. Optional
+   * (actualizarModo precedent): only the SQL adapter implements it —
+   * application fakes stay valid until the E3 use cases land.
+   */
+  crearSolicitudAyuda?(entrada: {
+    conversacionId: number;
+    mensajeId?: number | null;
+    consulta: string;
+    terminosBuscados: string[];
+    score: number | null;
+  }): Promise<SolicitudAyuda>;
+  /** The conversation's PENDIENTE request (latest by id), null if none. */
+  obtenerSolicitudAyudaPendiente?(conversacionId: number): Promise<SolicitudAyuda | null>;
+  /** The conversation's latest RESUELTA request (resueltaEn/id DESC), null if none. */
+  obtenerUltimaSolicitudResuelta?(conversacionId: number): Promise<SolicitudAyuda | null>;
+  /**
+   * Mark PENDIENTE → RESUELTA recording the operator's indicación.
+   * Typed errors (existing domain pattern): ConflictError when the
+   * row is no longer PENDIENTE, NotFoundError when the id is absent.
+   */
+  resolverSolicitudAyuda?(
+    id: number,
+    indicacion: string,
+    resueltaPor: string,
+  ): Promise<SolicitudAyuda>;
+  /**
+   * Flip asignadaA + modo together (the E3 take/return handoff):
+   * `actualizarEstado`/`actualizarModo` each move only one column.
+   */
+  actualizarAsignacion?(
+    id: number,
+    asignadaA: string | null,
+    modo: ModoConversacion,
+  ): Promise<void>;
+  /**
+   * Insert-or-update ONE ficha extraction, deduped app-level by
+   * (contactoId, empresaId, campo) with NULL-safe keys (NO unique
+   * index — SQL Server unique keys over NULLs are unreliable). The
+   * RULE (E3): an IA re-extraction NEVER overwrites a row the human
+   * confirmed (confirmado = 1 AND origen 'HUMANO' — human-confirmed
+   * wins); otherwise valor/origen/confirmado update and actualizadoEn
+   * advances. Returns the persisted row either way.
+   */
+  upsertExtraccionFicha?(extraccion: {
+    contactoId: number | null;
+    empresaId: number | null;
+    campo: CampoFicha;
+    valor: string;
+    origen: OrigenDatoFicha;
+    confirmado: boolean;
+  }): Promise<ExtraccionFicha>;
+  /**
+   * Ficha reads: rows whose contactoId column = `contactoId` OR
+   * whose empresaId column = `empresaId` (when the other is null,
+   * exactly that side); both null → []. campo/id-ordered.
+   */
+  listarExtraccionesFicha?(
+    contactoId: number | null,
+    empresaId: number | null,
+  ): Promise<ExtraccionFicha[]>;
 }
 
 /** Backward (older-first) pagination window for the thread read. */
@@ -769,13 +839,26 @@ export interface MensajeCrmRepository {
  * LIKE over titulo/contenido with properly escaped wildcards (E1
  * lesson); term-overlap ranking and vigencia filtering live in the
  * application layer (recuperarConocimiento). Both reads only ever
- * return activo entries.
+ * return activo entries. E3 appends the KB-gap write (`crearHueco`,
+ * optional — actualizarModo precedent); the entry CRUD editor still
+ * arrives in E5.
  */
 export interface ConocimientoCrmRepository {
   /** Every active entry, id-ordered (the E5 editor stats base). */
   listarActivas(): Promise<EntradaConocimiento[]>;
   /** Active entries whose titulo/contenido match the escaped text. */
   buscarPorTexto(texto: string): Promise<EntradaConocimiento[]>;
+  /**
+   * Persist ONE KB-gap candidate (E3): defaults to estado 'ABIERTO';
+   * `terminos` crosses as a JSON string array (adapter-mapped). The
+   * hueco SURVIVES its triggering solicitud (FK SET NULL).
+   */
+  crearHueco?(entrada: {
+    consulta: string;
+    terminos: string[];
+    origenSolicitudId?: number | null;
+    estado?: EstadoHuecoConocimiento;
+  }): Promise<HuecoConocimiento>;
 }
 
 // ---------------------------------------------------------------------------

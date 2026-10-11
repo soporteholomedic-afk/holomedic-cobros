@@ -261,6 +261,15 @@ export interface ConversacionCrm {
   estado: EstadoConversacion;
   asignadaA: string | null;
   modo: ModoConversacion;
+  /**
+   * E3: per-conversation memory toggle — true (DB DEFAULT 1) = la
+   * Guía reads/writes the Engram memory for this thread; false =
+   * privacy opt-out (no observations saved, no context loaded).
+   * OPTIONAL (ultimoMensajeCuerpo E2·T6 precedent): the SQL adapter
+   * ALWAYS maps it; pre-E3 fakes/payloads stay valid without it and
+   * consumers treat `undefined` as ON (mirrors the DB DEFAULT 1).
+   */
+  memoriaActiva?: boolean;
   ultimoMensajeEn: string | null;
   noLeidos: number;
   creadoEn: string;
@@ -339,6 +348,91 @@ export interface CrearMensajeInput {
   modelo?: string | null;
 }
 
+// ---- Solicitudes de ayuda, huecos de KB y ficha (agente-ia-crm, E3) ----
+
+/**
+ * Help-request lifecycle (CHECK-backed in CRM_SolicitudesAyuda):
+ * PENDIENTE from the moment la Guía escalates (the motor's
+ * REQUIERE_HUMANO transition creates the row), RESUELTA once an
+ * operator answers it with an indicación. Timestamps stay as `Date`
+ * (Conocimiento/TareaAgente precedent — never cross to presentation.
+ */
+export type EstadoSolicitudAyuda = 'PENDIENTE' | 'RESUELTA';
+
+/**
+ * One CRM_SolicitudesAyuda row (E3) — the persisted help request the
+ * operator answers: the escalated `consulta`, the RAG terms/score it
+ * failed with, and after resolution the `indicación` la Guía must
+ * obey (`RESPONDER_CON_INDICACION` re-reads it from this row).
+ */
+export interface SolicitudAyuda {
+  id: number;
+  conversacionId: number;
+  /** The triggering IN message; NULL when unknown. NO FK (AgenteTareas.mensajeId precedent). */
+  mensajeId: number | null;
+  consulta: string;
+  /** RAG search terms stored as a JSON string array (adapter-mapped). */
+  terminosBuscados: string[];
+  score: number | null;
+  estado: EstadoSolicitudAyuda;
+  /** The operator's instruction; null while PENDIENTE. */
+  indicacion: string | null;
+  resueltaPor: string | null;
+  creadoEn: Date;
+  resueltaEn: Date | null;
+}
+
+/**
+ * KB-gap lifecycle (CHECK-backed in CRM_ConocimientoHuecos): ABIERTO
+ * at birth (candidate to curate), CURADO once the entry lands in
+ * CRM_Conocimiento, DESCARTADO when rejected.
+ */
+export type EstadoHuecoConocimiento = 'ABIERTO' | 'CURADO' | 'DESCARTADO';
+
+/**
+ * One CRM_ConocimientoHuecos row (E3) — the KB-gap candidate an
+ * escalation leaves behind: the query the KB could NOT answer, so
+ * the E5 curator knows what to add. Survives its triggering
+ * solicitud (FK SET NULL on origenSolicitudId).
+ */
+export interface HuecoConocimiento {
+  id: number;
+  consulta: string;
+  /** Search terms stored as a JSON string array (adapter-mapped). */
+  terminos: string[];
+  estado: EstadoHuecoConocimiento;
+  origenSolicitudId: number | null;
+  creadoEn: Date;
+}
+
+/**
+ * The ficha fields E3 extracts from the thread (CHECK-backed in
+ * CRM_ExtraccionesFicha.campo): the contacto's cargo and the
+ * empresa's trabajadores/sedes counts.
+ */
+export type CampoFicha = 'cargo' | 'trabajadores' | 'sedes';
+
+/** Who asserted a ficha value: la Guía's extraction or an operator. */
+export type OrigenDatoFicha = 'IA' | 'HUMANO';
+
+/**
+ * One CRM_ExtraccionesFicha row (E3) — a ficha (contact-card) datum
+ * extracted from the conversation. Dedup is app-level by
+ * (contactoId, empresaId, campo) with NULL-safe keys; the ONE rule:
+ * an IA re-extraction NEVER overwrites a row the human confirmed
+ * (confirmado = 1 AND origen 'HUMANO') — human-confirmed wins.
+ */
+export interface ExtraccionFicha {
+  id: number;
+  contactoId: number | null;
+  empresaId: number | null;
+  campo: CampoFicha;
+  valor: string;
+  origen: OrigenDatoFicha;
+  confirmado: boolean;
+  actualizadoEn: Date;
+}
+
 // ---- Base de conocimiento (agente-ia-crm, E2) ----
 
 /**
@@ -369,17 +463,20 @@ export interface EntradaConocimiento {
 /**
  * The distilled observation types la Guía saves to the conversation
  * memory (Engram): client facts, agreements, commitments,
- * preferences and objections — the five categories the E2 distiller
- * emits. Stored `tipo` on ObservacionMemoria stays a plain string:
- * reads (contexto/buscar) may surface server-side types outside this
- * union, only `guardar` is closed over it.
+ * preferences and objections — plus the E3 `indicacion_humana`, the
+ * operator instruction captured when a help request is resolved
+ * (kept so future answers honor it). Stored `tipo` on
+ * ObservacionMemoria stays a plain string: reads (contexto/buscar)
+ * may surface server-side types outside this union, only `guardar`
+ * is closed over it.
  */
 export type TipoObservacionDestilada =
   | 'hecho_cliente'
   | 'acuerdo'
   | 'compromiso'
   | 'preferencia'
-  | 'objecion';
+  | 'objecion'
+  | 'indicacion_humana';
 
 /**
  * Memory scope (locked design: 2 niveles chat + empresa, aislamiento
@@ -521,12 +618,15 @@ export interface ObservacionDestilada {
 // ---- Cola de tareas del agente (agente-ia-crm, E2·T5) ----
 
 /**
- * The task types the durable agent queue can carry (E2·T5;
- * CHECK-backed in CRM_AgenteTareas). GENERAR_RESPUESTA = answer the
- * triggering IN message through the E2 motor; more types arrive with
- * later épocas (the CHECK widens with them).
+ * The task types the durable agent queue can carry (CHECK-backed in
+ * CRM_AgenteTareas). GENERAR_RESPUESTA = answer the triggering IN
+ * message through the E2 motor; RESPONDER_CON_INDICACION = E3 help
+ * pattern — re-answer AFTER the operator resolved the solicitud: the
+ * worker re-reads the indicación from the resolved solicitud itself
+ * (no extra TareaAgente fields), more types arrive with later épocas
+ * (the CHECK widens with them).
  */
-export type TipoTareaAgente = 'GENERAR_RESPUESTA';
+export type TipoTareaAgente = 'GENERAR_RESPUESTA' | 'RESPONDER_CON_INDICACION';
 
 /**
  * Task lifecycle (CHECK-backed in CRM_AgenteTareas): PENDIENTE at

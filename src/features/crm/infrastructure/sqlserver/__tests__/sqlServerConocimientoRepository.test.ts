@@ -4,6 +4,7 @@ import * as mssql from 'mssql';
 import { getCrmDb } from '@/features/crm/infrastructure/getCrmDb';
 
 import { SqlServerConocimientoRepository } from '../sqlServerConocimientoRepository';
+import { SqlServerConversacionRepository } from '../sqlServerConversacionRepository';
 import { loadEnvLocal } from './loadEnvLocal';
 
 loadEnvLocal();
@@ -51,6 +52,34 @@ async function limpiarPorMarca(): Promise<void> {
     .query('DELETE FROM dbo.CRM_Conocimiento WHERE titulo LIKE @patron');
 }
 
+// ---- E3 (agente-ia-crm): huecos de conocimiento ----
+
+const huecosCreados = new Set<number>();
+const conversacionesCreadas = new Set<number>();
+let secuenciaE3 = 0;
+
+/** Unique E.164-ish probe phone for the E3 solicitud fixtures. */
+function telefonoProbeE3(): string {
+  secuenciaE3 += 1;
+  return `+595985${Date.now().toString().slice(-8)}${secuenciaE3}`;
+}
+
+/** E3 cleanup: huecos primero (SET NULL no los borra), luego conversaciones. */
+async function limpiarProbeE3(): Promise<void> {
+  for (const id of huecosCreados) {
+    await pool.request().input('id', mssql.BigInt, id).query(`
+      IF OBJECT_ID('dbo.CRM_ConocimientoHuecos') IS NOT NULL
+        DELETE FROM dbo.CRM_ConocimientoHuecos WHERE id = @id
+    `);
+  }
+  huecosCreados.clear();
+  for (const id of conversacionesCreadas) {
+    await pool.request().input('id', mssql.Int, id)
+      .query('DELETE FROM dbo.CRM_Conversaciones WHERE id = @id');
+  }
+  conversacionesCreadas.clear();
+}
+
 interface InsertarProbeOpciones {
   titulo: string;
   contenido?: string;
@@ -93,6 +122,7 @@ afterAll(async () => {
     // Idempotente por si un finally de test no alcanzó a correr.
     await limpiarProbe();
     await limpiarPorMarca();
+    await limpiarProbeE3();
     await pool.close();
   }
 });
@@ -240,6 +270,86 @@ describe('SqlServerConocimientoRepository (integración, filas probe propias)', 
       expect(sinVigencia?.vigenciaHasta).toBeNull();
     } finally {
       await limpiarProbe();
+    }
+  });
+});
+
+describe('E3 (agente-ia-crm): huecos de conocimiento (crearHueco)', () => {
+  it('crearHueco por defecto ABIERTO; terminos JSON round-trip; origenSolicitudId null', async () => {
+    try {
+      const hueco = await repo.crearHueco({
+        consulta: `¿Hacen certificados para minería ${SUFIJO}?`,
+        terminos: ['certificados', 'minería'],
+      });
+      huecosCreados.add(hueco.id);
+      expect(hueco).toMatchObject({
+        id: expect.any(Number),
+        consulta: `¿Hacen certificados para minería ${SUFIJO}?`,
+        estado: 'ABIERTO',
+        origenSolicitudId: null,
+      });
+      expect(hueco.terminos).toEqual(['certificados', 'minería']);
+      expect(hueco.creadoEn).toBeInstanceOf(Date);
+    } finally {
+      await limpiarProbeE3();
+    }
+  });
+
+  it('estado explícito + origenSolicitudId enlazado; el hueco SOBREVIVE al borrado de la solicitud (FK SET NULL)', async () => {
+    try {
+      // Fixture: conversación + solicitud de ayuda propia de esta corrida.
+      const conversaciones = new SqlServerConversacionRepository(pool);
+      const conv = await conversaciones.crear({
+        canal: 'WHATSAPP',
+        telefono: telefonoProbeE3(),
+        identificadorCanal: `probe-hueco-${SUFIJO}-${secuenciaE3}`,
+      });
+      conversacionesCreadas.add(conv.id);
+      const solicitud = await conversaciones.crearSolicitudAyuda({
+        conversacionId: conv.id,
+        consulta: `Consulta que deja hueco ${SUFIJO}`,
+        terminosBuscados: ['hueco'],
+        score: 0.15,
+      });
+
+      const hueco = await repo.crearHueco({
+        consulta: `Consulta que deja hueco ${SUFIJO}`,
+        terminos: ['hueco', 'curado'],
+        origenSolicitudId: solicitud.id,
+        estado: 'CURADO',
+      });
+      huecosCreados.add(hueco.id);
+      expect(hueco.origenSolicitudId).toBe(solicitud.id);
+      expect(hueco.estado).toBe('CURADO');
+      expect(hueco.terminos).toEqual(['hueco', 'curado']);
+
+      // Borrar la conversación arrastra la solicitud (CASCADE) pero el
+      // hueco SOBREVIVE con origenSolicitudId en NULL: el candidato de
+      // hueco de KB es dato de curación, no de la conversación.
+      await pool
+        .request()
+        .input('id', mssql.Int, conv.id)
+        .query('DELETE FROM dbo.CRM_Conversaciones WHERE id = @id');
+      conversacionesCreadas.delete(conv.id);
+
+      const releido = await pool
+        .request()
+        .input('id', mssql.BigInt, hueco.id).query(`
+          SELECT consulta, terminos, estado, origenSolicitudId
+          FROM dbo.CRM_ConocimientoHuecos WHERE id = @id
+        `);
+      const fila = (releido.recordset as Array<{
+        consulta: string;
+        terminos: string | null;
+        estado: string;
+        origenSolicitudId: number | null;
+      }>)[0];
+      expect(fila?.origenSolicitudId).toBeNull();
+      expect(fila?.consulta).toBe(`Consulta que deja hueco ${SUFIJO}`);
+      expect(fila?.estado).toBe('CURADO');
+      expect(JSON.parse(fila?.terminos ?? '[]')).toEqual(['hueco', 'curado']);
+    } finally {
+      await limpiarProbeE3();
     }
   });
 });
