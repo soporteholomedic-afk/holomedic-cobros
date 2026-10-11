@@ -80,7 +80,7 @@ export function HiloConversacion({ fila, onVolver, onCambio }: HiloConversacionP
     vincular,
     vinculando,
     errorVinculacion,
-  } = useHiloConversacion(fila.id);
+  } = useHiloConversacion(fila.id, fila.ultimoMensajeEn);
 
   const [borrador, setBorrador] = useState('');
   const scrollRef = useRef<HTMLDivElement | null>(null);

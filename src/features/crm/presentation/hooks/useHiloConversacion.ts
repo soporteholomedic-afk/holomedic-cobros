@@ -15,6 +15,10 @@ import { esCandidatosContacto, esHiloConversacion, esMensajeCrm } from '../compo
  * [id]/vincular). Fetch-only, useEmpresas model. A failed reply NEVER
  * throws to the composer: it lands in `errorEnvio` so the draft text
  * survives; `vincular` reloads the hilo on success.
+ *
+ * `versionActividad` es la señal de "hubo actividad nueva" (hoy
+ * fila.ultimoMensajeEn del listado): cambia → recarga silenciosa del
+ * hilo ya abierto; igual id + igual versión → no refetch.
  */
 
 export const DEBOUNCE_CANDIDATOS_MS = 300;
@@ -52,7 +56,10 @@ export interface UseHiloConversacionResult {
   recargar: () => void;
 }
 
-export function useHiloConversacion(conversacionId: number | null): UseHiloConversacionResult {
+export function useHiloConversacion(
+  conversacionId: number | null,
+  versionActividad: string | null = null,
+): UseHiloConversacionResult {
   const [hilo, setHilo] = useState<HiloCargado | null>(null);
   const [status, setStatus] = useState<UseHiloConversacionStatus>('idle');
   const [error, setError] = useState<string | null>(null);
@@ -100,8 +107,9 @@ export function useHiloConversacion(conversacionId: number | null): UseHiloConve
     [],
   );
 
-  // Carga al seleccionar (y recarga al cambiar de conversación). null
-  // → idle: sin columna central hasta que haya selección.
+  // Carga al seleccionar (y recarga al cambiar de conversación o al
+  // detectar actividad nueva via versionActividad). null → idle: sin
+  // columna central hasta que haya selección.
   useEffect(() => {
     /* eslint-disable react-hooks/set-state-in-effect */
     mountedRef.current = true;
@@ -120,7 +128,7 @@ export function useHiloConversacion(conversacionId: number | null): UseHiloConve
     return () => {
       mountedRef.current = false;
     };
-  }, [conversacionId, fetchOnce]);
+  }, [conversacionId, versionActividad, fetchOnce]);
 
   const recargar = useCallback(() => {
     if (conversacionId !== null) void fetchOnce(conversacionId, true);
