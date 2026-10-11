@@ -6,21 +6,35 @@ import { ArrowLeft, Send } from 'lucide-react';
 import type { ConversacionListada, MensajeCrm } from '../../../domain/entities';
 import { useHiloConversacion } from '../../hooks/useHiloConversacion';
 import { formatearFecha } from '../../etiquetas';
-import { ETIQUETA_ESTADO_CONVERSACION, formatearTelefono, iniciales, parsearTitulosFuentes, tituloFilaConversacion } from './guards';
+import {
+  ETIQUETA_ESTADO_CONVERSACION,
+  formatearTelefono,
+  iniciales,
+  parsearTitulosFuentes,
+  tituloFilaConversacion,
+} from './guards';
 import { PanelVinculacion } from './PanelVinculacion';
+import { TarjetaAyuda } from './TarjetaAyuda';
+import { FichaContacto } from './FichaContacto';
+import { MemoriasPanel } from './MemoriasPanel';
+import { AjustesChat } from './AjustesChat';
+import { SelectorEscalar } from './SelectorEscalar';
 
 /**
- * HiloConversacion (agente-ia-crm E1) — the bandeja's center column:
- * header (nombre, empresa, estado, teléfono), the thread oldest-first
- * with IN bubbles left (cliente) / OUT bubbles right (La Guía u
- * operador labeled), auto-scroll to the bottom, and the composer
- * (Enter sends / Shift+Enter newline; disabled while empty/sending; a
- * failed send surfaces inline and NEVER drops the draft). CERRADA →
+ * HiloConversacion (agente-ia-crm E1; E3·T5 help pattern) — the
+ * bandeja's center column plus the right panel column: header
+ * (nombre, empresa, estado — '⚠ NECESITA TU AYUDA' when la Guía
+ * escaló), the thread oldest-first with IN bubbles left / OUT right
+ * (IA tinted indigo with score+fuentes), the help card (TarjetaAyuda)
+ * while a solicitud stays PENDIENTE, the composer (Enter sends /
+ * Shift+Enter newline; a failed send NEVER drops the draft — the
+ * draft also survives the help card, the indicación and every estado
+ * change/refetch) and the estado actions ('↩ Tomar la conversación' /
+ * 'Devolver a la Guía' + 'Escalar a…'). The right column (ficha +
+ * memorias + ajustes, mockup .side ~320px) hides below xl and reads
+ * the SAME useHiloConversacion instance — no prop drilling. CERRADA →
  * composer replaced by the closed notice; PENDIENTE_VINCULACION →
- * composer replaced by PanelVinculacion (linking the conversation IS
- * the action that state demands). Opening the hilo already marks it
- * read server-side (GET contract). All fetches live in
- * useHiloConversacion.
+ * PanelVinculacion. Opening the hilo already marks it read (GET).
  */
 
 export interface HiloConversacionProps {
@@ -111,16 +125,66 @@ export function HiloConversacion({ fila, onVolver, onCambio }: HiloConversacionP
     vincular,
     vinculando,
     errorVinculacion,
+    // E3·T5: side column + help pattern
+    ficha,
+    statusFicha,
+    errorFicha,
+    confirmandoFicha,
+    errorConfirmacionFicha,
+    confirmarDatoFicha,
+    memorias,
+    empresaIdMemorias,
+    statusMemorias,
+    errorMemorias,
+    gestionandoMemoria,
+    errorMemoriaAccion,
+    pinearMemoria,
+    eliminarMemoria,
+    guardarMemoria,
+    ajustes,
+    statusAjustes,
+    errorAjustes,
+    alternandoMemoria,
+    errorToggleMemoria,
+    toggleMemoriaActiva,
+    usuariosAsignables,
+    statusUsuarios,
+    errorUsuarios,
+    cargarUsuariosAsignables,
+    enviandoIndicacion,
+    errorIndicacion,
+    enviarIndicacion,
+    transicionando,
+    errorTransicion,
+    tomar,
+    devolver,
+    escalar,
   } = useHiloConversacion(fila.id, fila.ultimoMensajeEn);
 
   const [borrador, setBorrador] = useState('');
   const scrollRef = useRef<HTMLDivElement | null>(null);
+  // Éxito de la indicación: vive ACÁ (no en la tarjeta) para sobrevivir
+  // al refetch del hilo que desmonta la solicitud (el ✓ debe verse).
+  const [exitoIndicacion, setExitoIndicacion] = useState(false);
+  const solicitud = hilo?.solicitudAyuda ?? null;
+
+  // Nueva solicitud (o conversación distinta) → el ✓ caduca. OJO:
+  // cuando el refetch DESMONTA la solicitud (id → undefined) NO se
+  // resetea — el ✓ debe sobrevivir justo a ese refetch.
+  const prevSolicitudRef = useRef<number | null>(null);
+  useEffect(() => {
+    const idActual = solicitud?.id ?? null;
+    if (idActual !== null && prevSolicitudRef.current !== idActual) {
+      setExitoIndicacion(false);
+      prevSolicitudRef.current = idActual;
+    }
+  }, [solicitud?.id, fila.id]);
 
   // Auto-scroll al fondo: al abrir y con cada mensaje nuevo.
   useEffect(() => {
     const nodo = scrollRef.current;
     if (nodo !== null) nodo.scrollTop = nodo.scrollHeight;
-  }, [hilo?.mensajes.length, fila.id]);
+  }, [hilo?.mensajes.length, fila.id, solicitud?.id]);
 
   // La conversación cerrada o pendiente reemplaza el composer; el
   // borrador NO se limpia al cambiar de estado para no perder texto.
@@ -137,9 +201,22 @@ export function HiloConversacion({ fila, onVolver, onCambio }: HiloConversacionP
     }
   }
 
+  async function manejarTomar(): Promise<void> {
+    if (transicionando) return;
+    const ok = await tomar();
+    if (ok) onCambio();
+  }
+
+  async function manejarDevolver(): Promise<void> {
+    if (transicionando) return;
+    const ok = await devolver();
+    if (ok) onCambio();
+  }
+
   return (
-    <div className="flex h-full flex-col overflow-hidden rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm">
-      <header className="flex items-center gap-3 border-b border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/20 px-4 py-3">
+    <div className="flex h-full gap-4">
+      <div className="flex h-full min-w-0 flex-1 flex-col overflow-hidden rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm">
+        <header className="flex items-center gap-3 border-b border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/20 px-4 py-3">
         <button
           type="button"
           onClick={onVolver}
@@ -163,10 +240,17 @@ export function HiloConversacion({ fila, onVolver, onCambio }: HiloConversacionP
             {fila.telefono !== null ? ` · ${formatearTelefono(fila.telefono)}` : ''}
           </p>
         </div>
-        <span className="inline-flex flex-none items-center gap-1.5 whitespace-nowrap rounded-full border border-slate-200 dark:border-slate-700/50 bg-white dark:bg-slate-800 px-2.5 py-1 text-xs font-semibold text-slate-600 dark:text-slate-300">
-          <span className="h-1.5 w-1.5 rounded-full bg-slate-400" aria-hidden="true" />
-          {ETIQUETA_ESTADO_CONVERSACION[estado]}
-        </span>
+        {estado === 'REQUIERE_HUMANO' ? (
+          <span className="inline-flex flex-none items-center gap-1.5 whitespace-nowrap rounded-full border border-amber-300 dark:border-amber-900/60 bg-amber-50 dark:bg-amber-950/40 px-2.5 py-1 text-xs font-semibold text-amber-700 dark:text-amber-300">
+            <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-amber-500" aria-hidden="true" />
+            ⚠ NECESITA TU AYUDA
+          </span>
+        ) : (
+          <span className="inline-flex flex-none items-center gap-1.5 whitespace-nowrap rounded-full border border-slate-200 dark:border-slate-700/50 bg-white dark:bg-slate-800 px-2.5 py-1 text-xs font-semibold text-slate-600 dark:text-slate-300">
+            <span className="h-1.5 w-1.5 rounded-full bg-slate-400" aria-hidden="true" />
+            {ETIQUETA_ESTADO_CONVERSACION[estado]}
+          </span>
+        )}
       </header>
 
       <div
@@ -198,6 +282,20 @@ export function HiloConversacion({ fila, onVolver, onCambio }: HiloConversacionP
             Sin mensajes todavía.
           </p>
         )}
+
+        {/* E3·T5: la tarjeta de ayuda vive al pie del hilo (mockup
+            .helpcard) — solo con solicitud PENDIENTE; el ✓ de éxito
+            sobrevive al refetch que la desmonta. */}
+        {status === 'ready' && (solicitud !== null || exitoIndicacion) && (
+          <TarjetaAyuda
+            solicitud={solicitud}
+            enviada={exitoIndicacion}
+            onEnviada={setExitoIndicacion}
+            enviando={enviandoIndicacion}
+            error={errorIndicacion}
+            onEnviar={enviarIndicacion}
+          />
+        )}
       </div>
 
       {estado === 'CERRADA' && (
@@ -224,6 +322,56 @@ export function HiloConversacion({ fila, onVolver, onCambio }: HiloConversacionP
 
       {composerHabilitado && (
         <div className="border-t border-slate-200 dark:border-slate-800 p-3">
+          {/* E3·T5: acciones de estado junto al composer (mockup
+              .draftarea .actions) — el borrador NUNCA se limpia por
+              estas acciones. */}
+          {(estado === 'ACTIVA_IA' ||
+            estado === 'REQUIERE_HUMANO' ||
+            estado === 'TOMADA_HUMANO') && (
+            <div className="mb-2 flex flex-wrap items-center justify-end gap-1.5">
+              {errorTransicion !== null && (
+                <p role="alert" className="mr-auto text-xs font-medium text-red-600 dark:text-red-400">
+                  {errorTransicion}
+                </p>
+              )}
+              {(estado === 'ACTIVA_IA' || estado === 'REQUIERE_HUMANO') && (
+                <button
+                  type="button"
+                  onClick={() => void manejarTomar()}
+                  disabled={transicionando}
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-2.5 py-1.5 text-xs font-semibold text-slate-600 dark:text-slate-300 transition hover:bg-slate-100 dark:hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  ↩ Tomar la conversación
+                </button>
+              )}
+              {estado === 'TOMADA_HUMANO' && (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => void manejarDevolver()}
+                    disabled={transicionando}
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-2.5 py-1.5 text-xs font-semibold text-slate-600 dark:text-slate-300 transition hover:bg-slate-100 dark:hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    Devolver a la Guía
+                  </button>
+                  <SelectorEscalar
+                    usuarios={usuariosAsignables}
+                    status={statusUsuarios}
+                    error={errorUsuarios}
+                    escalando={transicionando}
+                    errorEscalar={errorTransicion}
+                    onCargar={cargarUsuariosAsignables}
+                    onEscalar={async (usuarioId) => {
+                      const ok = await escalar(usuarioId);
+                      if (ok) onCambio();
+                      return ok;
+                    }}
+                  />
+                </>
+              )}
+            </div>
+          )}
+
           {errorEnvio !== null && (
             <p
               role="alert"
@@ -262,6 +410,42 @@ export function HiloConversacion({ fila, onVolver, onCambio }: HiloConversacionP
           </div>
         </div>
       )}
+      </div>
+
+      {/* E3·T5: columna derecha (mockup .side ~320px) — ficha,
+          memorias y ajustes; se oculta por debajo de xl. */}
+      <aside
+        aria-label="Panel de la conversación"
+        className="hidden w-80 flex-none flex-col gap-4 overflow-y-auto xl:flex"
+      >
+        <FichaContacto
+          ficha={ficha}
+          status={statusFicha}
+          error={errorFicha}
+          confirmando={confirmandoFicha}
+          errorConfirmacion={errorConfirmacionFicha}
+          onConfirmar={confirmarDatoFicha}
+        />
+        <MemoriasPanel
+          memorias={memorias}
+          empresaId={empresaIdMemorias}
+          status={statusMemorias}
+          error={errorMemorias}
+          gestionando={gestionandoMemoria}
+          errorAccion={errorMemoriaAccion}
+          onPinear={pinearMemoria}
+          onEliminar={eliminarMemoria}
+          onGuardar={guardarMemoria}
+        />
+        <AjustesChat
+          ajustes={ajustes}
+          status={statusAjustes}
+          error={errorAjustes}
+          alternando={alternandoMemoria}
+          errorToggle={errorToggleMemoria}
+          onToggleMemoriaActiva={toggleMemoriaActiva}
+        />
+      </aside>
     </div>
   );
 }

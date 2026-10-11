@@ -190,3 +190,208 @@ describe('HiloConversacion burbuja IA (E2·T6)', () => {
     expect(screen.getByText('🤖 La Guía')).toBeInTheDocument();
   });
 });
+
+describe('HiloConversacion patrón de ayuda (E3·T5)', () => {
+  const SOLICITUD_AYUDA = {
+    id: 9,
+    conversacionId: fila.id,
+    mensajeId: 1,
+    consulta: '¿facturan con crédito fiscal a 30 días?',
+    terminosBuscados: ['crédito', 'facturación'],
+    score: 0.29,
+    estado: 'PENDIENTE',
+    indicacion: null,
+    resueltaPor: null,
+    creadoEn: '2026-10-11T14:03:00.000Z',
+    resueltaEn: null,
+  };
+
+  const FICHA_BODY = {
+    success: true,
+    conversacionId: fila.id,
+    contacto: { id: 11, nombre: 'Luis Medina', telefono: '+595981234567', cargo: null },
+    empresa: { id: 1, razonSocial: 'Comercio Central', cantidadTrabajadores: null },
+    datos: {
+      cargo: { valor: 'Gerente', origen: 'IA', confirmado: false },
+      trabajadores: { valor: null, origen: 'IA', confirmado: false },
+      sedes: { valor: null, origen: 'IA', confirmado: false },
+    },
+  };
+
+  const MEMORIAS_BODY = {
+    success: true,
+    empresaId: 1,
+    memorias: [
+      {
+        id: 101,
+        nivel: 'empresa',
+        tipo: 'acuerdo',
+        titulo: 'Cronograma',
+        contenido: 'Pidió propuesta formal',
+        pineada: true,
+        creadoEn: '2026-06-10T10:00:00.000Z',
+      },
+    ],
+  };
+
+  const AJUSTES_BODY = {
+    success: true,
+    estado: fila.estado,
+    modo: fila.modo,
+    asignadaA: fila.asignadaA,
+    memoriaActiva: true,
+    config: { umbralConfianza: 0.6, maxIntercambios: 6, horarioDesde: 8, horarioHasta: 18 },
+  };
+
+  interface Escena {
+    estado: string;
+    solicitud: unknown;
+  }
+
+  /** Router fetch: hilo + laterales + POSTs de acción. */
+  function montarEscena(escena: Escena): { posts: Array<{ clave: string; cuerpo: unknown }> } {
+    const posts: Array<{ clave: string; cuerpo: unknown }> = [];
+    fetchMock.mockImplementation(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
+      const clave = `${init?.method ?? 'GET'} ${url.replace('http://localhost', '')}`;
+      const rutas: Record<string, unknown> = {
+        [`GET /api/crm/conversaciones/${fila.id}`]: () =>
+          okHiloCuerpo(escena.estado, escena.solicitud),
+        [`GET /api/crm/conversaciones/${fila.id}/ficha`]: FICHA_BODY,
+        [`GET /api/crm/conversaciones/${fila.id}/memorias`]: MEMORIAS_BODY,
+        [`GET /api/crm/conversaciones/${fila.id}/ajustes`]: AJUSTES_BODY,
+      };
+      if (init?.method === 'POST') {
+        posts.push({ clave, cuerpo: JSON.parse(String(init.body ?? '{}')) });
+        return new Response(JSON.stringify({ success: true, ok: true }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        });
+      }
+      const ruta = rutas[clave];
+      const json = typeof ruta === 'function' ? (ruta as () => unknown)() : ruta;
+      return new Response(JSON.stringify(json), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      });
+    });
+    render(<HiloConversacion fila={fila} onVolver={() => {}} onCambio={() => {}} />);
+    return { posts };
+  }
+
+  function okHiloCuerpo(estado: string, solicitud: unknown): unknown {
+    const conversacion = {
+      id: fila.id,
+      empresaId: fila.empresaId,
+      contactoId: fila.contactoId,
+      canal: fila.canal,
+      telefono: fila.telefono,
+      identificadorCanal: fila.identificadorCanal,
+      estado,
+      asignadaA: estado === 'TOMADA_HUMANO' ? 'jperez' : null,
+      modo: estado === 'TOMADA_HUMANO' ? 'HUMANO' : 'IA',
+      ultimoMensajeEn: fila.ultimoMensajeEn,
+      noLeidos: fila.noLeidos,
+      creadoEn: fila.creadoEn,
+      actualizadoEn: fila.actualizadoEn,
+    };
+    return { success: true, conversacion, mensajes: [], solicitudAyuda: solicitud };
+  }
+
+  it('la tarjeta de ayuda SOLO aparece con solicitudAyuda pendiente', async () => {
+    montarEscena({ estado: 'REQUIERE_HUMANO', solicitud: SOLICITUD_AYUDA });
+    expect(await screen.findByText('🤖 La Guía pregunta: ¿cómo sigo?')).toBeInTheDocument();
+    expect(screen.getByText('score 0.29')).toBeInTheDocument();
+  });
+
+  it('sin solicitudAyuda no hay tarjeta (aunque el estado sea REQUIERE_HUMANO)', async () => {
+    montarEscena({ estado: 'REQUIERE_HUMANO', solicitud: null });
+    await waitFor(() => expect(screen.getByLabelText('Mensajes')).toBeInTheDocument());
+    expect(screen.queryByText('🤖 La Guía pregunta: ¿cómo sigo?')).not.toBeInTheDocument();
+  });
+
+  it('encabezado REQUIERE_HUMANO → chip «⚠ NECESITA TU AYUDA»', async () => {
+    montarEscena({ estado: 'REQUIERE_HUMANO', solicitud: SOLICITUD_AYUDA });
+    expect(await screen.findByText('⚠ NECESITA TU AYUDA')).toBeInTheDocument();
+  });
+
+  it('ACTIVA_IA → «↩ Tomar la conversación» (sin devolver/escalar)', async () => {
+    const activa = montarEscena({ estado: 'ACTIVA_IA', solicitud: null });
+    expect(await screen.findByRole('button', { name: '↩ Tomar la conversación' })).toBeEnabled();
+    expect(screen.queryByRole('button', { name: 'Devolver a la Guía' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Escalar a…' })).not.toBeInTheDocument();
+    expect(activa.posts).toEqual([]);
+  });
+
+  it('TOMADA_HUMANO → «Devolver a la Guía» + «Escalar a…» (sin tomar)', async () => {
+    const tomada = montarEscena({ estado: 'TOMADA_HUMANO', solicitud: null });
+    expect(await screen.findByRole('button', { name: 'Devolver a la Guía' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'Escalar a…' })).toBeEnabled();
+    expect(screen.queryByRole('button', { name: '↩ Tomar la conversación' })).not.toBeInTheDocument();
+    expect(tomada.posts).toEqual([]);
+  });
+
+  it('el borrador del composer SOBREVIVE a: tarjeta, indicación enviada y cambio de estado', async () => {
+    // Escenario: REQUIERE_HUMANO con solicitud → se escribe en el
+    // composer Y en la tarjeta → se envía la indicación (éxito) → la
+    // tarjeta se limpia y muestra el ✓, el composer INTACTO.
+    let solicitud: unknown = SOLICITUD_AYUDA;
+    let estadoActual = 'REQUIERE_HUMANO';
+    fetchMock.mockImplementation(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url =
+        typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
+      const clave = `${init?.method ?? 'GET'} ${url.replace('http://localhost', '')}`;
+      if (clave === `POST /api/crm/conversaciones/${fila.id}/indicacion`) {
+        solicitud = null; // el refetch ya no la ve
+        return new Response(JSON.stringify({ success: true }), { status: 200 });
+      }
+      if (clave === `POST /api/crm/conversaciones/${fila.id}/tomar`) {
+        estadoActual = 'TOMADA_HUMANO';
+        return new Response(JSON.stringify({ success: true }), { status: 200 });
+      }
+      if (init?.method === 'POST') {
+        return new Response(JSON.stringify({ success: true }), { status: 200 });
+      }
+      const rutas: Record<string, unknown> = {
+        [`GET /api/crm/conversaciones/${fila.id}`]: () => okHiloCuerpo(estadoActual, solicitud),
+        [`GET /api/crm/conversaciones/${fila.id}/ficha`]: FICHA_BODY,
+        [`GET /api/crm/conversaciones/${fila.id}/memorias`]: MEMORIAS_BODY,
+        [`GET /api/crm/conversaciones/${fila.id}/ajustes`]: AJUSTES_BODY,
+      };
+      const ruta = rutas[clave];
+      const json = typeof ruta === 'function' ? (ruta as () => unknown)() : ruta;
+      return new Response(JSON.stringify(json), { status: 200 });
+    });
+    render(<HiloConversacion fila={fila} onVolver={() => {}} onCambio={() => {}} />);
+
+    const composer = await screen.findByLabelText('Mensaje a enviar');
+    await user.type(composer, 'mi borrador sobrevive');
+    const tarjeta = await screen.findByPlaceholderText('Tu indicación para la Guía…');
+    await user.type(tarjeta, 'Decile que sí');
+    await user.click(screen.getByRole('button', { name: 'Enviar indicación' }));
+
+    // Éxito: ✓ visible, input de la tarjeta desmontado (limpio), composer INTACTO.
+    expect(await screen.findByText('✓ Indicación guardada — la Guía continúa con el cliente')).toBeInTheDocument();
+    expect(screen.queryByPlaceholderText('Tu indicación para la Guía…')).not.toBeInTheDocument();
+    expect(composer).toHaveValue('mi borrador sobrevive');
+
+    // Refetch con cambio de estado (tomar): el borrador sigue.
+    solicitud = null;
+    await user.click(screen.getByRole('button', { name: '↩ Tomar la conversación' }));
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Devolver a la Guía' })).toBeEnabled(),
+    );
+    expect(composer).toHaveValue('mi borrador sobrevive');
+  });
+
+  it('la columna derecha renderiza ficha, memorias y ajustes', async () => {
+    montarEscena({ estado: 'TOMADA_HUMANO', solicitud: null });
+
+    expect(await screen.findByText('📇 Datos del contacto')).toBeInTheDocument();
+    expect(await screen.findByText('🧠 Memorias de la gente')).toBeInTheDocument();
+    expect(await screen.findByText('🤖 Agente en esta conversación')).toBeInTheDocument();
+    expect(screen.getByText('umbral .60')).toBeInTheDocument();
+    expect(screen.getByText('📌 acuerdo')).toBeInTheDocument();
+    expect(screen.getAllByText('— por detectar —').length).toBeGreaterThan(0);
+  });
+});

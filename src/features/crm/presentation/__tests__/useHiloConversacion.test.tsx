@@ -18,6 +18,12 @@ import { buildHiloPath, useHiloConversacion } from '../hooks/useHiloConversacion
  *   error; limpiarErrorEnvio lo limpia a mano (R3-cobertura-hilo);
  * - vincular: ok → POST + recarga del hilo (segundo GET) + true;
  *   error → errorVinculacion + false, sin recarga.
+ *
+ * E3·T5: el hook TAMBIÉN carga la columna derecha (ficha/memorias/
+ * ajustes) al seleccionar — los conteos de fetch del HILO se asserts
+ * sobre `llamadasHilo()` (solo los GET del propio hilo), y el stub
+ * enruta por URL para que los laterales reciban sus cuerpos y no
+ * coman las respuestas encadenadas del hilo.
  */
 
 // ---- Fixtures (shapes que pasan esHiloConversacion — ver guards.ts) ----
@@ -86,6 +92,65 @@ function mensajeOut(id: number, cuerpo: string, creadoEn: string) {
 
 const fetchMock = vi.fn();
 
+/** Cuerpos válidos de los laterales (E3·T5) para que carguen ready. */
+const CUERPO_FICHA = {
+  success: true,
+  conversacionId: 7,
+  contacto: { id: 11, nombre: 'Luis Medina', telefono: '+595981234567', cargo: null },
+  empresa: { id: 1, razonSocial: 'Comercio Central', cantidadTrabajadores: null },
+  datos: {
+    cargo: { valor: null, origen: 'IA', confirmado: false },
+    trabajadores: { valor: null, origen: 'IA', confirmado: false },
+    sedes: { valor: null, origen: 'IA', confirmado: false },
+  },
+};
+const CUERPO_MEMORIAS = { success: true, memorias: [], empresaId: 1 };
+const CUERPO_AJUSTES = {
+  success: true,
+  estado: 'TOMADA_HUMANO',
+  modo: 'HUMANO',
+  asignadaA: 'jperez',
+  memoriaActiva: true,
+  config: { umbralConfianza: 0.6, maxIntercambios: 8, horarioDesde: 8, horarioHasta: 18 },
+};
+
+function jsonResponse(json: unknown, status = 200): Response {
+  return new Response(JSON.stringify(json), { status, headers: { 'content-type': 'application/json' } });
+}
+
+/**
+ * Stub enrutado por "METHOD url": el hilo sirve `hiloPara(7)`, los
+ * laterales sus cuerpos — nada come respuestas ajenas (E3·T5).
+ */
+function enrutar(
+  hiloPor: Record<number, () => unknown>,
+  extra: Record<string, (init?: RequestInit) => unknown> = {},
+): void {
+  fetchMock.mockImplementation(async (url: unknown, init?: RequestInit) => {
+    const clave = `${init?.method ?? 'GET'} ${String(url)}`;
+    const match = /^GET (\/api\/crm\/conversaciones\/(\d+))$/.exec(clave);
+    if (match !== null) {
+      const hilo = hiloPor[Number(match[2])];
+      return jsonResponse(hilo === undefined ? { success: false, error: 'sin stub' } : hilo());
+    }
+    if (clave.endsWith('/ficha')) return jsonResponse(CUERPO_FICHA);
+    if (clave.endsWith('/memorias')) return jsonResponse(CUERPO_MEMORIAS);
+    if (clave.endsWith('/ajustes')) return jsonResponse(CUERPO_AJUSTES);
+    const extraRuta = extra[clave];
+    if (extraRuta !== undefined) return jsonResponse(extraRuta(init));
+    return jsonResponse({ success: false, error: `sin stub: ${clave}` }, 500);
+  });
+}
+
+/** GETs del propio hilo (los laterales no cuentan — E3·T5). */
+function llamadasHilo(id = 7): number {
+  return fetchMock.mock.calls.filter(([u, i]) => String(u) === buildHiloPath(id) && (i as RequestInit | undefined)?.method !== 'POST').length;
+}
+
+function okBody(mensajes: unknown[]): unknown {
+  return { success: true, conversacion, mensajes };
+}
+
 beforeEach(() => {
   fetchMock.mockReset();
   vi.stubGlobal('fetch', fetchMock);
@@ -107,10 +172,8 @@ function montar(props: Props) {
 // ---- carga + versionActividad ----
 
 describe('useHiloConversacion carga', () => {
-  it('carga el hilo al seleccionar un id (un solo fetch)', async () => {
-    fetchMock.mockResolvedValue(
-      okHilo([mensaje(7, 1, 'Hola, quiero info', '2026-10-11T10:00:00Z')]),
-    );
+  it('carga el hilo al seleccionar un id (un solo fetch del hilo)', async () => {
+    enrutar({ 7: () => okBody([mensaje(7, 1, 'Hola, quiero info', '2026-10-11T10:00:00Z')]) });
 
     const { result } = montar({ id: 7, version: '2026-10-11T10:00:00Z' });
 
@@ -119,8 +182,12 @@ describe('useHiloConversacion carga', () => {
     expect(result.current.hilo?.conversacion.id).toBe(7);
     expect(result.current.hilo?.mensajes.map((m) => m.cuerpo)).toEqual(['Hola, quiero info']);
     expect(result.current.error).toBeNull();
-    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(llamadasHilo()).toBe(1);
     expect(fetchMock).toHaveBeenCalledWith(buildHiloPath(7), expect.anything());
+    // E3·T5: los laterales también cargaron con la selección.
+    await waitFor(() => expect(result.current.statusFicha).toBe('ready'));
+    await waitFor(() => expect(result.current.statusMemorias).toBe('ready'));
+    await waitFor(() => expect(result.current.statusAjustes).toBe('ready'));
   });
 
   it('queda idle sin fetch cuando el id es null', () => {
@@ -133,41 +200,32 @@ describe('useHiloConversacion carga', () => {
 });
 
 describe('useHiloConversacion versionActividad', () => {
-  it('mismo id + misma versión → NO segundo fetch', async () => {
-    fetchMock.mockResolvedValue(
-      okHilo([mensaje(7, 1, 'Hola, quiero info', '2026-10-11T10:00:00Z')]),
-    );
+  it('mismo id + misma versión → NO segundo fetch del hilo', async () => {
+    enrutar({ 7: () => okBody([mensaje(7, 1, 'Hola, quiero info', '2026-10-11T10:00:00Z')]) });
 
     const { result, rerender } = montar({ id: 7, version: '2026-10-11T10:00:00Z' });
     await waitFor(() => expect(result.current.status).toBe('ready'));
-    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(llamadasHilo()).toBe(1);
 
     rerender({ id: 7, version: '2026-10-11T10:00:00Z' });
     expect(result.current.status).toBe('ready');
-    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(llamadasHilo()).toBe(1);
   });
 
   it('mismo id + versión distinta → segundo fetch con los mensajes nuevos', async () => {
-    fetchMock
-      .mockResolvedValueOnce(
-        okHilo([mensaje(7, 1, 'Hola, quiero info', '2026-10-11T10:00:00Z')]),
-      )
-      .mockResolvedValueOnce(
-        okHilo([
-          mensaje(7, 1, 'Hola, quiero info', '2026-10-11T10:00:00Z'),
-          mensaje(7, 2, 'Sigo con la consulta', '2026-10-11T10:05:00Z'),
-        ]),
-      );
+    let mensajes = [mensaje(7, 1, 'Hola, quiero info', '2026-10-11T10:00:00Z')];
+    enrutar({ 7: () => okBody(mensajes) });
 
     const { result, rerender } = montar({ id: 7, version: '2026-10-11T10:00:00Z' });
     await waitFor(() => expect(result.current.status).toBe('ready'));
-    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(llamadasHilo()).toBe(1);
 
+    mensajes = [...mensajes, mensaje(7, 2, 'Sigo con la consulta', '2026-10-11T10:05:00Z')];
     await act(async () => {
       rerender({ id: 7, version: '2026-10-11T10:05:00Z' });
     });
 
-    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(llamadasHilo()).toBe(2);
     await waitFor(() => expect(result.current.status).toBe('ready'));
     expect(result.current.hilo?.mensajes.map((m) => m.cuerpo)).toEqual([
       'Hola, quiero info',
@@ -176,13 +234,14 @@ describe('useHiloConversacion versionActividad', () => {
   });
 
   it('cambiar de id recarga el hilo de la nueva conversación', async () => {
-    fetchMock
-      .mockResolvedValueOnce(
-        okHilo([mensaje(7, 1, 'Hola, quiero info', '2026-10-11T10:00:00Z')]),
-      )
-      .mockResolvedValueOnce(
-        okHilo([mensaje(8, 2, 'Otra conversación', '2026-10-11T11:00:00Z')]),
-      );
+    enrutar({
+      7: () => okBody([mensaje(7, 1, 'Hola, quiero info', '2026-10-11T10:00:00Z')]),
+      8: () => ({
+        success: true,
+        conversacion: { ...conversacion, id: 8 },
+        mensajes: [mensaje(8, 2, 'Otra conversación', '2026-10-11T11:00:00Z')],
+      }),
+    });
 
     const { result, rerender } = montar({ id: 7, version: '2026-10-11T10:00:00Z' });
     await waitFor(() => expect(result.current.status).toBe('ready'));
@@ -191,7 +250,8 @@ describe('useHiloConversacion versionActividad', () => {
       rerender({ id: 8, version: '2026-10-11T11:00:00Z' });
     });
 
-    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(llamadasHilo(7)).toBe(1);
+    expect(llamadasHilo(8)).toBe(1);
     await waitFor(() => expect(result.current.status).toBe('ready'));
     expect(result.current.hilo?.mensajes.map((m) => m.cuerpo)).toEqual(['Otra conversación']);
   });
@@ -202,13 +262,10 @@ describe('useHiloConversacion versionActividad', () => {
 describe('useHiloConversacion enviarMensaje', () => {
   it('POSTea el mensaje, lo appendea al hilo y deja errorEnvio null', async () => {
     const enviado = mensajeOut(2, 'Buenas, en qué te ayudo', '2026-10-11T10:06:00Z');
-    fetchMock.mockImplementation(async (url: unknown, init?: RequestInit) => {
-      if (init?.method === 'POST') {
-        return new Response(JSON.stringify({ success: true, mensaje: enviado }), { status: 201 });
-      }
-      expect(String(url)).toBe(buildHiloPath(7));
-      return okHilo([mensaje(7, 1, 'Hola, quiero info', '2026-10-11T10:00:00Z')]);
-    });
+    enrutar(
+      { 7: () => okBody([mensaje(7, 1, 'Hola, quiero info', '2026-10-11T10:00:00Z')]) },
+      { 'POST /api/crm/conversaciones/7/mensajes': () => ({ success: true, mensaje: enviado }) },
+    );
 
     const { result } = montar({ id: 7, version: '2026-10-11T10:00:00Z' });
     await waitFor(() => expect(result.current.status).toBe('ready'));
@@ -225,8 +282,11 @@ describe('useHiloConversacion enviarMensaje', () => {
       'Buenas, en qué te ayudo',
     ]);
     expect(result.current.enviando).toBe(false);
-    expect(fetchMock).toHaveBeenCalledTimes(2); // GET carga + POST
-    const [url, init] = fetchMock.mock.calls[1]!;
+    const postMensaje = fetchMock.mock.calls.filter(
+      ([u, i]) => String(u) === `${buildHiloPath(7)}/mensajes` && (i as RequestInit | undefined)?.method === 'POST',
+    );
+    expect(postMensaje).toHaveLength(1);
+    const [url, init] = postMensaje[0]!;
     expect(url).toBe(`${buildHiloPath(7)}/mensajes`);
     expect(init).toMatchObject({ method: 'POST' });
     expect(JSON.parse(String(init?.body))).toEqual({ cuerpo: 'Buenas, en qué te ayudo' });
@@ -329,18 +389,16 @@ describe('useHiloConversacion enviarMensaje', () => {
 
 describe('useHiloConversacion vincular', () => {
   it('asociar ok → POST + recarga del hilo (segundo GET) y true', async () => {
-    const conversacionTomada = { ...conversacion, estado: 'TOMADA_HUMANO' };
-    fetchMock
-      .mockResolvedValueOnce(okHilo([mensaje(7, 1, 'Hola, quiero info', '2026-10-11T10:00:00Z')]))
-      .mockResolvedValueOnce(
-        new Response(JSON.stringify({ success: true, conversacion: conversacionTomada }), { status: 200 }),
-      )
-      .mockResolvedValueOnce(
-        okHilo([
-          mensaje(7, 1, 'Hola, quiero info', '2026-10-11T10:00:00Z'),
-          mensaje(7, 2, 'Ya quedó vinculada', '2026-10-11T10:08:00Z'),
-        ]),
-      );
+    let mensajes = [mensaje(7, 1, 'Hola, quiero info', '2026-10-11T10:00:00Z')];
+    enrutar(
+      { 7: () => okBody(mensajes) },
+      {
+        'POST /api/crm/conversaciones/7/vincular': () => {
+          mensajes = [...mensajes, mensaje(7, 2, 'Ya quedó vinculada', '2026-10-11T10:08:00Z')];
+          return { success: true, conversacion: { ...conversacion, estado: 'TOMADA_HUMANO' } };
+        },
+      },
+    );
 
     const { result } = montar({ id: 7, version: '2026-10-11T10:00:00Z' });
     await waitFor(() => expect(result.current.status).toBe('ready'));
@@ -353,12 +411,15 @@ describe('useHiloConversacion vincular', () => {
     expect(ok).toBe(true);
     expect(result.current.errorVinculacion).toBeNull();
     expect(result.current.vinculando).toBe(false);
-    expect(fetchMock).toHaveBeenCalledTimes(3); // GET + POST + recarga GET
-    const [url, init] = fetchMock.mock.calls[1]!;
-    expect(url).toBe(`${buildHiloPath(7)}/vincular`);
-    expect(JSON.parse(String(init?.body))).toEqual({ modo: 'asociar', contactoId: 11 });
-    const [urlRecarga] = fetchMock.mock.calls[2]!;
-    expect(urlRecarga).toBe(buildHiloPath(7));
+    const postVincular = fetchMock.mock.calls.filter(
+      ([u, i]) => String(u) === `${buildHiloPath(7)}/vincular` && (i as RequestInit | undefined)?.method === 'POST',
+    );
+    expect(postVincular).toHaveLength(1);
+    expect(JSON.parse(String((postVincular[0]![1] as RequestInit).body))).toEqual({
+      modo: 'asociar',
+      contactoId: 11,
+    });
+    expect(llamadasHilo()).toBe(2); // carga + recarga
     // La recarga dejó el hilo fresco (mensaje nuevo visible).
     expect(result.current.hilo?.mensajes.map((m) => m.cuerpo)).toEqual([
       'Hola, quiero info',
@@ -367,18 +428,22 @@ describe('useHiloConversacion vincular', () => {
   });
 
   it('error → errorVinculacion seteado, false y SIN recarga del hilo', async () => {
-    fetchMock
-      .mockResolvedValueOnce(okHilo([mensaje(7, 1, 'Hola, quiero info', '2026-10-11T10:00:00Z')]))
-      .mockResolvedValueOnce(
-        new Response(
-          JSON.stringify({
-            success: false,
-            error: 'Ya existe un contacto con ese nombre',
-            code: 'CONFLICT_ERROR',
-          }),
-          { status: 409 },
-        ),
-      );
+    fetchMock.mockImplementation(async (url: unknown, init?: RequestInit) => {
+      const clave = `${init?.method ?? 'GET'} ${String(url)}`;
+      if (clave === 'POST /api/crm/conversaciones/7/vincular') {
+        return jsonResponse(
+          { success: false, error: 'Ya existe un contacto con ese nombre', code: 'CONFLICT_ERROR' },
+          409,
+        );
+      }
+      if (/^GET \/api\/crm\/conversaciones\/7$/.test(clave)) {
+        return jsonResponse(okBody([mensaje(7, 1, 'Hola, quiero info', '2026-10-11T10:00:00Z')]));
+      }
+      if (clave.endsWith('/ficha')) return jsonResponse(CUERPO_FICHA);
+      if (clave.endsWith('/memorias')) return jsonResponse(CUERPO_MEMORIAS);
+      if (clave.endsWith('/ajustes')) return jsonResponse(CUERPO_AJUSTES);
+      return jsonResponse({ success: false }, 500);
+    });
 
     const { result } = montar({ id: 7, version: '2026-10-11T10:00:00Z' });
     await waitFor(() => expect(result.current.status).toBe('ready'));
@@ -390,6 +455,6 @@ describe('useHiloConversacion vincular', () => {
 
     expect(ok).toBe(false);
     expect(result.current.errorVinculacion).toBe('Ya existe un contacto con ese nombre');
-    expect(fetchMock).toHaveBeenCalledTimes(2); // GET + POST: sin recarga
+    expect(llamadasHilo()).toBe(1); // carga solamente: sin recarga
   });
 });

@@ -16,6 +16,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 const mocks = vi.hoisted(() => ({
   listarMock: vi.fn(),
   gestionarMock: vi.fn(),
+  guardarMock: vi.fn(),
   getSessionMock: vi.fn(),
 }));
 
@@ -28,11 +29,14 @@ vi.mock('@/features/crm/application/listarMemoriasConversacion', () => ({
   GestionarMemoriaConversacionUseCase: class GestionarMemoriaConversacionUseCaseFake {
     readonly ejecutar = mocks.gestionarMock;
   },
+  GuardarMemoriaConversacionUseCase: class GuardarMemoriaConversacionUseCaseFake {
+    readonly ejecutar = mocks.guardarMock;
+  },
 }));
 
 import { GET, POST } from '../memorias/route';
 import { __setCrmDbForTests, type CrmDb } from '@/features/crm/infrastructure/getCrmDb';
-import { NotFoundError } from '@/features/crm/domain/errors';
+import { NotFoundError, ValidationError } from '@/features/crm/domain/errors';
 import { ErrorMemoriaCrm } from '@/features/crm/infrastructure/engram/memoriaEngramHttp';
 
 const sessionBase = { sub: 'u-1', nombre: 'Juana Perez', area: 'ventas' };
@@ -196,6 +200,106 @@ describe('POST /api/crm/conversaciones/[id]/memorias (E3·T3)', () => {
 
     const response = await POST(
       jsonPost('1', { observacionId: 101, accion: 'eliminar' }),
+      routeContext('1'),
+    );
+
+    expect(response.status).toBe(502);
+  });
+});
+
+describe('POST /api/crm/conversaciones/[id]/memorias — accion guardar (E3·T5)', () => {
+  it('200 {ok: true, id} para una memoria manual de nivel chat', async () => {
+    mocks.guardarMock.mockResolvedValueOnce({ id: 555, estado: 'comprometido' });
+
+    const response = await POST(
+      jsonPost('1', {
+        accion: 'guardar',
+        nivel: 'chat',
+        tipo: 'indicacion_humana',
+        titulo: 'Indicación humana',
+        contenido: 'Crédito fiscal 30 días: SÍ',
+      }),
+      routeContext('1'),
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body).toEqual({ ok: true, id: 555 });
+    expect(mocks.guardarMock).toHaveBeenCalledWith({
+      conversacionId: 1,
+      nivel: 'chat',
+      tipo: 'indicacion_humana',
+      titulo: 'Indicación humana',
+      contenido: 'Crédito fiscal 30 días: SÍ',
+    });
+  });
+
+  it('nivel empresa también cruza (misma forma, nivel distinto)', async () => {
+    mocks.guardarMock.mockResolvedValueOnce({ id: 556, estado: 'guardado' });
+
+    const response = await POST(
+      jsonPost('1', {
+        accion: 'guardar',
+        nivel: 'empresa',
+        tipo: 'acuerdo',
+        titulo: 'Acuerdo de firmas',
+        contenido: 'Cronograma mensual',
+      }),
+      routeContext('1'),
+    );
+
+    expect(response.status).toBe(200);
+    expect(mocks.guardarMock).toHaveBeenCalledWith(
+      expect.objectContaining({ nivel: 'empresa', tipo: 'acuerdo' }),
+    );
+  });
+
+  it('body inválido (nivel/tipo/titulo/contenido fuera de contrato) → 400', async () => {
+    const casos = [
+      { accion: 'guardar', nivel: 'otro', tipo: 'acuerdo', titulo: 'T', contenido: 'C' },
+      { accion: 'guardar', nivel: 'chat', tipo: 'inventado', titulo: 'T', contenido: 'C' },
+      { accion: 'guardar', nivel: 'chat', tipo: 'acuerdo', titulo: '  ', contenido: 'C' },
+      { accion: 'guardar', nivel: 'chat', tipo: 'acuerdo', titulo: 'T', contenido: '' },
+      { accion: 'guardar', nivel: 'chat' },
+    ];
+    for (const cuerpo of casos) {
+      expect((await POST(jsonPost('1', cuerpo), routeContext('1'))).status).toBe(400);
+    }
+    expect(mocks.guardarMock).not.toHaveBeenCalled();
+  });
+
+  it('conversación sin empresa (MemoriaSinEmpresaError, ValidationError) → 400', async () => {
+    mocks.guardarMock.mockRejectedValueOnce(
+      new ValidationError('La conversación no tiene empresa vinculada'),
+    );
+
+    const response = await POST(
+      jsonPost('1', {
+        accion: 'guardar',
+        nivel: 'chat',
+        tipo: 'acuerdo',
+        titulo: 'T',
+        contenido: 'C',
+      }),
+      routeContext('1'),
+    );
+
+    expect(response.status).toBe(400);
+  });
+
+  it('ErrorMemoriaCrm → 502 (upstream Engram)', async () => {
+    mocks.guardarMock.mockRejectedValueOnce(
+      new ErrorMemoriaCrm('MEMORIA_ERROR', 'Engram respondió HTTP 500'),
+    );
+
+    const response = await POST(
+      jsonPost('1', {
+        accion: 'guardar',
+        nivel: 'chat',
+        tipo: 'acuerdo',
+        titulo: 'T',
+        contenido: 'C',
+      }),
       routeContext('1'),
     );
 
