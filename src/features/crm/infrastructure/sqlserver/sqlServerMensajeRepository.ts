@@ -105,12 +105,21 @@ export class SqlServerMensajeRepository implements MensajeCrmRepository {
     id: number,
     datos: { estadoEnvio: 'ENVIADO' | 'FALLIDO'; wamid?: string | null },
   ): Promise<MensajeCrm | null> {
-    const result = await this.pool
+    // wamid ausente (undefined) = NO tocar el valor existente (un
+    // FALLIDO reportado sin wamid no borra el wamid de un intento
+    // previo — R3 fallido-borra-wamid); null EXPLÍCITO sí lo borra.
+    const request = this.pool
       .request()
       .input('id', mssql.BigInt, id)
-      .input('estadoEnvio', mssql.VarChar(10), datos.estadoEnvio)
-      .input('wamid', mssql.VarChar(128), datos.wamid ?? null)
-      .query('UPDATE dbo.CRM_Mensajes SET estadoEnvio = @estadoEnvio, wamid = @wamid OUTPUT INSERTED.id WHERE id = @id');
+      .input('estadoEnvio', mssql.VarChar(10), datos.estadoEnvio);
+    const sets = ['estadoEnvio = @estadoEnvio'];
+    if (datos.wamid !== undefined) {
+      sets.push('wamid = @wamid');
+      request.input('wamid', mssql.VarChar(128), datos.wamid);
+    }
+    const result = await request.query(
+      `UPDATE dbo.CRM_Mensajes SET ${sets.join(', ')} OUTPUT INSERTED.id WHERE id = @id`,
+    );
     const actualizado = (result.recordset as { id: number | string }[])[0];
     return actualizado === undefined ? null : this.obtenerPorId(Number(actualizado.id));
   }

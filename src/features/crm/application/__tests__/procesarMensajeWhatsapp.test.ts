@@ -359,4 +359,26 @@ describe('ProcesarMensajeWhatsappUseCase — ingesta whatsapp.message.received (
     expect(fila.noLeidos).toBe(2);
     expect(fila.ultimoMensajeEn).not.toBeNull();
   });
+
+  it('cuerpo de texto > 4000 caracteres se trunca EXPLÍCITO con marcador visible (R3)', async () => {
+    const { mensajes, useCase } = crearSuite();
+
+    await useCase.ejecutar(eventoTexto({ text: { body: 'a'.repeat(5000) } }));
+
+    // NVARCHAR(4000): el truncado silencioso de la DB se reemplaza por
+    // un corte EXPLÍCITO — 3988 chars + '…[truncado]' (12) = 4000.
+    const cuerpo = mensajes.escritas[0]?.cuerpo ?? '';
+    expect(cuerpo.length).toBe(4000);
+    expect(cuerpo.endsWith('…[truncado]')).toBe(true);
+    expect(cuerpo.slice(0, 3988)).toBe('a'.repeat(3988));
+    expect(mensajes.escritas[0]?.tipo).toBe('TEXTO');
+  });
+
+  it('cuerpo de exactamente 4000 caracteres pasa íntegro (sin marcador)', async () => {
+    const { mensajes, useCase } = crearSuite();
+
+    await useCase.ejecutar(eventoTexto({ text: { body: 'b'.repeat(4000) } }));
+
+    expect(mensajes.escritas[0]?.cuerpo).toBe('b'.repeat(4000));
+  });
 });

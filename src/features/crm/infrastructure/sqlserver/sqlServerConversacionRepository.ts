@@ -75,6 +75,17 @@ function mapearConversacion(row: ConversacionRow): ConversacionCrm {
   };
 }
 
+/**
+ * Escapa los comodines LIKE de SQL Server ('[' → '[[]', '%' → '[%]',
+ * '_' → '[_]') ANTES de envolver el input en '%…%'. Sin esto, buscar
+ * '%' matchea TODAS las filas (R3 wildcards-sin-escape: input del
+ * usuario interpolado como patrón). Se escapa ANTES de envolver para
+ * que los '%' del wrapper sigan siendo comodines.
+ */
+function escaparLike(input: string): string {
+  return input.replace(/[[%_]/g, (caracter) => `[${caracter}]`);
+}
+
 export class SqlServerConversacionRepository implements ConversacionCrmRepository {
   constructor(private readonly pool: mssql.ConnectionPool) {}
 
@@ -148,7 +159,9 @@ export class SqlServerConversacionRepository implements ConversacionCrmRepositor
       clauses.push(
         '(emp.razonSocial LIKE @busqueda OR con.nombre LIKE @busqueda OR c.telefono LIKE @busqueda)',
       );
-      request.input('busqueda', mssql.NVarChar(200), `%${busqueda}%`);
+      // NVarChar(600): hasta 200 chars de input × 3 por el escape de
+      // comodines — el patrón escapado nunca revienta el parámetro.
+      request.input('busqueda', mssql.NVarChar(600), `%${escaparLike(busqueda)}%`);
     }
     if (filtros?.estado !== undefined) {
       clauses.push('c.estado = @estado');
@@ -158,21 +171,16 @@ export class SqlServerConversacionRepository implements ConversacionCrmRepositor
     const limite = filtros?.limite ?? 50;
     const offset = filtros?.offset ?? 0;
 
-    // Misma WHERE/JOINs para la página y para el total: la vista pagina
-    // con el count exacto bajo los mismos filtros.
-    const conteo = await request.query(`
-      SELECT COUNT(*) AS total
-      FROM dbo.CRM_Conversaciones c
-      LEFT JOIN dbo.CRM_Empresas emp ON emp.id = c.empresaId
-      LEFT JOIN dbo.CRM_Contactos con ON con.id = c.contactoId
-      ${where}
-    `);
-    const total = Number((conteo.recordset as { total: number }[])[0]?.total ?? 0);
-
+    // UNA sola query (R4 count-not-atomic / R3 total-page-drift): el
+    // total viaja como COUNT(*) OVER() en cada fila de la MISMA
+    // página, así página y total nunca divergen (los dos roundtrips
+    // previos podían derivar entre el COUNT y el SELECT). La firma
+    // {items, total} se mantiene; 0 filas → total 0.
     const result = await request
       .input('limite', mssql.Int, limite)
       .input('offset', mssql.Int, offset).query(`
-        SELECT ${COLUMNAS_CON_ALIAS}, emp.razonSocial, con.nombre AS nombreContacto
+        SELECT ${COLUMNAS_CON_ALIAS}, emp.razonSocial, con.nombre AS nombreContacto,
+               COUNT(*) OVER() AS total
         FROM dbo.CRM_Conversaciones c
         LEFT JOIN dbo.CRM_Empresas emp ON emp.id = c.empresaId
         LEFT JOIN dbo.CRM_Contactos con ON con.id = c.contactoId
@@ -180,14 +188,15 @@ export class SqlServerConversacionRepository implements ConversacionCrmRepositor
         ORDER BY c.ultimoMensajeEn DESC, c.id DESC
         OFFSET @offset ROWS FETCH NEXT @limite ROWS ONLY
       `);
-    const items: ConversacionListada[] = (
-      result.recordset as Array<ConversacionRow & { razonSocial: string | null; nombreContacto: string | null }>
-    ).map((row) => ({
+    const filas = result.recordset as Array<
+      ConversacionRow & { razonSocial: string | null; nombreContacto: string | null; total: number }
+    >;
+    const items: ConversacionListada[] = filas.map((row) => ({
       ...mapearConversacion(row),
       razonSocial: row.razonSocial,
       nombreContacto: row.nombreContacto,
     }));
-    return { items, total };
+    return { items, total: filas.length > 0 ? Number(filas[0]?.total ?? 0) : 0 };
   }
 
   async vincular(
@@ -266,24 +275,37 @@ export class SqlServerConversacionRepository implements ConversacionCrmRepositor
   }
 
   async buscarCandidatosVinculacion(telefonoE164: string): Promise<CandidatoVinculacion[]> {
+    // Deuda E2 (documentada): la resolución COMPLETA es una columna de
+    // teléfono normalizada escrita por el feature de contactos + un
+    // índice sobre ella. Mientras tanto el match es texto-libre → E.164
+    // en TS y este SELECT lee TODOS los contactos con teléfono: el
+    // TOP acota la lectura (R3 scan-tabla-completa) y el warn señala
+    // el tope cuando se alcanza.
+    const TOPE_CANDIDATOS = 5000;
     const result = await this.pool.request().query(`
-      SELECT c.id, c.empresaId, c.nombre, c.telefono, e.razonSocial
+      SELECT TOP (${TOPE_CANDIDATOS}) c.id, c.empresaId, c.nombre, c.telefono, e.razonSocial
       FROM dbo.CRM_Contactos c
       JOIN dbo.CRM_Empresas e ON e.id = c.empresaId
       WHERE c.telefono IS NOT NULL
     `);
-    const claveEntrante = telefonoDigitosClave(telefonoE164);
-    // teléfono es texto libre: la comparación se hace en TS tras
-    // normalizar ambos lados (normalizarTelefonoE164 + digitos clave).
-    // Optimizable con una columna normalizada si la tabla crece.
-    const candidatos: CandidatoVinculacion[] = [];
-    for (const row of result.recordset as Array<{
+    const leidos = result.recordset as Array<{
       id: number;
       empresaId: number;
       nombre: string;
       telefono: string;
       razonSocial: string;
-    }>) {
+    }>;
+    if (leidos.length >= TOPE_CANDIDATOS) {
+      console.warn(
+        `buscarCandidatosVinculacion alcanzó el tope de ${TOPE_CANDIDATOS} contactos con teléfono; ` +
+          'la autovinculación puede perder candidatos: migre a la columna de teléfono normalizada (deuda E2).',
+      );
+    }
+    const claveEntrante = telefonoDigitosClave(telefonoE164);
+    // teléfono es texto libre: la comparación se hace en TS tras
+    // normalizar ambos lados (normalizarTelefonoE164 + digitos clave).
+    const candidatos: CandidatoVinculacion[] = [];
+    for (const row of leidos) {
       const e164 = normalizarTelefonoE164(row.telefono);
       if (e164 === null) continue;
       if (telefonoDigitosClave(e164) === claveEntrante) {
@@ -363,10 +385,11 @@ export class SqlServerConversacionRepository implements ConversacionCrmRepositor
     // Buscador del panel de vinculación (E1): LIKE sobre nombre /
     // razón social — INNER JOIN porque un candidato SIN empresa no es
     // vinculable. TOP parametrizado; collation case-insensitive
-    // (listar precedent).
+    // (listar precedent). El input se escapa (escaparLike — R3): un
+    // '%' del usuario matchea SOLO un '%' literal.
     const result = await this.pool
       .request()
-      .input('busqueda', mssql.NVarChar(200), `%${busqueda.trim()}%`)
+      .input('busqueda', mssql.NVarChar(600), `%${escaparLike(busqueda.trim())}%`)
       .input('limite', mssql.Int, limite)
       .query(`
         SELECT TOP (@limite) c.id AS contactoId, c.empresaId, c.nombre, c.telefono, e.razonSocial

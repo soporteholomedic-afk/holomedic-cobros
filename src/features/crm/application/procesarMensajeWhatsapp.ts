@@ -57,6 +57,21 @@ export interface MensajeEntranteWhatsapp {
   message: MensajeWhatsappRecibido['message'];
 }
 
+/** CRM_Mensajes.cuerpo es NVARCHAR(4000): techo de caracteres del cuerpo. */
+const CUERPO_MAX_CARACTERES = 4000;
+/** Marcador visible del corte explícito (12 caracteres → 3988 + 12 = 4000). */
+const MARCA_TRUNCADO = '…[truncado]';
+
+/**
+ * R3 cuerpo-truncado-silencioso: un cuerpo IN que excede el techo de
+ * NVARCHAR(4000) se trunca EXPLÍCITO con un marcador visible en vez
+ * de perder el final en silencio (o reventar el INSERT).
+ */
+function acotarCuerpo(cuerpo: string): string {
+  if (cuerpo.length <= CUERPO_MAX_CARACTERES) return cuerpo;
+  return cuerpo.slice(0, CUERPO_MAX_CARACTERES - MARCA_TRUNCADO.length) + MARCA_TRUNCADO;
+}
+
 export interface ResultadoProcesarMensaje {
   /** The conversation used/created (null on the duplicate early-out). */
   conversacionId: number | null;
@@ -147,7 +162,7 @@ export class ProcesarMensajeWhatsappUseCase {
       conversacionId: conversacion.id,
       direccion: 'IN',
       emisor: 'CLIENTE',
-      cuerpo: esTexto ? cuerpoTexto : `[${message.type}]`,
+      cuerpo: esTexto ? acotarCuerpo(cuerpoTexto) : `[${message.type}]`,
       tipo: esTexto ? 'TEXTO' : 'MEDIA',
       canal: 'WHATSAPP',
       wamid: message.id,
