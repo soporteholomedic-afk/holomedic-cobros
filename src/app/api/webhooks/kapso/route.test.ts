@@ -278,7 +278,9 @@ describe('POST /api/webhooks/kapso — ack, procesamiento e idempotencia', () =>
       tipo: 'TEXTO',
       canal: 'WHATSAPP',
       wamid: 'wamid.123',
-      idempotenciaKey: 'key-1',
+      // Dedup uniforme por identidad de mensaje: la clave guardada es
+      // el wamid (el header del delivery queda solo como fallback).
+      idempotenciaKey: 'wamid.123',
     });
     expect(conversaciones.crearMock).toHaveBeenCalledTimes(1);
     expect(conversaciones.registrarActividad).toHaveBeenCalledWith(1);
@@ -298,6 +300,35 @@ describe('POST /api/webhooks/kapso — ack, procesamiento e idempotencia', () =>
     expect(segundaBody).toEqual({ success: true, procesados: 0, duplicados: 1 });
     expect(mensajes.escritas).toHaveLength(1);
     expect(conversaciones.crearMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('mismo wamid re-entregado en otro formato (single→batch, headers distintos) → duplicado (R3-clave-batch-inconsistente)', async () => {
+    const conversaciones = makeConversaciones();
+    const mensajes = makeMensajes();
+    setDb(conversaciones, mensajes);
+
+    // Primera entrega: evento simple con su X-Idempotency-Key H1.
+    const primera = await POST(requestPost(payloadTexto('wamid.x'), { 'x-idempotency-key': 'H1' }));
+    expect((await primera.json()).procesados).toBe(1);
+
+    // Re-entrega del MISMO mensaje dentro de un batch con OTRO header
+    // H2: antes del fix las claves eran H1 vs H2:wamid.x → doble
+    // escritura; ahora la clave uniforme es el wamid → duplicado.
+    const raw = JSON.stringify({
+      type: 'whatsapp.message.received',
+      batch: true,
+      data: [JSON.parse(payloadTexto('wamid.x'))],
+      batch_info: { size: 1 },
+    });
+    const segunda = await POST(
+      requestPost(raw, { 'x-webhook-batch': 'true', 'x-idempotency-key': 'H2' }),
+    );
+    const body = await segunda.json();
+
+    expect(segunda.status).toBe(200);
+    expect(body).toEqual({ success: true, procesados: 0, duplicados: 1 });
+    expect(mensajes.escritas).toHaveLength(1);
+    expect(mensajes.escritas[0]?.idempotenciaKey).toBe('wamid.x');
   });
 
   it('repo falla al crear el mensaje → 503 PROCESAMIENTO_FALLIDO (Kapso reintenta)', async () => {
@@ -328,8 +359,9 @@ describe('POST /api/webhooks/kapso — ack, procesamiento e idempotencia', () =>
     expect(response.status).toBe(200);
     expect(body).toEqual({ success: true, procesados: 2, duplicados: 0 });
     expect(mensajes.escritas).toHaveLength(2);
-    // La clave del header NO se comparte tal cual entre payloads del
-    // batch: cada mensaje dedupa por su propio wamid compuesto.
+    // La clave de dedup es la identidad del mensaje (wamid), NO el
+    // header del delivery: cada mensaje del batch dedupe por sí mismo
+    // y coincide con una entrega simple del mismo wamid.
     expect(new Set(mensajes.escritas.map((m) => m.idempotenciaKey)).size).toBe(2);
     expect(mensajes.escritas.map((m) => m.wamid).sort()).toEqual(['wamid.a', 'wamid.b']);
   });

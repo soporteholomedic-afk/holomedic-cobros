@@ -102,15 +102,12 @@ export async function POST(request: Request): Promise<Response> {
   for (const payload of payloads) {
     if (!esMensajeWhatsappRecibido(payload)) continue;
     const wamid = payload.message.id;
-    // Clave por payload: el header tal cual en eventos simples; en un
-    // batch el header es UNA clave para N mensajes, así que se compone
-    // con el wamid para que cada mensaje dedupe por sí mismo.
-    const key =
-      claveHeader !== null && payloads.length === 1
-        ? claveHeader
-        : claveHeader !== null
-          ? `${claveHeader}:${wamid}`
-          : wamid;
+    // Clave de dedup UNIFORME por identidad de mensaje (remediación
+    // R3-clave-batch-inconsistente): el wamid es la identidad estable
+    // del mensaje — el mismo mensaje re-entregado (single o batch,
+    // mismo o distinto X-Idempotency-Key de delivery) dedupe igual.
+    // El header solo es fallback si el wamid faltara.
+    const key = wamid !== '' ? wamid : (claveHeader ?? wamid);
     try {
       const resultado = await useCase.ejecutar({ idempotenciaKey: key, message: payload.message });
       if (resultado.duplicado) duplicados += 1; else procesados += 1;
