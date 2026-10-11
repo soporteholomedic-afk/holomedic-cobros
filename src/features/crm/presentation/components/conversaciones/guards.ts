@@ -2,12 +2,14 @@ import type {
   CanalConversacion,
   ConversacionCrm,
   ConversacionListada,
+  DetalleAyudaNotificacion,
   EmisorMensaje,
   EstadoConversacion,
   FichaConversacion,
   MemoriaLista,
   MensajeCrm,
   ModoConversacion,
+  ResumenNotificaciones,
 } from '../../../domain/entities';
 import type { ContactoConEmpresa } from '../../../domain/ports';
 
@@ -338,6 +340,43 @@ export function esCandidatosContacto(v: unknown): v is {
 }
 
 // ---- Display helpers (pure) ----
+
+/**
+ * One row of the notificaciones payload's requiereAyudaDetalle
+ * (E3·T6) — feeds the global toast + deep link.
+ */
+export function esDetalleAyudaNotificacion(v: unknown): v is DetalleAyudaNotificacion {
+  if (typeof v !== 'object' || v === null) return false;
+  const obj = v as Record<string, unknown>;
+  return (
+    esNumero(obj.conversacionId) &&
+    esCadena(obj.etiqueta) &&
+    esCadenaNulable(obj.consulta)
+  );
+}
+
+/**
+ * GET /api/crm/conversaciones/notificaciones success body (E3·T3 +
+ * E3·T6): the badge counts plus the OPTIONAL detalle array — absent
+ * in pre-T6 payloads, consumers treat undefined as []. The hook
+ * never trusts a decoded body (useConversaciones precedent).
+ */
+export function esResumenNotificaciones(
+  v: unknown,
+): v is ResumenNotificaciones & { success: true } {
+  if (typeof v !== 'object' || v === null) return false;
+  const obj = v as Record<string, unknown>;
+  return (
+    obj.success === true &&
+    esNumero(obj.requiereAyuda) &&
+    esNumero(obj.pendienteVinculacion) &&
+    esNumero(obj.total) &&
+    esCadenaNulable(obj.ultimaActividad) &&
+    (obj.requiereAyudaDetalle === undefined ||
+      (Array.isArray(obj.requiereAyudaDetalle) &&
+        obj.requiereAyudaDetalle.every(esDetalleAyudaNotificacion)))
+  );
+}
 
 /**
  * Parse the IA message's `fuentes` JSON (E2 RAG cites,

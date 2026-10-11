@@ -58,6 +58,7 @@ describe('GET /api/crm/conversaciones/notificaciones (E3·T3)', () => {
       pendienteVinculacion: 5,
       total: 40,
       ultimaActividad: '2026-06-15T12:30:00.000Z',
+      requiereAyudaDetalle: [],
     });
 
     const response = await GET();
@@ -70,6 +71,37 @@ describe('GET /api/crm/conversaciones/notificaciones (E3·T3)', () => {
       pendienteVinculacion: 5,
       total: 40,
       ultimaActividad: '2026-06-15T12:30:00.000Z',
+      requiereAyudaDetalle: [],
+    });
+    expect(response.headers.get('cache-control')).toBe('no-store');
+  });
+
+  it('200: payload additive con requiereAyudaDetalle (E3·T6 toasts globales)', async () => {
+    mocks.ejecutarMock.mockResolvedValueOnce({
+      requiereAyuda: 2,
+      pendienteVinculacion: 5,
+      total: 40,
+      ultimaActividad: '2026-06-15T12:30:00.000Z',
+      requiereAyudaDetalle: [
+        { conversacionId: 7, etiqueta: 'ACME S.A.', consulta: 'Crédito fiscal a 30 días' },
+        { conversacionId: 8, etiqueta: 'Comercio Central', consulta: null },
+      ],
+    });
+
+    const response = await GET();
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body).toEqual({
+      success: true,
+      requiereAyuda: 2,
+      pendienteVinculacion: 5,
+      total: 40,
+      ultimaActividad: '2026-06-15T12:30:00.000Z',
+      requiereAyudaDetalle: [
+        { conversacionId: 7, etiqueta: 'ACME S.A.', consulta: 'Crédito fiscal a 30 días' },
+        { conversacionId: 8, etiqueta: 'Comercio Central', consulta: null },
+      ],
     });
     expect(response.headers.get('cache-control')).toBe('no-store');
   });

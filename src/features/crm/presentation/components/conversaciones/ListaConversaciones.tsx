@@ -25,6 +25,9 @@ import {
  * cuerpo truncado, visually quiet — quieter than the razón social)
  * sourced from listar()'s OUTER APPLY columns; rows without messages
  * show no preview line.
+ * E3·T6: rows in estado REQUIERE_HUMANO add the '⚠ AYUDA' dot next
+ * to the title (mockup verbatim) — on top of the existing estado
+ * chip; every other estado shows no marker.
  */
 
 export interface ListaConversacionesProps {
@@ -82,8 +85,16 @@ function FilaConversacion({
       </span>
       <span className="min-w-0 flex-1">
         <span className="flex items-center justify-between gap-2">
-          <span className="truncate text-sm font-semibold text-slate-900 dark:text-slate-100">
-            {titulo}
+          <span className="flex min-w-0 items-center gap-1.5">
+            <span className="truncate text-sm font-semibold text-slate-900 dark:text-slate-100">
+              {titulo}
+            </span>
+            {/* E3·T6: '⚠ AYUDA' (mockup verbatim) — solo REQUIERE_HUMANO. */}
+            {conversacion.estado === 'REQUIERE_HUMANO' && (
+              <span className="flex-none rounded-full border border-red-200 bg-red-50 px-1.5 py-0.5 text-[9px] font-bold text-red-700 dark:border-red-900/60 dark:bg-red-950/40 dark:text-red-300">
+                ⚠ AYUDA
+              </span>
+            )}
           </span>
           {conversacion.ultimoMensajeEn !== null && (
             <span className="flex-none text-[10px] text-slate-400 dark:text-slate-500">

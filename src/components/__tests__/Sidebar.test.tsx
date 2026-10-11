@@ -1,11 +1,23 @@
 import React from 'react';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 
 const mockUsePathname = vi.hoisted(() => vi.fn().mockReturnValue('/'));
+// Estable entre renders como el router real de Next (un objeto nuevo
+// por llamada re-armaría el polling en cada render del Sidebar).
+const routerMock = vi.hoisted(() => ({ push: vi.fn() }));
+const mockUseRouter = vi.hoisted(() => vi.fn(() => routerMock));
+const toastMock = vi.hoisted(() => Object.assign(vi.fn(), { dismiss: vi.fn() }));
 
 vi.mock('next/navigation', () => ({
   usePathname: mockUsePathname,
+  useRouter: mockUseRouter,
+}));
+
+// E3·T6: el Sidebar monta useNotificacionesConversaciones (badge +
+// toasts globales) — sonner se moquea para no emitir toasts reales.
+vi.mock('sonner', () => ({
+  toast: toastMock,
 }));
 
 vi.mock('next/link', () => ({
@@ -46,6 +58,28 @@ const firmaUser: AuthUser = {
   activo: true,
 };
 
+// agente-ia-crm E3·T6: the "Conversaciones" entry is gated by its
+// OWN permiso `crm_conversaciones` — independent of `crm` (the CRM
+// panel entry): an operator with only crm_conversaciones sees the
+// bandeja entry but NOT the CRM panel.
+const conversacionesUser: AuthUser = {
+  idUsuario: 'u-conversaciones',
+  usuario: 'mconversa',
+  nombre: 'Marcos Conversa',
+  area: 'Cobranza',
+  permisos: ['crm_conversaciones'],
+  activo: true,
+};
+
+const crmUser: AuthUser = {
+  idUsuario: 'u-crm',
+  usuario: 'vcrm',
+  nombre: 'Vera Crm',
+  area: 'Sistemas',
+  permisos: ['crm'],
+  activo: true,
+};
+
 function mockAuthMe(user: AuthUser | null): void {
   global.fetch = vi.fn().mockImplementation((url: string) =>
     url === '/api/auth/me'
@@ -55,6 +89,32 @@ function mockAuthMe(user: AuthUser | null): void {
       : Promise.resolve({ ok: true, json: () => Promise.resolve({}) }),
   ) as unknown as typeof fetch;
 }
+
+// E3·T6: auth + resumen de notificaciones en un solo mock de fetch —
+// el badge vive del GET /api/crm/conversaciones/notificaciones.
+function mockAuthMeNotificaciones(user: AuthUser, payload: unknown): void {
+  global.fetch = vi.fn().mockImplementation((url: string) =>
+    url === '/api/auth/me'
+      ? Promise.resolve({ ok: true, json: () => Promise.resolve({ usuario: user }) })
+      : url === '/api/crm/conversaciones/notificaciones'
+        ? Promise.resolve({ ok: true, json: () => Promise.resolve(payload) })
+        : Promise.resolve({ ok: true, json: () => Promise.resolve({}) }),
+  ) as unknown as typeof fetch;
+}
+
+const resumenConAyuda = {
+  success: true,
+  requiereAyuda: 2,
+  pendienteVinculacion: 0,
+  total: 12,
+  ultimaActividad: '2026-06-15T12:30:00.000Z',
+  requiereAyudaDetalle: [],
+};
+
+const resumenSinAyuda = {
+  ...resumenConAyuda,
+  requiereAyuda: 0,
+};
 
 const renderSidebar = () =>
   render(
@@ -262,6 +322,91 @@ describe('Sidebar Component', () => {
       const trigger = screen.getByRole('button', { name: /Areas/i });
       fireEvent.click(trigger);
       expect(trigger).toHaveAttribute('aria-expanded', 'true');
+    });
+  });
+
+  // agente-ia-crm E3·T6: entrada global "Conversaciones" + badge de ayuda
+  describe('Conversaciones entry (permiso crm_conversaciones, E3·T6)', () => {
+    beforeEach(() => {
+      mockUsePathname.mockReturnValue('/');
+      mockUseRouter.mockClear();
+      toastMock.mockClear();
+      toastMock.dismiss.mockClear();
+    });
+
+    it('debe mostrar "Conversaciones" y enlazar a /crm/conversaciones con el permiso', async () => {
+      mockAuthMe(conversacionesUser);
+      renderSidebar();
+      expect(await screen.findByText('Marcos Conversa')).toBeInTheDocument();
+
+      const link = screen.getByText('Conversaciones').closest('a');
+      expect(link).toHaveAttribute('href', '/crm/conversaciones');
+    });
+
+    it('permiso propio: con SOLO crm_conversaciones ve Conversaciones pero NO el panel CRM', async () => {
+      mockAuthMe(conversacionesUser);
+      renderSidebar();
+      expect(await screen.findByText('Conversaciones')).toBeInTheDocument();
+      expect(screen.queryByText('CRM')).not.toBeInTheDocument();
+    });
+
+    it('permiso propio: con SOLO crm ve el panel CRM pero NO Conversaciones', async () => {
+      mockAuthMe(crmUser);
+      renderSidebar();
+      expect(await screen.findByText('CRM')).toBeInTheDocument();
+      expect(screen.queryByText('Conversaciones')).not.toBeInTheDocument();
+    });
+
+    it('debe ocultar "Conversaciones" sin el permiso crm_conversaciones', async () => {
+      mockAuthMe(nonAdminUser);
+      renderSidebar();
+      expect(await screen.findByText('Ana Cobranza')).toBeInTheDocument();
+      expect(screen.queryByText('Conversaciones')).not.toBeInTheDocument();
+    });
+
+    it('marca activa la entrada en /crm/conversaciones', async () => {
+      mockUsePathname.mockReturnValue('/crm/conversaciones');
+      mockAuthMe(conversacionesUser);
+      renderSidebar();
+      const link = (await screen.findByText('Conversaciones')).closest('a');
+      expect(link?.className).toContain('text-sky-300');
+    });
+
+    it('badge: cuenta requiereAyuda con aria-label cuando > 0', async () => {
+      mockAuthMeNotificaciones(conversacionesUser, resumenConAyuda);
+      renderSidebar();
+
+      const badge = await screen.findByLabelText('2 conversaciones necesitan ayuda');
+      expect(badge).toHaveTextContent('2');
+    });
+
+    it('badge: oculto cuando requiereAyuda es 0', async () => {
+      mockAuthMeNotificaciones(conversacionesUser, resumenSinAyuda);
+      renderSidebar();
+      expect(await screen.findByText('Marcos Conversa')).toBeInTheDocument();
+
+      await waitFor(() =>
+        expect(global.fetch).toHaveBeenCalledWith(
+          '/api/crm/conversaciones/notificaciones',
+          expect.anything(),
+        ),
+      );
+      expect(screen.queryByLabelText(/conversaciones necesitan ayuda/)).not.toBeInTheDocument();
+    });
+
+    it('sin permiso no polea notificaciones (ni badge ni fetch)', async () => {
+      const fetchSpy = vi.fn().mockImplementation((url: string) =>
+        url === '/api/auth/me'
+          ? Promise.resolve({ ok: true, json: () => Promise.resolve({ usuario: nonAdminUser }) })
+          : Promise.resolve({ ok: true, json: () => Promise.resolve({}) }),
+      );
+      global.fetch = fetchSpy as unknown as typeof fetch;
+      renderSidebar();
+      expect(await screen.findByText('Ana Cobranza')).toBeInTheDocument();
+
+      expect(
+        fetchSpy.mock.calls.filter((c) => String(c[0]).includes('notificaciones')),
+      ).toHaveLength(0);
     });
   });
 });

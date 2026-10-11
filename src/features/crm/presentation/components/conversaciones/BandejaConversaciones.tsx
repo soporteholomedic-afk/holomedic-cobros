@@ -1,7 +1,8 @@
 'use client';
 
-import { useState } from 'react';
+import { Suspense, useEffect, useState } from 'react';
 import { MessageSquare } from 'lucide-react';
+import { useSearchParams } from 'next/navigation';
 
 import { useConversaciones } from '../../hooks/useConversaciones';
 import { HiloConversacion } from './HiloConversacion';
@@ -18,13 +19,44 @@ import { SimuladorEntrada } from './SimuladorEntrada';
  * The simulator card renders only while the server reports
  * modoSimulado (mock-first E1). Visual tokens copied from panel/
  * (PanelCrm header + card, slate/teal).
+ *
+ * E3·T6 deep link: `?conversacion=<id>` (the global toast's 'Ver
+ * conversación' lands here) preselects that row ONCE the list loads
+ * and the row is present. The exported wrapper keeps
+ * useSearchParams behind its own Suspense boundary
+ * (envio-resultados page precedent) so the page stays prerenderable;
+ * page.tsx itself stays untouched.
  */
 
-export function BandejaConversaciones() {
+function BandejaConversacionesContenido() {
+  const searchParams = useSearchParams();
+  const conversacionParam = searchParams.get('conversacion');
   const [busqueda, setBusqueda] = useState('');
   const [seleccionadaId, setSeleccionadaId] = useState<number | null>(null);
+  // La preselección aplica UNA sola vez; el clic del usuario la
+  // consume (user clicks win — jamás re-aplica el parámetro).
+  const [preseleccionPendiente, setPreseleccionPendiente] = useState(
+    conversacionParam !== null,
+  );
   const { conversaciones, total, modoSimulado, status, error, refetch, simularEntrada } =
     useConversaciones(busqueda);
+
+  // Deep link: espera la lista (llega async) y preselecciona la fila
+  // indicada si está presente; id inválido o ausente → fallback al
+  // comportamiento de hoy (nada seleccionado, placeholder visible).
+  useEffect(() => {
+    if (!preseleccionPendiente) return;
+    const id = Number(conversacionParam);
+    if (!Number.isInteger(id)) {
+      setPreseleccionPendiente(false);
+      return;
+    }
+    if (status !== 'ready') return;
+    if (conversaciones.some((conversacion) => conversacion.id === id)) {
+      setSeleccionadaId(id);
+    }
+    setPreseleccionPendiente(false);
+  }, [preseleccionPendiente, conversacionParam, status, conversaciones]);
 
   // Fila seleccionada: DERIVADA de la lista (nunca estado duplicado —
   // regla del repo) — al refrescar llega el dato nuevo (badge limpio,
@@ -60,6 +92,7 @@ export function BandejaConversaciones() {
             // Éxito → refresco (dentro del hook) + abrir la conversación
             // resultante: el operador aterriza en el hilo que simuló.
             if (resultado.ok && resultado.conversacionId !== null) {
+              setPreseleccionPendiente(false);
               setSeleccionadaId(resultado.conversacionId);
             }
             return resultado;
@@ -77,7 +110,11 @@ export function BandejaConversaciones() {
             busqueda={busqueda}
             onBuscar={setBusqueda}
             seleccionada={seleccionadaId}
-            onSeleccionar={(id) => setSeleccionadaId(id)}
+            onSeleccionar={(id) => {
+              // El clic del usuario consume la preselección (gana él).
+              setPreseleccionPendiente(false);
+              setSeleccionadaId(id);
+            }}
             onReintentar={() => refetch()}
           />
         </div>
@@ -106,5 +143,29 @@ export function BandejaConversaciones() {
         </div>
       </div>
     </section>
+  );
+}
+
+/**
+ * Exported shell: the Suspense boundary useSearchParams needs during
+ * prerendering (Next.js requirement; envio-resultados page
+ * precedent, kept INSIDE the component so page.tsx stays a plain
+ * server wrapper). Light skeleton fallback matching the card look.
+ */
+export function BandejaConversaciones() {
+  return (
+    <Suspense
+      fallback={
+        <div
+          role="status"
+          aria-label="Cargando conversaciones"
+          className="flex h-[calc(100vh-16rem)] min-h-[28rem] items-center justify-center rounded-2xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900"
+        >
+          <div className="h-7 w-7 animate-spin rounded-full border-4 border-teal-600 border-t-transparent" />
+        </div>
+      }
+    >
+      <BandejaConversacionesContenido />
+    </Suspense>
   );
 }

@@ -642,6 +642,20 @@ export interface MemoriaLista {
 }
 
 /**
+ * ONE row of the sidebar's ayuda detalle (agente-ia-crm E3·T6):
+ * what the global toast needs per escalated conversation — the id
+ * (deep-link target), the display etiqueta (razonSocial → contacto →
+ * telefono, the same chain the bandeja derives for display) and the
+ * consulta that defeated the RAG (null when the repo lacks the
+ * solicitud capability or the row is absent).
+ */
+export interface DetalleAyudaNotificacion {
+  conversacionId: number;
+  etiqueta: string;
+  consulta: string | null;
+}
+
+/**
  * The bandeja notification badge (agente-ia-crm E3·T3): counts over
  * CRM_Conversaciones — `requiereAyuda` (estado REQUIERE_HUMANO),
  * `pendienteVinculacion` (estado PENDIENTE_VINCULACION), `total` and
@@ -653,6 +667,13 @@ export interface ResumenNotificaciones {
   pendienteVinculacion: number;
   total: number;
   ultimaActividad: string | null;
+  /**
+   * E3·T6 (additive, optional): top-5 REQUIERE_HUMANO conversations
+   * by ultimoMensajeEn DESC — feeds the global toast + deep link in
+   * the shell. Absent in pre-T6 payloads; consumers treat undefined
+   * as [] (ultimoMensajeCuerpo precedent).
+   */
+  requiereAyudaDetalle?: DetalleAyudaNotificacion[];
 }
 
 // ---- Generador de respuestas LLM (agente-ia-crm, E2·T3) ----

@@ -3,9 +3,10 @@
 import { useState, useCallback } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Activity, Building2, FileSpreadsheet, Home, DollarSign, FileText, Mail, Menu, X, Users, LogOut, PenLine } from 'lucide-react';
+import { Activity, Building2, FileSpreadsheet, Home, DollarSign, FileText, Mail, Menu, X, Users, LogOut, MessageSquare, PenLine } from 'lucide-react';
 import AreasMenuItem from './AreasMenuItem';
 import { useAuth } from '@/features/auth/presentation/hooks/useAuth';
+import { useNotificacionesConversaciones } from '@/features/crm/presentation/hooks/useNotificacionesConversaciones';
 
 const navItems = [
   { href: '/', label: 'Inicio', icon: Home },
@@ -33,10 +34,25 @@ export default function Sidebar() {
   // route requires exactly `crm` via RUTAS_PROTETGIDAS; crm_admin is a
   // separate elevation for the import surface and never shown here.
   const canCrm = user?.permisos.includes('crm');
+  // agente-ia-crm E3·T6: "Conversaciones" is gated by its OWN permiso
+  // too — INDEPENDENT of `crm` (the bandeja route requires exactly
+  // `crm_conversaciones`): an operator with only crm_conversaciones
+  // sees this entry but NOT the CRM panel.
+  const canConversaciones = user?.permisos.includes('crm_conversaciones');
+  // The polling (badge + toasts) lives exactly where the entry lives
+  // — the global shell. The hook call stays unconditional at the top
+  // level (rules-of-hooks); `habilitado` gates the fetches/timers.
+  const { resumen: resumenNotificaciones } = useNotificacionesConversaciones(
+    canConversaciones === true,
+  );
+  const requiereAyuda = resumenNotificaciones?.requiereAyuda ?? 0;
   // editor-firmas: "Mi firma" is gated by its OWN permiso — NOT by
   // admin nor plantillas (design D1/D6; the page route requires
   // exactly `firma_correo` via RUTAS_PROTEGIDAS).
   const canEditFirma = user?.permisos.includes('firma_correo');
+  // E3·T6 active-state: exact match or any sub-route of the bandeja.
+  const conversacionesActiva =
+    pathname === '/crm/conversaciones' || pathname.startsWith('/crm/conversaciones/');
 
   return (
     <>
@@ -147,6 +163,39 @@ export default function Sidebar() {
               <span>CRM</span>
               {pathname === '/crm' && (
                 <span className="ml-auto w-1.5 h-1.5 rounded-full bg-sky-400 shadow-sm shadow-sky-400/50" />
+              )}
+            </Link>
+          )}
+
+          {canConversaciones && (
+            <Link
+              href="/crm/conversaciones"
+              onClick={closeMobile}
+              className={`flex items-center space-x-3 px-4 py-3 rounded-xl text-sm font-medium transition-all duration-200 ${
+                conversacionesActiva
+                  ? 'bg-sky-950/50 text-sky-300 border border-sky-800/30 shadow-sm'
+                  : 'text-slate-400 hover:text-white hover:bg-slate-800/50'
+              }`}
+            >
+              <MessageSquare className="w-5 h-5" />
+              <span>Conversaciones</span>
+              {/* E3·T6 badge (ListaConversaciones noLeidos styling
+                  convention): requiereAyuda > 0 only, aria-label for
+                  screen readers. When present it owns the ml-auto and
+                  the active dot trails it. */}
+              {requiereAyuda > 0 && (
+                <span
+                  aria-label={`${requiereAyuda} conversaciones necesitan ayuda`}
+                  title="Conversaciones donde La Guía pide tu ayuda"
+                  className="ml-auto rounded-full bg-red-600 px-2 py-0.5 text-[10px] font-bold text-white"
+                >
+                  {requiereAyuda}
+                </span>
+              )}
+              {conversacionesActiva && (
+                <span
+                  className={`${requiereAyuda > 0 ? '' : 'ml-auto '}w-1.5 h-1.5 rounded-full bg-sky-400 shadow-sm shadow-sky-400/50`}
+                />
               )}
             </Link>
           )}

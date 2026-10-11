@@ -11,6 +11,10 @@ import type { ConversacionListada } from '../../../../domain/entities';
  * Guía / '👤 ' operador + cuerpo truncated ~60 chars) sourced from
  * the listar() OUTER APPLY columns; conversations without messages
  * show no preview line.
+ *
+ * E3·T6: rows in estado REQUIERE_HUMANO additionally carry the '⚠
+ * AYUDA' dot (mockup verbatim) next to the title — on top of the
+ * existing estado chip, only for that estado.
  */
 
 function fila(overrides: Partial<ConversacionListada> = {}): ConversacionListada {
@@ -107,5 +111,27 @@ describe('ListaConversaciones preview del último mensaje (E2·T6)', () => {
     montar([fila({ ultimoMensajeCuerpo: '   ', ultimoMensajeEmisor: 'IA' })]);
     expect(await screen.findByText('Luis Medina')).toBeInTheDocument();
     expect(screen.queryByText(/🤖/)).not.toBeInTheDocument();
+  });
+});
+
+describe('ListaConversaciones marcador ⚠ AYUDA (E3·T6)', () => {
+  it('muestra "⚠ AYUDA" solo en filas REQUIERE_HUMANO (mockup verbatim)', async () => {
+    montar([
+      fila({ estado: 'REQUIERE_HUMANO', id: 7, nombreContacto: 'Ana López' }),
+      fila({ estado: 'TOMADA_HUMANO', id: 8, nombreContacto: 'Beto Ríos' }),
+      fila({ estado: 'ACTIVA_IA', id: 9, nombreContacto: 'Carla Ruiz' }),
+    ]);
+
+    const marcadores = await screen.findAllByText('⚠ AYUDA');
+    expect(marcadores).toHaveLength(1);
+    // El marcador vive dentro de la fila de Ana López, no de las otras.
+    expect(marcadores[0]?.closest('button')?.textContent).toContain('Ana López');
+    expect(marcadores[0]?.closest('button')?.textContent).not.toContain('Beto Ríos');
+  });
+
+  it('conserva el chip de estado existente además del marcador', async () => {
+    montar([fila({ estado: 'REQUIERE_HUMANO' })]);
+    expect(await screen.findByText('⚠ AYUDA')).toBeInTheDocument();
+    expect(screen.getByText('Pide ayuda')).toBeInTheDocument();
   });
 });
