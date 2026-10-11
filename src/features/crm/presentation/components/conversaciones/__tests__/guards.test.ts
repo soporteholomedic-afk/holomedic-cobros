@@ -1,8 +1,14 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  esAjustesConversacion,
   esConversacionListada,
+  esFichaConversacion,
+  esHiloConversacion,
+  esListadoMemorias,
   esMensajeCrm,
+  esSolicitudAyuda,
+  esUsuariosAsignables,
   parsearTitulosFuentes,
   previsualizarUltimoMensaje,
 } from '../guards';
@@ -151,5 +157,108 @@ describe('previsualizarUltimoMensaje', () => {
     expect(previsualizarUltimoMensaje(null, 'IA')).toBeNull();
     expect(previsualizarUltimoMensaje('   ', 'IA')).toBeNull();
     expect(previsualizarUltimoMensaje('texto', null)).toBe('texto');
+  });
+});
+
+describe('guards E3·T5 — solicitudAyuda, ficha, memorias, ajustes, usuarios', () => {
+  const SOLICITUD = {
+    id: 9,
+    conversacionId: 7,
+    mensajeId: 55,
+    consulta: '¿facturan con crédito fiscal a 30 días?',
+    terminosBuscados: ['crédito', 'facturación'],
+    score: 0.29,
+    estado: 'PENDIENTE',
+    indicacion: null,
+    resueltaPor: null,
+    creadoEn: '2026-10-11T14:03:00.000Z',
+    resueltaEn: null,
+  };
+
+  it('esSolicitudAyuda: acepta la fila pendiente y rechaza formas rotas', () => {
+    expect(esSolicitudAyuda(SOLICITUD)).toBe(true);
+    // score/terminos nulos-vacíos son válidos; mensajeId null también.
+    expect(esSolicitudAyuda({ ...SOLICITUD, score: null, mensajeId: null, terminosBuscados: [] })).toBe(true);
+    expect(esSolicitudAyuda({ ...SOLICITUD, terminosBuscados: 'crédito' })).toBe(false);
+    expect(esSolicitudAyuda({ ...SOLICITUD, estado: 'OTRO' })).toBe(false);
+    expect(esSolicitudAyuda(null)).toBe(false);
+  });
+
+  it('esHiloConversacion acepta solicitudAyuda opcional (ausente/null/objeto) y la rechaza rota', () => {
+    const base = {
+      success: true,
+      conversacion: fila(),
+      mensajes: [mensaje()],
+    };
+    expect(esHiloConversacion(base)).toBe(true);
+    expect(esHiloConversacion({ ...base, solicitudAyuda: null })).toBe(true);
+    expect(esHiloConversacion({ ...base, solicitudAyuda: SOLICITUD })).toBe(true);
+    expect(esHiloConversacion({ ...base, solicitudAyuda: { id: 'x' } })).toBe(false);
+  });
+
+  it('esFichaConversacion: acepta el cuerpo GET/POST ficha y rechaza datos incompletos', () => {
+    const ficha = {
+      success: true,
+      conversacionId: 7,
+      contacto: { id: 11, nombre: 'Luis Medina', telefono: '+595981234567', cargo: null },
+      empresa: { id: 1, razonSocial: 'Comercio Central', cantidadTrabajadores: null },
+      datos: {
+        cargo: { valor: 'Gerente', origen: 'IA', confirmado: false },
+        trabajadores: { valor: null, origen: 'IA', confirmado: false },
+        sedes: { valor: 'Encarnación', origen: 'HUMANO', confirmado: true },
+      },
+    };
+    expect(esFichaConversacion(ficha)).toBe(true);
+    expect(esFichaConversacion({ ...ficha, contacto: null, empresa: null })).toBe(true);
+    expect(esFichaConversacion({ ...ficha, datos: { cargo: ficha.datos.cargo } })).toBe(false);
+    expect(
+      esFichaConversacion({
+        ...ficha,
+        datos: { ...ficha.datos, sedes: { valor: 'x', origen: 'otro', confirmado: false } },
+      }),
+    ).toBe(false);
+  });
+
+  it('esListadoMemorias: acepta {memorias, empresaId} y rechaza filas rotas', () => {
+    const cuerpo = {
+      success: true,
+      empresaId: 7,
+      memorias: [
+        {
+          id: 101,
+          nivel: 'chat',
+          tipo: 'indicacion_humana',
+          titulo: 'Indicación humana',
+          contenido: 'Responder por la tarde',
+          pineada: true,
+          creadoEn: '2026-06-10T10:00:00.000Z',
+        },
+      ],
+    };
+    expect(esListadoMemorias(cuerpo)).toBe(true);
+    expect(esListadoMemorias({ ...cuerpo, empresaId: null, memorias: [] })).toBe(true);
+    expect(esListadoMemorias({ ...cuerpo, memorias: [{ ...cuerpo.memorias[0]!, pineada: 'si' }] })).toBe(false);
+  });
+
+  it('esAjustesConversacion: acepta el cuerpo ajustes y rechaza config incompleta', () => {
+    const ajustes = {
+      success: true,
+      estado: 'REQUIERE_HUMANO',
+      modo: 'IA',
+      asignadaA: null,
+      memoriaActiva: true,
+      config: { umbralConfianza: 0.6, maxIntercambios: 8, horarioDesde: 8, horarioHasta: 18 },
+    };
+    expect(esAjustesConversacion(ajustes)).toBe(true);
+    expect(esAjustesConversacion({ ...ajustes, asignadaA: 'juana' })).toBe(true);
+    expect(esAjustesConversacion({ ...ajustes, config: { umbralConfianza: 0.6 } })).toBe(false);
+    expect(esAjustesConversacion({ ...ajustes, modo: 'otro' })).toBe(false);
+  });
+
+  it('esUsuariosAsignables: acepta {usuarios:[{id,nombre}]} y rechaza extraños', () => {
+    expect(esUsuariosAsignables({ success: true, usuarios: [{ id: 'juana', nombre: 'Juana P' }] })).toBe(true);
+    expect(esUsuariosAsignables({ success: true, usuarios: [] })).toBe(true);
+    expect(esUsuariosAsignables({ success: true, usuarios: [{ id: 1, nombre: 'X' }] })).toBe(false);
+    expect(esUsuariosAsignables({ usuarios: [] })).toBe(false);
   });
 });

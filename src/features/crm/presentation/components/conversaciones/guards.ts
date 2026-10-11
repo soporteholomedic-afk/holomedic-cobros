@@ -4,7 +4,10 @@ import type {
   ConversacionListada,
   EmisorMensaje,
   EstadoConversacion,
+  FichaConversacion,
+  MemoriaLista,
   MensajeCrm,
+  ModoConversacion,
 } from '../../../domain/entities';
 import type { ContactoConEmpresa } from '../../../domain/ports';
 
@@ -140,6 +143,8 @@ export function esHiloConversacion(v: unknown): v is {
   success: true;
   conversacion: ConversacionCrm;
   mensajes: MensajeCrm[];
+  /** E3·T5: the pending help request feeding the thread's help card. */
+  solicitudAyuda?: SolicitudAyudaVista | null;
 } {
   if (typeof v !== 'object' || v === null) return false;
   const obj = v as Record<string, unknown>;
@@ -147,7 +152,168 @@ export function esHiloConversacion(v: unknown): v is {
     obj.success === true &&
     esConversacionCrm(obj.conversacion) &&
     Array.isArray(obj.mensajes) &&
-    obj.mensajes.every(esMensajeCrm)
+    obj.mensajes.every(esMensajeCrm) &&
+    (obj.solicitudAyuda === undefined ||
+      obj.solicitudAyuda === null ||
+      esSolicitudAyuda(obj.solicitudAyuda))
+  );
+}
+
+/**
+ * One CRM_SolicitudesAyuda row as it crosses the WIRE (E3·T5): the
+ * domain SolicitudAyuda carries `creadoEn`/`resueltaEn` as Dates, but
+ * NextResponse.json serializes them to ISO strings — this is the
+ * presentation-facing shape (MemoriaLista precedent).
+ */
+export interface SolicitudAyudaVista {
+  id: number;
+  conversacionId: number;
+  mensajeId: number | null;
+  consulta: string;
+  terminosBuscados: string[];
+  score: number | null;
+  estado: 'PENDIENTE' | 'RESUELTA';
+  indicacion: string | null;
+  resueltaPor: string | null;
+  creadoEn: string;
+  resueltaEn: string | null;
+}
+
+/** Shape guard for the hilo's solicitudAyuda field. */
+export function esSolicitudAyuda(v: unknown): v is SolicitudAyudaVista {
+  if (typeof v !== 'object' || v === null) return false;
+  const obj = v as Record<string, unknown>;
+  return (
+    esNumero(obj.id) &&
+    esNumero(obj.conversacionId) &&
+    esNumeroNulable(obj.mensajeId) &&
+    esCadena(obj.consulta) &&
+    Array.isArray(obj.terminosBuscados) &&
+    obj.terminosBuscados.every((t) => typeof t === 'string') &&
+    (obj.score === null || obj.score === undefined || typeof obj.score === 'number') &&
+    (obj.estado === 'PENDIENTE' || obj.estado === 'RESUELTA') &&
+    esCadenaNulable(obj.indicacion) &&
+    esCadenaNulable(obj.resueltaPor) &&
+    esCadena(obj.creadoEn) &&
+    esCadenaNulable(obj.resueltaEn)
+  );
+}
+
+/** GET/POST /api/crm/conversaciones/[id]/ficha success body. */
+export function esFichaConversacion(v: unknown): v is { success: true } & FichaConversacion {
+  if (typeof v !== 'object' || v === null) return false;
+  const obj = v as Record<string, unknown>;
+  if (obj.success !== true || !esNumero(obj.conversacionId)) return false;
+  const contactoOk =
+    obj.contacto === null ||
+    (typeof obj.contacto === 'object' &&
+      obj.contacto !== null &&
+      esNumero((obj.contacto as Record<string, unknown>).id) &&
+      esCadena((obj.contacto as Record<string, unknown>).nombre) &&
+      esCadenaNulable((obj.contacto as Record<string, unknown>).telefono) &&
+      esCadenaNulable((obj.contacto as Record<string, unknown>).cargo));
+  const empresaOk =
+    obj.empresa === null ||
+    (typeof obj.empresa === 'object' &&
+      obj.empresa !== null &&
+      esNumero((obj.empresa as Record<string, unknown>).id) &&
+      esCadena((obj.empresa as Record<string, unknown>).razonSocial) &&
+      esNumeroNulable((obj.empresa as Record<string, unknown>).cantidadTrabajadores));
+  if (!contactoOk || !empresaOk) return false;
+  const datos = obj.datos as Record<string, unknown> | undefined;
+  if (typeof datos !== 'object' || datos === null) return false;
+  const origenes = ['IA', 'HUMANO', 'canonico'];
+  return ['cargo', 'trabajadores', 'sedes'].every((campo) => {
+    const dato = datos[campo] as Record<string, unknown> | undefined;
+    return (
+      typeof dato === 'object' &&
+      dato !== null &&
+      esCadenaNulable(dato.valor) &&
+      typeof dato.origen === 'string' &&
+      origenes.includes(dato.origen) &&
+      typeof dato.confirmado === 'boolean'
+    );
+  });
+}
+
+/** GET /api/crm/conversaciones/[id]/memorias success body. */
+export function esListadoMemorias(
+  v: unknown,
+): v is { success: true; memorias: MemoriaLista[]; empresaId: number | null } {
+  if (typeof v !== 'object' || v === null) return false;
+  const obj = v as Record<string, unknown>;
+  if (obj.success !== true || !esNumeroNulable(obj.empresaId) || !Array.isArray(obj.memorias)) {
+    return false;
+  }
+  return obj.memorias.every(
+    (m) =>
+      typeof m === 'object' &&
+      m !== null &&
+      esNumero((m as Record<string, unknown>).id) &&
+      ((m as Record<string, unknown>).nivel === 'chat' ||
+        (m as Record<string, unknown>).nivel === 'empresa') &&
+      esCadena((m as Record<string, unknown>).tipo) &&
+      esCadena((m as Record<string, unknown>).titulo) &&
+      esCadena((m as Record<string, unknown>).contenido) &&
+      typeof (m as Record<string, unknown>).pineada === 'boolean' &&
+      esCadena((m as Record<string, unknown>).creadoEn),
+  );
+}
+
+/** The ajustes panel payload (E3·T5) — AjustesConversacion + success. */
+export interface AjustesConversacionVista {
+  success: true;
+  estado: EstadoConversacion;
+  modo: ModoConversacion;
+  asignadaA: string | null;
+  memoriaActiva: boolean;
+  config: {
+    umbralConfianza: number;
+    maxIntercambios: number;
+    horarioDesde: number;
+    horarioHasta: number;
+  };
+}
+
+/** GET/POST /api/crm/conversaciones/[id]/ajustes success body. */
+export function esAjustesConversacion(v: unknown): v is AjustesConversacionVista {
+  if (typeof v !== 'object' || v === null) return false;
+  const obj = v as Record<string, unknown>;
+  const config = obj.config as Record<string, unknown> | undefined;
+  return (
+    obj.success === true &&
+    (ESTADOS_CONVERSACION as readonly string[]).includes(String(obj.estado)) &&
+    (obj.modo === 'IA' || obj.modo === 'HUMANO') &&
+    esCadenaNulable(obj.asignadaA) &&
+    typeof obj.memoriaActiva === 'boolean' &&
+    typeof config === 'object' &&
+    config !== null &&
+    typeof config.umbralConfianza === 'number' &&
+    typeof config.maxIntercambios === 'number' &&
+    typeof config.horarioDesde === 'number' &&
+    typeof config.horarioHasta === 'number'
+  );
+}
+
+/** One assignable operator as the escalar selector sees it (E3·T5). */
+export interface UsuarioAsignableVista {
+  id: string;
+  nombre: string;
+}
+
+/** GET /api/crm/conversaciones/usuarios-asignables success body. */
+export function esUsuariosAsignables(
+  v: unknown,
+): v is { success: true; usuarios: UsuarioAsignableVista[] } {
+  if (typeof v !== 'object' || v === null) return false;
+  const obj = v as Record<string, unknown>;
+  if (obj.success !== true || !Array.isArray(obj.usuarios)) return false;
+  return obj.usuarios.every(
+    (u) =>
+      typeof u === 'object' &&
+      u !== null &&
+      esCadena((u as Record<string, unknown>).id) &&
+      esCadena((u as Record<string, unknown>).nombre),
   );
 }
 
