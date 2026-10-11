@@ -251,6 +251,23 @@ export class SqlServerConversacionRepository implements ConversacionCrmRepositor
     return this.obtenerPorId(id);
   }
 
+  /**
+   * Flip ONLY the modo column (E2·T5 born-state wiring): the SQL
+   * container always provides it; the port keeps it optional so
+   * non-SQL fakes stay valid. Mirrors actualizarEstado's shape.
+   */
+  async actualizarModo(id: number, modo: ConversacionCrm['modo']): Promise<ConversacionCrm | null> {
+    const result = await this.pool
+      .request()
+      .input('id', mssql.Int, id)
+      .input('modo', mssql.NVarChar(10), modo)
+      .query(
+        'UPDATE dbo.CRM_Conversaciones SET modo = @modo, actualizadoEn = SYSDATETIME() WHERE id = @id',
+      );
+    if ((result.rowsAffected[0] ?? 0) === 0) return null;
+    return this.obtenerPorId(id);
+  }
+
   async marcarMensajesLeidos(id: number): Promise<void> {
     await this.pool
       .request()

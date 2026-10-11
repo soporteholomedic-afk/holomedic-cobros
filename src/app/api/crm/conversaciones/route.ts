@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 
 import { getSession } from '@/lib/auth';
 import { getCrmDb } from '@/features/crm/infrastructure/getCrmDb';
+import { iniciarBarredorTareas } from '@/features/crm/infrastructure/agentes/iniciarBarredorTareas';
 import { esModoSimulado } from '@/features/crm/infrastructure/whatsapp/crearEnviadorWhatsapp';
 import { ListarConversacionesUseCase } from '@/features/crm/application/listarConversaciones';
 import type { ConversacionListada } from '@/features/crm/domain/entities';
@@ -43,6 +44,10 @@ const ESTADOS: readonly EstadoConversacion[] = [
 
 const LIMITE_DEFAULT = 50;
 const LIMITE_MAX = 100;
+
+// E2·T5: boot the lazy sweeper once per process — opening the bandeja
+// guarantees a task drainer exists for the queue the webhook fills.
+iniciarBarredorTareas();
 
 function esEstadoConversacion(v: string): v is EstadoConversacion {
   return (ESTADOS as readonly string[]).includes(v);

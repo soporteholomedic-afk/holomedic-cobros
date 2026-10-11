@@ -1,6 +1,10 @@
 import { NotFoundError, ValidationError } from '../domain/errors';
 import type { ConversacionListada } from '../domain/entities';
-import type { ConversacionCrmRepository } from '../domain/ports';
+import type {
+  ConversacionCrmRepository,
+  MensajeCrmRepository,
+  TareaAgenteRepository,
+} from '../domain/ports';
 
 import { ConversacionNoEncontradaError } from './obtenerHiloConversacion';
 
@@ -9,12 +13,16 @@ import { ConversacionNoEncontradaError } from './obtenerHiloConversacion';
 export { ConversacionNoEncontradaError };
 
 /**
- * VincularConversacionUseCase (agente-ia-crm E1) — resolve a
+ * VincularConversacionUseCase (agente-ia-crm E1 + E2·T5) — resolve a
  * conversation to the registry: asociar an EXISTING contacto (its
  * empresaId is resolved from the contacto itself — never trusted
  * from the request) or CREATE the contacto first (nombreNormalizado
- * derived by the adapter) and then link. The vincular write also
- * moves the conversation to TOMADA_HUMANO (an operator just acted).
+ * derived by the adapter) and then link. The vincular write moves
+ * the conversation to ACTIVA_IA + modo 'IA' (E2 decision:
+ * conversations are born IA-managed — the operator resolved WHO the
+ * client is; la Guía takes it from there), and ONE GENERAR_RESPUESTA
+ * task is enqueued for the most recent IN/CLIENTE message so the
+ * pending client message does not wait for the next inbound one.
  * Re-vincular is ALLOWED by design: it is the operator-correction
  * path (cambia el contacto de una conversación ya vinculada).
  */
@@ -55,7 +63,19 @@ export interface VincularConversacionEntrada {
 
 export interface VincularConversacionDeps {
   conversaciones: ConversacionCrmRepository;
+  /**
+   * Thread read for the E2·T5 task hook (most recent IN/CLIENTE
+   * message). Optional (guardarContactoOperativo precedent): the SQL
+   * container always provides it; pre-E2 constructions stay valid
+   * and simply skip the hook.
+   */
+  mensajes?: MensajeCrmRepository;
+  /** Agent-task queue for the E2·T5 hook (same optional rule). */
+  tareas?: TareaAgenteRepository;
 }
+
+/** Thread page size for the trigger lookup (hilo precedent: 50). */
+const LIMITE_PAGINA_HILO = 50;
 
 export class VincularConversacionUseCase {
   constructor(private readonly deps: VincularConversacionDeps) {}
@@ -101,14 +121,42 @@ export class VincularConversacionUseCase {
       empresaId = nuevo.empresaId;
     }
 
-    // La escritura única de vinculación: registro + TOMADA_HUMANO (un
-    // operador acaba de intervenir). Re-vincular sobreescribe.
+    // La escritura única de vinculación: registro + ACTIVA_IA (E2:
+    // nace gestionada por la Guía). Re-vincular sobreescribe.
     const vinculada = await this.deps.conversaciones.vincular(entrada.conversacionId, {
       empresaId,
       contactoId,
-      estado: 'TOMADA_HUMANO',
+      estado: 'ACTIVA_IA',
     });
     if (vinculada === null) throw new ConversacionNoEncontradaError();
+
+    // El puerto de vincular no lleva modo: el flip es una escritura
+    // propia (actualizarModo, opcional en el puerto — el adaptador
+    // SQL siempre lo implementa; sin la capacidad se omite).
+    if (this.deps.conversaciones.actualizarModo !== undefined) {
+      await this.deps.conversaciones.actualizarModo(entrada.conversacionId, 'IA');
+    }
+
+    // E2·T5: el mensaje IN pendiente que motivó la vinculación no
+    // debe esperar al PRÓXIMO inbound — una tarea GENERAR_RESPUESTA
+    // por el IN/CLIENTE más reciente (idempotente por triple;
+    // DESPUÉS del flip de estado para que un barredor ansioso no la
+    // complete como CONVERSACION_NO_ACTIVA_IA).
+    if (this.deps.mensajes !== undefined && this.deps.tareas !== undefined) {
+      const hilo = await this.deps.mensajes.listarPorConversacion(entrada.conversacionId, {
+        limite: LIMITE_PAGINA_HILO,
+      });
+      const disparador = hilo.find(
+        (mensaje) => mensaje.direccion === 'IN' && mensaje.emisor === 'CLIENTE',
+      );
+      if (disparador !== undefined) {
+        await this.deps.tareas.crearSiNoExiste({
+          conversacionId: entrada.conversacionId,
+          mensajeId: disparador.id,
+          tipo: 'GENERAR_RESPUESTA',
+        });
+      }
+    }
 
     return { ...vinculada, razonSocial, nombreContacto: contactoNombre };
   }

@@ -9,6 +9,7 @@ import { SqlServerAsignacionesRepository } from './sqlserver/sqlServerAsignacion
 import { SqlServerConversacionRepository } from './sqlserver/sqlServerConversacionRepository';
 import { SqlServerMensajeRepository } from './sqlserver/sqlServerMensajeRepository';
 import { SqlServerConocimientoRepository } from './sqlserver/sqlServerConocimientoRepository';
+import { SqlServerTareaAgenteRepository } from './sqlserver/sqlServerTareaAgenteRepository';
 import { SqlServerCrmImportador } from './importar/importadorCrm';
 import type {
   ConversacionCrmRepository,
@@ -24,6 +25,7 @@ import type {
   CrmTransicionesRepositoryPort,
   ConocimientoCrmRepository,
   MensajeCrmRepository,
+  TareaAgenteRepository,
 } from '../domain/ports';
 
 /**
@@ -93,6 +95,13 @@ export interface CrmDb {
    * editor adds the write side).
    */
   conocimiento?: ConocimientoCrmRepository;
+  /**
+   * Agent-task queue adapter (agente-ia-crm E2·T5): the durable
+   * CRM_AgenteTareas rows the webhook hook enqueues and the sweeper
+   * drains (same optional-for-fakes rule as conversaciones/mensajes;
+   * the real factory ALWAYS provides it).
+   */
+  tareas?: TareaAgenteRepository;
 }
 
 let cached: Promise<CrmDb> | null = null;
@@ -125,6 +134,7 @@ export function getCrmDb(): Promise<CrmDb> {
       conversaciones: new SqlServerConversacionRepository(pool),
       mensajes: new SqlServerMensajeRepository(pool),
       conocimiento: new SqlServerConocimientoRepository(pool),
+      tareas: new SqlServerTareaAgenteRepository(pool),
     };
   })();
   return cached;

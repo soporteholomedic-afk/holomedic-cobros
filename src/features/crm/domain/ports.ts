@@ -15,15 +15,19 @@ import type {
   Empresa,
   EstadoConversacion,
   MensajeCrm,
+  ModoConversacion,
   NivelMemoria,
   ObservacionDestilada,
   ObservacionMemoria,
   PipelineEmpresa,
   RespuestaGenerada,
+  ResultadoCrearTarea,
   ResultadoGuardarMemoria,
   SectorCrm,
+  TareaAgente,
   TipoEmpresa,
   TipoObservacionDestilada,
+  TipoTareaAgente,
 } from './entities';
 import type { ErrorFilaImport, GrupoEmpresaImportado } from './importar/validarImportacion';
 import type { EfectosDenormalizados } from './efectosTransicion';
@@ -706,6 +710,16 @@ export interface ConversacionCrmRepository {
     busqueda: string,
     limite?: number,
   ): Promise<ContactoConEmpresa[]>;
+  /**
+   * Flip ONLY the modo column (agente-ia-crm E2·T5 born-state
+   * wiring): `actualizarEstado`/`vincular` cannot carry modo, and the
+   * born-ACTIVA_IA / implicit-take transitions need estado and modo
+   * to move together. Optional (guardarContactoOperativo
+   * precedent): only the SQL adapter implements it — test fakes and
+   * pre-E2 containers stay valid without it, and use cases degrade
+   * gracefully (skip) when the capability is absent.
+   */
+  actualizarModo?(id: number, modo: ModoConversacion): Promise<ConversacionCrm | null>;
 }
 
 /** Backward (older-first) pagination window for the thread read. */
@@ -860,4 +874,47 @@ export interface GeneradorRespuestaPort {
    * marks agreements/commitments to pin in the conversation memory.
    */
   destilar(entrada: EntradaDestilacion): Promise<ObservacionDestilada[]>;
+}
+
+// ---------------------------------------------------------------------------
+// Agent-task queue port (agente-ia-crm E2·T5) — the durable CRM_AgenteTareas
+// rows that decouple the webhook ack from the slow LLM work. One SQL
+// adapter implements it (SqlServerTareaAgenteRepository); the claim
+// methods are single-statement UPDATE … OUTPUT so a claim is atomic
+// and the sweeper never needs a read-then-write window.
+// ---------------------------------------------------------------------------
+
+/** Idempotent creation payload: the UNIQUE (conversacionId, mensajeId, tipo) triple. */
+export interface EntradaCrearTareaAgente {
+  conversacionId: number;
+  mensajeId: number;
+  tipo: TipoTareaAgente;
+}
+
+/**
+ * Outbound port for the agent-task queue (CRM_AgenteTareas, E2·T5).
+ * Claim semantics: `reclamarPendientes` flips fresh PENDIENTE rows to
+ * PROCESANDO in one UPDATE … OUTPUT; the 60 s cooling only delays
+ * REQUEUED tasks (reclamadaEn set by a previous claim) — fresh rows
+ * (reclamadaEn NULL) are claimed immediately. `reclamarAbandonadas`
+ * re-claims PROCESANDO rows whose claim is older than `minutos`
+ * (crash recovery). `fallar` counts the attempt: at 3 attempts the
+ * row goes FALLIDA (terminal), else back to PENDIENTE (retry behind
+ * the cooling). `reencolar` requeues WITHOUT counting an attempt —
+ * used for FUERA_DE_HORARIO / AGENTE_DESHABILITADO, which are not
+ * failures.
+ */
+export interface TareaAgenteRepository {
+  /** INSERT; a UNIQUE violation (2601/2627) returns the existing row's id with creada:false. */
+  crearSiNoExiste(entrada: EntradaCrearTareaAgente): Promise<ResultadoCrearTarea>;
+  /** Atomically claim up to `limite` PENDIENTE rows (id ASC, 60 s requeue cooling). */
+  reclamarPendientes(limite: number): Promise<TareaAgente[]>;
+  /** Crash recovery: re-claim PROCESANDO rows claimed more than `minutos` ago. */
+  reclamarAbandonadas(limite: number, minutos: number): Promise<TareaAgente[]>;
+  /** estado COMPLETADA, procesadaEn now, error cleared. */
+  completar(id: number): Promise<void>;
+  /** estado back to PENDIENTE — keeps reclamadaEn as the cooling timestamp, never touches intentos. */
+  reencolar(id: number): Promise<void>;
+  /** intentos + 1; at 3 → FALLIDA (procesadaEn now), else PENDIENTE (retry with cooling). Error truncated to 500 chars. */
+  fallar(id: number, error: string): Promise<void>;
 }

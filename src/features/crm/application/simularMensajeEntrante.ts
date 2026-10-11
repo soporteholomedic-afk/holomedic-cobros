@@ -37,6 +37,11 @@ export interface ResultadoSimulacion {
   conversacionId: number | null;
   mensajeId: number | null;
   vinculado: boolean;
+  /** E2·T5: id of the durable agent task created for this message
+   * (null when the conversation is not IA-managed). The use case
+   * returns the full ResultadoProcesarMensaje; this field is part
+   * of the contract so routes can drain the queue without casts. */
+  tareaAgenteId: number | null;
 }
 
 export class SimularMensajeEntranteUseCase {

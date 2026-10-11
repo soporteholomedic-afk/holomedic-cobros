@@ -6,6 +6,7 @@ import type {
   ContactoConEmpresa,
   ConversacionCrmRepository,
   MensajeCrmRepository,
+  TareaAgenteRepository,
 } from '../../domain/ports';
 import type {
   CanalConversacion,
@@ -20,14 +21,20 @@ import { ProcesarMensajeWhatsappUseCase, type MensajeEntranteWhatsapp } from '..
 
 /**
  * Use-case contract for the inbound WhatsApp pipeline (agente-ia-crm
- * T2). Hexagonal: exercised against the PORTS with in-memory fakes —
- * the SQL adapters stay thin. Pinned here:
+ * T2 + E2·T5 queue hook). Hexagonal: exercised against the PORTS with
+ * in-memory fakes — the SQL adapters stay thin. Pinned here:
  * - Idempotencia: a repeated idempotenciaKey returns duplicado:true
- *   EARLY (no conversation lookup, no write).
+ *   EARLY (no conversation lookup, no write, NO task).
  * - Routing: existing conversation by canal key is REUSED; a new one
  *   is born PENDIENTE_VINCULACION — unless exactly ONE candidate
- *   contacto matches the E.164, then it is born vinculado
- *   TOMADA_HUMANO; 0 or >1 candidates never autovinculate.
+ *   contacto matches the E.164, then it is born vinculada ACTIVA_IA
+ *   (E2 decision: conversations are born IA-managed, modo IA); 0 or
+ *   >1 candidates never autovinculate.
+ * - E2·T5 hook: an IN/CLIENTE message persisted on an ACTIVA_IA
+ *   conversation enqueues ONE GENERAR_RESPUESTA task (idempotent on
+ *   the conversacionId+mensajeId+tipo triple) and surfaces its id as
+ *   tareaAgenteId; every other born/existing estado → tareaAgenteId
+ *   null, nothing enqueued.
  * - BSUID-less payloads (no from / from_user_id) still process, with
  *   telefono and identificadorCanal both null.
  * - Message body: text → verbatim TEXTO; any other type → `[type]`
@@ -164,6 +171,32 @@ class FakeMensajes implements MensajeCrmRepository {
   async actualizarEnvio(): Promise<null> { throw new Error('no requerido en este fake'); }
 }
 
+class FakeTareas implements TareaAgenteRepository {
+  creaciones: Array<{ conversacionId: number; mensajeId: number; tipo: 'GENERAR_RESPUESTA' }> = [];
+  private filas = new Map<string, number>();
+  private siguienteId = 1;
+
+  async crearSiNoExiste(entrada: {
+    conversacionId: number;
+    mensajeId: number;
+    tipo: 'GENERAR_RESPUESTA';
+  }): Promise<{ id: number; creada: boolean }> {
+    this.creaciones.push({ ...entrada });
+    const clave = `${entrada.conversacionId}:${entrada.mensajeId}:${entrada.tipo}`;
+    const existente = this.filas.get(clave);
+    if (existente !== undefined) return { id: existente, creada: false };
+    const id = this.siguienteId++;
+    this.filas.set(clave, id);
+    return { id, creada: true };
+  }
+
+  async reclamarPendientes(): Promise<never[]> { throw new Error('no requerido en este fake'); }
+  async reclamarAbandonadas(): Promise<never[]> { throw new Error('no requerido en este fake'); }
+  async completar(): Promise<void> { throw new Error('no requerido en este fake'); }
+  async reencolar(): Promise<void> { throw new Error('no requerido en este fake'); }
+  async fallar(): Promise<void> { throw new Error('no requerido en este fake'); }
+}
+
 function eventoTexto(sobres: Partial<MensajeEntranteWhatsapp['message']> = {}, key = 'uuid-1'): MensajeEntranteWhatsapp {
   return {
     idempotenciaKey: key,
@@ -182,13 +215,41 @@ function eventoTexto(sobres: Partial<MensajeEntranteWhatsapp['message']> = {}, k
 function crearSuite(candidatos: CandidatoVinculacion[] = []): {
   conversaciones: FakeConversaciones;
   mensajes: FakeMensajes;
+  tareas: FakeTareas;
   useCase: ProcesarMensajeWhatsappUseCase;
 } {
   const conversaciones = new FakeConversaciones();
   conversaciones.candidatos = candidatos;
   const mensajes = new FakeMensajes();
-  const useCase = new ProcesarMensajeWhatsappUseCase({ conversaciones, mensajes });
-  return { conversaciones, mensajes, useCase };
+  const tareas = new FakeTareas();
+  const useCase = new ProcesarMensajeWhatsappUseCase({ conversaciones, mensajes, tareas });
+  return { conversaciones, mensajes, tareas, useCase };
+}
+
+/** Seeds a pre-existing conversation row (ids >= 100 to avoid fake collisions). */
+function sembrarConversacion(
+  conversaciones: FakeConversaciones,
+  sobres: Partial<ConversacionCrm> = {},
+): ConversacionCrm {
+  const ahora = new Date().toISOString();
+  const fila: ConversacionCrm = {
+    id: 100,
+    empresaId: 7,
+    contactoId: 42,
+    canal: 'WHATSAPP',
+    telefono: '+595981234567',
+    identificadorCanal: 'US.13491208655302741918',
+    estado: 'ACTIVA_IA',
+    asignadaA: null,
+    modo: 'IA',
+    ultimoMensajeEn: null,
+    noLeidos: 0,
+    creadoEn: ahora,
+    actualizadoEn: ahora,
+    ...sobres,
+  };
+  conversaciones.filas.push(fila);
+  return fila;
 }
 
 const candidatoUnico: CandidatoVinculacion = {
@@ -201,7 +262,7 @@ const candidatoUnico: CandidatoVinculacion = {
 
 describe('ProcesarMensajeWhatsappUseCase — ingesta whatsapp.message.received (T2)', () => {
   it('happy path texto: crea conversación PENDIENTE_VINCULACION y mensaje IN/CLIENTE/TEXTO', async () => {
-    const { conversaciones, mensajes, useCase } = crearSuite();
+    const { conversaciones, mensajes, tareas, useCase } = crearSuite();
 
     const resultado = await useCase.ejecutar(eventoTexto());
 
@@ -210,7 +271,10 @@ describe('ProcesarMensajeWhatsappUseCase — ingesta whatsapp.message.received (
       mensajeId: 1,
       vinculado: false,
       duplicado: false,
+      tareaAgenteId: null,
     });
+    // PENDIENTE_VINCULACION: nada en la cola del agente.
+    expect(tareas.creaciones).toEqual([]);
     expect(conversaciones.filas).toHaveLength(1);
     expect(conversaciones.filas[0]).toMatchObject({
       canal: 'WHATSAPP',
@@ -250,23 +314,29 @@ describe('ProcesarMensajeWhatsappUseCase — ingesta whatsapp.message.received (
     expect(mensajes.escritas[0]).toMatchObject({ cuerpo: '[text]', tipo: 'MEDIA' });
   });
 
-  it('exactamente 1 candidato → conversación nace vinculada TOMADA_HUMANO (modo HUMANO)', async () => {
-    const { conversaciones, useCase } = crearSuite([candidatoUnico]);
+  it('exactamente 1 candidato → conversación nace vinculada ACTIVA_IA (modo IA) con tarea GENERAR_RESPUESTA', async () => {
+    const { conversaciones, tareas, useCase } = crearSuite([candidatoUnico]);
 
     const resultado = await useCase.ejecutar(eventoTexto());
 
     expect(resultado.vinculado).toBe(true);
+    expect(resultado.tareaAgenteId).toBe(1);
     expect(conversaciones.filas).toHaveLength(1);
     expect(conversaciones.filas[0]).toMatchObject({
       empresaId: 7,
       contactoId: 42,
-      estado: 'TOMADA_HUMANO',
+      estado: 'ACTIVA_IA',
       asignadaA: null,
+      modo: 'IA',
     });
+    // E2·T5 hook: el mensaje IN/CLIENTE sobre la ACTIVA_IA encoló su tarea.
+    expect(tareas.creaciones).toEqual([
+      { conversacionId: 1, mensajeId: 1, tipo: 'GENERAR_RESPUESTA' },
+    ]);
   });
 
   it('más de 1 candidato → NO autovincula: nace PENDIENTE_VINCULACION', async () => {
-    const { conversaciones, useCase } = crearSuite([
+    const { conversaciones, tareas, useCase } = crearSuite([
       candidatoUnico,
       { ...candidatoUnico, contactoId: 43, nombreContacto: 'Beto', telefono: '0981 234 567' },
     ]);
@@ -274,15 +344,40 @@ describe('ProcesarMensajeWhatsappUseCase — ingesta whatsapp.message.received (
     const resultado = await useCase.ejecutar(eventoTexto());
 
     expect(resultado.vinculado).toBe(false);
+    expect(resultado.tareaAgenteId).toBeNull();
     expect(conversaciones.filas[0]).toMatchObject({
       empresaId: null,
       contactoId: null,
       estado: 'PENDIENTE_VINCULACION',
     });
+    expect(tareas.creaciones).toEqual([]);
   });
 
-  it('idempotenciaKey repetida → duplicado:true early, sin segunda escritura ni lookup', async () => {
-    const { conversaciones, mensajes, useCase } = crearSuite();
+  it('mensaje IN sobre conversación existente ACTIVA_IA → encola tarea para ese mensaje', async () => {
+    const { conversaciones, tareas, useCase } = crearSuite();
+    const existente = sembrarConversacion(conversaciones, { estado: 'ACTIVA_IA', modo: 'IA' });
+
+    const resultado = await useCase.ejecutar(eventoTexto());
+
+    expect(resultado.conversacionId).toBe(existente.id);
+    expect(resultado.tareaAgenteId).toBe(1);
+    expect(tareas.creaciones).toEqual([
+      { conversacionId: existente.id, mensajeId: resultado.mensajeId, tipo: 'GENERAR_RESPUESTA' },
+    ]);
+  });
+
+  it('mensaje IN sobre conversación existente TOMADA_HUMANO → SIN tarea (tareaAgenteId null)', async () => {
+    const { conversaciones, tareas, useCase } = crearSuite();
+    sembrarConversacion(conversaciones, { estado: 'TOMADA_HUMANO', modo: 'HUMANO', asignadaA: 'operador' });
+
+    const resultado = await useCase.ejecutar(eventoTexto());
+
+    expect(resultado.tareaAgenteId).toBeNull();
+    expect(tareas.creaciones).toEqual([]);
+  });
+
+  it('idempotenciaKey repetida → duplicado:true early, sin segunda escritura ni lookup ni tarea', async () => {
+    const { conversaciones, mensajes, tareas, useCase } = crearSuite();
     const evento = eventoTexto();
 
     const primero = await useCase.ejecutar(evento);
@@ -290,20 +385,35 @@ describe('ProcesarMensajeWhatsappUseCase — ingesta whatsapp.message.received (
 
     expect(primero.duplicado).toBe(false);
     expect(segundo).toMatchObject({ duplicado: true, conversacionId: null, mensajeId: null });
+    expect(segundo.tareaAgenteId).toBeNull();
     expect(mensajes.escritas).toHaveLength(1);
     expect(conversaciones.filas).toHaveLength(1);
+    expect(tareas.creaciones).toEqual([]);
+  });
+
+  it('segundo mensaje IN sobre la misma ACTIVA_IA → una tarea POR mensaje (triples distintos)', async () => {
+    const { conversaciones, tareas, useCase } = crearSuite();
+    const existente = sembrarConversacion(conversaciones, { estado: 'ACTIVA_IA', modo: 'IA' });
+
+    const primero = await useCase.ejecutar(eventoTexto({ from: '595981234567' }, 'uuid-1'));
+    const segundo = await useCase.ejecutar(eventoTexto({ from: '595981234567' }, 'uuid-2'));
+
+    expect(primero.tareaAgenteId).not.toBe(segundo.tareaAgenteId);
+    expect(tareas.creaciones).toHaveLength(2);
+    expect(tareas.creaciones.map((c) => c.conversacionId)).toEqual([existente.id, existente.id]);
   });
 
   it('mensajes.crear viola el índice único (2601) → duplicado:true sin re-bump del contador', async () => {
-    const { conversaciones, mensajes, useCase } = crearSuite();
+    const { conversaciones, mensajes, tareas, useCase } = crearSuite();
     vi.spyOn(mensajes, 'crear').mockRejectedValueOnce(
       Object.assign(new Error('Violation of UNIQUE KEY constraint'), { number: 2601 }),
     );
 
     const resultado = await useCase.ejecutar(eventoTexto());
 
-    expect(resultado).toEqual({ conversacionId: null, mensajeId: null, vinculado: false, duplicado: true });
+    expect(resultado).toEqual({ conversacionId: null, mensajeId: null, vinculado: false, duplicado: true, tareaAgenteId: null });
     expect(mensajes.escritas).toHaveLength(0);
+    expect(tareas.creaciones).toEqual([]);
     // registrarActividad queda después del insert perdedor: no re-bump.
     expect(conversaciones.filas[0].noLeidos).toBe(0);
     expect(conversaciones.filas[0].ultimoMensajeEn).toBeNull();

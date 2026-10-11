@@ -488,3 +488,53 @@ export interface ObservacionDestilada {
   contenido: string;
   pinear: boolean;
 }
+
+// ---- Cola de tareas del agente (agente-ia-crm, E2·T5) ----
+
+/**
+ * The task types the durable agent queue can carry (E2·T5;
+ * CHECK-backed in CRM_AgenteTareas). GENERAR_RESPUESTA = answer the
+ * triggering IN message through the E2 motor; more types arrive with
+ * later épocas (the CHECK widens with them).
+ */
+export type TipoTareaAgente = 'GENERAR_RESPUESTA';
+
+/**
+ * Task lifecycle (CHECK-backed in CRM_AgenteTareas): PENDIENTE at
+ * birth, PROCESANDO once claimed, COMPLETADA (done) or FALLIDA (3
+ * failed attempts). A PROCESANDO row whose claim is stale is
+ * reclaimed by the crash-recovery sweep.
+ */
+export type EstadoTareaAgente = 'PENDIENTE' | 'PROCESANDO' | 'COMPLETADA' | 'FALLIDA';
+
+/**
+ * One CRM_AgenteTareas row (E2·T5) — the durable queue that decouples
+ * the webhook ack from the slow LLM work: the ingesta persists the
+ * task with a fast DB write, the lazy sweeper (or a route trigger)
+ * claims and drains it later. UNIQUE (conversacionId, mensajeId,
+ * tipo) makes creation idempotent. Timestamps cross as `Date`
+ * (Conocimiento precedent): claim/cooling math compares them against
+ * SYSUTCDATETIME, never crossing to the presentation layer.
+ */
+export interface TareaAgente {
+  id: number;
+  conversacionId: number;
+  mensajeId: number;
+  tipo: TipoTareaAgente;
+  estado: EstadoTareaAgente;
+  intentos: number;
+  error: string | null;
+  creadoEn: Date;
+  reclamadaEn: Date | null;
+  procesadaEn: Date | null;
+}
+
+/**
+ * Typed outcome of an idempotent task creation (E2·T5): `creada`
+ * false means the UNIQUE (conversacionId, mensajeId, tipo) row
+ * already existed and `id` is the existing row's id.
+ */
+export interface ResultadoCrearTarea {
+  id: number;
+  creada: boolean;
+}

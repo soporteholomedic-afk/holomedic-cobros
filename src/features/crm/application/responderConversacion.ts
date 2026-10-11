@@ -6,10 +6,17 @@ import type {
 } from '../domain/ports';
 
 /**
- * ResponderConversacionUseCase (agente-ia-crm E1) — ONE manual reply
- * from the bandeja, outbox-lite (R4): validate → persist OUT intent
+ * ResponderConversacionUseCase (agente-ia-crm E1 + E2·T5) — ONE
+ * manual reply from the bandeja, outbox-lite (R4): validate → persist OUT intent
  * PENDIENTE → send → confirm (ENVIADO o FALLIDO) → registrarActividad OUT. The send
  * adapters are selected by KAPSO_MODO (real Kapso vs simulador).
+ *
+ * E2·T5 implicit take: after a SUCCESSFUL send from an ACTIVA_IA or
+ * REQUIERE_HUMANO conversation (estadoPrevio captured BEFORE sending),
+ * the conversation flips to TOMADA_HUMANO + modo 'HUMANO' best-effort
+ * (registrarActividad pattern: log-only failure — the sent message is
+ * the durable truth, a failed flip is logged, never retried). Every
+ * other estado (and every failed send) leaves the lifecycle intact.
  *
  * Failure contract: a send failure NEVER throws — best-effort FALLIDO +
  * {ok:false} (retry safe: that send truly failed). An intent-persist
@@ -95,6 +102,9 @@ export class ResponderConversacionUseCase {
     }
 
     // Fase 1 (outbox-lite R4): persist PENDIENTE antes de enviar — si falla, propaga (nada salió).
+    // estadoPrevio se captura ANTES del envío: la toma implícita (E2·T5)
+    // se decide sobre el estado que la conversación tenía al entrar.
+    const estadoPrevio = conversacion.estado;
     const mensaje = await this.deps.mensajes.crear({
       conversacionId: conversacion.id,
       direccion: 'OUT',
@@ -136,6 +146,24 @@ export class ResponderConversacionUseCase {
 
       // La fila confirmada por el repositorio es la verdad; null (fila
       // desaparecida — patológico) cae a la PENDIENTE persistida en fase 1.
+      // E2·T5 toma implícita: un humano acaba de responder con éxito desde
+      // una conversación de la Guía (o pendiente de escalado) — la toma.
+      // Best-effort (registrarActividad pattern): el envío confirmado es la
+      // verdad duradera; un flip fallido se loguea, jamás se reintenta.
+      if (estadoPrevio === 'ACTIVA_IA' || estadoPrevio === 'REQUIERE_HUMANO') {
+        try {
+          await this.deps.conversaciones.actualizarEstado(conversacion.id, 'TOMADA_HUMANO');
+          if (this.deps.conversaciones.actualizarModo !== undefined) {
+            await this.deps.conversaciones.actualizarModo(conversacion.id, 'HUMANO');
+          }
+        } catch (errorToma) {
+          console.error('[responderConversacion] toma implícita TOMADA_HUMANO falló', {
+            conversacionId: conversacion.id,
+            mensajeId: mensaje.id,
+            error: errorToma,
+          });
+        }
+      }
       return { ok: true, mensaje: confirmado ?? mensaje };
     }
 

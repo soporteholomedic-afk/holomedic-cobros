@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server';
 
 import { getSession } from '@/lib/auth';
 import { getCrmDb } from '@/features/crm/infrastructure/getCrmDb';
+import { iniciarBarredorTareas } from '@/features/crm/infrastructure/agentes/iniciarBarredorTareas';
+import { crearProcesadorTareasAgente } from '@/features/crm/infrastructure/agentes/crearProcesadorTareasAgente';
 import {
   VincularConversacionUseCase,
   type NuevoContactoVinculacion,
@@ -10,6 +12,10 @@ import {
 import type { ConversacionListada } from '@/features/crm/domain/entities';
 import { buildCrmError, mapCrmError, type CrmErrorResponse } from '../../../empresas/errorResponse';
 import { parsearIdConversacion } from '../../_id';
+
+// E2·T5: boot the lazy sweeper once per process (same rule as the
+// webhook/simular routes — vinculación puede encolar tareas IA).
+iniciarBarredorTareas();
 
 /**
  * `POST /api/crm/conversaciones/[id]/vincular` (permiso
@@ -85,16 +91,30 @@ export async function POST(
       );
     }
 
-    const { conversaciones: repo } = await getCrmDb();
+    const { conversaciones: repo, mensajes, tareas } = await getCrmDb();
     if (!repo) return buildCrmError('INTERNAL_ERROR', 'CRM no configurado', 503);
 
-    const conversacion = await new VincularConversacionUseCase({ conversaciones: repo }).ejecutar({
+    const conversacion = await new VincularConversacionUseCase({
+      conversaciones: repo,
+      mensajes,
+      tareas,
+    }).ejecutar({
       conversacionId: id,
       modo: body.modo,
       contactoId: body.contactoId,
       empresaId: body.empresaId,
       nuevoContacto: body.nuevoContacto,
     });
+    // E2·T5: vinculación nace ACTIVA_IA y puede encolar una tarea
+    // GENERAR_RESPUESTA para el último mensaje del cliente — drenar
+    // fire-and-forget (el barredor hace backstop).
+    void crearProcesadorTareasAgente()
+      .procesar()
+      .catch((err: unknown) => {
+        console.error('[crm vincular] drenaje de tareas del agente falló', {
+          error: err instanceof Error ? err.message : String(err),
+        });
+      });
     return NextResponse.json({ success: true, conversacion });
   } catch (error) {
     return mapCrmError('crm conversaciones [id] vincular POST', error);

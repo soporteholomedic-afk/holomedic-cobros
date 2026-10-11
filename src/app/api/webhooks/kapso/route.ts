@@ -3,10 +3,17 @@ import { createHmac, timingSafeEqual } from 'node:crypto';
 import { NextResponse } from 'next/server';
 
 import { getCrmDb } from '@/features/crm/infrastructure/getCrmDb';
+import { iniciarBarredorTareas } from '@/features/crm/infrastructure/agentes/iniciarBarredorTareas';
+import { crearProcesadorTareasAgente } from '@/features/crm/infrastructure/agentes/crearProcesadorTareasAgente';
 import {
   ProcesarMensajeWhatsappUseCase,
   esMensajeWhatsappRecibido,
 } from '@/features/crm/application/procesarMensajeWhatsapp';
+
+// E2·T5: boot the lazy sweeper once per process — this module is the
+// inbound entry point, so importing it guarantees a drainer exists
+// even when no other bandeja route was touched first.
+iniciarBarredorTareas();
 
 /**
  * `POST /api/webhooks/kapso` — PUBLIC ingestion endpoint for Kapso
@@ -93,12 +100,14 @@ export async function POST(request: Request): Promise<Response> {
   const useCase = new ProcesarMensajeWhatsappUseCase({
     conversaciones: db.conversaciones,
     mensajes: db.mensajes,
+    tareas: db.tareas,
   });
 
   // El dedup vive DENTRO del use case, awaited antes del ack: fallo → 503 y reintento.
   const claveHeader = request.headers.get('x-idempotency-key');
   let procesados = 0;
   let duplicados = 0;
+  let hayTareas = false;
   for (const payload of payloads) {
     if (!esMensajeWhatsappRecibido(payload)) continue;
     const wamid = payload.message.id;
@@ -111,6 +120,7 @@ export async function POST(request: Request): Promise<Response> {
     try {
       const resultado = await useCase.ejecutar({ idempotenciaKey: key, message: payload.message });
       if (resultado.duplicado) duplicados += 1; else procesados += 1;
+      if (typeof resultado.tareaAgenteId === 'number') hayTareas = true;
     } catch (err: unknown) {
       // Sin cuerpos ni secretos: solo el wamid y el mensaje de error.
       console.error('[kapso-webhook] error procesando mensaje', {
@@ -122,6 +132,21 @@ export async function POST(request: Request): Promise<Response> {
         { status: 503 },
       );
     }
+  }
+
+  // E2·T5: the queue write already happened INSIDE the use case
+  // (fast DB write, awaited before this ack); the AI drain is
+  // fire-and-forget so the handler's await path stays exactly as
+  // fast as E1 — the slow LLM work runs in the background (and the
+  // module-scope sweeper backstops anything this trigger misses).
+  if (hayTareas) {
+    void crearProcesadorTareasAgente()
+      .procesar()
+      .catch((err: unknown) => {
+        console.error('[kapso-webhook] drenaje de tareas del agente falló', {
+          error: err instanceof Error ? err.message : String(err),
+        });
+      });
   }
 
   return NextResponse.json({ success: true, procesados, duplicados });

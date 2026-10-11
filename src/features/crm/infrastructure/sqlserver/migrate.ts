@@ -78,6 +78,19 @@ import * as mssql from 'mssql';
  *   `creadoEn` stamps SYSUTCDATETIME() (unlike the SYSDATETIME()
  *   registry precedent): the E2 ranking compares vigencia against an
  *   injected UTC `ahora`, so storage and comparison share one clock.
+ * - `CRM_AgenteTareas` (agente-ia-crm E2·T5) — the durable agent
+ *   queue that decouples the webhook ack from the slow LLM work: one
+ *   row per pending GENERAR_RESPUESTA job, UNIQUE (conversacionId,
+ *   mensajeId, tipo) so task creation is idempotent, `intentos` +
+ *   `error` for the 3-attempt failure policy, and UTC claim stamps
+ *   (`reclamadaEn` doubles as the 60 s requeue-cooling timestamp;
+ *   `procesadaEn` marks COMPLETADA/FALLIDA). Single FK to
+ *   CRM_Conversaciones with CASCADE — deleting a conversation drops
+ *   its tasks (mirror of CRM_Mensajes); `mensajeId` (BIGINT, matching
+ *   CRM_Mensajes.id) carries NO FK on purpose: a second path into the
+ *   conversation's cascade graph would hit the two-cascade-paths
+ *   rule (error 1785) and its integrity already flows through the
+ *   conversation FK.
  *
  * Normalization columns (rediseno-crm-panel, design D6): additive and
  * nullable, carried by the CREATE blocks for fresh installs and added
@@ -341,6 +354,32 @@ BEGIN
     actualizadoEn   DATETIME2      NULL
   );
 END;
+IF NOT EXISTS (SELECT 1 FROM sys.tables WHERE name = 'CRM_AgenteTareas' AND schema_id = SCHEMA_ID('dbo'))
+BEGIN
+  CREATE TABLE dbo.CRM_AgenteTareas (
+    id              BIGINT         IDENTITY(1,1) NOT NULL PRIMARY KEY,
+    -- CASCADE mirrors CRM_Mensajes: deleting the conversation drops
+    -- its tasks. Single FK — no second path into the graph (see the
+    -- header note on mensajeId).
+    conversacionId  INT            NOT NULL CONSTRAINT FK_CRM_AgenteTareas_Conversacion REFERENCES dbo.CRM_Conversaciones (id) ON DELETE CASCADE,
+    -- BIGINT: matches CRM_Mensajes.id (high-volume history,
+    -- Transiciones precedent). No FK — header note.
+    mensajeId       BIGINT         NOT NULL,
+    tipo            VARCHAR(30)    NOT NULL CONSTRAINT CK_CRM_AgenteTareas_Tipo CHECK (tipo IN ('GENERAR_RESPUESTA')),
+    estado          VARCHAR(20)    NOT NULL CONSTRAINT DF_CRM_AgenteTareas_Estado DEFAULT 'PENDIENTE' CONSTRAINT CK_CRM_AgenteTareas_Estado CHECK (estado IN ('PENDIENTE','PROCESANDO','COMPLETADA','FALLIDA')),
+    intentos        INT            NOT NULL DEFAULT 0,
+    error           NVARCHAR(MAX)  NULL,
+    -- UTC stamps (E2·T5 claim/cooling clock — Conocimiento
+    -- precedent): the claim compares reclamadaEn against
+    -- SYSUTCDATETIME() in the same statement that sets it.
+    creadoEn        DATETIME2      NOT NULL DEFAULT SYSUTCDATETIME(),
+    reclamadaEn     DATETIME2      NULL,
+    procesadaEn     DATETIME2      NULL,
+    -- Idempotent creation: one task per (conversacion, mensaje,
+    -- tipo) — a replayed webhook delivery never double-enqueues.
+    CONSTRAINT UQ_CRM_AgenteTareas_ConversacionMensajeTipo UNIQUE (conversacionId, mensajeId, tipo)
+  );
+END;
 
 -- Normalization columns (rediseno-crm-panel, design D6): gated,
 -- additive, nullable — no-ops on fresh installs (the CREATE blocks
@@ -480,6 +519,23 @@ BEGIN
   -- scan activo = 1 rows — the E5 editor's inactive drafts never pay.
   CREATE INDEX IX_CRM_Conocimiento_Activo
     ON dbo.CRM_Conocimiento (activo);
+END;
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_CRM_AgenteTareas_Estado' AND object_id = OBJECT_ID('dbo.CRM_AgenteTareas'))
+BEGIN
+  -- Sweeper scan (E2·T5): both claim queries filter on estado +
+  -- reclamadaEn and order by id — covering so the claim never
+  -- leaves the index on the filter side.
+  CREATE INDEX IX_CRM_AgenteTareas_Estado
+    ON dbo.CRM_AgenteTareas (estado)
+    INCLUDE (reclamadaEn, conversacionId, mensajeId, tipo, intentos);
+END;
+IF NOT EXISTS (SELECT 1 FROM sys.default_constraints WHERE name = 'DF_CRM_AgenteTareas_Estado' AND parent_object_id = OBJECT_ID('dbo.CRM_AgenteTareas'))
+BEGIN
+  -- E2·T5 correction: the very first run of the guarded CREATE block
+  -- shipped WITHOUT this default (crearSiNoExiste inserts only the
+  -- triple) — databases that already carry the table get the named
+  -- default added; fresh installs skip (the CREATE carries it inline).
+  ALTER TABLE dbo.CRM_AgenteTareas ADD CONSTRAINT DF_CRM_AgenteTareas_Estado DEFAULT 'PENDIENTE' FOR estado;
 END;
 IF EXISTS (SELECT 1 FROM sys.check_constraints WHERE name = 'CK_CRM_Mensajes_EstadoEnvio' AND parent_object_id = OBJECT_ID('dbo.CRM_Mensajes') AND definition NOT LIKE '%PENDIENTE%')
 -- Outbox-lite (R4): widen once the old 2-value CHECK (needs PENDIENTE intent rows).

@@ -103,8 +103,32 @@ class FakeConversaciones implements ConversacionCrmRepository {
     throw new Error('no requerido en este fake');
   }
 
-  async actualizarEstado(): Promise<ConversacionCrm | null> {
-    throw new Error('no requerido en este fake');
+  /** E2·T5 implicit-take log: the use case flips estado/modo after a
+   * successful manual send from ACTIVA_IA / REQUIERE_HUMANO. */
+  estadosActualizados: Array<{ id: number; estado: ConversacionCrm['estado'] }> = [];
+  modosActualizados: Array<{ id: number; modo: ConversacionCrm['modo'] }> = [];
+  falloActualizarEstado: Error | null = null;
+
+  async actualizarEstado(
+    id: number,
+    estado: ConversacionCrm['estado'],
+  ): Promise<ConversacionCrm | null> {
+    if (this.falloActualizarEstado !== null) throw this.falloActualizarEstado;
+    const fila = this.filas.find((f) => f.id === id);
+    if (!fila) return null;
+    fila.estado = estado;
+    fila.actualizadoEn = new Date().toISOString();
+    this.estadosActualizados.push({ id, estado });
+    return structuredClone(fila);
+  }
+
+  async actualizarModo(id: number, modo: ConversacionCrm['modo']): Promise<ConversacionCrm | null> {
+    const fila = this.filas.find((f) => f.id === id);
+    if (!fila) return null;
+    fila.modo = modo;
+    fila.actualizadoEn = new Date().toISOString();
+    this.modosActualizados.push({ id, modo });
+    return structuredClone(fila);
   }
 
   async marcarMensajesLeidos(): Promise<void> {
@@ -227,6 +251,7 @@ interface OverridesFakes {
   falloActualizarEnvio?: Error;
   retornoActualizarEnvio?: MensajeCrm | null;
   falloActividad?: Error;
+  falloActualizarEstado?: Error;
 }
 
 /** Factory única (E1 advisory R2-dup-test-fakes): arma los tres fakes-espía cableados al use case. */
@@ -241,6 +266,7 @@ function crearFakes(overrides: OverridesFakes = {}): {
     conversaciones.sembrar(overrides.conversacion === undefined ? conversacionBase() : overrides.conversacion);
   }
   conversaciones.falloActividad = overrides.falloActividad ?? null;
+  conversaciones.falloActualizarEstado = overrides.falloActualizarEstado ?? null;
   const mensajes = new FakeMensajes();
   mensajes.falloCrear = overrides.falloCrear ?? null;
   mensajes.falloActualizarEnvio = overrides.falloActualizarEnvio ?? null;
@@ -482,5 +508,89 @@ describe('ResponderConversacionUseCase — respuesta manual por WhatsApp (E1)', 
     expect(esperarError(resultado)).toMatchObject({ code: 'CONVERSACION_CERRADA' });
     expect(whatsapp.envios).toHaveLength(0);
     expect(mensajes.escritas).toHaveLength(0);
+  });
+
+  // ---- E2·T5: toma implícita del humano ----
+
+  it('respuesta manual desde ACTIVA_IA → tras el envío exitoso pasa a TOMADA_HUMANO + modo HUMANO', async () => {
+    const { conversaciones, useCase } = crearFakes({
+      conversacion: conversacionBase({ estado: 'ACTIVA_IA', modo: 'IA', asignadaA: null }),
+    });
+
+    const resultado = await useCase.ejecutar({ conversacionId: 1, cuerpo: 'Buenas' });
+
+    expect(resultado.ok).toBe(true);
+    expect(conversaciones.estadosActualizados).toEqual([{ id: 1, estado: 'TOMADA_HUMANO' }]);
+    expect(conversaciones.modosActualizados).toEqual([{ id: 1, modo: 'HUMANO' }]);
+    expect(conversaciones.filas[0]).toMatchObject({ estado: 'TOMADA_HUMANO', modo: 'HUMANO' });
+  });
+
+  it('respuesta manual desde REQUIERE_HUMANO → TOMADA_HUMANO tras el envío exitoso', async () => {
+    const { conversaciones, useCase } = crearFakes({
+      conversacion: conversacionBase({ estado: 'REQUIERE_HUMANO', modo: 'IA' }),
+    });
+
+    const resultado = await useCase.ejecutar({ conversacionId: 1, cuerpo: 'Buenas' });
+
+    expect(resultado.ok).toBe(true);
+    expect(conversaciones.estadosActualizados).toEqual([{ id: 1, estado: 'TOMADA_HUMANO' }]);
+    expect(conversaciones.modosActualizados).toEqual([{ id: 1, modo: 'HUMANO' }]);
+  });
+
+  it('respuesta manual desde TOMADA_HUMANO → estado y modo quedan intactos (sin flip)', async () => {
+    const { conversaciones, useCase } = crearFakes({
+      conversacion: conversacionBase({ estado: 'TOMADA_HUMANO', modo: 'HUMANO', asignadaA: 'operador' }),
+    });
+
+    const resultado = await useCase.ejecutar({ conversacionId: 1, cuerpo: 'Buenas' });
+
+    expect(resultado.ok).toBe(true);
+    expect(conversaciones.estadosActualizados).toEqual([]);
+    expect(conversaciones.modosActualizados).toEqual([]);
+    expect(conversaciones.filas[0]).toMatchObject({ estado: 'TOMADA_HUMANO', modo: 'HUMANO' });
+  });
+
+  it('respuesta manual desde PAUSADA → estado queda PAUSADA (sin flip)', async () => {
+    const { conversaciones, useCase } = crearFakes({
+      conversacion: conversacionBase({ estado: 'PAUSADA', modo: 'IA' }),
+    });
+
+    const resultado = await useCase.ejecutar({ conversacionId: 1, cuerpo: 'Buenas' });
+
+    expect(resultado.ok).toBe(true);
+    expect(conversaciones.estadosActualizados).toEqual([]);
+    expect(conversaciones.filas[0].estado).toBe('PAUSADA');
+  });
+
+  it('envío FALLA desde ACTIVA_IA → estado y modo quedan intactos (la toma es solo tras éxito)', async () => {
+    const { conversaciones, useCase } = crearFakes({
+      conversacion: conversacionBase({ estado: 'ACTIVA_IA', modo: 'IA', asignadaA: null }),
+      envio: { ok: false, error: 'KAPSO_TIMEOUT', detalle: 'timeout' },
+    });
+
+    const resultado = await useCase.ejecutar({ conversacionId: 1, cuerpo: 'Buenas' });
+
+    expect(resultado.ok).toBe(false);
+    expect(conversaciones.estadosActualizados).toEqual([]);
+    expect(conversaciones.modosActualizados).toEqual([]);
+    expect(conversaciones.filas[0]).toMatchObject({ estado: 'ACTIVA_IA', modo: 'IA' });
+  });
+
+  it('el flip de toma implícita es best-effort: su fallo se loguea y NO rompe el ok:true', async () => {
+    const { conversaciones, useCase } = crearFakes({
+      conversacion: conversacionBase({ estado: 'ACTIVA_IA', modo: 'IA', asignadaA: null }),
+      falloActualizarEstado: new Error('UPDATE estado rebotó'),
+    });
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    const resultado = await useCase.ejecutar({ conversacionId: 1, cuerpo: 'Buenas' });
+
+    expect(resultado).toMatchObject({ ok: true });
+    expect(conversaciones.modosActualizados).toEqual([]);
+    expect(errorSpy).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({ conversacionId: 1 }),
+    );
+    errorSpy.mockRestore();
   });
 });

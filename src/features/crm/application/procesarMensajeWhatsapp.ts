@@ -1,13 +1,28 @@
 import { normalizarTelefonoE164 } from '../domain/normalizar';
 import type { CrearMensajeInput, MensajeCrm } from '../domain/entities';
-import type { ConversacionCrmRepository, MensajeCrmRepository } from '../domain/ports';
+import type {
+  ConversacionCrmRepository,
+  MensajeCrmRepository,
+  TareaAgenteRepository,
+} from '../domain/ports';
 
 /**
- * Ingest of one `whatsapp.message.received` event (agente-ia-crm T2)
- * — the pipeline the Kapso webhook and the E1 simulator share:
- * dedup → route to a conversation (vincular when exactly one contact
- * matches) → persist the IN message → tick the bandeja counters.
- * Transport concerns (HMAC, raw body, batching) stay in the route.
+ * Ingest of one `whatsapp.message.received` event (agente-ia-crm T2
+ * + E2·T5 queue hook) — the pipeline the Kapso webhook and the E1
+ * simulator share: dedup → route to a conversation (vincular when
+ * exactly one contact matches) → persist the IN message → enqueue
+ * the agent task on IA-managed conversations → tick the bandeja
+ * counters. Transport concerns (HMAC, raw body, batching) stay in
+ * the route.
+ *
+ * E2·T5: an IN/CLIENTE message persisted on an ACTIVA_IA
+ * conversation enqueues ONE GENERAR_RESPUESTA task — a fast
+ * idempotent DB write AWAITED before the webhook ack so a lost task
+ * can never strand the message; the slow LLM work never runs inline
+ * (the sweeper/route trigger drains the queue in the background).
+ * New conversations with EXACTLY ONE candidato are born ACTIVA_IA
+ * (E2 decision: conversations are born IA-managed) — 0 or >1
+ * candidates still fall to PENDIENTE_VINCULACION.
  */
 
 /** The Kapso payload (snake_case verbatim) once it passed the guard. */
@@ -81,11 +96,24 @@ export interface ResultadoProcesarMensaje {
   vinculado: boolean;
   /** true when the idempotenciaKey was already seen (nothing written). */
   duplicado: boolean;
+  /**
+   * The CRM_AgenteTareas id enqueued for this message (E2·T5), null
+   * when no task applies: duplicate, or a conversation the IA does
+   * not manage (anything but ACTIVA_IA).
+   */
+  tareaAgenteId: number | null;
 }
 
 export interface ProcesarMensajeWhatsappDeps {
   conversaciones: ConversacionCrmRepository;
   mensajes: MensajeCrmRepository;
+  /**
+   * Agent-task queue (E2·T5). Optional (guardarContactoOperativo
+   * precedent): the SQL container always provides it, pre-E2 test
+   * containers and old call sites stay valid without it — the hook
+   * is simply skipped.
+   */
+  tareas?: TareaAgenteRepository;
 }
 
 export class ProcesarMensajeWhatsappUseCase {
@@ -96,7 +124,13 @@ export class ProcesarMensajeWhatsappUseCase {
     //    filtered unique index remains the race backstop for the
     //    window between this check and the insert).
     if (await this.deps.mensajes.existePorIdempotenciaKey(evento.idempotenciaKey)) {
-      return { conversacionId: null, mensajeId: null, vinculado: false, duplicado: true };
+      return {
+        conversacionId: null,
+        mensajeId: null,
+        vinculado: false,
+        duplicado: true,
+        tareaAgenteId: null,
+      };
     }
 
     const { message } = evento;
@@ -108,8 +142,9 @@ export class ProcesarMensajeWhatsappUseCase {
     // 3. Route: reuse the existing conversation (phone key first, then
     //    the channel user id as fallback so a BSUID-born thread is
     //    never duplicated when the phone shows up later); otherwise
-    //    create — vinculado TOMADA_HUMANO when EXACTLY ONE contact
-    //    matches, PENDIENTE_VINCULACION otherwise (0, >1 or no phone).
+    //    create — born ACTIVA_IA (E2: conversations are born
+    //    IA-managed) when EXACTLY ONE contact matches,
+    //    PENDIENTE_VINCULACION otherwise (0, >1 or no phone).
     let conversacion =
       telefono !== null
         ? await this.deps.conversaciones.buscarPorCanal('WHATSAPP', { telefono })
@@ -129,8 +164,8 @@ export class ProcesarMensajeWhatsappUseCase {
             identificadorCanal,
             empresaId: candidatos[0].empresaId,
             contactoId: candidatos[0].contactoId,
-            estado: 'TOMADA_HUMANO',
-            modo: 'HUMANO',
+            estado: 'ACTIVA_IA',
+            modo: 'IA',
             asignadaA: null,
           });
         }
@@ -174,7 +209,33 @@ export class ProcesarMensajeWhatsappUseCase {
       mensaje = await this.deps.mensajes.crear(nuevoMensaje);
     } catch (err: unknown) {
       if (!esViolacionIndiceUnico(err)) throw err;
-      return { conversacionId: null, mensajeId: null, vinculado: false, duplicado: true };
+      return {
+        conversacionId: null,
+        mensajeId: null,
+        vinculado: false,
+        duplicado: true,
+        tareaAgenteId: null,
+      };
+    }
+
+    // 5b. E2·T5 durable-queue hook: the IN message just persisted on
+    //     an ACTIVA_IA conversation enqueues ONE GENERAR_RESPUESTA
+    //     task for it (this use case only ever persists IN/CLIENTE
+    //     rows, so the message condition is structural). Placed
+    //     BEFORE registrarActividad: the task must exist regardless
+    //     of the counter tick's outcome — both are fast DB writes
+    //     awaited before the ack, and crearSiNoExiste is idempotent
+    //     on (conversacionId, mensajeId, tipo) so a replayed delivery
+    //     never double-enqueues. Errors propagate → 503 → Kapso
+    //     retry (dedup absorbs it).
+    let tareaAgenteId: number | null = null;
+    if (this.deps.tareas !== undefined && conversacion.estado === 'ACTIVA_IA') {
+      const tarea = await this.deps.tareas.crearSiNoExiste({
+        conversacionId: conversacion.id,
+        mensajeId: mensaje.id,
+        tipo: 'GENERAR_RESPUESTA',
+      });
+      tareaAgenteId = tarea.id;
     }
 
     // 6. Bandeja counters: ultimoMensajeEn = ahora, noLeidos + 1.
@@ -185,6 +246,7 @@ export class ProcesarMensajeWhatsappUseCase {
       mensajeId: mensaje.id,
       vinculado: conversacion.empresaId !== null && conversacion.contactoId !== null,
       duplicado: false,
+      tareaAgenteId,
     };
   }
 }
