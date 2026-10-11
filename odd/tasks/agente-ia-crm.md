@@ -105,6 +105,12 @@ Cada entregable es un hito **demoable de punta a punta** y cierra con work-unit 
 
 ## Registro de avance
 
+### Revisión nativa RDD (E1)
+El candidato completo (51 archivos) excedió el presupuesto de contexto (`lens_context_budget_exceeded`) → dividido en 3 rebanadas encadenadas (decisión del usuario 2026-10-11), revisadas en worktrees dedicados:
+- **Rebanada A** f794a2e..94d8e51 (T1+T2: esquema+dominio+webhook) — **APROVADA** (línea `review-8344e417cd1670f5`, ack quemado). Halló 1 CRITICAL (R3: ack antes de persistir → pérdida de mensajes en fallo async) corregido en `25037fc` (persist-before-ack + 503 para reintento de Kapso + backstop de carrera 2601/2627, 179 líneas diff). Advisory NO bloqueantes (seguimiento futuro): R3-adapters-sql-sin-tests (WARNING), R3-clave-batch-inconsistente (WARNING), R3-cuerpo-truncado-silencioso (SUGGESTION), R3-scan-tabla-completa-candidatos (WARNING).
+- **Rebanada B** 94d8e51..b65fed7 (T3+T4: permisos+backend bandeja) — pendiente.
+- **Rebanada C** b65fed7..52b2174 (T5: UI+docs) — pendiente.
+
 - [ ] E1 — Canal y conversaciones
   - [x] T1 Esquema CRM_Conversaciones/CRM_Mensajes + dominio (E.164) + repos + wiring — commit `dee1d09`
   - [x] T2 Webhook /api/webhooks/kapso (HMAC + idempotencia + ack<10s + async) — commit `94d8e51`
