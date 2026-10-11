@@ -121,6 +121,9 @@ async function main() {
 
   // 2) Indicación (E3): aplicar y reanudar.
   if (args.indicacion !== undefined) {
+    if (!db.conocimiento || !db.tareas) {
+      throw new Error('La indicación requiere los repos conocimiento/tareas (getCrmDb no los proveyó)');
+    }
     const aplicar = new AplicarIndicacionUseCase({
       conversaciones: db.conversaciones,
       conocimiento: db.conocimiento,
