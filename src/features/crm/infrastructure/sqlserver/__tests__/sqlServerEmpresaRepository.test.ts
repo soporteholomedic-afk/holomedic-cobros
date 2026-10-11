@@ -264,4 +264,30 @@ describe('SqlServerEmpresaRepository', () => {
       await pool.request().query(`DELETE FROM dbo.CRM_Empresas WHERE ${PROBE_KEY}`);
     }
   });
+
+  it('actualizarCantidadTrabajadores promueve el headcount canónico (E3·T4); id inexistente → null', async () => {
+    const repo = new SqlServerEmpresaRepository(pool);
+    try {
+      // Nace SIN headcount (columna aditiva — NULL en filas previas).
+      const creada = await repo.crear(inputAlfa());
+      expect(creada.cantidadTrabajadores).toBeNull();
+
+      const actualizada = await repo.actualizarCantidadTrabajadores(creada.id, 120);
+      expect(actualizada?.id).toBe(creada.id);
+      expect(actualizada?.cantidadTrabajadores).toBe(120);
+      expect(actualizada?.razonSocial).toBe('Probe Alfa SA'); // untouched field survives
+
+      // Round-trip: releído desde la base con el MISMO mapeo de agregado.
+      const releida = await repo.obtenerPorId(creada.id);
+      expect(releida?.cantidadTrabajadores).toBe(120);
+
+      // Re-promoción (el operador corrige): el valor canónico se reemplaza.
+      const corregida = await repo.actualizarCantidadTrabajadores(creada.id, 90);
+      expect(corregida?.cantidadTrabajadores).toBe(90);
+
+      expect(await repo.actualizarCantidadTrabajadores(987654321, 10)).toBeNull();
+    } finally {
+      await pool.request().query(`DELETE FROM dbo.CRM_Empresas WHERE ${PROBE_KEY}`);
+    }
+  });
 });

@@ -1,9 +1,11 @@
 import type {
   EntradaDestilacion,
   EntradaGenerarRespuesta,
+  FichaDestilada,
   IdentificacionExtraida,
   ObservacionDestilada,
   RespuestaGenerada,
+  ResultadoDestilacion,
 } from '../../domain/entities';
 import type { GeneradorRespuestaPort } from '../../domain/ports';
 
@@ -30,7 +32,16 @@ import type { GeneradorRespuestaPort } from '../../domain/ports';
  *   deferral texto.
  * destilar emits exactly ONE hecho_cliente observation (first 8 words
  * of the consulta as titulo, consulta trimmed to 200 chars, never
- * pinear); an empty consulta distills to NOTHING.
+ * pinear); an empty consulta distills to NOTHING. E3·T4: the SAME
+ * call attaches a `ficha` block via deterministic heuristics over
+ * the EXCHANGE text (consulta + respuesta) — /(\d+)\s*(personas|
+ * trabajadores|empleados|gente)/i → trabajadores, /(\d+)\s*sede/i →
+ * sedes (the captured NUMBER in both cases) and a cargo keyword
+ * (dueño|dueña|gerente|director|encargado|jefe|responsable|
+ * comprador — case-tolerant, ñ/n-tolerant for the only accented
+ * letter in the catalog) → the matched word. This is what makes the
+ * no-API-key DoD demo SHOW "la ficha muestra el dato extraído
+ * automáticamente"; no keyword → no ficha property at all.
  * extraerIdentificacion (E2·T9) ALWAYS returns null: identification
  * is exercised only by the real adapter (the motor tests mock the
  * port) — the simulator never fabricates a stated name/company. Every
@@ -58,6 +69,36 @@ const TITULO_VACIO = 'Consulta cliente';
 const MODELO_SIMULADO = 'simulado';
 /** scoreConfianza of the contactoNuevo greeting (answered, not escalated). */
 const SCORE_SALUDO_CONTACTO_NUEVO = 0.7;
+
+/** E3·T4 heuristics — the number captured before each headcount word. */
+const PATRON_TRABAJADORES = /(\d+)\s*(?:personas|trabajadores|empleados|gente)/i;
+/** E3·T4 heuristics — the number captured before "sede(s)". */
+const PATRON_SEDES = /(\d+)\s*sede/i;
+/**
+ * E3·T4 heuristics — cargo keywords. ñ is the only accented letter in
+ * the catalog, so [ñn] classes give accent tolerance; /i gives case
+ * tolerance. Alternation longest-first so "directora" reports
+ * "directora", not the "director" prefix.
+ */
+const PATRON_CARGO =
+  /(due[nñ]a|due[nñ]o|directora|director|encargada|encargado|gerente|jefe|responsable|compradora|comprador)/i;
+
+/**
+ * E3·T4: deterministic ficha heuristics over the exchange text.
+ * Only non-empty string fields are attached; no keyword → undefined
+ * (the caller leaves the property absent entirely).
+ */
+function fichaDelIntercambio(consulta: string, respuesta: string): FichaDestilada | undefined {
+  const texto = `${consulta}\n${respuesta}`;
+  const ficha: FichaDestilada = {};
+  const trabajadores = PATRON_TRABAJADORES.exec(texto);
+  if (trabajadores !== null) ficha.trabajadores = trabajadores[1];
+  const sedes = PATRON_SEDES.exec(texto);
+  if (sedes !== null) ficha.sedes = sedes[1];
+  const cargo = PATRON_CARGO.exec(texto);
+  if (cargo !== null) ficha.cargo = cargo[0];
+  return Object.keys(ficha).length > 0 ? ficha : undefined;
+}
 
 /** Prompt fragment body → simulated texto (400-char cap, safe fallback). */
 function textoSimulado(contenido: string, titulo: string): string {
@@ -133,17 +174,22 @@ export class GeneradorSimulado implements GeneradorRespuestaPort {
     };
   }
 
-  async destilar(entrada: EntradaDestilacion): Promise<ObservacionDestilada[]> {
+  async destilar(entrada: EntradaDestilacion): Promise<ResultadoDestilacion> {
     const consulta = entrada.consulta.trim();
     if (consulta === '') return [];
-    return [
+    // E3·T4: la misma llamada lleva la ficha (heurísticas sobre el
+    // intercambio completo); sin datos la propiedad queda ausente.
+    const resultado = [
       {
         tipo: 'hecho_cliente',
         titulo: tituloDeConsulta(consulta),
         contenido: consulta.slice(0, LIMITE_CONTENIDO_DESTILACION),
         pinear: false,
       },
-    ];
+    ] as ResultadoDestilacion;
+    const ficha = fichaDelIntercambio(consulta, entrada.respuesta);
+    if (ficha !== undefined) resultado.ficha = ficha;
+    return resultado;
   }
 
   async extraerIdentificacion(): Promise<IdentificacionExtraida | null> {

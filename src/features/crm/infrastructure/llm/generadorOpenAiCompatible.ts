@@ -2,9 +2,11 @@ import type {
   EntradaDestilacion,
   EntradaExtraerIdentificacion,
   EntradaGenerarRespuesta,
+  FichaDestilada,
   IdentificacionExtraida,
   ObservacionDestilada,
   RespuestaGenerada,
+  ResultadoDestilacion,
   TipoObservacionDestilada,
 } from '../../domain/entities';
 import type { GeneradorRespuestaPort } from '../../domain/ports';
@@ -29,7 +31,12 @@ import type { GeneradorRespuestaPort } from '../../domain/ports';
  * - destilar: items with a tipo outside the 5-value catalog are
  *   DROPPED (not fatal — the model losing one item must not lose the
  *   exchange), titulo/contenido clamped to 60/300 chars, pinear kept
- *   true ONLY for acuerdo/compromiso.
+ *   true ONLY for acuerdo/compromiso. E3·T4: the response is asked as
+ *   {"observaciones": [...], "ficha": {...}} in the SAME call; the
+ *   legacy bare-array form stays accepted (backward compatible) and
+ *   a malformed ficha NEVER fails — fields survive only as non-empty
+ *   strings (clamped to 500, the CRM_ExtraccionesFicha.valor width),
+ *   everything else is dropped, no retry.
  * - extraerIdentificacion (E2·T9): one call, strict JSON
  *   {"nombre": string|null, "empresa": string|null}; fields trimmed
  *   and clamped to 120 chars, non-string fields coerce to null (the
@@ -101,6 +108,8 @@ const TITULO_DESTILACION_MAX = 60;
 const CONTENIDO_DESTILACION_MAX = 300;
 /** E2·T9: nombre/empresa clamp (a stated name/company is short). */
 const IDENTIFICACION_MAX_CARACTERES = 120;
+/** E3·T4: ficha field clamp (CRM_ExtraccionesFicha.valor NVARCHAR(500)). */
+const FICHA_MAX_CARACTERES = 500;
 
 /** System nudge appended on the ONE JSON-validity retry. */
 const NUDGE_JSON = 'Respondé únicamente con JSON válido, sin texto adicional.';
@@ -124,11 +133,15 @@ const PROMPT_SISTEMA_DESTILAR = [
   'Eres el distilador de La Guía, la asistente de WhatsApp de Holomedic.',
   'Extraé del intercambio únicamente hechos duraderos: datos del cliente, acuerdos, compromisos, preferencias u objeciones;',
   'ignorá saludos y charla pasajera.',
-  'Respondé ÚNICAMENTE con un array JSON válido, sin texto adicional, con esta forma exacta:',
-  '[{"tipo": "hecho_cliente"|"acuerdo"|"compromiso"|"preferencia"|"objecion", "titulo": string (máximo 60 caracteres),',
-  '"contenido": string (máximo 300 caracteres), "pinear": boolean}]',
+  'Además extraé la ficha del contacto SOLO si el cliente la declaró explícitamente en el intercambio:',
+  'su cargo (cargo), la cantidad de trabajadores de su empresa (trabajadores, como texto) y la cantidad de sedes (sedes, como texto);',
+  'null cuando no aparezca. Nunca los deduzcas, completes ni inventes.',
+  'Respondé ÚNICAMENTE con JSON válido, sin texto adicional, con esta forma exacta:',
+  '{"observaciones": [{"tipo": "hecho_cliente"|"acuerdo"|"compromiso"|"preferencia"|"objecion", "titulo": string (máximo 60 caracteres),',
+  '"contenido": string (máximo 300 caracteres), "pinear": boolean}],',
+  '"ficha": {"cargo": string|null, "trabajadores": string|null, "sedes": string|null}}',
   '— pinear=true solo para acuerdos y compromisos.',
-  'Si no hay nada duradero, respondé [].',
+  'Si no hay nada duradero ni datos de ficha, respondé {"observaciones": [], "ficha": null}.',
 ].join(' ');
 
 const PROMPT_SISTEMA_IDENTIFICAR = [
@@ -319,6 +332,57 @@ function validarObservacionesDestiladas(valor: unknown): ObservacionDestilada[] 
 }
 
 /**
+ * Guard the destilar result (E3·T4): the top level accepts BOTH the
+ * asked object form {observaciones, ficha} and the legacy bare array
+ * (backward compatible). A non-array `observaciones` inside the object
+ * is unsalvageable (null → retry); the ficha block is parsed with
+ * FULL tolerance — missing/null/non-object ficha ⇔ no ficha property,
+ * per-field only non-empty strings survive (clamped to 500) — a
+ * malformed ficha must NEVER fail the distillation nor trigger the
+ * retry (only JSON-invalidity retries).
+ */
+function validarResultadoDestilacion(valor: unknown): ResultadoDestilacion | null {
+  if (Array.isArray(valor)) {
+    return validarObservacionesDestiladas(valor);
+  }
+  if (valor === null || typeof valor !== 'object') return null;
+  const crudo = valor as Record<string, unknown>;
+  const observaciones = validarObservacionesDestiladas(crudo.observaciones);
+  if (observaciones === null) return null;
+  const ficha = validarFichaDestilada(crudo.ficha);
+  if (ficha === undefined) return observaciones;
+  const resultado = observaciones as ResultadoDestilacion;
+  resultado.ficha = ficha;
+  return resultado;
+}
+
+/**
+ * Tolerant ficha guard (E3·T4): non-object/absent → undefined; per
+ * field, only a non-empty string survives (trim + clamp 500) —
+ * anything else is dropped. Returns undefined when NO field
+ * survived (the property stays absent on the result).
+ */
+function validarFichaDestilada(valor: unknown): FichaDestilada | undefined {
+  if (valor === null || typeof valor !== 'object' || Array.isArray(valor)) return undefined;
+  const crudo = valor as Record<string, unknown>;
+  const ficha: FichaDestilada = {};
+  const cargo = textoFichaONulo(crudo.cargo);
+  const trabajadores = textoFichaONulo(crudo.trabajadores);
+  const sedes = textoFichaONulo(crudo.sedes);
+  if (cargo !== null) ficha.cargo = cargo;
+  if (trabajadores !== null) ficha.trabajadores = trabajadores;
+  if (sedes !== null) ficha.sedes = sedes;
+  return Object.keys(ficha).length > 0 ? ficha : undefined;
+}
+
+/** unknown → trim + clamp 500 (empty → null); anything else → null. */
+function textoFichaONulo(valor: unknown): string | null {
+  if (typeof valor !== 'string') return null;
+  const recortado = valor.trim().slice(0, FICHA_MAX_CARACTERES);
+  return recortado === '' ? null : recortado;
+}
+
+/**
  * Guard IdentificacionExtraida (E2·T9): a non-object top level is
  * unsalvageable (null → retry); per FIELD, anything that is not a
  * string coerces to null and strings are trimmed + clamped to 120
@@ -371,13 +435,13 @@ export class GeneradorOpenAiCompatible implements GeneradorRespuestaPort {
     );
   }
 
-  async destilar(entrada: EntradaDestilacion): Promise<ObservacionDestilada[]> {
+  async destilar(entrada: EntradaDestilacion): Promise<ResultadoDestilacion> {
     return this.pedirJson(
       [
         { role: 'system', content: PROMPT_SISTEMA_DESTILAR },
         { role: 'user', content: mensajeUsuarioDestilar(entrada) },
       ],
-      validarObservacionesDestiladas,
+      validarResultadoDestilacion,
       'observaciones destiladas',
     );
   }

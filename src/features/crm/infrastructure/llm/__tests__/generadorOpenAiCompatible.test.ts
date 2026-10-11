@@ -597,6 +597,120 @@ describe('GeneradorOpenAiCompatible — destilar (E2·T3)', () => {
   });
 });
 
+describe('GeneradorOpenAiCompatible — destilar con ficha (E3·T4)', () => {
+  it('objeto {observaciones, ficha} → ambas partes cruzan; el prompt pide la ficha en la MISMA llamada', async () => {
+    const { llamadas } = stubFetch([
+      {
+        status: 200,
+        contenido: JSON.stringify({
+          observaciones: [
+            { tipo: 'hecho_cliente', titulo: 'Rubro minería', contenido: 'Trabaja en minería.', pinear: false },
+          ],
+          ficha: { cargo: 'Jefe de Compras', trabajadores: '120', sedes: '3' },
+        }),
+      },
+    ]);
+
+    const resultado = await crearAdapter().destilar({ consulta: 'c', respuesta: 'r' });
+
+    expect([...resultado]).toEqual([
+      { tipo: 'hecho_cliente', titulo: 'Rubro minería', contenido: 'Trabaja en minería.', pinear: false },
+    ]);
+    expect(resultado.ficha).toEqual({ cargo: 'Jefe de Compras', trabajadores: '120', sedes: '3' });
+    // El contrato JSON del prompt pide la ficha en el mismo pedido.
+    const cuerpo = cuerpoDe(llamadas[0] as LlamadaFetch);
+    const sistema = cuerpo.messages.find((m) => m.role === 'system')?.content ?? '';
+    expect(sistema).toContain('ficha');
+    expect(sistema).toContain('cargo');
+    expect(sistema).toContain('trabajadores');
+    expect(sistema).toContain('sedes');
+  });
+
+  it('ficha null o ausente → observaciones solas, propiedad ficha ausente', async () => {
+    stubFetch([
+      { status: 200, contenido: JSON.stringify({ observaciones: [], ficha: null }) },
+    ]);
+    const conNull = await crearAdapter().destilar({ consulta: 'c', respuesta: 'r' });
+    expect([...conNull]).toEqual([]);
+    expect('ficha' in conNull).toBe(false);
+
+    stubFetch([{ status: 200, contenido: JSON.stringify({ observaciones: [] }) }]);
+    const sinClave = await crearAdapter().destilar({ consulta: 'c', respuesta: 'r' });
+    expect('ficha' in sinClave).toBe(false);
+  });
+
+  it('forma legacy (array puro) sigue válida → observaciones sin ficha (retrocompatibilidad)', async () => {
+    stubFetch([
+      {
+        status: 200,
+        contenido: JSON.stringify([
+          { tipo: 'acuerdo', titulo: 'Examen el martes', contenido: 'Acordado.', pinear: true },
+        ]),
+      },
+    ]);
+
+    const resultado = await crearAdapter().destilar({ consulta: 'c', respuesta: 'r' });
+
+    expect(resultado).toHaveLength(1);
+    expect('ficha' in resultado).toBe(false);
+  });
+
+  it('ficha malformada NUNCA tira ni reintenta: campos inválidos se descartan, el resto sobrevive', async () => {
+    const { fetchMock } = stubFetch([
+      {
+        status: 200,
+        contenido: JSON.stringify({
+          observaciones: [],
+          ficha: { cargo: 42, trabajadores: '  ', sedes: 'dos', extra: 'ignorado' },
+        }),
+      },
+    ]);
+
+    const resultado = await crearAdapter().destilar({ consulta: 'c', respuesta: 'r' });
+
+    // cargo numérico y trabajadores vacío se descartan; sedes textual sobrevive.
+    expect(resultado.ficha).toEqual({ sedes: 'dos' });
+    // Sin reintento: la ficha es best-effort, solo la invalidez de JSON reintenta.
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('ficha no-objeto (string) → tolerada como ausente, sin reintento', async () => {
+    const { fetchMock } = stubFetch([
+      { status: 200, contenido: JSON.stringify({ observaciones: [], ficha: 'nada' }) },
+    ]);
+
+    const resultado = await crearAdapter().destilar({ consulta: 'c', respuesta: 'r' });
+
+    expect('ficha' in resultado).toBe(false);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('observaciones no-array dentro del objeto → invalidéz de JSON: reintenta y luego tira', async () => {
+    stubFetch([
+      { status: 200, contenido: JSON.stringify({ observaciones: 'no-array', ficha: { cargo: 'x' } }) },
+      { status: 200, contenido: JSON.stringify({ observaciones: 'no-array' }) },
+    ]);
+
+    const codigo = await codigoDeError(crearAdapter().destilar({ consulta: 'c', respuesta: 'r' }));
+
+    expect(codigo).toBe('GENERADOR_RESPUESTA_INVALIDA');
+  });
+
+  it('valores de ficha se recortan a 500 caracteres (columna NVARCHAR(500))', async () => {
+    const largo = 'x'.repeat(600);
+    stubFetch([
+      {
+        status: 200,
+        contenido: JSON.stringify({ observaciones: [], ficha: { cargo: largo } }),
+      },
+    ]);
+
+    const resultado = await crearAdapter().destilar({ consulta: 'c', respuesta: 'r' });
+
+    expect(resultado.ficha?.cargo).toHaveLength(500);
+  });
+});
+
 describe('GeneradorOpenAiCompatible — extraerIdentificacion (E2·T9)', () => {
   it('JSON limpio → {nombre, empresa} tipados con UN solo pedido; CONSULTA/RESPUESTA rotuladas', async () => {
     const { llamadas } = stubFetch([

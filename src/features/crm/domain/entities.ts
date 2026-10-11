@@ -448,6 +448,82 @@ export interface ExtraccionFicha {
   actualizadoEn: Date;
 }
 
+/**
+ * The ficha block ONE distillation may carry (E3·T4, piggyback on the
+ * post-send destilar call): raw STRING values for uniformity — parsing
+ * is confirm-time — and each field present ONLY when the exchange
+ * stated it (undefined ⇔ not said; adapters never invent). cargo =
+ * the contacto's role; trabajadores/sedes = the empresa counts.
+ */
+export interface FichaDestilada {
+  cargo?: string | null;
+  trabajadores?: string | null;
+  sedes?: string | null;
+}
+
+/**
+ * The destilar RESULT (E3·T4): the observation list PLUS an optional
+ * ficha block. Array subtype (RegExpExecArray precedent) so every
+ * existing consumer keeps working unchanged — iterate, .length,
+ * toEqual([...]) — and an ABSENT ficha property ⇔ nothing extracted;
+ * adapters attach `ficha` only when at least one field is a non-empty
+ * string.
+ */
+export interface ResultadoDestilacion extends Array<ObservacionDestilada> {
+  ficha?: FichaDestilada;
+}
+
+// ---- Ficha viva read side (agente-ia-crm E3·T4) ----
+
+/**
+ * Who backs one merged ficha datum (E3·T4): an IA extraction, an
+ * operator confirmation, or the CANONICAL column the promotion wrote
+ * (CRM_Contactos.cargo / CRM_Empresas.cantidadTrabajadores — always
+ * wins over any extraction when set).
+ */
+export type OrigenDatoFichaVista = OrigenDatoFicha | 'canonico';
+
+/**
+ * One merged ficha datum (E3·T4): `valor` null ⇔ sin dato (origen /
+ * confirmado are placeholders then — the shape stays total so the UI
+ * reads Record<CampoFicha, DatoFicha> without key checks).
+ */
+export interface DatoFicha {
+  valor: string | null;
+  origen: OrigenDatoFichaVista;
+  confirmado: boolean;
+}
+
+/** The contacto side of the ficha (canonical display fields, E3·T4). */
+export interface ContactoFicha {
+  id: number;
+  nombre: string;
+  telefono: string | null;
+  /** Canonical CRM_Contactos.cargo (null = unset). */
+  cargo: string | null;
+}
+
+/** The empresa side of the ficha (canonical display fields, E3·T4). */
+export interface EmpresaFicha {
+  id: number;
+  razonSocial: string;
+  cantidadTrabajadores: number | null;
+}
+
+/**
+ * The living contact card (ficha viva, E3·T4): the conversation's
+ * contacto/empresa canonical fields plus the merged per-campo view —
+ * canonical column value wins for cargo/trabajadores when set
+ * (origen 'canonico'); otherwise the LATEST extraction;
+ * sedes always comes from extracciones (ficha-only by locked design).
+ */
+export interface FichaConversacion {
+  conversacionId: number;
+  contacto: ContactoFicha | null;
+  empresa: EmpresaFicha | null;
+  datos: Record<CampoFicha, DatoFicha>;
+}
+
 // ---- Base de conocimiento (agente-ia-crm, E2) ----
 
 /**

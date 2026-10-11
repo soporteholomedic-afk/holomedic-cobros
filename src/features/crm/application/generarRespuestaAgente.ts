@@ -1,12 +1,15 @@
 import type {
+  CampoFicha,
   Empresa,
   EstadoConversacion,
+  FichaDestilada,
   FragmentoMemoria,
   IdentificacionExtraida,
   MensajeCrm,
   MensajeHistorialGeneracion,
   ObservacionDestilada,
   RespuestaGenerada,
+  ResultadoDestilacion,
 } from '../domain/entities';
 import type {
   ConocimientoCrmRepository,
@@ -100,7 +103,10 @@ import { recuperarConocimiento } from './recuperarConocimiento';
  * and still persists its solicitud). (c) memoriaActiva=false (the
  * per-conversation privacy opt-out, E3·T1 — undefined ≡ active)
  * skips the Engram recall (contexto + buscar) AND the post-send
- * distillation+pin; the KB recall and the rest of the flow continue.
+ * distillation+pin — and, because the ficha extraction piggybacks
+ * that same destilar call (E3·T4), it skips the ficha too: the
+ * opt-out is over what la Guía LEARNS from the thread, not just the
+ * memory store. The KB recall and the rest of the flow continue.
  */
 
 /** Every terminal outcome of one engine run. */
@@ -249,6 +255,13 @@ function codigoDeError(error: unknown): string {
     if (typeof codigo === 'string') return codigo;
   }
   return error instanceof Error ? error.name : 'ERROR_DESCONOCIDO';
+}
+
+/** E3·T4: null/blank ficha field → null (nothing to upsert). */
+function textoNoVacio(valor: string | null | undefined): string | null {
+  if (valor === null || valor === undefined) return null;
+  const recortado = valor.trim();
+  return recortado === '' ? null : recortado;
 }
 
 export class GenerarRespuestaAgenteUseCase {
@@ -524,14 +537,24 @@ export class GenerarRespuestaAgenteUseCase {
       }
     }
 
-    // 13. Distillation — ONLY on RESPONDIDO, ONLY with an empresa (the
-    //     memory port requires empresaId), ONLY while memoriaActiva
-    //     (E3 privacy opt-out), best-effort and never throws.
-    if (responder && conversacion.empresaId !== null && memoriaActiva) {
+    // 13. Distillation — ONLY on RESPONDIDO, ONLY while memoriaActiva
+    //     (E3 privacy opt-out; the ficha piggybacks the same call, so
+    //     the opt-out covers it too), best-effort and never throws.
+    //     The MEMORY side still requires an empresa; E3·T4 widens the
+    //     gate to "someone to distill FOR": a contacto-only row (no
+    //     empresa) skips the memory saves but still feeds la ficha
+    //     (cargo keys on the contacto). Nothing to distill for (no
+    //     empresa AND no contacto — the unlinked case) skips entirely.
+    if (
+      responder &&
+      memoriaActiva &&
+      (conversacion.empresaId !== null || conversacion.contactoId !== null)
+    ) {
       await this.destilarYGuardar({
         consultaOriginal,
         textoFinal,
         empresaId: conversacion.empresaId,
+        contactoId: conversacion.contactoId,
         conversacionId: conversacion.id,
         mensajeId: mensajeFinal.id,
       });
@@ -618,20 +641,25 @@ export class GenerarRespuestaAgenteUseCase {
    * Post-send distillation: distilar the ORIGINAL (unmasked) exchange,
    * guardar each observation (agreements/commitments at 'empresa'
    * level, everything else 'chat') with a deterministic operationId,
-   * and pin when asked. Every failure warns with codigo + conversation
-   * id ONLY (bodies are PII) and continues — distillation must never
-   * change the already-sent outcome.
+   * and pin when asked. E3·T4: the SAME destilar call may carry a
+   * `ficha` block — written FIRST (right after destilar returns) into
+   * CRM_ExtraccionesFicha with the motor keying (cargo → the contacto;
+   * trabajadores/sedes → the empresa). Memory saves still require an
+   * empresa. Every failure warns with codigo + conversation id ONLY
+   * (bodies are PII) and continues — distillation must never change
+   * the already-sent outcome.
    */
   private async destilarYGuardar(params: {
     consultaOriginal: string;
     textoFinal: string;
-    empresaId: number;
+    empresaId: number | null;
+    contactoId: number | null;
     conversacionId: number;
     mensajeId: number;
   }): Promise<void> {
-    let observaciones: ObservacionDestilada[];
+    let distilacion: ResultadoDestilacion;
     try {
-      observaciones = await this.deps.generador.destilar({
+      distilacion = await this.deps.generador.destilar({
         consulta: params.consultaOriginal,
         respuesta: params.textoFinal,
       });
@@ -642,6 +670,11 @@ export class GenerarRespuestaAgenteUseCase {
       });
       return;
     }
+    // E3·T4 ficha first: extraction landing, IA-origin, unconfirmed —
+    // the operator confirms (and promotes) through confirmarDatoFicha.
+    await this.guardarFichaDestilada(distilacion.ficha, params);
+    if (params.empresaId === null) return;
+    const observaciones: ObservacionDestilada[] = [...distilacion];
     for (let indice = 0; indice < observaciones.length; indice += 1) {
       const observacion = observaciones[indice];
       if (observacion === undefined) continue;
@@ -662,6 +695,75 @@ export class GenerarRespuestaAgenteUseCase {
         console.warn('[generarRespuestaAgente] guardar observación destilada falló', {
           conversacionId: params.conversacionId,
           codigo: codigoDeError(errorGuardar),
+        });
+      }
+    }
+  }
+
+  /**
+   * E3·T4: land the destilar ficha block as IA extractions. Keying —
+   * cargo → contactoId (empresaId null; empresa-keyed only when the
+   * conversation carries NO contacto), trabajadores/sedes → empresaId
+   * (contactoId null, skipped without an empresa). Per-field
+   * try/catch: one failed upsert never sinks the others nor the run.
+   * upsertExtraccionFicha is optional — repos without the E3·T1
+   * capability skip silently (actualizarModo precedent). Logs carry
+   * codigo + conversation id only — ficha values are client data.
+   */
+  private async guardarFichaDestilada(
+    ficha: FichaDestilada | undefined,
+    params: { contactoId: number | null; empresaId: number | null; conversacionId: number },
+  ): Promise<void> {
+    if (ficha === undefined) return;
+    const upsert = this.deps.conversaciones.upsertExtraccionFicha;
+    if (upsert === undefined) return;
+
+    const escrituras: Array<{
+      contactoId: number | null;
+      empresaId: number | null;
+      campo: CampoFicha;
+      valor: string;
+    }> = [];
+    const cargo = textoNoVacio(ficha.cargo);
+    if (cargo !== null) {
+      escrituras.push({
+        contactoId: params.contactoId,
+        empresaId: params.contactoId !== null ? null : params.empresaId,
+        campo: 'cargo',
+        valor: cargo,
+      });
+    }
+    if (params.empresaId !== null) {
+      const trabajadores = textoNoVacio(ficha.trabajadores);
+      if (trabajadores !== null) {
+        escrituras.push({
+          contactoId: null,
+          empresaId: params.empresaId,
+          campo: 'trabajadores',
+          valor: trabajadores,
+        });
+      }
+      const sedes = textoNoVacio(ficha.sedes);
+      if (sedes !== null) {
+        escrituras.push({ contactoId: null, empresaId: params.empresaId, campo: 'sedes', valor: sedes });
+      }
+    }
+
+    for (const escritura of escrituras) {
+      try {
+        await upsert.call(this.deps.conversaciones, {
+          contactoId: escritura.contactoId,
+          empresaId: escritura.empresaId,
+          campo: escritura.campo,
+          valor: escritura.valor,
+          origen: 'IA',
+          confirmado: false,
+        });
+      } catch (errorFicha) {
+        console.warn('[generarRespuestaAgente] guardar extracción de ficha falló', {
+          conversacionId: params.conversacionId,
+          campo: escritura.campo,
+          codigo: codigoDeError(errorFicha),
         });
       }
     }

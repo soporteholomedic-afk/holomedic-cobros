@@ -205,6 +205,26 @@ export class SqlServerEmpresaRepository implements CrmEmpresaRepositoryPort {
     return this.obtenerPorId(id);
   }
 
+  /**
+   * E3·T4 trabajadores promotion (ficha viva confirm): flip ONLY
+   * CRM_Empresas.cantidadTrabajadores — NARROW method because
+   * ActualizarEmpresaInput deliberately carries no headcount (a
+   * generic update must not touch the OcupaCare offering datum).
+   * Mirror of actualizar's shape (UPDATE + aggregate re-read;
+   * rowsAffected 0 → null).
+   */
+  async actualizarCantidadTrabajadores(empresaId: number, cantidad: number): Promise<Empresa | null> {
+    const result = await this.pool
+      .request()
+      .input('id', mssql.Int, empresaId)
+      .input('cantidadTrabajadores', mssql.Int, cantidad)
+      .query(
+        'UPDATE dbo.CRM_Empresas SET cantidadTrabajadores = @cantidadTrabajadores, updatedAt = SYSDATETIME() WHERE id = @id',
+      );
+    if ((result.rowsAffected[0] ?? 0) === 0) return null;
+    return this.obtenerPorId(empresaId);
+  }
+
   private async insertContacto(
     tx: mssql.Transaction,
     empresaId: number,

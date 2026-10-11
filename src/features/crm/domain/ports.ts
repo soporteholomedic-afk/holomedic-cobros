@@ -30,6 +30,7 @@ import type {
   PipelineEmpresa,
   RespuestaGenerada,
   ResultadoCrearTarea,
+  ResultadoDestilacion,
   ResultadoGuardarMemoria,
   SectorCrm,
   SolicitudAyuda,
@@ -62,6 +63,18 @@ export interface CrmEmpresaRepositoryPort {
   listar(filtros?: FiltrosEmpresas): Promise<Empresa[]>;
   obtenerPorId(id: number): Promise<Empresa | null>;
   actualizar(id: number, cambios: ActualizarEmpresaInput): Promise<Empresa | null>;
+  /**
+   * E3·T4 ficha promotion (NARROW on purpose): ActualizarEmpresaInput
+   * carries no cantidadTrabajadores, and widening it would let every
+   * call site touch the headcount column — so the confirm use case
+   * promotes through this dedicated method instead. Optional
+   * (guardarContactoOperativo precedent): only the SQL adapter
+   * implements it; test fakes stay valid without it.
+   */
+  actualizarCantidadTrabajadores?(
+    empresaId: number,
+    cantidad: number,
+  ): Promise<Empresa | null>;
   /**
    * Upsert ONE operational contacto by (empresaId, cargo) — crm-ux
    * redesign (DatosSolicitados capture). Optional: only the SQL
@@ -659,6 +672,12 @@ export interface ContactoConEmpresa {
   nombreContacto: string;
   razonSocial: string | null;
   telefono: string | null;
+  /**
+   * Canonical CRM_Contactos.cargo (E3·T4 ficha read). Optional
+   * (ultimoMensajeCuerpo precedent): the ficha use case treats
+   * undefined as null; pre-E3 fakes/payloads stay valid without it.
+   */
+  cargo?: string | null;
 }
 
 /**
@@ -798,6 +817,17 @@ export interface ConversacionCrmRepository {
     contactoId: number | null,
     empresaId: number | null,
   ): Promise<ExtraccionFicha[]>;
+  /**
+   * E3·T4 cargo promotion: flip ONLY CRM_Contactos.cargo (the ficha
+   * confirm writes the canonical column after the HUMANO upsert).
+   * Optional (crearContacto precedent — same table): only the SQL
+   * adapter implements it; returns the re-read row, null when the
+   * contacto id is absent.
+   */
+  actualizarCargoContacto?(
+    contactoId: number,
+    cargo: string,
+  ): Promise<ContactoConEmpresa | null>;
   /**
    * E3·T3 notification badge: ONE SELECT with conditional COUNTs +
    * MAX(ultimoMensajeEn) over CRM_Conversaciones (single roundtrip,
@@ -999,8 +1029,12 @@ export interface GeneradorRespuestaPort {
    * Distill durable observations from ONE exchange (post-send):
    * 0..N typed observations (empty = nothing durable); `pinear`
    * marks agreements/commitments to pin in the conversation memory.
+   * E3·T4: the SAME call may carry a `ficha` block (cargo /
+   * trabajadores / sedes the client stated) — absent ⇔ nothing
+   * extracted; adapters attach it only with non-empty string fields
+   * and never let a malformed ficha fail the distillation.
    */
-  destilar(entrada: EntradaDestilacion): Promise<ObservacionDestilada[]>;
+  destilar(entrada: EntradaDestilacion): Promise<ResultadoDestilacion>;
   /**
    * Extract the nombre/empresa the client STATED in one exchange
    * (E2·T9, post-send progressive identification): null FIELDS mean

@@ -190,6 +190,107 @@ describe('GeneradorSimulado — destilar (E2·T3)', () => {
   });
 });
 
+describe('GeneradorSimulado — ficha de la destilación (E3·T4)', () => {
+  it('trabajadores: «somos 250 trabajadores» → la cifra capturada como texto', async () => {
+    const generador = new GeneradorSimulado();
+
+    const resultado = await generador.destilar({
+      consulta: 'Hola, somos 250 trabajadores de la constructora',
+      respuesta: 'r',
+    });
+
+    expect(resultado.ficha?.trabajadores).toBe('250');
+  });
+
+  it('variantes de trabajadores: personas / empleados / gente', async () => {
+    const generador = new GeneradorSimulado();
+
+    for (const [texto, esperado] of [
+      ['somos 80 personas en la planta', '80'],
+      ['tenemos 12 empleados', '12'],
+      ['la gente, unas 40 gente del area', '40'],
+    ] as const) {
+      const resultado = await generador.destilar({ consulta: texto, respuesta: 'r' });
+      expect(resultado.ficha?.trabajadores, texto).toBe(esperado);
+    }
+  });
+
+  it('sedes: «tenemos 3 sedes» → la cifra', async () => {
+    const generador = new GeneradorSimulado();
+
+    const resultado = await generador.destilar({
+      consulta: 'Tenemos 3 sedes: Asunción, Encarnación y Ciudad del Este',
+      respuesta: 'r',
+    });
+
+    expect(resultado.ficha?.sedes).toBe('3');
+  });
+
+  it('cargo: keyword en la consulta → la palabra matcheada, con su caja original', async () => {
+    const generador = new GeneradorSimulado();
+
+    const resultado = await generador.destilar({
+      consulta: 'Buenas, soy el Dueño de la empresa',
+      respuesta: 'r',
+    });
+
+    expect(resultado.ficha?.cargo).toBe('Dueño');
+  });
+
+  it('cargo: tolerante a acentos y mayúsculas (ENCARGADO / duena)', async () => {
+    const generador = new GeneradorSimulado();
+
+    const mayus = await generador.destilar({ consulta: 'SOY EL ENCARGADO DE COMPRAS', respuesta: 'r' });
+    expect(mayus.ficha?.cargo).toBe('ENCARGADO');
+
+    const sinTilde = await generador.destilar({ consulta: 'hola, soy la duena', respuesta: 'r' });
+    expect(sinTilde.ficha?.cargo).toBe('duena');
+  });
+
+  it('el dato puede venir en la RESPUESTA del intercambio (texto completo)', async () => {
+    const generador = new GeneradorSimulado();
+
+    const resultado = await generador.destilar({
+      consulta: 'una consulta',
+      respuesta: 'Perfecto, gerente de compras.',
+    });
+
+    expect(resultado.ficha?.cargo).toBe('gerente');
+  });
+
+  it('sin datos de ficha → la propiedad ficha queda AUSENTE (no undefined suelto en el array)', async () => {
+    const generador = new GeneradorSimulado();
+
+    const resultado = await generador.destilar({
+      consulta: '¿Qué incluye el examen ocupacional?',
+      respuesta: 'Incluye examen médico.',
+    });
+
+    expect('ficha' in resultado).toBe(false);
+    expect(resultado).toEqual([
+      {
+        tipo: 'hecho_cliente',
+        titulo: '¿Qué incluye el examen ocupacional?',
+        contenido: '¿Qué incluye el examen ocupacional?',
+        pinear: false,
+      },
+    ]);
+  });
+
+  it('con ficha: las observaciones siguen intactas (mismo contrato de antes)', async () => {
+    const generador = new GeneradorSimulado();
+
+    const resultado = await generador.destilar({
+      consulta: 'Somos 120 trabajadores, ¿qué incluye el examen?',
+      respuesta: 'r',
+    });
+
+    expect(resultado).toHaveLength(1);
+    expect(resultado[0]?.tipo).toBe('hecho_cliente');
+    expect(resultado.ficha).toEqual({ trabajadores: '120' });
+  });
+});
+
 describe('GeneradorSimulado — extraerIdentificacion (E2·T9)', () => {
   it('siempre null (documentado): la identificación se ejercita solo en el adapter real', async () => {
     const generador = new GeneradorSimulado();

@@ -786,6 +786,40 @@ describe('E3 (agente-ia-crm): extracciones de ficha (upsert IA vs HUMANO)', () =
   });
 });
 
+describe('E3·T4 (agente-ia-crm): promoción de cargo del contacto', () => {
+  it('actualizarCargoContacto redondea el cargo canónico (obtenerContactoPorId lo expone); id inexistente → null', async () => {
+    try {
+      const fixture = await crearFixtureVinculada('ACTIVA_IA');
+
+      // El contacto probe nace SIN cargo (columna aditiva — NULL).
+      const antes = await repo.obtenerContactoPorId(fixture.contactoId);
+      expect(antes).not.toBeNull();
+      expect(antes?.cargo).toBeNull();
+
+      const actualizado = await repo.actualizarCargoContacto(fixture.contactoId, 'Jefe de Compras');
+      expect(actualizado).toMatchObject({
+        contactoId: fixture.contactoId,
+        empresaId: fixture.empresaId,
+        nombreContacto: `Contacto ACTIVA_IA-${SUFIJO}`,
+        cargo: 'Jefe de Compras',
+      });
+
+      // Round-trip: releído desde la base.
+      const releido = await repo.obtenerContactoPorId(fixture.contactoId);
+      expect(releido?.cargo).toBe('Jefe de Compras');
+
+      // Re-promoción (el operador corrige): el valor canónico se reemplaza.
+      const corregido = await repo.actualizarCargoContacto(fixture.contactoId, 'Gerente');
+      expect(corregido?.cargo).toBe('Gerente');
+
+      const ausente = await idInexistente('CRM_Contactos');
+      expect(await repo.actualizarCargoContacto(ausente, 'X')).toBeNull();
+    } finally {
+      await limpiarProbe();
+    }
+  });
+});
+
 describe('E3 (agente-ia-crm): asignación y memoria por conversación', () => {
   it('actualizarAsignacion fija asignadaA + modo (round-trip ida y vuelta)', async () => {
     try {

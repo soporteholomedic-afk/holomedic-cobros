@@ -31,12 +31,15 @@ import type {
   EntradaDestilacion,
   EntradaGenerarRespuesta,
   EstadoConversacion,
+  ExtraccionFicha,
+  FichaDestilada,
   IdentificacionExtraida,
   MensajeCrm,
   ModoConversacion,
   ObservacionDestilada,
   ObservacionMemoria,
   RespuestaGenerada,
+  ResultadoDestilacion,
   ResultadoGuardarMemoria,
   SolicitudAyuda,
 } from '../../domain/entities';
@@ -95,8 +98,20 @@ class FakeConversaciones implements ConversacionCrmRepository {
     terminosBuscados: string[];
     score: number | null;
   }> = [];
+  /** E3·T4: upserts de ficha IA grabados por el motor (solo registro). */
+  extraccionesFicha: Array<{
+    contactoId: number | null;
+    empresaId: number | null;
+    campo: 'cargo' | 'trabajadores' | 'sedes';
+    valor: string;
+    origen: 'IA' | 'HUMANO';
+    confirmado: boolean;
+  }> = [];
+  /** E3·T4: cuando seteado, upsertExtraccionFicha rechaza (best-effort). */
+  falloUpsertFicha: Error | null = null;
   private siguienteContactoId = 500;
   private siguienteSolicitudId = 900;
+  private siguienteExtraccionId = 700;
 
   sembrar(fila: ConversacionCrm): void {
     this.filas.push(fila);
@@ -255,6 +270,28 @@ class FakeConversaciones implements ConversacionCrmRepository {
     throw new Error('no requerido en este fake');
   }
 
+  async upsertExtraccionFicha(extraccion: {
+    contactoId: number | null;
+    empresaId: number | null;
+    campo: ExtraccionFicha['campo'];
+    valor: string;
+    origen: ExtraccionFicha['origen'];
+    confirmado: boolean;
+  }): Promise<ExtraccionFicha> {
+    if (this.falloUpsertFicha !== null) throw this.falloUpsertFicha;
+    this.extraccionesFicha.push(structuredClone(extraccion));
+    return {
+      id: this.siguienteExtraccionId++,
+      contactoId: extraccion.contactoId,
+      empresaId: extraccion.empresaId,
+      campo: extraccion.campo,
+      valor: extraccion.valor,
+      origen: extraccion.origen,
+      confirmado: extraccion.confirmado,
+      actualizadoEn: new Date(),
+    };
+  }
+
   async registrarActividad(id: number, direccion: 'IN' | 'OUT' = 'IN'): Promise<void> {
     const fila = this.filas.find((f) => f.id === id);
     if (!fila) throw new Error(`conversación ${id} inexistente en el fake`);
@@ -389,15 +426,19 @@ class FakeGenerador implements GeneradorRespuestaPort {
     modelo: 'modelo-prueba',
   };
   observaciones: ObservacionDestilada[] = [];
+  /** E3·T4: bloque ficha que destilar devuelve junto a las observaciones. */
+  ficha: FichaDestilada | null = null;
 
   async generarRespuesta(entrada: EntradaGenerarRespuesta): Promise<RespuestaGenerada> {
     this.entradasGenerar.push(structuredClone(entrada));
     return structuredClone(this.respuesta);
   }
 
-  async destilar(entrada: EntradaDestilacion): Promise<ObservacionDestilada[]> {
+  async destilar(entrada: EntradaDestilacion): Promise<ResultadoDestilacion> {
     this.entradasDestilar.push(structuredClone(entrada));
-    return structuredClone(this.observaciones);
+    const resultado = structuredClone(this.observaciones) as ResultadoDestilacion;
+    if (this.ficha !== null) resultado.ficha = structuredClone(this.ficha);
+    return resultado;
   }
 
   async extraerIdentificacion(entrada: {
@@ -548,6 +589,8 @@ interface OverridesFakes {
   hilo?: MensajeCrm[];
   respuesta?: Partial<RespuestaGenerada>;
   observaciones?: ObservacionDestilada[];
+  /** E3·T4: bloque ficha del destilar simulado (null ⇔ ausente). */
+  ficha?: FichaDestilada | null;
   envio?: ResultadoEnvioWhatsapp;
   config?: Partial<ConfigAgente>;
   falloGuardar?: Error;
@@ -556,6 +599,8 @@ interface OverridesFakes {
   empresasFilas?: Empresa[];
   /** true = motor construido SIN el dep empresas (E2·T9 opcional). */
   sinEmpresas?: boolean;
+  /** E3·T4: el upsert de ficha rechaza (best-effort). */
+  falloUpsertFicha?: Error;
 }
 
 function crearFakes(overrides: OverridesFakes = {}): {
@@ -583,10 +628,12 @@ function crearFakes(overrides: OverridesFakes = {}): {
   const generador = new FakeGenerador();
   Object.assign(generador.respuesta, overrides.respuesta ?? {});
   generador.observaciones = overrides.observaciones ?? [];
+  generador.ficha = overrides.ficha ?? null;
   generador.identificacion = overrides.identificacion ?? { nombre: null, empresa: null };
   generador.falloIdentificar = overrides.falloIdentificar ?? null;
   const whatsapp = new FakeWhatsApp();
   if (overrides.envio !== undefined) whatsapp.resultado = overrides.envio;
+  conversaciones.falloUpsertFicha = overrides.falloUpsertFicha ?? null;
   const empresas = new FakeEmpresas();
   empresas.filas = overrides.empresasFilas ?? [];
   const config: ConfigAgente = { ...crearConfigAgente({}), ...overrides.config };
@@ -966,7 +1013,7 @@ describe('GenerarRespuestaAgenteUseCase — destilación post-envío (E2·T4)', 
     expect(salida).not.toContain('Acordado examen');
   });
 
-  it('empresaId null → sin recall de memoria y SIN destilación (pero RESPONDIDO)', async () => {
+  it('empresaId null PERO con contacto (E3·T4) → destila para la ficha, SIN recall ni observaciones de memoria', async () => {
     const fakes = crearFakes({
       conversacion: conversacionActiva({ empresaId: null }),
       observaciones: OBSERVACIONES,
@@ -977,8 +1024,129 @@ describe('GenerarRespuestaAgenteUseCase — destilación post-envío (E2·T4)', 
     expect(resultado.resultado).toBe('RESPONDIDO');
     expect(fakes.memoria.contextos).toEqual([]);
     expect(fakes.memoria.busquedas).toEqual([]);
-    expect(fakes.generador.entradasDestilar).toEqual([]);
+    // La única llamada a destilar sirve a la ficha (piggyback E3·T4):
+    // la memoria ya no corre sin empresa, pero el cargo del contacto sí.
+    expect(fakes.generador.entradasDestilar).toHaveLength(1);
     expect(fakes.memoria.guardadas).toEqual([]);
+  });
+});
+
+describe('GenerarRespuestaAgenteUseCase — ficha viva post-envío (E3·T4)', () => {
+  const FICHA_COMPLETA: FichaDestilada = { cargo: 'Jefe de Compras', trabajadores: '120', sedes: '3' };
+
+  it('ficha completa con contacto+empresa → tres upserts IA con el keying correcto', async () => {
+    const fakes = crearFakes({ ficha: FICHA_COMPLETA });
+
+    const resultado = await fakes.useCase.ejecutar(1, AHORA);
+
+    expect(resultado.resultado).toBe('RESPONDIDO');
+    expect(fakes.conversaciones.extraccionesFicha).toEqual([
+      { contactoId: 42, empresaId: null, campo: 'cargo', valor: 'Jefe de Compras', origen: 'IA', confirmado: false },
+      { contactoId: null, empresaId: 7, campo: 'trabajadores', valor: '120', origen: 'IA', confirmado: false },
+      { contactoId: null, empresaId: 7, campo: 'sedes', valor: '3', origen: 'IA', confirmado: false },
+    ]);
+  });
+
+  it('sin contactoId (solo empresa) → cargo keyed por la empresa; trabajadores/sedes igual', async () => {
+    const fakes = crearFakes({
+      conversacion: conversacionActiva({ contactoId: null }),
+      ficha: FICHA_COMPLETA,
+    });
+
+    await fakes.useCase.ejecutar(1, AHORA);
+
+    expect(fakes.conversaciones.extraccionesFicha).toEqual([
+      { contactoId: null, empresaId: 7, campo: 'cargo', valor: 'Jefe de Compras', origen: 'IA', confirmado: false },
+      { contactoId: null, empresaId: 7, campo: 'trabajadores', valor: '120', origen: 'IA', confirmado: false },
+      { contactoId: null, empresaId: 7, campo: 'sedes', valor: '3', origen: 'IA', confirmado: false },
+    ]);
+  });
+
+  it('sin empresa (solo contacto) → SOLO cargo (trabajadores/sedes se omiten sin empresaId)', async () => {
+    const fakes = crearFakes({
+      conversacion: conversacionActiva({ empresaId: null }),
+      ficha: FICHA_COMPLETA,
+    });
+
+    await fakes.useCase.ejecutar(1, AHORA);
+
+    expect(fakes.conversaciones.extraccionesFicha).toEqual([
+      { contactoId: 42, empresaId: null, campo: 'cargo', valor: 'Jefe de Compras', origen: 'IA', confirmado: false },
+    ]);
+    // La observación de memoria NO se guardó (la memoria exige empresa).
+    expect(fakes.memoria.guardadas).toEqual([]);
+  });
+
+  it('sin contacto NI empresa (desvinculada) → ni se destila ni se escribe ficha', async () => {
+    const fakes = crearFakes({ conversacion: conversacionDesvinculada(), ficha: FICHA_COMPLETA });
+
+    const resultado = await fakes.useCase.ejecutar(1, AHORA);
+
+    expect(resultado.resultado).toBe('RESPONDIDO');
+    expect(fakes.generador.entradasDestilar).toEqual([]);
+    expect(fakes.conversaciones.extraccionesFicha).toEqual([]);
+  });
+
+  it('memoriaActiva=false salta la ficha TAMBIÉN (opt-out de privacidad cubre la extracción)', async () => {
+    const fakes = crearFakes({
+      conversacion: conversacionActiva({ memoriaActiva: false }),
+      ficha: FICHA_COMPLETA,
+    });
+
+    const resultado = await fakes.useCase.ejecutar(1, AHORA);
+
+    expect(resultado.resultado).toBe('RESPONDIDO');
+    expect(fakes.generador.entradasDestilar).toEqual([]);
+    expect(fakes.conversaciones.extraccionesFicha).toEqual([]);
+  });
+
+  it('escalado → SIN ficha (la extracción es post-envío del RESPONDIDO)', async () => {
+    const fakes = crearFakes({ respuesta: { scoreConfianza: 0.3 }, ficha: FICHA_COMPLETA });
+
+    const resultado = await fakes.useCase.ejecutar(1, AHORA);
+
+    expect(resultado.resultado).toBe('ESCALADO');
+    expect(fakes.generador.entradasDestilar).toEqual([]);
+    expect(fakes.conversaciones.extraccionesFicha).toEqual([]);
+  });
+
+  it('ficha ausente → cero upserts, la destilación de observaciones sigue igual', async () => {
+    const fakes = crearFakes({
+      observaciones: [
+        { tipo: 'hecho_cliente', titulo: 'Rubro minería', contenido: 'Trabaja en minería.', pinear: false },
+      ],
+    });
+
+    const resultado = await fakes.useCase.ejecutar(1, AHORA);
+
+    expect(resultado.resultado).toBe('RESPONDIDO');
+    expect(fakes.conversaciones.extraccionesFicha).toEqual([]);
+    expect(fakes.memoria.guardadas).toHaveLength(1);
+  });
+
+  it('fallo del upsert NO falla la respuesta: best-effort con warn de codigo+id, sin cuerpos', async () => {
+    const fallo = Object.assign(new Error('boom'), { codigo: 'EXTRACCION_ERROR' });
+    const fakes = crearFakes({ ficha: FICHA_COMPLETA, falloUpsertFicha: fallo });
+
+    const resultado = await fakes.useCase.ejecutar(1, AHORA);
+
+    expect(resultado.resultado).toBe('RESPONDIDO');
+    expect(fakes.conversaciones.extraccionesFicha).toEqual([]);
+    expect(console.warn).toHaveBeenCalled();
+    const salida = JSON.stringify((console.warn as ReturnType<typeof vi.fn>).mock.calls);
+    expect(salida).toContain('EXTRACCION_ERROR');
+    expect(salida).toContain('"conversacionId":1');
+    expect(salida).not.toContain('Jefe de Compras');
+  });
+
+  it('repo SIN upsertExtraccionFicha → early-skip silencioso: responde sin crash', async () => {
+    const fakes = crearFakes({ ficha: FICHA_COMPLETA });
+    (fakes.conversaciones as { upsertExtraccionFicha?: unknown }).upsertExtraccionFicha = undefined;
+
+    const resultado = await fakes.useCase.ejecutar(1, AHORA);
+
+    expect(resultado.resultado).toBe('RESPONDIDO');
+    expect(fakes.conversaciones.extraccionesFicha).toEqual([]);
   });
 });
 

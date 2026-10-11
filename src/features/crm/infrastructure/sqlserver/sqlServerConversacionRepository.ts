@@ -541,11 +541,13 @@ export class SqlServerConversacionRepository implements ConversacionCrmRepositor
   }
 
   async obtenerContactoPorId(contactoId: number): Promise<ContactoConEmpresa | null> {
+    // E3·T4: c.cargo viaja en el SELECT — la ficha viva lee la columna
+    // canónica sin un segundo repositorio de contactos.
     const result = await this.pool
       .request()
       .input('contactoId', mssql.Int, contactoId)
       .query(`
-        SELECT c.id AS contactoId, c.empresaId, c.nombre, c.telefono, e.razonSocial
+        SELECT c.id AS contactoId, c.empresaId, c.nombre, c.telefono, c.cargo, e.razonSocial
         FROM dbo.CRM_Contactos c
         LEFT JOIN dbo.CRM_Empresas e ON e.id = c.empresaId
         WHERE c.id = @contactoId
@@ -556,6 +558,7 @@ export class SqlServerConversacionRepository implements ConversacionCrmRepositor
         empresaId: number;
         nombre: string;
         telefono: string | null;
+        cargo: string | null;
         razonSocial: string | null;
       }>
     )[0];
@@ -566,8 +569,28 @@ export class SqlServerConversacionRepository implements ConversacionCrmRepositor
           nombreContacto: row.nombre,
           razonSocial: row.razonSocial,
           telefono: row.telefono,
+          cargo: row.cargo ?? null,
         }
       : null;
+  }
+
+  /**
+   * E3·T4 cargo promotion (ficha viva confirm): flip ONLY
+   * CRM_Contactos.cargo — same table as crearContacto, mirror of
+   * actualizarEstado's shape (UPDATE + re-read; rowsAffected 0 →
+   * null). NVarChar(120) = the column width.
+   */
+  async actualizarCargoContacto(
+    contactoId: number,
+    cargo: string,
+  ): Promise<ContactoConEmpresa | null> {
+    const result = await this.pool
+      .request()
+      .input('contactoId', mssql.Int, contactoId)
+      .input('cargo', mssql.NVarChar(120), cargo)
+      .query('UPDATE dbo.CRM_Contactos SET cargo = @cargo WHERE id = @contactoId');
+    if ((result.rowsAffected[0] ?? 0) === 0) return null;
+    return this.obtenerContactoPorId(contactoId);
   }
 
   async buscarContactosTexto(
