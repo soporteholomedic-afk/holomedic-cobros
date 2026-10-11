@@ -28,16 +28,22 @@ import {
  * Hexagonal: exercised against the PORTS with in-memory fakes — the
  * SQL adapters and the Kapso SDK stay thin. Pinned here:
  * - Validation order (cuerpo → conversación → cerrada → teléfono)
- *   with NO send and NO write on every failure arm.
+ *   with NO send and NO write on every failure arm; el cuerpo se
+ *   normaliza (trim) UNA vez y esa misma variable se valida, envía
+ *   y persiste (límite 4000 sobre el valor trimeado).
  * - Outbox-lite (R4): intent persisted PENDIENTE BEFORE the send; envío
- *   ok → confirm ENVIADO (wamid) + registrarActividad('OUT') (noLeidos
- *   does NOT grow); envío falla → best-effort FALLIDO + ok:false (nunca
- *   lanza); intent failure propaga sin envío; confirm failure → CONFIRMACION_FALLIDA.
+ *   ok → confirm ENVIADO (wamid, el resultado devuelve la FILA que
+ *   actualizarEnvio retorna, fallback a la pendiente si null) +
+ *   registrarActividad('OUT') best-effort (su fallo NO miente con
+ *   CONFIRMACION_FALLIDA); envío falla → best-effort FALLIDO + ok:false
+ *   (nunca lanza); intent failure propaga sin envío; confirm failure →
+ *   CONFIRMACION_FALLIDA.
  */
 
 class FakeConversaciones implements ConversacionCrmRepository {
   filas: ConversacionCrm[] = [];
   actividades: Array<{ id: number; direccion: 'IN' | 'OUT' }> = [];
+  falloActividad: Error | null = null;
   private siguienteId = 1;
 
   sembrar(fila: ConversacionCrm): void {
@@ -118,6 +124,7 @@ class FakeConversaciones implements ConversacionCrmRepository {
   }
 
   async registrarActividad(id: number, direccion: 'IN' | 'OUT' = 'IN'): Promise<void> {
+    if (this.falloActividad !== null) throw this.falloActividad;
     const fila = this.filas.find((f) => f.id === id);
     if (!fila) throw new Error(`conversación ${id} inexistente en el fake`);
     const ahora = new Date().toISOString();
@@ -133,6 +140,8 @@ class FakeMensajes implements MensajeCrmRepository {
   filas: MensajeCrm[] = [];
   falloCrear: Error | null = null;
   falloActualizarEnvio: Error | null = null;
+  /** Presente (aunque sea null) → actualizarEnvio devuelve exactamente eso, sin tocar filas. */
+  retornoActualizarEnvio?: MensajeCrm | null;
   private siguienteId = 1;
 
   async crear(datos: CrearMensajeInput): Promise<MensajeCrm> {
@@ -163,6 +172,7 @@ class FakeMensajes implements MensajeCrmRepository {
     datos: { estadoEnvio: 'ENVIADO' | 'FALLIDO'; wamid?: string | null },
   ): Promise<MensajeCrm | null> {
     if (this.falloActualizarEnvio !== null) throw this.falloActualizarEnvio;
+    if (this.retornoActualizarEnvio !== undefined) return this.retornoActualizarEnvio;
     const fila = this.filas.find((f) => f.id === id);
     if (fila === undefined) return null;
     Object.assign(fila, datos);
@@ -208,16 +218,37 @@ function conversacionBase(sobres: Partial<ConversacionCrm> = {}): ConversacionCr
   };
 }
 
-function crearSuite(conversacion: ConversacionCrm | null = conversacionBase()): {
+/** Overrides que acepta la factory — cada test declara su escenario, sin toquetear knobs a mano. */
+interface OverridesFakes {
+  /** null = sin conversación sembrada (CONVERSACION_NO_ENCONTRADA). */
+  conversacion?: ConversacionCrm | null;
+  envio?: ResultadoEnvioWhatsapp;
+  falloCrear?: Error;
+  falloActualizarEnvio?: Error;
+  retornoActualizarEnvio?: MensajeCrm | null;
+  falloActividad?: Error;
+}
+
+/** Factory única (E1 advisory R2-dup-test-fakes): arma los tres fakes-espía cableados al use case. */
+function crearFakes(overrides: OverridesFakes = {}): {
   conversaciones: FakeConversaciones;
   mensajes: FakeMensajes;
   whatsapp: FakeWhatsApp;
   useCase: ResponderConversacionUseCase;
 } {
   const conversaciones = new FakeConversaciones();
-  if (conversacion !== null) conversaciones.sembrar(conversacion);
+  if (overrides.conversacion !== null) {
+    conversaciones.sembrar(overrides.conversacion === undefined ? conversacionBase() : overrides.conversacion);
+  }
+  conversaciones.falloActividad = overrides.falloActividad ?? null;
   const mensajes = new FakeMensajes();
+  mensajes.falloCrear = overrides.falloCrear ?? null;
+  mensajes.falloActualizarEnvio = overrides.falloActualizarEnvio ?? null;
+  if (overrides.retornoActualizarEnvio !== undefined) {
+    mensajes.retornoActualizarEnvio = overrides.retornoActualizarEnvio;
+  }
   const whatsapp = new FakeWhatsApp();
+  if (overrides.envio !== undefined) whatsapp.resultado = overrides.envio;
   const useCase = new ResponderConversacionUseCase({ conversaciones, mensajes, whatsapp });
   return { conversaciones, mensajes, whatsapp, useCase };
 }
@@ -231,7 +262,7 @@ function esperarError(
 
 describe('ResponderConversacionUseCase — respuesta manual por WhatsApp (E1)', () => {
   it('envío ok: persiste OUT/HUMANO/TEXTO/ENVIADO con wamid y registra actividad OUT', async () => {
-    const { mensajes, whatsapp, conversaciones, useCase } = crearSuite();
+    const { mensajes, whatsapp, conversaciones, useCase } = crearFakes();
 
     const resultado = await useCase.ejecutar({ conversacionId: 1, cuerpo: 'Buenas tardes, sí!' });
 
@@ -259,9 +290,66 @@ describe('ResponderConversacionUseCase — respuesta manual por WhatsApp (E1)', 
     expect(conversaciones.filas[0].ultimoMensajeEn).not.toBeNull();
   });
 
+  it('el resultado usa la fila confirmada que actualizarEnvio retorna (no una resíntesis local)', async () => {
+    const filaConfirmada: MensajeCrm = {
+      id: 1,
+      conversacionId: 1,
+      direccion: 'OUT',
+      emisor: 'HUMANO',
+      cuerpo: 'Buenas tardes, sí!',
+      tipo: 'TEXTO',
+      canal: 'WHATSAPP',
+      wamid: 'wamid.REPO.CONFIRMADA',
+      idempotenciaKey: null,
+      estadoEnvio: 'ENVIADO',
+      fuentes: null,
+      score: null,
+      modelo: null,
+      creadoEn: '2026-02-02T10:00:00.000Z',
+    };
+    const { useCase } = crearFakes({ retornoActualizarEnvio: filaConfirmada });
+
+    const resultado = await useCase.ejecutar({ conversacionId: 1, cuerpo: 'Buenas tardes, sí!' });
+
+    expect(resultado).toEqual({ ok: true, mensaje: filaConfirmada });
+  });
+
+  it('actualizarEnvio devuelve null → el resultado cae a la fila PENDIENTE persistida (fallback honesto)', async () => {
+    const { useCase } = crearFakes({ retornoActualizarEnvio: null });
+
+    const resultado = await useCase.ejecutar({ conversacionId: 1, cuerpo: 'Hola' });
+
+    expect(resultado).toEqual({
+      ok: true,
+      mensaje: expect.objectContaining({ estadoEnvio: 'PENDIENTE', wamid: null }),
+    });
+  });
+
+  it('registrarActividad falla tras confirmar ENVIADO → ok:true SIN advertencia (la fila SÍ está confirmada) + log', async () => {
+    const { mensajes, conversaciones, useCase } = crearFakes({
+      falloActividad: new Error('UPDATE actividad rebotó'),
+    });
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    const resultado = await useCase.ejecutar({ conversacionId: 1, cuerpo: 'Hola' });
+
+    expect(resultado).toEqual({
+      ok: true,
+      mensaje: expect.objectContaining({ estadoEnvio: 'ENVIADO', wamid: 'wamid.OK1' }),
+    });
+    expect(mensajes.filas[0]).toMatchObject({ estadoEnvio: 'ENVIADO', wamid: 'wamid.OK1' });
+    expect(conversaciones.actividades).toEqual([]);
+    expect(errorSpy).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({ conversacionId: 1 }),
+    );
+    errorSpy.mockRestore();
+  });
+
   it('envío falla: persiste igual el mensaje FALLIDO (auditoría) y retorna ok:false sin lanzar', async () => {
-    const { mensajes, whatsapp, useCase } = crearSuite();
-    whatsapp.resultado = { ok: false, error: 'KAPSO_TIMEOUT', detalle: 'timeout tras 10s' };
+    const { mensajes, useCase } = crearFakes({
+      envio: { ok: false, error: 'KAPSO_TIMEOUT', detalle: 'timeout tras 10s' },
+    });
 
     const resultado = await useCase.ejecutar({ conversacionId: 1, cuerpo: 'Reintento' });
 
@@ -273,36 +361,42 @@ describe('ResponderConversacionUseCase — respuesta manual por WhatsApp (E1)', 
   });
 
   it('fallo al persistir la intención → no envía nada y el error propaga (sin duplicado posible)', async () => {
-    const { mensajes, whatsapp, useCase } = crearSuite();
-    mensajes.falloCrear = new Error('INSERT rebotó');
+    const { mensajes, whatsapp, useCase } = crearFakes({ falloCrear: new Error('INSERT rebotó') });
     await expect(useCase.ejecutar({ conversacionId: 1, cuerpo: 'Hola' })).rejects.toThrow('INSERT rebotó');
     expect(whatsapp.envios).toHaveLength(0);
+    expect(mensajes.escritas).toHaveLength(0);
   });
 
   it('confirmación falla tras envío exitoso → ok:true + CONFIRMACION_FALLIDA con fila PENDIENTE', async () => {
-    const { mensajes, useCase } = crearSuite();
-    mensajes.falloActualizarEnvio = new Error('UPDATE rebotó');
+    const { mensajes, conversaciones, useCase } = crearFakes({
+      falloActualizarEnvio: new Error('UPDATE rebotó'),
+    });
     const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
     const resultado = await useCase.ejecutar({ conversacionId: 1, cuerpo: 'Hola' });
     expect(resultado).toMatchObject({ ok: true, advertencia: 'CONFIRMACION_FALLIDA',
       mensaje: { estadoEnvio: 'PENDIENTE', wamid: null } });
     expect(mensajes.filas[0].estadoEnvio).toBe('PENDIENTE');
+    // La confirmación rebotó ANTES de tocar la actividad: nada que registrar.
+    expect(conversaciones.actividades).toEqual([]);
     expect(errorSpy).toHaveBeenCalledWith(expect.any(String), expect.objectContaining({ mensajeId: 1, wamid: 'wamid.OK1' }));
+    errorSpy.mockRestore();
   });
 
   it('el fallo del best-effort FALLIDO no enmascara el error original del envío', async () => {
-    const { mensajes, whatsapp, useCase } = crearSuite();
-    whatsapp.resultado = { ok: false, error: 'KAPSO_ERROR', detalle: '5xx del canal' };
-    mensajes.falloActualizarEnvio = new Error('UPDATE rebotó');
+    const { mensajes, useCase } = crearFakes({
+      envio: { ok: false, error: 'KAPSO_ERROR', detalle: '5xx del canal' },
+      falloActualizarEnvio: new Error('UPDATE rebotó'),
+    });
     const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
     const resultado = await useCase.ejecutar({ conversacionId: 1, cuerpo: 'Hola' });
     expect(esperarError(resultado)).toEqual({ code: 'KAPSO_ERROR', detalle: '5xx del canal' });
     expect(mensajes.filas[0].estadoEnvio).toBe('PENDIENTE');
     expect(errorSpy).toHaveBeenCalledWith(expect.any(String), expect.objectContaining({ mensajeId: 1 }));
+    errorSpy.mockRestore();
   });
 
   it('cuerpo vacío o solo espacios → CUERPO_INVALIDO sin enviar ni persistir', async () => {
-    const { mensajes, whatsapp, useCase } = crearSuite();
+    const { mensajes, whatsapp, useCase } = crearFakes();
 
     const vacio = await useCase.ejecutar({ conversacionId: 1, cuerpo: '   ' });
 
@@ -313,7 +407,7 @@ describe('ResponderConversacionUseCase — respuesta manual por WhatsApp (E1)', 
   });
 
   it('cuerpo de 4001 caracteres → CUERPO_INVALIDO (límite NVARCHAR(4000))', async () => {
-    const { mensajes, useCase } = crearSuite();
+    const { mensajes, useCase } = crearFakes();
 
     const largo = await useCase.ejecutar({ conversacionId: 1, cuerpo: 'a'.repeat(4001) });
 
@@ -323,7 +417,7 @@ describe('ResponderConversacionUseCase — respuesta manual por WhatsApp (E1)', 
   });
 
   it('cuerpo de exactamente 4000 caracteres pasa la validación', async () => {
-    const { mensajes, useCase } = crearSuite();
+    const { mensajes, useCase } = crearFakes();
 
     const limite = await useCase.ejecutar({ conversacionId: 1, cuerpo: 'a'.repeat(4000) });
 
@@ -331,10 +425,35 @@ describe('ResponderConversacionUseCase — respuesta manual por WhatsApp (E1)', 
     expect(mensajes.escritas).toHaveLength(1);
   });
 
+  it('4000 + espacios alrededor → el largo se mide sobre el valor TRIMEADO (una sola normalización)', async () => {
+    const { mensajes, whatsapp, useCase } = crearFakes();
+
+    const resultado = await useCase.ejecutar({ conversacionId: 1, cuerpo: `  ${'a'.repeat(4000)}  ` });
+
+    expect(resultado.ok).toBe(true);
+    expect(mensajes.escritas).toHaveLength(1);
+    expect(mensajes.escritas[0].cuerpo).toBe('a'.repeat(4000));
+    expect(whatsapp.envios).toEqual([
+      { telefonoE164: '+595981234567', cuerpo: 'a'.repeat(4000) },
+    ]);
+  });
+
+  it('el cuerpo trimeado es el que se envía y persiste (misma variable en todo el flujo)', async () => {
+    const { mensajes, whatsapp, useCase } = crearFakes();
+
+    const resultado = await useCase.ejecutar({ conversacionId: 1, cuerpo: '  Hola  ' });
+
+    expect(resultado.ok).toBe(true);
+    if (!resultado.ok) return;
+    expect(resultado.mensaje.cuerpo).toBe('Hola');
+    expect(mensajes.escritas[0].cuerpo).toBe('Hola');
+    expect(whatsapp.envios).toEqual([{ telefonoE164: '+595981234567', cuerpo: 'Hola' }]);
+  });
+
   it('conversación sin teléfono → SIN_TELEFONO sin enviar', async () => {
-    const { whatsapp, useCase } = crearSuite(
-      conversacionBase({ telefono: null, identificadorCanal: null }),
-    );
+    const { whatsapp, useCase } = crearFakes({
+      conversacion: conversacionBase({ telefono: null, identificadorCanal: null }),
+    });
 
     const resultado = await useCase.ejecutar({ conversacionId: 1, cuerpo: 'Hola' });
 
@@ -344,7 +463,7 @@ describe('ResponderConversacionUseCase — respuesta manual por WhatsApp (E1)', 
   });
 
   it('conversación inexistente → CONVERSACION_NO_ENCONTRADA', async () => {
-    const { useCase } = crearSuite(null);
+    const { useCase } = crearFakes({ conversacion: null });
 
     const resultado = await useCase.ejecutar({ conversacionId: 99, cuerpo: 'Hola' });
 
@@ -353,7 +472,9 @@ describe('ResponderConversacionUseCase — respuesta manual por WhatsApp (E1)', 
   });
 
   it('conversación CERRADA → CONVERSACION_CERRADA sin enviar ni persistir', async () => {
-    const { mensajes, whatsapp, useCase } = crearSuite(conversacionBase({ estado: 'CERRADA' }));
+    const { mensajes, whatsapp, useCase } = crearFakes({
+      conversacion: conversacionBase({ estado: 'CERRADA' }),
+    });
 
     const resultado = await useCase.ejecutar({ conversacionId: 1, cuerpo: 'Hola' });
 

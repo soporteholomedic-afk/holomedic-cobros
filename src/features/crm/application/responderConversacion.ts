@@ -15,9 +15,11 @@ import type {
  * {ok:false} (retry safe: that send truly failed). An intent-persist
  * failure propagates. A post-send confirmation failure → ok:true +
  * CONFIRMACION_FALLIDA (fila PENDIENTE: el envío SUCEDIÓ, reintentar duplicaría).
- * Validation/state failures (cuerpo, conversación, cerrada, teléfono)
- * return {ok:false} too without any write — the route maps each code
- * to its HTTP status.
+ * registrarActividad es best-effort y corre FUERA del try de la confirmación:
+ * si falla con la fila ya ENVIADO, el resultado sigue ok:true (solo log) — no
+ * debe mentir con CONFIRMACION_FALLIDA. Validation/state failures (cuerpo,
+ * conversación, cerrada, teléfono) return {ok:false} too without any write —
+ * the route maps each code to its HTTP status.
  */
 
 /** NVARCHAR(4000) en CRM_Mensajes — el límite físico de un cuerpo. */
@@ -53,9 +55,12 @@ export class ResponderConversacionUseCase {
   constructor(private readonly deps: ResponderConversacionDeps) {}
 
   async ejecutar(entrada: ResponderConversacionEntrada): Promise<ResultadoResponderConversacion> {
-    // 1. Cuerpo: no vacío tras trim y ≤4000 (límite de columna).
+    // 1. Cuerpo: no vacío tras trim y ≤4000 (límite de columna). Se trimea
+    //    UNA vez y esa MISMA variable se valida, envía y persiste — nunca
+    //    mezclar el largo del original con el valor trimeado (E1 advisory
+    //    R2-trimmed-length-mismatch).
     const cuerpo = entrada.cuerpo.trim();
-    if (cuerpo === '' || entrada.cuerpo.length > CUERPO_MAX) {
+    if (cuerpo === '' || cuerpo.length > CUERPO_MAX) {
       return {
         ok: false,
         error: {
@@ -105,18 +110,33 @@ export class ResponderConversacionUseCase {
     const envio = await this.deps.whatsapp.enviar({ telefonoE164: conversacion.telefono, cuerpo });
 
     if (envio.ok) {
+      // Fase 3a — confirmación: SOLO actualizarEnvio dentro de este try; su
+      // fallo es el ÚNICO CONFIRMACION_FALLIDA legítimo (el envío SUCEDIÓ, la
+      // fila queda PENDIENTE, reintentar duplicaría).
+      let confirmado: MensajeCrm | null;
       try {
-        const confirmado = await this.deps.mensajes.actualizarEnvio(mensaje.id, {
+        confirmado = await this.deps.mensajes.actualizarEnvio(mensaje.id, {
           estadoEnvio: 'ENVIADO',
           wamid: envio.wamid,
         });
-        await this.deps.conversaciones.registrarActividad(conversacion.id, 'OUT');
-        return { ok: true, mensaje: confirmado ?? { ...mensaje, estadoEnvio: 'ENVIADO', wamid: envio.wamid } };
       } catch (error) {
-        // El envío SUCEDIÓ — solo falló confirmar: la fila queda PENDIENTE, no reintentar.
         console.error('[responderConversacion] confirmación post-envío falló', { mensajeId: mensaje.id, wamid: envio.wamid, error });
         return { ok: true, mensaje, advertencia: 'CONFIRMACION_FALLIDA' };
       }
+
+      // Fase 3b — actividad OUT: best-effort y FUERA del try de la
+      // confirmación. La fila YA está confirmada: si esto falla, mentir con
+      // CONFIRMACION_FALLIDA sería peor que perder el tick de ultimoMensajeEn
+      // (la conversación se re-abre y re-intenta naturalmente).
+      try {
+        await this.deps.conversaciones.registrarActividad(conversacion.id, 'OUT');
+      } catch (errorActividad) {
+        console.error('[responderConversacion] registrar actividad OUT falló (mensaje ya confirmado ENVIADO)', { conversacionId: conversacion.id, mensajeId: mensaje.id, error: errorActividad });
+      }
+
+      // La fila confirmada por el repositorio es la verdad; null (fila
+      // desaparecida — patológico) cae a la PENDIENTE persistida en fase 1.
+      return { ok: true, mensaje: confirmado ?? mensaje };
     }
 
     // Envío fallido: best-effort FALLIDO (reintentar es seguro, nada salió) — su fallo no enmascara el del canal.

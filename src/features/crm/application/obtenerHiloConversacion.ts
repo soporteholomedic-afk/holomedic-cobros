@@ -5,8 +5,9 @@ import type { ConversacionCrmRepository, MensajeCrmRepository } from '../domain/
 /**
  * ObtainHiloConversacionUseCase (agente-ia-crm E1) — the bandeja hilo
  * read: the conversation + its thread (oldest-first for delivery) and
- * the read-marking side effect (noLeidos = 0 once the operator SAW
- * the thread — the same write the bandeja depends on for badges).
+ * the read-marking side effect SOLO cuando hay noLeidos pendientes
+ * (noLeidos = 0 once the operator SAW the thread — the same write the
+ * bandeja depends on for badges; sin badge no hay escritura).
  * A missing conversation is the typed CONVERSACION_NO_ENCONTRADA
  * error (route → 404).
  */
@@ -46,8 +47,14 @@ export class ObtenerHiloConversacionUseCase {
     const mensajes = [...pagina].reverse();
 
     // Entregar el hilo YA lo marca leído (E1: abrir la conversación
-    // consume el badge; no existe lectura sin abrir el hilo).
-    await this.deps.conversaciones.marcarMensajesLeidos(conversacionId);
+    // consume el badge; no existe lectura sin abrir el hilo) — pero SOLO
+    // si hay badge pendiente: un noLeidos = 0 convierte el marcar-leído
+    // en una escritura inútil en CADA re-lectura del hilo (E1 advisory
+    // R4-hilo-read-write-coupling), y la lectura deja de acoplarse a
+    // un UPDATE que no cambia nada.
+    if (conversacion.noLeidos > 0) {
+      await this.deps.conversaciones.marcarMensajesLeidos(conversacionId);
+    }
 
     return { conversacion, mensajes };
   }
