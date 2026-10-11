@@ -1,0 +1,532 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+import {
+  ErrorGeneradorCrm,
+  GeneradorOpenAiCompatible,
+} from '../generadorOpenAiCompatible';
+import type { EntradaGenerarRespuesta } from '../../../domain/entities';
+
+/**
+ * Adapter contract for GeneradorOpenAiCompatible (agente-ia-crm E2·T3):
+ * one OpenAI-compatible POST /chat/completions per call with Bearer
+ * auth, AbortController timeout, temperature 0.2 and max_tokens; the
+ * prompts are the adapter's (system in Spanish + labeled user
+ * sections) and the output is STRICT JSON, fenced-JSON tolerant,
+ * first-balanced-JSON extracted, guarded and sanitized:
+ * - idsConocimiento filtered to the ids the caller PROVIDED.
+ * - scoreConfianza clamped into [0, 1].
+ * - texto required non-empty; missing booleans coerce to the ESCALATION
+ *   pair (enScope false / requiereAyudaHumana true) — fail toward a
+ *   human, never toward a fabricated answer.
+ * - destilar drops items with an unknown tipo, clamps titulo (60) /
+ *   contenido (300) and keeps pinear=true ONLY for acuerdo/compromiso.
+ * - One JSON-validity retry with a system nudge, then
+ *   GENERADOR_RESPUESTA_INVALIDA; 401/403 → GENERADOR_AUTH; abort →
+ *   GENERADOR_TIMEOUT; other non-2xx / network → GENERADOR_ERROR.
+ * - PII: consulta/respuesta bodies NEVER appear in console output.
+ * All offline: fetch is stubbed at the global boundary.
+ */
+
+const URL_BASE = 'https://llm-falso.test/v1';
+
+interface OpcionesFetch {
+  method?: string;
+  headers?: Record<string, string>;
+  body?: string;
+  signal?: AbortSignal;
+}
+
+interface LlamadaFetch {
+  url: string;
+  opciones: OpcionesFetch;
+}
+
+interface RespuestaSimulada {
+  status: number;
+  /** OpenAI-compatible body — content of choices[0].message. */
+  contenido?: string;
+  /** Raw body override (envelope-level garbage). */
+  cuerpo?: unknown;
+}
+
+/** Minimal Response-shaped object (the adapter only reads ok/status/json). */
+function respuestaDe(simulada: RespuestaSimulada): Response {
+  const cuerpo =
+    simulada.cuerpo !== undefined
+      ? simulada.cuerpo
+      : { choices: [{ message: { content: simulada.contenido ?? '' } }] };
+  return {
+    ok: simulada.status >= 200 && simulada.status < 300,
+    status: simulada.status,
+    json: async () => cuerpo,
+  } as Response;
+}
+
+/**
+ * Stubs global fetch with a FIFO response queue — every adapter call
+ * hits the same POST {urlBase}/chat/completions, so order is enough.
+ * An exhausted queue rejects so unexpected extra calls fail loudly.
+ */
+function stubFetch(cola: RespuestaSimulada[]) {
+  const llamadas: LlamadaFetch[] = [];
+  const fetchMock = vi.fn(async (url: unknown, opciones: OpcionesFetch = {}) => {
+    llamadas.push({ url: String(url), opciones });
+    const siguiente = cola.shift();
+    if (siguiente === undefined) throw new Error('fetch inesperado: cola agotada');
+    return respuestaDe(siguiente);
+  });
+  vi.stubGlobal('fetch', fetchMock);
+  return { llamadas, fetchMock };
+}
+
+function crearAdapter(overrides: Partial<ConstructorParameters<typeof GeneradorOpenAiCompatible>[0]> = {}) {
+  return new GeneradorOpenAiCompatible({
+    urlBase: URL_BASE,
+    apiKey: 'k-test',
+    modelo: 'glm-test',
+    ...overrides,
+  });
+}
+
+const ENTRADA: EntradaGenerarRespuesta = {
+  consulta: '¿Qué incluye el examen médico ocupacional?',
+  historial: [{ emisor: 'CLIENTE', texto: 'Hola, buenas tardes' }],
+  conocimiento: [
+    { id: 7, titulo: 'Examen ocupacional', contenido: 'Incluye examen médico, audiometría y espirometría.' },
+    { id: 8, titulo: 'Precios', contenido: 'El precio depende del headcount.' },
+  ],
+  memorias: [{ tipo: 'preferencia', titulo: 'Prefiere la tarde', contenido: 'El cliente prefiere turnos de tarde.' }],
+};
+
+const JSON_LIMPIO = JSON.stringify({
+  texto: 'El examen incluye examen médico, audiometría y espirometría.',
+  scoreConfianza: 0.9,
+  enScope: true,
+  requiereAyudaHumana: false,
+  idsConocimiento: [7, 999],
+});
+
+function cuerpoDe(llamada: LlamadaFetch): {
+  model: string;
+  messages: { role: string; content: string }[];
+  temperature: number;
+  max_tokens: number;
+} {
+  expect(llamada.opciones.body).toBeDefined();
+  return JSON.parse(llamada.opciones.body ?? '{}');
+}
+
+beforeEach(() => {
+  vi.spyOn(console, 'log').mockImplementation(() => {});
+  vi.spyOn(console, 'warn').mockImplementation(() => {});
+  vi.spyOn(console, 'error').mockImplementation(() => {});
+});
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+  vi.restoreAllMocks();
+});
+
+async function codigoDeError(promesa: Promise<unknown>): Promise<string> {
+  try {
+    await promesa;
+    throw new Error('la promesa debía rechazar');
+  } catch (error) {
+    if (error instanceof ErrorGeneradorCrm) return error.codigo;
+    throw error;
+  }
+}
+
+describe('GeneradorOpenAiCompatible — pedido HTTP (E2·T3)', () => {
+  it('POST {urlBase}/chat/completions con Bearer, model, temperature 0.2 y max_tokens', async () => {
+    const { llamadas } = stubFetch([{ status: 200, contenido: JSON_LIMPIO }]);
+
+    await crearAdapter().generarRespuesta(ENTRADA);
+
+    expect(llamadas).toHaveLength(1);
+    expect(llamadas[0]?.url).toBe(`${URL_BASE}/chat/completions`);
+    expect(llamadas[0]?.opciones.method).toBe('POST');
+    expect(llamadas[0]?.opciones.headers?.Authorization).toBe('Bearer k-test');
+    expect(llamadas[0]?.opciones.headers?.['Content-Type']).toBe('application/json');
+
+    const cuerpo = cuerpoDe(llamadas[0]!);
+    expect(cuerpo.model).toBe('glm-test');
+    expect(cuerpo.temperature).toBe(0.2);
+    expect(cuerpo.max_tokens).toBe(700);
+    expect(cuerpo.messages).toHaveLength(2);
+    expect(cuerpo.messages[0]?.role).toBe('system');
+    expect(cuerpo.messages[1]?.role).toBe('user');
+  });
+
+  it('urlBase con slash final se une sin doblar el path', async () => {
+    const { llamadas } = stubFetch([{ status: 200, contenido: JSON_LIMPIO }]);
+
+    await crearAdapter({ urlBase: `${URL_BASE}/` }).generarRespuesta(ENTRADA);
+
+    expect(llamadas[0]?.url).toBe(`${URL_BASE}/chat/completions`);
+  });
+
+  it('el mensaje de usuario trae las secciones rotuladas CONSULTA/HISTORIAL/CONOCIMIENTO/MEMORIAS', async () => {
+    const { llamadas } = stubFetch([{ status: 200, contenido: JSON_LIMPIO }]);
+
+    await crearAdapter().generarRespuesta(ENTRADA);
+
+    const usuario = cuerpoDe(llamadas[0]!).messages[1]?.content ?? '';
+    expect(usuario).toContain('CONSULTA:');
+    expect(usuario).toContain(ENTRADA.consulta);
+    expect(usuario).toContain('HISTORIAL:');
+    expect(usuario).toContain('[CLIENTE] Hola, buenas tardes');
+    expect(usuario).toContain('CONOCIMIENTO:');
+    expect(usuario).toContain('[id 7] Examen ocupacional');
+    expect(usuario).toContain('Incluye examen médico, audiometría y espirometría.');
+    expect(usuario).toContain('MEMORIAS:');
+    expect(usuario).toContain('[preferencia] Prefiere la tarde');
+  });
+
+  it('el system prompt exige JSON estricto y responder solo desde lo provisto', async () => {
+    const { llamadas } = stubFetch([{ status: 200, contenido: JSON_LIMPIO }]);
+
+    await crearAdapter().generarRespuesta(ENTRADA);
+
+    const sistema = cuerpoDe(llamadas[0]!).messages[0]?.content ?? '';
+    expect(sistema).toMatch(/JSON/);
+    expect(sistema).toContain('idsConocimiento');
+    expect(sistema).toContain('enScope');
+  });
+
+  it('destilar manda CONSULTA y RESPUESTA rotuladas al mismo endpoint', async () => {
+    const { llamadas } = stubFetch([{ status: 200, contenido: '[]' }]);
+
+    await crearAdapter().destilar({ consulta: '¿Hacemos el martes?', respuesta: 'Sí, agendado.' });
+
+    expect(llamadas).toHaveLength(1);
+    expect(llamadas[0]?.url).toBe(`${URL_BASE}/chat/completions`);
+    const usuario = cuerpoDe(llamadas[0]!).messages[1]?.content ?? '';
+    expect(usuario).toContain('CONSULTA:');
+    expect(usuario).toContain('¿Hacemos el martes?');
+    expect(usuario).toContain('RESPUESTA:');
+    expect(usuario).toContain('Sí, agendado.');
+  });
+});
+
+describe('GeneradorOpenAiCompatible — parseo y saneo (E2·T3)', () => {
+  it('JSON limpio → RespuestaGenerada tal cual, ids filtrados a los provistos', async () => {
+    stubFetch([{ status: 200, contenido: JSON_LIMPIO }]);
+
+    const respuesta = await crearAdapter().generarRespuesta(ENTRADA);
+
+    expect(respuesta).toEqual({
+      texto: 'El examen incluye examen médico, audiometría y espirometría.',
+      scoreConfianza: 0.9,
+      enScope: true,
+      requiereAyudaHumana: false,
+      idsConocimiento: [7],
+    });
+  });
+
+  it('JSON cercado con ```json se extrae igual', async () => {
+    stubFetch([{ status: 200, contenido: '```json\n' + JSON_LIMPIO + '\n```' }]);
+
+    const respuesta = await crearAdapter().generarRespuesta(ENTRADA);
+
+    expect(respuesta.texto).toBe('El examen incluye examen médico, audiometría y espirometría.');
+    expect(respuesta.idsConocimiento).toEqual([7]);
+  });
+
+  it('scoreConfianza se acota a [0, 1] por arriba y por abajo', async () => {
+    const porArriba = JSON.stringify({
+      texto: 'a',
+      scoreConfianza: 1.7,
+      enScope: true,
+      requiereAyudaHumana: false,
+      idsConocimiento: [],
+    });
+    const porAbajo = JSON.stringify({
+      texto: 'b',
+      scoreConfianza: -0.5,
+      enScope: true,
+      requiereAyudaHumana: false,
+      idsConocimiento: [],
+    });
+    const { llamadas } = stubFetch([
+      { status: 200, contenido: porArriba },
+      { status: 200, contenido: porAbajo },
+    ]);
+
+    const primera = await crearAdapter().generarRespuesta(ENTRADA);
+    const segunda = await crearAdapter().generarRespuesta(ENTRADA);
+
+    expect(primera.scoreConfianza).toBe(1);
+    expect(segunda.scoreConfianza).toBe(0);
+    expect(llamadas).toHaveLength(2);
+  });
+
+  it('booleanos ausentes coercen al par de ESCALADO (enScope false, ayuda humana true)', async () => {
+    stubFetch([
+      {
+        status: 200,
+        contenido: JSON.stringify({ texto: 'algo', scoreConfianza: 0.5, idsConocimiento: [] }),
+      },
+    ]);
+
+    const respuesta = await crearAdapter().generarRespuesta(ENTRADA);
+
+    expect(respuesta.enScope).toBe(false);
+    expect(respuesta.requiereAyudaHumana).toBe(true);
+  });
+
+  it('idsConocimiento no-array se normaliza a []', async () => {
+    stubFetch([
+      {
+        status: 200,
+        contenido: JSON.stringify({
+          texto: 'algo',
+          scoreConfianza: 0.5,
+          enScope: true,
+          requiereAyudaHumana: false,
+          idsConocimiento: '7',
+        }),
+      },
+    ]);
+
+    const respuesta = await crearAdapter().generarRespuesta(ENTRADA);
+
+    expect(respuesta.idsConocimiento).toEqual([]);
+  });
+});
+
+describe('GeneradorOpenAiCompatible — reintentos y errores (E2·T3)', () => {
+  it('JSON inválido → UN reintento con nudge de sistema y el segundo intento gana', async () => {
+    const { llamadas } = stubFetch([
+      { status: 200, contenido: 'Lo siento, no puedo responder eso.' },
+      { status: 200, contenido: JSON_LIMPIO },
+    ]);
+
+    const respuesta = await crearAdapter().generarRespuesta(ENTRADA);
+
+    expect(llamadas).toHaveLength(2);
+    const mensajes = cuerpoDe(llamadas[1]!).messages;
+    expect(mensajes).toHaveLength(3);
+    expect(mensajes[2]?.role).toBe('system');
+    expect(mensajes[2]?.content).toBe(
+      'Respondé únicamente con JSON válido, sin texto adicional.',
+    );
+    expect(respuesta.idsConocimiento).toEqual([7]);
+  });
+
+  it('JSON inválido dos veces → GENERADOR_RESPUESTA_INVALIDA (exactamente 2 pedidos)', async () => {
+    const { llamadas } = stubFetch([
+      { status: 200, contenido: 'nope' },
+      { status: 200, contenido: 'tampoco { esto' },
+    ]);
+
+    const codigo = await codigoDeError(crearAdapter().generarRespuesta(ENTRADA));
+
+    expect(codigo).toBe('GENERADOR_RESPUESTA_INVALIDA');
+    expect(llamadas).toHaveLength(2);
+  });
+
+  it('texto ausente o vacío → inválido (reintenta y falla igual)', async () => {
+    const sinTexto = JSON.stringify({ scoreConfianza: 0.9, enScope: true, idsConocimiento: [] });
+    const { llamadas } = stubFetch([
+      { status: 200, contenido: sinTexto },
+      { status: 200, contenido: sinTexto },
+    ]);
+
+    const codigo = await codigoDeError(crearAdapter().generarRespuesta(ENTRADA));
+
+    expect(codigo).toBe('GENERADOR_RESPUESTA_INVALIDA');
+    expect(llamadas).toHaveLength(2);
+  });
+
+  it('401 → GENERADOR_AUTH sin reintento', async () => {
+    const { llamadas } = stubFetch([{ status: 401 }]);
+
+    const codigo = await codigoDeError(crearAdapter().generarRespuesta(ENTRADA));
+
+    expect(codigo).toBe('GENERADOR_AUTH');
+    expect(llamadas).toHaveLength(1);
+  });
+
+  it('403 → GENERADOR_AUTH', async () => {
+    stubFetch([{ status: 403 }]);
+
+    const codigo = await codigoDeError(crearAdapter().generarRespuesta(ENTRADA));
+
+    expect(codigo).toBe('GENERADOR_AUTH');
+  });
+
+  it('abort del AbortController → GENERADOR_TIMEOUT', async () => {
+    const fetchMock = vi.fn(async () => {
+      const error = new Error('The operation was aborted');
+      error.name = 'AbortError';
+      throw error;
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const codigo = await codigoDeError(crearAdapter().generarRespuesta(ENTRADA));
+
+    expect(codigo).toBe('GENERADOR_TIMEOUT');
+  });
+
+  it('500 → GENERADOR_ERROR sin reintento', async () => {
+    const { llamadas } = stubFetch([{ status: 500 }]);
+
+    const codigo = await codigoDeError(crearAdapter().generarRespuesta(ENTRADA));
+
+    expect(codigo).toBe('GENERADOR_ERROR');
+    expect(llamadas).toHaveLength(1);
+  });
+
+  it('fallo de red (no abort) → GENERADOR_ERROR', async () => {
+    const fetchMock = vi.fn(async () => {
+      throw new TypeError('fetch failed');
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const codigo = await codigoDeError(crearAdapter().generarRespuesta(ENTRADA));
+
+    expect(codigo).toBe('GENERADOR_ERROR');
+  });
+
+  it('message.content ausente → GENERADOR_RESPUESTA_INVALIDA sin reintento', async () => {
+    const { llamadas } = stubFetch([{ status: 200, cuerpo: { choices: [{ message: {} }] } }]);
+
+    const codigo = await codigoDeError(crearAdapter().generarRespuesta(ENTRADA));
+
+    expect(codigo).toBe('GENERADOR_RESPUESTA_INVALIDA');
+    expect(llamadas).toHaveLength(1);
+  });
+
+  it('choices ausente → GENERADOR_RESPUESTA_INVALIDA', async () => {
+    stubFetch([{ status: 200, cuerpo: { object: 'chat.completion' } }]);
+
+    const codigo = await codigoDeError(crearAdapter().generarRespuesta(ENTRADA));
+
+    expect(codigo).toBe('GENERADOR_RESPUESTA_INVALIDA');
+  });
+});
+
+describe('GeneradorOpenAiCompatible — destilar (E2·T3)', () => {
+  it('array limpio → observaciones tipadas; pinear true pasa para acuerdo', async () => {
+    stubFetch([
+      {
+        status: 200,
+        contenido: JSON.stringify([
+          { tipo: 'acuerdo', titulo: 'Examen el martes', contenido: 'El cliente acordó examen el martes 10.', pinear: true },
+          { tipo: 'preferencia', titulo: 'Turnos de tarde', contenido: 'Prefiere turnos de tarde.', pinear: false },
+        ]),
+      },
+    ]);
+
+    const observaciones = await crearAdapter().destilar({
+      consulta: '¿Hacemos el examen el martes a la tarde?',
+      respuesta: 'Sí, quedó agendado para el martes.',
+    });
+
+    expect(observaciones).toEqual([
+      { tipo: 'acuerdo', titulo: 'Examen el martes', contenido: 'El cliente acordó examen el martes 10.', pinear: true },
+      { tipo: 'preferencia', titulo: 'Turnos de tarde', contenido: 'Prefiere turnos de tarde.', pinear: false },
+    ]);
+  });
+
+  it('items con tipo fuera del catálogo se descartan', async () => {
+    stubFetch([
+      {
+        status: 200,
+        contenido: JSON.stringify([
+          { tipo: 'emocion', titulo: 'X', contenido: 'Y', pinear: true },
+          { tipo: 'hecho_cliente', titulo: 'Rubro minería', contenido: 'Trabaja en minería.', pinear: false },
+        ]),
+      },
+    ]);
+
+    const observaciones = await crearAdapter().destilar({ consulta: 'c', respuesta: 'r' });
+
+    expect(observaciones).toEqual([
+      { tipo: 'hecho_cliente', titulo: 'Rubro minería', contenido: 'Trabaja en minería.', pinear: false },
+    ]);
+  });
+
+  it('pinear true se coerce a false para tipos que no son acuerdo/compromiso', async () => {
+    stubFetch([
+      {
+        status: 200,
+        contenido: JSON.stringify([
+          { tipo: 'preferencia', titulo: 'Tarde', contenido: 'Prefiere tarde.', pinear: true },
+          { tipo: 'compromiso', titulo: 'Enviar nomina', contenido: 'Enviará la nómina.', pinear: true },
+        ]),
+      },
+    ]);
+
+    const observaciones = await crearAdapter().destilar({ consulta: 'c', respuesta: 'r' });
+
+    expect(observaciones[0]?.pinear).toBe(false);
+    expect(observaciones[1]?.pinear).toBe(true);
+  });
+
+  it('titulo y contenido se acotan a 60 y 300 caracteres', async () => {
+    const largo = 'x'.repeat(500);
+    stubFetch([
+      {
+        status: 200,
+        contenido: JSON.stringify([
+          { tipo: 'hecho_cliente', titulo: largo, contenido: largo, pinear: false },
+        ]),
+      },
+    ]);
+
+    const observaciones = await crearAdapter().destilar({ consulta: 'c', respuesta: 'r' });
+
+    expect(observaciones[0]?.titulo).toHaveLength(60);
+    expect(observaciones[0]?.contenido).toHaveLength(300);
+  });
+
+  it('array vacío (nada duradero) es válido → []', async () => {
+    stubFetch([{ status: 200, contenido: '[]' }]);
+
+    const observaciones = await crearAdapter().destilar({ consulta: 'c', respuesta: 'r' });
+
+    expect(observaciones).toEqual([]);
+  });
+
+  it('respuesta no-array dos veces → GENERADOR_RESPUESTA_INVALIDA', async () => {
+    stubFetch([
+      { status: 200, contenido: '{"tipo":"acuerdo"}' },
+      { status: 200, contenido: '{"tipo":"acuerdo"}' },
+    ]);
+
+    const codigo = await codigoDeError(crearAdapter().destilar({ consulta: 'c', respuesta: 'r' }));
+
+    expect(codigo).toBe('GENERADOR_RESPUESTA_INVALIDA');
+  });
+});
+
+describe('GeneradorOpenAiCompatible — PII (E2·T3)', () => {
+  it('ninguna salida de consola contiene la consulta ni la respuesta', async () => {
+    stubFetch([{ status: 500 }, { status: 200, contenido: 'basura' }]);
+    const espias = [
+      vi.spyOn(console, 'log'),
+      vi.spyOn(console, 'warn'),
+      vi.spyOn(console, 'error'),
+    ];
+
+    const consultaMarcadora = 'consulta-secreta-datos-personales-9911';
+    const respuestaMarcadora = 'respuesta-secreta-datos-personales-8822';
+    await crearAdapter()
+      .generarRespuesta({ ...ENTRADA, consulta: consultaMarcadora })
+      .catch(() => undefined);
+    await crearAdapter()
+      .destilar({ consulta: consultaMarcadora, respuesta: respuestaMarcadora })
+      .catch(() => undefined);
+
+    const salidas: string[] = [];
+    for (const espia of espias) {
+      for (const llamada of espia.mock.calls) {
+        salidas.push(llamada.map((argumento) => String(argumento)).join(' '));
+      }
+    }
+    expect(salidas.every((linea) => !linea.includes(consultaMarcadora))).toBe(true);
+    expect(salidas.every((linea) => !linea.includes(respuestaMarcadora))).toBe(true);
+  });
+});

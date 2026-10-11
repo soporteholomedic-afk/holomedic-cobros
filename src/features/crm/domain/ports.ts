@@ -1,5 +1,7 @@
 import type {
   EntradaConocimiento,
+  EntradaDestilacion,
+  EntradaGenerarRespuesta,
   Etapa,
   Flujo,
   AccionAsignacion,
@@ -14,8 +16,10 @@ import type {
   EstadoConversacion,
   MensajeCrm,
   NivelMemoria,
+  ObservacionDestilada,
   ObservacionMemoria,
   PipelineEmpresa,
+  RespuestaGenerada,
   ResultadoGuardarMemoria,
   SectorCrm,
   TipoEmpresa,
@@ -816,4 +820,44 @@ export interface MemoriaConversacionPort {
   guardar(entrada: EntradaGuardarMemoria): Promise<ResultadoGuardarMemoria>;
   /** Pin one observation so it always shows up in `contexto`. */
   pinear(id: number): Promise<void>;
+}
+
+// ---------------------------------------------------------------------------
+// LLM response-generator port (agente-ia-crm E2·T3) — la Guía's brain:
+// answer generation + post-send distillation. STRUCTURED IN /
+// STRUCTURED OUT: callers pass typed input and get typed output — the
+// adapter owns ALL prompt engineering (system/user message building,
+// Spanish wording, JSON strictness); the application layer never
+// builds nor sees a prompt. Implemented by the OpenAI-compatible HTTP
+// adapter (GeneradorOpenAiCompatible), the deterministic offline
+// simulator (GeneradorSimulado) and the fail-closed adapter the
+// factory selects in production without LLM_API_KEY (every method
+// rejects ErrorGeneradorCrm GENERADOR_NO_CONFIGURADA — infrastructure/
+// llm).
+// ---------------------------------------------------------------------------
+
+/**
+ * Outbound port for the LLM response generator (E2·T3). Every adapter
+ * maps failures to ErrorGeneradorCrm (infrastructure/llm) with codigo
+ * ∈ GENERADOR_NO_CONFIGURADA | GENERADOR_AUTH | GENERADOR_TIMEOUT |
+ * GENERADOR_ERROR | GENERADOR_RESPUESTA_INVALIDA.
+ */
+export interface GeneradorRespuestaPort {
+  /**
+   * Answer one client query from the provided knowledge + memory.
+   * Contract: `idsConocimiento` must cite ONLY ids present in
+   * `entrada.conocimiento` (adapters filter — a hallucinated id
+   * never crosses); `scoreConfianza` ∈ [0, 1]; `enScope: false`
+   * means the query is NOT covered by the provided knowledge+memory
+   * — the adapter/motor decides escalation
+   * (`requiereAyudaHumana` + a short safe deferral texto), never a
+   * made-up answer.
+   */
+  generarRespuesta(entrada: EntradaGenerarRespuesta): Promise<RespuestaGenerada>;
+  /**
+   * Distill durable observations from ONE exchange (post-send):
+   * 0..N typed observations (empty = nothing durable); `pinear`
+   * marks agreements/commitments to pin in the conversation memory.
+   */
+  destilar(entrada: EntradaDestilacion): Promise<ObservacionDestilada[]>;
 }

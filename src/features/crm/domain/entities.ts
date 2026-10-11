@@ -408,3 +408,80 @@ export interface ResultadoGuardarMemoria {
   id: number;
   estado: 'guardado' | 'comprometido';
 }
+
+// ---- Generador de respuestas LLM (agente-ia-crm, E2·T3) ----
+
+/**
+ * One thread message as the LLM prompt sees it (E2·T3): the emisor
+ * union reuses EmisorMensaje; `texto` is the already PII-scrubbed
+ * body (phones masked before crossing, locked E2 decision).
+ */
+export interface MensajeHistorialGeneracion {
+  emisor: EmisorMensaje;
+  texto: string;
+}
+
+/**
+ * One KB fragment the RAG ranking selected into the prompt (E2·T3):
+ * the prompt projection of an EntradaConocimiento — id included so
+ * the model can cite it back in `idsConocimiento`.
+ */
+export interface FragmentoConocimiento {
+  id: number;
+  titulo: string;
+  contenido: string;
+}
+
+/**
+ * One memory fragment (Engram observation) loaded into the prompt
+ * (E2·T3): `tipo` stays a plain string — reads may surface
+ * server-side types outside TipoObservacionDestilada.
+ */
+export interface FragmentoMemoria {
+  tipo: string;
+  titulo: string;
+  contenido: string;
+}
+
+/** Structured input for one respuesta generation (E2·T3). */
+export interface EntradaGenerarRespuesta {
+  consulta: string;
+  /** Recent thread tail, as provided by the motor (last-first order). */
+  historial: MensajeHistorialGeneracion[];
+  conocimiento: FragmentoConocimiento[];
+  memorias: FragmentoMemoria[];
+}
+
+/**
+ * Structured output of one respuesta generation (E2·T3):
+ * `scoreConfianza` ∈ [0, 1]; `enScope` false means the query is NOT
+ * covered by the provided conocimiento+memorias — the motor decides
+ * escalation from that flag plus the confidence threshold, never
+ * from the raw text alone; `idsConocimiento` cites only provided
+ * fragment ids (adapters filter hallucinated ids).
+ */
+export interface RespuestaGenerada {
+  texto: string;
+  scoreConfianza: number;
+  enScope: boolean;
+  requiereAyudaHumana: boolean;
+  idsConocimiento: number[];
+}
+
+/** One client↔Guía exchange to distill (E2·T3, post-send). */
+export interface EntradaDestilacion {
+  consulta: string;
+  respuesta: string;
+}
+
+/**
+ * One distilled observation returned by the LLM distiller (E2·T3):
+ * `pinear` true marks agreements/commitments worth pinning in the
+ * conversation memory.
+ */
+export interface ObservacionDestilada {
+  tipo: TipoObservacionDestilada;
+  titulo: string;
+  contenido: string;
+  pinear: boolean;
+}
