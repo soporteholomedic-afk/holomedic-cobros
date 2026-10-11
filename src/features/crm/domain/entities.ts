@@ -356,3 +356,55 @@ export interface EntradaConocimiento {
   /** Soft on/off — inactive entries never reach the RAG prefilter. */
   activo: boolean;
 }
+
+// ---- Memoria de conversación (agente-ia-crm, E2·T2) ----
+
+/**
+ * The distilled observation types la Guía saves to the conversation
+ * memory (Engram): client facts, agreements, commitments,
+ * preferences and objections — the five categories the E2 distiller
+ * emits. Stored `tipo` on ObservacionMemoria stays a plain string:
+ * reads (contexto/buscar) may surface server-side types outside this
+ * union, only `guardar` is closed over it.
+ */
+export type TipoObservacionDestilada =
+  | 'hecho_cliente'
+  | 'acuerdo'
+  | 'compromiso'
+  | 'preferencia'
+  | 'objecion';
+
+/**
+ * Memory scope (locked design: 2 niveles chat + empresa, aislamiento
+ * por empresa): 'chat' = scoped to ONE conversation (session
+ * `chat-<conversacionId>`), 'empresa' = durable across every
+ * conversation of the empresa (fixed 'empresa' session).
+ */
+export type NivelMemoria = 'chat' | 'empresa';
+
+/**
+ * One memory observation read back from Engram (pinned context,
+ * search hit). NOTE on `contexto` results: the ### Pinned render
+ * carries NO observation id nor timestamp, so those entries cross
+ * with `id: 0` (the caller keys them by `titulo`) and `creadoEn` at
+ * epoch — search results carry the real values.
+ */
+export interface ObservacionMemoria {
+  id: number;
+  nivel: NivelMemoria;
+  tipo: string;
+  titulo: string;
+  contenido: string;
+  creadoEn: Date;
+}
+
+/**
+ * Typed save outcome: 'guardado' = accepted with an observation id
+ * but the bounded commit poll expired unconfirmed (non-fatal — the
+ * write stands, confirmation is eventual); 'comprometido' = the
+ * save-result endpoint confirmed the commit.
+ */
+export interface ResultadoGuardarMemoria {
+  id: number;
+  estado: 'guardado' | 'comprometido';
+}

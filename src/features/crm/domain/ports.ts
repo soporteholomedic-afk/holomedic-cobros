@@ -13,9 +13,13 @@ import type {
   Empresa,
   EstadoConversacion,
   MensajeCrm,
+  NivelMemoria,
+  ObservacionMemoria,
   PipelineEmpresa,
+  ResultadoGuardarMemoria,
   SectorCrm,
   TipoEmpresa,
+  TipoObservacionDestilada,
 } from './entities';
 import type { ErrorFilaImport, GrupoEmpresaImportado } from './importar/validarImportacion';
 import type { EfectosDenormalizados } from './efectosTransicion';
@@ -747,4 +751,69 @@ export interface ConocimientoCrmRepository {
   listarActivas(): Promise<EntradaConocimiento[]>;
   /** Active entries whose titulo/contenido match the escaped text. */
   buscarPorTexto(texto: string): Promise<EntradaConocimiento[]>;
+}
+
+// ---------------------------------------------------------------------------
+// Conversation-memory port (agente-ia-crm E2·T2) — la Guía's persistent
+// memory over Engram 3.3.2 HTTP. Scoping model (locked design): one
+// project per empresa (`crm-emp-<empresaId>`), two session levels —
+// `chat-<conversacionId>` for conversation-scoped observations and the
+// fixed `empresa` session for durable empresa facts. Implemented by
+// the HTTP adapter (MemoriaEngramHttp), the in-memory simulator
+// (MemoriaSimulada) and the fail-closed adapter the factory selects in
+// production without ENGRAM_CRM_URL.
+// ---------------------------------------------------------------------------
+
+/** Payload of ONE distilled observation to save (E2·T2). */
+export interface EntradaGuardarMemoria {
+  empresaId: number;
+  conversacionId: number;
+  /** 'chat' → session `chat-<conversacionId>`; 'empresa' → session 'empresa'. */
+  nivel: NivelMemoria;
+  tipo: TipoObservacionDestilada;
+  titulo: string;
+  contenido: string;
+  /** Idempotency key: replaying the same operationId returns the SAME observation id. */
+  operationId: string;
+}
+
+/**
+ * Outbound port for the conversation memory (Engram-backed, E2·T2).
+ * Every adapter maps failures to ErrorMemoriaCrm (infrastructure/
+ * engram) with codigo ∈ MEMORIA_NO_CONFIGURADA | MEMORIA_TIMEOUT |
+ * MEMORIA_ERROR | MEMORIA_RESPUESTA_INVALIDA.
+ */
+export interface MemoriaConversacionPort {
+  /**
+   * The empresa's pinned observations — the durable context la Guía
+   * loads before answering. Parsed from the "### Pinned" block of
+   * GET /context (lines `- [tipo] **titulo**: contenido`); malformed
+   * lines are skipped, never thrown. nivel derives from the session
+   * (`session_id === 'empresa'` ? 'empresa' : 'chat' — the pinned
+   * render carries no session, so those entries default to 'chat'
+   * unless the line shows a session marker). Pinned context lines
+   * have NO id: they cross with `id: 0` and the `titulo` as key.
+   */
+  contexto(empresaId: number): Promise<ObservacionMemoria[]>;
+  /**
+   * Search the empresa's project (GET /search), CLIENT-filtered to
+   * the caller's own conversation session plus the empresa session
+   * (the server ignores session params — the filter is ours), sliced
+   * to `limite`. `created_at` crosses as UTC "YYYY-MM-DD HH:MM:SS".
+   */
+  buscar(
+    consulta: string,
+    empresaId: number,
+    conversacionId: number,
+    limite: number,
+  ): Promise<ObservacionMemoria[]>;
+  /**
+   * Save one distilled observation: ensure the session (idempotent
+   * POST /sessions), save with `operation_id` (server-side dedup),
+   * then a bounded commit poll — still-uncommitted after ~2 s is
+   * NON-fatal ({estado: 'guardado'}).
+   */
+  guardar(entrada: EntradaGuardarMemoria): Promise<ResultadoGuardarMemoria>;
+  /** Pin one observation so it always shows up in `contexto`. */
+  pinear(id: number): Promise<void>;
 }
