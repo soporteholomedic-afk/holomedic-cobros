@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import type { ResultadoCrearTarea, TareaAgente, TipoTareaAgente } from '../../domain/entities';
+import type { ResultadoCrearTarea, SolicitudAyuda, TareaAgente, TipoTareaAgente } from '../../domain/entities';
 import type {
   EntradaCrearTareaAgente,
   TareaAgenteRepository,
@@ -125,14 +125,23 @@ class FakeTareas implements TareaAgenteRepository {
 type ScriptMotor = ResultadoAgente['resultado'] | Error;
 
 interface MotorLike {
-  ejecutar(conversacionId: number, ahora?: Date): Promise<ResultadoAgente>;
+  ejecutar(
+    conversacionId: number,
+    ahora?: Date,
+    opciones?: { indicacionHumana?: string },
+  ): Promise<ResultadoAgente>;
 }
 
-function motorConGuion(guion: ScriptMotor[]): { motor: MotorLike; llamadas: number[][] } {
-  const llamadas: number[][] = [];
+interface LlamadaMotor {
+  conversacionId: number;
+  opciones?: { indicacionHumana?: string };
+}
+
+function motorConGuion(guion: ScriptMotor[]): { motor: MotorLike; llamadas: LlamadaMotor[] } {
+  const llamadas: LlamadaMotor[] = [];
   const motor: MotorLike = {
-    async ejecutar(conversacionId: number): Promise<ResultadoAgente> {
-      llamadas.push([conversacionId]);
+    async ejecutar(conversacionId: number, _ahora?: Date, opciones?: { indicacionHumana?: string }): Promise<ResultadoAgente> {
+      llamadas.push({ conversacionId, opciones });
       const siguiente = guion.shift();
       if (siguiente instanceof Error) throw siguiente;
       return {
@@ -144,6 +153,36 @@ function motorConGuion(guion: ScriptMotor[]): { motor: MotorLike; llamadas: numb
     },
   };
   return { motor, llamadas };
+}
+
+/** Structural fake for the E3·T2 route dep: the resolved-solicitud read. */
+class FakeConversacionesSolicitudes {
+  resueltas: SolicitudAyuda[] = [];
+
+  async obtenerUltimaSolicitudResuelta(conversacionId: number): Promise<SolicitudAyuda | null> {
+    const candidatas = this.resueltas
+      .filter((s) => s.conversacionId === conversacionId)
+      .sort((a, b) => b.id - a.id);
+    const fila = candidatas[0];
+    return fila ? structuredClone(fila) : null;
+  }
+}
+
+function solicitudResuelta(sobres: Partial<SolicitudAyuda> = {}): SolicitudAyuda {
+  return {
+    id: 21,
+    conversacionId: 11,
+    mensajeId: 101,
+    consulta: '¿Hacen exámenes los sábados?',
+    terminosBuscados: ['examenes', 'sabados'],
+    score: 0.3,
+    estado: 'RESUELTA',
+    indicacion: 'Decile que sí, los sábados por la mañana.',
+    resueltaPor: 'ana',
+    creadoEn: new Date(2026, 5, 15, 9, 0, 0),
+    resueltaEn: new Date(2026, 5, 15, 10, 0, 0),
+    ...sobres,
+  };
 }
 
 describe('ProcesarTareasAgenteUseCase — drenaje de la cola duradera (E2·T5)', () => {
@@ -328,5 +367,118 @@ describe('ProcesarTareasAgenteUseCase — drenaje de la cola duradera (E2·T5)',
 
     expect(tareas.reclamosPendientes).toEqual([3]);
     expect(tareas.reclamosAbandonadas).toEqual([{ limite: 3, minutos: 5 }]);
+  });
+});
+
+describe('ProcesarTareasAgenteUseCase — ruta RESPONDER_CON_INDICACION (E3·T2)', () => {
+  it('relee la solicitud RESUELTA y pasa su indicación al motor como opciones; RESPONDIDO → completar', async () => {
+    const tareas = new FakeTareas();
+    const tarea = tareas.sembrar({
+      conversacionId: 11,
+      mensajeId: 101,
+      tipo: 'RESPONDER_CON_INDICACION' satisfies TipoTareaAgente,
+    });
+    const conversaciones = new FakeConversacionesSolicitudes();
+    conversaciones.resueltas.push(solicitudResuelta());
+    const { motor, llamadas } = motorConGuion(['RESPONDIDO']);
+    const useCase = new ProcesarTareasAgenteUseCase({ tareas, motor, conversaciones });
+
+    const resultado = await useCase.ejecutar();
+
+    expect(llamadas).toEqual([
+      { conversacionId: 11, opciones: { indicacionHumana: 'Decile que sí, los sábados por la mañana.' } },
+    ]);
+    expect(resultado.resultados).toEqual([{ tareaId: tarea.id, resultado: 'RESPONDIDO' }]);
+    expect(tareas.completadas).toEqual([tarea.id]);
+    expect(tareas.fallos).toEqual([]);
+  });
+
+  it('FUERA_DE_HORARIO en la ruta con indicación → reencolar SIN intento (misma semántica que GENERAR_RESPUESTA)', async () => {
+    const tareas = new FakeTareas();
+    const tarea = tareas.sembrar({
+      conversacionId: 11,
+      mensajeId: 101,
+      tipo: 'RESPONDER_CON_INDICACION',
+    });
+    const conversaciones = new FakeConversacionesSolicitudes();
+    conversaciones.resueltas.push(solicitudResuelta());
+    const { motor } = motorConGuion(['FUERA_DE_HORARIO']);
+    const useCase = new ProcesarTareasAgenteUseCase({ tareas, motor, conversaciones });
+
+    const resultado = await useCase.ejecutar();
+
+    expect(resultado.resultados).toEqual([{ tareaId: tarea.id, resultado: 'REENCOLADA' }]);
+    expect(tareas.reencoladas).toEqual([tarea.id]);
+    expect(tareas.fallos).toEqual([]);
+    expect(tareas.filas[0]?.intentos).toBe(0);
+  });
+
+  it('sin solicitud RESUELTA → falla la tarea con error de inconsistencia (intento contado)', async () => {
+    const tareas = new FakeTareas();
+    const tarea = tareas.sembrar({
+      conversacionId: 11,
+      mensajeId: 101,
+      tipo: 'RESPONDER_CON_INDICACION',
+    });
+    const conversaciones = new FakeConversacionesSolicitudes();
+    const { motor, llamadas } = motorConGuion(['RESPONDIDO']);
+    const useCase = new ProcesarTareasAgenteUseCase({ tareas, motor, conversaciones });
+
+    const resultado = await useCase.ejecutar();
+
+    expect(resultado.resultados).toEqual([{ tareaId: tarea.id, resultado: 'REENCOLADA' }]);
+    expect(llamadas).toHaveLength(0);
+    expect(tareas.fallos).toHaveLength(1);
+    expect(tareas.fallos[0]?.error).toContain('solicitud');
+  });
+
+  it('solicitud resuelta SIN indicación → falla igual (datos inconsistentes)', async () => {
+    const tareas = new FakeTareas();
+    const tarea = tareas.sembrar({
+      conversacionId: 11,
+      mensajeId: 101,
+      tipo: 'RESPONDER_CON_INDICACION',
+    });
+    const conversaciones = new FakeConversacionesSolicitudes();
+    conversaciones.resueltas.push(solicitudResuelta({ indicacion: null }));
+    const { motor, llamadas } = motorConGuion(['RESPONDIDO']);
+    const useCase = new ProcesarTareasAgenteUseCase({ tareas, motor, conversaciones });
+
+    const resultado = await useCase.ejecutar();
+
+    expect(resultado.resultados).toEqual([{ tareaId: tarea.id, resultado: 'REENCOLADA' }]);
+    expect(llamadas).toHaveLength(0);
+    expect(tareas.fallos).toHaveLength(1);
+  });
+
+  it('dep conversaciones ausente → falla la tarea (capacidad E3 sin cablear, nunca responde a ciegas)', async () => {
+    const tareas = new FakeTareas();
+    const tarea = tareas.sembrar({
+      conversacionId: 11,
+      mensajeId: 101,
+      tipo: 'RESPONDER_CON_INDICACION',
+    });
+    const { motor, llamadas } = motorConGuion(['RESPONDIDO']);
+    const useCase = new ProcesarTareasAgenteUseCase({ tareas, motor });
+
+    const resultado = await useCase.ejecutar();
+
+    expect(resultado.resultados).toEqual([{ tareaId: tarea.id, resultado: 'REENCOLADA' }]);
+    expect(llamadas).toHaveLength(0);
+    expect(tareas.fallos).toHaveLength(1);
+    expect(tareas.fallos[0]?.error).toContain('obtenerUltimaSolicitudResuelta');
+  });
+
+  it('GENERAR_RESPUESTA sigue yendo al motor SIN opciones (ruta intacta)', async () => {
+    const tareas = new FakeTareas();
+    tareas.sembrar({ conversacionId: 11, mensajeId: 101, tipo: 'GENERAR_RESPUESTA' });
+    const conversaciones = new FakeConversacionesSolicitudes();
+    const { motor, llamadas } = motorConGuion(['RESPONDIDO']);
+    const useCase = new ProcesarTareasAgenteUseCase({ tareas, motor, conversaciones });
+
+    await useCase.ejecutar();
+
+    expect(llamadas).toEqual([{ conversacionId: 11, opciones: undefined }]);
+    expect(conversaciones.resueltas).toEqual([]);
   });
 });

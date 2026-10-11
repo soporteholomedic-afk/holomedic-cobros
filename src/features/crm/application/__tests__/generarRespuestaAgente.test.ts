@@ -38,6 +38,7 @@ import type {
   ObservacionMemoria,
   RespuestaGenerada,
   ResultadoGuardarMemoria,
+  SolicitudAyuda,
 } from '../../domain/entities';
 import { enmascararTelefonos, GenerarRespuestaAgenteUseCase } from '../generarRespuestaAgente';
 import { crearConfigAgente, type ConfigAgente } from '../configAgente';
@@ -86,10 +87,37 @@ class FakeConversaciones implements ConversacionCrmRepository {
   vinculaciones: Array<{ id: number; datos: VincularConversacionDatos }> = [];
   contactosCreados: Array<{ empresaId: number; datos: { nombre: string } }> = [];
   cambiosModo: Array<{ id: number; modo: ModoConversacion }> = [];
+  solicitudes: SolicitudAyuda[] = [];
+  solicitudesCreadas: Array<{
+    conversacionId: number;
+    mensajeId: number | null;
+    consulta: string;
+    terminosBuscados: string[];
+    score: number | null;
+  }> = [];
   private siguienteContactoId = 500;
+  private siguienteSolicitudId = 900;
 
   sembrar(fila: ConversacionCrm): void {
     this.filas.push(fila);
+  }
+
+  sembrarSolicitud(sobres: Partial<SolicitudAyuda> & Pick<SolicitudAyuda, 'conversacionId'>): SolicitudAyuda {
+    const fila: SolicitudAyuda = {
+      id: this.siguienteSolicitudId++,
+      mensajeId: null,
+      consulta: CONSULTA,
+      terminosBuscados: [],
+      score: null,
+      estado: 'PENDIENTE',
+      indicacion: null,
+      resueltaPor: null,
+      creadoEn: new Date(),
+      resueltaEn: null,
+      ...sobres,
+    };
+    this.solicitudes.push(fila);
+    return fila;
   }
 
   async crear(datos: CrearConversacionInput): Promise<ConversacionCrm> {
@@ -182,6 +210,45 @@ class FakeConversaciones implements ConversacionCrmRepository {
     fila.modo = modo;
     fila.actualizadoEn = new Date().toISOString();
     return structuredClone(fila);
+  }
+
+  async crearSolicitudAyuda(entrada: {
+    conversacionId: number;
+    mensajeId?: number | null;
+    consulta: string;
+    terminosBuscados: string[];
+    score: number | null;
+  }): Promise<SolicitudAyuda> {
+    this.solicitudesCreadas.push({
+      conversacionId: entrada.conversacionId,
+      mensajeId: entrada.mensajeId ?? null,
+      consulta: entrada.consulta,
+      terminosBuscados: [...entrada.terminosBuscados],
+      score: entrada.score,
+    });
+    const fila: SolicitudAyuda = {
+      id: this.siguienteSolicitudId++,
+      conversacionId: entrada.conversacionId,
+      mensajeId: entrada.mensajeId ?? null,
+      consulta: entrada.consulta,
+      terminosBuscados: [...entrada.terminosBuscados],
+      score: entrada.score,
+      estado: 'PENDIENTE',
+      indicacion: null,
+      resueltaPor: null,
+      creadoEn: new Date(),
+      resueltaEn: null,
+    };
+    this.solicitudes.push(fila);
+    return structuredClone(fila);
+  }
+
+  async obtenerSolicitudAyudaPendiente(conversacionId: number): Promise<SolicitudAyuda | null> {
+    const pendientes = this.solicitudes
+      .filter((s) => s.conversacionId === conversacionId && s.estado === 'PENDIENTE')
+      .sort((a, b) => b.id - a.id);
+    const fila = pendientes[0];
+    return fila ? structuredClone(fila) : null;
   }
 
   async obtenerContactoPorId(): Promise<ContactoConEmpresa | null> {
@@ -1160,6 +1227,270 @@ describe('GenerarRespuestaAgenteUseCase — PII: mascarar solo la entrada LLM (E
       },
     ]);
     expect(fakes.memoria.guardadas).toEqual([]);
+  });
+});
+
+describe('GenerarRespuestaAgenteUseCase — solicitud de ayuda al escalar (E3·T2)', () => {
+  it('escalado por score persiste la solicitud: consulta+términos del prefilter+score+mensajeId disparador', async () => {
+    const fakes = crearFakes({ respuesta: { scoreConfianza: 0.4 } });
+
+    const resultado = await fakes.useCase.ejecutar(1, AHORA);
+
+    expect(resultado.resultado).toBe('ESCALADO');
+    expect(fakes.conversaciones.solicitudesCreadas).toEqual([
+      {
+        conversacionId: 1,
+        mensajeId: 1,
+        consulta: CONSULTA,
+        terminosBuscados: ['que', 'incluye', 'examen', 'ocupacional'],
+        score: 0.4,
+      },
+    ]);
+    expect(fakes.conversaciones.solicitudes[0]).toMatchObject({ estado: 'PENDIENTE' });
+  });
+
+  it('escalado por límite también persiste la solicitud (score null — no hubo generación)', async () => {
+    const hilo: MensajeCrm[] = [
+      mensajeDeHilo(1, 'IA', 'OUT', 'respuesta 1'),
+      mensajeDeHilo(2, 'CLIENTE', 'IN', CONSULTA),
+    ];
+    const fakes = crearFakes({ hilo, config: { maxIntercambios: 1 } });
+
+    const resultado = await fakes.useCase.ejecutar(1, AHORA);
+
+    expect(resultado.resultado).toBe('ESCALADO');
+    expect(fakes.conversaciones.solicitudesCreadas).toEqual([
+      {
+        conversacionId: 1,
+        mensajeId: 2,
+        consulta: CONSULTA,
+        terminosBuscados: ['que', 'incluye', 'examen', 'ocupacional'],
+        score: null,
+      },
+    ]);
+  });
+
+  it('con solicitud PENDIENTE ya existente NO apila una segunda (idempotencia de escalado)', async () => {
+    const fakes = crearFakes({ respuesta: { scoreConfianza: 0.4 } });
+    fakes.conversaciones.sembrarSolicitud({ conversacionId: 1, mensajeId: 1 });
+
+    const resultado = await fakes.useCase.ejecutar(1, AHORA);
+
+    expect(resultado.resultado).toBe('ESCALADO');
+    expect(fakes.conversaciones.solicitudesCreadas).toEqual([]);
+    expect(fakes.conversaciones.solicitudes).toHaveLength(1);
+  });
+
+  it('repo SIN los métodos opcionales E3 → early-skip silencioso: escalado normal, sin crash', async () => {
+    const fakes = crearFakes({ respuesta: { scoreConfianza: 0.4 } });
+    // Sombrear las capacidades opcionales como ausentes (repo pre-E3).
+    (fakes.conversaciones as { crearSolicitudAyuda?: unknown }).crearSolicitudAyuda = undefined;
+    (fakes.conversaciones as { obtenerSolicitudAyudaPendiente?: unknown }).obtenerSolicitudAyudaPendiente =
+      undefined;
+
+    const resultado = await fakes.useCase.ejecutar(1, AHORA);
+
+    expect(resultado.resultado).toBe('ESCALADO');
+    expect(fakes.conversaciones.solicitudesCreadas).toEqual([]);
+    expect(fakes.conversaciones.cambiosEstado).toEqual([{ id: 1, estado: 'REQUIERE_HUMANO' }]);
+  });
+
+  it('fallo al crear la solicitud es best-effort: el escalado NO cambia (console.error, sin cuerpos)', async () => {
+    const fakes = crearFakes({ respuesta: { scoreConfianza: 0.4 } });
+    const fallo = Object.assign(new Error('boom'), { codigo: 'SOLICITUD_ERROR' });
+    fakes.conversaciones.crearSolicitudAyuda = async () => {
+      throw fallo;
+    };
+
+    const resultado = await fakes.useCase.ejecutar(1, AHORA);
+
+    expect(resultado.resultado).toBe('ESCALADO');
+    expect(fakes.conversaciones.cambiosEstado).toEqual([{ id: 1, estado: 'REQUIERE_HUMANO' }]);
+    expect(console.error).toHaveBeenCalled();
+    const salida = JSON.stringify((console.error as ReturnType<typeof vi.fn>).mock.calls);
+    expect(salida).toContain('SOLICITUD_ERROR');
+    expect(salida).not.toContain(CONSULTA);
+  });
+});
+
+describe('GenerarRespuestaAgenteUseCase — indicación humana (E3·T2)', () => {
+  const INDICACION = 'Decile que el examen se coordina para el viernes a las 9.';
+
+  it('REQUIERE_HUMANO + indicación: responde pese a score bajo/fuera de scope, SIN escalado ni nueva solicitud, vuelve a ACTIVA_IA con modo IA, fuentes con el marcador', async () => {
+    const fakes = crearFakes({
+      conversacion: conversacionActiva({ estado: 'REQUIERE_HUMANO' }),
+      respuesta: { scoreConfianza: 0.2, enScope: false, idsConocimiento: [] },
+    });
+
+    const resultado = await fakes.useCase.ejecutar(1, AHORA, { indicacionHumana: INDICACION });
+
+    expect(resultado.resultado).toBe('RESPONDIDO');
+    expect(resultado.score).toBe(0.2);
+    // La indicación cruza al generador y se envía el texto generado (no el seguro).
+    expect(fakes.generador.entradasGenerar[0]?.indicacionHumana).toBe(INDICACION);
+    expect(fakes.whatsapp.envios[0]?.cuerpo).toBe(
+      'El examen incluye examen médico, audiometría y espirometría.',
+    );
+    // Sin escalado: flip a ACTIVA_IA + modo IA (retoma la Guía), sin solicitud nueva.
+    expect(fakes.conversaciones.cambiosEstado).toEqual([{ id: 1, estado: 'ACTIVA_IA' }]);
+    expect(fakes.conversaciones.cambiosModo).toEqual([{ id: 1, modo: 'IA' }]);
+    expect(fakes.conversaciones.filas[0]?.estado).toBe('ACTIVA_IA');
+    expect(fakes.conversaciones.solicitudesCreadas).toEqual([]);
+    // Auditoría: fuentes EXTENDIDAS con el marcador (sin ids de KB → solo el marcador).
+    const fuentes = JSON.parse(fakes.mensajes.escritas[0]?.fuentes ?? 'null');
+    expect(fuentes).toEqual([{ tipo: 'indicacion_humana', titulo: 'Indicación humana' }]);
+  });
+
+  it('fuentes con indicación EXTIENDE la lista de KB (no la reemplaza)', async () => {
+    const fakes = crearFakes({
+      conversacion: conversacionActiva({ estado: 'REQUIERE_HUMANO' }),
+      respuesta: { scoreConfianza: 0.2, idsConocimiento: [7] },
+    });
+
+    const resultado = await fakes.useCase.ejecutar(1, AHORA, { indicacionHumana: INDICACION });
+
+    expect(resultado.resultado).toBe('RESPONDIDO');
+    const fuentes = JSON.parse(fakes.mensajes.escritas[0]?.fuentes ?? 'null');
+    expect(fuentes).toEqual([
+      { id: 7, tipo: 'KB', titulo: 'Examen ocupacional' },
+      { tipo: 'indicacion_humana', titulo: 'Indicación humana' },
+    ]);
+  });
+
+  it('indicación con teléfono → llega MASCARADA al generador (PII antes de cruzar al LLM)', async () => {
+    const fakes = crearFakes({ conversacion: conversacionActiva({ estado: 'REQUIERE_HUMANO' }) });
+
+    await fakes.useCase.ejecutar(1, AHORA, {
+      indicacionHumana: 'Llamalo al 0981-234-567 y coordiná el examen',
+    });
+
+    expect(fakes.generador.entradasGenerar[0]?.indicacionHumana).toBe(
+      'Llamalo al [teléfono] y coordiná el examen',
+    );
+  });
+
+  it('generador pide ayuda humana CON indicación → responde igual (el humano ya intervino) + warn', async () => {
+    const fakes = crearFakes({
+      conversacion: conversacionActiva({ estado: 'REQUIERE_HUMANO' }),
+      respuesta: { scoreConfianza: 0.1, enScope: false, requiereAyudaHumana: true },
+    });
+
+    const resultado = await fakes.useCase.ejecutar(1, AHORA, { indicacionHumana: INDICACION });
+
+    expect(resultado.resultado).toBe('RESPONDIDO');
+    expect(fakes.conversaciones.cambiosEstado).toEqual([{ id: 1, estado: 'ACTIVA_IA' }]);
+    expect(fakes.conversaciones.solicitudesCreadas).toEqual([]);
+    expect(console.warn).toHaveBeenCalled();
+    const salida = JSON.stringify((console.warn as ReturnType<typeof vi.fn>).mock.calls);
+    expect(salida).toContain('"conversacionId":1');
+    expect(salida).not.toContain(INDICACION);
+  });
+
+  it('kill switch sigue cortando CON indicación (la indicación autoriza contenido, no autonomía)', async () => {
+    const fakes = crearFakes({ config: { habilitado: false } });
+
+    const resultado = await fakes.useCase.ejecutar(1, AHORA, { indicacionHumana: INDICACION });
+
+    expect(resultado.resultado).toBe('AGENTE_DESHABILITADO');
+    sinEfectos(fakes);
+  });
+
+  it('fuera de horario CON indicación → FUERA_DE_HORARIO (la indicación no abre ventanas)', async () => {
+    const fakes = crearFakes();
+
+    const resultado = await fakes.useCase.ejecutar(
+      1,
+      new Date(2026, 5, 15, 21, 0, 0),
+      { indicacionHumana: INDICACION },
+    );
+
+    expect(resultado.resultado).toBe('FUERA_DE_HORARIO');
+    sinEfectos(fakes);
+  });
+
+  it('límite de intercambios CON indicación → sigue escalando Y persiste la solicitud', async () => {
+    const hilo: MensajeCrm[] = [
+      mensajeDeHilo(1, 'IA', 'OUT', 'respuesta 1'),
+      mensajeDeHilo(2, 'CLIENTE', 'IN', CONSULTA),
+    ];
+    const fakes = crearFakes({
+      hilo,
+      config: { maxIntercambios: 1 },
+      conversacion: conversacionActiva({ estado: 'REQUIERE_HUMANO' }),
+    });
+
+    const resultado = await fakes.useCase.ejecutar(1, AHORA, { indicacionHumana: INDICACION });
+
+    expect(resultado.resultado).toBe('ESCALADO');
+    expect(fakes.generador.entradasGenerar).toEqual([]);
+    expect(fakes.conversaciones.solicitudesCreadas).toHaveLength(1);
+  });
+
+  it('ACTIVA_IA con indicación → responde SIN flip de estado (ya está en IA)', async () => {
+    const fakes = crearFakes({ respuesta: { scoreConfianza: 0.2 } });
+
+    const resultado = await fakes.useCase.ejecutar(1, AHORA, { indicacionHumana: INDICACION });
+
+    expect(resultado.resultado).toBe('RESPONDIDO');
+    expect(fakes.conversaciones.cambiosEstado).toEqual([]);
+    expect(fakes.conversaciones.cambiosModo).toEqual([]);
+  });
+
+  it('TOMADA_HUMANO sigue siendo no-op aun con indicación (un humano tiene la conversación)', async () => {
+    const fakes = crearFakes({ conversacion: conversacionActiva({ estado: 'TOMADA_HUMANO' }) });
+
+    const resultado = await fakes.useCase.ejecutar(1, AHORA, { indicacionHumana: INDICACION });
+
+    expect(resultado.resultado).toBe('CONVERSACION_NO_ACTIVA_IA');
+    sinEfectos(fakes);
+  });
+
+  it('indicación en blanco ("   ") se ignora: corre el camino normal (gate activo)', async () => {
+    const fakes = crearFakes({ respuesta: { scoreConfianza: 0.2 } });
+
+    const resultado = await fakes.useCase.ejecutar(1, AHORA, { indicacionHumana: '   ' });
+
+    expect(resultado.resultado).toBe('ESCALADO');
+    expect(fakes.conversaciones.solicitudesCreadas).toHaveLength(1);
+  });
+});
+
+describe('GenerarRespuestaAgenteUseCase — memoriaActiva=false (E3)', () => {
+  const OBSERVACIONES_OPT_OUT: ObservacionDestilada[] = [
+    { tipo: 'hecho_cliente', titulo: 'Rubro minería', contenido: 'Trabaja en minería.', pinear: false },
+  ];
+
+  it('salta el recall de memoria Y la destilación, pero NO el recall de KB', async () => {
+    const fakes = crearFakes({
+      conversacion: conversacionActiva({ memoriaActiva: false }),
+      observaciones: OBSERVACIONES_OPT_OUT,
+    });
+
+    const resultado = await fakes.useCase.ejecutar(1, AHORA);
+
+    expect(resultado.resultado).toBe('RESPONDIDO');
+    expect(fakes.conocimiento.consultas).toEqual([CONSULTA]);
+    expect(fakes.memoria.contextos).toEqual([]);
+    expect(fakes.memoria.busquedas).toEqual([]);
+    expect(fakes.generador.entradasDestilar).toEqual([]);
+    expect(fakes.memoria.guardadas).toEqual([]);
+    expect(fakes.memoria.pineadas).toEqual([]);
+  });
+
+  it('memoriaActiva=false en la ruta indicación: la respuesta sale igual, sin memoria', async () => {
+    const fakes = crearFakes({
+      conversacion: conversacionActiva({ estado: 'REQUIERE_HUMANO', memoriaActiva: false }),
+      respuesta: { scoreConfianza: 0.2 },
+      observaciones: OBSERVACIONES_OPT_OUT,
+    });
+
+    const resultado = await fakes.useCase.ejecutar(1, AHORA, { indicacionHumana: 'Respondé y cerrá' });
+
+    expect(resultado.resultado).toBe('RESPONDIDO');
+    expect(fakes.memoria.contextos).toEqual([]);
+    expect(fakes.memoria.busquedas).toEqual([]);
+    expect(fakes.memoria.guardadas).toEqual([]);
+    expect(fakes.conocimiento.consultas).toEqual([CONSULTA]);
   });
 });
 

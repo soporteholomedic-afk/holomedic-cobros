@@ -13,6 +13,10 @@ import type { GeneradorRespuestaPort } from '../../domain/ports';
  * randomness — selected by default in development via
  * crearGeneradorRespuesta (missing LLM_API_KEY) so the E2 DoD demo
  * runs without an API key. Branches:
+ * - indicacionHumana present (E3·T2) → deterministic relay: a fixed
+ *   prefix + the indicación trimmed to 200 chars, enScope true and NO
+ *   ayuda humana (the motor skips the gate anyway; the no-API-key
+ *   demo must SHOW the relay). This arm wins over every other.
  * - conocimiento non-empty → the FIRST fragment's contenido (trimmed
  *   to 400 chars; a safe prefix + titulo when the contenido is blank),
  *   scoreConfianza 0.8, enScope true, citing that fragment's id.
@@ -42,9 +46,13 @@ const TEXTO_DERIVACION =
 const TEXTO_SALUDO_CONTACTO_NUEVO =
   '¡Hola! Qué gusto que nos escribas. Soy La Guía, de Holomedic. Para ayudarte mejor, ¿me contás tu nombre y de qué empresa nos contactás?';
 const PREFIJO_SEGURO = 'Información disponible: ';
+/** E3·T2 deterministic relay prefix (offline demo shows the indicación). */
+const PREFIJO_INDICACION = '(simulado) Conforme a la indicación de nuestro equipo: ';
 const LIMITE_TEXTO = 400;
 const LIMITE_TITULO_PALABRAS = 8;
 const LIMITE_CONTENIDO_DESTILACION = 200;
+/** E3·T2 indicación clamp inside the simulated texto. */
+const LIMITE_INDICACION = 200;
 const TITULO_VACIO = 'Consulta cliente';
 /** Model name reported in RespuestaGenerada.modelo (audit). */
 const MODELO_SIMULADO = 'simulado';
@@ -67,6 +75,19 @@ function tituloDeConsulta(consulta: string): string {
 
 export class GeneradorSimulado implements GeneradorRespuestaPort {
   async generarRespuesta(entrada: EntradaGenerarRespuesta): Promise<RespuestaGenerada> {
+    // E3·T2 FIRST arm: an indicación relays deterministically — the
+    // offline demo and the tests must SEE the operator instruction.
+    const indicacion = entrada.indicacionHumana?.trim() ?? '';
+    if (indicacion !== '') {
+      return {
+        texto: `${PREFIJO_INDICACION}${indicacion.slice(0, LIMITE_INDICACION)}`,
+        scoreConfianza: 0.8,
+        enScope: true,
+        requiereAyudaHumana: false,
+        idsConocimiento: [],
+        modelo: MODELO_SIMULADO,
+      };
+    }
     const primerConocimiento = entrada.conocimiento[0];
     if (primerConocimiento !== undefined) {
       return {

@@ -51,7 +51,14 @@ export function crearProcesadorTareasAgente(): ProcesadorTareasAgente {
         whatsapp: crearEnviadorWhatsapp(),
         empresas: db.empresas,
       });
-      const useCase = new ProcesarTareasAgenteUseCase({ tareas: db.tareas, motor });
+      const useCase = new ProcesarTareasAgenteUseCase({
+        tareas: db.tareas,
+        motor,
+        // E3·T2: the RESPONDER_CON_INDICACION route re-reads the resolved
+        // solicitud's indicación before relaunching the motor. Optional
+        // dependency in the use case; the SQL repo always provides it.
+        conversaciones: db.conversaciones,
+      });
       return useCase.ejecutar(limite);
     },
   };

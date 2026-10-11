@@ -201,3 +201,69 @@ describe('GeneradorSimulado — extraerIdentificacion (E2·T9)', () => {
     expect(identificacion).toBeNull();
   });
 });
+
+describe('GeneradorSimulado — indicación humana (E3·T2)', () => {
+  it('indicación → rama determinista: el texto referencia la indicación, enScope, sin ayuda humana (aunque haya conocimiento)', async () => {
+    const generador = new GeneradorSimulado();
+
+    const respuesta = await generador.generarRespuesta({
+      consulta: '¿Hacen exámenes los sábados?',
+      contactoNuevo: false,
+      historial: [],
+      conocimiento: CONOCIMIENTO,
+      memorias: [],
+      indicacionHumana: 'Decile que sí, los sábados de 8 a 12.',
+    });
+
+    expect(respuesta).toEqual({
+      texto: '(simulado) Conforme a la indicación de nuestro equipo: Decile que sí, los sábados de 8 a 12.',
+      scoreConfianza: 0.8,
+      enScope: true,
+      requiereAyudaHumana: false,
+      idsConocimiento: [],
+      modelo: 'simulado',
+    });
+  });
+
+  it('indicación larga → recorte determinista a 200 caracteres', async () => {
+    const generador = new GeneradorSimulado();
+    const indicacion = `Coordiná el examen. ${'x'.repeat(250)}`;
+
+    const respuesta = await generador.generarRespuesta({
+      consulta: 'c',
+      contactoNuevo: false,
+      historial: [],
+      conocimiento: [],
+      memorias: [],
+      indicacionHumana: indicacion,
+    });
+
+    const esperado = `(simulado) Conforme a la indicación de nuestro equipo: ${indicacion.slice(0, 200)}`;
+    expect(respuesta.texto).toBe(esperado);
+    expect(respuesta.texto.length).toBeLessThan(300);
+  });
+
+  it('indicación en blanco → cae a las ramas normales (escalado sin recall, saludo si contactoNuevo)', async () => {
+    const generador = new GeneradorSimulado();
+
+    const vinculada = await generador.generarRespuesta({
+      consulta: 'c',
+      contactoNuevo: false,
+      historial: [],
+      conocimiento: [],
+      memorias: [],
+      indicacionHumana: '   ',
+    });
+    expect(vinculada.requiereAyudaHumana).toBe(true);
+
+    const nueva = await generador.generarRespuesta({
+      consulta: 'Hola',
+      contactoNuevo: true,
+      historial: [],
+      conocimiento: [],
+      memorias: [],
+      indicacionHumana: '',
+    });
+    expect(nueva.texto.toLowerCase()).toContain('nombre');
+  });
+});

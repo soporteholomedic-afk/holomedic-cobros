@@ -25,6 +25,7 @@ import type {
   NivelMemoria,
   ObservacionDestilada,
   ObservacionMemoria,
+  ObservacionMemoriaEnLista,
   OrigenDatoFicha,
   PipelineEmpresa,
   RespuestaGenerada,
@@ -797,6 +798,25 @@ export interface ConversacionCrmRepository {
     contactoId: number | null,
     empresaId: number | null,
   ): Promise<ExtraccionFicha[]>;
+  /**
+   * E3·T3 notification badge: ONE SELECT with conditional COUNTs +
+   * MAX(ultimoMensajeEn) over CRM_Conversaciones (single roundtrip,
+   * backs IX_CRM_Conversaciones_EstadoUltimo on estado; the table is
+   * small by construction — one row per channel thread). Optional
+   * (actualizarModo precedent): only the SQL adapter implements it.
+   */
+  contarResumen?(): Promise<ConteoResumenConversaciones>;
+}
+
+/**
+ * Raw repo shape of the notification badge (E3·T3) — presentation
+ * mapping (Date → ISO) lives in the use case.
+ */
+export interface ConteoResumenConversaciones {
+  requiereAyuda: number;
+  pendienteVinculacion: number;
+  total: number;
+  ultimaActividad: Date | null;
 }
 
 /** Backward (older-first) pagination window for the thread read. */
@@ -889,7 +909,9 @@ export interface EntradaGuardarMemoria {
  * Outbound port for the conversation memory (Engram-backed, E2·T2).
  * Every adapter maps failures to ErrorMemoriaCrm (infrastructure/
  * engram) with codigo ∈ MEMORIA_NO_CONFIGURADA | MEMORIA_TIMEOUT |
- * MEMORIA_ERROR | MEMORIA_RESPUESTA_INVALIDA.
+ * MEMORIA_ERROR | MEMORIA_RESPUESTA_INVALIDA | MEMORIA_NO_ENCONTRADA
+ * (E3·T3: the operator delete of an observation the project does
+ * not hold).
  */
 export interface MemoriaConversacionPort {
   /**
@@ -924,6 +946,21 @@ export interface MemoriaConversacionPort {
   guardar(entrada: EntradaGuardarMemoria): Promise<ResultadoGuardarMemoria>;
   /** Pin one observation so it always shows up in `contexto`. */
   pinear(id: number): Promise<void>;
+  /**
+   * E3·T3 operator panel: EVERY observation of the empresa's project
+   * (GET /observations?project=<proj>), raw session included so the
+   * caller can scope by conversation. Optional (actualizarModo
+   * precedent): the HTTP and simulated adapters implement it; use
+   * cases degrade to an empty listing without the capability.
+   */
+  listarPorProyecto?(empresaId: number): Promise<ObservacionMemoriaEnLista[]>;
+  /**
+   * E3·T3 operator delete: soft-delete ONE observation, project-
+   * scoped (expected_project) so a foreign id can never vanish.
+   * Optional like listarPorProyecto; the use case OWNS the ownership
+   * check (membership via listarPorProyecto) before calling.
+   */
+  eliminar?(id: number, empresaId: number): Promise<void>;
 }
 
 // ---------------------------------------------------------------------------

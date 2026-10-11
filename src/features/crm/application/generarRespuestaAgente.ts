@@ -75,9 +75,32 @@ import { recuperarConocimiento } from './recuperarConocimiento';
  * REQUIERE_HUMANO, no vinculación side effects).
  *
  * PII: phone numbers are masked with '[teléfono]' ONLY inside the
- * LLM input (consulta + historial); every persisted, sent and
- * distilled body stays verbatim. Logs never carry bodies — only ids
- * and typed error codes.
+ * LLM input (consulta + historial + indicación); every persisted,
+ * sent and distilled body stays verbatim. Logs never carry bodies —
+ * only ids and typed error codes.
+ *
+ * E3·T2 — help pattern: (a) every ESCALADO outcome now persists the
+ * help request (crearSolicitudAyuda, best-effort — never fails the
+ * engine, never stacks: skipped when obtenerSolicitudAyudaPendiente
+ * already sees one) carrying the consulta that defeated the RAG, the
+ * prefilter search terms and the audited score; (b) the new third
+ * argument carries `indicacionHumana` — the operator instruction
+ * read back from a RESUELTA solicitud by the queue route. The
+ * indicación authorizes CONTENT ONLY: the scope/umbral gate is
+ * skipped (a human vouched for the answer, so low score / out of
+ * scope / even a requiereAyudaHumana flag still ANSWER — the latter
+ * warns), REQUIERE_HUMANO conversations are attended again (la Guía
+ * retakes the thread after a successful indicación-driven send:
+ * estado back to ACTIVA_IA + modo IA), the sent message audit grows
+ * the marker {tipo:'indicacion_humana'} on its fuentes JSON, and NO
+ * new solicitud is created on an indicación-driven answer. It does
+ * NOT open autonomy windows: kill switch, business hours, exchange
+ * limit, sin-teléfono and no-IN guards keep running exactly as the
+ * plain path (a limit escalation with an indicación still escalates
+ * and still persists its solicitud). (c) memoriaActiva=false (the
+ * per-conversation privacy opt-out, E3·T1 — undefined ≡ active)
+ * skips the Engram recall (contexto + buscar) AND the post-send
+ * distillation+pin; the KB recall and the rest of the flow continue.
  */
 
 /** Every terminal outcome of one engine run. */
@@ -96,6 +119,16 @@ export interface ResultadoAgente {
   mensajeId: number | null;
   /** The generation's scoreConfianza (null: no-ops and limit escalation). */
   score: number | null;
+}
+
+/**
+ * Third-argument options for one engine run (E3·T2). The indicación
+ * comes from a RESUELTA help request (the queue route re-reads it);
+ * it authorizes the CONTENT of the answer, never autonomy windows
+ * (see the class docblock). Blank/absent ⇒ the plain E2 path.
+ */
+export interface OpcionesEjecutarMotor {
+  indicacionHumana?: string;
 }
 
 /** Constructor dependencies — every port faked in tests (hexagonal). */
@@ -129,6 +162,17 @@ const LIMITE_PAGINA_HILO = 50;
 const ESTADOS_ATENDIDOS_IA: ReadonlySet<EstadoConversacion> = new Set([
   'ACTIVA_IA',
   'PENDIENTE_VINCULACION',
+]);
+
+/**
+ * E3·T2: with an indicación the engine ALSO retakes REQUIERE_HUMANO
+ * (the operator resolved the solicitud — la Guía answers again).
+ * TOMADA_HUMANO/PAUSADA/CERRADA stay out: a human holding the
+ * conversation outranks any indicación.
+ */
+const ESTADOS_ATENDIDOS_CON_INDICACION: ReadonlySet<EstadoConversacion> = new Set([
+  ...ESTADOS_ATENDIDOS_IA,
+  'REQUIERE_HUMANO',
 ]);
 
 /** A digit run shorter than this is not treated as a phone number. */
@@ -177,6 +221,27 @@ function normalizarNombreEmpresa(texto: string): string {
     .toLowerCase();
 }
 
+/**
+ * Search terms of the KB recall prefilter, mirrored from the SQL
+ * adapter's derivation (E2 fix 7b129ce): lowercase + NFD diacritics
+ * strip + non-alphanumeric split, terms longer than 2 chars, max 8.
+ * Persisted on the help request (terminosBuscados) and replayed into
+ * the KB-gap candidate, so the E5 curator sees EXACTLY what the LIKE
+ * prefilter ran with. recuperarConocimiento (ranking) and the SQL
+ * adapter (prefilter) each own their normalization twins — this
+ * mirror keeps both untouched.
+ */
+const MAX_TERMINOS_PREFILTRO = 8;
+function extraerTerminosRecall(consulta: string): string[] {
+  return consulta
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .split(/[^a-z0-9]+/)
+    .filter((termino) => termino.length > 2)
+    .slice(0, MAX_TERMINOS_PREFILTRO);
+}
+
 /** Typed error code for logs — never the message (bodies are PII). */
 function codigoDeError(error: unknown): string {
   if (typeof error === 'object' && error !== null) {
@@ -193,7 +258,11 @@ export class GenerarRespuestaAgenteUseCase {
     this.config = deps.config ?? crearConfigAgente();
   }
 
-  async ejecutar(conversacionId: number, ahora: Date = new Date()): Promise<ResultadoAgente> {
+  async ejecutar(
+    conversacionId: number,
+    ahora: Date = new Date(),
+    opciones: OpcionesEjecutarMotor = {},
+  ): Promise<ResultadoAgente> {
     const sinEfectos = (resultado: ResultadoMotorAgente): ResultadoAgente => ({
       conversacionId,
       resultado,
@@ -201,11 +270,21 @@ export class GenerarRespuestaAgenteUseCase {
       score: null,
     });
 
+    // E3·T2: a blank indicación is NO indicación — the plain path runs.
+    const indicacion = opciones.indicacionHumana?.trim() ?? '';
+    const conIndicacion = indicacion !== '';
+
     // 1. Only IA-attended conversations belong to the engine: ACTIVA_IA
-    //    (linked) or PENDIENTE_VINCULACION (E2·T9 unlinked). Every
+    //    (linked) or PENDIENTE_VINCULACION (E2·T9 unlinked). With an
+    //    indicación, REQUIERE_HUMANO joins too (E3·T2 retake). Every
     //    other estado is a zero-side-effect no-op.
     const conversacion = await this.deps.conversaciones.obtenerPorId(conversacionId);
-    if (conversacion === null || !ESTADOS_ATENDIDOS_IA.has(conversacion.estado)) {
+    if (
+      conversacion === null ||
+      !(conIndicacion ? ESTADOS_ATENDIDOS_CON_INDICACION : ESTADOS_ATENDIDOS_IA).has(
+        conversacion.estado,
+      )
+    ) {
       return sinEfectos('CONVERSACION_NO_ACTIVA_IA');
     }
 
@@ -242,6 +321,10 @@ export class GenerarRespuestaAgenteUseCase {
 
     // 6-8. Recall + masked generation (SKIPPED on the limit escalation:
     // no LLM call is spent on a thread already bound for a human).
+    // E3: memoriaActiva=false (undefined ≡ active) opts out of the
+    // Engram memory — recall AND distillation — without touching the
+    // KB recall (privacy opt-out, not a knowledge opt-out).
+    const memoriaActiva = conversacion.memoriaActiva !== false;
     let respuesta: RespuestaGenerada | null = null;
     let titulosConocimiento = new Map<number, string>();
     if (!limiteAlcanzado) {
@@ -255,7 +338,7 @@ export class GenerarRespuestaAgenteUseCase {
       );
 
       let memorias: FragmentoMemoria[] = [];
-      if (conversacion.empresaId !== null) {
+      if (conversacion.empresaId !== null && memoriaActiva) {
         const contexto = await this.deps.memoria.contexto(conversacion.empresaId);
         const hallazgos = await this.deps.memoria.buscar(
           consultaOriginal,
@@ -287,16 +370,30 @@ export class GenerarRespuestaAgenteUseCase {
           contenido: rankeada.entrada.contenido,
         })),
         memorias,
+        // E3·T2: the operator instruction rides the LLM input masked
+        // like every other body (PII policy — consulta precedent).
+        indicacionHumana: conIndicacion ? enmascararTelefonos(indicacion) : undefined,
       });
     }
 
     // 9. Decision: answer only when in scope, no human-help flag and
-    //    confidence at or above the threshold (>= inclusive).
+    //    confidence at or above the threshold (>= inclusive). E3·T2:
+    //    with an indicación the CONTENT is already authorized by a
+    //    human — the scope/umbral gate is skipped (a null respuesta
+    //    stays non-answering: the limit escalation never had one).
     const responder =
       respuesta !== null &&
-      respuesta.enScope &&
-      !respuesta.requiereAyudaHumana &&
-      respuesta.scoreConfianza >= this.config.umbralConfianza;
+      (conIndicacion ||
+        (respuesta.enScope &&
+          !respuesta.requiereAyudaHumana &&
+          respuesta.scoreConfianza >= this.config.umbralConfianza));
+    if (conIndicacion && respuesta !== null && respuesta.requiereAyudaHumana) {
+      // The human already intervened (the indicación) — answering is
+      // right, but the model asking for help anyway deserves a warn.
+      console.warn('[generarRespuestaAgente] generador pidió ayuda humana pese a la indicación', {
+        conversacionId,
+      });
+    }
     const textoFinal =
       respuesta !== null && responder ? respuesta.texto : this.config.textoEscalado;
     // Audit: null score/modelo ONLY on the limit escalation (no
@@ -304,12 +401,23 @@ export class GenerarRespuestaAgenteUseCase {
     // the score the model reported.
     const score = respuesta !== null ? respuesta.scoreConfianza : null;
     const modelo = respuesta !== null ? respuesta.modelo : null;
-    const fuentesJson = JSON.stringify(
-      (respuesta?.idsConocimiento ?? []).flatMap((id) => {
-        const titulo = titulosConocimiento.get(id);
-        return titulo === undefined ? [] : [{ id, tipo: 'KB' as const, titulo }];
-      }),
-    );
+    // E3·T2 widens the audit union: KB citations plus the human
+    // indicación marker ({id} present only on KB rows).
+    const fuentesAuditoria: Array<{
+      id?: number;
+      tipo: 'KB' | 'indicacion_humana';
+      titulo: string;
+    }> = (respuesta?.idsConocimiento ?? []).flatMap((id) => {
+      const titulo = titulosConocimiento.get(id);
+      return titulo === undefined ? [] : [{ id, tipo: 'KB' as const, titulo }];
+    });
+    // E3·T2: an indicación-driven answer must visibly record WHERE its
+    // authority came from — extend (never replace) the KB list with
+    // the marker; with no KB ids the fuentes is the marker alone.
+    if (conIndicacion) {
+      fuentesAuditoria.push({ tipo: 'indicacion_humana', titulo: 'Indicación humana' });
+    }
+    const fuentesJson = JSON.stringify(fuentesAuditoria);
 
     // 10. Outbox-lite (responderConversacion mirror): persist the OUT
     //     intent PENDIENTE with the RAG audit columns BEFORE sending —
@@ -380,6 +488,8 @@ export class GenerarRespuestaAgenteUseCase {
     //     FALLIDO_ENVIO above never reaches here). Best-effort: the
     //     durable side effect is the sent message; a failed flip is
     //     logged for an operator, never retried by re-sending.
+    //     E3·T2: the escalation ALSO persists the help request the
+    //     operator will answer (best-effort, never stacked).
     if (!responder) {
       try {
         await this.deps.conversaciones.actualizarEstado(conversacion.id, 'REQUIERE_HUMANO');
@@ -389,11 +499,35 @@ export class GenerarRespuestaAgenteUseCase {
           error: codigoDeError(errorEstado),
         });
       }
+      await this.registrarSolicitudAyuda({
+        conversacionId: conversacion.id,
+        disparadorId: disparador.id,
+        consultaOriginal,
+        score,
+      });
+    }
+
+    // 12b. E3·T2 retake: an indicación-driven answer on a thread that
+    //      came in as REQUIERE_HUMANO hands the conversation BACK to
+    //      la Guía — estado ACTIVA_IA + modo IA (vincularConversacion
+    //      mirror: actualizarEstado never touches modo). Best-effort,
+    //      same as the escalation flip. Other estados need no flip.
+    if (responder && conIndicacion && conversacion.estado === 'REQUIERE_HUMANO') {
+      try {
+        await this.deps.conversaciones.actualizarEstado(conversacion.id, 'ACTIVA_IA');
+        await this.deps.conversaciones.actualizarModo?.(conversacion.id, 'IA');
+      } catch (errorRetomar) {
+        console.error('[generarRespuestaAgente] retomar ACTIVA_IA tras indicación falló', {
+          conversacionId: conversacion.id,
+          error: codigoDeError(errorRetomar),
+        });
+      }
     }
 
     // 13. Distillation — ONLY on RESPONDIDO, ONLY with an empresa (the
-    //     memory port requires empresaId), best-effort and never throws.
-    if (responder && conversacion.empresaId !== null) {
+    //     memory port requires empresaId), ONLY while memoriaActiva
+    //     (E3 privacy opt-out), best-effort and never throws.
+    if (responder && conversacion.empresaId !== null && memoriaActiva) {
       await this.destilarYGuardar({
         consultaOriginal,
         textoFinal,
@@ -439,6 +573,45 @@ export class GenerarRespuestaAgenteUseCase {
       antesDeId = ultima.id;
     }
     return hilo;
+  }
+
+  /**
+   * E3·T2 escalation side effect: persist the help request the
+   * operator will answer — the consulta that defeated the RAG, the
+   * prefilter terms (extraerTerminosRecall) and the audited score
+   * (null on the limit escalation, where no generation happened).
+   * NEVER stacks: skipped when a PENDIENTE request already exists for
+   * the conversation. Repos without the optional E3 capability skip
+   * entirely (pre-E3 fakes/adapters stay valid). Best-effort: every
+   * failure only logs (codigo + conversation id — bodies are PII) and
+   * the already-sent escalation stays the durable truth.
+   */
+  private async registrarSolicitudAyuda(params: {
+    conversacionId: number;
+    disparadorId: number;
+    consultaOriginal: string;
+    score: number | null;
+  }): Promise<void> {
+    const repo = this.deps.conversaciones;
+    if (repo.crearSolicitudAyuda === undefined || repo.obtenerSolicitudAyudaPendiente === undefined) {
+      return;
+    }
+    try {
+      const pendiente = await repo.obtenerSolicitudAyudaPendiente(params.conversacionId);
+      if (pendiente !== null) return;
+      await repo.crearSolicitudAyuda({
+        conversacionId: params.conversacionId,
+        mensajeId: params.disparadorId,
+        consulta: params.consultaOriginal,
+        terminosBuscados: extraerTerminosRecall(params.consultaOriginal),
+        score: params.score,
+      });
+    } catch (errorSolicitud) {
+      console.error('[generarRespuestaAgente] registrar solicitud de ayuda falló', {
+        conversacionId: params.conversacionId,
+        error: codigoDeError(errorSolicitud),
+      });
+    }
   }
 
   /**

@@ -406,6 +406,21 @@ export interface HuecoConocimiento {
 }
 
 /**
+ * Typed outcome of aplicarIndicacion (E3·T2) — the operator answered
+ * a help request with an indicación: the RESUELTA solicitud (the
+ * durable source of truth for the indicación), the ABIERTO KB-gap
+ * candidate it left behind, whether the memory pin survived
+ * (best-effort — the solicitud row is the durable copy), and the
+ * idempotent RESPONDER_CON_INDICACION task that relaunches la Guía.
+ */
+export interface ResultadoAplicarIndicacion {
+  solicitud: SolicitudAyuda;
+  hueco: HuecoConocimiento;
+  memoria: { guardada: boolean };
+  tarea: ResultadoCrearTarea;
+}
+
+/**
  * The ficha fields E3 extracts from the thread (CHECK-backed in
  * CRM_ExtraccionesFicha.campo): the contacto's cargo and the
  * empresa's trabajadores/sedes counts.
@@ -513,6 +528,57 @@ export interface ResultadoGuardarMemoria {
   estado: 'guardado' | 'comprometido';
 }
 
+/**
+ * ONE raw project observation as listed for the operator panel
+ * (agente-ia-crm E3·T3) — the GET /observations?project=<proj> row
+ * mapped. Carries the raw `sesion` (session_id) instead of a derived
+ * nivel because the LISTING is project-wide: the caller (use case)
+ * scopes rows to `chat-<conversacionId>` + the fixed 'empresa'
+ * session, so it must see WHICH chat session each row belongs to
+ * (ObservacionMemoria.nivel alone cannot distinguish chats).
+ */
+export interface ObservacionMemoriaEnLista {
+  id: number;
+  /** Raw Engram session id: 'empresa' or 'chat-<conversacionId>'. */
+  sesion: string;
+  tipo: string;
+  titulo: string;
+  contenido: string;
+  creadoEn: Date;
+}
+
+/**
+ * ONE memory observation shaped for the operator's "Memorias" panel
+ * (agente-ia-crm E3·T3): the ObservacionMemoria row plus the
+ * `pineada` flag (matched by TITULO against the /context pinned
+ * block — pinned lines carry no id) with `creadoEn` crossing as an
+ * ISO string (the panel is presentation-facing, unlike the Date the
+ * domain compares against).
+ */
+export interface MemoriaLista {
+  id: number;
+  nivel: NivelMemoria;
+  tipo: string;
+  titulo: string;
+  contenido: string;
+  pineada: boolean;
+  creadoEn: string;
+}
+
+/**
+ * The bandeja notification badge (agente-ia-crm E3·T3): counts over
+ * CRM_Conversaciones — `requiereAyuda` (estado REQUIERE_HUMANO),
+ * `pendienteVinculacion` (estado PENDIENTE_VINCULACION), `total` and
+ * the latest activity tick. Presentation-facing: `ultimaActividad`
+ * crosses as an ISO string (null when no conversation has messages).
+ */
+export interface ResumenNotificaciones {
+  requiereAyuda: number;
+  pendienteVinculacion: number;
+  total: number;
+  ultimaActividad: string | null;
+}
+
 // ---- Generador de respuestas LLM (agente-ia-crm, E2·T3) ----
 
 /**
@@ -561,6 +627,15 @@ export interface EntradaGenerarRespuesta {
   historial: MensajeHistorialGeneracion[];
   conocimiento: FragmentoConocimiento[];
   memorias: FragmentoMemoria[];
+  /**
+   * E3·T2: the operator's instruction from a RESUELTA help request —
+   * the human already authorized THIS answer (the motor skips the
+   * scope/umbral gate), so the adapter gives it MAXIMUM priority
+   * when drafting. Already PII-scrubbed by the motor (phones
+   * masked before crossing, consulta/historial precedent). Absent
+   * on the plain E2 path.
+   */
+  indicacionHumana?: string;
 }
 
 /**

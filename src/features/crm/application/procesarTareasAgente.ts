@@ -1,7 +1,7 @@
 import type { TareaAgente } from '../domain/entities';
-import type { TareaAgenteRepository } from '../domain/ports';
+import type { ConversacionCrmRepository, TareaAgenteRepository } from '../domain/ports';
 
-import type { ResultadoAgente } from './generarRespuestaAgente';
+import type { OpcionesEjecutarMotor, ResultadoAgente } from './generarRespuestaAgente';
 
 /**
  * ProcesarTareasAgenteUseCase (agente-ia-crm E2·T5) — drain the
@@ -30,6 +30,15 @@ import type { ResultadoAgente } from './generarRespuestaAgente';
  * batch. The result reports the OBSERVED derivation (intentos + 1 >=
  * 3 → 'FALLIDA') rather than re-reading the row — fallar's semantics
  * decide, this only mirrors them.
+ *
+ * E3·T2 — the RESPONDER_CON_INDICACION route: the worker re-reads the
+ * conversation's latest RESUELTA solicitud (the indicación's source
+ * of truth) and hands it to the motor as opciones.indicacionHumana;
+ * the outcome mapping is IDENTICAL to GENERAR_RESPUESTA (a
+ * FUERA_DE_HORARIO indicación waits for the window like any other).
+ * A missing resolved solicitud (or one resolved without indicación)
+ * is a data inconsistency that shouldn't happen — the task FAILS
+ * (attempt counted) instead of answering blind.
  */
 
 /** Every per-task outcome of one drain run. */
@@ -47,16 +56,41 @@ export interface ResultadoProcesarTareas {
  * without the class).
  */
 export interface MotorAgentePort {
-  ejecutar(conversacionId: number, ahora?: Date): Promise<ResultadoAgente>;
+  ejecutar(
+    conversacionId: number,
+    ahora?: Date,
+    opciones?: OpcionesEjecutarMotor,
+  ): Promise<ResultadoAgente>;
 }
 
 export interface ProcesarTareasAgenteDeps {
   tareas: TareaAgenteRepository;
   motor: MotorAgentePort;
+  /**
+   * E3·T2: the resolved-solicitud read behind the
+   * RESPONDER_CON_INDICACION route (structural minimum — MotorAgentePort
+   * precedent). OPTIONAL so pre-E3 constructions stay valid; without
+   * it those tasks FAIL (data inconsistency) instead of answering
+   * blind. The composition root should always provide it.
+   */
+  conversaciones?: Pick<ConversacionCrmRepository, 'obtenerUltimaSolicitudResuelta'>;
 }
 
 /** Crash recovery: a PROCESANDO claim older than this is abandoned. */
 const MINUTOS_ABANDONO = 5;
+
+/**
+ * Typed data-inconsistency failure of the RESPONDER_CON_INDICACION
+ * route (E3·T2): the resolved solicitud — or its indicación — is not
+ * there. Shouldn't happen (aplicarIndicacion writes both); the task
+ * FAILS with this message instead of the motor answering blind.
+ */
+export class SolicitudIndicacionAusenteError extends Error {
+  constructor(motivo: string) {
+    super(`Solicitud de ayuda resuelta ausente: ${motivo}`);
+    this.name = 'SolicitudIndicacionAusenteError';
+  }
+}
 
 export class ProcesarTareasAgenteUseCase {
   constructor(private readonly deps: ProcesarTareasAgenteDeps) {}
@@ -86,7 +120,10 @@ export class ProcesarTareasAgenteUseCase {
     resultado: ResultadoTareaProcesada;
   }> {
     try {
-      const resultado = await this.deps.motor.ejecutar(tarea.conversacionId);
+      const resultado =
+        tarea.tipo === 'RESPONDER_CON_INDICACION'
+          ? await this.ejecutarRespuestaConIndicacion(tarea)
+          : await this.deps.motor.ejecutar(tarea.conversacionId);
       if (resultado.resultado === 'FUERA_DE_HORARIO' || resultado.resultado === 'AGENTE_DESHABILITADO') {
         // Not a failure: no attempt counted, the row waits cooled.
         await this.deps.tareas.reencolar(tarea.id);
@@ -104,6 +141,41 @@ export class ProcesarTareasAgenteUseCase {
       // stays PROCESANDO and is recovered by reclamarAbandonadas.
       return this.registrarFallo(tarea, error instanceof Error ? error.message : String(error));
     }
+  }
+
+  /**
+   * E3·T2 route: re-read the conversation's latest RESUELTA solicitud
+   * (the indicación's source of truth — no extra task fields) and run
+   * the motor with it. A missing read capability, a missing row or a
+   * blank indicación throws SolicitudIndicacionAusenteError → the task
+   * falls (attempt counted), never answers blind.
+   */
+  private async ejecutarRespuestaConIndicacion(tarea: TareaAgente): Promise<ResultadoAgente> {
+    const repo = this.deps.conversaciones;
+    const obtenerResuelta = repo?.obtenerUltimaSolicitudResuelta;
+    if (repo === undefined || obtenerResuelta === undefined) {
+      throw new SolicitudIndicacionAusenteError(
+        `repositorio sin la capacidad obtenerUltimaSolicitudResuelta (conversación ${tarea.conversacionId})`,
+      );
+    }
+    // .call(repo, …): the optional method is read off the port, so it
+    // must run bound to it (a detached `this` would read its state off
+    // undefined).
+    const solicitud = await obtenerResuelta.call(repo, tarea.conversacionId);
+    if (solicitud === null) {
+      throw new SolicitudIndicacionAusenteError(
+        `sin solicitud RESUELTA para la conversación ${tarea.conversacionId}`,
+      );
+    }
+    const indicacion = solicitud.indicacion?.trim() ?? '';
+    if (indicacion === '') {
+      throw new SolicitudIndicacionAusenteError(
+        `la solicitud ${solicitud.id} quedó resuelta sin indicación`,
+      );
+    }
+    return this.deps.motor.ejecutar(tarea.conversacionId, new Date(), {
+      indicacionHumana: indicacion,
+    });
   }
 
   private async registrarFallo(tarea: TareaAgente, error: string): Promise<{

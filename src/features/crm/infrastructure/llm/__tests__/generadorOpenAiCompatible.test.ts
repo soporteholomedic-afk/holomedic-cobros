@@ -250,6 +250,51 @@ describe('GeneradorOpenAiCompatible — pedido HTTP (E2·T3)', () => {
   });
 });
 
+describe('GeneradorOpenAiCompatible — indicación humana (E3·T2)', () => {
+  it('indicación presente → sección INDICACIÓN DEL OPERADOR al PRINCIPIO del mensaje de usuario (antes de CONSULTA)', async () => {
+    const { llamadas } = stubFetch([{ status: 200, contenido: JSON_LIMPIO }]);
+
+    await crearAdapter().generarRespuesta({
+      ...ENTRADA,
+      indicacionHumana: 'Confirmale el examen del viernes a las 9 y pedile el headcount.',
+    });
+
+    const usuario = cuerpoDe(llamadas[0]!).messages[1]?.content ?? '';
+    expect(usuario).toContain('INDICACIÓN DEL OPERADOR');
+    expect(usuario).toContain('prioridad máxima');
+    expect(usuario).toContain('Confirmale el examen del viernes a las 9 y pedile el headcount.');
+    // Prominencia real: la sección va ANTES de la consulta y de todo lo demás.
+    expect(usuario.indexOf('INDICACIÓN DEL OPERADOR')).toBeLessThan(usuario.indexOf('CONSULTA:'));
+    expect(usuario.indexOf('INDICACIÓN DEL OPERADOR')).toBe(0);
+    // Las secciones estándar siguen presentes.
+    expect(usuario).toContain('CONOCIMIENTO:');
+    expect(usuario).toContain('MEMORIAS:');
+    // El contrato de salida NO cambia: sigue siendo el JSON estricto de siempre.
+    const sistema = cuerpoDe(llamadas[0]!).messages[0]?.content ?? '';
+    expect(sistema).toContain('scoreConfianza');
+    expect(sistema).toContain('idsConocimiento');
+  });
+
+  it('indicación ausente → SIN la sección (camino E2 intacto)', async () => {
+    const { llamadas } = stubFetch([{ status: 200, contenido: JSON_LIMPIO }]);
+
+    await crearAdapter().generarRespuesta(ENTRADA);
+
+    const usuario = cuerpoDe(llamadas[0]!).messages[1]?.content ?? '';
+    expect(usuario).not.toContain('INDICACIÓN DEL OPERADOR');
+    expect(usuario.startsWith('CONSULTA:')).toBe(true);
+  });
+
+  it('indicación en blanco → SIN la sección (se ignora, camino normal)', async () => {
+    const { llamadas } = stubFetch([{ status: 200, contenido: JSON_LIMPIO }]);
+
+    await crearAdapter().generarRespuesta({ ...ENTRADA, indicacionHumana: '   ' });
+
+    const usuario = cuerpoDe(llamadas[0]!).messages[1]?.content ?? '';
+    expect(usuario).not.toContain('INDICACIÓN DEL OPERADOR');
+  });
+});
+
 describe('GeneradorOpenAiCompatible — parseo y saneo (E2·T3)', () => {
   it('JSON limpio → RespuestaGenerada tal cual, ids filtrados a los provistos', async () => {
     stubFetch([{ status: 200, contenido: JSON_LIMPIO }]);

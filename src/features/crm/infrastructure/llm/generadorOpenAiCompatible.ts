@@ -176,12 +176,22 @@ function mensajeUsuarioGenerar(entrada: EntradaGenerarRespuesta): string {
       : entrada.memorias
           .map((fragmento) => `[${fragmento.tipo}] ${fragmento.titulo}\n${fragmento.contenido}`)
           .join('\n\n');
-  const secciones = [
+  const secciones: string[] = [];
+  // E3·T2: the operator instruction opens the message — MAXIMUM
+  // priority, before everything else (a human already vouched for
+  // this answer; the motor masked it upstream like every body).
+  const indicacion = entrada.indicacionHumana?.trim() ?? '';
+  if (indicacion !== '') {
+    secciones.push(
+      `INDICACIÓN DEL OPERADOR (prioridad máxima — seguila estrictamente al redactar tu respuesta):\n${indicacion}`,
+    );
+  }
+  secciones.push(
     `CONSULTA:\n${entrada.consulta}`,
     `HISTORIAL:\n${historial}`,
     `CONOCIMIENTO:\n${conocimiento}`,
     `MEMORIAS:\n${memorias}`,
-  ];
+  );
   // E2·T9: the progressive-identification instruction rides ONLY on
   // unlinked conversations, as the LAST labeled section.
   if (entrada.contactoNuevo) {
