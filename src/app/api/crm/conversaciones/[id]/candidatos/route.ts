@@ -4,6 +4,7 @@ import { getSession } from '@/lib/auth';
 import { getCrmDb } from '@/features/crm/infrastructure/getCrmDb';
 import type { ContactoConEmpresa } from '@/features/crm/domain/ports';
 import { buildCrmError, mapCrmError, type CrmErrorResponse } from '../../../empresas/errorResponse';
+import { parsearIdConversacion } from '../../_id';
 
 /**
  * `GET /api/crm/conversaciones/[id]/candidatos?busqueda=` (permiso
@@ -31,12 +32,6 @@ interface CandidatosSuccess {
 const LIMITE_CANDIDATOS = 20;
 const MIN_BUSQUEDA = 2;
 
-/** `Number.parseInt` con cota de positividad; null → 400. */
-function parseConversacionId(raw: string): number | null {
-  const parsed = Number.parseInt(raw, 10);
-  return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
-}
-
 export async function GET(
   request: Request,
   ctx: { params: Promise<{ id: string }> },
@@ -49,7 +44,7 @@ export async function GET(
     }
 
     const { id: rawId } = await ctx.params;
-    const id = parseConversacionId(rawId);
+    const id = parsearIdConversacion(rawId);
     if (id === null) {
       return buildCrmError('VALIDATION_ERROR', '"id" debe ser un número entero positivo', 400);
     }

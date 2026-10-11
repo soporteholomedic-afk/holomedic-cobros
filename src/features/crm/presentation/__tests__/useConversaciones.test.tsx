@@ -212,6 +212,47 @@ describe('useConversaciones simularEntrada', () => {
     });
   });
 
+  it('no retorna hasta que el refetch silencioso posterior completó', async () => {
+    // El refetch queda colgado hasta que el test lo libera: si
+    // simularEntrda no espera el fetchOnce, retorna antes (R3).
+    let liberarRefetch: (() => void) | null = null;
+    fetchMock.mockImplementation((_url: unknown, init?: RequestInit) => {
+      if (init?.method === 'POST') {
+        return Promise.resolve(
+          new Response(
+            JSON.stringify({ success: true, conversacionId: 9, mensajeId: 99, vinculado: false }),
+            { status: 201 },
+          ),
+        );
+      }
+      if (fetchMock.mock.calls.length <= 1) return Promise.resolve(okListado()); // carga
+      return new Promise<Response>((resolve) => {
+        liberarRefetch = () => resolve(okListado());
+      });
+    });
+
+    const { result } = renderHook(() => useConversaciones(''));
+    await waitFor(() => expect(result.current.status).toBe('ready'));
+
+    let finalizado = false;
+    const simulacion = result.current.simularEntrada('0981 234 567', 'Hola, quiero info');
+    void simulacion.then(() => {
+      finalizado = true;
+    });
+
+    // El POST ya resolvió y disparó el GET del refetch (en vuelo)…
+    await vi.waitFor(() => expect(liberarRefetch).not.toBeNull());
+    // …pero mientras ese GET no completa, simularEntrada NO retorna.
+    expect(finalizado).toBe(false);
+
+    await act(async () => {
+      liberarRefetch?.();
+      await simulacion;
+    });
+    expect(finalizado).toBe(true);
+    expect(fetchMock).toHaveBeenCalledTimes(3); // carga + POST + refetch
+  });
+
   it('returns the API error without breaking on failure', async () => {
     fetchMock.mockImplementation(async (_url: unknown, init?: RequestInit) =>
       init?.method === 'POST'

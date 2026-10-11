@@ -172,7 +172,9 @@ export function useConversaciones(busqueda: string): UseConversacionesResult {
           };
         }
         const conversacionId = (json as { conversacionId?: unknown }).conversacionId;
-        fetchOnce(true, true); // la conversación nueva/movida aparece ya
+        // R3: se ESPERA el refetch — el caller (abrir el hilo de la
+        // conversación nueva/movida) corre con la fila ya en la lista.
+        await fetchOnce(true, true);
         return { ok: true, conversacionId: typeof conversacionId === 'number' ? conversacionId : null };
       } catch (err: unknown) {
         return { ok: false, error: err instanceof Error ? err.message : 'Error de red' };

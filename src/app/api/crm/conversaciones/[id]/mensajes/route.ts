@@ -9,6 +9,7 @@ import {
 } from '@/features/crm/application/responderConversacion';
 import type { MensajeCrm } from '@/features/crm/domain/entities';
 import { buildCrmError, mapCrmError, type CrmErrorResponse } from '../../../empresas/errorResponse';
+import { parsearIdConversacion } from '../../_id';
 
 /**
  * `POST /api/crm/conversaciones/[id]/mensajes` (permiso
@@ -43,12 +44,6 @@ function esCuerpoMensaje(v: unknown): v is { cuerpo: string } {
   return typeof v === 'object' && v !== null && typeof (v as { cuerpo?: unknown }).cuerpo === 'string';
 }
 
-/** `Number.parseInt` con cota de positividad; null → 400. */
-function parseConversacionId(raw: string): number | null {
-  const parsed = Number.parseInt(raw, 10);
-  return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
-}
-
 /** code → HTTP status (the use case never throws these). */
 function statusDeError(code: string): number {
   switch (code) {
@@ -77,7 +72,7 @@ export async function POST(
     }
 
     const { id: rawId } = await ctx.params;
-    const id = parseConversacionId(rawId);
+    const id = parsearIdConversacion(rawId);
     if (id === null) {
       return buildCrmError('VALIDATION_ERROR', '"id" debe ser un número entero positivo', 400);
     }

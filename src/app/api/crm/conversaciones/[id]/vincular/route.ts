@@ -9,6 +9,7 @@ import {
 } from '@/features/crm/application/vincularConversacion';
 import type { ConversacionListada } from '@/features/crm/domain/entities';
 import { buildCrmError, mapCrmError, type CrmErrorResponse } from '../../../empresas/errorResponse';
+import { parsearIdConversacion } from '../../_id';
 
 /**
  * `POST /api/crm/conversaciones/[id]/vincular` (permiso
@@ -53,12 +54,6 @@ function esVincularBody(v: unknown): v is VincularConversacionEntrada {
   return true;
 }
 
-/** `Number.parseInt` con cota de positividad; null → 400. */
-function parseConversacionId(raw: string): number | null {
-  const parsed = Number.parseInt(raw, 10);
-  return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
-}
-
 export async function POST(
   request: Request,
   ctx: { params: Promise<{ id: string }> },
@@ -71,7 +66,7 @@ export async function POST(
     }
 
     const { id: rawId } = await ctx.params;
-    const id = parseConversacionId(rawId);
+    const id = parsearIdConversacion(rawId);
     if (id === null) {
       return buildCrmError('VALIDATION_ERROR', '"id" debe ser un número entero positivo', 400);
     }

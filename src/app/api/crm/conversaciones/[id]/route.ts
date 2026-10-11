@@ -7,6 +7,7 @@ import {
   type HiloConversacion,
 } from '@/features/crm/application/obtenerHiloConversacion';
 import { buildCrmError, mapCrmError, type CrmErrorResponse } from '../../empresas/errorResponse';
+import { parsearIdConversacion } from '../_id';
 
 /**
  * `GET /api/crm/conversaciones/[id]` (permiso `crm_conversaciones`,
@@ -23,12 +24,6 @@ interface HiloSuccess extends HiloConversacion {
   success: true;
 }
 
-/** `Number.parseInt` con cota de positividad; null → 400. */
-function parseConversacionId(raw: string): number | null {
-  const parsed = Number.parseInt(raw, 10);
-  return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
-}
-
 export async function GET(
   _request: Request,
   ctx: { params: Promise<{ id: string }> },
@@ -41,7 +36,7 @@ export async function GET(
     }
 
     const { id: rawId } = await ctx.params;
-    const id = parseConversacionId(rawId);
+    const id = parsearIdConversacion(rawId);
     if (id === null) {
       return buildCrmError('VALIDATION_ERROR', '"id" debe ser un número entero positivo', 400);
     }
