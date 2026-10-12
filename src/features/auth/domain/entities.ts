@@ -26,6 +26,11 @@ export const PERMISOS = [
   // plain `crm` so conversation access can be granted or revoked on
   // its own — same additive pattern as crm_admin.
   'crm_conversaciones',
+  // agente-ia-crm (E4·T8): dedicated gate for knowledge ingestion
+  // (/admin/crm/conocimiento + /api/crm/conocimiento/ingestas).
+  // Separate from `crm` so uploading to La Guía's knowledge base can
+  // be granted on its own — same additive pattern as crm_conversaciones.
+  'crm_conocimiento',
 ] as const;
 
 export type Permiso = (typeof PERMISOS)[number];

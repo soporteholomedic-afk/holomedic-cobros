@@ -409,4 +409,113 @@ describe('Sidebar Component', () => {
       ).toHaveLength(0);
     });
   });
+
+  // agente-ia-crm E4·T6: entrada global "Calidad" — el panel de
+  // métricas vive en el MISMO permiso crm_conversaciones que la
+  // bandeja (ruta prefijo más largo /crm/calidad).
+  describe('Calidad entry (permiso crm_conversaciones, E4·T6)', () => {
+    beforeEach(() => {
+      mockUsePathname.mockReturnValue('/');
+      mockUseRouter.mockClear();
+      toastMock.mockClear();
+      toastMock.dismiss.mockClear();
+    });
+
+    it('debe mostrar "Calidad" y enlazar a /crm/calidad con el permiso', async () => {
+      mockAuthMe(conversacionesUser);
+      renderSidebar();
+      expect(await screen.findByText('Marcos Conversa')).toBeInTheDocument();
+
+      const link = screen.getByText('Calidad').closest('a');
+      expect(link).toHaveAttribute('href', '/crm/calidad');
+    });
+
+    it('permiso propio: con SOLO crm_conversaciones ve Calidad pero NO el panel CRM', async () => {
+      mockAuthMe(conversacionesUser);
+      renderSidebar();
+      expect(await screen.findByText('Calidad')).toBeInTheDocument();
+      expect(screen.queryByText('CRM')).not.toBeInTheDocument();
+    });
+
+    it('permiso propio: con SOLO crm ve el panel CRM pero NO Calidad', async () => {
+      mockAuthMe(crmUser);
+      renderSidebar();
+      expect(await screen.findByText('CRM')).toBeInTheDocument();
+      expect(screen.queryByText('Calidad')).not.toBeInTheDocument();
+    });
+
+    it('debe ocultar "Calidad" sin el permiso crm_conversaciones', async () => {
+      mockAuthMe(nonAdminUser);
+      renderSidebar();
+      expect(await screen.findByText('Ana Cobranza')).toBeInTheDocument();
+      expect(screen.queryByText('Calidad')).not.toBeInTheDocument();
+    });
+
+    it('marca activa la entrada en /crm/calidad', async () => {
+      mockUsePathname.mockReturnValue('/crm/calidad');
+      mockAuthMe(conversacionesUser);
+      renderSidebar();
+      const link = (await screen.findByText('Calidad')).closest('a');
+      expect(link?.className).toContain('text-sky-300');
+    });
+  });
+
+  // agente-ia-crm E4·T8: entrada global "Conocimiento" — la carga de
+  // conocimiento vive en su PROPIO permiso crm_conocimiento (ruta
+  // /admin/crm/conocimiento), independiente de crm/admin.
+  describe('Conocimiento entry (permiso crm_conocimiento, E4·T8)', () => {
+    const conocimientoUser: AuthUser = {
+      idUsuario: 'u-conocimiento',
+      usuario: 'cconocim',
+      nombre: 'Carla Conocimiento',
+      area: 'Comercial',
+      permisos: ['crm_conocimiento'],
+      activo: true,
+    };
+
+    beforeEach(() => {
+      mockUsePathname.mockReturnValue('/');
+      mockUseRouter.mockClear();
+      toastMock.mockClear();
+      toastMock.dismiss.mockClear();
+    });
+
+    it('debe mostrar "Conocimiento" y enlazar a /admin/crm/conocimiento con el permiso', async () => {
+      mockAuthMe(conocimientoUser);
+      renderSidebar();
+      expect(await screen.findByText('Carla Conocimiento')).toBeInTheDocument();
+
+      const link = screen.getByText('Conocimiento').closest('a');
+      expect(link).toHaveAttribute('href', '/admin/crm/conocimiento');
+    });
+
+    it('permiso propio: con SOLO crm_conocimiento ve Conocimiento pero NO el panel CRM', async () => {
+      mockAuthMe(conocimientoUser);
+      renderSidebar();
+      expect(await screen.findByText('Conocimiento')).toBeInTheDocument();
+      expect(screen.queryByText('CRM')).not.toBeInTheDocument();
+    });
+
+    it('permiso propio: con SOLO crm ve el panel CRM pero NO Conocimiento', async () => {
+      mockAuthMe(crmUser);
+      renderSidebar();
+      expect(await screen.findByText('CRM')).toBeInTheDocument();
+      expect(screen.queryByText('Conocimiento')).not.toBeInTheDocument();
+    });
+
+    it('debe ocultar "Conocimiento" sin el permiso crm_conocimiento', async () => {
+      mockAuthMe(nonAdminUser);
+      renderSidebar();
+      expect(await screen.findByText('Ana Cobranza')).toBeInTheDocument();
+      expect(screen.queryByText('Conocimiento')).not.toBeInTheDocument();
+    });
+
+    it('marca activa la entrada en /admin/crm/conocimiento', async () => {
+      mockUsePathname.mockReturnValue('/admin/crm/conocimiento');
+      mockAuthMe(conocimientoUser);
+      renderSidebar();
+      const link = (await screen.findByText('Conocimiento')).closest('a');
+      expect(link?.className).toContain('text-sky-300');
+    });
+  });
 });

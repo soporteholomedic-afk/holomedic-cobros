@@ -16,6 +16,7 @@ vi.mock('jsonwebtoken', () => ({
 }));
 
 import { proxy } from '@/proxy';
+import { PERMISOS } from '../entities';
 import { buscarRutaProtegida, permisoParaRuta } from '../routes';
 
 // ---- Domain level: the registration itself ----
@@ -128,6 +129,58 @@ describe('RUTAS_PROTEGIDAS — calidad entry (E4·T6)', () => {
   it('crm_conversaciones session → pass', () => {
     mockVerify.mockReturnValue({ permisos: ['crm_conversaciones'] });
     const res = proxy(makeRequest('/crm/calidad', 'a.jwt.token'));
+    expect(res.status).toBe(200);
+  });
+});
+
+// ---- agente-ia-crm E4·T8: knowledge upload rides its OWN crm_conocimiento permiso ----
+
+describe('RUTAS_PROTEGIDAS — conocimiento entries (E4·T8)', () => {
+  it('registers the crm_conocimiento permiso in the single source of truth', () => {
+    expect(PERMISOS).toContain('crm_conocimiento');
+  });
+
+  it('maps /admin/crm/conocimiento to crm_conocimiento under its OWN (longer) entry', () => {
+    expect(permisoParaRuta('/admin/crm/conocimiento')).toBe('crm_conocimiento');
+    expect(buscarRutaProtegida('/admin/crm/conocimiento')?.path).toBe('/admin/crm/conocimiento');
+    expect(buscarRutaProtegida('/admin/crm/conocimiento')?.label).toBe('Conocimiento');
+  });
+
+  it('maps /api/crm/conocimiento/ingestas to crm_conocimiento (API registered explicitly, E1 precedent)', () => {
+    expect(permisoParaRuta('/api/crm/conocimiento/ingestas')).toBe('crm_conocimiento');
+    expect(buscarRutaProtegida('/api/crm/conocimiento/ingestas')?.label).toBe('Conocimiento');
+  });
+
+  it('longest-first: both entries beat the generic /admin/usuarios and /api/crm gates', () => {
+    // admin-only and crm-only sessions must NOT inherit this surface.
+    expect(permisoParaRuta('/admin/crm/conocimiento')).not.toBe('admin');
+    expect(permisoParaRuta('/api/crm/conocimiento/ingestas')).not.toBe('crm');
+    // Subpaths (future E6 editor deep links) inherit the same gate.
+    expect(permisoParaRuta('/admin/crm/conocimiento/editor')).toBe('crm_conocimiento');
+  });
+
+  it('unauthenticated page → login redirect', () => {
+    mockVerify.mockReturnValue(null);
+    const res = proxy(makeRequest('/admin/crm/conocimiento'));
+    expect(res.status).toBe(307);
+    const location = res.headers.get('location') ?? '';
+    expect(location).toContain('/auth/login');
+    expect(location).toContain(`redirect=${encodeURIComponent('/admin/crm/conocimiento')}`);
+  });
+
+  it('crm-only session → denegado redirect naming crm_conocimiento / Conocimiento', () => {
+    mockVerify.mockReturnValue({ permisos: ['crm'] });
+    const res = proxy(makeRequest('/admin/crm/conocimiento', 'a.jwt.token'));
+    expect(res.status).toBe(307);
+    const params = new URL(res.headers.get('location') ?? '').searchParams;
+    expect(params.get('permiso')).toBe('crm_conocimiento');
+    expect(params.get('label')).toBe('Conocimiento');
+    expect(params.get('ruta')).toBe('/admin/crm/conocimiento');
+  });
+
+  it('crm_conocimiento session → pass', () => {
+    mockVerify.mockReturnValue({ permisos: ['crm_conocimiento'] });
+    const res = proxy(makeRequest('/admin/crm/conocimiento', 'a.jwt.token'));
     expect(res.status).toBe(200);
   });
 });

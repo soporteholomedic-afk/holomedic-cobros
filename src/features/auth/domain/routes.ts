@@ -70,6 +70,14 @@ export const RUTAS_PROTEGIDAS: RutaProtegida[] = [
   // proxy and re-checks crm_conversaciones IN-ROUTE (productividad
   // pattern).
   { path: '/crm/calidad',            permiso: 'crm_conversaciones', label: 'Calidad' },
+  // agente-ia-crm (E4·T8): knowledge upload has its OWN permiso.
+  // Both entries are LONGER prefixes than /admin/usuarios and /api/crm,
+  // so longest-first startsWith matching gates them independently of
+  // the generic admin/crm entries (crm_conversaciones pattern). The
+  // API surface is registered EXPLICITLY (E1 precedent): without its
+  // own entry it would fall under the plain-`crm` /api/crm gate.
+  { path: '/admin/crm/conocimiento',        permiso: 'crm_conocimiento', label: 'Conocimiento' },
+  { path: '/api/crm/conocimiento/ingestas', permiso: 'crm_conocimiento', label: 'Conocimiento' },
   { path: '/api/crm',             permiso: 'crm',              label: 'API CRM' },
   { path: '/crm',                 permiso: 'crm',              label: 'CRM' },
 ];

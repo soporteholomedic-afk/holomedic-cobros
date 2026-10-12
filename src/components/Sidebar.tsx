@@ -3,7 +3,7 @@
 import { useState, useCallback } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Activity, Building2, FileSpreadsheet, Home, DollarSign, FileText, Mail, Menu, X, Users, LogOut, MessageSquare, PenLine } from 'lucide-react';
+import { Activity, Building2, FileSpreadsheet, Home, DollarSign, FileText, Mail, Menu, X, Users, LogOut, MessageSquare, PenLine, Gauge, BookOpen } from 'lucide-react';
 import AreasMenuItem from './AreasMenuItem';
 import { useAuth } from '@/features/auth/presentation/hooks/useAuth';
 import { useNotificacionesConversaciones } from '@/features/crm/presentation/hooks/useNotificacionesConversaciones';
@@ -53,6 +53,15 @@ export default function Sidebar() {
   // E3·T6 active-state: exact match or any sub-route of the bandeja.
   const conversacionesActiva =
     pathname === '/crm/conversaciones' || pathname.startsWith('/crm/conversaciones/');
+  // E4·T6: "Calidad" rides the SAME crm_conversaciones gate (the
+  // quality panel is a conversations-tier surface).
+  const calidadActiva = pathname === '/crm/calidad' || pathname.startsWith('/crm/calidad/');
+  // agente-ia-crm E4·T8: "Conocimiento" is gated by its OWN permiso
+  // crm_conocimiento (the /admin/crm/conocimiento upload surface) —
+  // independent of crm/admin, same additive pattern as the others.
+  const canConocimiento = user?.permisos.includes('crm_conocimiento');
+  const conocimientoActiva =
+    pathname === '/admin/crm/conocimiento' || pathname.startsWith('/admin/crm/conocimiento/');
 
   return (
     <>
@@ -196,6 +205,42 @@ export default function Sidebar() {
                 <span
                   className={`${requiereAyuda > 0 ? '' : 'ml-auto '}w-1.5 h-1.5 rounded-full bg-sky-400 shadow-sm shadow-sky-400/50`}
                 />
+              )}
+            </Link>
+          )}
+
+          {canConversaciones && (
+            <Link
+              href="/crm/calidad"
+              onClick={closeMobile}
+              className={`flex items-center space-x-3 px-4 py-3 rounded-xl text-sm font-medium transition-all duration-200 ${
+                calidadActiva
+                  ? 'bg-sky-950/50 text-sky-300 border border-sky-800/30 shadow-sm'
+                  : 'text-slate-400 hover:text-white hover:bg-slate-800/50'
+              }`}
+            >
+              <Gauge className="w-5 h-5" />
+              <span>Calidad</span>
+              {calidadActiva && (
+                <span className="ml-auto w-1.5 h-1.5 rounded-full bg-sky-400 shadow-sm shadow-sky-400/50" />
+              )}
+            </Link>
+          )}
+
+          {canConocimiento && (
+            <Link
+              href="/admin/crm/conocimiento"
+              onClick={closeMobile}
+              className={`flex items-center space-x-3 px-4 py-3 rounded-xl text-sm font-medium transition-all duration-200 ${
+                conocimientoActiva
+                  ? 'bg-sky-950/50 text-sky-300 border border-sky-800/30 shadow-sm'
+                  : 'text-slate-400 hover:text-white hover:bg-slate-800/50'
+              }`}
+            >
+              <BookOpen className="w-5 h-5" />
+              <span>Conocimiento</span>
+              {conocimientoActiva && (
+                <span className="ml-auto w-1.5 h-1.5 rounded-full bg-sky-400 shadow-sm shadow-sky-400/50" />
               )}
             </Link>
           )}
