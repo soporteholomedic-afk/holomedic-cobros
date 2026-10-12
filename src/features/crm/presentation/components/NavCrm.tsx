@@ -35,6 +35,10 @@ interface SeccionCrm {
 const SECCIONES: readonly SeccionCrm[] = [
   { href: '/crm', label: 'Empresas', prefijo: '/crm/empresas' },
   { href: '/crm/conversaciones', label: 'Conversaciones', permiso: 'crm_conversaciones' },
+  // E4·T6: the quality panel lives in the SAME crm_conversaciones
+  // gate as the bandeja — the operator reviews what la Guía answered
+  // right where the conversations live.
+  { href: '/crm/calidad', label: 'Calidad', permiso: 'crm_conversaciones' },
   { href: '/crm/importar', label: 'Importar', permiso: 'crm_admin' },
   { href: '/crm/productividad', label: 'Productividad' },
 ];

@@ -28,6 +28,7 @@ import type {
   OrigenDatoFicha,
   PipelineEmpresa,
   RespuestaGenerada,
+  ResumenCalidad,
   ResultadoCrearTarea,
   ResultadoDestilacion,
   ResultadoGuardarMemoria,
@@ -1125,4 +1126,22 @@ export interface TareaAgenteRepository {
   reencolar(id: number): Promise<void>;
   /** intentos + 1; at 3 → FALLIDA (procesadaEn now), else PENDIENTE (retry with cooling). Error truncated to 500 chars. */
   fallar(id: number, error: string): Promise<void>;
+}
+
+// ---------------------------------------------------------------------------
+// Quality-metrics port (agente-ia-crm E4·T6) — the ONE aggregate behind
+// GET /api/crm/calidad y el panel /crm/calidad. Read-only by design: the
+// panel never writes. One SQL adapter implements it
+// (SqlServerCalidadRepository).
+// ---------------------------------------------------------------------------
+
+/**
+ * Outbound port for the quality metrics. `desde` is the window start —
+ * the CALLER owns the window policy (the fixed DIAS_VENTANA_CALIDAD in
+ * the route/page); every query is parameterized on it and touches no
+ * user input beyond that. Null fields mean "sin dato" (no qualifying
+ * rows), never 0.
+ */
+export interface CalidadRepository {
+  obtenerResumen(desde: Date): Promise<ResumenCalidad>;
 }

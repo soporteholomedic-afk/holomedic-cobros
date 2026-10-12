@@ -62,6 +62,14 @@ export const RUTAS_PROTEGIDAS: RutaProtegida[] = [
   // moot.
   { path: '/crm/conversaciones',     permiso: 'crm_conversaciones', label: 'Conversaciones' },
   { path: '/api/crm/conversaciones', permiso: 'crm_conversaciones', label: 'Conversaciones' },
+  // agente-ia-crm (E4·T6): the quality panel rides the SAME
+  // crm_conversaciones permiso — LONGER prefix than `/crm`, so
+  // longest-first startsWith matching gates it independently of the
+  // generic crm entry (firma_correo pattern). The API surface
+  // /api/crm/calidad stays under the generic /api/crm gate in the
+  // proxy and re-checks crm_conversaciones IN-ROUTE (productividad
+  // pattern).
+  { path: '/crm/calidad',            permiso: 'crm_conversaciones', label: 'Calidad' },
   { path: '/api/crm',             permiso: 'crm',              label: 'API CRM' },
   { path: '/crm',                 permiso: 'crm',              label: 'CRM' },
 ];

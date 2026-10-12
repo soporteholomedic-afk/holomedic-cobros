@@ -86,3 +86,48 @@ describe.each([
     expect(res.status).toBe(200);
   });
 });
+
+// ---- agente-ia-crm E4·T6: the quality panel rides crm_conversaciones ----
+
+describe('RUTAS_PROTEGIDAS — calidad entry (E4·T6)', () => {
+  it('maps /crm/calidad to crm_conversaciones under its OWN (longer) entry', () => {
+    expect(permisoParaRuta('/crm/calidad')).toBe('crm_conversaciones');
+    expect(buscarRutaProtegida('/crm/calidad')?.path).toBe('/crm/calidad');
+    expect(buscarRutaProtegida('/crm/calidad')?.label).toBe('Calidad');
+  });
+
+  it('longest-first: the specific entry beats the generic /crm gate', () => {
+    const ruta = buscarRutaProtegida('/crm/calidad');
+    expect(ruta?.permiso).toBe('crm_conversaciones');
+    expect(ruta?.permiso).not.toBe('crm');
+  });
+
+  it('the API surface /api/crm/calidad stays under the generic /api/crm crm gate in the PROXY; the route re-checks crm_conversaciones in-route (productividad pattern)', () => {
+    expect(permisoParaRuta('/api/crm/calidad')).toBe('crm');
+  });
+
+  it('unauthenticated page → login redirect', () => {
+    mockVerify.mockReturnValue(null);
+    const res = proxy(makeRequest('/crm/calidad'));
+    expect(res.status).toBe(307);
+    const location = res.headers.get('location') ?? '';
+    expect(location).toContain('/auth/login');
+    expect(location).toContain(`redirect=${encodeURIComponent('/crm/calidad')}`);
+  });
+
+  it('crm-only session → denegado redirect naming crm_conversaciones / Calidad', () => {
+    mockVerify.mockReturnValue({ permisos: ['crm'] });
+    const res = proxy(makeRequest('/crm/calidad', 'a.jwt.token'));
+    expect(res.status).toBe(307);
+    const params = new URL(res.headers.get('location') ?? '').searchParams;
+    expect(params.get('permiso')).toBe('crm_conversaciones');
+    expect(params.get('label')).toBe('Calidad');
+    expect(params.get('ruta')).toBe('/crm/calidad');
+  });
+
+  it('crm_conversaciones session → pass', () => {
+    mockVerify.mockReturnValue({ permisos: ['crm_conversaciones'] });
+    const res = proxy(makeRequest('/crm/calidad', 'a.jwt.token'));
+    expect(res.status).toBe(200);
+  });
+});

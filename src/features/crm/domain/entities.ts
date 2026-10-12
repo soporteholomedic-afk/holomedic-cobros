@@ -890,3 +890,42 @@ export interface ResultadoCrearTarea {
   id: number;
   creada: boolean;
 }
+
+// ---- Métricas de calidad (agente-ia-crm, E4·T6) ----
+
+/**
+ * Ventana fija del panel de calidad (E4·T6): las métricas ventanadas
+ * (respuestas, promedios, marcadas, solicitudes, intervenciones) se
+ * calculan sobre los últimos N días. El valor llega del SERVIDOR —
+ * la API no acepta parámetros de ventana, así el cliente nunca puede
+ * ampliarla (productividad: el scope no se negocia por request).
+ */
+export const DIAS_VENTANA_CALIDAD = 30;
+
+/**
+ * The quality panel's ONE aggregate row (E4·T6) — read-only metrics
+ * over la Guía's answers. NULL semantics are the contract: promedios
+ * y % son null cuando NO hay filas que promediar (sin dato, nunca 0);
+ * los contadores son enteros ≥ 0. `desde` cruza como ISO string
+ * (presentation-facing, ResumenNotificaciones precedent).
+ */
+export interface ResumenCalidad {
+  /** Inicio de la ventana efectiva (ISO) — eco del cálculo server-side. */
+  desde: string;
+  /** Respuestas generadas: emisor='IA' con score registrado, en ventana. */
+  respuestasIa: number;
+  /** Promedio de score sobre esas respuestas; null sin respuestas. */
+  scorePromedio: number | null;
+  /** Promedio de fidelidad autoevaluada (0..1); null sin filas con fidelidad. */
+  fidelidadPromedio: number | null;
+  /** % de respuestas generadas que citan fuentes; null sin respuestas. */
+  porcentajeConFuentes: number | null;
+  /** Respuestas IA marcadas deficiente (creadoEn del mensaje IA, en ventana). */
+  marcadasDeficiente: number;
+  /** CRM_SolicitudesAyuda creadas en ventana (proxy de escalados). */
+  solicitudesAyuda: number;
+  /** CRM_ConocimientoHuecos en ABIERTO — TOTAL acumulado, SIN ventana. */
+  huecosAbiertos: number;
+  /** Mensajes emisor='HUMANO' direccion='OUT' en ventana. */
+  intervencionesHumanas: number;
+}

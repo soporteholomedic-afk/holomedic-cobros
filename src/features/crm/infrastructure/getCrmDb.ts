@@ -9,6 +9,7 @@ import { SqlServerAsignacionesRepository } from './sqlserver/sqlServerAsignacion
 import { SqlServerConversacionRepository } from './sqlserver/sqlServerConversacionRepository';
 import { SqlServerMensajeRepository } from './sqlserver/sqlServerMensajeRepository';
 import { SqlServerConocimientoRepository } from './sqlserver/sqlServerConocimientoRepository';
+import { SqlServerCalidadRepository } from './sqlserver/sqlServerCalidadRepository';
 import { SqlServerTareaAgenteRepository } from './sqlserver/sqlServerTareaAgenteRepository';
 import { SqlServerCrmImportador } from './importar/importadorCrm';
 import type {
@@ -23,6 +24,7 @@ import type {
   CrmPipelineRepositoryPort,
   CrmResultadosRepositoryPort,
   CrmTransicionesRepositoryPort,
+  CalidadRepository,
   ConocimientoCrmRepository,
   MensajeCrmRepository,
   TareaAgenteRepository,
@@ -102,6 +104,13 @@ export interface CrmDb {
    * the real factory ALWAYS provides it).
    */
   tareas?: TareaAgenteRepository;
+  /**
+   * Quality-metrics adapter (agente-ia-crm E4·T6): the READ-ONLY
+   * aggregate behind GET /api/crm/calidad y /crm/calidad (same
+   * optional-for-fakes rule as conversaciones/mensajes; the real
+   * factory ALWAYS provides it).
+   */
+  calidad?: CalidadRepository;
 }
 
 let cached: Promise<CrmDb> | null = null;
@@ -134,6 +143,7 @@ export function getCrmDb(): Promise<CrmDb> {
       conversaciones: new SqlServerConversacionRepository(pool),
       mensajes: new SqlServerMensajeRepository(pool),
       conocimiento: new SqlServerConocimientoRepository(pool),
+      calidad: new SqlServerCalidadRepository(pool),
       tareas: new SqlServerTareaAgenteRepository(pool),
     };
   })();

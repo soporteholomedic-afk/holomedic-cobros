@@ -90,4 +90,45 @@ describe('NavCrm', () => {
     );
     expect(screen.getByRole('link', { name: 'Empresas' })).not.toHaveAttribute('aria-current');
   });
+
+  // agente-ia-crm E4·T6: "Calidad" rides the SAME crm_conversaciones
+  // gate as Conversaciones (longer-prefix route entry) and sits right
+  // after it in flow order — the operator reviews what la Guía
+  // answered right where the bandeja lives.
+  const LOS_PERMISOS_CONVERSACIONES = ['crm', 'crm_conversaciones'];
+
+  it('shows Calidad right after Conversaciones for a crm_conversaciones session', () => {
+    render(<NavCrm permisos={LOS_PERMISOS_CONVERSACIONES} />);
+
+    expect(screen.getByRole('link', { name: 'Calidad' })).toHaveAttribute(
+      'href',
+      '/crm/calidad',
+    );
+    expect(hrefsEnOrden()).toEqual([
+      '/crm',
+      '/crm/conversaciones',
+      '/crm/calidad',
+      '/crm/productividad',
+    ]);
+  });
+
+  it('hides Calidad from a session without crm_conversaciones', () => {
+    render(<NavCrm permisos={LOS_PERMISOS_VENDEDOR} />);
+
+    expect(screen.queryByRole('link', { name: 'Calidad' })).not.toBeInTheDocument();
+    expect(hrefsEnOrden()).not.toContain('/crm/calidad');
+  });
+
+  it('marks Calidad active on its own route', () => {
+    vi.mocked(usePathname).mockReturnValue('/crm/calidad');
+    render(<NavCrm permisos={LOS_PERMISOS_CONVERSACIONES} />);
+
+    expect(screen.getByRole('link', { name: 'Calidad' })).toHaveAttribute(
+      'aria-current',
+      'page',
+    );
+    expect(screen.getByRole('link', { name: 'Conversaciones' })).not.toHaveAttribute(
+      'aria-current',
+    );
+  });
 });
