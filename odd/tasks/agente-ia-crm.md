@@ -1,6 +1,6 @@
 # Feature: agente-ia-crm — La Guía (agente IA de conversaciones del CRM)
 
-> Estado: **E1–E3 completos, revisados y promovidos a develop (RDD 3/3, 4/4, 7/7) · E4 implementado y verificado — revisión RDD pendiente** · Creado: 2026-10-10 · Plan ampliado a 6 entregables: 2026-10-11 · E3 promovido a develop (fast-forward `20fde7c..bf7f73c`, sin push): 2026-10-12
+> Estado: **E1–E4 completos, revisados y quemados (RDD 3/3, 4/4, 7/7, 6/6+split) · E1–E3 en develop · E4 en `feature/agente-ia-crm-e4` listo para promoción** · Creado: 2026-10-10 · Plan ampliado a 6 entregables: 2026-10-11 · E3 promovido a develop (fast-forward `20fde7c..bf7f73c`, sin push): 2026-10-12
 > Registro maestro de diseño: Engram tópico `agente-ia-crm` (obs 825, revisiones al día).
 > Prototipos visuales: `http://172.16.10.20:1226/` (index · mockup · flujo-guia · configuracion).
 
@@ -242,11 +242,23 @@ El candidato completo (92 rutas/~12.700 líneas) excedió `lens_context_budget_e
   - [x] E4·T6 Panel `/crm/calidad`: API resumen (30 días) + página con KpiCards + entrada nav + tests — commit `2298b4f` (165 passed; 3 integración DB real con semántica NULL exacta; repo CalidadRepository en getCrmDb; ruta RUTAS_PROTEGIDAS con crm_conversaciones; nota reloj mixto SYSDATETIME vs SYSUTCDATETIME documentada)
   - [x] E4·T7 Ingesta backend: `CRM_Conocimiento.origen` + `CRM_IngestasConocimiento` + extracción TXT/PDF/DOCX (pdf-parse+mammoth) + limpieza+chunking + cola `INGESTAR_CONOCIMIENTO` + etiquetas sugeridas + tests — commit `9835266` (134+139 tests; dedup NULL verificado: conversacionId NULL + mensajeId=ingestaId; despacho aprobado fuera de superficies iniciales por interacción; fixture docx 967B generado con python3 zipfile)
   - [x] E4·T8 Carga desde la plataforma: permiso `crm_conocimiento` + APIs ingesta (texto pegado JSON / archivo multipart con límite) + vista mínima `/admin/crm/conocimiento` con estado en vivo + tests — commit `20fe479` (47 tests nuevos; extracción en upload; drenaje webhook-idiom; polling 5s stale-while-error; contenidoCrudo sin exponer por wire)
-  - [x] E4·T9 Verificación final: suite scoped + tsc + build + sync SDK + docs módulo + demo DoD + revisión RDD por rebanadas — verificación 3720/3721 (1 fallo preexistente ambiental sqlServerEmpresaRepository documentado) · tsc ✓ 0 · build ✓ 42s sin warnings E4 · sync SDK dry-run 85/0 con paths E4 · smoke E2E DoD `temp/e4-calidad.smoke.test.ts` PASS 5/5 con residuo cero · lint: 4 problemas de deuda E3 (2 errores react-hooks/set-state-in-effect de T6-E3, 2 unused imports) documentados para remediación propia, no bloquean. **Revisión RDD: PENDIENTE (preflight inspect ejecutado; rebanado a decisión del usuario)**
+  - [x] E4·T9 Verificación final: suite scoped + tsc + build + sync SDK + docs módulo + demo DoD + revisión RDD por rebanadas — verificación 3720/3721 (1 fallo preexistente ambiental sqlServerEmpresaRepository documentado) · tsc ✓ 0 · build ✓ 42s sin warnings E4 · sync SDK dry-run 85/0 con paths E4 · smoke E2E DoD `temp/e4-calidad.smoke.test.ts` PASS 5/5 con residuo cero · lint: 4 problemas de deuda E3 (2 errores react-hooks/set-state-in-effect de T6-E3, 2 unused imports) documentados para remediación propia, no bloquean. **Revisión RDD: COMPLETA — ver arriba**
 
 **Demo (DoD)**: se sube un PDF con condiciones comerciales → la Guía responde una pregunta sobre ese contenido citándolo → se marca una respuesta débil → queda el hueco enlazado → se mejora el prompt (bump de `promptVersion`) y la misma pregunta responde mejor, ambas versiones auditadas en el hilo → las memorias muestran recall relevante sin duplicados.
 
-- [ ] E4 — Cerebro de calidad — **IMPLEMENTADO Y VERIFICADO (T1–T8 + T9 verificación/smoke); falta revisión RDD**
+- [x] E4 — Cerebro de calidad — **COMPLETO Y REVISADO (RDD 6/6 rebanadas + split)**
+
+### Revisión nativa RDD (E4) — 6/6 rebanadas aprobadas y quemadas (2026-10-12)
+El usuario eligió rebanar directo (práctica E1–E3); la propuesta inicial de 6 excedió presupuesto en una (T7+T8 juntas: `lens_context_budget_exceeded`, SIN lineage creada, retry-safe) y se partió en E1+F — 6 lineages, todas aprobadas sin correcciones:
+- **A** `bf7f73c..887d0e2` T1+T2 prompt v2+golden (17 paths/1.594 líneas, 1 lente) — **APROBADA** (`review-84e4611e8c388330`, quemada). Advisories: R3-golden-invention-gating (W), R3-prompt-scope-encoding (W), +2 S.
+- **B** `887d0e2..e3c91e2` T3+T4 recall+destilación (15 paths/1.336, 1 lente) — **APROBADA** (`review-ca39a7a0c1da42e3`, quemada). Advisories: R3-generación-version-audit (W), R3-síntesis-masking-coverage (W), +2 S.
+- **C** `e3c91e2..40c201a` T5 fidelidad+deficiente (27 paths/1.880, 1 lente) — **APROBADA** (`review-ec902a10043a0f5d`, quemada). Advisories: R3-cursor-walk-sin-cobertura (W), R3-hueco-idempotencia-no-atómica (W), +4 S.
+- **D** `40c201a..2298b4f` T6 panel (13 paths/1.003, HIGH por auth → grupo 4 lentes) — **APROBADA** (`review-e53e90b8ee4f7c10`, quemada, 4/4 reviewers). 11 informativos (R2 W, R3-mixed-clock W, R4 W, +8 S).
+- **E (intento)** `2298b4f..20fe479` T7+T8 juntas (43 paths) — `lens_context_budget_exceeded`, SIN lineage; partido en E1+F.
+- **E1** `2298b4f..9835266` T7 backend (30 paths/2.847, 1 lente) — **APROBADA** (`review-aa27f00cf4d7f954`, quemada). 3 W (etiquetas-overflow, migration-index-drop, silent-chunk-truncation) + 2 S.
+- **F** `9835266..896d77f` T8+carga+docs (14 paths/2.107, HIGH → grupo 4 lentes) — **APROBADA** (`review-2db3573a8cb2f8b7`, quemada, 4/4). 15 informativos (5 W: R1-upload, R2-panel-doc, R3-hook-stale, R3-upload-bound, R4-001/002; +9 S).
+
+**Total: 46 hallazgos informativos NO bloqueantes (0 CRITICAL, 0 correcciones exigidas; 12 W + 34 S).** Lineages quemadas con ack nativo; worktrees `temp/wt-e4*` removidos tras el cierre. Gotchas nuevos: (1) revisar por rebanadas exige worktree en el tip de cada rebanada (el HEAD del checkout define el candidato); (2) bindings de grupo se copian byte a byte — un hash mal transcrita rechaza el grupo entero sin capturar nada.
 
 ### Registro E4 (2026-10-12)
 
