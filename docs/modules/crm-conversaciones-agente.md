@@ -169,6 +169,29 @@ Ranking (`recuperarConocimiento`): prefilter LIKE **por términos** (NFD, >2 cha
 - **API consumida**: `GET /context` (solo el bloque pineados) + `GET /search` para el recall; `save` con `operation_id` idempotente + poll de commit; `PUT /observations/{id}/pin`. Un 404 `unknown_project` es el estado vacío normal de una empresa nueva, no un error.
 - **Retención**: 12 meses — el job de purga llega en E5.
 
+## Cerebro de calidad (E4)
+
+### Prompt v2 modular y versionado (`application/prompt/promptGeneracion.ts`)
+
+El armado del prompt es dueño de la capa aplicación — los adapters LLM son transporte puro. `armarPromptGeneracion(entrada)` compone system base (persona La Guía/Holomedic, voseo cálido, formato WhatsApp, anti-invención dura, cierre con próximo paso) + bloques condicionales (indicación → PRIORIDAD MÁXIMA, contactoNuevo → PRESENTACIÓN INICIAL, KB hit → fragmentos `[id N]` / miss → FUERA DE COBERTURA, memorias vs primera interacción) sobre el user de secciones etiquetadas (INDICACIÓN → CONSULTA → SINTESIS DEL HILO → HISTORIAL → CONOCIMIENTO → MEMORIAS → CONTACTO NUEVO).
+
+- `PROMPT_VERSION='v2'` se estampa en `CRM_Mensajes.promptVersion` junto a score/modelo/fuentes — cada iteración de prompt queda auditada y comparable en el hilo.
+- Contrato JSON de generación: `{texto, scoreConfianza, fidelidad, enScope, requiereAyudaHumana, idsConocimiento}` — `fidelidad` es el self-score de apego a fuentes (clamp [0,1]; ausente → NULL = sin dato, nunca 0).
+- Destilación v2: observaciones autocontenidas (con sujeto y contexto), títulos accionables ≤8 palabras, `pinear` solo acuerdos/compromisos que obligan a una parte, jamás datos sensibles, montos/fechas literales.
+
+### Recall híbrido de memorias (`rankearMemorias`)
+
+`puntaje = 2.0·léxico + frescura·exp(−días/30) + nivel(chat +0.5) + 2.0 pineado` sobre candidatos de `buscar` (top-10), con dedup (título normalizado o contención de contenido; pineado siempre sobrevive) y presupuestos por bloque `MAX_MEMORIAS_PINEADOS=3 / EMPRESA=3 / CHAT=5`. La síntesis del hilo (`sintetizarHilo`) agrega memoria de trabajo determinista (intercambios, temas tratados según memorias de chat, último pedido del cliente) sin llamada LLM extra.
+
+### Calidad medible
+
+- **Marcar respuesta deficiente** (1 click en la burbuja IA): `POST /api/crm/conversaciones/[id]/deficiente {mensajeId}` → valida emisor IA → hueco en `CRM_ConocimientoHuecos` con `origenMensajeId` + `deficiente=1` en el mensaje (409 si ya estaba). La curación de la cola sigue en E6.
+- **Panel `/crm/calidad`** (permiso `crm_conversaciones`): respuestas IA, score promedio, fidelidad promedio, % con fuentes, marcadas deficiente, solicitudes de ayuda, huecos abiertos, intervenciones humanas — ventana fija 30 días; NULL = sin dato.
+
+### Información subible (`/admin/crm/conocimiento`, permiso `crm_conocimiento`)
+
+Pegar texto o subir PDF/TXT/DOCX (≤5 MB) → extracción en upload (`pdf-parse`/`mammoth`) → `CRM_IngestasConocimiento` PENDIENTE → tarea `INGESTAR_CONOCIMIENTO` en la cola del agente (dedup `conversacionId NULL + mensajeId=ingestaId`; drenaje inmediato + barredor 20s backstop) → chunking por párrafos (~900 chars, solape ~150, tope 200) → entradas en `CRM_Conocimiento` con `origen='SUBIDO'`, etiquetas sugeridas + `subido`, vigencia heredada → mismo RAG, uso inmediato. Estado en vivo por polling (5s) mientras hay ingestas en curso. El editor CRUD completo llega en E6.
+
 ## Golden set del prompt (E4)
 
 `src/features/crm/application/prompt/goldenSet/` es la vara para medir cada iteración del prompt: un corpus de 13 preguntas típicas de Holomedic (`casos.ts`, etiquetado con `PROMPT_GOLDEN_VERSION`) + un evaluador determinista puro (`evaluarRespuestaGolden.ts`) que puntúa cada respuesta por cobertura de términos clave (`termino_faltante`), no-invención — nada de precios/cifras que no estén en las fuentes del caso (`dato_inventado`, `termino_prohibido`, con whitelist de los números que las propias fuentes ya traen) —, formato WhatsApp (`formato_*`, `largo_excesivo`) y presencia (`respuesta_vacia`, `respuesta_corta`). Dos niveles de ejecución:
