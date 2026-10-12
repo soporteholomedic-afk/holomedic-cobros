@@ -382,6 +382,13 @@ BEGIN
     -- are business policy, not row integrity.
     vigenciaDesde   DATETIME2      NULL,
     vigenciaHasta   DATETIME2      NULL,
+    -- E4 (agente-ia-crm): procedencia de la entrada — MANUAL (alta
+    -- directa / editor E5 y seed antiguo), SEMILLA (script de siembra),
+    -- SUBIDO (archivos de la ingesta E4·T7). NOT NULL con DEFAULT
+    -- nombrado: las filas históricas nacen MANUAL (deficiente
+    -- precedent); el CHECK viaja inline para que la columna nunca
+    -- exista sin él (backstop en POSTALTER para estados fuera de banda).
+    origen          NVARCHAR(20)   NOT NULL CONSTRAINT DF_CRM_Conocimiento_Origen DEFAULT 'MANUAL' CONSTRAINT CK_CRM_Conocimiento_Origen CHECK (origen IN ('MANUAL','SEMILLA','SUBIDO')),
     activo          BIT            NOT NULL DEFAULT 1,
     -- UTC stamps (E2 ranking clock); actualizadoEn starts NULL and
     -- only the E5 editor writes it (read-only table until then).
@@ -389,14 +396,49 @@ BEGIN
     actualizadoEn   DATETIME2      NULL
   );
 END;
+IF NOT EXISTS (SELECT 1 FROM sys.tables WHERE name = 'CRM_IngestasConocimiento' AND schema_id = SCHEMA_ID('dbo'))
+BEGIN
+  CREATE TABLE dbo.CRM_IngestasConocimiento (
+    -- E4·T7 (agente-ia-crm): una ingesta de conocimiento — un documento
+    -- o texto pegado que el operador sube y el procesador de la cola
+    -- trocea en entradas de CRM_Conocimiento. Sin FK: es una fila de
+    -- trabajo autónoma (CRM_AgenteTareas.mensajeId precedent).
+    id              BIGINT         IDENTITY(1,1) NOT NULL PRIMARY KEY,
+    -- Nombre visible del documento (archivo o título del pegado).
+    nombre          NVARCHAR(260)  NOT NULL,
+    -- Catálogo cerrado: pegado de texto o archivo subido. El crudo ya
+    -- viene EXTRAÍDO a texto (la ruta de subida T8 usa
+    -- infrastructure/extraccion/extraerTextoArchivo en el upload) —
+    -- tipo describe la procedencia, no el formato de contenidoCrudo.
+    tipo            NVARCHAR(10)   NOT NULL CONSTRAINT CK_CRM_IngestasConocimiento_Tipo CHECK (tipo IN ('TEXTO','PDF','TXT','DOCX')),
+    tamanoBytes     INT            NOT NULL,
+    -- Texto crudo ya extraído (NULL solo si una fila futura cambia el
+    -- contrato; el procesador la trata como vacía → COMPLETADA(0)).
+    contenidoCrudo  NVARCHAR(MAX)  NULL,
+    estado          NVARCHAR(12)   NOT NULL CONSTRAINT DF_CRM_IngestasConocimiento_Estado DEFAULT 'PENDIENTE' CONSTRAINT CK_CRM_IngestasConocimiento_Estado CHECK (estado IN ('PENDIENTE','PROCESANDO','COMPLETADA','FALLIDA')),
+    error           NVARCHAR(MAX)  NULL,
+    entradasCreadas INT            NOT NULL DEFAULT 0,
+    creadoPor       NVARCHAR(60)   NULL,
+    -- UTC stamps (Conocimiento precedent).
+    creadoEn        DATETIME2      NOT NULL DEFAULT SYSUTCDATETIME(),
+    procesadoEn     DATETIME2      NULL,
+    -- Vigencia heredable: el procesador la copia a cada entrada creada.
+    vigenciaDesde   DATETIME2      NULL,
+    vigenciaHasta   DATETIME2      NULL
+  );
+END;
 IF NOT EXISTS (SELECT 1 FROM sys.tables WHERE name = 'CRM_AgenteTareas' AND schema_id = SCHEMA_ID('dbo'))
 BEGIN
   CREATE TABLE dbo.CRM_AgenteTareas (
     id              BIGINT         IDENTITY(1,1) NOT NULL PRIMARY KEY,
     -- CASCADE mirrors CRM_Mensajes: deleting the conversation drops
-    -- its tasks. Single FK — no second path into the graph (see the
+    -- its tasks. NULLable desde E4·T7: las tareas INGESTAR_CONOCIMIENTO
+    -- no tienen conversación — conversacionId NULL (la FK no aplica) y
+    -- el id de la ingesta viaja en mensajeId; el dedup UNIQUE considera
+    -- los NULL iguales, así que (NULL, ingestaId, tipo) sigue siendo
+    -- idempotente. Single FK — no second path into the graph (see the
     -- header note on mensajeId).
-    conversacionId  INT            NOT NULL CONSTRAINT FK_CRM_AgenteTareas_Conversacion REFERENCES dbo.CRM_Conversaciones (id) ON DELETE CASCADE,
+    conversacionId  INT            NULL CONSTRAINT FK_CRM_AgenteTareas_Conversacion REFERENCES dbo.CRM_Conversaciones (id) ON DELETE CASCADE,
     -- BIGINT: matches CRM_Mensajes.id (high-volume history,
     -- Transiciones precedent). No FK — header note.
     mensajeId       BIGINT         NOT NULL,
@@ -414,6 +456,25 @@ BEGIN
     -- tipo) — a replayed webhook delivery never double-enqueues.
     CONSTRAINT UQ_CRM_AgenteTareas_ConversacionMensajeTipo UNIQUE (conversacionId, mensajeId, tipo)
   );
+END;
+-- E4·T7 (agente-ia-crm): conversacionId pasa a NULLable en bases que
+-- ya traen la tabla (el CREATE de arriba ya nace NULLable en frescas;
+-- el guard corre UNA vez). T-SQL exige soltar primero el índice, la UQ
+-- y la FK que tocan la columna; todos se re-crean con sus nombres
+-- canónicos y la misma semántica (CASCADE + triple dedup).
+IF EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('dbo.CRM_AgenteTareas') AND name = 'conversacionId' AND is_nullable = 0)
+BEGIN
+  IF EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_CRM_AgenteTareas_Estado' AND object_id = OBJECT_ID('dbo.CRM_AgenteTareas'))
+    DROP INDEX IX_CRM_AgenteTareas_Estado ON dbo.CRM_AgenteTareas;
+  IF EXISTS (SELECT 1 FROM sys.key_constraints WHERE name = 'UQ_CRM_AgenteTareas_ConversacionMensajeTipo' AND parent_object_id = OBJECT_ID('dbo.CRM_AgenteTareas'))
+    ALTER TABLE dbo.CRM_AgenteTareas DROP CONSTRAINT UQ_CRM_AgenteTareas_ConversacionMensajeTipo;
+  IF EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = 'FK_CRM_AgenteTareas_Conversacion' AND parent_object_id = OBJECT_ID('dbo.CRM_AgenteTareas'))
+    ALTER TABLE dbo.CRM_AgenteTareas DROP CONSTRAINT FK_CRM_AgenteTareas_Conversacion;
+  ALTER TABLE dbo.CRM_AgenteTareas ALTER COLUMN conversacionId INT NULL;
+  ALTER TABLE dbo.CRM_AgenteTareas ADD CONSTRAINT FK_CRM_AgenteTareas_Conversacion
+    FOREIGN KEY (conversacionId) REFERENCES dbo.CRM_Conversaciones (id) ON DELETE CASCADE;
+  ALTER TABLE dbo.CRM_AgenteTareas ADD CONSTRAINT UQ_CRM_AgenteTareas_ConversacionMensajeTipo
+    UNIQUE (conversacionId, mensajeId, tipo);
 END;
 IF NOT EXISTS (SELECT 1 FROM sys.tables WHERE name = 'CRM_SolicitudesAyuda' AND schema_id = SCHEMA_ID('dbo'))
 BEGIN
@@ -545,6 +606,19 @@ BEGIN
   -- deficiente que lo dejó. Sin FK a propósito (ver el comentario en
   -- el CREATE): los mensajes nunca se borran en este dominio.
   ALTER TABLE dbo.CRM_ConocimientoHuecos ADD origenMensajeId BIGINT NULL;
+END;
+IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('dbo.CRM_Conocimiento') AND name = 'origen')
+BEGIN
+  -- E4·T7 (agente-ia-crm): procedencia de la entrada de conocimiento —
+  -- MANUAL (historícas + editor E5), SEMILLA (script de siembra),
+  -- SUBIDO (ingesta de archivos). NOT NULL con DEFAULT: las filas
+  -- históricas nacen MANUAL (deficiente precedent). DF + CHECK con
+  -- nombre viajan inline (memoriaActiva precedent); los backstops del
+  -- POSTALTER batch cubren bases con la columna ya aplicada fuera de
+  -- banda sin las restricciones.
+  ALTER TABLE dbo.CRM_Conocimiento ADD origen NVARCHAR(20) NOT NULL
+    CONSTRAINT DF_CRM_Conocimiento_Origen DEFAULT 'MANUAL'
+    CONSTRAINT CK_CRM_Conocimiento_Origen CHECK (origen IN ('MANUAL','SEMILLA','SUBIDO'));
 END;
 IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'UX_CRM_Contactos_Principal' AND object_id = OBJECT_ID('dbo.CRM_Contactos'))
 BEGIN
@@ -722,6 +796,14 @@ BEGIN
   ALTER TABLE dbo.CRM_AgenteTareas DROP CONSTRAINT CK_CRM_AgenteTareas_Tipo;
   ALTER TABLE dbo.CRM_AgenteTareas ADD CONSTRAINT CK_CRM_AgenteTareas_Tipo CHECK (tipo IN ('GENERAR_RESPUESTA','RESPONDER_CON_INDICACION'));
 END;
+IF EXISTS (SELECT 1 FROM sys.check_constraints WHERE name = 'CK_CRM_AgenteTareas_Tipo' AND parent_object_id = OBJECT_ID('dbo.CRM_AgenteTareas') AND definition NOT LIKE '%INGESTAR_CONOCIMIENTO%')
+-- Ingesta de conocimiento (E4·T7): widen again — the queue now also
+-- carries INGESTAR_CONOCIMIENTO (the ingesta id travels in mensajeId,
+-- conversacionId NULL). Same widening pattern as E3.
+BEGIN
+  ALTER TABLE dbo.CRM_AgenteTareas DROP CONSTRAINT CK_CRM_AgenteTareas_Tipo;
+  ALTER TABLE dbo.CRM_AgenteTareas ADD CONSTRAINT CK_CRM_AgenteTareas_Tipo CHECK (tipo IN ('GENERAR_RESPUESTA','RESPONDER_CON_INDICACION','INGESTAR_CONOCIMIENTO'));
+END;
 `;
 
 /**
@@ -734,6 +816,19 @@ END;
  * the first batch). A second batch gives the ALTER room to land first.
  */
 const SCHEMA_SQL_POSTALTER = /* sql */ `
+IF EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('dbo.CRM_Conocimiento') AND name = 'origen' AND default_object_id = 0)
+BEGIN
+  -- E4·T7 backstop: la columna origen existe pero SIN default (aplicada
+  -- fuera de banda) — el named default llega aquí porque el segundo
+  -- batch ya ve la columna (ver la nota de la función migrate).
+  ALTER TABLE dbo.CRM_Conocimiento ADD CONSTRAINT DF_CRM_Conocimiento_Origen DEFAULT 'MANUAL' FOR origen;
+END;
+IF NOT EXISTS (SELECT 1 FROM sys.check_constraints WHERE name = 'CK_CRM_Conocimiento_Origen' AND parent_object_id = OBJECT_ID('dbo.CRM_Conocimiento'))
+BEGIN
+  -- E4·T7 backstop: mismo caso para el CHECK con nombre (el col-add
+  -- inline ya lo crea en la vía normal; esto solo cubre fuera de banda).
+  ALTER TABLE dbo.CRM_Conocimiento ADD CONSTRAINT CK_CRM_Conocimiento_Origen CHECK (origen IN ('MANUAL','SEMILLA','SUBIDO'));
+END;
 IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_CRM_Contactos_TelefonoNormalizado' AND object_id = OBJECT_ID('dbo.CRM_Contactos'))
 BEGIN
   -- Autovinculación seek (E2·T8): exact match on the normalized E.164

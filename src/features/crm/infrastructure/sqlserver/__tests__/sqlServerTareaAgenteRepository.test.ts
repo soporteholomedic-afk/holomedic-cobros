@@ -114,6 +114,86 @@ async function drenarPendientes(): Promise<void> {
   await repo.reclamarPendientes(1000);
 }
 
+// ---- E4·T7 (agente-ia-crm): tareas INGESTAR_CONOCIMIENTO (conversacionId NULL) ----
+
+/** Base de los mensajeId de ingesta probe (grandes, nunca colisionan). */
+const MARCA_INGESTA_ID = 4_200_000_000;
+const idsTareasIngesta = new Set<number>();
+let secuenciaIngesta = 0;
+
+function ingestaIdProbe(): number {
+  secuenciaIngesta += 1;
+  return MARCA_INGESTA_ID + secuenciaIngesta;
+}
+
+describe('SqlServerTareaAgenteRepository — tareas INGESTAR_CONOCIMIENTO (E4·T7)', () => {
+  it('crearSiNoExiste con conversacionId NULL: dedup por (NULL, ingestaId, tipo) — misma clave → mismo id, creada:false', async () => {
+    try {
+      const ingestaId = ingestaIdProbe();
+      const primera = await repo.crearSiNoExiste({
+        conversacionId: null,
+        mensajeId: ingestaId,
+        tipo: 'INGESTAR_CONOCIMIENTO',
+      });
+      idsTareasIngesta.add(primera.id);
+      expect(primera.creada).toBe(true);
+
+      // Replay de la MISMA ingesta: la UNIQUE trata los NULL como
+      // iguales → violación atrapada → el fallback SELECT debe
+      // encontrar la fila con IS NULL y devolver la misma id.
+      const segunda = await repo.crearSiNoExiste({
+        conversacionId: null,
+        mensajeId: ingestaId,
+        tipo: 'INGESTAR_CONOCIMIENTO',
+      });
+      expect(segunda).toEqual({ id: primera.id, creada: false });
+
+      // Otra ingesta (otro mensajeId) es OTRA tarea.
+      const otraIngesta = ingestaIdProbe();
+      const tercera = await repo.crearSiNoExiste({
+        conversacionId: null,
+        mensajeId: otraIngesta,
+        tipo: 'INGESTAR_CONOCIMIENTO',
+      });
+      idsTareasIngesta.add(tercera.id);
+      expect(tercera.creada).toBe(true);
+      expect(tercera.id).not.toBe(primera.id);
+    } finally {
+      for (const id of idsTareasIngesta) {
+        await pool.request().input('id', mssql.BigInt, id)
+          .query('DELETE FROM dbo.CRM_AgenteTareas WHERE id = @id');
+      }
+      idsTareasIngesta.clear();
+    }
+  });
+
+  it('el claim devuelve la tarea de ingesta con conversacionId NULL intacto (mapeo honesto)', async () => {
+    try {
+      await drenarPendientes();
+      const ingestaId = ingestaIdProbe();
+      const { id } = await repo.crearSiNoExiste({
+        conversacionId: null,
+        mensajeId: ingestaId,
+        tipo: 'INGESTAR_CONOCIMIENTO',
+      });
+      idsTareasIngesta.add(id);
+
+      const reclamadas = await repo.reclamarPendientes(1000);
+      const deIngesta = reclamadas.find((t) => t.id === id);
+      expect(deIngesta, 'la tarea de ingesta fue reclamada').toBeDefined();
+      expect(deIngesta?.tipo).toBe('INGESTAR_CONOCIMIENTO');
+      expect(deIngesta?.conversacionId, 'NULL cruza tal cual (sin placeholder 0)').toBeNull();
+      expect(deIngesta?.mensajeId).toBe(ingestaId);
+    } finally {
+      for (const id of idsTareasIngesta) {
+        await pool.request().input('id', mssql.BigInt, id)
+          .query('DELETE FROM dbo.CRM_AgenteTareas WHERE id = @id');
+      }
+      idsTareasIngesta.clear();
+    }
+  });
+});
+
 beforeAll(async () => {
   const db = await getCrmDb();
   pool = db.pool;
@@ -124,6 +204,18 @@ beforeAll(async () => {
 
 afterAll(async () => {
   if (pool) {
+    // E4·T7: las tareas de ingesta NO cascadean (conversacionId NULL) —
+    // se rastrean y borran explícitamente, con backstop por mensajeId.
+    for (const id of idsTareasIngesta) {
+      await pool.request().input('id', mssql.BigInt, id)
+        .query('DELETE FROM dbo.CRM_AgenteTareas WHERE id = @id');
+    }
+    await pool
+      .request()
+      .input('desde', mssql.BigInt, MARCA_INGESTA_ID)
+      .query(
+        'DELETE FROM dbo.CRM_AgenteTareas WHERE conversacionId IS NULL AND mensajeId >= @desde AND tipo = \'INGESTAR_CONOCIMIENTO\'',
+      );
     // The conversations own the graph: CRM_Mensajes and
     // CRM_AgenteTareas cascade away with them.
     for (const id of idsConversacion) {

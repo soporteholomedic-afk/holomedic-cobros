@@ -18,6 +18,7 @@ import type {
   Empresa,
   EstadoConversacion,
   EstadoHuecoConocimiento,
+  IngestaConocimiento,
   ExtraccionFicha,
   HuecoConocimiento,
   MensajeCrm,
@@ -25,6 +26,7 @@ import type {
   NivelMemoria,
   ObservacionMemoria,
   ObservacionMemoriaEnLista,
+  OrigenConocimiento,
   OrigenDatoFicha,
   PipelineEmpresa,
   RespuestaGenerada,
@@ -36,6 +38,7 @@ import type {
   SolicitudAyuda,
   TareaAgente,
   TipoEmpresa,
+  TipoIngesta,
   TipoObservacionDestilada,
   TipoTareaAgente,
 } from './entities';
@@ -944,6 +947,64 @@ export interface ConocimientoCrmRepository {
    * dejó hueco.
    */
   obtenerHuecoPorMensaje?(mensajeId: number): Promise<HuecoConocimiento | null>;
+  /**
+   * E4·T7 (capacidad opcional, crearHueco precedent): persistir UNA
+   * entrada de conocimiento escrita por la ingesta (también la usará
+   * el editor E5). `origen` documenta la procedencia (default MANUAL);
+   * `titulo` queda acotado por el adapter (columna NVARCHAR(200));
+   * `etiquetas` cruza como string[] y se guarda CSV (vacío = sin
+   * etiquetas). Devuelve la fila releída — la entrada es visible para
+   * el RAG de inmediato (no hay indexación aparte).
+   */
+  crearEntrada?(entrada: {
+    titulo: string;
+    contenido: string;
+    etiquetas: string[];
+    vigenciaDesde?: Date | null;
+    vigenciaHasta?: Date | null;
+    origen?: OrigenConocimiento;
+  }): Promise<EntradaConocimiento>;
+}
+
+// ---------------------------------------------------------------------------
+// Knowledge-ingestion port (agente-ia-crm E4·T7) — las ingestas de
+// conocimiento: documentos/textos que el operador sube y el procesador
+// de la cola trocea en entradas de CRM_Conocimiento. Un adapter SQL lo
+// implementa (SqlServerIngestaConocimientoRepository).
+// ---------------------------------------------------------------------------
+
+/** Payload de creación de UNA ingesta (el texto crudo ya extraído). */
+export interface EntradaCrearIngestaConocimiento {
+  nombre: string;
+  tipo: TipoIngesta;
+  tamanoBytes: number;
+  contenidoCrudo: string | null;
+  creadoPor?: string | null;
+  vigenciaDesde?: Date | null;
+  vigenciaHasta?: Date | null;
+}
+
+/**
+ * Outbound port para las ingestas de conocimiento (CRM_IngestasConocimiento,
+ * E4·T7). El ciclo lo manejan las use cases: iniciarIngesta crea la
+ * fila PENDIENTE + encola la tarea INGESTAR_CONOCIMIENTO;
+ * procesarIngesta toma la fila (marcarProcesando), crea las entradas
+ * y cierra en COMPLETADA(n) o FALLIDA(mensaje) — la FALLIDA es
+ * terminal (un PDF corrupto no mejora con reintentos).
+ */
+export interface IngestaConocimientoRepository {
+  /** INSERT; devuelve la fila releída (crearHueco precedent). */
+  crear(entrada: EntradaCrearIngestaConocimiento): Promise<IngestaConocimiento>;
+  /** Lectura por id; null si no existe (sin inventar filas). */
+  obtenerPorId(id: number): Promise<IngestaConocimiento | null>;
+  /** Las `limite` ingestas más recientes (id DESC) — panel T8. */
+  listarRecientes(limite: number): Promise<IngestaConocimiento[]>;
+  /** estado PROCESANDO (el worker reclamó la ingesta). */
+  marcarProcesando(id: number): Promise<void>;
+  /** estado COMPLETADA con el contador de entradas; limpia error; estampa procesadoEn. */
+  marcarCompletada(id: number, entradasCreadas: number): Promise<void>;
+  /** estado FALLIDA con el mensaje; estampa procesadoEn. */
+  marcarFallida(id: number, error: string): Promise<void>;
 }
 
 // ---------------------------------------------------------------------------
@@ -1093,9 +1154,15 @@ export interface GeneradorRespuestaPort {
 // and the sweeper never needs a read-then-write window.
 // ---------------------------------------------------------------------------
 
-/** Idempotent creation payload: the UNIQUE (conversacionId, mensajeId, tipo) triple. */
+/**
+ * Idempotent creation payload: the UNIQUE (conversacionId, mensajeId, tipo) triple.
+ * E4·T7: `conversacionId` acepta NULL — las tareas INGESTAR_CONOCIMIENTO
+ * no tienen conversación (el id de la ingesta viaja en mensajeId); SQL
+ * Server trata los NULL como iguales en la UNIQUE, así que el dedup
+ * sigue siendo exactamente una tarea por (ingesta, tipo).
+ */
 export interface EntradaCrearTareaAgente {
-  conversacionId: number;
+  conversacionId: number | null;
   mensajeId: number;
   tipo: TipoTareaAgente;
 }

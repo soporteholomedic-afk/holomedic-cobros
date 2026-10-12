@@ -585,6 +585,65 @@ export interface EntradaConocimiento {
   activo: boolean;
 }
 
+/**
+ * Procedencia de una entrada de conocimiento (E4·T7, CHECK-backed en
+ * CRM_Conocimiento.origen): MANUAL = alta directa (editor E5 y filas
+ * históricas), SEMILLA = script de siembra, SUBIDO = ingesta de
+ * archivos/texto del operador. Cruza como string plano en las filas
+ * de escritura; las lecturas del RAG no lo proyectan (metadato de
+ * auditoría, no de ranking).
+ */
+export type OrigenConocimiento = 'MANUAL' | 'SEMILLA' | 'SUBIDO';
+
+/**
+ * Tipo de una ingesta de conocimiento (E4·T7, CHECK-backed en
+ * CRM_IngestasConocimiento.tipo): TEXTO = pegado del operador; PDF,
+ * TXT y DOCX = archivo subido. El texto crudo ya llega EXTRAÍDO a la
+ * ingesta (la ruta de subida extrae en el upload con
+ * extraerTextoArchivo) — el tipo describe la procedencia, no el
+ * formato de contenidoCrudo.
+ */
+export type TipoIngesta = 'TEXTO' | 'PDF' | 'TXT' | 'DOCX';
+
+/**
+ * Ciclo de vida de una ingesta (CHECK-backed): PENDIENTE al nacer,
+ * PROCESANDO cuando el worker la toma, COMPLETADA (con su contador de
+ * entradas creadas) o FALLIDA (con el mensaje de error). Espejo del
+ * ciclo de CRM_AgenteTareas pero con estados PROPIOS: una ingesta
+ * FALLIDA es terminal — un PDF corrupto no mejora con reintentos.
+ */
+export type EstadoIngesta = 'PENDIENTE' | 'PROCESANDO' | 'COMPLETADA' | 'FALLIDA';
+
+/**
+ * Una fila de CRM_IngestasConocimiento (E4·T7): el trabajo de ingesta
+ * que el operador crea (uso directo o vía la futura ruta T8) y el
+ * procesador de la cola convierte en N entradas de CRM_Conocimiento.
+ * Timestamps como Date (EntradaConocimiento precedent). contenidoCrudo
+ * ya es TEXTO extraído — nunca binarios.
+ */
+export interface IngestaConocimiento {
+  id: number;
+  /** Nombre visible del documento (archivo o título del pegado). */
+  nombre: string;
+  tipo: TipoIngesta;
+  /** Tamaño del contenido crudo en bytes (UTF-8). */
+  tamanoBytes: number;
+  /** Texto crudo ya extraído; null se procesa como vacío → COMPLETADA(0). */
+  contenidoCrudo: string | null;
+  estado: EstadoIngesta;
+  /** Mensaje del fallo (null mientras vive). */
+  error: string | null;
+  /** Entradas de CRM_Conocimiento que esta ingesta creó. */
+  entradasCreadas: number;
+  /** Usuario operador que la creó (null = sistema). */
+  creadoPor: string | null;
+  creadoEn: Date;
+  procesadoEn: Date | null;
+  /** Ventana de vigencia heredable por cada entrada creada. */
+  vigenciaDesde: Date | null;
+  vigenciaHasta: Date | null;
+}
+
 // ---- Memoria de conversación (agente-ia-crm, E2·T2) ----
 
 /**
@@ -846,10 +905,13 @@ export interface ObservacionDestilada {
  * message through the E2 motor; RESPONDER_CON_INDICACION = E3 help
  * pattern — re-answer AFTER the operator resolved the solicitud: the
  * worker re-reads the indicación from the resolved solicitud itself
- * (no extra TareaAgente fields), more types arrive with later épocas
- * (the CHECK widens with them).
+ * (no extra TareaAgente fields); INGESTAR_CONOCIMIENTO = E4·T7 — the
+ * queue task of a knowledge ingestion: conversacionId NULL (no
+ * conversation exists), the INGESTA id travels in mensajeId and the
+ * worker chunks it into CRM_Conocimiento entries. More types arrive
+ * with later épocas (the CHECK widens with them).
  */
-export type TipoTareaAgente = 'GENERAR_RESPUESTA' | 'RESPONDER_CON_INDICACION';
+export type TipoTareaAgente = 'GENERAR_RESPUESTA' | 'RESPONDER_CON_INDICACION' | 'INGESTAR_CONOCIMIENTO';
 
 /**
  * Task lifecycle (CHECK-backed in CRM_AgenteTareas): PENDIENTE at
@@ -867,10 +929,18 @@ export type EstadoTareaAgente = 'PENDIENTE' | 'PROCESANDO' | 'COMPLETADA' | 'FAL
  * tipo) makes creation idempotent. Timestamps cross as `Date`
  * (Conocimiento precedent): claim/cooling math compares them against
  * SYSUTCDATETIME, never crossing to the presentation layer.
+ *
+ * E4·T7: `conversacionId` es NULL SOLO en tareas INGESTAR_CONOCIMIENTO
+ * (la ingesta no tiene conversación; el id de la ingesta viaja en
+ * mensajeId y la UNIQUE trata los NULL como iguales → dedup por
+ * ingesta). Para GENERAR/RESPONDER es SIEMPRE un id real: un NULL ahí
+ * es inconsistencia de datos y la tarea falla ruidoso (nunca responde
+ * a ciegas).
  */
 export interface TareaAgente {
   id: number;
-  conversacionId: number;
+  /** NULL solo en tareas INGESTAR_CONOCIMIENTO (ver cabecera). */
+  conversacionId: number | null;
   mensajeId: number;
   tipo: TipoTareaAgente;
   estado: EstadoTareaAgente;

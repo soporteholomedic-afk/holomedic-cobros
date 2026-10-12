@@ -407,3 +407,59 @@ describe('E3 (agente-ia-crm): huecos de conocimiento (crearHueco)', () => {
     }
   });
 });
+
+describe('E4·T7 (agente-ia-crm): escritura de entradas por la ingesta (crearEntrada)', () => {
+  it('crearEntrada: round-trip con origen SUBIDO, etiquetas CSV y vigencia heredada', async () => {
+    try {
+      const desde = new Date('2026-02-01T08:00:00.000Z');
+      const hasta = new Date('2026-11-30T08:00:00.000Z');
+      const entrada = await repo.crearEntrada({
+        titulo: `${MARCA} parte 1 de 3`,
+        contenido: 'contenido subido por la ingesta de conocimiento',
+        etiquetas: ['manual', 'operativo', 'subido'],
+        vigenciaDesde: desde,
+        vigenciaHasta: hasta,
+        origen: 'SUBIDO',
+      });
+
+      expect(entrada.id).toBeGreaterThan(0);
+      expect(entrada.titulo).toBe(`${MARCA} parte 1 de 3`);
+      expect(entrada.contenido).toBe('contenido subido por la ingesta de conocimiento');
+      expect(entrada.etiquetas).toEqual(['manual', 'operativo', 'subido']);
+      expect(entrada.vigenciaDesde?.toISOString()).toBe(desde.toISOString());
+      expect(entrada.vigenciaHasta?.toISOString()).toBe(hasta.toISOString());
+      expect(entrada.activo).toBe(true);
+
+      // La entrada es visible de inmediato para el RAG (leer fila real).
+      const fila = await pool
+        .request()
+        .input('id', mssql.Int, entrada.id).query(
+          'SELECT titulo, etiquetas, origen FROM dbo.CRM_Conocimiento WHERE id = @id',
+        );
+      expect(fila.recordset[0]?.origen).toBe('SUBIDO');
+      expect(fila.recordset[0]?.etiquetas).toBe('manual,operativo,subido');
+    } finally {
+      await limpiarPorMarca();
+    }
+  });
+
+  it('crearEntrada: origen por defecto MANUAL y etiquetas vacías permitidas', async () => {
+    try {
+      const entrada = await repo.crearEntrada({
+        titulo: `${MARCA} sin etiquetas`,
+        contenido: 'entrada mínima',
+        etiquetas: [],
+      });
+      expect(entrada.etiquetas).toEqual([]);
+      const fila = await pool
+        .request()
+        .input('id', mssql.Int, entrada.id)
+        .query('SELECT origen, vigenciaDesde, vigenciaHasta FROM dbo.CRM_Conocimiento WHERE id = @id');
+      expect(fila.recordset[0]?.origen).toBe('MANUAL');
+      expect(fila.recordset[0]?.vigenciaDesde).toBeNull();
+      expect(fila.recordset[0]?.vigenciaHasta).toBeNull();
+    } finally {
+      await limpiarPorMarca();
+    }
+  });
+});

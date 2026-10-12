@@ -1,6 +1,7 @@
 import { GenerarRespuestaAgenteUseCase } from '../../application/generarRespuestaAgente';
 import { ProcesarTareasAgenteUseCase } from '../../application/procesarTareasAgente';
 import type { ResultadoProcesarTareas } from '../../application/procesarTareasAgente';
+import { ProcesarIngestaConocimientoUseCase } from '../../application/conocimiento/procesarIngestaConocimiento';
 import { getCrmDb } from '../getCrmDb';
 import { crearMemoriaConversacion } from '../engram/crearMemoriaConversacion';
 import { crearGeneradorRespuesta } from '../llm/crearGeneradorRespuesta';
@@ -39,8 +40,16 @@ export function crearProcesadorTareasAgente(): ProcesadorTareasAgente {
   return {
     async procesar(limite?: number): Promise<ResultadoProcesarTareas> {
       const db = await getCrmDb();
-      if (!db.conversaciones || !db.mensajes || !db.conocimiento || !db.tareas) {
-        throw new Error('CRM no configurado: faltan repositorios de conversaciones/mensajes/conocimiento/tareas');
+      if (
+        !db.conversaciones ||
+        !db.mensajes ||
+        !db.conocimiento ||
+        !db.ingestaConocimiento ||
+        !db.tareas
+      ) {
+        throw new Error(
+          'CRM no configurado: faltan repositorios de conversaciones/mensajes/conocimiento/ingesta/tareas',
+        );
       }
       const motor = new GenerarRespuestaAgenteUseCase({
         conversaciones: db.conversaciones,
@@ -58,6 +67,14 @@ export function crearProcesadorTareasAgente(): ProcesadorTareasAgente {
         // solicitud's indicación before relaunching the motor. Optional
         // dependency in the use case; the SQL repo always provides it.
         conversaciones: db.conversaciones,
+        // E4·T7: the INGESTAR_CONOCIMIENTO route hands the task to the
+        // ingestion processor (ingesta id travels in mensajeId). Same
+        // optional-for-pre-E4 rule; the container always provides both
+        // repos (getCrmDb factory).
+        procesarIngesta: new ProcesarIngestaConocimientoUseCase({
+          ingestas: db.ingestaConocimiento,
+          conocimiento: db.conocimiento,
+        }),
       });
       return useCase.ejecutar(limite);
     },

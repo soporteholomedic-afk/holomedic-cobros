@@ -11,7 +11,10 @@
  *    plan (what exists, what would be inserted) and writes NOTHING.
  *  - `--apply`: writes ONLY the missing entries — each INSERT is an
  *    `INSERT … SELECT … WHERE NOT EXISTS` by titulo, so re-runs are
- *    no-ops (idempotent).
+ *    no-ops (idempotent). E4·T7: cada fila nueva lleva origen 'SEMILLA'
+ *    (procedencia CRM_Conocimiento.origen); las filas históricas
+ *    quedan en su DEFAULT 'MANUAL' — no hay UPDATE, la marca solo
+ *    documenta el origen de lo que el seed crea.
  *  - `--limpiar`: removes ONLY entries whose `etiquetas` contain the
  *    `semilla` tag as a CSV element (curated E5 content and probe
  *    rows are never touched).
@@ -54,8 +57,8 @@ export const PREDICADO_SEMILLA = `(',' + etiquetas + ',') LIKE '%,${ETIQUETA_SEM
 
 /** Idempotent per-entry insert: guarded by `WHERE NOT EXISTS` on titulo. */
 export const SQL_INSERTAR_ENTRADA = `
-  INSERT INTO dbo.CRM_Conocimiento (titulo, contenido, etiquetas)
-  SELECT @titulo, @contenido, @etiquetas
+  INSERT INTO dbo.CRM_Conocimiento (titulo, contenido, etiquetas, origen)
+  SELECT @titulo, @contenido, @etiquetas, 'SEMILLA'
   WHERE NOT EXISTS (SELECT 1 FROM dbo.CRM_Conocimiento WHERE titulo = @titulo)
 `;
 

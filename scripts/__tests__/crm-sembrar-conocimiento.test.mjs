@@ -57,6 +57,13 @@ describe('planificarSiembra (idempotencia por titulo)', () => {
     expect(SQL_INSERTAR_ENTRADA).toContain('titulo = @titulo');
   });
 
+  it('el insert marca origen SEMILLA (procedencia E4·T7; las filas históricas quedan MANUAL)', () => {
+    expect(SQL_INSERTAR_ENTRADA).toContain('origen');
+    expect(SQL_INSERTAR_ENTRADA).toContain("'SEMILLA'");
+    // Solo las filas NUEVAS del seed llevan la marca — el UPDATE no existe.
+    expect(SQL_INSERTAR_ENTRADA).not.toContain('UPDATE');
+  });
+
   it('el SQL de limpieza toca SOLO filas con la etiqueta semilla (CSV-safe)', () => {
     expect(SQL_LIMPIAR_SEMILLA).toContain('DELETE FROM dbo.CRM_Conocimiento');
     // CSV-safe: la etiqueta debe aparecer como elemento de lista, no

@@ -9,6 +9,7 @@ import { SqlServerAsignacionesRepository } from './sqlserver/sqlServerAsignacion
 import { SqlServerConversacionRepository } from './sqlserver/sqlServerConversacionRepository';
 import { SqlServerMensajeRepository } from './sqlserver/sqlServerMensajeRepository';
 import { SqlServerConocimientoRepository } from './sqlserver/sqlServerConocimientoRepository';
+import { SqlServerIngestaConocimientoRepository } from './sqlserver/sqlServerIngestaConocimientoRepository';
 import { SqlServerCalidadRepository } from './sqlserver/sqlServerCalidadRepository';
 import { SqlServerTareaAgenteRepository } from './sqlserver/sqlServerTareaAgenteRepository';
 import { SqlServerCrmImportador } from './importar/importadorCrm';
@@ -26,6 +27,7 @@ import type {
   CrmTransicionesRepositoryPort,
   CalidadRepository,
   ConocimientoCrmRepository,
+  IngestaConocimientoRepository,
   MensajeCrmRepository,
   TareaAgenteRepository,
 } from '../domain/ports';
@@ -111,6 +113,13 @@ export interface CrmDb {
    * factory ALWAYS provides it).
    */
   calidad?: CalidadRepository;
+  /**
+   * Knowledge-ingestion adapter (agente-ia-crm E4·T7): las filas de
+   * CRM_IngestasConocimiento que la ruta de subida (T8) crea y el
+   * procesador INGESTAR_CONOCIMIENTO drena (same optional-for-fakes
+   * rule; the real factory ALWAYS provides it).
+   */
+  ingestaConocimiento?: IngestaConocimientoRepository;
 }
 
 let cached: Promise<CrmDb> | null = null;
@@ -143,6 +152,7 @@ export function getCrmDb(): Promise<CrmDb> {
       conversaciones: new SqlServerConversacionRepository(pool),
       mensajes: new SqlServerMensajeRepository(pool),
       conocimiento: new SqlServerConocimientoRepository(pool),
+      ingestaConocimiento: new SqlServerIngestaConocimientoRepository(pool),
       calidad: new SqlServerCalidadRepository(pool),
       tareas: new SqlServerTareaAgenteRepository(pool),
     };

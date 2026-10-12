@@ -19,10 +19,11 @@ import type { EntradaCrearTareaAgente, TareaAgenteRepository } from '../../domai
  * (Asignaciones/Mensajes precedent); the adapter maps them.
  */
 
-/** CRM_AgenteTareas read row — BIGINT id/mensajeId as string, DATETIME2 as Date. */
+/** CRM_AgenteTareas read row — BIGINT id/mensajeId as string, DATETIME2 as Date.
+ * E4·T7: conversacionId cruza NULL en tareas INGESTAR_CONOCIMIENTO (sin placeholder). */
 interface TareaRow {
   id: number | string;
-  conversacionId: number;
+  conversacionId: number | null;
   mensajeId: number | string;
   tipo: string;
   estado: string;
@@ -88,9 +89,13 @@ export class SqlServerTareaAgenteRepository implements TareaAgenteRepository {
         .input('conversacionId', mssql.Int, entrada.conversacionId)
         .input('mensajeId', mssql.BigInt, entrada.mensajeId)
         .input('tipo', mssql.VarChar(30), entrada.tipo)
+        // E4·T7: con conversacionId NULL, `= NULL` jamás matchea — el
+        // fallback del dedup busca con IS NULL (SQL Server trata los
+        // NULL como iguales en la UNIQUE, así que la fila existe).
         .query(`
           SELECT id FROM dbo.CRM_AgenteTareas
-          WHERE conversacionId = @conversacionId AND mensajeId = @mensajeId AND tipo = @tipo
+          WHERE conversacionId ${entrada.conversacionId === null ? 'IS NULL' : '= @conversacionId'}
+            AND mensajeId = @mensajeId AND tipo = @tipo
         `);
       const fila = (existente.recordset as { id: number | string }[])[0];
       if (fila === undefined) throw err;

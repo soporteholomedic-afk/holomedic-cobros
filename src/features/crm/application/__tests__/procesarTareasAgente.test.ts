@@ -6,6 +6,7 @@ import type {
   TareaAgenteRepository,
 } from '../../domain/ports';
 import type { ResultadoAgente } from '../generarRespuestaAgente';
+import type { ResultadoProcesarIngesta } from '../conocimiento/procesarIngestaConocimiento';
 import { ProcesarTareasAgenteUseCase } from '../procesarTareasAgente';
 
 /**
@@ -480,5 +481,89 @@ describe('ProcesarTareasAgenteUseCase — ruta RESPONDER_CON_INDICACION (E3·T2)
 
     expect(llamadas).toEqual([{ conversacionId: 11, opciones: undefined }]);
     expect(conversaciones.resueltas).toEqual([]);
+  });
+});
+
+describe('ProcesarTareasAgenteUseCase — ruta INGESTAR_CONOCIMIENTO (E4·T7)', () => {
+  /** Fake estructural del procesador de ingestas (el dep opcional). */
+  function procesarIngestaFake(errores: Error[] = []): {
+    procesarIngesta: { ejecutar(entrada: { ingestaId: number }): Promise<ResultadoProcesarIngesta> };
+    llamadas: number[];
+  } {
+    const llamadas: number[] = [];
+    return {
+      procesarIngesta: {
+        async ejecutar(entrada: { ingestaId: number }): Promise<ResultadoProcesarIngesta> {
+          const error = errores.shift();
+          if (error) throw error;
+          llamadas.push(entrada.ingestaId);
+          return { ingestaId: entrada.ingestaId, estado: 'COMPLETADA', entradasCreadas: 2 };
+        },
+      },
+      llamadas,
+    };
+  }
+
+  it('la tarea INGESTAR va al procesador de ingestas (mensajeId = ingestaId), NUNCA al motor; COMPLETADA e INGESTADA', async () => {
+    const tareas = new FakeTareas();
+    const tarea = tareas.sembrar({
+      conversacionId: null,
+      mensajeId: 77,
+      tipo: 'INGESTAR_CONOCIMIENTO' satisfies TipoTareaAgente,
+    });
+    const { procesarIngesta, llamadas: llamadasIngesta } = procesarIngestaFake();
+    const { motor, llamadas: llamadasMotor } = motorConGuion(['RESPONDIDO']);
+    const useCase = new ProcesarTareasAgenteUseCase({ tareas, motor, procesarIngesta });
+
+    const resultado = await useCase.ejecutar();
+
+    expect(llamadasIngesta).toEqual([77]);
+    expect(llamadasMotor, 'el motor jamás ve una tarea de ingesta').toHaveLength(0);
+    expect(resultado.resultados).toEqual([{ tareaId: tarea.id, resultado: 'INGESTADA' }]);
+    expect(tareas.completadas, 'el use case de ingesta NUNCA lanza por fallos de contenido → la tarea se completa (un PDF corrupto no se reencola infinito)').toEqual([tarea.id]);
+    expect(tareas.fallos).toEqual([]);
+  });
+
+  it('dep procesarIngesta ausente → falla la tarea (capacidad E4 sin cablear, espejo E3; intento contado)', async () => {
+    const tareas = new FakeTareas();
+    tareas.sembrar({ conversacionId: null, mensajeId: 77, tipo: 'INGESTAR_CONOCIMIENTO' });
+    const { motor, llamadas } = motorConGuion(['RESPONDIDO']);
+    const useCase = new ProcesarTareasAgenteUseCase({ tareas, motor });
+
+    const resultado = await useCase.ejecutar();
+
+    expect(resultado.resultados).toEqual([{ tareaId: tareas.filas[0]?.id, resultado: 'REENCOLADA' }]);
+    expect(llamadas).toHaveLength(0);
+    expect(tareas.fallos).toHaveLength(1);
+    expect(tareas.fallos[0]?.error).toContain('procesarIngesta');
+  });
+
+  it('GENERAR/RESPONDER con conversacionId NULL → inconsistencia de datos: falla ruidoso, nunca responde a ciegas', async () => {
+    const tareas = new FakeTareas();
+    tareas.sembrar({ conversacionId: null, mensajeId: 101, tipo: 'GENERAR_RESPUESTA' });
+    const { motor, llamadas } = motorConGuion(['RESPONDIDO']);
+    const useCase = new ProcesarTareasAgenteUseCase({ tareas, motor });
+
+    const resultado = await useCase.ejecutar();
+
+    expect(llamadas, 'el motor no se invoca sin conversación').toHaveLength(0);
+    expect(resultado.resultados).toEqual([{ tareaId: tareas.filas[0]?.id, resultado: 'REENCOLADA' }]);
+    expect(tareas.fallos).toHaveLength(1);
+    expect(tareas.fallos[0]?.error).toContain('conversacionId');
+  });
+
+  it('si el procesador de ingestas LANZA (fallo de infraestructura, p.ej. marcarFallida) → cuenta intento y reintenta', async () => {
+    const tareas = new FakeTareas();
+    const tarea = tareas.sembrar({ conversacionId: null, mensajeId: 77, tipo: 'INGESTAR_CONOCIMIENTO' });
+    const { procesarIngesta } = procesarIngestaFake([new Error('DB caída al marcar')]);
+    const { motor } = motorConGuion([]);
+    const useCase = new ProcesarTareasAgenteUseCase({ tareas, motor, procesarIngesta });
+
+    const resultado = await useCase.ejecutar();
+
+    expect(resultado.resultados).toEqual([{ tareaId: tarea.id, resultado: 'REENCOLADA' }]);
+    expect(tareas.fallos).toEqual([{ id: tarea.id, error: 'DB caída al marcar' }]);
+    expect(tareas.filas[0]?.intentos).toBe(1);
+    expect(tareas.completadas).toEqual([]);
   });
 });

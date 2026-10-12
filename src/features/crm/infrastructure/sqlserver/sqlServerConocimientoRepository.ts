@@ -1,6 +1,6 @@
 import * as mssql from 'mssql';
 
-import type { EntradaConocimiento, HuecoConocimiento } from '../../domain/entities';
+import type { EntradaConocimiento, HuecoConocimiento, OrigenConocimiento } from '../../domain/entities';
 import type { ConocimientoCrmRepository } from '../../domain/ports';
 
 /**
@@ -12,7 +12,9 @@ import type { ConocimientoCrmRepository } from '../../domain/ports';
  * precedent) whose wildcards are ALWAYS escaped (E1 lesson — a
  * client '%' must match a literal '%', never every row). Both reads
  * only ever return activo = 1 rows. E3 appends `crearHueco`: the
- * append-only KB-gap log over CRM_ConocimientoHuecos.
+ * append-only KB-gap log over CRM_ConocimientoHuecos. E4·T7 appends
+ * `crearEntrada`: the write side the knowledge ingestion (and the E5
+ * editor) uses — nuevas entradas sirven al RAG de inmediato.
  */
 
 /** CRM_Conocimiento read row — DATETIME2 crosses tedious as Date. */
@@ -201,5 +203,46 @@ export class SqlServerConocimientoRepository implements ConocimientoCrmRepositor
       `);
     const row = (result.recordset as HuecoRow[])[0];
     return row ? mapearHueco(row) : null;
+  }
+
+  // ---- E4·T7 (agente-ia-crm): escritura por la ingesta de conocimiento ----
+
+  async crearEntrada(entrada: {
+    titulo: string;
+    contenido: string;
+    etiquetas: string[];
+    vigenciaDesde?: Date | null;
+    vigenciaHasta?: Date | null;
+    origen?: OrigenConocimiento;
+  }): Promise<EntradaConocimiento> {
+    // El titulo vive en NVARCHAR(200): el adapter acota (tareas.fallar
+    // precedent — el límite de columna es del adapter, no del caller).
+    const titulo = entrada.titulo.slice(0, 200);
+    const csv = entrada.etiquetas
+      .map((etiqueta) => etiqueta.trim())
+      .filter((etiqueta) => etiqueta !== '')
+      .join(',');
+    const inserted = await this.pool
+      .request()
+      .input('titulo', mssql.NVarChar(200), titulo)
+      .input('contenido', mssql.NVarChar(mssql.MAX), entrada.contenido)
+      .input('etiquetas', mssql.NVarChar(300), csv)
+      .input('vigenciaDesde', mssql.DateTime2, entrada.vigenciaDesde ?? null)
+      .input('vigenciaHasta', mssql.DateTime2, entrada.vigenciaHasta ?? null)
+      .input('origen', mssql.NVarChar(20), entrada.origen ?? 'MANUAL').query(`
+        INSERT INTO dbo.CRM_Conocimiento
+          (titulo, contenido, etiquetas, vigenciaDesde, vigenciaHasta, origen)
+        OUTPUT INSERTED.id
+        VALUES (@titulo, @contenido, @etiquetas, @vigenciaDesde, @vigenciaHasta, @origen)
+      `);
+    const id = (inserted.recordset as { id: number }[])[0]?.id;
+    if (id === undefined) throw new Error('INSERT de CRM_Conocimiento no devolvió id');
+    const releido = await this.pool
+      .request()
+      .input('id', mssql.Int, id)
+      .query(`SELECT ${COLUMNAS} FROM dbo.CRM_Conocimiento WHERE id = @id`);
+    const row = (releido.recordset as ConocimientoRow[])[0];
+    if (!row) throw new Error('La entrada recién creada no pudo releerse');
+    return mapearEntrada(row);
   }
 }

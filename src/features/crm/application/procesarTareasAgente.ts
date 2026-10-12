@@ -1,6 +1,7 @@
 import type { TareaAgente } from '../domain/entities';
 import type { ConversacionCrmRepository, TareaAgenteRepository } from '../domain/ports';
 
+import type { ResultadoProcesarIngesta } from './conocimiento/procesarIngestaConocimiento';
 import type { OpcionesEjecutarMotor, ResultadoAgente } from './generarRespuestaAgente';
 
 /**
@@ -39,10 +40,23 @@ import type { OpcionesEjecutarMotor, ResultadoAgente } from './generarRespuestaA
  * A missing resolved solicitud (or one resolved without indicación)
  * is a data inconsistency that shouldn't happen — the task FAILS
  * (attempt counted) instead of answering blind.
+ *
+ * E4·T7 — the INGESTAR_CONOCIMIENTO route: the worker hands the task
+ * to the ingestion processor (procesarIngestaConocimiento) keyed by
+ * tarea.mensajeId = the INGESTA id (conversacionId is NULL on these
+ * tasks — there is no conversation). The processor NEVER throws for
+ * content failures (a corrupt PDF is swallowed into marcarFallida and
+ * stays auditable), so a returned run COMPLETES the task and reports
+ * 'INGESTADA' — a corrupt ingesta must not burn its 3 queue retries.
+ * A processor THROW (infrastructure: e.g. marcarFallida itself failed,
+ * or the dep is missing) counts an attempt like any motor throw. A
+ * GENERAR/RESPONDER task carrying conversacionId NULL is a data
+ * inconsistency: it FAILS loudly instead of answering a conversation
+ * that does not exist.
  */
 
 /** Every per-task outcome of one drain run. */
-export type ResultadoTareaProcesada = ResultadoAgente['resultado'] | 'REENCOLADA' | 'FALLIDA';
+export type ResultadoTareaProcesada = ResultadoAgente['resultado'] | 'REENCOLADA' | 'FALLIDA' | 'INGESTADA';
 
 export interface ResultadoProcesarTareas {
   /** Tasks claimed and attempted in this run. */
@@ -74,6 +88,16 @@ export interface ProcesarTareasAgenteDeps {
    * blind. The composition root should always provide it.
    */
   conversaciones?: Pick<ConversacionCrmRepository, 'obtenerUltimaSolicitudResuelta'>;
+  /**
+   * E4·T7: the ingestion processor behind the INGESTAR_CONOCIMIENTO
+   * route (structural minimum — conversaciones precedent). OPTIONAL so
+   * pre-E4 constructions stay valid; without it those tasks FAIL
+   * (attempt counted) instead of being silently dropped. The
+   * composition root should always provide it.
+   */
+  procesarIngesta?: {
+    ejecutar(entrada: { ingestaId: number }): Promise<ResultadoProcesarIngesta>;
+  };
 }
 
 /** Crash recovery: a PROCESANDO claim older than this is abandoned. */
@@ -89,6 +113,33 @@ export class SolicitudIndicacionAusenteError extends Error {
   constructor(motivo: string) {
     super(`Solicitud de ayuda resuelta ausente: ${motivo}`);
     this.name = 'SolicitudIndicacionAusenteError';
+  }
+}
+
+/**
+ * Typed data-inconsistency failure of the GENERAR/RESPONDER routes
+ * (E4·T7): the task claims to answer a conversation but carries
+ * conversacionId NULL (only INGESTAR_CONOCIMIENTO tasks are NULL).
+ * The task FAILS instead of the motor answering a conversation that
+ * does not exist.
+ */
+export class ConversacionAusenteError extends Error {
+  constructor(motivo: string) {
+    super(`Conversación ausente en la tarea: ${motivo}`);
+    this.name = 'ConversacionAusenteError';
+  }
+}
+
+/**
+ * Typed missing-dependency failure of the INGESTAR_CONOCIMIENTO route
+ * (E4·T7, SolicitudIndicacionAusenteError precedent): the queue holds
+ * ingestion tasks but no processor was wired. The task FAILS (attempt
+ * counted) instead of being dropped.
+ */
+export class ProcesadorIngestaAusenteError extends Error {
+  constructor(motivo: string) {
+    super(`Procesador de ingestas ausente: ${motivo}`);
+    this.name = 'ProcesadorIngestaAusenteError';
   }
 }
 
@@ -120,10 +171,27 @@ export class ProcesarTareasAgenteUseCase {
     resultado: ResultadoTareaProcesada;
   }> {
     try {
-      const resultado =
-        tarea.tipo === 'RESPONDER_CON_INDICACION'
-          ? await this.ejecutarRespuestaConIndicacion(tarea)
-          : await this.deps.motor.ejecutar(tarea.conversacionId);
+      let resultado: ResultadoAgente;
+      if (tarea.tipo === 'INGESTAR_CONOCIMIENTO') {
+        await this.ejecutarProcesarIngesta(tarea);
+        // El procesador traga los fallos de contenido en marcarFallida
+        // (un PDF corrupto no mejora con reintentos): una ejecución que
+        // RETURNÓ terminó el trabajo → la tarea se COMPLETA.
+        await this.deps.tareas.completar(tarea.id);
+        return { tareaId: tarea.id, resultado: 'INGESTADA' };
+      }
+      // Las rutas conversacionales exigen conversación (NULL solo en
+      // tareas de ingesta) — inconsistencia de datos revienta acá.
+      if (tarea.conversacionId === null) {
+        throw new ConversacionAusenteError(
+          `la tarea ${tarea.tipo} ${tarea.id} no tiene conversación (conversacionId NULL)`,
+        );
+      }
+      if (tarea.tipo === 'RESPONDER_CON_INDICACION') {
+        resultado = await this.ejecutarRespuestaConIndicacion(tarea, tarea.conversacionId);
+      } else {
+        resultado = await this.deps.motor.ejecutar(tarea.conversacionId);
+      }
       if (resultado.resultado === 'FUERA_DE_HORARIO' || resultado.resultado === 'AGENTE_DESHABILITADO') {
         // Not a failure: no attempt counted, the row waits cooled.
         await this.deps.tareas.reencolar(tarea.id);
@@ -144,27 +212,44 @@ export class ProcesarTareasAgenteUseCase {
   }
 
   /**
+   * E4·T7 route: hand the task to the ingestion processor keyed by
+   * mensajeId = the ingesta id. Throws ONLY on missing dep (wiring) or
+   * processor infrastructure failure — content failures never escape
+   * procesarIngestaConocimiento (its contract), so they complete the
+   * task instead of burning retries.
+   */
+  private async ejecutarProcesarIngesta(tarea: TareaAgente): Promise<void> {
+    const procesarIngesta = this.deps.procesarIngesta;
+    if (procesarIngesta === undefined) {
+      throw new ProcesadorIngestaAusenteError(
+        `procesarIngesta ausente (capacidad E4): la tarea INGESTAR_CONOCIMIENTO ${tarea.id} no tiene procesador cableado`,
+      );
+    }
+    await procesarIngesta.ejecutar({ ingestaId: tarea.mensajeId });
+  }
+
+  /**
    * E3·T2 route: re-read the conversation's latest RESUELTA solicitud
    * (the indicación's source of truth — no extra task fields) and run
    * the motor with it. A missing read capability, a missing row or a
    * blank indicación throws SolicitudIndicacionAusenteError → the task
    * falls (attempt counted), never answers blind.
    */
-  private async ejecutarRespuestaConIndicacion(tarea: TareaAgente): Promise<ResultadoAgente> {
+  private async ejecutarRespuestaConIndicacion(tarea: TareaAgente, conversacionId: number): Promise<ResultadoAgente> {
     const repo = this.deps.conversaciones;
     const obtenerResuelta = repo?.obtenerUltimaSolicitudResuelta;
     if (repo === undefined || obtenerResuelta === undefined) {
       throw new SolicitudIndicacionAusenteError(
-        `repositorio sin la capacidad obtenerUltimaSolicitudResuelta (conversación ${tarea.conversacionId})`,
+        `repositorio sin la capacidad obtenerUltimaSolicitudResuelta (conversación ${conversacionId})`,
       );
     }
     // .call(repo, …): the optional method is read off the port, so it
     // must run bound to it (a detached `this` would read its state off
     // undefined).
-    const solicitud = await obtenerResuelta.call(repo, tarea.conversacionId);
+    const solicitud = await obtenerResuelta.call(repo, conversacionId);
     if (solicitud === null) {
       throw new SolicitudIndicacionAusenteError(
-        `sin solicitud RESUELTA para la conversación ${tarea.conversacionId}`,
+        `sin solicitud RESUELTA para la conversación ${conversacionId}`,
       );
     }
     const indicacion = solicitud.indicacion?.trim() ?? '';
@@ -173,7 +258,7 @@ export class ProcesarTareasAgenteUseCase {
         `la solicitud ${solicitud.id} quedó resuelta sin indicación`,
       );
     }
-    return this.deps.motor.ejecutar(tarea.conversacionId, new Date(), {
+    return this.deps.motor.ejecutar(conversacionId, new Date(), {
       indicacionHumana: indicacion,
     });
   }

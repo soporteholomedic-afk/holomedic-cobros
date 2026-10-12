@@ -39,6 +39,7 @@ const TABLAS = [
   'CRM_Actividades',
   'CRM_Asignaciones',
   'CRM_EnviosCorreos',
+  'CRM_IngestasConocimiento',
 ] as const;
 const CHECKS = [
   'CK_CRM_Empresas_Tipo',
@@ -50,6 +51,9 @@ const CHECKS = [
   'CK_CRM_Asignaciones_Accion',
   'CK_CRM_EnviosCorreos_Plantilla',
   'CK_CRM_EnviosCorreos_Estado',
+  'CK_CRM_Conocimiento_Origen',
+  'CK_CRM_IngestasConocimiento_Tipo',
+  'CK_CRM_IngestasConocimiento_Estado',
 ] as const;
 const UNIQUES = [
   'UQ_CRM_Empresas_RucNormalizado',
@@ -133,11 +137,11 @@ async function catalogFingerprint(p: mssql.ConnectionPool): Promise<string[]> {
     UNION ALL
     SELECT 'KEY', kc.name
       FROM sys.key_constraints kc
-     WHERE kc.parent_object_id IN (OBJECT_ID('dbo.CRM_Empresas'), OBJECT_ID('dbo.CRM_Contactos'), OBJECT_ID('dbo.CRM_Correos'), OBJECT_ID('dbo.CRM_Importaciones'), OBJECT_ID('dbo.CRM_Pipeline'), OBJECT_ID('dbo.CRM_Transiciones'), OBJECT_ID('dbo.CRM_Resultados'), OBJECT_ID('dbo.CRM_Handoffs'), OBJECT_ID('dbo.CRM_Actividades'), OBJECT_ID('dbo.CRM_Asignaciones'), OBJECT_ID('dbo.CRM_EnviosCorreos'))
+     WHERE kc.parent_object_id IN (OBJECT_ID('dbo.CRM_Empresas'), OBJECT_ID('dbo.CRM_Contactos'), OBJECT_ID('dbo.CRM_Correos'), OBJECT_ID('dbo.CRM_Importaciones'), OBJECT_ID('dbo.CRM_Pipeline'), OBJECT_ID('dbo.CRM_Transiciones'), OBJECT_ID('dbo.CRM_Resultados'), OBJECT_ID('dbo.CRM_Handoffs'), OBJECT_ID('dbo.CRM_Actividades'), OBJECT_ID('dbo.CRM_Asignaciones'), OBJECT_ID('dbo.CRM_EnviosCorreos'), OBJECT_ID('dbo.CRM_IngestasConocimiento'))
     UNION ALL
     SELECT 'CHECK', cc.name
       FROM sys.check_constraints cc
-     WHERE cc.parent_object_id IN (OBJECT_ID('dbo.CRM_Empresas'), OBJECT_ID('dbo.CRM_Pipeline'), OBJECT_ID('dbo.CRM_Resultados'), OBJECT_ID('dbo.CRM_Actividades'), OBJECT_ID('dbo.CRM_Asignaciones'), OBJECT_ID('dbo.CRM_EnviosCorreos'))
+     WHERE cc.parent_object_id IN (OBJECT_ID('dbo.CRM_Empresas'), OBJECT_ID('dbo.CRM_Pipeline'), OBJECT_ID('dbo.CRM_Resultados'), OBJECT_ID('dbo.CRM_Actividades'), OBJECT_ID('dbo.CRM_Asignaciones'), OBJECT_ID('dbo.CRM_EnviosCorreos'), OBJECT_ID('dbo.CRM_Conocimiento'), OBJECT_ID('dbo.CRM_IngestasConocimiento'))
     UNION ALL
     SELECT 'FK', fk.name
       FROM sys.foreign_keys fk
@@ -157,12 +161,14 @@ describe('crm migrate() — HOLOMEDIC schema integration', () => {
     await migrate(pool);
     const after = await catalogFingerprint(pool);
     expect(after).toEqual(before);
-    // 11 tables (3 registry + job + 3 pipeline + handoffs + activities
-    // + asignaciones + envios-correos) + 15 key constraints (11 PK + 4 UQ)
-    // + 9 CHECKs + 11 FKs + 29 indexes (14 named + 4 backing the UQs
+    // 12 tables (3 registry + job + 3 pipeline + handoffs + activities
+    // + asignaciones + envios-correos + ingesta-conocimiento E4·T7)
+    // + 16 key constraints (12 PK + 4 UQ)
+    // + 12 CHECKs (9 + origen E4·T7 + ingesta tipo/estado E4·T7)
+    // + 11 FKs + 29 indexes (14 named + 4 backing the UQs
     // + 11 clustered PKs; +1 named = IX_CRM_Contactos_TelefonoNormalizado,
     // agente-ia-crm E2·T8).
-    expect(before).toHaveLength(11 + 15 + 9 + 11 + 29);
+    expect(before).toHaveLength(12 + 16 + 12 + 11 + 29);
     // Existing rows untouched: the additive migration performs no DML —
     // registry row counts are identical across the re-run.
     const empresas = await pool.request().query(`SELECT COUNT(*) AS n FROM dbo.CRM_Empresas`);
@@ -208,7 +214,7 @@ describe('crm migrate() — HOLOMEDIC schema integration', () => {
       .request()
       .query<NameRow>(
         `SELECT name FROM sys.check_constraints
-          WHERE parent_object_id IN (OBJECT_ID('dbo.CRM_Empresas'), OBJECT_ID('dbo.CRM_Pipeline'), OBJECT_ID('dbo.CRM_Resultados'), OBJECT_ID('dbo.CRM_Actividades'), OBJECT_ID('dbo.CRM_Asignaciones'), OBJECT_ID('dbo.CRM_EnviosCorreos'))
+          WHERE parent_object_id IN (OBJECT_ID('dbo.CRM_Empresas'), OBJECT_ID('dbo.CRM_Pipeline'), OBJECT_ID('dbo.CRM_Resultados'), OBJECT_ID('dbo.CRM_Actividades'), OBJECT_ID('dbo.CRM_Asignaciones'), OBJECT_ID('dbo.CRM_EnviosCorreos'), OBJECT_ID('dbo.CRM_Conocimiento'), OBJECT_ID('dbo.CRM_IngestasConocimiento'))
           ORDER BY name`,
       );
     expect(result.recordset.map((r) => r.name).sort()).toEqual([...CHECKS].sort());
@@ -458,6 +464,181 @@ describe('crm migrate() — HOLOMEDIC schema integration', () => {
        WHERE fk.parent_object_id = OBJECT_ID('dbo.CRM_ConocimientoHuecos')
          AND c.name = 'origenMensajeId'`);
     expect(fks.recordset).toHaveLength(0);
+  });
+
+  it('adds the origen provenance column gated, NOT NULL DEFAULT MANUAL with named CHECK (CRM_Conocimiento.origen, agente-ia-crm E4·T7)', async () => {
+    const result = await pool.request().query<{ name: string; is_nullable: number; tipo: string; max_length: number; definicion: string | null }>(`
+      SELECT c.name, c.is_nullable, TYPE_NAME(c.user_type_id) AS tipo, c.max_length,
+             dc.definition AS definicion
+        FROM sys.columns c
+        LEFT JOIN sys.default_constraints dc ON dc.parent_object_id = c.object_id AND dc.parent_column_id = c.column_id
+       WHERE c.object_id = OBJECT_ID('dbo.CRM_Conocimiento') AND c.name = 'origen'`);
+    expect(result.recordset).toHaveLength(1);
+    const fila = result.recordset[0];
+    expect(Boolean(fila?.is_nullable)).toBe(false);
+    expect(fila?.tipo).toBe('nvarchar');
+    // NVARCHAR(20) → max_length 40 (2 bytes por carácter).
+    expect(fila?.max_length).toBe(40);
+    expect(fila?.definicion ?? '').toContain('MANUAL');
+    // Las filas históricas nacen MANUAL (seed viejo + editor E5).
+    const origen = await pool.request().query<{ origen: string }>(`
+      SELECT TOP (1) origen FROM dbo.CRM_Conocimiento ORDER BY id`);
+    expect(origen.recordset[0]?.origen).toBe('MANUAL');
+  });
+
+  it('creates CRM_IngestasConocimiento with the ingestion columns (agente-ia-crm E4·T7)', async () => {
+    const result = await pool.request().query<{ name: string; tipo: string; is_nullable: number; definicion: string | null }>(`
+      SELECT c.name, TYPE_NAME(c.user_type_id) AS tipo, c.is_nullable,
+             dc.definition AS definicion
+        FROM sys.columns c
+        LEFT JOIN sys.default_constraints dc ON dc.parent_object_id = c.object_id AND dc.parent_column_id = c.column_id
+       WHERE c.object_id = OBJECT_ID('dbo.CRM_IngestasConocimiento')
+       ORDER BY c.name`);
+    expect(result.recordset.map((r) => r.name).sort()).toEqual(
+      [
+        'id',
+        'nombre',
+        'tipo',
+        'tamanoBytes',
+        'contenidoCrudo',
+        'estado',
+        'error',
+        'entradasCreadas',
+        'creadoPor',
+        'creadoEn',
+        'procesadoEn',
+        'vigenciaDesde',
+        'vigenciaHasta',
+      ].sort(),
+    );
+    const porNombre = new Map(result.recordset.map((r) => [r.name, r]));
+    expect(porNombre.get('estado')?.definicion ?? '').toContain('PENDIENTE');
+    expect(porNombre.get('entradasCreadas')?.definicion ?? '').toContain('0');
+  });
+
+  it('widens CK_CRM_AgenteTareas_Tipo with INGESTAR_CONOCIMIENTO (agente-ia-crm E4·T7)', async () => {
+    const result = await pool.request().query<{ definition: string }>(`
+      SELECT definition FROM sys.check_constraints
+       WHERE name = 'CK_CRM_AgenteTareas_Tipo'
+         AND parent_object_id = OBJECT_ID('dbo.CRM_AgenteTareas')`);
+    const definicion = result.recordset[0]?.definition ?? '';
+    expect(definicion).toContain('GENERAR_RESPUESTA');
+    expect(definicion).toContain('RESPONDER_CON_INDICACION');
+    expect(definicion).toContain('INGESTAR_CONOCIMIENTO');
+  });
+
+  it('makes CRM_AgenteTareas.conversacionId nullable, keeping FK/UQ enforcing (agente-ia-crm E4·T7, probe rolled back)', async () => {
+    // Guardado estructural: la columna quedó NULLable y la FK/UQ siguen.
+    const columna = await pool.request().query<{ is_nullable: number }>(`
+      SELECT is_nullable FROM sys.columns
+       WHERE object_id = OBJECT_ID('dbo.CRM_AgenteTareas') AND name = 'conversacionId'`);
+    expect(Boolean(columna.recordset[0]?.is_nullable)).toBe(true);
+    const fk = await pool.request().query<{ name: string; delete_referential_action: number }>(`
+      SELECT name, delete_referential_action FROM sys.foreign_keys
+       WHERE name = 'FK_CRM_AgenteTareas_Conversacion'
+         AND parent_object_id = OBJECT_ID('dbo.CRM_AgenteTareas')`);
+    expect(fk.recordset).toHaveLength(1);
+    expect(fk.recordset[0]?.delete_referential_action).toBe(1); // CASCADE
+    const uq = await pool.request().query<{ name: string }>(`
+      SELECT name FROM sys.key_constraints
+       WHERE name = 'UQ_CRM_AgenteTareas_ConversacionMensajeTipo' AND type = 'UQ'
+         AND parent_object_id = OBJECT_ID('dbo.CRM_AgenteTareas')`);
+    expect(uq.recordset).toHaveLength(1);
+
+    // Sonda de escritura (siempre en tx que se revierte): la tarea de
+    // ingesta nace con conversacionId NULL (no hay conversación) y el
+    // dedup UNIQUE trata los NULL como iguales.
+    const marca = `E4T7-PROBE-${Date.now().toString(36)}`;
+    const tx = pool.transaction();
+    await tx.begin();
+    try {
+      const insertarIngesta = (mensajeId: number): mssql.Request =>
+        tx.request().input('mensajeId', mssql.BigInt, mensajeId);
+      await insertarIngesta(1).query(`
+        INSERT INTO dbo.CRM_AgenteTareas (conversacionId, mensajeId, tipo)
+        VALUES (NULL, @mensajeId, 'INGESTAR_CONOCIMIENTO')`);
+      // Dedup: la MISMA triple (NULL, mensajeId, tipo) se rechaza.
+      await expect(
+        insertarIngesta(1).query(`
+          INSERT INTO dbo.CRM_AgenteTareas (conversacionId, mensajeId, tipo)
+          VALUES (NULL, @mensajeId, 'INGESTAR_CONOCIMIENTO')`),
+      ).rejects.toThrow(/UQ_CRM_AgenteTareas_ConversacionMensajeTipo/);
+      // Otra ingesta (otro mensajeId) sí entra.
+      await insertarIngesta(2).query(`
+        INSERT INTO dbo.CRM_AgenteTareas (conversacionId, mensajeId, tipo)
+        VALUES (NULL, @mensajeId, 'INGESTAR_CONOCIMIENTO')`);
+      // La FK re-creada sigue ENFORCANDO para tareas con conversación:
+      // una conversación probe real acepta tareas y las cascadea al borrarse.
+      const conversacion = await tx
+        .request()
+        .input('identificador', mssql.VarChar(64), `${marca}-conv`)
+        .query(`
+          INSERT INTO dbo.CRM_Conversaciones (canal, telefono, identificadorCanal, estado, modo)
+          OUTPUT INSERTED.id
+          VALUES ('WHATSAPP', NULL, @identificador, 'ACTIVA_IA', 'IA')`);
+      const conversacionId: number = conversacion.recordset[0]?.id ?? -1;
+      await tx
+        .request()
+        .input('conversacionId', mssql.Int, conversacionId)
+        .query(`
+          INSERT INTO dbo.CRM_AgenteTareas (conversacionId, mensajeId, tipo)
+          VALUES (@conversacionId, 0, 'GENERAR_RESPUESTA')`);
+      await tx.request().input('conversacionId', mssql.Int, conversacionId).query(
+        'DELETE FROM dbo.CRM_Conversaciones WHERE id = @conversacionId',
+      );
+      const cascada = await tx
+        .request()
+        .input('conversacionId', mssql.Int, conversacionId)
+        .query('SELECT id FROM dbo.CRM_AgenteTareas WHERE conversacionId = @conversacionId');
+      expect(cascada.recordset, 'la FK re-creada mantiene el CASCADE').toHaveLength(0);
+    } finally {
+      await tx.rollback();
+    }
+  });
+
+  it('enforces the CRM_IngestasConocimiento catalog at write time (agente-ia-crm E4·T7, probe rolled back)', async () => {
+    const tx = pool.transaction();
+    await tx.begin();
+    try {
+      // Happy path: defaults PENDIENTE / entradasCreadas 0.
+      await tx
+        .request()
+        .input('nombre', mssql.NVarChar(260), 'Sonda E4T7.pdf')
+        .input('tipo', mssql.NVarChar(10), 'PDF')
+        .input('tamanoBytes', mssql.Int, 1234).query(`
+          INSERT INTO dbo.CRM_IngestasConocimiento (nombre, tipo, tamanoBytes)
+          VALUES (@nombre, @tipo, @tamanoBytes)`);
+      const fila = await tx.request().query(
+        `SELECT estado, entradasCreadas FROM dbo.CRM_IngestasConocimiento WHERE nombre = 'Sonda E4T7.pdf'`,
+      );
+      expect(fila.recordset[0]?.estado).toBe('PENDIENTE');
+      expect(fila.recordset[0]?.entradasCreadas).toBe(0);
+
+      // Catálogo tipo: solo TEXTO/PDF/TXT/DOCX.
+      await expect(
+        tx
+          .request()
+          .input('nombre', mssql.NVarChar(260), 'Sonda.xlsx')
+          .input('tipo', mssql.NVarChar(10), 'XLSX')
+          .input('tamanoBytes', mssql.Int, 1).query(`
+            INSERT INTO dbo.CRM_IngestasConocimiento (nombre, tipo, tamanoBytes)
+            VALUES (@nombre, @tipo, @tamanoBytes)`),
+      ).rejects.toThrow(/CK_CRM_IngestasConocimiento_Tipo/);
+
+      // Catálogo estado: solo PENDIENTE/PROCESANDO/COMPLETADA/FALLIDA.
+      await expect(
+        tx
+          .request()
+          .input('nombre', mssql.NVarChar(260), 'Sonda2.pdf')
+          .input('tipo', mssql.NVarChar(10), 'PDF')
+          .input('tamanoBytes', mssql.Int, 1)
+          .input('estado', mssql.NVarChar(12), 'REENCOLADA').query(`
+            INSERT INTO dbo.CRM_IngestasConocimiento (nombre, tipo, tamanoBytes, estado)
+            VALUES (@nombre, @tipo, @tamanoBytes, @estado)`),
+      ).rejects.toThrow(/CK_CRM_IngestasConocimiento_Estado/);
+    } finally {
+      await tx.rollback();
+    }
   });
 
   it('creates the handoff audit index IX_CRM_Handoffs_EmpresaFecha', async () => {
