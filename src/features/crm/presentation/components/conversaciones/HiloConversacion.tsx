@@ -52,7 +52,16 @@ const ETIQUETA_EMISOR: Record<MensajeCrm['emisor'], string> = {
   HUMANO: 'Operador',
 };
 
-function Burbuja({ mensaje }: { mensaje: MensajeCrm }) {
+function Burbuja({
+  mensaje,
+  onMarcarDeficiente,
+  marcandoDeficiente = false,
+}: {
+  mensaje: MensajeCrm;
+  /** E4·T5: presente SOLO cuando la marca está disponible para esta burbuja. */
+  onMarcarDeficiente?: (mensajeId: number) => void;
+  marcandoDeficiente?: boolean;
+}) {
   const esOut = mensaje.direccion === 'OUT';
   // OUT+IA se distingue (E2·T6): tinte índigo en vez del teal del
   // operador — la respuesta de La Guía se reconoce de un vistazo.
@@ -70,6 +79,10 @@ function Burbuja({ mensaje }: { mensaje: MensajeCrm }) {
   // Parse defensivo por render (sin estado): JSON garbage → [] y el
   // affordance simplemente no aparece (contrato de parsearTitulosFuentes).
   const titulosFuentes = esIa ? parsearTitulosFuentes(mensaje.fuentes) : [];
+  // E4·T5: la fidelidad autoevaluada se muestra SOLO cuando la fila la
+  // trae (guard tolerante — filas pre-E4 → undefined → sin línea).
+  const fidelidad = esIa && typeof mensaje.fidelidad === 'number' ? mensaje.fidelidad : null;
+  const puedeMarcarDeficiente = esIa && mensaje.deficiente !== true && onMarcarDeficiente !== undefined;
   return (
     <div
       className={`flex max-w-[80%] flex-col rounded-2xl px-3.5 py-2 text-sm shadow-sm ${fondo}`}
@@ -78,14 +91,22 @@ function Burbuja({ mensaje }: { mensaje: MensajeCrm }) {
         {ETIQUETA_EMISOR[mensaje.emisor]}
       </span>
       <span className="whitespace-pre-wrap break-words">{mensaje.cuerpo}</span>
-      {(mensaje.score !== null && esIa) || titulosFuentes.length > 0 ? (
+      {(mensaje.score !== null && esIa) || titulosFuentes.length > 0 || fidelidad !== null ? (
         <span className="mt-1 flex flex-wrap items-center gap-1.5">
           {esIa && mensaje.score !== null && (
             <span className="inline-flex items-center rounded-full bg-white/20 px-2 py-0.5 text-[10px] font-semibold">
               confianza {mensaje.score.toFixed(2)}
             </span>
           )}
-          {titulosFuentes.length > 0 && (
+          {/* E4·T5: marca de respuesta deficiente (estado desde la fila,
+              sobrevive al refetch — el hueco #id llega por la respuesta
+              de la ruta, no necesita ir inline en el listado). */}
+          {esIa && mensaje.deficiente === true && (
+            <span className="inline-flex items-center rounded-full bg-amber-400/90 px-2 py-0.5 text-[10px] font-semibold text-amber-950">
+              ⚠ marcada deficiente
+            </span>
+          )}
+          {(titulosFuentes.length > 0 || fidelidad !== null) && (
             <details className="w-fit">
               <summary className="inline-flex cursor-pointer select-none items-center rounded-full bg-white/20 px-2 py-0.5 text-[10px] font-semibold">
                 Fuentes ({titulosFuentes.length})
@@ -94,11 +115,26 @@ function Burbuja({ mensaje }: { mensaje: MensajeCrm }) {
                 {titulosFuentes.map((titulo, indice) => (
                   <li key={`${indice}-${titulo}`}>{titulo}</li>
                 ))}
+                {/* E4·T5: la autoevaluación de fidelidad vive junto a las
+                    fuentes citadas (0.90 → «Fidelidad: 0.90»). */}
+                {fidelidad !== null && <li>Fidelidad: {fidelidad.toFixed(2)}</li>}
               </ul>
             </details>
           )}
         </span>
       ) : null}
+      {/* E4·T5: la marca SOLO se ofrece en respuestas IA sin marcar;
+          la visibilidad (estado del hilo) la decide el padre. */}
+      {puedeMarcarDeficiente && (
+        <button
+          type="button"
+          onClick={() => onMarcarDeficiente?.(mensaje.id)}
+          disabled={marcandoDeficiente}
+          className="mt-1 self-start rounded-lg border border-white/30 px-2 py-0.5 text-[10px] font-semibold text-indigo-100 transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          {marcandoDeficiente ? 'Marcando…' : '⚠ Marcar deficiente'}
+        </button>
+      )}
       {/* PENDIENTE (outbox en vuelo, E2): ni hora ni wamid — un estado
           sutil de enviando; FALLIDO mantiene el marcado de error. */}
       {mensaje.estadoEnvio === 'PENDIENTE' ? (
@@ -159,6 +195,11 @@ export function HiloConversacion({ fila, onVolver, onCambio }: HiloConversacionP
     tomar,
     devolver,
     escalar,
+    // E4·T5: marca de respuesta deficiente
+    marcandoDeficiente,
+    errorDeficiente,
+    limpiarErrorDeficiente,
+    marcarDeficiente,
   } = useHiloConversacion(fila.id, fila.ultimoMensajeEn);
 
   const [borrador, setBorrador] = useState('');
@@ -211,6 +252,13 @@ export function HiloConversacion({ fila, onVolver, onCambio }: HiloConversacionP
     if (transicionando) return;
     const ok = await devolver();
     if (ok) onCambio();
+  }
+
+  // E4·T5: la marca por burbuja (el refetch del hilo ya corre en el
+  // hook — el chip llega desde la fila refetchada).
+  function manejarDeficiente(mensajeId: number): void {
+    if (marcandoDeficiente) return;
+    void marcarDeficiente(mensajeId);
   }
 
   return (
@@ -275,7 +323,37 @@ export function HiloConversacion({ fila, onVolver, onCambio }: HiloConversacionP
         )}
 
         {status === 'ready' &&
-          hilo?.mensajes.map((mensaje) => <Burbuja key={mensaje.id} mensaje={mensaje} />)}
+          hilo?.mensajes.map((mensaje) => (
+            <Burbuja
+              key={mensaje.id}
+              mensaje={mensaje}
+              // E4·T5: la marca se ofrece solo en hilos atendibles —
+              // PENDIENTE_VINCULACION no (guarda de acciones existente:
+              // el composer y las acciones tampoco se ofrecen ahí).
+              onMarcarDeficiente={
+                estado === 'PENDIENTE_VINCULACION' ? undefined : manejarDeficiente
+              }
+              marcandoDeficiente={marcandoDeficiente}
+            />
+          ))}
+
+        {/* E4·T5: error inline de la marca (junto al hilo, visible sin
+            importar el estado del composer). */}
+        {errorDeficiente !== null && (
+          <p
+            role="alert"
+            className="self-center rounded-lg border border-red-200 dark:border-red-900/50 bg-red-50 dark:bg-red-950/40 px-3 py-1.5 text-xs font-medium text-red-700 dark:text-red-400"
+          >
+            {errorDeficiente}{' '}
+            <button
+              type="button"
+              onClick={limpiarErrorDeficiente}
+              className="underline underline-offset-2 hover:opacity-80"
+            >
+              ocultar
+            </button>
+          </p>
+        )}
 
         {status === 'ready' && hilo !== null && hilo.mensajes.length === 0 && (
           <p className="self-center py-8 text-xs text-slate-400 dark:text-slate-500">

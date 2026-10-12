@@ -119,6 +119,13 @@ export interface UseHiloConversacionResult {
   tomar: () => Promise<boolean>;
   devolver: () => Promise<boolean>;
   escalar: (usuarioId: string) => Promise<boolean>;
+  // ---- E4·T5: marcar respuesta deficiente ----
+  /** true mientras el POST /deficiente vuela (botón por burbuja). */
+  marcandoDeficiente: boolean;
+  errorDeficiente: string | null;
+  limpiarErrorDeficiente: () => void;
+  /** huecoId creado (toast del caller); null en fallo (errorDeficiente). */
+  marcarDeficiente: (mensajeId: number) => Promise<number | null>;
   confirmandoFicha: boolean;
   errorConfirmacionFicha: string | null;
   /** true → ficha refreshed from the POST response. */
@@ -170,6 +177,9 @@ export function useHiloConversacion(
   const [errorIndicacion, setErrorIndicacion] = useState<string | null>(null);
   const [transicionando, setTransicionando] = useState(false);
   const [errorTransicion, setErrorTransicion] = useState<string | null>(null);
+  // E4·T5: marca de respuesta deficiente (flag + error inline).
+  const [marcandoDeficiente, setMarcandoDeficiente] = useState(false);
+  const [errorDeficiente, setErrorDeficiente] = useState<string | null>(null);
   const [confirmandoFicha, setConfirmandoFicha] = useState(false);
   const [errorConfirmacionFicha, setErrorConfirmacionFicha] = useState<string | null>(null);
   const [alternandoMemoria, setAlternandoMemoria] = useState(false);
@@ -541,6 +551,37 @@ export function useHiloConversacion(
     [transicionar],
   );
 
+  // ---- E4·T5: marcar respuesta deficiente ----
+
+  const limpiarErrorDeficiente = useCallback(() => setErrorDeficiente(null), []);
+
+  /**
+   * Marcar UNA respuesta IA como deficiente: al éxito se refetcha el
+   * hilo (la burbuja pasa a «⚠ marcada deficiente» desde la fila) y
+   * se devuelve el huecoId creado para el toast del caller. Fallo →
+   * null + errorDeficiente inline (nunca un throw).
+   */
+  const marcarDeficiente = useCallback(
+    async (mensajeId: number): Promise<number | null> => {
+      if (conversacionId === null) return null;
+      setMarcandoDeficiente(true);
+      setErrorDeficiente(null);
+      const { ok, json } = await postAccion(`${buildHiloPath(conversacionId)}/deficiente`, {
+        mensajeId,
+      });
+      if (!ok || (json as { success?: unknown }).success !== true) {
+        setErrorDeficiente(mensajeError(json, 0));
+        setMarcandoDeficiente(false);
+        return null;
+      }
+      await fetchOnce(conversacionId, true);
+      setMarcandoDeficiente(false);
+      const huecoId = (json as { huecoId?: unknown }).huecoId;
+      return typeof huecoId === 'number' ? huecoId : null;
+    },
+    [conversacionId, fetchOnce],
+  );
+
   const confirmarDatoFicha = useCallback(
     async (campo: CampoFicha, valor: string): Promise<boolean> => {
       if (conversacionId === null) return false;
@@ -708,6 +749,11 @@ export function useHiloConversacion(
     tomar,
     devolver,
     escalar,
+    // E4·T5: marcar respuesta deficiente
+    marcandoDeficiente,
+    errorDeficiente,
+    limpiarErrorDeficiente,
+    marcarDeficiente,
     confirmandoFicha,
     errorConfirmacionFicha,
     confirmarDatoFicha,

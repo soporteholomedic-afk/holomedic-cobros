@@ -515,3 +515,93 @@ describe('useHiloConversacion — usuarios asignables (lazy, E3·T5)', () => {
     expect(gets).toBe(1);
   });
 });
+
+describe('useHiloConversacion — marcar respuesta deficiente (E4·T5)', () => {
+  const MENSAJE_IA: MensajeCrm = {
+    id: 4,
+    conversacionId: 7,
+    direccion: 'OUT',
+    emisor: 'IA',
+    cuerpo: 'Respuesta de la Guía',
+    tipo: 'TEXTO',
+    canal: 'WHATSAPP',
+    wamid: 'wamid.4',
+    idempotenciaKey: null,
+    estadoEnvio: 'ENVIADO',
+    fuentes: null,
+    score: 0.8,
+    modelo: 'glm',
+    creadoEn: '2026-10-11T10:05:00Z',
+  };
+
+  it('marcarDeficiente → POST {mensajeId}, devuelve el huecoId y refetcha el hilo (la fila llega deficiente)', async () => {
+    const estado = structuredClone(BASE);
+    estado.hilo.mensajes = [MENSAJE_IA];
+    const rutas = rutasBase(estado);
+    rutas['POST /api/crm/conversaciones/7/deficiente'] = (init?: RequestInit) => {
+      const cuerpo = JSON.parse(String(init?.body ?? '{}')) as { mensajeId: number };
+      expect(cuerpo).toEqual({ mensajeId: 4 });
+      // El GET del hilo refleja el post-marca (la burbuja lo muestra).
+      estado.hilo.mensajes = [{ ...MENSAJE_IA, deficiente: true }];
+      return { success: true, huecoId: 61, mensajeId: 4 };
+    };
+    enrutar(rutas);
+
+    const { result } = renderHook(() => useHiloConversacion(7, null));
+    await waitFor(() => expect(result.current.status).toBe('ready'));
+
+    let huecoId: number | null = null;
+    await act(async () => {
+      huecoId = await result.current.marcarDeficiente(4);
+    });
+
+    expect(huecoId).toBe(61);
+    expect(result.current.errorDeficiente).toBeNull();
+    await waitFor(() =>
+      expect(result.current.hilo?.mensajes.find((m) => m.id === 4)?.deficiente).toBe(true),
+    );
+  });
+
+  it('409 (ya marcada) → null + errorDeficiente con el mensaje del servidor', async () => {
+    const estado = structuredClone(BASE);
+    estado.hilo.mensajes = [MENSAJE_IA];
+    const rutas = rutasBase(estado);
+    rutas['POST /api/crm/conversaciones/7/deficiente'] = {
+      success: false,
+      error: 'La respuesta ya fue marcada como deficiente',
+      code: 'CONFLICT_ERROR',
+    };
+    enrutar(rutas);
+
+    const { result } = renderHook(() => useHiloConversacion(7, null));
+    await waitFor(() => expect(result.current.status).toBe('ready'));
+
+    let huecoId: number | null = 99;
+    await act(async () => {
+      huecoId = await result.current.marcarDeficiente(4);
+    });
+
+    expect(huecoId).toBeNull();
+    expect(result.current.errorDeficiente).toBe('La respuesta ya fue marcada como deficiente');
+    await waitFor(() =>
+      expect(result.current.hilo?.mensajes.find((m) => m.id === 4)?.deficiente).toBeFalsy(),
+    );
+  });
+
+  it('limpiarErrorDeficiente limpia el error inline', async () => {
+    const rutas = rutasBase(BASE);
+    rutas['POST /api/crm/conversaciones/7/deficiente'] = 400;
+    enrutar(rutas);
+
+    const { result } = renderHook(() => useHiloConversacion(7, null));
+    await waitFor(() => expect(result.current.status).toBe('ready'));
+
+    await act(async () => {
+      await result.current.marcarDeficiente(3);
+    });
+    expect(result.current.errorDeficiente).not.toBeNull();
+
+    act(() => result.current.limpiarErrorDeficiente());
+    expect(result.current.errorDeficiente).toBeNull();
+  });
+});

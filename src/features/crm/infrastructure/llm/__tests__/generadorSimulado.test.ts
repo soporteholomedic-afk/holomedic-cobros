@@ -37,6 +37,7 @@ describe('GeneradorSimulado — generarRespuesta (E2·T3)', () => {
     expect(respuesta).toEqual({
       texto: 'Incluye examen médico, audiometría y espirometría.',
       scoreConfianza: 0.8,
+      fidelidad: 0.9,
       enScope: true,
       requiereAyudaHumana: false,
       idsConocimiento: [7],
@@ -91,6 +92,7 @@ describe('GeneradorSimulado — generarRespuesta (E2·T3)', () => {
     expect(respuesta).toEqual({
       texto: 'Prefiere turnos de tarde.',
       scoreConfianza: 0.8,
+      fidelidad: 0.9,
       enScope: true,
       requiereAyudaHumana: false,
       idsConocimiento: [],
@@ -112,6 +114,7 @@ describe('GeneradorSimulado — generarRespuesta (E2·T3)', () => {
     expect(respuesta).toEqual({
       texto: TEXTO_DERIVACION,
       scoreConfianza: 0.1,
+      fidelidad: 0.3,
       enScope: false,
       requiereAyudaHumana: true,
       idsConocimiento: [],
@@ -131,6 +134,7 @@ describe('GeneradorSimulado — generarRespuesta (E2·T3)', () => {
     });
 
     expect(respuesta.scoreConfianza).toBe(0.7);
+    expect(respuesta.fidelidad).toBe(0.9);
     expect(respuesta.enScope).toBe(true);
     expect(respuesta.requiereAyudaHumana).toBe(false);
     expect(respuesta.idsConocimiento).toEqual([]);
@@ -153,6 +157,64 @@ describe('GeneradorSimulado — generarRespuesta (E2·T3)', () => {
 
     expect(respuesta.texto).toBe('Incluye examen médico, audiometría y espirometría.');
     expect(respuesta.idsConocimiento).toEqual([7]);
+  });
+});
+
+describe('GeneradorSimulado — fidelidad autoevaluada (E4·T5)', () => {
+  it('ramas CON fuente (indicación/KB/memoria/saludo) → fidelidad 0.9 determinista', async () => {
+    const generador = new GeneradorSimulado();
+
+    const porIndicacion = await generador.generarRespuesta({
+      consulta: 'c',
+      contactoNuevo: false,
+      historial: [],
+      conocimiento: [],
+      memorias: [],
+      indicacionHumana: 'Respondé que sí',
+    });
+    const porKB = await generador.generarRespuesta({
+      consulta: 'c',
+      contactoNuevo: false,
+      historial: [],
+      conocimiento: CONOCIMIENTO,
+      memorias: [],
+    });
+    const porMemoria = await generador.generarRespuesta({
+      consulta: 'c',
+      contactoNuevo: false,
+      historial: [],
+      conocimiento: [],
+      memorias: [{ tipo: 'preferencia', titulo: 'Tarde', contenido: 'Prefiere la tarde.' }],
+    });
+    const porSaludo = await generador.generarRespuesta({
+      consulta: 'Hola',
+      contactoNuevo: true,
+      historial: [],
+      conocimiento: [],
+      memorias: [],
+    });
+
+    expect(porIndicacion.fidelidad).toBe(0.9);
+    expect(porKB.fidelidad).toBe(0.9);
+    expect(porMemoria.fidelidad).toBe(0.9);
+    expect(porSaludo.fidelidad).toBe(0.9);
+    expect(porIndicacion.modelo).toBe('simulado');
+  });
+
+  it('rama de derivación (sin fuente) → fidelidad 0.3: la baja autoevaluada acompaña la escalación', async () => {
+    const generador = new GeneradorSimulado();
+
+    const respuesta = await generador.generarRespuesta({
+      consulta: '¿Venden seguros?',
+      contactoNuevo: false,
+      historial: [],
+      conocimiento: [],
+      memorias: [],
+    });
+
+    expect(respuesta.enScope).toBe(false);
+    expect(respuesta.requiereAyudaHumana).toBe(true);
+    expect(respuesta.fidelidad).toBe(0.3);
   });
 });
 
@@ -360,6 +422,7 @@ describe('GeneradorSimulado — indicación humana (E3·T2)', () => {
     expect(respuesta).toEqual({
       texto: '(simulado) Conforme a la indicación de nuestro equipo: Decile que sí, los sábados de 8 a 12.',
       scoreConfianza: 0.8,
+      fidelidad: 0.9,
       enScope: true,
       requiereAyudaHumana: false,
       idsConocimiento: [],

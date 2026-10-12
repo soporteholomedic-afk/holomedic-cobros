@@ -395,3 +395,130 @@ describe('HiloConversacion patrón de ayuda (E3·T5)', () => {
     expect(screen.getAllByText('— por detectar —').length).toBeGreaterThan(0);
   });
 });
+
+describe('HiloConversacion calidad medible (E4·T5)', () => {
+  const MENSAJE_IA: MensajeCrm = {
+    id: 2,
+    conversacionId: fila.id,
+    direccion: 'OUT',
+    emisor: 'IA',
+    cuerpo: 'Te confirmo los horarios',
+    tipo: 'TEXTO',
+    canal: 'WHATSAPP',
+    wamid: 'wamid.2',
+    idempotenciaKey: null,
+    estadoEnvio: 'ENVIADO',
+    fuentes: FUENTES_JSON,
+    score: 0.8,
+    modelo: 'glm',
+    creadoEn: '2026-10-11T10:05:00Z',
+  };
+
+  /** Router fetch: hilo (con mensajes) + laterales; POSTs grabados. */
+  function montarConMensajes(
+    mensajes: MensajeCrm[],
+    estado: string = 'TOMADA_HUMANO',
+    respuestaDeficiente: unknown = { success: true, huecoId: 61, mensajeId: 2 },
+  ): { posts: Array<{ clave: string; cuerpo: unknown }>; setMensajes: (nuevos: MensajeCrm[]) => void } {
+    const posts: Array<{ clave: string; cuerpo: unknown }> = [];
+    let mensajesActuales = mensajes;
+    fetchMock.mockImplementation(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
+      const clave = `${init?.method ?? 'GET'} ${url.replace('http://localhost', '')}`;
+      if (init?.method === 'POST') {
+        posts.push({ clave, cuerpo: JSON.parse(String(init.body ?? '{}')) });
+        return new Response(JSON.stringify(respuestaDeficiente), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        });
+      }
+      const conversacion = {
+        id: fila.id,
+        empresaId: fila.empresaId,
+        contactoId: fila.contactoId,
+        canal: fila.canal,
+        telefono: fila.telefono,
+        identificadorCanal: fila.identificadorCanal,
+        estado,
+        asignadaA: fila.asignadaA,
+        modo: fila.modo,
+        ultimoMensajeEn: fila.ultimoMensajeEn,
+        noLeidos: fila.noLeidos,
+        creadoEn: fila.creadoEn,
+        actualizadoEn: fila.actualizadoEn,
+      };
+      if (clave === `GET /api/crm/conversaciones/${fila.id}`) {
+        return new Response(
+          JSON.stringify({ success: true, conversacion, mensajes: mensajesActuales }),
+          { status: 200, headers: { 'content-type': 'application/json' } },
+        );
+      }
+      return new Response(JSON.stringify({ success: true }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      });
+    });
+    render(<HiloConversacion fila={fila} onVolver={() => {}} onCambio={() => {}} />);
+    return { posts, setMensajes: (nuevos: MensajeCrm[]) => { mensajesActuales = nuevos; } };
+  }
+
+  it('burbuja IA con fidelidad → línea «Fidelidad: 0.90» dentro del detalle de fuentes', async () => {
+    montarConMensajes([mensaje({ ...MENSAJE_IA, fidelidad: 0.9 })]);
+
+    expect(await screen.findByText('Te confirmo los horarios')).toBeInTheDocument();
+    const resumen = screen.getByText('Fuentes (2)');
+    await user.click(resumen);
+    expect(screen.getByText('Horarios de atención')).toBeInTheDocument();
+    expect(screen.getByText('Fidelidad: 0.90')).toBeInTheDocument();
+  });
+
+  it('burbuja IA sin fidelidad (fila pre-E4) → sin línea de fidelidad, sin crash', async () => {
+    montarConMensajes([mensaje(MENSAJE_IA)]);
+
+    expect(await screen.findByText('Te confirmo los horarios')).toBeInTheDocument();
+    const resumen = screen.getByText('Fuentes (2)');
+    await user.click(resumen);
+    expect(screen.queryByText(/Fidelidad:/)).not.toBeInTheDocument();
+  });
+
+  it('respuesta IA sin marcar → botón «⚠ Marcar deficiente»; al éxito refetcha y muestra «⚠ marcada deficiente»', async () => {
+    const escena = montarConMensajes([mensaje(MENSAJE_IA)]);
+
+    const boton = await screen.findByRole('button', { name: '⚠ Marcar deficiente' });
+    escena.setMensajes([mensaje({ ...MENSAJE_IA, deficiente: true })]);
+    await user.click(boton);
+
+    expect(escena.posts).toEqual([
+      { clave: `POST /api/crm/conversaciones/${fila.id}/deficiente`, cuerpo: { mensajeId: 2 } },
+    ]);
+    await waitFor(() =>
+      expect(screen.getByText('⚠ marcada deficiente')).toBeInTheDocument(),
+    );
+    expect(screen.queryByRole('button', { name: '⚠ Marcar deficiente' })).not.toBeInTheDocument();
+  });
+
+  it('respuesta YA marcada → chip «⚠ marcada deficiente» y SIN botón', async () => {
+    montarConMensajes([mensaje({ ...MENSAJE_IA, deficiente: true })]);
+
+    expect(await screen.findByText('⚠ marcada deficiente')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '⚠ Marcar deficiente' })).not.toBeInTheDocument();
+  });
+
+  it('el botón solo existe en mensajes OUT+IA (el cliente y el operador no lo llevan)', async () => {
+    montarConMensajes([
+      mensaje({ id: 1, direccion: 'IN', emisor: 'CLIENTE', cuerpo: 'pregunta' }),
+      mensaje({ ...MENSAJE_IA }),
+      mensaje({ id: 3, direccion: 'OUT', emisor: 'HUMANO', cuerpo: 'respuesta humana' }),
+    ]);
+
+    await waitFor(() => expect(screen.getByText('respuesta humana')).toBeInTheDocument());
+    expect(screen.getAllByRole('button', { name: '⚠ Marcar deficiente' })).toHaveLength(1);
+  });
+
+  it('PENDIENTE_VINCULACION → sin botón de marcar (sin composer ni acciones)', async () => {
+    montarConMensajes([mensaje(MENSAJE_IA)], 'PENDIENTE_VINCULACION');
+
+    expect(await screen.findByText('Te confirmo los horarios')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '⚠ Marcar deficiente' })).not.toBeInTheDocument();
+  });
+});

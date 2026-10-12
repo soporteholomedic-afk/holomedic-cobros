@@ -881,6 +881,19 @@ export interface MensajeCrmRepository {
     conversacionId: number,
     opciones: ListarMensajesOpciones,
   ): Promise<MensajeCrm[]>;
+  /**
+   * Read ONE thread row by id (E4·T5, optional — actualizarModo
+   * precedent): null cuando no existe. marcarRespuestaDeficiente lo
+   * usa para validar existencia + pertenencia a la conversación.
+   */
+  obtenerPorId?(id: number): Promise<MensajeCrm | null>;
+  /**
+   * Flag ONE IA reply as deficient (E4·T5, optional capability):
+   * UPDATE deficiente = 1 — idempotente por naturaleza (re-marcar no
+   * cambia nada). Devuelve la fila actualizada; null cuando el id no
+   * existe (la use case lo mapea a 404 tipado).
+   */
+  marcarDeficiente?(id: number): Promise<MensajeCrm | null>;
 }
 
 // ---------------------------------------------------------------------------
@@ -908,14 +921,28 @@ export interface ConocimientoCrmRepository {
   /**
    * Persist ONE KB-gap candidate (E3): defaults to estado 'ABIERTO';
    * `terminos` crosses as a JSON string array (adapter-mapped). The
-   * hueco SURVIVES its triggering solicitud (FK SET NULL).
+   * hueco SURVIVES its triggering solicitud (FK SET NULL). E4·T5:
+   * `origenMensajeId` records the deficient IA reply that left the
+   * gap (marcarRespuestaDeficiente) — deliberately NO FK: this
+   * domain's messages are never deleted, so the provenance is
+   * permanent (CRM_AgenteTareas.mensajeId precedent).
    */
   crearHueco?(entrada: {
     consulta: string;
     terminos: string[];
     origenSolicitudId?: number | null;
+    /** E4·T5: the IA reply flagged deficient that left this gap. */
+    origenMensajeId?: number | null;
     estado?: EstadoHuecoConocimiento;
   }): Promise<HuecoConocimiento>;
+  /**
+   * The LAST hueco left by ONE IA reply (E4·T5, optional capability):
+   * SELECT id … WHERE origenMensajeId = ? ORDER BY id DESC (TOP 1).
+   * marcarRespuestaDeficiente uses it to expose the existing hueco id
+   * on the MENSAJE_YA_MARCADO conflict; null cuando el mensaje no
+   * dejó hueco.
+   */
+  obtenerHuecoPorMensaje?(mensajeId: number): Promise<HuecoConocimiento | null>;
 }
 
 // ---------------------------------------------------------------------------

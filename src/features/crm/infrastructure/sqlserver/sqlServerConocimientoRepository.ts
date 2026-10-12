@@ -75,10 +75,12 @@ interface HuecoRow {
   terminos: string | null;
   estado: string;
   origenSolicitudId: number | string | null;
+  /** E4·T5: la respuesta IA deficiente que dejó este hueco. */
+  origenMensajeId: number | string | null;
   creadoEn: Date;
 }
 
-const COLUMNAS_HUECO = 'id, consulta, terminos, estado, origenSolicitudId, creadoEn';
+const COLUMNAS_HUECO = 'id, consulta, terminos, estado, origenSolicitudId, origenMensajeId, creadoEn';
 
 function mapearHueco(row: HuecoRow): HuecoConocimiento {
   return {
@@ -87,6 +89,7 @@ function mapearHueco(row: HuecoRow): HuecoConocimiento {
     terminos: parsearTerminosJson(row.terminos),
     estado: row.estado as HuecoConocimiento['estado'],
     origenSolicitudId: row.origenSolicitudId === null ? null : Number(row.origenSolicitudId),
+    origenMensajeId: row.origenMensajeId === null ? null : Number(row.origenMensajeId),
     creadoEn: row.creadoEn,
   };
 }
@@ -155,6 +158,7 @@ export class SqlServerConocimientoRepository implements ConocimientoCrmRepositor
     consulta: string;
     terminos: string[];
     origenSolicitudId?: number | null;
+    origenMensajeId?: number | null;
     estado?: HuecoConocimiento['estado'];
   }): Promise<HuecoConocimiento> {
     const inserted = await this.pool
@@ -162,10 +166,11 @@ export class SqlServerConocimientoRepository implements ConocimientoCrmRepositor
       .input('consulta', mssql.NVarChar(2000), entrada.consulta)
       .input('terminos', mssql.NVarChar(mssql.MAX), JSON.stringify(entrada.terminos))
       .input('estado', mssql.NVarChar(20), entrada.estado ?? 'ABIERTO')
-      .input('origenSolicitudId', mssql.BigInt, entrada.origenSolicitudId ?? null).query(`
-        INSERT INTO dbo.CRM_ConocimientoHuecos (consulta, terminos, estado, origenSolicitudId)
+      .input('origenSolicitudId', mssql.BigInt, entrada.origenSolicitudId ?? null)
+      .input('origenMensajeId', mssql.BigInt, entrada.origenMensajeId ?? null).query(`
+        INSERT INTO dbo.CRM_ConocimientoHuecos (consulta, terminos, estado, origenSolicitudId, origenMensajeId)
         OUTPUT INSERTED.id
-        VALUES (@consulta, @terminos, @estado, @origenSolicitudId)
+        VALUES (@consulta, @terminos, @estado, @origenSolicitudId, @origenMensajeId)
       `);
     const id = Number((inserted.recordset as { id: number | string }[])[0]?.id);
     if (Number.isNaN(id)) throw new Error('INSERT de CRM_ConocimientoHuecos no devolvió id');
@@ -176,5 +181,25 @@ export class SqlServerConocimientoRepository implements ConocimientoCrmRepositor
     const row = (releido.recordset as HuecoRow[])[0];
     if (!row) throw new Error('El hueco recién creado no pudo releerse');
     return mapearHueco(row);
+  }
+
+  /**
+   * E4·T5: el ÚLTIMO hueco que dejó UNA respuesta IA deficiente —
+   * TOP (1) con ORDER BY id DESC (re-marcar el mismo mensaje jamás
+   * crea un segundo, así que en la práctica es único; el DESC es el
+   * desempate determinista si una corrección manual lo duplica).
+   */
+  async obtenerHuecoPorMensaje(mensajeId: number): Promise<HuecoConocimiento | null> {
+    const result = await this.pool
+      .request()
+      .input('mensajeId', mssql.BigInt, mensajeId)
+      .query(`
+        SELECT TOP (1) ${COLUMNAS_HUECO}
+        FROM dbo.CRM_ConocimientoHuecos
+        WHERE origenMensajeId = @mensajeId
+        ORDER BY id DESC
+      `);
+    const row = (result.recordset as HuecoRow[])[0];
+    return row ? mapearHueco(row) : null;
   }
 }

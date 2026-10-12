@@ -96,6 +96,12 @@ describe('promptGeneracion — system base SIEMPRE presente (E4·T1)', () => {
     expect(system).toContain('idsConocimiento');
   });
 
+  it('contrato JSON pide fidelidad self-score (E4·T5): definición y forma exacta con el campo', () => {
+    const { system } = armarPromptGeneracion(entrada());
+    expect(system).toContain('fidelidad es tu autoevaluación (entre 0 y 1)');
+    expect(system).toContain('"fidelidad": number');
+  });
+
   it('cláusula de saludos/cortesía y derivación SOLO de negocio (regresión E2·T9)', () => {
     const { system } = armarPromptGeneracion(entrada());
     expect(system).toContain('Los saludos, agradecimientos y cortesía general SIEMPRE se responden');

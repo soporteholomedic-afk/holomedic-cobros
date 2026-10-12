@@ -78,11 +78,14 @@ const BASE_GENERACION_V2 = [
   ].join(' '),
 ].join('\n\n');
 
-/** JSON output contract — unchanged since E2·T3 (the adapter guards it). */
+/** JSON output contract — unchanged since E2·T3 except fidelidad (E4·T5, self-score). */
 const CONTRATO_JSON_GENERACION = [
   'scoreConfianza es tu confianza (entre 0 y 1) en que la respuesta está respaldada por lo provisto.',
+  'fidelidad es tu autoevaluación (entre 0 y 1) de cuánto se apega la respuesta a las fuentes provistas:',
+  '1 cuando todo lo que decís sale textual o directamente de CONOCIMIENTO/MEMORIAS/INDICACIÓN/HISTORIAL;',
+  'menor cuanto más tuviste que inferir, generalizar o completar por tu cuenta.',
   'Respondé ÚNICAMENTE con JSON válido, sin texto adicional, con esta forma exacta:',
-  '{"texto": string, "scoreConfianza": number, "enScope": boolean, "requiereAyudaHumana": boolean, "idsConocimiento": number[]}',
+  '{"texto": string, "scoreConfianza": number, "fidelidad": number, "enScope": boolean, "requiereAyudaHumana": boolean, "idsConocimiento": number[]}',
   'y nada más.',
 ].join(' ');
 

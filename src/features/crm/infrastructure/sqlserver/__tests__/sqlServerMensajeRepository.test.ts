@@ -149,6 +149,90 @@ describe('SqlServerMensajeRepository (integración, filas probe propias)', () =>
     }
   });
 
+  it('crear roundtrip fidelidad + deficiente (E4·T5): DECIMAL(4,3) cruza como number, BIT como boolean, defaults correctos', async () => {
+    try {
+      const conversacionId = await crearConversacionProbe();
+
+      const conFidelidad = await repoMensajes.crear({
+        conversacionId,
+        direccion: 'OUT',
+        emisor: 'IA',
+        cuerpo: 'Respuesta con fidelidad autoevaluada',
+        estadoEnvio: 'ENVIADO',
+        score: 0.8,
+        fidelidad: 0.905,
+      });
+      expect(conFidelidad.fidelidad).toBeCloseTo(0.905, 6);
+      expect(conFidelidad.deficiente).toBe(false); // DEFAULT 0
+
+      const sinNada = await repoMensajes.crear({
+        conversacionId,
+        direccion: 'IN',
+        emisor: 'CLIENTE',
+        cuerpo: 'consulta del cliente',
+      });
+      expect(sinNada.fidelidad).toBeNull(); // columna nullable
+      expect(sinNada.deficiente).toBe(false);
+
+      const hilo = await repoMensajes.listarPorConversacion(conversacionId, { limite: 10 });
+      expect(hilo.map((m) => m.fidelidad)).toEqual([null, expect.any(Number)]);
+      expect(hilo.every((m) => m.deficiente === false)).toBe(true);
+    } finally {
+      await limpiarProbe();
+    }
+  });
+
+  it('marcarDeficiente (E4·T5): marca 1 y devuelve la fila, es idempotente y null con id desconocido', async () => {
+    try {
+      const conversacionId = await crearConversacionProbe();
+      const mensaje = await repoMensajes.crear({
+        conversacionId,
+        direccion: 'OUT',
+        emisor: 'IA',
+        cuerpo: 'respuesta a marcar',
+        estadoEnvio: 'ENVIADO',
+        score: 0.9,
+        fidelidad: 0.9,
+      });
+
+      const primera = await repoMensajes.marcarDeficiente(mensaje.id);
+      expect(primera).not.toBeNull();
+      expect(primera?.deficiente).toBe(true);
+      // Idempotente: marcar de nuevo NO falla ni altera el resto de la fila.
+      const segunda = await repoMensajes.marcarDeficiente(mensaje.id);
+      expect(segunda?.deficiente).toBe(true);
+      expect(segunda?.score).toBe(0.9);
+      expect(segunda?.fidelidad).toBeCloseTo(0.9, 6);
+
+      // La marca se lee desde el hilo (el repo SELECT la mapea).
+      const hilo = await repoMensajes.listarPorConversacion(conversacionId, { limite: 10 });
+      expect(hilo[0]?.deficiente).toBe(true);
+
+      expect(await repoMensajes.marcarDeficiente(4_000_000_000)).toBeNull();
+    } finally {
+      await limpiarProbe();
+    }
+  });
+
+  it('obtenerPorId público (E4·T5): devuelve la fila o null con id desconocido', async () => {
+    try {
+      const conversacionId = await crearConversacionProbe();
+      const mensaje = await repoMensajes.crear({
+        conversacionId,
+        direccion: 'OUT',
+        emisor: 'IA',
+        cuerpo: 'para leer por id',
+        estadoEnvio: 'ENVIADO',
+      });
+
+      const leido = await repoMensajes.obtenerPorId(mensaje.id);
+      expect(leido).toMatchObject({ id: mensaje.id, cuerpo: 'para leer por id' });
+      expect(await repoMensajes.obtenerPorId(4_000_000_001)).toBeNull();
+    } finally {
+      await limpiarProbe();
+    }
+  });
+
   it('listarPorConversacion: páginas newest-first con cursor antesDeId exclusivo', async () => {
     try {
       const conversacionId = await crearConversacionProbe();

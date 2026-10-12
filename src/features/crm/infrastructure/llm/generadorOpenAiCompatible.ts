@@ -34,7 +34,10 @@ import {
  *   be a finite number, clamped into [0, 1]; missing booleans coerce
  *   to the ESCALATION pair (enScope false / requiereAyudaHumana
  *   true — fail toward a human, never toward a fabricated answer);
- *   idsConocimiento filtered to the ids the caller provided.
+ *   idsConocimiento filtered to the ids the caller provided; E4·T5:
+ *   `fidelidad` (self-assessed source fidelity) is OPTIONAL — absent,
+ *   non-number or non-finite stays absent (persisted null, never a
+ *   validation failure), a present number is clamped into [0, 1].
  * - destilar: items with a tipo outside the 5-value catalog are
  *   DROPPED (not fatal — the model losing one item must not lose the
  *   exchange), titulo/contenido clamped to 60/300 chars, pinear kept
@@ -203,6 +206,14 @@ function validarRespuestaGenerada(
   const enScope = typeof crudo.enScope === 'boolean' ? crudo.enScope : false;
   const requiereAyudaHumana =
     typeof crudo.requiereAyudaHumana === 'boolean' ? crudo.requiereAyudaHumana : true;
+  // E4·T5: self-assessed fidelity to the cited sources — OPTIONAL and
+  // tolerant: absent / non-number / non-finite ⇒ the property stays
+  // absent (persist null; older models must never be failed for it);
+  // present ⇒ clamped into [0, 1].
+  const fidelidad =
+    typeof crudo.fidelidad === 'number' && Number.isFinite(crudo.fidelidad)
+      ? acotar(crudo.fidelidad, 0, 1)
+      : undefined;
   const idsConocimiento = Array.isArray(crudo.idsConocimiento)
     ? crudo.idsConocimiento.filter(
         (id): id is number => typeof id === 'number' && Number.isFinite(id) && idsValidos.has(id),
@@ -211,6 +222,7 @@ function validarRespuestaGenerada(
   return {
     texto: crudo.texto.trim(),
     scoreConfianza: acotar(crudo.scoreConfianza, 0, 1),
+    ...(fidelidad !== undefined ? { fidelidad } : {}),
     enScope,
     requiereAyudaHumana,
     idsConocimiento,

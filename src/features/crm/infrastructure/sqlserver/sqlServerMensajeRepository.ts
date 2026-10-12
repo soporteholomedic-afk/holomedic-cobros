@@ -31,13 +31,18 @@ interface MensajeRow {
   estadoEnvio: string | null;
   fuentes: string | null;
   score: number | null;
+  /** E4·T5: fidelidad autoevaluada (DECIMAL(4,3) → number|null). */
+  fidelidad: number | null;
+  /** E4·T5: marca de respuesta deficiente (BIT → boolean). */
+  deficiente: boolean;
   modelo: string | null;
   promptVersion: string | null;
   creadoEn: Date;
 }
 
 const COLUMNAS = `id, conversacionId, direccion, emisor, cuerpo, tipo, canal, wamid,
-                  idempotenciaKey, estadoEnvio, fuentes, score, modelo, promptVersion, creadoEn`;
+                  idempotenciaKey, estadoEnvio, fuentes, score, fidelidad, deficiente,
+                  modelo, promptVersion, creadoEn`;
 
 function mapearMensaje(row: MensajeRow): MensajeCrm {
   return {
@@ -53,6 +58,8 @@ function mapearMensaje(row: MensajeRow): MensajeCrm {
     estadoEnvio: row.estadoEnvio as MensajeCrm['estadoEnvio'],
     fuentes: row.fuentes,
     score: row.score,
+    fidelidad: row.fidelidad,
+    deficiente: row.deficiente,
     modelo: row.modelo,
     promptVersion: row.promptVersion,
     creadoEn: row.creadoEn.toISOString(),
@@ -77,18 +84,24 @@ export class SqlServerMensajeRepository implements MensajeCrmRepository {
         .input('estadoEnvio', mssql.VarChar(10), datos.estadoEnvio ?? null)
         .input('fuentes', mssql.NVarChar(mssql.MAX), datos.fuentes ?? null)
         .input('score', mssql.Decimal(4, 3), datos.score ?? null)
+        .input('fidelidad', mssql.Decimal(4, 3), datos.fidelidad ?? null)
+        .input('deficiente', mssql.Bit, datos.deficiente ?? false)
         .input('modelo', mssql.NVarChar(60), datos.modelo ?? null)
         .input('promptVersion', mssql.NVarChar(20), datos.promptVersion ?? null).query(`
           INSERT INTO dbo.CRM_Mensajes
             (conversacionId, direccion, emisor, cuerpo, tipo, canal, wamid,
-             idempotenciaKey, estadoEnvio, fuentes, score, modelo, promptVersion)
+             idempotenciaKey, estadoEnvio, fuentes, score, fidelidad, deficiente,
+             modelo, promptVersion)
           OUTPUT INSERTED.id
           VALUES (@conversacionId, @direccion, @emisor, @cuerpo, @tipo, @canal, @wamid,
-                  @idempotenciaKey, @estadoEnvio, @fuentes, @score, @modelo, @promptVersion)
+                  @idempotenciaKey, @estadoEnvio, @fuentes, @score, @fidelidad, @deficiente,
+                  @modelo, @promptVersion)
         `);
       const id = Number((inserted.recordset as { id: number | string }[])[0]?.id);
       if (!Number.isFinite(id)) throw new Error('INSERT de CRM_Mensajes no devolvió id');
-      return this.obtenerPorId(id);
+      const releido = await this.obtenerPorId(id);
+      if (releido === null) throw new Error('El mensaje recién creado no pudo releerse');
+      return releido;
     } catch (err: unknown) {
       throw mapearConflictoUnico(err);
     }
@@ -146,13 +159,32 @@ export class SqlServerMensajeRepository implements MensajeCrmRepository {
     return (result.recordset as MensajeRow[]).map(mapearMensaje);
   }
 
-  private async obtenerPorId(id: number): Promise<MensajeCrm> {
+  /**
+   * Read ONE thread row by id (E4·T5, puerto opcional): null cuando
+   * el id no existe. marcarRespuestaDeficiente lo usa para validar
+   * existencia + pertenencia; crear() conserva su chequeo estricto
+   * sobre la fila recién insertada.
+   */
+  async obtenerPorId(id: number): Promise<MensajeCrm | null> {
     const result = await this.pool
       .request()
       .input('id', mssql.BigInt, id)
       .query(`SELECT ${COLUMNAS} FROM dbo.CRM_Mensajes WHERE id = @id`);
     const row = (result.recordset as MensajeRow[])[0];
-    if (!row) throw new Error('El mensaje recién creado no pudo releerse');
-    return mapearMensaje(row);
+    return row ? mapearMensaje(row) : null;
+  }
+
+  /**
+   * E4·T5: marca la respuesta como deficiente (UPDATE deficiente = 1).
+   * Idempotente por naturaleza — re-marcar no cambia nada. Devuelve la
+   * fila actualizada; null cuando el id no existe.
+   */
+  async marcarDeficiente(id: number): Promise<MensajeCrm | null> {
+    const result = await this.pool
+      .request()
+      .input('id', mssql.BigInt, id)
+      .query('UPDATE dbo.CRM_Mensajes SET deficiente = 1 OUTPUT INSERTED.id WHERE id = @id');
+    const actualizado = (result.recordset as { id: number | string }[])[0];
+    return actualizado === undefined ? null : this.obtenerPorId(Number(actualizado.id));
   }
 }

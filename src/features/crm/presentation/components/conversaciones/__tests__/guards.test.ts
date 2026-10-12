@@ -262,3 +262,20 @@ describe('guards E3·T5 — solicitudAyuda, ficha, memorias, ajustes, usuarios',
     expect(esUsuariosAsignables({ usuarios: [] })).toBe(false);
   });
 });
+
+// ---- E4·T5: fidelidad + deficiente en el mensaje (tolerantes opcionales) ----
+
+describe('esMensajeCrm fidelidad/deficiente (E4·T5)', () => {
+  it('acepta fidelidad number|null|undefined y deficiente boolean|undefined', () => {
+    expect(esMensajeCrm(mensaje({ fidelidad: 0.9, deficiente: true }))).toBe(true);
+    expect(esMensajeCrm(mensaje({ fidelidad: null }))).toBe(true);
+    expect(esMensajeCrm(mensaje({ deficiente: false }))).toBe(true);
+    // Filas pre-E4 sin las propiedades: siguen válidas (tolerancia).
+    expect(esMensajeCrm(mensaje({}))).toBe(true);
+  });
+
+  it('rechaza tipos extraños (fidelidad string, deficiente string)', () => {
+    expect(esMensajeCrm(mensaje({ fidelidad: 'alta' as never }))).toBe(false);
+    expect(esMensajeCrm(mensaje({ deficiente: 'si' as never }))).toBe(false);
+  });
+});

@@ -352,4 +352,58 @@ describe('E3 (agente-ia-crm): huecos de conocimiento (crearHueco)', () => {
       await limpiarProbeE3();
     }
   });
+
+  it('origenMensajeId (E4·T5): crearHueco lo persiste y el round-trip lo mapea; null cuando no se pasa', async () => {
+    try {
+      const conOrigen = await repo.crearHueco({
+        consulta: `hueco con origen de mensaje ${SUFIJO}`,
+        terminos: ['origen', 'mensaje'],
+        origenMensajeId: 4_100_000_001,
+      });
+      huecosCreados.add(conOrigen.id);
+      expect(conOrigen.origenMensajeId).toBe(4_100_000_001);
+
+      const sinOrigen = await repo.crearHueco({
+        consulta: `hueco sin origen de mensaje ${SUFIJO}`,
+        terminos: ['sin', 'origen'],
+      });
+      huecosCreados.add(sinOrigen.id);
+      expect(sinOrigen.origenMensajeId).toBeNull();
+    } finally {
+      await limpiarProbeE3();
+    }
+  });
+
+  it('obtenerHuecoPorMensaje (E4·T5): devuelve el ÚLTIMO hueco de ese mensaje; null si no hay; ignora otros mensajes', async () => {
+    try {
+      const mensajeId = 4_100_000_002;
+      const primero = await repo.crearHueco({
+        consulta: `primer hueco del mensaje ${SUFIJO}`,
+        terminos: ['primero'],
+        origenMensajeId: mensajeId,
+      });
+      huecosCreados.add(primero.id);
+      const segundo = await repo.crearHueco({
+        consulta: `segundo hueco del mensaje ${SUFIJO}`,
+        terminos: ['segundo'],
+        origenMensajeId: mensajeId,
+      });
+      huecosCreados.add(segundo.id);
+      const deOtro = await repo.crearHueco({
+        consulta: `hueco de otro mensaje ${SUFIJO}`,
+        terminos: ['otro'],
+        origenMensajeId: 4_100_000_003,
+      });
+      huecosCreados.add(deOtro.id);
+
+      const encontrado = await repo.obtenerHuecoPorMensaje(mensajeId);
+      expect(encontrado?.id).toBe(segundo.id);
+      expect(encontrado?.origenMensajeId).toBe(mensajeId);
+      expect(encontrado?.consulta).toBe(`segundo hueco del mensaje ${SUFIJO}`);
+
+      expect(await repo.obtenerHuecoPorMensaje(4_199_999_999)).toBeNull();
+    } finally {
+      await limpiarProbeE3();
+    }
+  });
 });

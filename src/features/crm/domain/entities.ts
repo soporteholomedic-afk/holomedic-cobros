@@ -316,6 +316,20 @@ export interface MensajeCrm {
   score: number | null;
   modelo: string | null;
   /**
+   * E4·T5: autoevaluación de fidelidad del modelo a sus fuentes
+   * (0..1), si el modelo la reportó. OPTIONAL como promptVersion —
+   * pre-E4 fakes/payloads quedan válidos; NULL sigue el patrón
+   * score/modelo (solo una generación la estampa).
+   */
+  fidelidad?: number | null;
+  /**
+   * E4·T5: la respuesta fue marcada deficiente por un operador
+   * (marcarRespuestaDeficiente) y dejó un hueco de KB asociado
+   * (CRM_ConocimientoHuecos.origenMensajeId). OPTIONAL — las filas
+   * pre-E4 no la traen; DEFAULT false en la base.
+   */
+  deficiente?: boolean;
+  /**
    * E4·T1: which prompt version produced this IA message ('v2' today;
    * application/prompt/promptGeneracion). OPTIONAL like
    * ultimoMensajeCuerpo — pre-E4 fakes/payloads stay valid without
@@ -354,6 +368,10 @@ export interface CrearMensajeInput {
   fuentes?: string | null;
   score?: number | null;
   modelo?: string | null;
+  /** E4·T5: fidelidad autoevaluada (0..1) — solo una generación la estampa. */
+  fidelidad?: number | null;
+  /** E4·T5: defecto false en la base; solo marcarRespuestaDeficiente lo pone en 1. */
+  deficiente?: boolean;
   /** E4·T1: prompt version audit ('v2' today) — only a generation stamps it. */
   promptVersion?: string | null;
 }
@@ -412,6 +430,14 @@ export interface HuecoConocimiento {
   terminos: string[];
   estado: EstadoHuecoConocimiento;
   origenSolicitudId: number | null;
+  /**
+   * E4·T5: la respuesta IA deficiente que dejó este hueco
+   * (marcarRespuestaDeficiente). OPTIONAL como los campos de vista —
+   * pre-E4 filas/payloads quedan válidos. Sin FK a CRM_Mensajes: los
+   * mensajes de este dominio NUNCA se borran (CRM_AgenteTareas.
+   * mensajeId precedent), la procedencia es permanente.
+   */
+  origenMensajeId?: number | null;
   creadoEn: Date;
 }
 
@@ -766,6 +792,13 @@ export interface EntradaGenerarRespuesta {
 export interface RespuestaGenerada {
   texto: string;
   scoreConfianza: number;
+  /**
+   * E4·T5: autoevaluación de FIDELIDAD del modelo — qué tan estricta
+   * fue su respuesta con las fuentes citadas (0..1). OPCIONAL y
+   * tolerante: los modelos viejos no la mandan → absent (el motor
+   * persiste null, nunca invalida la respuesta por su ausencia).
+   */
+  fidelidad?: number;
   enScope: boolean;
   requiereAyudaHumana: boolean;
   idsConocimiento: number[];

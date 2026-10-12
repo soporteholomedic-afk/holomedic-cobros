@@ -348,6 +348,15 @@ BEGIN
     estadoEnvio     VARCHAR(10)     NULL CONSTRAINT CK_CRM_Mensajes_EstadoEnvio CHECK (estadoEnvio IN ('PENDIENTE','ENVIADO','FALLIDO')),
     fuentes         NVARCHAR(MAX)   NULL,
     score           DECIMAL(4,3)    NULL,
+    -- E4 (agente-ia-crm): fidelidad autoevaluada del modelo a sus
+    -- fuentes (0..1), si el modelo la reportó. Nullable like
+    -- score/modelo: NULL on non-IA rows and on the no-generation
+    -- escalations (and on older models that never sent it).
+    fidelidad       DECIMAL(4,3)    NULL,
+    -- E4 (agente-ia-crm): la respuesta fue marcada deficiente por un
+    -- operador (marcarRespuestaDeficiente). DEFAULT 0: históricas no
+    -- deficientes; solo la use case escribe 1 (nunca se desmarca).
+    deficiente      BIT             NOT NULL DEFAULT 0,
     modelo          NVARCHAR(60)    NULL,
     -- E4 (agente-ia-crm): prompt audit — which prompt version produced
     -- this IA message ('v2' today; application/prompt/promptGeneracion).
@@ -445,6 +454,13 @@ BEGIN
     -- solicitud (via the conversation CASCADE above) drops only the
     -- provenance — the KB-gap candidate survives for curation (E5).
     origenSolicitudId BIGINT         NULL CONSTRAINT FK_CRM_ConocimientoHuecos_Solicitud REFERENCES dbo.CRM_SolicitudesAyuda (id) ON DELETE SET NULL,
+    -- E4 (agente-ia-crm): la respuesta IA deficiente que dejó este
+    -- hueco (marcarRespuestaDeficiente). BIGINT: matches
+    -- CRM_Mensajes.id (high-volume history). Deliberadamente NO FK —
+    -- los mensajes de este dominio NUNCA se borran (webhook append-
+    -- only, CRM_AgenteTareas.mensajeId precedent), así la procedencia
+    -- es permanente y no necesita regla ON DELETE.
+    origenMensajeId   BIGINT         NULL,
     creadoEn          DATETIME2      NOT NULL DEFAULT SYSUTCDATETIME()
   );
 END;
@@ -508,6 +524,27 @@ BEGIN
   -- (memoriaActiva precedent): no-op on fresh installs (the CREATE
   -- above carries it).
   ALTER TABLE dbo.CRM_Mensajes ADD promptVersion NVARCHAR(20) NULL;
+END;
+IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('dbo.CRM_Mensajes') AND name = 'fidelidad')
+BEGIN
+  -- E4 (agente-ia-crm): fidelidad autoevaluada del modelo (0..1) —
+  -- DECIMAL(4,3) igual que score. Guarded column add (promptVersion
+  -- precedent): no-op on fresh installs (the CREATE above carries it).
+  ALTER TABLE dbo.CRM_Mensajes ADD fidelidad DECIMAL(4,3) NULL;
+END;
+IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('dbo.CRM_Mensajes') AND name = 'deficiente')
+BEGIN
+  -- E4 (agente-ia-crm): marca de respuesta deficiente del operador.
+  -- NOT NULL DEFAULT 0 (memoriaActiva precedent): las filas históricas
+  -- nacen no deficientes y solo marcarRespuestaDeficiente escribe 1.
+  ALTER TABLE dbo.CRM_Mensajes ADD deficiente BIT NOT NULL DEFAULT 0;
+END;
+IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('dbo.CRM_ConocimientoHuecos') AND name = 'origenMensajeId')
+BEGIN
+  -- E4 (agente-ia-crm): procedencia del hueco — la respuesta IA
+  -- deficiente que lo dejó. Sin FK a propósito (ver el comentario en
+  -- el CREATE): los mensajes nunca se borran en este dominio.
+  ALTER TABLE dbo.CRM_ConocimientoHuecos ADD origenMensajeId BIGINT NULL;
 END;
 IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'UX_CRM_Contactos_Principal' AND object_id = OBJECT_ID('dbo.CRM_Contactos'))
 BEGIN

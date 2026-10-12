@@ -936,3 +936,73 @@ describe('GeneradorOpenAiCompatible — PII (E2·T3)', () => {
     expect(salidas.every((linea) => !linea.includes(respuestaMarcadora))).toBe(true);
   });
 });
+
+describe('GeneradorOpenAiCompatible — fidelidad autoevaluada (E4·T5)', () => {
+  it('fidelidad ausente (modelo viejo) → undefined: NO invalida la respuesta (tolerante)', async () => {
+    stubFetch([{ status: 200, contenido: JSON_LIMPIO }]);
+
+    const respuesta = await crearAdapter().generarRespuesta(ENTRADA);
+
+    expect(respuesta.fidelidad).toBeUndefined();
+  });
+
+  it('fidelidad presente → se acota a [0, 1] y cruza con el resto intacto', async () => {
+    stubFetch([
+      {
+        status: 200,
+        contenido: JSON.stringify({ ...JSON.parse(JSON_LIMPIO), fidelidad: 0.92 }),
+      },
+    ]);
+
+    const respuesta = await crearAdapter().generarRespuesta(ENTRADA);
+
+    expect(respuesta.fidelidad).toBe(0.92);
+    expect(respuesta.texto).toBe('El examen incluye examen médico, audiometría y espirometría.');
+  });
+
+  it('fidelidad fuera de rango se acota: 1.7 → 1, -0.2 → 0', async () => {
+    stubFetch([
+      { status: 200, contenido: JSON.stringify({ ...JSON.parse(JSON_LIMPIO), fidelidad: 1.7 }) },
+      { status: 200, contenido: JSON.stringify({ ...JSON.parse(JSON_LIMPIO), fidelidad: -0.2 }) },
+    ]);
+
+    const alta = await crearAdapter().generarRespuesta(ENTRADA);
+    const baja = await crearAdapter().generarRespuesta(ENTRADA);
+
+    expect(alta.fidelidad).toBe(1);
+    expect(baja.fidelidad).toBe(0);
+  });
+
+  it('fidelidad no-numérica o no-finita se trata como AUSENTE (sin invalidar la respuesta)', async () => {
+    stubFetch([
+      { status: 200, contenido: JSON.stringify({ ...JSON.parse(JSON_LIMPIO), fidelidad: 'alta' }) },
+      { status: 200, contenido: JSON.stringify({ ...JSON.parse(JSON_LIMPIO), fidelidad: null }) },
+      { status: 200, contenido: JSON.stringify({ ...JSON.parse(JSON_LIMPIO), fidelidad: Number.NaN }) },
+    ]);
+
+    const porCadena = await crearAdapter().generarRespuesta(ENTRADA);
+    const porNulo = await crearAdapter().generarRespuesta(ENTRADA);
+    const porNaN = await crearAdapter().generarRespuesta(ENTRADA);
+
+    expect(porCadena.fidelidad).toBeUndefined();
+    expect(porNulo.fidelidad).toBeUndefined();
+    expect(porNaN.fidelidad).toBeUndefined();
+  });
+
+  it('texto vacío sigue invalidando AUN con fidelidad presente (el guard no se relaja)', async () => {
+    stubFetch([
+      {
+        status: 200,
+        contenido: JSON.stringify({ ...JSON.parse(JSON_LIMPIO), texto: '   ', fidelidad: 0.9 }),
+      },
+      {
+        status: 200,
+        contenido: JSON.stringify({ ...JSON.parse(JSON_LIMPIO), texto: '   ', fidelidad: 0.9 }),
+      },
+    ]);
+
+    await expect(crearAdapter().generarRespuesta(ENTRADA)).rejects.toMatchObject({
+      codigo: 'GENERADOR_RESPUESTA_INVALIDA',
+    });
+  });
+});

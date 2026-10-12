@@ -34,6 +34,7 @@ import {
 } from './configAgente';
 import { PROMPT_VERSION } from './prompt/promptGeneracion';
 import { rankearMemorias } from './rankearMemorias';
+import { extraerTerminosRecall } from './recuperarTerminos';
 import { recuperarConocimiento } from './recuperarConocimiento';
 import { sintetizarHilo } from './sintetizarHilo';
 
@@ -234,27 +235,6 @@ function normalizarNombreEmpresa(texto: string): string {
     .toLowerCase();
 }
 
-/**
- * Search terms of the KB recall prefilter, mirrored from the SQL
- * adapter's derivation (E2 fix 7b129ce): lowercase + NFD diacritics
- * strip + non-alphanumeric split, terms longer than 2 chars, max 8.
- * Persisted on the help request (terminosBuscados) and replayed into
- * the KB-gap candidate, so the E5 curator sees EXACTLY what the LIKE
- * prefilter ran with. recuperarConocimiento (ranking) and the SQL
- * adapter (prefilter) each own their normalization twins — this
- * mirror keeps both untouched.
- */
-const MAX_TERMINOS_PREFILTRO = 8;
-function extraerTerminosRecall(consulta: string): string[] {
-  return consulta
-    .toLowerCase()
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .split(/[^a-z0-9]+/)
-    .filter((termino) => termino.length > 2)
-    .slice(0, MAX_TERMINOS_PREFILTRO);
-}
-
 /** Typed error code for logs — never the message (bodies are PII). */
 function codigoDeError(error: unknown): string {
   if (typeof error === 'object' && error !== null) {
@@ -447,8 +427,11 @@ export class GenerarRespuestaAgenteUseCase {
     // generation happened); a confidence-based escalation still audits
     // the score the model reported. E4·T1: promptVersion follows the
     // SAME presence/absence pattern — 'v2' whenever a generation ran,
-    // null when no LLM call happened.
+    // null when no LLM call happened. E4·T5: fidelidad too — the
+    // model's self-assessed source fidelity (null when the model
+    // didn't report one, null when no generation ran).
     const score = respuesta !== null ? respuesta.scoreConfianza : null;
+    const fidelidad = respuesta !== null ? (respuesta.fidelidad ?? null) : null;
     const modelo = respuesta !== null ? respuesta.modelo : null;
     const promptVersion = respuesta !== null ? PROMPT_VERSION : null;
     // E3·T2 widens the audit union: KB citations plus the human
@@ -484,6 +467,7 @@ export class GenerarRespuestaAgenteUseCase {
       estadoEnvio: 'PENDIENTE',
       fuentes: fuentesJson,
       score,
+      fidelidad,
       modelo,
       promptVersion,
     });

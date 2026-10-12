@@ -117,6 +117,11 @@ export function esMensajeCrm(v: unknown): v is MensajeCrm {
       obj.estadoEnvio === 'PENDIENTE') &&
     esCadenaNulable(obj.fuentes) &&
     (obj.score === null || obj.score === undefined || typeof obj.score === 'number') &&
+    // E4·T5: fidelidad autoevaluada + marca deficiente — campos
+    // OPCIONALES y tolerantes como score: ausentes (filas pre-E4) o
+    // null pasan; un tipo extraño rechaza la fila completa.
+    (obj.fidelidad === null || obj.fidelidad === undefined || typeof obj.fidelidad === 'number') &&
+    (obj.deficiente === undefined || typeof obj.deficiente === 'boolean') &&
     esCadenaNulable(obj.modelo) &&
     esCadena(obj.creadoEn)
   );

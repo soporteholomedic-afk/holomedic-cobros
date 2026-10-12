@@ -411,6 +411,55 @@ describe('crm migrate() — HOLOMEDIC schema integration', () => {
     expect(fila?.max_length).toBe(40);
   });
 
+  it('adds the fidelidad self-score column gated and nullable DECIMAL(4,3) (CRM_Mensajes.fidelidad, agente-ia-crm E4·T5)', async () => {
+    const result = await pool.request().query<{ name: string; is_nullable: number; tipo: string; precision: number; scale: number }>(`
+      SELECT c.name, c.is_nullable, TYPE_NAME(c.user_type_id) AS tipo, c.precision, c.scale
+        FROM sys.columns c
+       WHERE c.object_id = OBJECT_ID('dbo.CRM_Mensajes') AND c.name = 'fidelidad'`);
+    expect(result.recordset).toHaveLength(1);
+    const fila = result.recordset[0];
+    expect(Boolean(fila?.is_nullable)).toBe(true);
+    expect(fila?.tipo).toBe('decimal');
+    expect(fila?.precision).toBe(4);
+    expect(fila?.scale).toBe(3);
+  });
+
+  it('adds the deficiente flag gated, NOT NULL with DEFAULT 0 (CRM_Mensajes.deficiente, agente-ia-crm E4·T5)', async () => {
+    const result = await pool.request().query<{ name: string; is_nullable: number; tipo: string; definicion: string | null }>(`
+      SELECT c.name, c.is_nullable, TYPE_NAME(c.user_type_id) AS tipo,
+             dc.definition AS definicion
+        FROM sys.columns c
+        LEFT JOIN sys.default_constraints dc ON dc.parent_object_id = c.object_id AND dc.parent_column_id = c.column_id
+       WHERE c.object_id = OBJECT_ID('dbo.CRM_Mensajes') AND c.name = 'deficiente'`);
+    expect(result.recordset).toHaveLength(1);
+    const fila = result.recordset[0];
+    expect(Boolean(fila?.is_nullable)).toBe(false);
+    expect(fila?.tipo).toBe('bit');
+    expect(fila?.definicion).toBe('((0))'); // DEFAULT 0: respuestas históricas no deficientes
+  });
+
+  it('adds the deficiente provenance column gated and nullable BIGINT, NO FK (CRM_ConocimientoHuecos.origenMensajeId, agente-ia-crm E4·T5)', async () => {
+    const columna = await pool.request().query<{ name: string; is_nullable: number; tipo: string; max_length: number }>(`
+      SELECT c.name, c.is_nullable, TYPE_NAME(c.user_type_id) AS tipo, c.max_length
+        FROM sys.columns c
+       WHERE c.object_id = OBJECT_ID('dbo.CRM_ConocimientoHuecos') AND c.name = 'origenMensajeId'`);
+    expect(columna.recordset).toHaveLength(1);
+    const fila = columna.recordset[0];
+    expect(Boolean(fila?.is_nullable)).toBe(true);
+    expect(fila?.tipo).toBe('bigint');
+    expect(fila?.max_length).toBe(8);
+    // Deliberadamente SIN foreign key (los mensajes de este dominio
+    // nunca se borran — mismo patrón que CRM_AgenteTareas.mensajeId).
+    const fks = await pool.request().query<{ name: string }>(`
+      SELECT fk.name
+        FROM sys.foreign_keys fk
+        JOIN sys.foreign_key_columns fkc ON fkc.constraint_object_id = fk.object_id
+        JOIN sys.columns c ON c.object_id = fkc.parent_object_id AND c.column_id = fkc.parent_column_id
+       WHERE fk.parent_object_id = OBJECT_ID('dbo.CRM_ConocimientoHuecos')
+         AND c.name = 'origenMensajeId'`);
+    expect(fks.recordset).toHaveLength(0);
+  });
+
   it('creates the handoff audit index IX_CRM_Handoffs_EmpresaFecha', async () => {
     const names = await pool.request().query<NameRow>(`
       SELECT i.name

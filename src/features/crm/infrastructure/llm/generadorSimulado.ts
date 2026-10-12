@@ -53,7 +53,11 @@ import type { GeneradorRespuestaPort } from '../../domain/ports';
  * is exercised only by the real adapter (the motor tests mock the
  * port) — the simulator never fabricates a stated name/company. Every
  * RespuestaGenerada carries modelo 'simulado' (the motor's per-message
- * audit column must distinguish simulated answers offline).
+ * audit column must distinguish simulated answers offline). E4·T5:
+ * every arm also carries a deterministic `fidelidad` self-score —
+ * 0.9 whenever the answer leans on a SOURCE (indicación / KB /
+ * memoria / contactoNuevo greeting) and 0.3 on the escalation arm
+ * (no source to be faithful to).
  *
  * Security: this fake keeps every input strictly in process memory
  * and logs NOTHING.
@@ -77,6 +81,14 @@ const SUJETO_POR_DEFECTO = 'Cliente';
 const MODELO_SIMULADO = 'simulado';
 /** scoreConfianza of the contactoNuevo greeting (answered, not escalated). */
 const SCORE_SALUDO_CONTACTO_NUEVO = 0.7;
+/**
+ * E4·T5: fidelidad autoevaluada determinista — 0.9 en TODAS las ramas
+ * con fuente (indicación/KB/memoria/saludo: la respuesta se apoya en
+ * material real), 0.3 en la derivación (no hay fuente: la baja
+ * autoevaluada acompaña la escalación).
+ */
+const FIDELIDAD_CON_FUENTE = 0.9;
+const FIDELIDAD_SIN_FUENTE = 0.3;
 
 /** E3·T4 heuristics — the number captured before each headcount word. */
 const PATRON_TRABAJADORES = /(\d+)\s*(?:personas|trabajadores|empleados|gente)/i;
@@ -147,6 +159,7 @@ export class GeneradorSimulado implements GeneradorRespuestaPort {
       return {
         texto: `${PREFIJO_INDICACION}${indicacion.slice(0, LIMITE_INDICACION)}`,
         scoreConfianza: 0.8,
+        fidelidad: FIDELIDAD_CON_FUENTE,
         enScope: true,
         requiereAyudaHumana: false,
         idsConocimiento: [],
@@ -158,6 +171,7 @@ export class GeneradorSimulado implements GeneradorRespuestaPort {
       return {
         texto: textoSimulado(primerConocimiento.contenido, primerConocimiento.titulo),
         scoreConfianza: 0.8,
+        fidelidad: FIDELIDAD_CON_FUENTE,
         enScope: true,
         requiereAyudaHumana: false,
         idsConocimiento: [primerConocimiento.id],
@@ -169,6 +183,7 @@ export class GeneradorSimulado implements GeneradorRespuestaPort {
       return {
         texto: textoSimulado(primeraMemoria.contenido, primeraMemoria.titulo),
         scoreConfianza: 0.8,
+        fidelidad: FIDELIDAD_CON_FUENTE,
         enScope: true,
         requiereAyudaHumana: false,
         idsConocimiento: [],
@@ -182,6 +197,7 @@ export class GeneradorSimulado implements GeneradorRespuestaPort {
       return {
         texto: TEXTO_SALUDO_CONTACTO_NUEVO,
         scoreConfianza: SCORE_SALUDO_CONTACTO_NUEVO,
+        fidelidad: FIDELIDAD_CON_FUENTE,
         enScope: true,
         requiereAyudaHumana: false,
         idsConocimiento: [],
@@ -191,6 +207,7 @@ export class GeneradorSimulado implements GeneradorRespuestaPort {
     return {
       texto: TEXTO_DERIVACION,
       scoreConfianza: 0.1,
+      fidelidad: FIDELIDAD_SIN_FUENTE,
       enScope: false,
       requiereAyudaHumana: true,
       idsConocimiento: [],
