@@ -2,10 +2,11 @@ import { afterAll, describe, expect, it } from 'vitest';
 
 import { crearGeneradorRespuesta } from '../../../infrastructure/llm/crearGeneradorRespuesta';
 import { GeneradorSimulado } from '../../../infrastructure/llm/generadorSimulado';
-import { CASOS_GOLDEN, PROMPT_GOLDEN_VERSION } from '../goldenSet/casos';
+import { CASOS_GOLDEN, CASOS_GOLDEN_CIERRE, PROMPT_GOLDEN_VERSION } from '../goldenSet/casos';
 import type { CasoGolden } from '../goldenSet/casos';
 import {
   evaluarRespuestaGolden,
+  evaluarSenalCierreGolden,
   resumenGolden,
   type ResultadoCasoGolden,
 } from '../goldenSet/evaluarRespuestaGolden';
@@ -61,9 +62,9 @@ function casoDePrueba(overrides: Partial<CasoGolden> = {}): CasoGolden {
 }
 
 describe('goldenSet — corpus (E4·T2)', () => {
-  it('la versión del corpus acompaña la v2 del prompt y los ids son únicos', () => {
-    expect(PROMPT_GOLDEN_VERSION).toBe('v2');
-    expect(PROMPT_VERSION).toBe('v2');
+  it('la versión del corpus acompaña la v3 del prompt y los ids son únicos', () => {
+    expect(PROMPT_GOLDEN_VERSION).toBe('v3');
+    expect(PROMPT_VERSION).toBe('v3');
     expect(CASOS_GOLDEN.length).toBeGreaterThanOrEqual(12);
     expect(CASOS_GOLDEN.length).toBeLessThanOrEqual(15);
     const ids = new Set(CASOS_GOLDEN.map((caso) => caso.id));
@@ -110,6 +111,78 @@ describe('goldenSet — generadorSimulado × evaluador (regresión CI, E4·T2)',
   it.each(CASOS_GOLDEN)('$id pasa el evaluador golden con la respuesta simulada', async (caso) => {
     const respuesta = await generador.generarRespuesta(caso.entrada);
     expect(evaluarRespuestaGolden(caso, respuesta.texto)).toEqual({ pasa: true, violaciones: [] });
+  });
+});
+
+describe('goldenSet — señal de cierre (E5·T8)', () => {
+  const generador = new GeneradorSimulado();
+
+  it('corpus de cierre: ≥6 casos, 3 positivos (uno por tipo) y ≥3 negativos, ids únicos y distintos del corpus base', () => {
+    expect(CASOS_GOLDEN_CIERRE.length).toBeGreaterThanOrEqual(6);
+    const positivos = CASOS_GOLDEN_CIERRE.filter((caso) => typeof caso.senalCierreEsperada === 'string');
+    const negativos = CASOS_GOLDEN_CIERRE.filter((caso) => caso.senalCierreEsperada === null);
+    expect(new Set(positivos.map((caso) => caso.senalCierreEsperada))).toEqual(
+      new Set(['ACEPTACION', 'CONFIRMACION_PRESENTACION', 'CONVERSION_CLIENTE']),
+    );
+    expect(negativos.length).toBeGreaterThanOrEqual(3);
+    const ids = [...CASOS_GOLDEN, ...CASOS_GOLDEN_CIERRE].map((caso) => caso.id);
+    expect(new Set(ids).size).toBe(ids.length);
+    for (const caso of positivos) {
+      expect(caso.entrada.cierresPosibles).toContain(caso.senalCierreEsperada);
+    }
+  });
+
+  it.each(CASOS_GOLDEN_CIERRE)('$id: la señal del simulado coincide con la esperada', async (caso) => {
+    const respuesta = await generador.generarRespuesta(caso.entrada);
+    expect(evaluarSenalCierreGolden(caso, respuesta.senalCierre)).toEqual({ pasa: true, violaciones: [] });
+    expect(evaluarRespuestaGolden(caso, respuesta.texto)).toEqual({ pasa: true, violaciones: [] });
+  });
+
+  it.each(CASOS_GOLDEN_CIERRE)('$id arma el prompt con el bloque CIERRE solo si hay cierresPosibles', (caso) => {
+    const armado = armarPromptGeneracion(caso.entrada);
+    expect(armado.system.includes('CIERRE AUTÓNOMO')).toBe((caso.entrada.cierresPosibles ?? []).length > 0);
+  });
+
+  it('evaluarSenalCierreGolden: caso sin expectativa de cierre no se mide', () => {
+    const caso = casoDePrueba();
+    expect(evaluarSenalCierreGolden(caso, { tipo: 'ACEPTACION', confianza: 0.9 })).toEqual({
+      pasa: true,
+      violaciones: [],
+    });
+  });
+
+  it('evaluarSenalCierreGolden: violaciones estables (faltante / inesperada / distinta)', () => {
+    const positivo = casoDePrueba({ senalCierreEsperada: 'ACEPTACION' });
+    const negativo = casoDePrueba({ senalCierreEsperada: null });
+
+    expect(evaluarSenalCierreGolden(positivo, { tipo: 'ACEPTACION', confianza: 0.5 }).pasa).toBe(true);
+    expect(evaluarSenalCierreGolden(positivo, undefined).violaciones).toEqual([
+      'senal_cierre_faltante: ACEPTACION',
+    ]);
+    expect(evaluarSenalCierreGolden(positivo, null).violaciones).toEqual(['senal_cierre_faltante: ACEPTACION']);
+    expect(evaluarSenalCierreGolden(positivo, { tipo: 'CONVERSION_CLIENTE', confianza: 0.9 }).violaciones).toEqual([
+      'senal_cierre_distinta: esperada ACEPTACION, obtenida CONVERSION_CLIENTE',
+    ]);
+    expect(evaluarSenalCierreGolden(negativo, undefined)).toEqual({ pasa: true, violaciones: [] });
+    expect(evaluarSenalCierreGolden(negativo, { tipo: 'ACEPTACION', confianza: 0.9 }).violaciones).toEqual([
+      'senal_cierre_inesperada: ACEPTACION',
+    ]);
+  });
+
+  it('resumenGolden reporta la métrica de cierre solo cuando hay casos con expectativa de cierre', () => {
+    const sinCierre = resumenGolden([
+      { caso: casoDePrueba(), respuesta: 'ok', veredicto: { pasa: true, violaciones: [] } },
+    ]);
+    expect(sinCierre).not.toContain('cierre');
+
+    const conCierre = resumenGolden([
+      {
+        caso: casoDePrueba({ senalCierreEsperada: null }),
+        respuesta: 'ok',
+        veredicto: { pasa: true, violaciones: [] },
+      },
+    ]);
+    expect(conCierre).toContain('Señal de cierre: 1/1 casos OK');
   });
 });
 

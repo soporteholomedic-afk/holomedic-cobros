@@ -11,6 +11,7 @@ import type {
   ObservacionMemoria,
   RespuestaGenerada,
   ResultadoDestilacion,
+  SenalCierre,
 } from '../domain/entities';
 import type {
   ConocimientoCrmRepository,
@@ -134,6 +135,12 @@ export interface ResultadoAgente {
   mensajeId: number | null;
   /** The generation's scoreConfianza (null: no-ops and limit escalation). */
   score: number | null;
+  /**
+   * E5·T8: the close the generator PROPOSED, set ONLY when the outcome
+   * is RESPONDIDO (the reply actually went out); null on every other
+   * path. The motor does not act on it (a later task validates it).
+   */
+  senalCierre: SenalCierre | null;
 }
 
 /**
@@ -279,6 +286,7 @@ export class GenerarRespuestaAgenteUseCase {
       resultado,
       mensajeId: null,
       score: null,
+      senalCierre: null,
     });
 
     // E3·T2: a blank indicación is NO indicación — the plain path runs.
@@ -502,7 +510,13 @@ export class GenerarRespuestaAgenteUseCase {
           error: codigoDeError(errorMarcado),
         });
       }
-      return { conversacionId, resultado: 'FALLIDO_ENVIO', mensajeId: mensaje.id, score };
+      return {
+        conversacionId,
+        resultado: 'FALLIDO_ENVIO',
+        mensajeId: mensaje.id,
+        score,
+        senalCierre: null,
+      };
     }
 
     // Confirmation: a failure here means the send HAPPENED — log, keep
@@ -615,6 +629,7 @@ export class GenerarRespuestaAgenteUseCase {
       resultado: responder ? 'RESPONDIDO' : 'ESCALADO',
       mensajeId: mensajeFinal.id,
       score,
+      senalCierre: responder ? (respuesta?.senalCierre ?? null) : null,
     };
   }
 

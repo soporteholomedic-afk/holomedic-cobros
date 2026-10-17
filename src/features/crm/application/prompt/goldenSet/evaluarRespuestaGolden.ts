@@ -1,3 +1,4 @@
+import type { SenalCierre } from '../../../domain/entities';
 import { PROMPT_VERSION } from '../promptGeneracion';
 import { PROMPT_GOLDEN_VERSION } from './casos';
 import type { CasoGolden } from './casos';
@@ -153,12 +154,39 @@ export function evaluarRespuestaGolden(caso: CasoGolden, respuesta: string): Ver
   return { pasa: violaciones.length === 0, violaciones };
 }
 
+/**
+ * Puntea la señal de cierre (E5·T8) contra `senalCierreEsperada`:
+ * ausente ⇒ el caso no mide cierre; null ⇒ no debe haber señal; un tipo
+ * ⇒ debe proponerse exactamente ese (la confianza no se puntúa).
+ */
+export function evaluarSenalCierreGolden(
+  caso: CasoGolden,
+  senal: SenalCierre | null | undefined,
+): VeredictoGolden {
+  const esperada = caso.senalCierreEsperada;
+  const violaciones: string[] = [];
+  if (esperada === null && senal != null) {
+    violaciones.push(`senal_cierre_inesperada: ${senal.tipo}`);
+  } else if (typeof esperada === 'string') {
+    if (senal == null) violaciones.push(`senal_cierre_faltante: ${esperada}`);
+    else if (senal.tipo !== esperada) {
+      violaciones.push(`senal_cierre_distinta: esperada ${esperada}, obtenida ${senal.tipo}`);
+    }
+  }
+  return { pasa: violaciones.length === 0, violaciones };
+}
+
 /** Tabla para el stdout del runner live (y de cualquier corrida local). */
 export function resumenGolden(resultados: ResultadoCasoGolden[]): string {
   const ok = resultados.filter((resultado) => resultado.veredicto.pasa).length;
   const lineas = [
     `Golden set ${PROMPT_GOLDEN_VERSION} (prompt ${PROMPT_VERSION}) — ${ok}/${resultados.length} casos OK`,
   ];
+  const conCierre = resultados.filter(({ caso }) => caso.senalCierreEsperada !== undefined);
+  if (conCierre.length > 0) {
+    const okCierre = conCierre.filter(({ veredicto }) => veredicto.pasa).length;
+    lineas.push(`Señal de cierre: ${okCierre}/${conCierre.length} casos OK`);
+  }
   for (const { caso, veredicto } of resultados) {
     const marca = veredicto.pasa ? 'OK   ' : 'FALLA';
     const detalle =

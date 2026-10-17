@@ -7,8 +7,11 @@ import type {
   ObservacionDestilada,
   RespuestaGenerada,
   ResultadoDestilacion,
+  SenalCierre,
+  TipoCierreAgente,
   TipoObservacionDestilada,
 } from '../../domain/entities';
+import { TIPOS_CIERRE_AGENTE } from '../../domain/entities';
 import type { GeneradorRespuestaPort } from '../../domain/ports';
 import {
   armarPromptDestilacion,
@@ -138,6 +141,24 @@ function acotar(valor: number, minimo: number, maximo: number): number {
   return Math.min(maximo, Math.max(minimo, valor));
 }
 
+/**
+ * E5·T8: tolerant close-signal guard. Only an object whose tipo is a
+ * known close AND allowed for THIS request, with a finite numeric
+ * confianza (clamped to [0, 1]), survives; anything else is absent.
+ * Never a reason to fail or retry.
+ */
+function validarSenalCierre(
+  valor: unknown,
+  cierresPosibles: readonly TipoCierreAgente[],
+): SenalCierre | undefined {
+  if (valor === null || typeof valor !== 'object' || Array.isArray(valor)) return undefined;
+  const crudo = valor as Record<string, unknown>;
+  const tipo = TIPOS_CIERRE_AGENTE.find((candidato) => candidato === crudo.tipo);
+  if (tipo === undefined || !cierresPosibles.includes(tipo)) return undefined;
+  if (typeof crudo.confianza !== 'number' || !Number.isFinite(crudo.confianza)) return undefined;
+  return { tipo, confianza: acotar(crudo.confianza, 0, 1) };
+}
+
 function esTipoDestilado(valor: unknown): valor is TipoObservacionDestilada {
   return typeof valor === 'string' && (TIPOS_DESTILACION as readonly string[]).includes(valor);
 }
@@ -188,13 +209,15 @@ function extraerPrimerJson(contenido: string): string | null {
  * scoreConfianza a finite number (clamped); missing booleans coerce
  * to the ESCALATION defaults; idsConocimiento keeps only provided
  * ids; `modelo` is stamped by the adapter from its own configured
- * model name (never trusted from the wire). Returns null when the
+ * model name (never trusted from the wire). E5·T8: `senalCierre` is
+ * parsed tolerantly against the request's `cierresPosibles`. Returns null when the
  * value cannot be salvaged (→ retry).
  */
 function validarRespuestaGenerada(
   valor: unknown,
   idsValidos: Set<number>,
   modelo: string,
+  cierresPosibles: readonly TipoCierreAgente[],
 ): RespuestaGenerada | null {
   if (valor === null || typeof valor !== 'object' || Array.isArray(valor)) return null;
   const crudo = valor as Record<string, unknown>;
@@ -214,6 +237,7 @@ function validarRespuestaGenerada(
     typeof crudo.fidelidad === 'number' && Number.isFinite(crudo.fidelidad)
       ? acotar(crudo.fidelidad, 0, 1)
       : undefined;
+  const senalCierre = validarSenalCierre(crudo.senalCierre, cierresPosibles);
   const idsConocimiento = Array.isArray(crudo.idsConocimiento)
     ? crudo.idsConocimiento.filter(
         (id): id is number => typeof id === 'number' && Number.isFinite(id) && idsValidos.has(id),
@@ -223,6 +247,7 @@ function validarRespuestaGenerada(
     texto: crudo.texto.trim(),
     scoreConfianza: acotar(crudo.scoreConfianza, 0, 1),
     ...(fidelidad !== undefined ? { fidelidad } : {}),
+    ...(senalCierre !== undefined ? { senalCierre } : {}),
     enScope,
     requiereAyudaHumana,
     idsConocimiento,
@@ -357,7 +382,7 @@ export class GeneradorOpenAiCompatible implements GeneradorRespuestaPort {
         { role: 'system', content: prompt.system },
         { role: 'user', content: prompt.user },
       ],
-      (valor) => validarRespuestaGenerada(valor, idsValidos, this.modelo),
+      (valor) => validarRespuestaGenerada(valor, idsValidos, this.modelo, entrada.cierresPosibles ?? []),
       'una respuesta',
     );
   }

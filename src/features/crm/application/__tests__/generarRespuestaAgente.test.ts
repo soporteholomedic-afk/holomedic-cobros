@@ -699,6 +699,7 @@ describe('GenerarRespuestaAgenteUseCase — no-ops con cero efectos (E2·T4)', (
       resultado: 'CONVERSACION_NO_ACTIVA_IA',
       mensajeId: null,
       score: null,
+      senalCierre: null,
     });
     sinEfectos(fakes);
   });
@@ -735,6 +736,7 @@ describe('GenerarRespuestaAgenteUseCase — no-ops con cero efectos (E2·T4)', (
       resultado: 'AGENTE_DESHABILITADO',
       mensajeId: null,
       score: null,
+      senalCierre: null,
     });
     sinEfectos(fakes);
   });
@@ -809,6 +811,8 @@ describe('GenerarRespuestaAgenteUseCase — límite de intercambios (E2·T4)', (
       resultado: 'ESCALADO',
       mensajeId: 1000,
       score: null,
+
+      senalCierre: null,
     });
     expect(fakes.generador.entradasGenerar).toEqual([]);
     expect(fakes.conocimiento.consultas).toEqual([]);
@@ -892,6 +896,8 @@ describe('GenerarRespuestaAgenteUseCase — happy path RESPONDIDO (E2·T4)', () 
       resultado: 'RESPONDIDO',
       mensajeId: 1000,
       score: 0.9,
+
+      senalCierre: null,
     });
 
     // Recall: conocimiento con la consulta ORIGINAL y memoria solo por empresa.
@@ -911,7 +917,7 @@ describe('GenerarRespuestaAgenteUseCase — happy path RESPONDIDO (E2·T4)', () 
 
     // Fila creada: OUT/IA/TEXTO/WHATSAPP PENDIENTE con score/modelo/fuentes
     // (ids desconocidos saltados — solo el 7 tiene título del recall),
-    // promptVersion v2 (E4·T1) y fidelidad null (E4·T5 — el generador
+    // promptVersion v3 (E4·T1, E5·T8) y fidelidad null (E4·T5 — el generador
     // de prueba no reporta fidelidad).
     expect(fakes.mensajes.escritas).toHaveLength(1);
     expect(fakes.mensajes.escritas[0]).toEqual({
@@ -928,7 +934,7 @@ describe('GenerarRespuestaAgenteUseCase — happy path RESPONDIDO (E2·T4)', () 
       score: 0.9,
       fidelidad: null,
       modelo: 'modelo-prueba',
-      promptVersion: 'v2',
+      promptVersion: 'v3',
     });
 
     // Envío + confirmación + actividad OUT una sola vez; estado intacto.
@@ -979,6 +985,8 @@ describe('GenerarRespuestaAgenteUseCase — fallo de envío (E2·T4)', () => {
       resultado: 'FALLIDO_ENVIO',
       mensajeId: 1000,
       score: 0.9,
+
+      senalCierre: null,
     });
     expect(fakes.mensajes.filas.find((f) => f.id === 1000)?.estadoEnvio).toBe('FALLIDO');
     expect(fakes.conversaciones.filas[0]?.estado).toBe('ACTIVA_IA');
@@ -1726,7 +1734,7 @@ describe('GenerarRespuestaAgenteUseCase — promptVersion en la auditoría (E4·
     expect(fakes.mensajes.escritas[0]?.emisor).toBe('IA');
     expect(fakes.mensajes.escritas[0]?.score).not.toBeNull();
     expect(fakes.mensajes.escritas[0]?.modelo).not.toBeNull();
-    expect(fakes.mensajes.escritas[0]?.promptVersion).toBe('v2');
+    expect(fakes.mensajes.escritas[0]?.promptVersion).toBe('v3');
   });
 
   it('escalado por límite SIN generación → promptVersion null (mismo patrón que score/modelo)', async () => {
@@ -1752,7 +1760,70 @@ describe('GenerarRespuestaAgenteUseCase — promptVersion en la auditoría (E4·
 
     expect(resultado.resultado).toBe('ESCALADO');
     expect(fakes.mensajes.escritas[0]?.score).toBe(0.4);
-    expect(fakes.mensajes.escritas[0]?.promptVersion).toBe('v2');
+    expect(fakes.mensajes.escritas[0]?.promptVersion).toBe('v3');
+  });
+});
+
+describe('GenerarRespuestaAgenteUseCase — señal de cierre (E5·T8)', () => {
+  it('RESPONDIDO propaga la señal del generador y NO actúa sobre ella', async () => {
+    const fakes = crearFakes({
+      respuesta: { senalCierre: { tipo: 'ACEPTACION', confianza: 0.9 } },
+    });
+
+    const resultado = await fakes.useCase.ejecutar(1, AHORA);
+
+    expect(resultado.resultado).toBe('RESPONDIDO');
+    expect(resultado.senalCierre).toEqual({ tipo: 'ACEPTACION', confianza: 0.9 });
+    expect(fakes.conversaciones.cambiosEstado).toEqual([]);
+  });
+
+  it('RESPONDIDO sin señal del generador → null', async () => {
+    const fakes = crearFakes();
+
+    const resultado = await fakes.useCase.ejecutar(1, AHORA);
+
+    expect(resultado.resultado).toBe('RESPONDIDO');
+    expect(resultado.senalCierre).toBeNull();
+  });
+
+  it('el motor todavía NO llena cierresPosibles en la entrada del generador', async () => {
+    const fakes = crearFakes();
+
+    await fakes.useCase.ejecutar(1, AHORA);
+
+    expect(fakes.generador.entradasGenerar[0]?.cierresPosibles).toBeUndefined();
+  });
+
+  it('ESCALADO (score bajo) con señal del generador → null', async () => {
+    const fakes = crearFakes({
+      respuesta: { scoreConfianza: 0.3, senalCierre: { tipo: 'ACEPTACION', confianza: 0.9 } },
+    });
+
+    const resultado = await fakes.useCase.ejecutar(1, AHORA);
+
+    expect(resultado.resultado).toBe('ESCALADO');
+    expect(resultado.senalCierre).toBeNull();
+  });
+
+  it('FALLIDO_ENVIO con señal del generador → null (la respuesta no salió)', async () => {
+    const fakes = crearFakes({
+      respuesta: { senalCierre: { tipo: 'CONVERSION_CLIENTE', confianza: 0.9 } },
+      envio: { ok: false, error: 'KAPSO_ERROR', detalle: 'kapso caído' },
+    });
+
+    const resultado = await fakes.useCase.ejecutar(1, AHORA);
+
+    expect(resultado.resultado).toBe('FALLIDO_ENVIO');
+    expect(resultado.senalCierre).toBeNull();
+  });
+
+  it('no-ops (agente deshabilitado) → null', async () => {
+    const fakes = crearFakes({ config: { habilitado: false } });
+
+    const resultado = await fakes.useCase.ejecutar(1, AHORA);
+
+    expect(resultado.resultado).toBe('AGENTE_DESHABILITADO');
+    expect(resultado.senalCierre).toBeNull();
   });
 });
 
@@ -1922,6 +1993,7 @@ describe('GenerarRespuestaAgenteUseCase — config en caliente (E5·T3)', () => 
       resultado: 'AGENTE_DESHABILITADO',
       mensajeId: null,
       score: null,
+      senalCierre: null,
     });
     expect(fakes.mensajes.escritas).toHaveLength(escritasPrevias);
     expect(fakes.whatsapp.envios).toHaveLength(enviosPrevios);

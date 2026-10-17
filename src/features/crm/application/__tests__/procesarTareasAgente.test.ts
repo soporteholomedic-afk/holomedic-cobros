@@ -150,6 +150,7 @@ function motorConGuion(guion: ScriptMotor[]): { motor: MotorLike; llamadas: Llam
         resultado: siguiente ?? 'RESPONDIDO',
         mensajeId: null,
         score: null,
+        senalCierre: null,
       };
     },
   };

@@ -937,6 +937,77 @@ describe('GeneradorOpenAiCompatible — PII (E2·T3)', () => {
   });
 });
 
+describe('GeneradorOpenAiCompatible — senalCierre tolerante (E5·T8)', () => {
+  const ENTRADA_CIERRE: EntradaGenerarRespuesta = {
+    ...ENTRADA,
+    cierresPosibles: ['ACEPTACION', 'CONVERSION_CLIENTE'],
+  };
+  const conSenal = (senalCierre: unknown) =>
+    JSON.stringify({ ...JSON.parse(JSON_LIMPIO), senalCierre });
+
+  it('señal válida y permitida cruza; la confianza se acota a [0, 1]', async () => {
+    stubFetch([
+      { status: 200, contenido: conSenal({ tipo: 'ACEPTACION', confianza: 0.85 }) },
+      { status: 200, contenido: conSenal({ tipo: 'CONVERSION_CLIENTE', confianza: 1.8 }) },
+      { status: 200, contenido: conSenal({ tipo: 'ACEPTACION', confianza: -0.4 }) },
+    ]);
+
+    const normal = await crearAdapter().generarRespuesta(ENTRADA_CIERRE);
+    const alta = await crearAdapter().generarRespuesta(ENTRADA_CIERRE);
+    const baja = await crearAdapter().generarRespuesta(ENTRADA_CIERRE);
+
+    expect(normal.senalCierre).toEqual({ tipo: 'ACEPTACION', confianza: 0.85 });
+    expect(alta.senalCierre).toEqual({ tipo: 'CONVERSION_CLIENTE', confianza: 1 });
+    expect(baja.senalCierre).toEqual({ tipo: 'ACEPTACION', confianza: 0 });
+  });
+
+  it('tipo conocido pero FUERA de los cierresPosibles de este request → descartada', async () => {
+    stubFetch([{ status: 200, contenido: conSenal({ tipo: 'CONFIRMACION_PRESENTACION', confianza: 0.9 }) }]);
+
+    const respuesta = await crearAdapter().generarRespuesta(ENTRADA_CIERRE);
+
+    expect(respuesta.senalCierre).toBeUndefined();
+    expect('senalCierre' in respuesta).toBe(false);
+  });
+
+  it('sin cierresPosibles en la entrada, cualquier señal se descarta', async () => {
+    stubFetch([{ status: 200, contenido: conSenal({ tipo: 'ACEPTACION', confianza: 0.9 }) }]);
+
+    const respuesta = await crearAdapter().generarRespuesta(ENTRADA);
+
+    expect(respuesta.senalCierre).toBeUndefined();
+  });
+
+  it('tipo desconocido, no-objeto, array, null o confianza inválida → descartada sin reintento ni error', async () => {
+    const { fetchMock } = stubFetch([
+      { status: 200, contenido: conSenal({ tipo: 'VENTA', confianza: 0.9 }) },
+      { status: 200, contenido: conSenal('ACEPTACION') },
+      { status: 200, contenido: conSenal(['ACEPTACION']) },
+      { status: 200, contenido: conSenal(null) },
+      { status: 200, contenido: conSenal({ tipo: 'ACEPTACION', confianza: 'alta' }) },
+      { status: 200, contenido: conSenal({ tipo: 'ACEPTACION' }) },
+      { status: 200, contenido: conSenal({ tipo: 'ACEPTACION', confianza: null }) },
+    ]);
+
+    for (let i = 0; i < 7; i += 1) {
+      const respuesta = await crearAdapter().generarRespuesta(ENTRADA_CIERRE);
+      expect(respuesta.senalCierre).toBeUndefined();
+      expect(respuesta.texto).toBe('El examen incluye examen médico, audiometría y espirometría.');
+      expect(respuesta.enScope).toBe(true);
+    }
+    expect(fetchMock).toHaveBeenCalledTimes(7);
+  });
+
+  it('clave senalCierre ausente es normal: respuesta válida sin señal', async () => {
+    const { fetchMock } = stubFetch([{ status: 200, contenido: JSON_LIMPIO }]);
+
+    const respuesta = await crearAdapter().generarRespuesta(ENTRADA_CIERRE);
+
+    expect(respuesta.senalCierre).toBeUndefined();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+});
+
 describe('GeneradorOpenAiCompatible — fidelidad autoevaluada (E4·T5)', () => {
   it('fidelidad ausente (modelo viejo) → undefined: NO invalida la respuesta (tolerante)', async () => {
     stubFetch([{ status: 200, contenido: JSON_LIMPIO }]);

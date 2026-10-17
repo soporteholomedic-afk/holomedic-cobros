@@ -5,6 +5,8 @@ import type {
   IdentificacionExtraida,
   RespuestaGenerada,
   ResultadoDestilacion,
+  SenalCierre,
+  TipoCierreAgente,
 } from '../../domain/entities';
 import type { GeneradorRespuestaPort } from '../../domain/ports';
 
@@ -59,6 +61,11 @@ import type { GeneradorRespuestaPort } from '../../domain/ports';
  * memoria / contactoNuevo greeting) and 0.3 on the escalation arm
  * (no source to be faithful to).
  *
+ * E5·T8: every arm may also carry a `senalCierre`, decided by ONE
+ * helper over the LAST user message (`consulta`) and only when the
+ * matched tipo is in `cierresPosibles` (see senalCierreSimulada); it
+ * never alters text, score, scope or ids of the chosen arm.
+ *
  * Security: this fake keeps every input strictly in process memory
  * and logs NOTHING.
  */
@@ -89,6 +96,51 @@ const SCORE_SALUDO_CONTACTO_NUEVO = 0.7;
  */
 const FIDELIDAD_CON_FUENTE = 0.9;
 const FIDELIDAD_SIN_FUENTE = 0.3;
+
+/** E5·T8: confianza of every simulated close signal. */
+const CONFIANZA_CIERRE_SIMULADA = 0.9;
+
+/** Whole-word (unicode-aware) alternation, case-insensitive. */
+function palabrasCompletas(alternativas: string): RegExp {
+  return new RegExp(`(?<![\\p{L}\\p{N}])(?:${alternativas})(?![\\p{L}\\p{N}])`, 'iu');
+}
+
+/** E5·T8: close patterns in precedence order (first match wins). */
+const PATRONES_CIERRE: ReadonlyArray<readonly [TipoCierreAgente, RegExp]> = [
+  [
+    'CONVERSION_CLIENTE',
+    palabrasCompletas(
+      'contratamos|queremos\\s+contratar|firmamos|cerramos\\s+el\\s+contrato|quiero\\s+ser\\s+cliente|queremos\\s+ser\\s+clientes',
+    ),
+  ],
+  ['CONFIRMACION_PRESENTACION', palabrasCompletas('confirmo|confirmamos|confirmada|confirmado')],
+  [
+    'ACEPTACION',
+    palabrasCompletas('acepto|aceptamos|me\\s+interesa|nos\\s+interesa|avancemos|adelante|de\\s+acuerdo'),
+  ],
+];
+
+/** E5·T8: conditional / doubt markers that suppress any signal. */
+const PATRON_DUDA = new RegExp(
+  `${palabrasCompletas(
+    'capaz|quiz[aá]s|tal\\s+vez|lo\\s+vemos|despu[eé]s\\s+te\\s+aviso|no\\s+s[eé]',
+  ).source}|\\?`,
+  'iu',
+);
+
+/**
+ * E5·T8: the ONE place that decides the simulated close signal: none
+ * without allowed closes or with doubt markers; otherwise the first
+ * matching tipo (CONVERSION > CONFIRMACION > ACEPTACION), kept only
+ * when it is in `cierresPosibles`.
+ */
+function senalCierreSimulada(entrada: EntradaGenerarRespuesta): SenalCierre | undefined {
+  const permitidos = entrada.cierresPosibles ?? [];
+  if (permitidos.length === 0 || PATRON_DUDA.test(entrada.consulta)) return undefined;
+  const coincidencia = PATRONES_CIERRE.find(([, patron]) => patron.test(entrada.consulta));
+  if (coincidencia === undefined || !permitidos.includes(coincidencia[0])) return undefined;
+  return { tipo: coincidencia[0], confianza: CONFIANZA_CIERRE_SIMULADA };
+}
 
 /** E3·T4 heuristics — the number captured before each headcount word. */
 const PATRON_TRABAJADORES = /(\d+)\s*(?:personas|trabajadores|empleados|gente)/i;
@@ -152,6 +204,12 @@ function tituloDestilado(consulta: string): string {
 
 export class GeneradorSimulado implements GeneradorRespuestaPort {
   async generarRespuesta(entrada: EntradaGenerarRespuesta): Promise<RespuestaGenerada> {
+    const respuesta = this.respuestaDeRama(entrada);
+    const senalCierre = senalCierreSimulada(entrada);
+    return senalCierre === undefined ? respuesta : { ...respuesta, senalCierre };
+  }
+
+  private respuestaDeRama(entrada: EntradaGenerarRespuesta): RespuestaGenerada {
     // E3·T2 FIRST arm: an indicación relays deterministically — the
     // offline demo and the tests must SEE the operator instruction.
     const indicacion = entrada.indicacionHumana?.trim() ?? '';

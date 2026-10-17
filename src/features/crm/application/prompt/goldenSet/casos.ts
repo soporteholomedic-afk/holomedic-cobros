@@ -1,4 +1,4 @@
-import type { EntradaGenerarRespuesta } from '../../../domain/entities';
+import type { EntradaGenerarRespuesta, TipoCierreAgente } from '../../../domain/entities';
 
 /**
  * GOLDEN SET — corpus de casos Holomedic (agente-ia-crm E4·T2): la
@@ -30,7 +30,7 @@ import type { EntradaGenerarRespuesta } from '../../../domain/entities';
  */
 
 /** Versión del corpus golden (bump junto con el prompt que mide). */
-export const PROMPT_GOLDEN_VERSION = 'v2';
+export const PROMPT_GOLDEN_VERSION = 'v3';
 
 /** Qué debe lograr la respuesta de un caso golden. */
 export type TipoExpectativaGolden =
@@ -57,6 +57,11 @@ export interface CasoGolden {
   /** La MISMA forma que el motor le pasa a GeneradorRespuestaPort. */
   entrada: EntradaGenerarRespuesta;
   expectativa: ExpectativaGolden;
+  /**
+   * E5·T8: señal de cierre esperada. Un tipo = debe proponerse ese
+   * cierre; null = NO debe haber señal; ausente = el caso no mide cierre.
+   */
+  senalCierreEsperada?: TipoCierreAgente | null;
 }
 
 /**
@@ -336,5 +341,120 @@ export const CASOS_GOLDEN: CasoGolden[] = [
       tipo: 'cita_kb',
       terminosClave: ['cadena de custodia', '24 horas'],
     },
+  },
+];
+
+/** Memoria de contexto compartida por los casos de cierre (acuerdo previo real). */
+const MEMORIA_PRESENTACION: CasoGolden['entrada']['memorias'] = [
+  {
+    tipo: 'acuerdo',
+    titulo: 'Presentación propuesta',
+    contenido: 'Se propuso una presentación de servicios de Holomedic para el jueves a las 10:00.',
+  },
+];
+
+/**
+ * Casos de SEÑAL DE CIERRE (E5·T8): 3 positivos (uno por tipo) y 4
+ * negativos que NO deben producir señal. Corren por el simulado en el
+ * golden test; el modelo real los mide en modo live.
+ */
+export const CASOS_GOLDEN_CIERRE: CasoGolden[] = [
+  {
+    id: 'cierre_aceptacion_contacto',
+    nombre: 'Cierre: el contacto acepta que le escribamos',
+    entrada: {
+      consulta: 'Sí, de acuerdo, pueden escribirme por acá para coordinar lo de los exámenes',
+      contactoNuevo: false,
+      historial: [{ emisor: 'IA', texto: 'Hola Marcos, ¿te parece si coordinamos por este WhatsApp?' }],
+      conocimiento: [],
+      memorias: MEMORIA_PRESENTACION,
+      cierresPosibles: ['ACEPTACION'],
+    },
+    expectativa: { tipo: 'cortesia' },
+    senalCierreEsperada: 'ACEPTACION',
+  },
+  {
+    id: 'cierre_confirmacion_presentacion',
+    nombre: 'Cierre: el contacto confirma la presentación del jueves',
+    entrada: {
+      consulta: 'Perfecto, confirmo la presentación del jueves a las 10, ahí los espero en la oficina',
+      contactoNuevo: false,
+      historial: [{ emisor: 'IA', texto: '¿Te queda bien el jueves a las 10:00 para la presentación?' }],
+      conocimiento: [],
+      memorias: MEMORIA_PRESENTACION,
+      cierresPosibles: ['ACEPTACION', 'CONFIRMACION_PRESENTACION'],
+    },
+    expectativa: { tipo: 'cortesia' },
+    senalCierreEsperada: 'CONFIRMACION_PRESENTACION',
+  },
+  {
+    id: 'cierre_conversion_cliente',
+    nombre: 'Cierre: el prospecto acuerda ser cliente',
+    entrada: {
+      consulta: 'Ya lo conversé con gerencia, queremos contratar el servicio de exámenes ocupacionales',
+      contactoNuevo: false,
+      historial: [{ emisor: 'IA', texto: '¿Cómo les fue con la propuesta que les enviamos?' }],
+      conocimiento: [],
+      memorias: MEMORIA_PRESENTACION,
+      cierresPosibles: ['CONFIRMACION_PRESENTACION', 'CONVERSION_CLIENTE'],
+    },
+    expectativa: { tipo: 'cortesia' },
+    senalCierreEsperada: 'CONVERSION_CLIENTE',
+  },
+  {
+    id: 'cierre_negativo_agradecimiento',
+    nombre: 'Sin cierre: agradecimiento cortés',
+    entrada: {
+      consulta: 'Muchas gracias por la información, muy amable',
+      contactoNuevo: false,
+      historial: [{ emisor: 'IA', texto: 'Te comparto el detalle de los exámenes periódicos.' }],
+      conocimiento: [],
+      memorias: MEMORIA_PRESENTACION,
+      cierresPosibles: ['ACEPTACION', 'CONFIRMACION_PRESENTACION', 'CONVERSION_CLIENTE'],
+    },
+    expectativa: { tipo: 'cortesia' },
+    senalCierreEsperada: null,
+  },
+  {
+    id: 'cierre_negativo_condicional',
+    nombre: 'Sin cierre: lenguaje condicional ("capaz lo vemos")',
+    entrada: {
+      consulta: 'Capaz lo vemos la próxima semana, de acuerdo a cómo venga el mes',
+      contactoNuevo: false,
+      historial: [],
+      conocimiento: [],
+      memorias: MEMORIA_PRESENTACION,
+      cierresPosibles: ['ACEPTACION', 'CONFIRMACION_PRESENTACION', 'CONVERSION_CLIENTE'],
+    },
+    expectativa: { tipo: 'cortesia' },
+    senalCierreEsperada: null,
+  },
+  {
+    id: 'cierre_negativo_sin_cierres_posibles',
+    nombre: 'Sin cierre: frase de aceptación pero cierresPosibles vacío',
+    entrada: {
+      consulta: 'Acepto, adelante con lo que proponen',
+      contactoNuevo: false,
+      historial: [],
+      conocimiento: [],
+      memorias: MEMORIA_PRESENTACION,
+      cierresPosibles: [],
+    },
+    expectativa: { tipo: 'cortesia' },
+    senalCierreEsperada: null,
+  },
+  {
+    id: 'cierre_negativo_tipo_no_permitido',
+    nombre: 'Sin cierre: la frase corresponde a un tipo que no está permitido ahora',
+    entrada: {
+      consulta: 'Confirmo la presentación para el jueves',
+      contactoNuevo: false,
+      historial: [],
+      conocimiento: [],
+      memorias: MEMORIA_PRESENTACION,
+      cierresPosibles: ['ACEPTACION'],
+    },
+    expectativa: { tipo: 'cortesia' },
+    senalCierreEsperada: null,
   },
 ];

@@ -2,6 +2,7 @@ import type {
   EntradaDestilacion,
   EntradaExtraerIdentificacion,
   EntradaGenerarRespuesta,
+  TipoCierreAgente,
 } from '../../domain/entities';
 
 /**
@@ -12,7 +13,8 @@ import type {
  * system+user pair it must send. All CONTENT is Spanish product
  * content (the answers are client-facing Spanish WhatsApp texts).
  *
- * PROMPT_VERSION 'v2' — the first versioned rewrite: the monolithic
+ * PROMPT_VERSION 'v3' (E5·T8 adds the conditional CIERRE block and the
+ * senalCierre field of the JSON contract) on top of the v2 rewrite: the monolithic
  * E2 system string becomes base persona/format/anti-invention rules
  * plus CONDITIONAL blocks appended only when applicable (operator
  * indicación, new-contact presentation, knowledge hit/miss, memory
@@ -35,7 +37,7 @@ import type {
  */
 
 /** Prompt version of the generación builder (audited per IA message). */
-export const PROMPT_VERSION = 'v2';
+export const PROMPT_VERSION = 'v3';
 /** Prompt version of the destilación builder (v2 discipline, E4·T4). */
 export const PROMPT_VERSION_DESTILACION = 'v2';
 /** Prompt version of the identificación builder (relocated v1, unchanged). */
@@ -84,10 +86,37 @@ const CONTRATO_JSON_GENERACION = [
   'fidelidad es tu autoevaluación (entre 0 y 1) de cuánto se apega la respuesta a las fuentes provistas:',
   '1 cuando todo lo que decís sale textual o directamente de CONOCIMIENTO/MEMORIAS/INDICACIÓN/HISTORIAL;',
   'menor cuanto más tuviste que inferir, generalizar o completar por tu cuenta.',
+  'senalCierre debe ser null cuando no hay bloque CIERRE en estas instrucciones.',
   'Respondé ÚNICAMENTE con JSON válido, sin texto adicional, con esta forma exacta:',
-  '{"texto": string, "scoreConfianza": number, "fidelidad": number, "enScope": boolean, "requiereAyudaHumana": boolean, "idsConocimiento": number[]}',
+  '{"texto": string, "scoreConfianza": number, "fidelidad": number, "senalCierre": null | {"tipo": string, "confianza": number}, "enScope": boolean, "requiereAyudaHumana": boolean, "idsConocimiento": number[]}',
   'y nada más.',
 ].join(' ');
+
+/** One-line Spanish definition of each close the model may report (E5·T8). */
+const DEFINICION_CIERRE: Record<TipoCierreAgente, string> = {
+  ACEPTACION: 'la persona acepta de forma explícita el contacto que le propusimos desde Holomedic.',
+  CONFIRMACION_PRESENTACION: 'la persona confirma de forma explícita la presentación o reunión que le propusimos.',
+  CONVERSION_CLIENTE: 'el prospecto acuerda de forma explícita convertirse en cliente de Holomedic.',
+};
+
+/** v3 conditional block: closes the model may propose (E5·T8). */
+function bloqueCierre(cierresPosibles: TipoCierreAgente[]): string {
+  return [
+    [
+      'CIERRE AUTÓNOMO: si (y solo si) el ÚLTIMO mensaje del usuario afirma de forma clara y explícita',
+      'uno de los cierres permitidos de la lista, informalo en senalCierre con tu propia confianza',
+      '(entre 0 y 1): {"tipo": string, "confianza": number}.',
+    ].join(' '),
+    'Cierres permitidos:',
+    ...cierresPosibles.map((tipo) => `- ${tipo}: ${DEFINICION_CIERRE[tipo]}`),
+    [
+      'Reglas: jamás infieras un cierre a partir de cortesía, preguntas, dudas, negociación de precio',
+      'o lenguaje condicional ("capaz", "lo vemos", "después te aviso");',
+      'ante la duda, senalCierre null; nunca propongas un tipo fuera de la lista;',
+      'NO afirmes en el texto que algo quedó registrado o cerrado: el sistema lo confirma por separado.',
+    ].join(' '),
+  ].join('\n');
+}
 
 /** v2 conditional block: an operator indicación is active (E3·T2). */
 const BLOQUE_INDICACION = [
@@ -256,9 +285,10 @@ function mensajeUsuarioIdentificar(entrada: EntradaExtraerIdentificacion): strin
 }
 
 /**
- * Assemble the v2 prompt for one respuesta generation: the base
+ * Assemble the v3 prompt for one respuesta generation: the base
  * system rules plus one conditional block per applicable signal
- * (indicación, contacto nuevo, KB hit/miss, memoria hit/miss),
+ * (indicación, contacto nuevo, KB hit/miss, memoria hit/miss,
+ * cierres posibles),
  * closed by the unchanged strict-JSON contract; the user message is
  * the E2·T3 labeled-section assembly (see mensajeUsuarioGenerar).
  */
@@ -272,6 +302,9 @@ export function armarPromptGeneracion(entrada: EntradaGenerarRespuesta): PromptA
   }
   bloques.push(entrada.conocimiento.length > 0 ? BLOQUE_CONOCIMIENTO_HIT : BLOQUE_CONOCIMIENTO_MISS);
   bloques.push(entrada.memorias.length > 0 ? BLOQUE_MEMORIAS_HIT : BLOQUE_MEMORIAS_MISS);
+  if ((entrada.cierresPosibles?.length ?? 0) > 0) {
+    bloques.push(bloqueCierre(entrada.cierresPosibles ?? []));
+  }
   bloques.push(CONTRATO_JSON_GENERACION);
   return { system: bloques.join('\n\n'), user: mensajeUsuarioGenerar(entrada), version: PROMPT_VERSION };
 }

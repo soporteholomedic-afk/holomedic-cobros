@@ -472,3 +472,132 @@ describe('GeneradorSimulado — indicación humana (E3·T2)', () => {
     expect(nueva.texto.toLowerCase()).toContain('nombre');
   });
 });
+
+describe('GeneradorSimulado — senalCierre determinista (E5·T8)', () => {
+  const TODOS = ['ACEPTACION', 'CONFIRMACION_PRESENTACION', 'CONVERSION_CLIENTE'] as const;
+
+  function entradaCierre(
+    consulta: string,
+    cierresPosibles?: EntradaGenerarRespuesta['cierresPosibles'],
+    overrides: Partial<EntradaGenerarRespuesta> = {},
+  ): EntradaGenerarRespuesta {
+    return {
+      consulta,
+      contactoNuevo: false,
+      historial: [],
+      conocimiento: [],
+      memorias: [],
+      ...(cierresPosibles !== undefined ? { cierresPosibles } : {}),
+      ...overrides,
+    };
+  }
+
+  it.each([
+    ['Queremos contratar el servicio para toda la planta', 'CONVERSION_CLIENTE'],
+    ['Listo, firmamos el lunes', 'CONVERSION_CLIENTE'],
+    ['Quiero ser cliente de Holomedic', 'CONVERSION_CLIENTE'],
+    ['Confirmo la presentación del jueves', 'CONFIRMACION_PRESENTACION'],
+    ['Quedó confirmada para el jueves', 'CONFIRMACION_PRESENTACION'],
+    ['Acepto que me escriban por acá', 'ACEPTACION'],
+    ['Nos interesa, avancemos', 'ACEPTACION'],
+    ['DE ACUERDO, adelante', 'ACEPTACION'],
+  ] as const)('"%s" → %s con confianza 0.9', async (consulta, tipo) => {
+    const respuesta = await new GeneradorSimulado().generarRespuesta(entradaCierre(consulta, [...TODOS]));
+
+    expect(respuesta.senalCierre).toEqual({ tipo, confianza: 0.9 });
+  });
+
+  it('precedencia: CONVERSION_CLIENTE gana a CONFIRMACION y ACEPTACION; CONFIRMACION gana a ACEPTACION', async () => {
+    const generador = new GeneradorSimulado();
+
+    const conversion = await generador.generarRespuesta(
+      entradaCierre('De acuerdo, confirmo y queremos contratar', [...TODOS]),
+    );
+    const confirmacion = await generador.generarRespuesta(
+      entradaCierre('De acuerdo, confirmo la presentación', [...TODOS]),
+    );
+
+    expect(conversion.senalCierre?.tipo).toBe('CONVERSION_CLIENTE');
+    expect(confirmacion.senalCierre?.tipo).toBe('CONFIRMACION_PRESENTACION');
+  });
+
+  it('primer match gana pero SOLO si su tipo está permitido; si no, no hay señal (sin degradar a otro tipo)', async () => {
+    const respuesta = await new GeneradorSimulado().generarRespuesta(
+      entradaCierre('De acuerdo, queremos contratar', ['ACEPTACION']),
+    );
+
+    expect(respuesta.senalCierre).toBeUndefined();
+  });
+
+  it.each([
+    'Capaz acepto, lo vemos',
+    'Quizás nos interesa',
+    'Quizas avancemos',
+    'Tal vez firmamos',
+    'De acuerdo, después te aviso',
+    'Despues te aviso, de acuerdo',
+    'No sé si acepto',
+    'No se si contratamos, queremos contratar?',
+    'Acepto, ¿cuánto sale?',
+  ])('marcador de duda/condicional en "%s" → SIN señal', async (consulta) => {
+    const respuesta = await new GeneradorSimulado().generarRespuesta(entradaCierre(consulta, [...TODOS]));
+
+    expect(respuesta.senalCierre).toBeUndefined();
+  });
+
+  it('palabras completas: "aceptable" o "desacuerdo" no disparan', async () => {
+    const respuesta = await new GeneradorSimulado().generarRespuesta(
+      entradaCierre('El precio es aceptable, hay desacuerdo interno', [...TODOS]),
+    );
+
+    expect(respuesta.senalCierre).toBeUndefined();
+  });
+
+  it('cierresPosibles ausente o vacío → nunca hay señal', async () => {
+    const generador = new GeneradorSimulado();
+
+    const ausente = await generador.generarRespuesta(entradaCierre('Acepto, adelante'));
+    const vacio = await generador.generarRespuesta(entradaCierre('Acepto, adelante', []));
+
+    expect('senalCierre' in ausente).toBe(false);
+    expect('senalCierre' in vacio).toBe(false);
+  });
+
+  it('usa el ÚLTIMO mensaje (consulta), no el historial', async () => {
+    const respuesta = await new GeneradorSimulado().generarRespuesta(
+      entradaCierre('Gracias por la info', [...TODOS], {
+        historial: [{ emisor: 'CLIENTE', texto: 'Acepto, adelante' }],
+      }),
+    );
+
+    expect(respuesta.senalCierre).toBeUndefined();
+  });
+
+  it('la señal viaja en CADA rama sin alterar texto, score, scope ni ids', async () => {
+    const generador = new GeneradorSimulado();
+    const base = {
+      historial: [],
+    };
+    const ramas: EntradaGenerarRespuesta[] = [
+      { consulta: 'Acepto', contactoNuevo: false, ...base, conocimiento: [], memorias: [], indicacionHumana: 'Confirmale el viernes' },
+      { consulta: 'Acepto', contactoNuevo: false, ...base, conocimiento: CONOCIMIENTO, memorias: [] },
+      {
+        consulta: 'Acepto',
+        contactoNuevo: false,
+        ...base,
+        conocimiento: [],
+        memorias: [{ tipo: 'acuerdo', titulo: 'T', contenido: 'Contenido de memoria' }],
+      },
+      { consulta: 'Acepto', contactoNuevo: true, ...base, conocimiento: [], memorias: [] },
+      { consulta: 'Acepto', contactoNuevo: false, ...base, conocimiento: [], memorias: [] },
+    ];
+
+    for (const rama of ramas) {
+      const sin = await generador.generarRespuesta(rama);
+      const con = await generador.generarRespuesta({ ...rama, cierresPosibles: ['ACEPTACION'] });
+
+      expect(con.senalCierre).toEqual({ tipo: 'ACEPTACION', confianza: 0.9 });
+      expect({ ...con, senalCierre: undefined }).toEqual({ ...sin, senalCierre: undefined });
+    }
+  });
+});

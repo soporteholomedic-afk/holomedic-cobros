@@ -805,6 +805,29 @@ export interface FragmentoMemoria {
   contenido: string;
 }
 
+/**
+ * E5·T8: closes the agent may PROPOSE autonomously. ACEPTACION = the
+ * contact accepted our outbound contact; CONFIRMACION_PRESENTACION =
+ * the contact confirmed the presentation; CONVERSION_CLIENTE = the
+ * prospect agreed to become a client.
+ */
+export const TIPOS_CIERRE_AGENTE = [
+  'ACEPTACION',
+  'CONFIRMACION_PRESENTACION',
+  'CONVERSION_CLIENTE',
+] as const;
+
+export type TipoCierreAgente = (typeof TIPOS_CIERRE_AGENTE)[number];
+
+/**
+ * E5·T8: a close PROPOSED by the model for the user's last message;
+ * a deterministic rule validates it downstream. `confianza` ∈ [0, 1].
+ */
+export interface SenalCierre {
+  tipo: TipoCierreAgente;
+  confianza: number;
+}
+
 /** Structured input for one respuesta generation (E2·T3). */
 export interface EntradaGenerarRespuesta {
   consulta: string;
@@ -836,6 +859,13 @@ export interface EntradaGenerarRespuesta {
    * on the plain E2 path.
    */
   indicacionHumana?: string;
+  /**
+   * E5·T8: the closes that are legal NOW for this conversation (the
+   * motor derives them from the pipeline stage). Absent or empty ⇒
+   * no close can be proposed: the prompt omits the CIERRE block and
+   * adapters discard any signal.
+   */
+  cierresPosibles?: TipoCierreAgente[];
 }
 
 /**
@@ -858,6 +888,12 @@ export interface RespuestaGenerada {
    * persiste null, nunca invalida la respuesta por su ausencia).
    */
   fidelidad?: number;
+  /**
+   * E5·T8: close proposed by the model (absent = none). Tolerant like
+   * `fidelidad`: adapters drop anything malformed or outside the
+   * request's `cierresPosibles`, and it NEVER invalidates a response.
+   */
+  senalCierre?: SenalCierre;
   enScope: boolean;
   requiereAyudaHumana: boolean;
   idsConocimiento: number[];

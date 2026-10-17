@@ -50,14 +50,14 @@ function entrada(overrides: Partial<EntradaGenerarRespuesta> = {}): EntradaGener
 }
 
 describe('promptGeneracion — versiones (E4·T1, destilación v2 E4·T4)', () => {
-  it('generación y destilación firman v2; identificación sigue en v1', () => {
-    expect(PROMPT_VERSION).toBe('v2');
+  it('generación firma v3 (E5·T8); destilación v2; identificación sigue en v1', () => {
+    expect(PROMPT_VERSION).toBe('v3');
     expect(PROMPT_VERSION_DESTILACION).toBe('v2');
     expect(PROMPT_VERSION_IDENTIFICACION).toBe('v1');
   });
 
-  it('cada armado lleva su versión (generación/destilación v2, identificación v1)', () => {
-    expect(armarPromptGeneracion(entrada()).version).toBe('v2');
+  it('cada armado lleva su versión (generación v3, destilación v2, identificación v1)', () => {
+    expect(armarPromptGeneracion(entrada()).version).toBe('v3');
     expect(armarPromptDestilacion({ consulta: 'c', respuesta: 'r' }).version).toBe('v2');
     expect(armarPromptIdentificacion({ consulta: 'c', respuesta: 'r' }).version).toBe('v1');
   });
@@ -308,5 +308,46 @@ describe('promptGeneracion — destilación v2 (E4·T4)', () => {
     const { system } = armarPromptDestilacion({ consulta: 'c', respuesta: 'r' });
     expect(system).toContain('no parafrasees montos ni fechas');
     expect(system).toContain('copialos literal del hilo');
+  });
+});
+
+describe('promptGeneracion — bloque CIERRE condicional (E5·T8)', () => {
+  it('con cierresPosibles no vacío → bloque CIERRE que lista EXACTAMENTE los tipos permitidos', () => {
+    const { system } = armarPromptGeneracion(entrada({ cierresPosibles: ['ACEPTACION', 'CONVERSION_CLIENTE'] }));
+    expect(system).toContain('CIERRE');
+    expect(system).toContain('senalCierre');
+    expect(system).toContain('ACEPTACION');
+    expect(system).toContain('CONVERSION_CLIENTE');
+    expect(system).not.toContain('CONFIRMACION_PRESENTACION');
+  });
+
+  it('el bloque trae las reglas: nunca inferir de cortesía/dudas, null si hay duda, texto sin afirmar registro', () => {
+    const { system } = armarPromptGeneracion(entrada({ cierresPosibles: ['CONFIRMACION_PRESENTACION'] }));
+    expect(system).toContain('CONFIRMACION_PRESENTACION');
+    expect(system).toContain('cortesía');
+    expect(system).toContain('negociación de precio');
+    expect(system).toContain('"capaz"');
+    expect(system).toContain('"lo vemos"');
+    expect(system).toContain('"después te aviso"');
+    expect(system).toContain('senalCierre null');
+    expect(system).toContain('fuera de la lista');
+    expect(system).toContain('NO afirmes en el texto');
+  });
+
+  it('cierresPosibles vacío o ausente → SIN bloque CIERRE', () => {
+    expect(armarPromptGeneracion(entrada({ cierresPosibles: [] })).system).not.toContain('CIERRE AUTÓNOMO');
+    expect(armarPromptGeneracion(entrada()).system).not.toContain('CIERRE AUTÓNOMO');
+    expect(armarPromptGeneracion(entrada({ cierresPosibles: ['ACEPTACION'] })).system).toContain('CIERRE AUTÓNOMO');
+  });
+
+  it('el contrato JSON menciona senalCierre y exige null sin el bloque CIERRE', () => {
+    const { system } = armarPromptGeneracion(entrada());
+    expect(system).toContain('"senalCierre": null | {"tipo": string, "confianza": number}');
+    expect(system).toContain('senalCierre debe ser null cuando no hay bloque CIERRE');
+  });
+
+  it('la redacción de JSON estricto no cambia', () => {
+    const { system } = armarPromptGeneracion(entrada());
+    expect(system).toContain('Respondé ÚNICAMENTE con JSON válido, sin texto adicional, con esta forma exacta:');
   });
 });
