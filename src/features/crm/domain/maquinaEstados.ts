@@ -4,7 +4,7 @@
  * States are `{ flujo, etapa }` pairs over the INBOUND and OUTBOUND
  * doors plus the cross-flow RECHAZADO stage (T14 keeps the flujo). The
  * whole machine is a DATA TABLE (`TRANSICIONES`, the design's 16
- * T-rows) plus two pure functions over it — no framework, DB or clock
+ * T-rows plus T17, the agent-detected twin of T10) plus two pure functions over it — no framework, DB or clock
  * imports (hexagonal domain layer). Cadence arithmetic (weekly windows,
  * 3-strike, 3-month rest/cooldown) lives in `cadence.ts` (pr12): the
  * guards here are purely structural, so T8's derived trigger and T13's
@@ -69,6 +69,7 @@ export type EventoPipeline =
   | 'ConfirmaciónPresentación'
   | 'HandoffRegistrado'
   | 'AceptaciónOutbound'
+  | 'AceptaciónInbound'
   | 'ConversiónProspectoACliente'
   | 'DatosSolicitados'
   | 'EnviosAgotados'
@@ -93,7 +94,8 @@ export type IdTransicion =
   | 'T13'
   | 'T14'
   | 'T15'
-  | 'T16';
+  | 'T16'
+  | 'T17';
 
 /**
  * Runtime whitelist of every machine-readable event (the API body
@@ -108,6 +110,7 @@ export const EVENTOS_PIPELINE: readonly EventoPipeline[] = [
   'ConfirmaciónPresentación',
   'HandoffRegistrado',
   'AceptaciónOutbound',
+  'AceptaciónInbound',
   'ConversiónProspectoACliente',
   'DatosSolicitados',
   'EnviosAgotados',
@@ -140,8 +143,8 @@ export interface FilaTransicion {
 }
 
 /**
- * The design D3 transition table, T1–T16, verbatim. Order is the
- * design's order; `buscar` relies on rows being mutually exclusive
+ * The design D3 transition table: T1–T16 verbatim plus T17 (an
+ * addition to the design). Order is the design's order; `buscar` relies on rows being mutually exclusive
  * for a given (estado, evento) — guarded by the maquinaEstados tests.
  */
 export const TRANSICIONES: readonly FilaTransicion[] = [
@@ -180,6 +183,10 @@ export const TRANSICIONES: readonly FilaTransicion[] = [
   // T16 — conversión prospecto→cliente: tipo update only, NO stage change,
   // from ANY state (active, terminal or rejected).
   { id: 'T16', desde: { flujo: null, etapa: null }, evento: 'ConversiónProspectoACliente', haciaFlujo: 'MISMO', haciaEtapa: 'MISMO', resultado: 'ConversiónProspectoACliente' },
+  // T17 — agent-detected twin of T10: the contact accepted via an INBOUND chat
+  // message. Reuses the 'AceptaciónOutbound' result so the D4 catalog and the
+  // CRM_Resultados CHECK stay unchanged and productivity counts one acceptance.
+  { id: 'T17', desde: { flujo: 'OUTBOUND', etapa: 'CADENCIA' }, evento: 'AceptaciónInbound', haciaFlujo: 'OUTBOUND', haciaEtapa: 'ACEPTADO', resultado: 'AceptaciónOutbound' },
 ];
 
 /**
@@ -227,7 +234,7 @@ export function resolverTransicion(estado: EstadoPipeline, evento: EventoPipelin
   return buscarTransicion(estado, evento);
 }
 
-/** Whether `evento` is legal from `estado` (the T1–T16 guard table). */
+/** Whether `evento` is legal from `estado` (the T1–T17 guard table). */
 export function puedeTransicionar(estado: EstadoPipeline, evento: EventoPipeline): boolean {
   return buscarTransicion(estado, evento) !== undefined;
 }

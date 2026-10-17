@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import type { Etapa } from '../entities';
 import {
+  EVENTOS_PIPELINE,
   TRANSICIONES,
   TransicionInvalidaError,
   estadoInicial,
@@ -12,8 +13,8 @@ import type { EstadoPipeline, TipoResultado } from '../maquinaEstados';
 
 /**
  * Pure-domain contract for the pipeline state machine (design D3:
- * "two doors, one cadence engine"). Every T1–T16 row of the design's
- * transition table gets a happy-path case with its EXACT next state
+ * "two doors, one cadence engine"). Every T1–T17 row of the transition
+ * table (T17 = agent-detected twin of T10) gets a happy-path case with its EXACT next state
  * and its emitted result event (bold rows only — design D4's catalog
  * of 6 events, NO AvanceDeEtapa); the guards get illegal-move cases
  * rejected with Spanish typed errors. No mocks — the machine is pure.
@@ -23,12 +24,12 @@ const IN = (etapa: Etapa): EstadoPipeline => ({ flujo: 'INBOUND', etapa });
 const OUT = (etapa: Etapa): EstadoPipeline => ({ flujo: 'OUTBOUND', etapa });
 
 describe('maquinaEstados — TRANSICIONES table (design D3)', () => {
-  it('has exactly the 16 design rows T1–T16, each id unique', () => {
-    expect(TRANSICIONES).toHaveLength(16);
+  it('has exactly the 17 rows T1–T17, each id unique', () => {
+    expect(TRANSICIONES).toHaveLength(17);
     const ids = TRANSICIONES.map((t) => t.id);
-    expect(new Set(ids).size).toBe(16);
+    expect(new Set(ids).size).toBe(17);
     expect([...ids].sort()).toEqual(
-      ['T1', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'T8', 'T9', 'T10', 'T11', 'T12', 'T13', 'T14', 'T15', 'T16'].sort(),
+      ['T1', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'T8', 'T9', 'T10', 'T11', 'T12', 'T13', 'T14', 'T15', 'T16', 'T17'].sort(),
     );
   });
 
@@ -44,10 +45,10 @@ describe('maquinaEstados — TRANSICIONES table (design D3)', () => {
     const emitidos = TRANSICIONES.map((t) => t.resultado).filter((r): r is TipoResultado => r !== null);
     expect(new Set(emitidos)).toEqual(new Set(catalogo));
     expect(emitidos).not.toContain('AvanceDeEtapa');
-    // Bold rows: T2, T3, T4, T5, T7, T10, T12, T16 — exactly 8 rows
+    // Bold rows: T2, T3, T4, T5, T7, T10, T12, T16, T17 — exactly 9 rows
     // emit a result event (T7 repeats PresentaciónEnviada, T12 repeats
-    // CotizaciónEnviada).
-    expect(emitidos).toHaveLength(8);
+    // CotizaciónEnviada, T17 repeats AceptaciónOutbound).
+    expect(emitidos).toHaveLength(9);
   });
 });
 
@@ -108,6 +109,23 @@ describe('maquinaEstados — transitar: every design row happy path', () => {
     const r = transitar(OUT('CADENCIA'), 'AceptaciónOutbound');
     expect(r.estado).toEqual(OUT('ACEPTADO'));
     expect(r.resultado).toBe('AceptaciónOutbound');
+  });
+
+  it('T17 — AceptaciónInbound: OUT/CADENCIA → OUT/ACEPTADO, emits AceptaciónOutbound (reuses the D4 result)', () => {
+    const r = transitar(OUT('CADENCIA'), 'AceptaciónInbound');
+    expect(r.estado).toEqual(OUT('ACEPTADO'));
+    expect(r.resultado).toBe('AceptaciónOutbound');
+  });
+
+  it('AceptaciónInbound is part of the EVENTOS_PIPELINE whitelist', () => {
+    expect(EVENTOS_PIPELINE).toContain('AceptaciónInbound');
+  });
+
+  it('T17 does not mutate its input state', () => {
+    const estado = OUT('CADENCIA');
+    const r = transitar(estado, 'AceptaciónInbound');
+    expect(r.estado).not.toBe(estado);
+    expect(estado).toEqual(OUT('CADENCIA'));
   });
 
   it('T11 — DatosSolicitados: OUT/ACEPTADO → OUT/DATOS, emits NOTHING (plain stage change)', () => {
@@ -185,6 +203,29 @@ describe('maquinaEstados — guards reject illegal moves (Spanish typed errors)'
 
   it('T10 guard — AceptaciónOutbound is outbound-only (IN/SEGUIMIENTO rejects it)', () => {
     rechazar(IN('SEGUIMIENTO'), 'AceptaciónOutbound');
+  });
+
+  it('T17 guard — AceptaciónInbound is rejected from every state except OUT/CADENCIA', () => {
+    const etapas: Etapa[] = [
+      'REGISTRADO',
+      'SEGUIMIENTO',
+      'PRESENTACION',
+      'CONFIRMADA',
+      'ENTREGADA',
+      'NUEVO',
+      'CADENCIA',
+      'ACEPTADO',
+      'DATOS',
+      'DESCANSO',
+      'RECHAZADO',
+    ];
+    for (const construir of [IN, OUT]) {
+      for (const etapa of etapas) {
+        const estado = construir(etapa);
+        if (estado.flujo === 'OUTBOUND' && etapa === 'CADENCIA') continue;
+        rechazar(estado, 'AceptaciónInbound');
+      }
+    }
   });
 
   it('T11 guard — DatosSolicitados only from ACEPTADO (not from CADENCIA)', () => {

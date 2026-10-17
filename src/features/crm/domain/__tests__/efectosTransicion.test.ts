@@ -168,6 +168,19 @@ describe('efectosTransicion — unarmed NUEVO entries and passthrough rows', () 
     }
   });
 
+  it('T17 (AceptaciónInbound) leaves ciclo, enviosCiclo, dates and descansoHasta untouched', () => {
+    const efectos = efectosTransicion(fila(), 'AceptaciónInbound', HOY);
+    expect(efectos).toEqual({
+      ciclo: 1,
+      enviosCiclo: 2,
+      fechaCicloInicio: '2026-02-01',
+      fechaUltimoEnvio: '2026-03-10',
+      descansoHasta: null,
+      rechazadoHasta: null,
+      motivoRechazo: null,
+    });
+  });
+
   it('T3 does NOT arm the cadence even though it shares PresentaciónEnviada with T7', () => {
     const efectos = efectosTransicion(
       fila({ flujo: 'INBOUND', etapa: 'SEGUIMIENTO', ciclo: 1, enviosCiclo: 2, fechaUltimoEnvio: '2026-03-10' }),

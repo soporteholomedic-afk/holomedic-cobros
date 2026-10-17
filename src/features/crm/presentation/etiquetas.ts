@@ -51,6 +51,7 @@ export const ETIQUETA_EVENTO: Record<EventoPipeline, string> = {
   ConfirmaciónPresentación: 'Confirmación de presentación',
   HandoffRegistrado: 'Registrar handoff',
   AceptaciónOutbound: 'Aceptó nuestro contacto',
+  AceptaciónInbound: 'Aceptó por chat',
   ConversiónProspectoACliente: 'Convertir a cliente',
   DatosSolicitados: 'Pedir datos',
   EnviosAgotados: 'Marcar envíos agotados',
@@ -82,13 +83,17 @@ export function etiquetaEvento(evento: string): string {
 
 /**
  * Events the detail page offers from `estado` — the machine guard
- * (`puedeTransicionar`) over the runtime whitelist, MINUS T16: the
- * tipo conversion belongs to POST .../tipo (pr10 route contract) and
- * would be rejected by /transiciones.
+ * (`puedeTransicionar`) over the runtime whitelist, MINUS T16 (the
+ * tipo conversion belongs to POST .../tipo — pr10 route contract — and
+ * would be rejected by /transiciones) and MINUS AceptaciónInbound
+ * (T17 is agent-driven; humans use AceptaciónOutbound).
  */
 export function transicionesDisponibles(estado: EstadoPipeline): EventoPipeline[] {
   return EVENTOS_PIPELINE.filter(
-    (evento) => evento !== 'ConversiónProspectoACliente' && puedeTransicionar(estado, evento),
+    (evento) =>
+      evento !== 'ConversiónProspectoACliente' &&
+      evento !== 'AceptaciónInbound' &&
+      puedeTransicionar(estado, evento),
   );
 }
 

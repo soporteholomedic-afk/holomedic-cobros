@@ -49,6 +49,7 @@ describe('ETIQUETA_EVENTO', () => {
     }
     expect(ETIQUETA_EVENTO.Rechazo).toBe('Rechazar');
     expect(ETIQUETA_EVENTO.HandoffRegistrado).toBe('Registrar handoff');
+    expect(ETIQUETA_EVENTO.AceptaciónInbound).toBe('Aceptó por chat');
   });
 });
 
@@ -82,6 +83,14 @@ describe('transicionesDisponibles (puedeTransicionar over the event whitelist)',
       const disponibles = transicionesDisponibles({ flujo: 'INBOUND', etapa });
       expect(disponibles).not.toContain('ConversiónProspectoACliente');
     }
+  });
+});
+
+describe('transicionesDisponibles — agent-driven events', () => {
+  it('offers AceptaciónOutbound but NEVER AceptaciónInbound from OUTBOUND/CADENCIA (agent-only)', () => {
+    const disponibles = transicionesDisponibles({ flujo: 'OUTBOUND', etapa: 'CADENCIA' });
+    expect(disponibles).toContain('AceptaciónOutbound');
+    expect(disponibles).not.toContain('AceptaciónInbound');
   });
 });
 

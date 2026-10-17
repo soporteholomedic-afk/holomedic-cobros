@@ -25,7 +25,7 @@
  * - T13/T15 (entries into the unarmed NUEVO stage): enviosCiclo back
  *   to 0; T15 additionally clears the rejection markers; ciclo keeps
  *   its history.
- * - Plain stage changes (T3/T4/T5/T10/T11): full passthrough — they
+ * - Plain stage changes (T3/T4/T5/T10/T11/T17): full passthrough — they
  *   write audit/result rows, not counters.
  */
 
@@ -122,7 +122,7 @@ export function efectosTransicion(
         motivoRechazo: null,
       };
 
-    // T3/T4/T5/T10/T11 — plain stage changes: passthrough.
+    // T3/T4/T5/T10/T11/T17 — plain stage changes: passthrough.
     default:
       return base;
   }
