@@ -518,4 +518,64 @@ describe('Sidebar Component', () => {
       expect(link?.className).toContain('text-sky-300');
     });
   });
+
+  // agente-ia-crm E5·T6: entrada global "Configuración IA" — gobernada
+  // SOLO por crm_configuracion (ruta /admin/crm/configuracion),
+  // independiente de crm/admin/crm_conocimiento.
+  describe('Configuración IA entry (permiso crm_configuracion, E5·T6)', () => {
+    const configuracionUser: AuthUser = {
+      idUsuario: 'u-config',
+      usuario: 'cconfig',
+      nombre: 'Carla Configura',
+      area: 'Sistemas',
+      permisos: ['crm_configuracion'],
+      activo: true,
+    };
+
+    beforeEach(() => {
+      mockUsePathname.mockReturnValue('/');
+      mockUseRouter.mockClear();
+      toastMock.mockClear();
+      toastMock.dismiss.mockClear();
+    });
+
+    it('debe mostrar "Configuración IA" y enlazar a /admin/crm/configuracion con el permiso', async () => {
+      mockAuthMe(configuracionUser);
+      renderSidebar();
+      expect(await screen.findByText('Carla Configura')).toBeInTheDocument();
+
+      const link = screen.getByText('Configuración IA').closest('a');
+      expect(link).toHaveAttribute('href', '/admin/crm/configuracion');
+    });
+
+    it('debe ocultar "Configuración IA" sin el permiso crm_configuracion', async () => {
+      mockAuthMe(nonAdminUser);
+      renderSidebar();
+      expect(await screen.findByText('Ana Cobranza')).toBeInTheDocument();
+      expect(screen.queryByText('Configuración IA')).not.toBeInTheDocument();
+    });
+
+    it('permiso propio: con SOLO crm_configuracion ve Configuración IA pero NO CRM ni Conocimiento', async () => {
+      mockAuthMe(configuracionUser);
+      renderSidebar();
+      expect(await screen.findByText('Configuración IA')).toBeInTheDocument();
+      expect(screen.queryByText('CRM')).not.toBeInTheDocument();
+      expect(screen.queryByText('Conocimiento')).not.toBeInTheDocument();
+    });
+
+    it('permiso propio: crm_conocimiento y crm NO muestran Configuración IA', async () => {
+      mockAuthMe({ ...configuracionUser, permisos: ['crm', 'crm_conocimiento'] });
+      renderSidebar();
+      expect(await screen.findByText('Conocimiento')).toBeInTheDocument();
+      expect(screen.queryByText('Configuración IA')).not.toBeInTheDocument();
+    });
+
+    it('marca activa la entrada en /admin/crm/configuracion', async () => {
+      mockUsePathname.mockReturnValue('/admin/crm/configuracion');
+      mockAuthMe(configuracionUser);
+      renderSidebar();
+      const link = (await screen.findByText('Configuración IA')).closest('a');
+      expect(link?.className).toContain('text-sky-300');
+    });
+  });
 });

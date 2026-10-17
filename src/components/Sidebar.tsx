@@ -3,7 +3,7 @@
 import { useState, useCallback } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Activity, Building2, FileSpreadsheet, Home, DollarSign, FileText, Mail, Menu, X, Users, LogOut, MessageSquare, PenLine, Gauge, BookOpen } from 'lucide-react';
+import { Activity, Building2, FileSpreadsheet, Home, DollarSign, FileText, Mail, Menu, X, Users, LogOut, MessageSquare, PenLine, Gauge, BookOpen, SlidersHorizontal } from 'lucide-react';
 import AreasMenuItem from './AreasMenuItem';
 import { useAuth } from '@/features/auth/presentation/hooks/useAuth';
 import { useNotificacionesConversaciones } from '@/features/crm/presentation/hooks/useNotificacionesConversaciones';
@@ -62,6 +62,12 @@ export default function Sidebar() {
   const canConocimiento = user?.permisos.includes('crm_conocimiento');
   const conocimientoActiva =
     pathname === '/admin/crm/conocimiento' || pathname.startsWith('/admin/crm/conocimiento/');
+  // agente-ia-crm E5·T6: "Configuración IA" is gated by its OWN permiso
+  // crm_configuracion (the /admin/crm/configuracion surface) —
+  // independent of crm/admin/crm_conocimiento.
+  const canConfiguracion = user?.permisos.includes('crm_configuracion');
+  const configuracionActiva =
+    pathname === '/admin/crm/configuracion' || pathname.startsWith('/admin/crm/configuracion/');
 
   return (
     <>
@@ -240,6 +246,24 @@ export default function Sidebar() {
               <BookOpen className="w-5 h-5" />
               <span>Conocimiento</span>
               {conocimientoActiva && (
+                <span className="ml-auto w-1.5 h-1.5 rounded-full bg-sky-400 shadow-sm shadow-sky-400/50" />
+              )}
+            </Link>
+          )}
+
+          {canConfiguracion && (
+            <Link
+              href="/admin/crm/configuracion"
+              onClick={closeMobile}
+              className={`flex items-center space-x-3 px-4 py-3 rounded-xl text-sm font-medium transition-all duration-200 ${
+                configuracionActiva
+                  ? 'bg-sky-950/50 text-sky-300 border border-sky-800/30 shadow-sm'
+                  : 'text-slate-400 hover:text-white hover:bg-slate-800/50'
+              }`}
+            >
+              <SlidersHorizontal className="w-5 h-5" />
+              <span>Configuración IA</span>
+              {configuracionActiva && (
                 <span className="ml-auto w-1.5 h-1.5 rounded-full bg-sky-400 shadow-sm shadow-sky-400/50" />
               )}
             </Link>
