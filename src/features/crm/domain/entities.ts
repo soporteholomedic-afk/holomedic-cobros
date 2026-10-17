@@ -999,3 +999,30 @@ export interface ResumenCalidad {
   /** Mensajes emisor='HUMANO' direccion='OUT' en ventana. */
   intervencionesHumanas: number;
 }
+
+// ---------------------------------------------------------------------------
+// Platform configuration (agente-ia-crm E5·T2) — key/value rows the admin
+// edits at runtime (agent guardrails, Kapso channel, memory). Secret rows
+// hold an already-ENCRYPTED payload (cifradoSecretos); the audit trail never
+// stores secret values, only the fact that they changed.
+// ---------------------------------------------------------------------------
+
+/** One CRM_Config row. `valor` is ciphertext when `esSecreto`. */
+export interface EntradaConfigCrm {
+  clave: string;
+  valor: string;
+  esSecreto: boolean;
+  actualizadoPor: string;
+  actualizadoEn: Date;
+}
+
+/** One CRM_ConfigAuditoria row. Values are null for secrets (never stored) and for absent old/new sides. */
+export interface AuditoriaConfigCrm {
+  id: number;
+  clave: string;
+  usuario: string;
+  valorAnterior: string | null;
+  valorNuevo: string | null;
+  esSecreto: boolean;
+  creadoEn: Date;
+}

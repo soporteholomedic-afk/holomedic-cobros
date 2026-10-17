@@ -1,4 +1,6 @@
 import type {
+  AuditoriaConfigCrm,
+  EntradaConfigCrm,
   EntradaConocimiento,
   EntradaDestilacion,
   EntradaExtraerIdentificacion,
@@ -1211,4 +1213,42 @@ export interface TareaAgenteRepository {
  */
 export interface CalidadRepository {
   obtenerResumen(desde: Date): Promise<ResumenCalidad>;
+}
+
+// ---------------------------------------------------------------------------
+// Platform-configuration port (agente-ia-crm E5·T2) — CRM_Config key/value
+// rows + their audit trail. Encryption is the CALLER's job (the port stores
+// whatever string it is given); the adapter only guarantees that secret
+// values never reach the audit trail. One SQL adapter implements it
+// (SqlServerConfigRepository).
+// ---------------------------------------------------------------------------
+
+export interface GuardarConfigInput {
+  clave: string;
+  valor: string;
+  esSecreto: boolean;
+  usuario: string;
+}
+
+export interface EliminarConfigInput {
+  clave: string;
+  usuario: string;
+}
+
+export interface ListarAuditoriaConfigInput {
+  /** Exact key filter; omit for the whole trail. */
+  clave?: string;
+  /** Newest-first cap (default 50, max 200). */
+  limite?: number;
+}
+
+export interface ConfigCrmRepository {
+  obtener(clave: string): Promise<EntradaConfigCrm | null>;
+  /** Rows whose key starts with `prefijo` (literal match, wildcards escaped). */
+  listar(prefijo: string): Promise<EntradaConfigCrm[]>;
+  /** Upsert + audit row in ONE transaction. */
+  guardar(input: GuardarConfigInput): Promise<void>;
+  /** Delete + audit row in ONE transaction; no-op when the key is absent. */
+  eliminar(input: EliminarConfigInput): Promise<void>;
+  listarAuditoria(input?: ListarAuditoriaConfigInput): Promise<AuditoriaConfigCrm[]>;
 }

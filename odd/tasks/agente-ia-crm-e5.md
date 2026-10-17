@@ -19,8 +19,8 @@ La Guía cierra sola el trato (resultado + etapa + tipo + confirmación al clien
 ## Tareas
 
 ### Tanda B — Configuración
-- [ ] T1 Cifrado AES-256-GCM (`CRM_CONFIG_KEY`, fail-closed) + tests
-- [ ] T2 Esquema `CRM_Config` (+ auditoría de cambios) + port/repo SQL + migrate idempotente + tests
+- [x] T1 Cifrado AES-256-GCM (`CRM_CONFIG_KEY`, fail-closed) + tests
+- [x] T2 Esquema `CRM_Config` (+ auditoría de cambios) + port/repo SQL + migrate idempotente + tests
 - [ ] T3 Config del agente en caliente (DB con fallback env) + kill switch auditado; motor y `ajustesConversacion` la consumen
 - [ ] T4 Permiso `crm_configuracion` + `RUTAS_PROTEGIDAS` + APIs Agente y kill switch
 - [ ] T5 APIs Canal Kapso y Memoria (secretos cifrados, probar conexión, enmascarados al leer) + factories leen config
@@ -41,3 +41,5 @@ Test-first en cambios de comportamiento; tests/lint solo de archivos modificados
 
 ## Progreso / Evidencia
 - 2026-10-17: rama creada, plan bloqueado con 4 decisiones del usuario.
+- 2026-10-17 T1 done: RED observado (módulo inexistente) → GREEN `cifradoSecretos.test.ts` 14/14 · eslint del directorio limpio · tsc 0 errores en `infrastructure/config`. Payload `v1:<iv>:<tag>:<ct>`; clave base64 o hex de 32 bytes; sin fallback en claro; errores sin material sensible; `enmascararSecreto` para la UI. Commit `47f2880`.
+- 2026-10-17 T2 done: RED (repo inexistente) → GREEN `sqlServerConfigRepository.test.ts` 8/8 + `migrate.test.ts` (34/34 juntos, integración DB dev real) · tsc 0 · eslint limpio · residuo cero verificado. Tablas `CRM_Config` (PK clave) + `CRM_ConfigAuditoria` (sin FK: la traza sobrevive al borrado). Upsert+auditoría en UNA transacción con UPDLOCK/HOLDLOCK; los secretos NUNCA entran a la auditoría (valores NULL); `listar` escapa comodines LIKE. Contenedor `getCrmDb().config`. Commit `0312d0d`.

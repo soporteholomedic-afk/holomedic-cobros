@@ -12,6 +12,7 @@ import { SqlServerConocimientoRepository } from './sqlserver/sqlServerConocimien
 import { SqlServerIngestaConocimientoRepository } from './sqlserver/sqlServerIngestaConocimientoRepository';
 import { SqlServerCalidadRepository } from './sqlserver/sqlServerCalidadRepository';
 import { SqlServerTareaAgenteRepository } from './sqlserver/sqlServerTareaAgenteRepository';
+import { SqlServerConfigRepository } from './sqlserver/sqlServerConfigRepository';
 import { SqlServerCrmImportador } from './importar/importadorCrm';
 import type {
   ConversacionCrmRepository,
@@ -26,6 +27,7 @@ import type {
   CrmResultadosRepositoryPort,
   CrmTransicionesRepositoryPort,
   CalidadRepository,
+  ConfigCrmRepository,
   ConocimientoCrmRepository,
   IngestaConocimientoRepository,
   MensajeCrmRepository,
@@ -120,6 +122,12 @@ export interface CrmDb {
    * rule; the real factory ALWAYS provides it).
    */
   ingestaConocimiento?: IngestaConocimientoRepository;
+  /**
+   * Platform-configuration adapter (agente-ia-crm E5·T2): CRM_Config
+   * key/value rows + audit trail the admin edits at runtime (same
+   * optional-for-fakes rule; the real factory ALWAYS provides it).
+   */
+  config?: ConfigCrmRepository;
 }
 
 let cached: Promise<CrmDb> | null = null;
@@ -155,6 +163,7 @@ export function getCrmDb(): Promise<CrmDb> {
       ingestaConocimiento: new SqlServerIngestaConocimientoRepository(pool),
       calidad: new SqlServerCalidadRepository(pool),
       tareas: new SqlServerTareaAgenteRepository(pool),
+      config: new SqlServerConfigRepository(pool),
     };
   })();
   return cached;
