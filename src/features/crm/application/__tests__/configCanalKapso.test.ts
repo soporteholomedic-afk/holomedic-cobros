@@ -198,6 +198,63 @@ describe('resolverConfigCanalKapso / leerVistaCanalKapso', () => {
     expect(registrado).toContain('FORMATO_INVALIDO');
   });
 
+  describe('webhookSecret STRICT: fila en DB ilegible', () => {
+    const filaIlegible = (campo: 'apiKey' | 'webhookSecret'): EntradaConfigCrm => ({
+      clave: CLAVES_CONFIG_CANAL_KAPSO[campo],
+      valor: 'v1:basura',
+      esSecreto: true,
+      actualizadoPor: 'x',
+      actualizadoEn: new Date(),
+    });
+
+    it('webhookSecret null aunque el entorno tenga uno (no hay fallback a env)', async () => {
+      config.filas.set(CLAVES_CONFIG_CANAL_KAPSO.webhookSecret, filaIlegible('webhookSecret'));
+
+      const efectiva = await resolverConfigCanalKapso(
+        { config },
+        { ...ENV_CON_CLAVE, KAPSO_WEBHOOK_SECRET: 'env-wh' },
+      );
+
+      expect(efectiva.webhookSecret).toBeNull();
+      const registrado = JSON.stringify(warn.mock.calls);
+      expect(registrado).not.toContain('env-wh');
+      expect(registrado).not.toContain('v1:basura');
+    });
+
+    it('sin fila en DB sigue cayendo al entorno', async () => {
+      const efectiva = await resolverConfigCanalKapso(
+        { config },
+        { ...ENV_CON_CLAVE, KAPSO_WEBHOOK_SECRET: 'env-wh' },
+      );
+
+      expect(efectiva.webhookSecret).toBe('env-wh');
+    });
+
+    it('apiKey ilegible sigue cayendo al entorno aunque el webhookSecret sea estricto', async () => {
+      config.filas.set(CLAVES_CONFIG_CANAL_KAPSO.apiKey, filaIlegible('apiKey'));
+      config.filas.set(CLAVES_CONFIG_CANAL_KAPSO.webhookSecret, filaIlegible('webhookSecret'));
+
+      const efectiva = await resolverConfigCanalKapso(
+        { config },
+        { ...ENV_CON_CLAVE, KAPSO_API_KEY: 'env-key', KAPSO_WEBHOOK_SECRET: 'env-wh' },
+      );
+
+      expect(efectiva.apiKey).toBe('env-key');
+      expect(efectiva.webhookSecret).toBeNull();
+    });
+
+    it('fuentes.webhookSecret sigue siendo db para una fila ilegible', async () => {
+      config.filas.set(CLAVES_CONFIG_CANAL_KAPSO.webhookSecret, filaIlegible('webhookSecret'));
+
+      const vista = await leerVistaCanalKapso(
+        { config },
+        { ...ENV_CON_CLAVE, KAPSO_WEBHOOK_SECRET: 'env-wh' },
+      );
+
+      expect(vista.fuentes.webhookSecret).toBe('db');
+    });
+  });
+
   it('la vista nunca expone secretos: solo configurado + máscara, y fuentes', async () => {
     await useCase().guardar({ phoneNumberId: '123456', apiKey: API_KEY }, 'maria');
 

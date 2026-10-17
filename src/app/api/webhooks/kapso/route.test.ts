@@ -528,6 +528,29 @@ describe('POST /api/webhooks/kapso — secret resuelto por request (E5·T5b)', (
     expect(mala.status).toBe(401);
   });
 
+  it('STRICT: fila de secret en DB ilegible + secret en entorno → 503 y no procesa (el env no revive)', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const mensajes = makeMensajes();
+    const conversaciones = makeConversaciones();
+    const ilegible: EntradaConfigCrm = { ...filaWebhookSecret(SECRET_DB), valor: 'v1:basura' };
+    __setCrmDbForTests({
+      pool: {} as never,
+      conversaciones,
+      mensajes,
+      config: makeConfig(async () => [ilegible]) as ConfigCrmRepository,
+    } as unknown as CrmDb);
+    const raw = payloadTexto();
+
+    const response = await POST(
+      requestPost(raw, { 'x-webhook-signature': firmarCon(SECRET, raw) }),
+    );
+
+    expect(response.status).toBe(503);
+    expect(await response.json()).toEqual({ success: false, error: 'WEBHOOK_NO_CONFIGURADO' });
+    expect(mensajes.escritas).toHaveLength(0);
+    expect(conversaciones.crear).not.toHaveBeenCalled();
+  });
+
   it('getCrmDb falla → verifica con el secret del entorno; sin entorno responde 503', async () => {
     vi.spyOn(console, 'warn').mockImplementation(() => {});
     __setCrmDbForTests({

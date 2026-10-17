@@ -61,8 +61,10 @@ function esEnvelopeBatch(v: unknown): v is { data: unknown[] } {
 
 /**
  * Effective HMAC secret, resolved per request (DB `canal.kapso.webhookSecret`
- * decrypted over env KAPSO_WEBHOOK_SECRET). Any failure reaching the DB
- * degrades to the env secret — verification is never skipped.
+ * decrypted over env KAPSO_WEBHOOK_SECRET). Failure REACHING the DB (getCrmDb
+ * or the config read throws) degrades to the env secret; verification is
+ * never skipped. STRICT: if the DB row exists but cannot be decrypted, the
+ * resolver yields null and the env secret is NOT used (→ 503).
  */
 function secretOAusente(valor: string | null | undefined): string | null {
   // trim() only decides emptiness; a real secret is returned untouched.

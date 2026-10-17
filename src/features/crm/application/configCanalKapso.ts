@@ -194,7 +194,11 @@ function resolverDesdeFilas(filas: EntradaConfigCrm[], env: VariablesEntorno): R
     modo: modoDb ?? (esModo(modoEnv) ? modoEnv : null),
     apiKey: secretos.apiKey.valor ?? textoEnv(env, VARIABLE_ENTORNO.apiKey),
     phoneNumberId: fonoDb ?? textoEnv(env, VARIABLE_ENTORNO.phoneNumberId),
-    webhookSecret: secretos.webhookSecret.valor ?? textoEnv(env, VARIABLE_ENTORNO.webhookSecret),
+    // STRICT: a webhookSecret row that exists in DB but cannot be decrypted
+    // resolves to null (never env), so a rotated-away env secret cannot revive.
+    webhookSecret: secretos.webhookSecret.enDb
+      ? (secretos.webhookSecret.valor ?? null)
+      : textoEnv(env, VARIABLE_ENTORNO.webhookSecret),
     timeoutMs: timeoutDb ?? timeoutEnv ?? TIMEOUT_MS_POR_DEFECTO,
   };
 
@@ -229,7 +233,10 @@ function envCanalKapso(env: VariablesEntorno): ConfigCanalKapso {
 
 /**
  * Effective config: DB over env, env as the fallback per key. A DB read
- * failure or an undecryptable secret falls back to env (code-only warn).
+ * failure falls back to env for every key (code-only warn). An undecryptable
+ * `apiKey` row also falls back to env, but an undecryptable `webhookSecret`
+ * row is STRICT: it resolves to null (unconfigured, the webhook rejects) and
+ * never to the env secret. A missing row still falls back to env.
  */
 export async function resolverConfigCanalKapso(
   deps: ResolverConfigCanalKapsoDeps,
@@ -248,7 +255,9 @@ export async function resolverConfigCanalKapso(
   for (const campo of CAMPOS_SECRETOS) {
     const codigo = resolucion.secretos[campo].codigoError;
     if (codigo !== undefined) {
-      console.warn('[resolverConfigCanalKapso] secreto ilegible en DB; se usa env', {
+      const efecto =
+        campo === 'webhookSecret' ? 'queda sin configurar (sin fallback a env)' : 'se usa env';
+      console.warn(`[resolverConfigCanalKapso] secreto ilegible en DB; ${efecto}`, {
         clave: CLAVES_CONFIG_CANAL_KAPSO[campo],
         error: codigo,
       });
