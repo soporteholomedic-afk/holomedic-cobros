@@ -59,6 +59,24 @@ describe('TarjetaAyuda (E3·T5)', () => {
     expect(screen.getByText('score 0.29')).toBeInTheDocument();
   });
 
+  it('términos repetidos → un chip por término distinto y sin warning de key duplicada', () => {
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    montar({
+      solicitud: { ...SOLICITUD, score: null, terminosBuscados: ['que', 'hora', 'que', 'canal'] },
+    });
+
+    expect(screen.getAllByText('que')).toHaveLength(1);
+    expect(screen.getByText('hora')).toBeInTheDocument();
+    expect(screen.getByText('canal')).toBeInTheDocument();
+    expect(screen.getByText('La Guía buscó:')).toBeInTheDocument();
+    const chips = screen.getByText('La Guía buscó:').parentElement?.querySelectorAll('span.rounded-full');
+    expect(chips).toHaveLength(3);
+    const avisosKey = errorSpy.mock.calls.filter((llamada) =>
+      llamada.some((arg) => typeof arg === 'string' && arg.includes('same key')),
+    );
+    expect(avisosKey).toHaveLength(0);
+  });
+
   it('score null → sin chip de score; términos vacíos → sin chips', () => {
     montar({
       solicitud: { ...SOLICITUD, score: null, terminosBuscados: [] },

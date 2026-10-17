@@ -80,7 +80,7 @@ export function TarjetaAyuda({
           {solicitud.terminosBuscados.length > 0 && (
             <>
               <span className="text-indigo-700/80 dark:text-indigo-300/80">La Guía buscó:</span>
-              {solicitud.terminosBuscados.map((termino) => (
+              {Array.from(new Set(solicitud.terminosBuscados)).map((termino) => (
                 <span
                   key={termino}
                   className="rounded-full bg-white/70 dark:bg-indigo-900/50 px-2 py-0.5 font-medium"
