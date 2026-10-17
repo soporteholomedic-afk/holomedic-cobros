@@ -32,6 +32,7 @@ import {
   TOP_K_MEMORIA,
   type ConfigAgente,
 } from './configAgente';
+import { limpiarCitasRespuesta } from './limpiarCitasRespuesta';
 import { PROMPT_VERSION } from './prompt/promptGeneracion';
 import { rankearMemorias } from './rankearMemorias';
 import { extraerTerminosRecall } from './recuperarTerminos';
@@ -421,8 +422,12 @@ export class GenerarRespuestaAgenteUseCase {
         conversacionId,
       });
     }
+    // Citation markers ([id N]) are for the audit, not for the customer:
+    // strip them from the outgoing text only (fuentes stay untouched).
     const textoFinal =
-      respuesta !== null && responder ? respuesta.texto : this.config.textoEscalado;
+      respuesta !== null && responder
+        ? limpiarCitasRespuesta(respuesta.texto)
+        : this.config.textoEscalado;
     // Audit: null score/modelo ONLY on the limit escalation (no
     // generation happened); a confidence-based escalation still audits
     // the score the model reported. E4·T1: promptVersion follows the

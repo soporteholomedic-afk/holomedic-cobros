@@ -940,6 +940,28 @@ describe('GenerarRespuestaAgenteUseCase — happy path RESPONDIDO (E2·T4)', () 
     expect(fakes.conversaciones.cambiosEstado).toEqual([]);
     expect(fakes.conversaciones.filas[0]?.estado).toBe('ACTIVA_IA');
   });
+
+  it('quita los marcadores [id N] del cuerpo enviado y persistido, sin tocar la auditoría', async () => {
+    const fakes = crearFakes({
+      respuesta: {
+        texto: 'El examen cuesta $ 1800 [id 7], con resultados en 72 horas.',
+        idsConocimiento: [7],
+      },
+    });
+
+    const resultado = await fakes.useCase.ejecutar(1, AHORA);
+
+    expect(resultado.resultado).toBe('RESPONDIDO');
+    const limpio = 'El examen cuesta $ 1800, con resultados en 72 horas.';
+    expect(fakes.whatsapp.envios).toHaveLength(1);
+    expect(fakes.whatsapp.envios[0]?.cuerpo).toBe(limpio);
+    expect(fakes.mensajes.escritas[0]?.cuerpo).toBe(limpio);
+    expect(fakes.mensajes.escritas[0]?.fuentes).toBe(
+      JSON.stringify([{ id: 7, tipo: 'KB', titulo: 'Examen ocupacional' }]),
+    );
+    expect(fakes.mensajes.escritas[0]?.score).toBe(0.9);
+    expect(fakes.mensajes.escritas[0]?.modelo).toBe('modelo-prueba');
+  });
 });
 
 describe('GenerarRespuestaAgenteUseCase — fallo de envío (E2·T4)', () => {
