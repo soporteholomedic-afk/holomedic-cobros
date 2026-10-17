@@ -14,6 +14,11 @@ export interface RegistrarTransicionInput {
   handoff?: HandoffInput | null;
   /** Acting session user (CRM_Transiciones.usuario audit). */
   usuario: string;
+  /**
+   * Machine actor. Only La Guía's close use case sets it ('AGENTE'); the
+   * HTTP route never does, so agent-only events cannot be forged by a user.
+   */
+  actor?: 'AGENTE';
 }
 
 export interface ResultadoRegistrarTransicion {
@@ -59,6 +64,10 @@ export class RegistrarTransicionUseCase {
       throw new ValidationError(
         'La conversión de tipo no es una transición del pipeline: registre el cambio de tipo de la empresa',
       );
+    }
+
+    if (input.evento === 'AceptaciónInbound' && input.actor !== 'AGENTE') {
+      throw new ValidationError('Este evento solo lo registra La Guía');
     }
 
     const fila = await this.pipelines.obtenerPorEmpresaId(input.empresaId);

@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import type { PipelineEmpresa } from '../../domain/entities';
 import { NotFoundError, ValidationError } from '../../domain/errors';
@@ -273,6 +273,54 @@ describe('RegistrarTransicionUseCase — bundle application (spec G4)', () => {
     expect(resultado.pipeline.etapa).toBe('SEGUIMIENTO');
     expect(resultado.pipeline.enviosCiclo).toBe(1);
     expect(resultado.pipeline.updatedBy).toBe('jperez');
+  });
+});
+
+describe('RegistrarTransicionUseCase — AceptaciónInbound is agent-only (E5·T9)', () => {
+  const filaCadencia = () => filaInbound({ flujo: 'OUTBOUND', etapa: 'CADENCIA', enviosCiclo: 1 });
+
+  it('rejects AceptaciónInbound without the AGENTE actor, before any repository access', async () => {
+    const repo = new FakePipelineRepository();
+    repo.filas.set(7, filaCadencia());
+    const leer = vi.spyOn(repo, 'obtenerPorEmpresaId');
+
+    await expect(
+      useCaseCon(repo).execute({ empresaId: 7, evento: 'AceptaciónInbound', usuario: 'jperez' }),
+    ).rejects.toThrow('Este evento solo lo registra La Guía');
+    await expect(
+      useCaseCon(repo).execute({ empresaId: 7, evento: 'AceptaciónInbound', usuario: 'jperez' }),
+    ).rejects.toBeInstanceOf(ValidationError);
+    expect(leer).not.toHaveBeenCalled();
+    expect(repo.llamadas).toHaveLength(0);
+  });
+
+  it('accepts AceptaciónInbound with actor AGENTE (T17 → ACEPTADO, result AceptaciónOutbound)', async () => {
+    const repo = new FakePipelineRepository();
+    repo.filas.set(7, filaCadencia());
+
+    const resultado = await useCaseCon(repo).execute({
+      empresaId: 7,
+      evento: 'AceptaciónInbound',
+      usuario: 'La Guía (agente)',
+      actor: 'AGENTE',
+    });
+
+    expect(resultado.estado).toEqual({ flujo: 'OUTBOUND', etapa: 'ACEPTADO' });
+    expect(resultado.resultado).toBe('AceptaciónOutbound');
+    expect(repo.llamadas).toHaveLength(1);
+  });
+
+  it('leaves every other event unaffected by the actor flag', async () => {
+    const repo = new FakePipelineRepository();
+    repo.filas.set(7, filaInbound());
+
+    const resultado = await useCaseCon(repo).execute({
+      empresaId: 7,
+      evento: 'CotizaciónEnviada',
+      usuario: 'jperez',
+    });
+
+    expect(resultado.estado).toEqual({ flujo: 'INBOUND', etapa: 'SEGUIMIENTO' });
   });
 });
 

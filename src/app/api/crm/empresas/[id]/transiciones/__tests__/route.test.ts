@@ -266,6 +266,22 @@ describe('POST /api/crm/empresas/[id]/transiciones', () => {
     expect(pipeline.obtenerPorEmpresaId).not.toHaveBeenCalled();
   });
 
+  it('rejects evento AceptaciónInbound over HTTP with 400 (agent-only; the route sends no actor)', async () => {
+    mockGetSession.mockResolvedValue(crmSession);
+    const pipeline = makeFakePipeline({
+      obtenerPorEmpresaId: vi.fn().mockResolvedValue(filaPipeline({ flujo: 'OUTBOUND', etapa: 'CADENCIA' })),
+    });
+    setDb(pipeline);
+
+    const response = await POST(jsonPost('42', { evento: 'AceptaciónInbound' }), routeContext('42'));
+    const body = await response.json();
+
+    expect(response.status).toBe(400);
+    expect(body.code).toBe('VALIDATION_ERROR');
+    expect(body.error).toBe('Este evento solo lo registra La Guía');
+    expect(pipeline.registrarTransicion).not.toHaveBeenCalled();
+  });
+
   it('returns 400 for a malformed JSON body', async () => {
     mockGetSession.mockResolvedValue(crmSession);
     setDb(makeFakePipeline());
