@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 
 import { getSession } from '@/lib/auth';
+import type { ConfigCrmRepository } from '@/features/crm/domain/ports';
 import { getCrmDb } from '@/features/crm/infrastructure/getCrmDb';
 import { iniciarBarredorTareas } from '@/features/crm/infrastructure/agentes/iniciarBarredorTareas';
 import { crearProcesadorTareasAgente } from '@/features/crm/infrastructure/agentes/crearProcesadorTareasAgente';
@@ -11,7 +12,7 @@ import {
   type ResultadoSimulacion,
 } from '@/features/crm/application/simularMensajeEntrante';
 import { buildCrmError, mapCrmError, type CrmErrorResponse } from '../../empresas/errorResponse';
-import { esModoSimulado } from '@/features/crm/infrastructure/whatsapp/crearEnviadorWhatsapp';
+import { esModoSimuladoConfigurable } from '@/features/crm/infrastructure/whatsapp/crearEnviadorWhatsapp';
 
 /**
  * `POST /api/crm/conversaciones/simular` (permiso
@@ -51,13 +52,24 @@ function esSimularBody(v: unknown): v is { telefono: string; texto: string } {
   );
 }
 
+/** Runtime config repo when the CRM container is reachable; env-only otherwise. */
+async function configCrmODesconocida(): Promise<ConfigCrmRepository | undefined> {
+  try {
+    return (await getCrmDb()).config;
+  } catch {
+    return undefined;
+  }
+}
+
 export async function POST(
   request: Request,
 ): Promise<NextResponse<SimularSuccess | CrmErrorResponse>> {
   // Dev-only tool: existe SOLO con modo simulado activo (mismo flag
   // que la tarjeta del UI) — si no, 404 antes de tocar sesión/
   // cuerpo/DB: indescubrible cuando no aplica.
-  if (!esModoSimulado()) {
+  const config = await configCrmODesconocida();
+  const modoSimulado = await esModoSimuladoConfigurable({ config });
+  if (!modoSimulado) {
     return buildCrmError('NOT_FOUND_ERROR', 'No encontrado', 404);
   }
   try {
@@ -91,7 +103,10 @@ export async function POST(
       mensajes,
       tareas,
     });
-    const resultado = await new SimularMensajeEntranteUseCase({ procesar }).ejecutar({
+    const resultado = await new SimularMensajeEntranteUseCase({
+      procesar,
+      modoSimulado: () => modoSimulado,
+    }).ejecutar({
       telefono: body.telefono,
       texto: body.texto,
     });

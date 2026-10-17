@@ -184,6 +184,38 @@ describe('SimularMensajeEntranteUseCase — simulador de entrada (E1)', () => {
     expect(conversaciones.filas).toHaveLength(0);
   });
 
+  it('sin override conserva el comportamiento del entorno (simulado permite)', async () => {
+    vi.stubEnv('KAPSO_MODO', 'simulado');
+    const { conversaciones, useCase } = crearSuite();
+
+    await useCase.ejecutar({ telefono: '0981 234 567', texto: 'hola' });
+
+    expect(conversaciones.filas).toHaveLength(1);
+  });
+
+  it('modoSimulado=true (DB simulado) gana sobre KAPSO_MODO=real del entorno', async () => {
+    vi.stubEnv('KAPSO_MODO', 'real');
+    const { conversaciones, mensajes } = crearSuite();
+    const procesar = new ProcesarMensajeWhatsappUseCase({ conversaciones, mensajes });
+    const useCase = new SimularMensajeEntranteUseCase({ procesar, modoSimulado: async () => true });
+
+    await useCase.ejecutar({ telefono: '0981 234 567', texto: 'hola' });
+
+    expect(conversaciones.filas).toHaveLength(1);
+  });
+
+  it('modoSimulado=false (DB real) RECHAZA aunque el entorno diga simulado', async () => {
+    vi.stubEnv('KAPSO_MODO', 'simulado');
+    const { conversaciones, mensajes } = crearSuite();
+    const procesar = new ProcesarMensajeWhatsappUseCase({ conversaciones, mensajes });
+    const useCase = new SimularMensajeEntranteUseCase({ procesar, modoSimulado: () => false });
+
+    await expect(useCase.ejecutar({ telefono: '0981 234 567', texto: 'hola' })).rejects.toBeInstanceOf(
+      SimulacionDesactivadaError,
+    );
+    expect(conversaciones.filas).toHaveLength(0);
+  });
+
   it('teléfono no parseable → ValidationError, sin delegar', async () => {
     const { conversaciones, useCase } = crearSuite();
 

@@ -35,7 +35,7 @@ vi.mock('@/features/crm/application/aplicarIndicacion', () => ({
 }));
 
 vi.mock('@/features/crm/infrastructure/engram/crearMemoriaConversacion', () => ({
-  crearMemoriaConversacion: () => ({}) as never,
+  crearMemoriaConversacionConfigurable: async () => ({}) as never,
 }));
 
 vi.mock('@/features/crm/infrastructure/agentes/iniciarBarredorTareas', () => ({

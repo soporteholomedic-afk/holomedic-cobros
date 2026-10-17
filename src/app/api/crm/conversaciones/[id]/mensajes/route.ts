@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 
 import { getSession } from '@/lib/auth';
 import { getCrmDb } from '@/features/crm/infrastructure/getCrmDb';
-import { crearEnviadorWhatsapp } from '@/features/crm/infrastructure/whatsapp/crearEnviadorWhatsapp';
+import { crearEnviadorWhatsappConfigurable } from '@/features/crm/infrastructure/whatsapp/crearEnviadorWhatsapp';
 import {
   ResponderConversacionUseCase,
   type ResultadoResponderConversacion,
@@ -87,12 +87,16 @@ export async function POST(
       return buildCrmError('VALIDATION_ERROR', 'Cuerpo inválido: se requiere {cuerpo}', 400);
     }
 
-    const { conversaciones: repoConversaciones, mensajes: repoMensajes } = await getCrmDb();
+    const {
+      conversaciones: repoConversaciones,
+      mensajes: repoMensajes,
+      config,
+    } = await getCrmDb();
     if (!repoConversaciones || !repoMensajes) {
       return buildCrmError('INTERNAL_ERROR', 'CRM no configurado', 503);
     }
 
-    const whatsapp = crearEnviadorWhatsapp();
+    const whatsapp = await crearEnviadorWhatsappConfigurable({ config });
     const resultado: ResultadoResponderConversacion = await new ResponderConversacionUseCase({
       conversaciones: repoConversaciones,
       mensajes: repoMensajes,

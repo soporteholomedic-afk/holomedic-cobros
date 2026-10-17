@@ -1,4 +1,9 @@
-import type { EnviadorWhatsappCrmPort, ResultadoEnvioWhatsapp } from '../../domain/ports';
+import { resolverConfigCanalKapso } from '../../application/configCanalKapso';
+import type {
+  ConfigCrmRepository,
+  EnviadorWhatsappCrmPort,
+  ResultadoEnvioWhatsapp,
+} from '../../domain/ports';
 
 import { EnviadorKapsoWhatsapp } from './enviadorKapsoWhatsapp';
 import { EnviadorSimuladoWhatsapp } from './enviadorSimuladoWhatsapp';
@@ -72,6 +77,46 @@ export function crearEnviadorWhatsapp(): EnviadorWhatsappCrmPort {
   const modo = process.env.KAPSO_MODO;
   if (modo === 'real') return new EnviadorKapsoWhatsapp();
   if (modo === 'simulado') return new EnviadorSimuladoWhatsapp();
+  if (process.env.NODE_ENV === 'production') {
+    avisarModoDefaultUnaVez(true);
+    return new EnviadorFailClosedWhatsapp();
+  }
+  avisarModoDefaultUnaVez(false);
+  return new EnviadorSimuladoWhatsapp();
+}
+
+export interface DepsEnviadorConfigurable {
+  /** Runtime config repo; when undefined the env behavior applies. */
+  config?: Pick<ConfigCrmRepository, 'listar'>;
+}
+
+/**
+ * Same selection rules as the env factories, but over the effective
+ * runtime config (DB over env, resolved per call — no cache).
+ */
+export async function esModoSimuladoConfigurable(
+  deps: DepsEnviadorConfigurable,
+): Promise<boolean> {
+  if (deps.config === undefined) return esModoSimulado();
+  const { modo } = await resolverConfigCanalKapso({ config: deps.config });
+  if (modo === 'simulado') return true;
+  if (modo === 'real') return false;
+  return process.env.NODE_ENV !== 'production';
+}
+
+export async function crearEnviadorWhatsappConfigurable(
+  deps: DepsEnviadorConfigurable,
+): Promise<EnviadorWhatsappCrmPort> {
+  if (deps.config === undefined) return crearEnviadorWhatsapp();
+  const config = await resolverConfigCanalKapso({ config: deps.config });
+  if (config.modo === 'real') {
+    return new EnviadorKapsoWhatsapp({
+      apiKey: config.apiKey,
+      phoneNumberId: config.phoneNumberId,
+      timeoutMs: config.timeoutMs,
+    });
+  }
+  if (config.modo === 'simulado') return new EnviadorSimuladoWhatsapp();
   if (process.env.NODE_ENV === 'production') {
     avisarModoDefaultUnaVez(true);
     return new EnviadorFailClosedWhatsapp();

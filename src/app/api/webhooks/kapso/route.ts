@@ -2,6 +2,11 @@ import { createHmac, timingSafeEqual } from 'node:crypto';
 
 import { NextResponse } from 'next/server';
 
+import {
+  codigoErrorConfig,
+  resolverConfigCanalKapso,
+} from '@/features/crm/application/configCanalKapso';
+import type { ConfigCrmRepository } from '@/features/crm/domain/ports';
 import { getCrmDb } from '@/features/crm/infrastructure/getCrmDb';
 import { iniciarBarredorTareas } from '@/features/crm/infrastructure/agentes/iniciarBarredorTareas';
 import { crearProcesadorTareasAgente } from '@/features/crm/infrastructure/agentes/crearProcesadorTareasAgente';
@@ -54,11 +59,43 @@ function esEnvelopeBatch(v: unknown): v is { data: unknown[] } {
   );
 }
 
+/**
+ * Effective HMAC secret, resolved per request (DB `canal.kapso.webhookSecret`
+ * decrypted over env KAPSO_WEBHOOK_SECRET). Any failure reaching the DB
+ * degrades to the env secret — verification is never skipped.
+ */
+function secretOAusente(valor: string | null | undefined): string | null {
+  // trim() only decides emptiness; a real secret is returned untouched.
+  return valor !== null && valor !== undefined && valor.trim() !== '' ? valor : null;
+}
+
+async function resolverWebhookSecret(): Promise<string | null> {
+  const secretEnv = secretOAusente(process.env.KAPSO_WEBHOOK_SECRET);
+  let config: ConfigCrmRepository | undefined;
+  try {
+    config = (await getCrmDb()).config;
+  } catch (err: unknown) {
+    console.warn('[kapso-webhook] CRM DB no disponible; se usa el secret del entorno', {
+      error: codigoErrorConfig(err),
+    });
+    return secretEnv;
+  }
+  if (config === undefined) return secretEnv;
+  try {
+    return secretOAusente((await resolverConfigCanalKapso({ config })).webhookSecret);
+  } catch (err: unknown) {
+    console.warn('[kapso-webhook] resolución de config falló; se usa el secret del entorno', {
+      error: codigoErrorConfig(err),
+    });
+    return secretEnv;
+  }
+}
+
 export async function POST(request: Request): Promise<Response> {
   // Fail closed: sin secret no hay firma verificable — no procesar.
-  const secret = process.env.KAPSO_WEBHOOK_SECRET;
+  const secret = await resolverWebhookSecret();
   if (!secret) {
-    console.error('[kapso-webhook] rechazado: KAPSO_WEBHOOK_SECRET no configurado');
+    console.error('[kapso-webhook] rechazado: webhook secret no configurado');
     return NextResponse.json({ success: false, error: 'WEBHOOK_NO_CONFIGURADO' }, { status: 503 });
   }
 

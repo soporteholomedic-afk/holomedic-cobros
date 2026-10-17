@@ -3,7 +3,7 @@ import { NextResponse } from 'next/server';
 import { getSession } from '@/lib/auth';
 import { getCrmDb } from '@/features/crm/infrastructure/getCrmDb';
 import { iniciarBarredorTareas } from '@/features/crm/infrastructure/agentes/iniciarBarredorTareas';
-import { esModoSimulado } from '@/features/crm/infrastructure/whatsapp/crearEnviadorWhatsapp';
+import { esModoSimuladoConfigurable } from '@/features/crm/infrastructure/whatsapp/crearEnviadorWhatsapp';
 import { ListarConversacionesUseCase } from '@/features/crm/application/listarConversaciones';
 import type { ConversacionListada } from '@/features/crm/domain/entities';
 import type { EstadoConversacion } from '@/features/crm/domain/entities';
@@ -109,14 +109,14 @@ export async function GET(
     }
     if (filtros.limite === undefined) filtros.limite = LIMITE_DEFAULT;
 
-    const { conversaciones: repo } = await getCrmDb();
+    const { conversaciones: repo, config } = await getCrmDb();
     if (!repo) return buildCrmError('INTERNAL_ERROR', 'CRM no configurado', 503);
     const listado = await new ListarConversacionesUseCase(repo).ejecutar(filtros);
     return NextResponse.json({
       success: true,
       conversaciones: listado.items,
       total: listado.total,
-      modoSimulado: esModoSimulado(),
+      modoSimulado: await esModoSimuladoConfigurable({ config }),
     });
   } catch (error) {
     return mapCrmError('crm conversaciones GET', error);

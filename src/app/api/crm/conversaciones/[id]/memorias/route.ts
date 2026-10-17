@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 
 import { getSession } from '@/lib/auth';
 import { getCrmDb } from '@/features/crm/infrastructure/getCrmDb';
-import { crearMemoriaConversacion } from '@/features/crm/infrastructure/engram/crearMemoriaConversacion';
+import { crearMemoriaConversacionConfigurable } from '@/features/crm/infrastructure/engram/crearMemoriaConversacion';
 import type { NivelMemoria, TipoObservacionDestilada } from '@/features/crm/domain/entities';
 import {
   GestionarMemoriaConversacionUseCase,
@@ -125,13 +125,13 @@ export async function GET(
       return buildCrmError('VALIDATION_ERROR', '"id" debe ser un número entero positivo', 400);
     }
 
-    const { conversaciones: repo } = await getCrmDb();
+    const { conversaciones: repo, config } = await getCrmDb();
     if (!repo) return buildCrmError('INTERNAL_ERROR', 'CRM no configurado', 503);
 
     try {
       const resultado = await new ListarMemoriasConversacionUseCase({
         conversaciones: repo,
-        memoria: crearMemoriaConversacion(),
+        memoria: await crearMemoriaConversacionConfigurable({ config }),
       }).ejecutar(id);
       return NextResponse.json({ success: true, ...resultado } satisfies MemoriasSuccess);
     } catch (error) {
@@ -167,7 +167,7 @@ export async function POST(
       return buildCrmError('VALIDATION_ERROR', 'El cuerpo debe ser JSON válido', 400);
     }
 
-    const { conversaciones: repo } = await getCrmDb();
+    const { conversaciones: repo, config } = await getCrmDb();
     if (!repo) return buildCrmError('INTERNAL_ERROR', 'CRM no configurado', 503);
 
     // E3·T5 guardar arm: manual write (nueva memoria / editar).
@@ -182,7 +182,7 @@ export async function POST(
       try {
         const resultado = await new GuardarMemoriaConversacionUseCase({
           conversaciones: repo,
-          memoria: crearMemoriaConversacion(),
+          memoria: await crearMemoriaConversacionConfigurable({ config }),
         }).ejecutar({
           conversacionId: id,
           nivel: body.nivel,
@@ -208,7 +208,7 @@ export async function POST(
     try {
       await new GestionarMemoriaConversacionUseCase({
         conversaciones: repo,
-        memoria: crearMemoriaConversacion(),
+        memoria: await crearMemoriaConversacionConfigurable({ config }),
       }).ejecutar({ conversacionId: id, observacionId: body.observacionId, accion: body.accion });
       return NextResponse.json({ ok: true });
     } catch (error) {

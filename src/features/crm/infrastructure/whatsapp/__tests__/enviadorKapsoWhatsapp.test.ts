@@ -133,3 +133,48 @@ describe('EnviadorKapsoWhatsapp — adapter Kapso (E1)', () => {
     expect(resultado).toMatchObject({ ok: false, error: 'KAPSO_NO_CONFIGURADO' });
   });
 });
+
+describe('EnviadorKapsoWhatsapp — config inyectada (E5·T5b)', () => {
+  it('usa apiKey/phoneNumberId inyectados en vez del entorno', async () => {
+    mocks.sendTextMock.mockResolvedValueOnce({ messages: [{ id: 'wamid.inj' }] });
+
+    const resultado = await new EnviadorKapsoWhatsapp({
+      apiKey: 'db-key',
+      phoneNumberId: 'db-pnid',
+      timeoutMs: 1000,
+    }).enviar(ENVIO);
+
+    expect(resultado).toEqual({ ok: true, wamid: 'wamid.inj' });
+    expect(mocks.configsCapturados).toEqual([
+      { kapsoApiKey: 'db-key', baseUrl: 'https://api.kapso.ai/meta/whatsapp' },
+    ]);
+    expect(mocks.sendTextMock).toHaveBeenCalledWith(
+      expect.objectContaining({ phoneNumberId: 'db-pnid' }),
+    );
+  });
+
+  it('usa el timeout inyectado (el entorno de 40 ms no aplica)', async () => {
+    mocks.sendTextMock.mockImplementationOnce(
+      () => new Promise((resolve) => setTimeout(() => resolve({ messages: [{ id: 'w' }] }), 120)),
+    );
+
+    const resultado = await new EnviadorKapsoWhatsapp({
+      apiKey: 'k',
+      phoneNumberId: 'p',
+      timeoutMs: 2000,
+    }).enviar(ENVIO);
+
+    expect(resultado).toEqual({ ok: true, wamid: 'w' });
+  });
+
+  it('config inyectada sin apiKey → KAPSO_NO_CONFIGURADO aunque el entorno la tenga', async () => {
+    const resultado = await new EnviadorKapsoWhatsapp({
+      apiKey: null,
+      phoneNumberId: 'p',
+      timeoutMs: 1000,
+    }).enviar(ENVIO);
+
+    expect(resultado).toMatchObject({ ok: false, error: 'KAPSO_NO_CONFIGURADO' });
+    expect(mocks.configsCapturados).toHaveLength(0);
+  });
+});

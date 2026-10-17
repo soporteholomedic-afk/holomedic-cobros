@@ -27,6 +27,7 @@ const mocks = vi.hoisted(() => {
   }
   return {
     ejecutarMock: vi.fn(),
+    depsCapturadas: [] as unknown[],
     getSessionMock: vi.fn(),
     SimulacionDesactivadaFake,
   };
@@ -37,17 +38,22 @@ vi.mock('@/lib/auth', () => ({ getSession: mocks.getSessionMock }));
 vi.mock('@/features/crm/application/simularMensajeEntrante', () => ({
   SimularMensajeEntranteUseCase: class SimularMensajeEntranteUseCaseFake {
     readonly ejecutar = mocks.ejecutarMock;
+    constructor(deps: unknown) {
+      mocks.depsCapturadas.push(deps);
+    }
   },
   SimulacionDesactivadaError: mocks.SimulacionDesactivadaFake,
 }));
 
 import { POST } from './route';
 import { __setCrmDbForTests, type CrmDb } from '@/features/crm/infrastructure/getCrmDb';
+import type { ConfigCrmRepository } from '@/features/crm/domain/ports';
 
 const sessionBase = { sub: 'u-1', nombre: 'Juana Perez', area: 'ventas' };
 
-function setDb(): void {
+function setDb(config?: Pick<ConfigCrmRepository, 'listar'>): void {
   __setCrmDbForTests({
+    ...(config ? { config: config as ConfigCrmRepository } : {}),
     pool: {} as never,
     empresas: {} as never,
     importador: {} as never,
@@ -135,6 +141,30 @@ describe('POST /api/crm/conversaciones/simular — ruta solo-dev (E1)', () => {
       vinculado: false,
     });
     expect(mocks.ejecutarMock).toHaveBeenCalledWith({ telefono: '0981 234 567', texto: 'hola' });
+  });
+
+  it('DB modo=simulado con KAPSO_MODO=real → 201 y el use case recibe la decisión resuelta (true)', async () => {
+    vi.stubEnv('NODE_ENV', 'production');
+    vi.stubEnv('KAPSO_MODO', 'real');
+    setDb({
+      listar: async () => [
+        {
+          clave: 'canal.kapso.modo',
+          valor: 'simulado',
+          esSecreto: false,
+          actualizadoPor: 'admin',
+          actualizadoEn: new Date(),
+        },
+      ],
+    });
+    mocks.ejecutarMock.mockResolvedValueOnce({ conversacionId: 1, mensajeId: 2, vinculado: false });
+
+    const response = await POST(jsonPost({ telefono: '0981 234 567', texto: 'hola' }));
+
+    expect(response.status).toBe(201);
+    const deps = mocks.depsCapturadas[0] as { modoSimulado?: () => boolean | Promise<boolean> };
+    expect(typeof deps.modoSimulado).toBe('function');
+    expect(await deps.modoSimulado?.()).toBe(true);
   });
 
   it('sin sesión → 401', async () => {

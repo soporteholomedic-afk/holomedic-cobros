@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 
 import { getSession } from '@/lib/auth';
 import { getCrmDb } from '@/features/crm/infrastructure/getCrmDb';
-import { crearMemoriaConversacion } from '@/features/crm/infrastructure/engram/crearMemoriaConversacion';
+import { crearMemoriaConversacionConfigurable } from '@/features/crm/infrastructure/engram/crearMemoriaConversacion';
 import { iniciarBarredorTareas } from '@/features/crm/infrastructure/agentes/iniciarBarredorTareas';
 import { crearProcesadorTareasAgente } from '@/features/crm/infrastructure/agentes/crearProcesadorTareasAgente';
 import { AplicarIndicacionUseCase, AyudaNoPendienteError } from '@/features/crm/application/aplicarIndicacion';
@@ -74,7 +74,7 @@ export async function POST(
       return buildCrmError('VALIDATION_ERROR', 'Cuerpo inválido: se requiere {indicacion}', 400);
     }
 
-    const { conversaciones, mensajes, conocimiento, tareas } = await getCrmDb();
+    const { conversaciones, mensajes, conocimiento, tareas, config } = await getCrmDb();
     if (!conversaciones || !mensajes || !conocimiento || !tareas) {
       return buildCrmError('INTERNAL_ERROR', 'CRM no configurado', 503);
     }
@@ -82,7 +82,7 @@ export async function POST(
     const resultado = await new AplicarIndicacionUseCase({
       conversaciones,
       conocimiento,
-      memoria: crearMemoriaConversacion(),
+      memoria: await crearMemoriaConversacionConfigurable({ config }),
       tareas,
       mensajes,
     }).ejecutar({

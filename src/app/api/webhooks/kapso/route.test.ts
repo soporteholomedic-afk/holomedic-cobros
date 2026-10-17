@@ -6,12 +6,15 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { POST } from './route';
 import { __setCrmDbForTests, type CrmDb } from '@/features/crm/infrastructure/getCrmDb';
+import { cifrarSecreto } from '@/features/crm/infrastructure/config/cifradoSecretos';
 import type {
   CandidatoVinculacion,
+  ConfigCrmRepository,
   ConversacionCrmRepository,
   MensajeCrmRepository,
 } from '@/features/crm/domain/ports';
 import type {
+  EntradaConfigCrm,
   ConversacionCrm,
   CrearConversacionInput,
   CrearMensajeInput,
@@ -379,5 +382,168 @@ describe('POST /api/webhooks/kapso — ack, procesamiento e idempotencia', () =>
     expect(body).toEqual({ success: true, procesados: 0, duplicados: 0 });
     expect(mensajes.escritas).toHaveLength(0);
     expect(conversaciones.crearMock).not.toHaveBeenCalled();
+  });
+});
+
+// ---- Secret resuelto en runtime (E5·T5b) ----
+
+const CLAVE_MAESTRA = 'a'.repeat(64);
+const SECRET_DB = 'kapso-db-secret';
+
+function firmarCon(secret: string, raw: string): string {
+  return createHmac('sha256', secret).update(raw).digest('hex');
+}
+
+function filaWebhookSecret(valor: string): EntradaConfigCrm {
+  return {
+    clave: 'canal.kapso.webhookSecret',
+    valor: cifrarSecreto(valor, { CRM_CONFIG_KEY: CLAVE_MAESTRA }),
+    esSecreto: true,
+    actualizadoPor: 'admin',
+    actualizadoEn: new Date(),
+  };
+}
+
+function makeConfig(
+  listar: () => Promise<EntradaConfigCrm[]>,
+): Pick<ConfigCrmRepository, 'listar'> {
+  return { listar: vi.fn(listar) };
+}
+
+function setDbConConfig(config: Pick<ConfigCrmRepository, 'listar'> | null): void {
+  __setCrmDbForTests({
+    pool: {} as never,
+    conversaciones: makeConversaciones(),
+    mensajes: makeMensajes(),
+    ...(config ? { config: config as ConfigCrmRepository } : {}),
+  } as unknown as CrmDb);
+}
+
+describe('POST /api/webhooks/kapso — secret resuelto por request (E5·T5b)', () => {
+  beforeEach(() => {
+    vi.stubEnv('CRM_CONFIG_KEY', CLAVE_MAESTRA);
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  it('el secret de la DB gana sobre el del entorno', async () => {
+    setDbConConfig(makeConfig(async () => [filaWebhookSecret(SECRET_DB)]));
+    const raw = payloadTexto();
+
+    const response = await POST(
+      requestPost(raw, { 'x-webhook-signature': firmarCon(SECRET_DB, raw) }),
+    );
+
+    expect(response.status).toBe(200);
+  });
+
+  it('rotación: firma con el secret VIEJO del entorno se rechaza si existe uno en DB', async () => {
+    setDbConConfig(makeConfig(async () => [filaWebhookSecret(SECRET_DB)]));
+
+    const response = await POST(requestPost(payloadTexto()));
+
+    expect(response.status).toBe(401);
+  });
+
+  it('sin filas en DB usa el secret del entorno', async () => {
+    setDbConConfig(makeConfig(async () => []));
+
+    const response = await POST(requestPost(payloadTexto()));
+
+    expect(response.status).toBe(200);
+  });
+
+  it('sin secret en DB ni en entorno → 503 WEBHOOK_NO_CONFIGURADO', async () => {
+    delete process.env.KAPSO_WEBHOOK_SECRET;
+    setDbConConfig(makeConfig(async () => []));
+
+    const response = await POST(requestPost(payloadTexto()));
+
+    expect(response.status).toBe(503);
+    expect(await response.json()).toEqual({ success: false, error: 'WEBHOOK_NO_CONFIGURADO' });
+  });
+
+  it('secret del entorno solo con espacios → 503 y una firma calculada con "   " no se acepta', async () => {
+    process.env.KAPSO_WEBHOOK_SECRET = '   ';
+    setDbConConfig(makeConfig(async () => []));
+    const raw = payloadTexto();
+
+    const response = await POST(
+      requestPost(raw, { 'x-webhook-signature': firmarCon('   ', raw) }),
+    );
+
+    expect(response.status).toBe(503);
+    expect(await response.json()).toEqual({ success: false, error: 'WEBHOOK_NO_CONFIGURADO' });
+  });
+
+  it('getCrmDb falla y el entorno es solo espacios → 503', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    process.env.KAPSO_WEBHOOK_SECRET = '   ';
+    __setCrmDbForTests({
+      pool: {} as never,
+      conversaciones: makeConversaciones(),
+      mensajes: makeMensajes(),
+      get config(): ConfigCrmRepository {
+        throw new Error('db down');
+      },
+    } as unknown as CrmDb);
+    const raw = payloadTexto();
+
+    const response = await POST(
+      requestPost(raw, { 'x-webhook-signature': firmarCon('   ', raw) }),
+    );
+
+    expect(response.status).toBe(503);
+  });
+
+  it('secret de DB solo con espacios no se usa como clave → 503', async () => {
+    delete process.env.KAPSO_WEBHOOK_SECRET;
+    setDbConConfig(makeConfig(async () => [filaWebhookSecret('   ')]));
+    const raw = payloadTexto();
+
+    const response = await POST(
+      requestPost(raw, { 'x-webhook-signature': firmarCon('   ', raw) }),
+    );
+
+    expect(response.status).toBe(503);
+  });
+
+  it('el resolver falla (DB caída) → cae al entorno y sigue verificando la firma', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    setDbConConfig(
+      makeConfig(async () => {
+        throw new Error('db down');
+      }),
+    );
+
+    const ok = await POST(requestPost(payloadTexto()));
+    expect(ok.status).toBe(200);
+
+    const raw = payloadTexto('wamid.otro');
+    const mala = await POST(
+      requestPost(raw, { 'x-webhook-signature': firmarCon('otro-secret', raw) }),
+    );
+    expect(mala.status).toBe(401);
+  });
+
+  it('getCrmDb falla → verifica con el secret del entorno; sin entorno responde 503', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    __setCrmDbForTests({
+      pool: {} as never,
+      conversaciones: makeConversaciones(),
+      mensajes: makeMensajes(),
+      get config(): ConfigCrmRepository {
+        throw new Error('db down');
+      },
+    } as unknown as CrmDb);
+
+    const conEnv = await POST(requestPost(payloadTexto()));
+    expect(conEnv.status).toBe(200);
+
+    delete process.env.KAPSO_WEBHOOK_SECRET;
+    const sinEnv = await POST(requestPost(payloadTexto()));
+    expect(sinEnv.status).toBe(503);
   });
 });

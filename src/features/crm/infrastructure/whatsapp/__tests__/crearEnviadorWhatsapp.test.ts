@@ -5,8 +5,11 @@ import { EnviadorSimuladoWhatsapp } from '../enviadorSimuladoWhatsapp';
 import {
   __resetAvisosModoForTests,
   crearEnviadorWhatsapp,
+  crearEnviadorWhatsappConfigurable,
   esModoSimulado,
+  esModoSimuladoConfigurable,
 } from '../crearEnviadorWhatsapp';
+import type { EntradaConfigCrm } from '../../../domain/entities';
 
 /**
  * Factory contract (agente-ia-crm E1, remediation R1-simulador-default-prod
@@ -117,5 +120,81 @@ describe('crearEnviadorWhatsapp — selección de adapter (E1)', () => {
     expect(linea).not.toContain('5959812345');
     expect(linea).not.toContain(ENVIO.cuerpo);
     expect(linea).toContain(`${ENVIO.cuerpo.length}`);
+  });
+});
+
+function fila(clave: string, valor: string): EntradaConfigCrm {
+  return { clave, valor, esSecreto: false, actualizadoPor: 'admin', actualizadoEn: new Date() };
+}
+
+function repoCon(filas: EntradaConfigCrm[]): { listar: () => Promise<EntradaConfigCrm[]> } {
+  return { listar: async () => filas };
+}
+
+type NombreAdapter = 'kapso' | 'simulado' | 'failClosed';
+
+async function nombreDeAdapter(enviador: Awaited<ReturnType<typeof crearEnviadorWhatsapp>>): Promise<NombreAdapter> {
+  if (enviador instanceof EnviadorKapsoWhatsapp) return 'kapso';
+  if (enviador instanceof EnviadorSimuladoWhatsapp) return 'simulado';
+  return 'failClosed';
+}
+
+describe('crearEnviadorWhatsappConfigurable / esModoSimuladoConfigurable (E5·T5b)', () => {
+  const modos: Array<string> = ['real', 'simulado', ''];
+  const entornos: Array<string> = ['development', 'production'];
+
+  for (const modo of modos) {
+    for (const nodeEnv of entornos) {
+      it(`mismo adapter que el de entorno: KAPSO_MODO='${modo}' NODE_ENV=${nodeEnv}`, async () => {
+        vi.stubEnv('KAPSO_MODO', modo);
+        vi.stubEnv('NODE_ENV', nodeEnv);
+        const esperado = await nombreDeAdapter(crearEnviadorWhatsapp());
+        const esperadoSimulado = esModoSimulado();
+
+        // Same effective values coming from the DB, env cleared.
+        vi.stubEnv('KAPSO_MODO', '');
+        const filas = modo === '' ? [] : [fila('canal.kapso.modo', modo)];
+        const deps = { config: repoCon(filas) };
+
+        expect(await nombreDeAdapter(await crearEnviadorWhatsappConfigurable(deps))).toBe(esperado);
+        expect(await esModoSimuladoConfigurable(deps)).toBe(esperadoSimulado);
+      });
+    }
+  }
+
+  it('sin config delega al comportamiento de entorno', async () => {
+    vi.stubEnv('KAPSO_MODO', 'simulado');
+    expect(await crearEnviadorWhatsappConfigurable({})).toBeInstanceOf(EnviadorSimuladoWhatsapp);
+    expect(await esModoSimuladoConfigurable({})).toBe(true);
+  });
+
+  it('el valor de la DB gana sobre el entorno', async () => {
+    vi.stubEnv('KAPSO_MODO', 'simulado');
+    vi.stubEnv('NODE_ENV', 'production');
+    const deps = { config: repoCon([fila('canal.kapso.modo', 'real')]) };
+
+    expect(await crearEnviadorWhatsappConfigurable(deps)).toBeInstanceOf(EnviadorKapsoWhatsapp);
+    expect(await esModoSimuladoConfigurable(deps)).toBe(false);
+  });
+
+  it('sin caché: un cambio de config entre llamadas se ve en la siguiente', async () => {
+    vi.stubEnv('KAPSO_MODO', '');
+    let filas: EntradaConfigCrm[] = [fila('canal.kapso.modo', 'simulado')];
+    const deps = { config: { listar: async () => filas } };
+
+    expect(await crearEnviadorWhatsappConfigurable(deps)).toBeInstanceOf(EnviadorSimuladoWhatsapp);
+    filas = [fila('canal.kapso.modo', 'real')];
+    expect(await crearEnviadorWhatsappConfigurable(deps)).toBeInstanceOf(EnviadorKapsoWhatsapp);
+    expect(await esModoSimuladoConfigurable(deps)).toBe(false);
+  });
+
+  it('producción sin modo en ninguna fuente → fail closed con KAPSO_NO_CONFIGURADO', async () => {
+    vi.stubEnv('KAPSO_MODO', '');
+    vi.stubEnv('NODE_ENV', 'production');
+
+    const enviador = await crearEnviadorWhatsappConfigurable({ config: repoCon([]) });
+
+    expect(await enviador.enviar(ENVIO)).toMatchObject({ ok: false, error: 'KAPSO_NO_CONFIGURADO' });
+    expect(await esModoSimuladoConfigurable({ config: repoCon([]) })).toBe(false);
   });
 });

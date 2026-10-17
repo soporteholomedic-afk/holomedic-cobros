@@ -1,4 +1,5 @@
-import type { MemoriaConversacionPort } from '../../domain/ports';
+import { resolverConfigMemoria } from '../../application/configMemoria';
+import type { ConfigCrmRepository, MemoriaConversacionPort } from '../../domain/ports';
 
 import { ErrorMemoriaCrm, MemoriaEngramHttp } from './memoriaEngramHttp';
 import { MemoriaSimulada } from './memoriaSimulada';
@@ -86,6 +87,35 @@ export function crearMemoriaConversacion(): MemoriaConversacionPort {
       urlBase,
       token: process.env.ENGRAM_CRM_TOKEN,
       timeoutMs: leerEngramTimeoutMs(),
+    });
+  }
+  if (process.env.NODE_ENV === 'production') {
+    avisarMemoriaDefaultUnaVez(true);
+    return new MemoriaFailClosed();
+  }
+  avisarMemoriaDefaultUnaVez(false);
+  return new MemoriaSimulada();
+}
+
+export interface DepsMemoriaConfigurable {
+  /** Runtime config repo; when undefined the env behavior applies. */
+  config?: Pick<ConfigCrmRepository, 'listar'>;
+}
+
+/**
+ * Same selection rules as crearMemoriaConversacion over the effective
+ * runtime config (DB over env, resolved per call — no cache).
+ */
+export async function crearMemoriaConversacionConfigurable(
+  deps: DepsMemoriaConfigurable,
+): Promise<MemoriaConversacionPort> {
+  if (deps.config === undefined) return crearMemoriaConversacion();
+  const config = await resolverConfigMemoria({ config: deps.config });
+  if (config.url !== null && config.url !== '') {
+    return new MemoriaEngramHttp({
+      urlBase: config.url,
+      token: config.token ?? undefined,
+      timeoutMs: config.timeoutMs,
     });
   }
   if (process.env.NODE_ENV === 'production') {

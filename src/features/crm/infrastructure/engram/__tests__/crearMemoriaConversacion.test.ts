@@ -2,7 +2,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ErrorMemoriaCrm, MemoriaEngramHttp } from '../memoriaEngramHttp';
 import { MemoriaSimulada } from '../memoriaSimulada';
-import { __resetAvisosMemoriaForTests, crearMemoriaConversacion } from '../crearMemoriaConversacion';
+import {
+  __resetAvisosMemoriaForTests,
+  crearMemoriaConversacion,
+  crearMemoriaConversacionConfigurable,
+} from '../crearMemoriaConversacion';
+import type { EntradaConfigCrm } from '../../../domain/entities';
 
 /**
  * Factory contract (agente-ia-crm E2·T2) — mirrors crearEnviadorWhatsapp
@@ -96,5 +101,64 @@ describe('crearMemoriaConversacion — selección de adapter (E2·T2)', () => {
     // Una segunda construcción NO repite el error.
     crearMemoriaConversacion();
     expect(console.error).toHaveBeenCalledTimes(1);
+  });
+});
+
+function fila(clave: string, valor: string): EntradaConfigCrm {
+  return { clave, valor, esSecreto: false, actualizadoPor: 'admin', actualizadoEn: new Date() };
+}
+
+function nombreDeAdapter(memoria: object): 'http' | 'simulada' | 'failClosed' {
+  if (memoria instanceof MemoriaEngramHttp) return 'http';
+  if (memoria instanceof MemoriaSimulada) return 'simulada';
+  return 'failClosed';
+}
+
+describe('crearMemoriaConversacionConfigurable (E5·T5b)', () => {
+  for (const url of ['http://127.0.0.1:7438', '']) {
+    for (const nodeEnv of ['development', 'production']) {
+      it(`mismo adapter que el de entorno: url='${url}' NODE_ENV=${nodeEnv}`, async () => {
+        vi.stubEnv('ENGRAM_CRM_URL', url);
+        vi.stubEnv('NODE_ENV', nodeEnv);
+        const esperado = nombreDeAdapter(crearMemoriaConversacion());
+
+        vi.stubEnv('ENGRAM_CRM_URL', '');
+        const filas = url === '' ? [] : [fila('memoria.url', url)];
+        const memoria = await crearMemoriaConversacionConfigurable({
+          config: { listar: async () => filas },
+        });
+
+        expect(nombreDeAdapter(memoria)).toBe(esperado);
+      });
+    }
+  }
+
+  it('sin config delega al comportamiento de entorno', async () => {
+    vi.stubEnv('ENGRAM_CRM_URL', 'http://127.0.0.1:7438');
+    expect(await crearMemoriaConversacionConfigurable({})).toBeInstanceOf(MemoriaEngramHttp);
+  });
+
+  it('la URL de la DB gana sobre el entorno y no hay caché entre llamadas', async () => {
+    vi.stubEnv('ENGRAM_CRM_URL', 'http://env:1');
+    vi.stubEnv('NODE_ENV', 'production');
+    let filas: EntradaConfigCrm[] = [];
+    const deps = { config: { listar: async () => filas } };
+
+    expect(await crearMemoriaConversacionConfigurable(deps)).toBeInstanceOf(MemoriaEngramHttp);
+    vi.stubEnv('ENGRAM_CRM_URL', '');
+    expect(nombreDeAdapter(await crearMemoriaConversacionConfigurable(deps))).toBe('failClosed');
+    filas = [fila('memoria.url', 'http://db:2')];
+    expect(await crearMemoriaConversacionConfigurable(deps)).toBeInstanceOf(MemoriaEngramHttp);
+  });
+
+  it('producción sin URL en ninguna fuente → fail closed MEMORIA_NO_CONFIGURADA', async () => {
+    vi.stubEnv('ENGRAM_CRM_URL', '');
+    vi.stubEnv('NODE_ENV', 'production');
+
+    const memoria = await crearMemoriaConversacionConfigurable({
+      config: { listar: async () => [] },
+    });
+
+    await expect(memoria.contexto(3)).rejects.toMatchObject({ codigo: 'MEMORIA_NO_CONFIGURADA' });
   });
 });

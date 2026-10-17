@@ -14,9 +14,11 @@ import type { ProcesarMensajeWhatsappUseCase } from './procesarMensajeWhatsapp';
  * vinculación → bandeja → respuesta manual) is demoable end-to-end
  * with zero code duplication.
  *
- * Guard: KAPSO_MODO === 'real' RECHAZA (SimulacionDesactivadaError)
- * — the simulator reads the env directly (testable with vi.stubEnv)
- * and must be impossible to trigger in production.
+ * Guard: when the caller injects `modoSimulado` (the already-resolved
+ * DB-over-env decision) it is authoritative; otherwise KAPSO_MODO ===
+ * 'real' RECHAZA (SimulacionDesactivadaError), read from the env
+ * directly (testable with vi.stubEnv). Must be impossible to trigger
+ * in production.
  */
 
 /** Typed 403: the simulator only exists while KAPSO_MODO !== 'real'. */
@@ -31,6 +33,8 @@ export class SimulacionDesactivadaError extends Error {
 
 export interface SimularMensajeEntranteDeps {
   procesar: ProcesarMensajeWhatsappUseCase;
+  /** Resolved simulated-mode decision; authoritative when provided. */
+  modoSimulado?: () => boolean | Promise<boolean>;
 }
 
 export interface ResultadoSimulacion {
@@ -48,7 +52,10 @@ export class SimularMensajeEntranteUseCase {
   constructor(private readonly deps: SimularMensajeEntranteDeps) {}
 
   async ejecutar(entrada: { telefono: string; texto: string }): Promise<ResultadoSimulacion> {
-    if (process.env.KAPSO_MODO === 'real') {
+    const permitido = this.deps.modoSimulado
+      ? await this.deps.modoSimulado()
+      : process.env.KAPSO_MODO !== 'real';
+    if (!permitido) {
       throw new SimulacionDesactivadaError();
     }
 

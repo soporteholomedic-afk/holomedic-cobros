@@ -4,9 +4,9 @@ import { ProcesarTareasAgenteUseCase } from '../../application/procesarTareasAge
 import type { ResultadoProcesarTareas } from '../../application/procesarTareasAgente';
 import { ProcesarIngestaConocimientoUseCase } from '../../application/conocimiento/procesarIngestaConocimiento';
 import { getCrmDb } from '../getCrmDb';
-import { crearMemoriaConversacion } from '../engram/crearMemoriaConversacion';
+import { crearMemoriaConversacionConfigurable } from '../engram/crearMemoriaConversacion';
 import { crearGeneradorRespuesta } from '../llm/crearGeneradorRespuesta';
-import { crearEnviadorWhatsapp } from '../whatsapp/crearEnviadorWhatsapp';
+import { crearEnviadorWhatsappConfigurable } from '../whatsapp/crearEnviadorWhatsapp';
 
 /**
  * Factory for the agent-task queue processor (agente-ia-crm E2·T5) —
@@ -59,9 +59,9 @@ export function crearProcesadorTareasAgente(): ProcesadorTareasAgente {
         conversaciones: db.conversaciones,
         mensajes: db.mensajes,
         conocimiento: db.conocimiento,
-        memoria: crearMemoriaConversacion(),
+        memoria: await crearMemoriaConversacionConfigurable({ config: configRepo }),
         generador: crearGeneradorRespuesta(),
-        whatsapp: crearEnviadorWhatsapp(),
+        whatsapp: await crearEnviadorWhatsappConfigurable({ config: configRepo }),
         empresas: db.empresas,
         ...(configRepo ? { config: () => resolverConfigAgente({ config: configRepo }) } : {}),
       });

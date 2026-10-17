@@ -83,17 +83,29 @@ async function conTimeout<T>(promesa: Promise<T>, timeoutMs: number): Promise<T>
   }
 }
 
+/**
+ * Explicit adapter config (E5·T5b). When omitted, the adapter reads the
+ * KAPSO_* env exactly as before; the configurable factory passes the
+ * resolved runtime config (DB over env) instead.
+ */
+export interface ConfigEnviadorKapso {
+  apiKey: string | null;
+  phoneNumberId: string | null;
+  timeoutMs: number;
+}
+
 export class EnviadorKapsoWhatsapp implements EnviadorWhatsappCrmPort {
   private readonly client: WhatsAppClient | null;
 
-  constructor() {
-    const apiKey = process.env.KAPSO_API_KEY;
+  constructor(private readonly config?: ConfigEnviadorKapso) {
+    const apiKey = config ? config.apiKey : process.env.KAPSO_API_KEY;
     this.client = apiKey ? new WhatsAppClient({ kapsoApiKey: apiKey, baseUrl: KAPSO_BASE_URL }) : null;
   }
 
   async enviar(datos: EnvioWhatsappCrm): Promise<ResultadoEnvioWhatsapp> {
-    const phoneNumberId = process.env.KAPSO_PHONE_NUMBER_ID;
-    if (this.client === null || phoneNumberId === undefined || phoneNumberId === '') {
+    const phoneNumberId = this.config ? this.config.phoneNumberId : process.env.KAPSO_PHONE_NUMBER_ID;
+    const timeoutMs = this.config ? this.config.timeoutMs : leerKapsoTimeoutMs();
+    if (this.client === null || phoneNumberId === undefined || phoneNumberId === null || phoneNumberId === '') {
       return {
         ok: false,
         error: 'KAPSO_NO_CONFIGURADO',
@@ -108,7 +120,7 @@ export class EnviadorKapsoWhatsapp implements EnviadorWhatsappCrmPort {
           to: datos.telefonoE164,
           body: datos.cuerpo,
         }),
-        leerKapsoTimeoutMs(),
+        timeoutMs,
       );
       const wamid = respuesta.messages[0]?.id;
       if (wamid === undefined || wamid === '') {
