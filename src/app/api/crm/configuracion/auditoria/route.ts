@@ -9,8 +9,7 @@ import { buildCrmError, mapCrmError, type CrmErrorResponse } from '../../empresa
  * `GET /api/crm/configuracion/auditoria?prefijo=agente.&limite=50`
  * (agente-ia-crm E5·T4, permiso `crm_configuracion`): newest-first
  * config audit trail. `limite` defaults to 50 and is capped at 200.
- * The repo filters by exact key only, so `prefijo` is applied here over
- * the newest LIMITE_MAX rows. Secret rows NEVER carry values on the
+ * `prefijo` is a literal prefix filter applied by the repo. Secret rows NEVER carry values on the
  * wire (nulled here even if an adapter regressed). `no-store`.
  */
 
@@ -61,11 +60,13 @@ export async function GET(request: Request): Promise<NextResponse<AuditoriaSucce
     const limite =
       Number.isFinite(parseado) && parseado > 0 ? Math.min(parseado, LIMITE_MAX) : LIMITE_DEFAULT;
 
-    const filas = await db.config.listarAuditoria({ limite: prefijo === '' ? limite : LIMITE_MAX });
-    const filtradas = prefijo === '' ? filas : filas.filter((fila) => fila.clave.startsWith(prefijo));
+    const filas = await db.config.listarAuditoria({
+      limite,
+      ...(prefijo === '' ? {} : { prefijo }),
+    });
 
     return NextResponse.json(
-      { success: true, auditoria: filtradas.slice(0, limite).map(aWire) },
+      { success: true, auditoria: filas.map(aWire) },
       { headers: { 'cache-control': 'no-store' } },
     );
   } catch (error) {

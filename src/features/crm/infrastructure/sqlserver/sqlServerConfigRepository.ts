@@ -2,6 +2,7 @@ import * as mssql from 'mssql';
 
 import type { AuditoriaConfigCrm, EntradaConfigCrm } from '../../domain/entities';
 import type {
+  CambioConfig,
   ConfigCrmRepository,
   EliminarConfigInput,
   GuardarConfigInput,
@@ -118,43 +119,28 @@ export class SqlServerConfigRepository implements ConfigCrmRepository {
   }
 
   async guardar(input: GuardarConfigInput): Promise<void> {
-    const clave = normalizarClave(input.clave);
-    if (input.valor.length > VALOR_MAX_CARACTERES) {
-      throw new Error(`El valor de configuración supera ${VALOR_MAX_CARACTERES} caracteres.`);
-    }
+    await this.guardarVarios(
+      [{ clave: input.clave, valor: input.valor, esSecreto: input.esSecreto }],
+      input.usuario,
+    );
+  }
+
+  async guardarVarios(cambios: CambioConfig[], usuario: string): Promise<void> {
+    // Validate EVERYTHING before opening the transaction: a bad entry
+    // never leaves a partial write behind.
+    const normalizados = cambios.map((cambio) => {
+      const clave = normalizarClave(cambio.clave);
+      if (cambio.valor.length > VALOR_MAX_CARACTERES) {
+        throw new Error(`El valor de configuración supera ${VALOR_MAX_CARACTERES} caracteres.`);
+      }
+      return { clave, valor: cambio.valor, esSecreto: cambio.esSecreto };
+    });
+    if (normalizados.length === 0) return;
 
     await withCrmTransaction(this.pool, async (tx) => {
-      // UPDLOCK/HOLDLOCK: the previous value read and the upsert are one
-      // atomic unit, so the audit row's valorAnterior is never stale.
-      const previa = await new mssql.Request(tx)
-        .input('clave', mssql.NVarChar(CLAVE_MAX_CARACTERES), clave)
-        .query<{ valor: string }>(
-          'SELECT valor FROM dbo.CRM_Config WITH (UPDLOCK, HOLDLOCK) WHERE clave = @clave',
-        );
-      const existente = previa.recordset[0];
-
-      await new mssql.Request(tx)
-        .input('clave', mssql.NVarChar(CLAVE_MAX_CARACTERES), clave)
-        .input('valor', mssql.NVarChar(VALOR_MAX_CARACTERES), input.valor)
-        .input('esSecreto', mssql.Bit, input.esSecreto)
-        .input('usuario', mssql.NVarChar(200), input.usuario)
-        .query(
-          existente
-            ? `UPDATE dbo.CRM_Config
-                  SET valor = @valor, esSecreto = @esSecreto,
-                      actualizadoPor = @usuario, actualizadoEn = SYSDATETIME()
-                WHERE clave = @clave`
-            : `INSERT INTO dbo.CRM_Config (clave, valor, esSecreto, actualizadoPor)
-                  VALUES (@clave, @valor, @esSecreto, @usuario)`,
-        );
-
-      await this.auditar(tx, {
-        clave,
-        usuario: input.usuario,
-        esSecreto: input.esSecreto,
-        valorAnterior: existente ? existente.valor : null,
-        valorNuevo: input.valor,
-      });
+      for (const cambio of normalizados) {
+        await this.upsertar(tx, cambio, usuario);
+      }
     });
   }
 
@@ -189,11 +175,20 @@ export class SqlServerConfigRepository implements ConfigCrmRepository {
     const request = this.pool
       .request()
       .input('limite', mssql.Int, acotarLimite(input.limite));
-    let filtro = '';
+    const condiciones: string[] = [];
     if (input.clave !== undefined) {
       request.input('clave', mssql.NVarChar(CLAVE_MAX_CARACTERES), input.clave);
-      filtro = 'WHERE clave = @clave';
+      condiciones.push('clave = @clave');
     }
+    if (input.prefijo !== undefined && input.prefijo !== '') {
+      request.input(
+        'patron',
+        mssql.NVarChar(CLAVE_MAX_CARACTERES * 2),
+        `${escaparLike(input.prefijo)}%`,
+      );
+      condiciones.push("clave LIKE @patron ESCAPE '\\'");
+    }
+    const filtro = condiciones.length > 0 ? `WHERE ${condiciones.join(' AND ')}` : '';
 
     const result = await request.query<AuditoriaRow>(
       `SELECT TOP (@limite) id, clave, usuario, valorAnterior, valorNuevo, esSecreto, creadoEn
@@ -202,6 +197,45 @@ export class SqlServerConfigRepository implements ConfigCrmRepository {
         ORDER BY id DESC`,
     );
     return result.recordset.map(mapearAuditoria);
+  }
+
+  /** Upsert one row + its audit row inside the caller's transaction. */
+  private async upsertar(
+    tx: mssql.Transaction,
+    cambio: CambioConfig,
+    usuario: string,
+  ): Promise<void> {
+    // UPDLOCK/HOLDLOCK: the previous value read and the upsert are one
+    // atomic unit, so the audit row's valorAnterior is never stale.
+    const previa = await new mssql.Request(tx)
+      .input('clave', mssql.NVarChar(CLAVE_MAX_CARACTERES), cambio.clave)
+      .query<{ valor: string }>(
+        'SELECT valor FROM dbo.CRM_Config WITH (UPDLOCK, HOLDLOCK) WHERE clave = @clave',
+      );
+    const existente = previa.recordset[0];
+
+    await new mssql.Request(tx)
+      .input('clave', mssql.NVarChar(CLAVE_MAX_CARACTERES), cambio.clave)
+      .input('valor', mssql.NVarChar(VALOR_MAX_CARACTERES), cambio.valor)
+      .input('esSecreto', mssql.Bit, cambio.esSecreto)
+      .input('usuario', mssql.NVarChar(200), usuario)
+      .query(
+        existente
+          ? `UPDATE dbo.CRM_Config
+                SET valor = @valor, esSecreto = @esSecreto,
+                    actualizadoPor = @usuario, actualizadoEn = SYSDATETIME()
+              WHERE clave = @clave`
+          : `INSERT INTO dbo.CRM_Config (clave, valor, esSecreto, actualizadoPor)
+                VALUES (@clave, @valor, @esSecreto, @usuario)`,
+      );
+
+    await this.auditar(tx, {
+      clave: cambio.clave,
+      usuario,
+      esSecreto: cambio.esSecreto,
+      valorAnterior: existente ? existente.valor : null,
+      valorNuevo: cambio.valor,
+    });
   }
 
   /** Append one trail row inside the caller's transaction. Secrets never store values. */

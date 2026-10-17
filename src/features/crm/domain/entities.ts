@@ -1016,6 +1016,17 @@ export interface EntradaConfigCrm {
   actualizadoEn: Date;
 }
 
+/** Where the effective value of a config key comes from. */
+export type FuenteConfig = 'db' | 'env' | 'default';
+
+/** Admin-facing view of a secret: NEVER the value, only presence and a mask. */
+export interface VistaSecretoConfig {
+  configurado: boolean;
+  mascara: string;
+  /** Present (true) when the stored ciphertext cannot be decrypted. */
+  ilegible?: true;
+}
+
 /** One CRM_ConfigAuditoria row. Values are null for secrets (never stored) and for absent old/new sides. */
 export interface AuditoriaConfigCrm {
   id: number;

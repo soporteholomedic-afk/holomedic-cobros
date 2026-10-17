@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { AuditoriaConfigCrm, EntradaConfigCrm } from '@/features/crm/domain/entities';
 import type {
+  CambioConfig,
   ConfigCrmRepository,
   GuardarConfigInput,
   ListarAuditoriaConfigInput,
@@ -29,6 +30,8 @@ class FakeConfig implements ConfigCrmRepository {
   guardados: GuardarConfigInput[] = [];
   auditoria: AuditoriaConfigCrm[] = [];
   limitePedido: number | undefined;
+  prefijoPedido: string | undefined;
+  lotes: CambioConfig[][] = [];
   falloEnGuardar: Error | null = null;
 
   async obtener(clave: string): Promise<EntradaConfigCrm | null> {
@@ -60,11 +63,20 @@ class FakeConfig implements ConfigCrmRepository {
     });
   }
 
+  async guardarVarios(cambios: CambioConfig[], usuario: string): Promise<void> {
+    if (this.falloEnGuardar) throw this.falloEnGuardar;
+    this.lotes.push(cambios);
+    for (const cambio of cambios) await this.guardar({ ...cambio, usuario });
+  }
+
   async eliminar(): Promise<void> {}
 
   async listarAuditoria(input?: ListarAuditoriaConfigInput): Promise<AuditoriaConfigCrm[]> {
     this.limitePedido = input?.limite;
-    return this.auditoria.slice(0, input?.limite ?? 50);
+    this.prefijoPedido = input?.prefijo;
+    return this.auditoria
+      .filter((fila) => input?.prefijo === undefined || fila.clave.startsWith(input.prefijo))
+      .slice(0, input?.limite ?? 50);
   }
 }
 
@@ -262,6 +274,15 @@ describe('GET /api/crm/configuracion/auditoria', () => {
 
     await getAuditoria(new Request(`${URL_AUDITORIA}?limite=abc`));
     expect(config.limitePedido).toBe(50);
+  });
+
+  it('passes the prefijo to the repo (no in-memory filtering) and omits it when absent', async () => {
+    await getAuditoria(new Request(`${URL_AUDITORIA}?prefijo=canal.&limite=7`));
+    expect(config.prefijoPedido).toBe('canal.');
+    expect(config.limitePedido).toBe(7);
+
+    await getAuditoria(new Request(URL_AUDITORIA));
+    expect(config.prefijoPedido).toBeUndefined();
   });
 
   it('filters by prefijo and honours the limit over the filtered rows', async () => {

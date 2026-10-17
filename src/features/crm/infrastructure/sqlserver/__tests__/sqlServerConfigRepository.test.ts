@@ -167,4 +167,83 @@ describe('SqlServerConfigRepository', () => {
       valorNuevo: null,
     });
   });
+
+  it('guardarVarios writes every entry and its audit rows atomically, secrets without values', async () => {
+    const a = `${PREFIJO}lote.a`;
+    const b = `${PREFIJO}lote.b`;
+
+    await repo.guardarVarios(
+      [
+        { clave: a, valor: '1', esSecreto: false },
+        { clave: b, valor: 'v1:cifrado', esSecreto: true },
+      ],
+      'ana',
+    );
+
+    expect((await repo.obtener(a))?.valor).toBe('1');
+    expect((await repo.obtener(b))).toMatchObject({ valor: 'v1:cifrado', esSecreto: true });
+    const auditoria = await repo.listarAuditoria({ prefijo: `${PREFIJO}lote.` });
+    expect(auditoria).toHaveLength(2);
+    const secreta = auditoria.find((fila) => fila.clave === b);
+    expect(secreta).toMatchObject({ valorAnterior: null, valorNuevo: null, esSecreto: true });
+    expect(auditoria.find((fila) => fila.clave === a)?.valorNuevo).toBe('1');
+  });
+
+  it('guardarVarios persists NOTHING when one entry of the batch is invalid', async () => {
+    const buena = `${PREFIJO}atomico.buena`;
+
+    await expect(
+      repo.guardarVarios(
+        [
+          { clave: buena, valor: 'x', esSecreto: false },
+          { clave: '   ', valor: 'y', esSecreto: false },
+        ],
+        'ana',
+      ),
+    ).rejects.toThrow();
+    await expect(
+      repo.guardarVarios(
+        [
+          { clave: buena, valor: 'x', esSecreto: false },
+          { clave: `${PREFIJO}atomico.larga`, valor: 'z'.repeat(2001), esSecreto: false },
+        ],
+        'ana',
+      ),
+    ).rejects.toThrow();
+
+    expect(await repo.obtener(buena)).toBeNull();
+    expect(await repo.listarAuditoria({ prefijo: `${PREFIJO}atomico.` })).toEqual([]);
+  });
+
+  it('guardarVarios rolls back earlier rows when a later statement fails in SQL', async () => {
+    const primera = `${PREFIJO}rollback.a`;
+    // Passes app-level validation but fails in SQL (user exceeds its column),
+    // after the first statements of the transaction already ran.
+    await expect(
+      repo.guardarVarios([{ clave: primera, valor: '1', esSecreto: false }], 'u'.repeat(300)),
+    ).rejects.toThrow();
+
+    expect(await repo.obtener(primera)).toBeNull();
+    expect(await repo.listarAuditoria({ prefijo: `${PREFIJO}rollback.` })).toEqual([]);
+  });
+
+  it('listarAuditoria filters by literal prefix (wildcards escaped), newest-first and with limite', async () => {
+    for (const clave of ['pref.a', 'pref.b', 'otro.c']) {
+      await repo.guardar({ clave: `${PREFIJO}${clave}`, valor: '1', esSecreto: false, usuario: 'u' });
+    }
+    await repo.guardar({ clave: `${PREFIJO}pref.a`, valor: '2', esSecreto: false, usuario: 'u' });
+
+    const todas = await repo.listarAuditoria({ prefijo: `${PREFIJO}pref.` });
+    expect(todas.map((fila) => fila.clave)).toEqual([
+      `${PREFIJO}pref.a`,
+      `${PREFIJO}pref.b`,
+      `${PREFIJO}pref.a`,
+    ]);
+    expect(todas[0].valorNuevo).toBe('2');
+
+    const acotadas = await repo.listarAuditoria({ prefijo: `${PREFIJO}pref.`, limite: 2 });
+    expect(acotadas).toHaveLength(2);
+    expect(await repo.listarAuditoria({ prefijo: `${PREFIJO}pref_.` })).toEqual([]);
+    expect(await repo.listarAuditoria({ prefijo: `${PREFIJO}%` })).toEqual([]);
+  });
 });

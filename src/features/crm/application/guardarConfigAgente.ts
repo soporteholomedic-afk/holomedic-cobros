@@ -32,7 +32,7 @@ export class ErrorConfigAgenteInvalida extends Error {
 }
 
 export interface GuardarConfigAgenteDeps {
-  config: Pick<ConfigCrmRepository, 'guardar' | 'listar'>;
+  config: Pick<ConfigCrmRepository, 'guardarVarios' | 'listar'>;
 }
 
 const LARGO_MAXIMO_TEXTO_ESCALADO = 500;
@@ -105,9 +105,12 @@ export class GuardarConfigAgenteUseCase {
       clave: CLAVES_CONFIG_AGENTE[campo],
       valor: serializar(campo, cambios),
     }));
-    // Writes are sequential: the ConfigCrmRepository port has no batch method, so atomicity is per key (validation above prevents bad-payload partials).
-    for (const escritura of escrituras) {
-      await this.deps.config.guardar({ ...escritura, esSecreto: false, usuario });
+    // One atomic write: all keys and their audit rows commit together or not at all.
+    if (escrituras.length > 0) {
+      await this.deps.config.guardarVarios(
+        escrituras.map((escritura) => ({ ...escritura, esSecreto: false })),
+        usuario,
+      );
     }
     return resolverConfigAgente({ config: this.deps.config });
   }

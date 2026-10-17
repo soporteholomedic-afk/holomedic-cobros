@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import type { EntradaConfigCrm } from '../../domain/entities';
-import type { GuardarConfigInput } from '../../domain/ports';
+import type { CambioConfig, GuardarConfigInput } from '../../domain/ports';
 import { CLAVES_CONFIG_AGENTE } from '../resolverConfigAgente';
 import { ErrorConfigAgenteInvalida, GuardarConfigAgenteUseCase } from '../guardarConfigAgente';
 
@@ -14,11 +14,15 @@ import { ErrorConfigAgenteInvalida, GuardarConfigAgenteUseCase } from '../guarda
 
 class FakeConfig {
   guardados: GuardarConfigInput[] = [];
+  lotes: CambioConfig[][] = [];
   almacen = new Map<string, string>();
 
-  async guardar(input: GuardarConfigInput): Promise<void> {
-    this.guardados.push(input);
-    this.almacen.set(input.clave, input.valor);
+  async guardarVarios(cambios: CambioConfig[], usuario: string): Promise<void> {
+    this.lotes.push(cambios);
+    for (const cambio of cambios) {
+      this.guardados.push({ ...cambio, usuario });
+      this.almacen.set(cambio.clave, cambio.valor);
+    }
   }
 
   async listar(prefijo: string): Promise<EntradaConfigCrm[]> {
@@ -98,6 +102,7 @@ describe('GuardarConfigAgenteUseCase — persistencia (E5·T3)', () => {
       { clave: CLAVES_CONFIG_AGENTE.horarioHasta, valor: '22', esSecreto: false, usuario: 'maria' },
       { clave: CLAVES_CONFIG_AGENTE.textoEscalado, valor: 'Hola', esSecreto: false, usuario: 'maria' },
     ]);
+    expect(config.lotes).toHaveLength(1);
     expect(resuelta).toMatchObject({
       habilitado: true,
       umbralConfianza: 0.75,

@@ -1238,8 +1238,17 @@ export interface EliminarConfigInput {
 export interface ListarAuditoriaConfigInput {
   /** Exact key filter; omit for the whole trail. */
   clave?: string;
+  /** Literal key prefix (LIKE wildcards escaped); combinable with `clave` and `limite`. */
+  prefijo?: string;
   /** Newest-first cap (default 50, max 200). */
   limite?: number;
+}
+
+/** One entry of an atomic batch write (see `guardarVarios`). */
+export interface CambioConfig {
+  clave: string;
+  valor: string;
+  esSecreto: boolean;
 }
 
 export interface ConfigCrmRepository {
@@ -1248,6 +1257,12 @@ export interface ConfigCrmRepository {
   listar(prefijo: string): Promise<EntradaConfigCrm[]>;
   /** Upsert + audit row in ONE transaction. */
   guardar(input: GuardarConfigInput): Promise<void>;
+  /**
+   * ALL upserts + their audit rows in ONE transaction: if any entry is
+   * invalid or fails, NOTHING is persisted. Secret entries are never audited
+   * with values, same as `guardar`.
+   */
+  guardarVarios(cambios: CambioConfig[], usuario: string): Promise<void>;
   /** Delete + audit row in ONE transaction; no-op when the key is absent. */
   eliminar(input: EliminarConfigInput): Promise<void>;
   listarAuditoria(input?: ListarAuditoriaConfigInput): Promise<AuditoriaConfigCrm[]>;
