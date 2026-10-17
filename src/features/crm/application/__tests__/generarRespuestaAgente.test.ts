@@ -596,6 +596,8 @@ interface OverridesFakes {
   ficha?: FichaDestilada | null;
   envio?: ResultadoEnvioWhatsapp;
   config?: Partial<ConfigAgente>;
+  /** E5·T3: config source override (async resolver) instead of the plain object. */
+  fuenteConfig?: () => Promise<ConfigAgente>;
   falloGuardar?: Error;
   identificacion?: IdentificacionExtraida | null;
   falloIdentificar?: Error;
@@ -648,7 +650,7 @@ function crearFakes(overrides: OverridesFakes = {}): {
     generador,
     whatsapp,
     ...(overrides.sinEmpresas === true ? {} : { empresas }),
-    config,
+    config: overrides.fuenteConfig ?? config,
   });
   return { conversaciones, mensajes, conocimiento, memoria, generador, whatsapp, empresas, useCase };
 }
@@ -1895,5 +1897,51 @@ describe('GenerarRespuestaAgenteUseCase — recall híbrido + síntesis del hilo
       'Intercambios: 1 del cliente, 0 de la Guía.\n' +
         'Último pedido del cliente: ¿Qué incluye el examen ocupacional?',
     );
+  });
+});
+
+describe('GenerarRespuestaAgenteUseCase — config en caliente (E5·T3)', () => {
+  it('un resolver que cambia habilitado entre dos ejecutar cambia el resultado a AGENTE_DESHABILITADO sin efectos', async () => {
+    let habilitado = true;
+    const fakes = crearFakes({
+      fuenteConfig: async () => ({ ...crearConfigAgente({}), habilitado }),
+    });
+
+    const primera = await fakes.useCase.ejecutar(1, AHORA);
+    expect(primera.resultado).toBe('RESPONDIDO');
+
+    habilitado = false;
+    const escritasPrevias = fakes.mensajes.escritas.length;
+    const enviosPrevios = fakes.whatsapp.envios.length;
+    const generacionesPrevias = fakes.generador.entradasGenerar.length;
+
+    const segunda = await fakes.useCase.ejecutar(1, AHORA);
+
+    expect(segunda).toEqual({
+      conversacionId: 1,
+      resultado: 'AGENTE_DESHABILITADO',
+      mensajeId: null,
+      score: null,
+    });
+    expect(fakes.mensajes.escritas).toHaveLength(escritasPrevias);
+    expect(fakes.whatsapp.envios).toHaveLength(enviosPrevios);
+    expect(fakes.generador.entradasGenerar).toHaveLength(generacionesPrevias);
+  });
+
+  it('resuelve la config UNA vez por ejecutar', async () => {
+    const fuenteConfig = vi.fn(async () => crearConfigAgente({}));
+    const fakes = crearFakes({ fuenteConfig });
+
+    await fakes.useCase.ejecutar(1, AHORA);
+
+    expect(fuenteConfig).toHaveBeenCalledTimes(1);
+  });
+
+  it('un config de objeto plano sigue funcionando (retrocompatible)', async () => {
+    const fakes = crearFakes({ config: { habilitado: false } });
+
+    const resultado = await fakes.useCase.ejecutar(1, AHORA);
+
+    expect(resultado.resultado).toBe('AGENTE_DESHABILITADO');
   });
 });

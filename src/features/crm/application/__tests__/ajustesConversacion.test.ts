@@ -157,3 +157,27 @@ describe('AjustesConversacionUseCase — actualizarMemoriaActiva (E3·T5)', () =
     );
   });
 });
+
+describe('AjustesConversacionUseCase — config asíncrona (E5·T3)', () => {
+  it('espera el resolver asíncrono de config al proyectar', async () => {
+    const repo = new FakeConversaciones();
+    repo.sembrar();
+    const useCase = new AjustesConversacionUseCase({
+      conversaciones: repo as unknown as ConstructorParameters<
+        typeof AjustesConversacionUseCase
+      >[0]['conversaciones'],
+      config: async () => ({ ...CONFIG_FIJA, umbralConfianza: 0.9, horarioHasta: 21 }),
+    });
+
+    const ajustes = await useCase.obtener(1);
+    const tras = await useCase.actualizarMemoriaActiva(1, false);
+
+    expect(ajustes.config).toEqual({
+      umbralConfianza: 0.9,
+      maxIntercambios: 6,
+      horarioDesde: 7,
+      horarioHasta: 21,
+    });
+    expect(tras.config.umbralConfianza).toBe(0.9);
+  });
+});

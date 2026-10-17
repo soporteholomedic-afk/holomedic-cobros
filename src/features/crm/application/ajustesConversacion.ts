@@ -45,7 +45,7 @@ export interface AjustesConversacionDeps {
     'obtenerPorId' | 'actualizarMemoriaActiva'
   >;
   /** Config source — default: the live env (crearConfigAgente). */
-  config?: () => ConfigAgente;
+  config?: () => ConfigAgente | Promise<ConfigAgente>;
 }
 
 export class AjustesConversacionUseCase {
@@ -79,13 +79,13 @@ export class AjustesConversacionUseCase {
     return this.proyectar(conversacion);
   }
 
-  private proyectar(conversacion: {
+  private async proyectar(conversacion: {
     estado: EstadoConversacion;
     modo: ModoConversacion;
     asignadaA: string | null;
     memoriaActiva?: boolean;
-  }): AjustesConversacion {
-    const config = (this.deps.config ?? crearConfigAgente)();
+  }): Promise<AjustesConversacion> {
+    const config = await (this.deps.config ?? crearConfigAgente)();
     return {
       estado: conversacion.estado,
       modo: conversacion.modo,

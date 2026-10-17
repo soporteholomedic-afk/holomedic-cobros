@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 
 import { getSession } from '@/lib/auth';
 import { getCrmDb } from '@/features/crm/infrastructure/getCrmDb';
+import { resolverConfigAgente } from '@/features/crm/application/resolverConfigAgente';
 import {
   AjustesConversacionUseCase,
   type AjustesConversacion,
@@ -53,10 +54,13 @@ export async function GET(
       return buildCrmError('VALIDATION_ERROR', '"id" debe ser un número entero positivo', 400);
     }
 
-    const { conversaciones: repo } = await getCrmDb();
+    const { conversaciones: repo, config } = await getCrmDb();
     if (!repo) return buildCrmError('INTERNAL_ERROR', 'CRM no configurado', 503);
 
-    const ajustes = await new AjustesConversacionUseCase({ conversaciones: repo }).obtener(id);
+    const ajustes = await new AjustesConversacionUseCase({
+      conversaciones: repo,
+      ...(config ? { config: () => resolverConfigAgente({ config }) } : {}),
+    }).obtener(id);
     return NextResponse.json({ success: true, ...ajustes } satisfies AjustesSuccess);
   } catch (error) {
     return mapCrmError('crm conversaciones [id] ajustes GET', error);
@@ -90,13 +94,13 @@ export async function POST(
       return buildCrmError('VALIDATION_ERROR', 'Cuerpo inválido: se requiere {memoriaActiva: boolean}', 400);
     }
 
-    const { conversaciones: repo } = await getCrmDb();
+    const { conversaciones: repo, config } = await getCrmDb();
     if (!repo) return buildCrmError('INTERNAL_ERROR', 'CRM no configurado', 503);
 
-    const ajustes = await new AjustesConversacionUseCase({ conversaciones: repo }).actualizarMemoriaActiva(
-      id,
-      body.memoriaActiva,
-    );
+    const ajustes = await new AjustesConversacionUseCase({
+      conversaciones: repo,
+      ...(config ? { config: () => resolverConfigAgente({ config }) } : {}),
+    }).actualizarMemoriaActiva(id, body.memoriaActiva);
     return NextResponse.json({ success: true, ...ajustes } satisfies AjustesSuccess);
   } catch (error) {
     return mapCrmError('crm conversaciones [id] ajustes POST', error);

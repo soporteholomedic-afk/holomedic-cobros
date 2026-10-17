@@ -1,4 +1,5 @@
 import { GenerarRespuestaAgenteUseCase } from '../../application/generarRespuestaAgente';
+import { resolverConfigAgente } from '../../application/resolverConfigAgente';
 import { ProcesarTareasAgenteUseCase } from '../../application/procesarTareasAgente';
 import type { ResultadoProcesarTareas } from '../../application/procesarTareasAgente';
 import { ProcesarIngestaConocimientoUseCase } from '../../application/conocimiento/procesarIngestaConocimiento';
@@ -51,6 +52,9 @@ export function crearProcesadorTareasAgente(): ProcesadorTareasAgente {
           'CRM no configurado: faltan repositorios de conversaciones/mensajes/conocimiento/ingesta/tareas',
         );
       }
+      // E5·T3: hot config — when the CRM_Config repo exists the engine
+      // re-reads the DB overrides on every run (env stays the fallback).
+      const configRepo = db.config;
       const motor = new GenerarRespuestaAgenteUseCase({
         conversaciones: db.conversaciones,
         mensajes: db.mensajes,
@@ -59,6 +63,7 @@ export function crearProcesadorTareasAgente(): ProcesadorTareasAgente {
         generador: crearGeneradorRespuesta(),
         whatsapp: crearEnviadorWhatsapp(),
         empresas: db.empresas,
+        ...(configRepo ? { config: () => resolverConfigAgente({ config: configRepo }) } : {}),
       });
       const useCase = new ProcesarTareasAgenteUseCase({
         tareas: db.tareas,

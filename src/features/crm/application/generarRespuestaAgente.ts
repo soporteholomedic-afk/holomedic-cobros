@@ -162,8 +162,12 @@ export interface GeneradorRespuestaAgenteDeps {
    * conversations, it just cannot auto-vincular.
    */
   empresas?: CrmEmpresaRepositoryPort;
-  /** Defaults to crearConfigAgente() (env-derived). */
-  config?: ConfigAgente;
+  /**
+   * Defaults to crearConfigAgente() (env-derived). A resolver is
+   * awaited ONCE at the start of each `ejecutar` (E5·T3 hot config),
+   * so a kill-switch flip applies on the very next run.
+   */
+  config?: ConfigAgente | (() => Promise<ConfigAgente>);
 }
 
 /** Thread page size for the whole-thread load (hilo precedent: 50). */
@@ -253,10 +257,13 @@ function textoNoVacio(valor: string | null | undefined): string | null {
 }
 
 export class GenerarRespuestaAgenteUseCase {
-  private readonly config: ConfigAgente;
+  constructor(private readonly deps: GeneradorRespuestaAgenteDeps) {}
 
-  constructor(private readonly deps: GeneradorRespuestaAgenteDeps) {
-    this.config = deps.config ?? crearConfigAgente();
+  /** Resolve the engine config for ONE run (plain object, resolver or env default). */
+  private async resolverConfig(): Promise<ConfigAgente> {
+    const fuente = this.deps.config;
+    if (fuente === undefined) return crearConfigAgente();
+    return typeof fuente === 'function' ? fuente() : fuente;
   }
 
   async ejecutar(
@@ -264,6 +271,9 @@ export class GenerarRespuestaAgenteUseCase {
     ahora: Date = new Date(),
     opciones: OpcionesEjecutarMotor = {},
   ): Promise<ResultadoAgente> {
+    // E5·T3: the config is resolved ONCE per run (hot DB config), so
+    // a kill-switch flip applies on the very next run.
+    const config = await this.resolverConfig();
     const sinEfectos = (resultado: ResultadoMotorAgente): ResultadoAgente => ({
       conversacionId,
       resultado,
@@ -290,11 +300,11 @@ export class GenerarRespuestaAgenteUseCase {
     }
 
     // 2. Kill switch — global off, zero side effects.
-    if (!this.config.habilitado) return sinEfectos('AGENTE_DESHABILITADO');
+    if (!config.habilitado) return sinEfectos('AGENTE_DESHABILITADO');
 
     // 3. Business hours (local wall clock, overnight wrap honored): the
     //    message waits, the conversation stays ACTIVA_IA untouched.
-    if (esFueraDeHorario(ahora, this.config.horarioDesde, this.config.horarioHasta)) {
+    if (esFueraDeHorario(ahora, config.horarioDesde, config.horarioHasta)) {
       return sinEfectos('FUERA_DE_HORARIO');
     }
 
@@ -309,7 +319,7 @@ export class GenerarRespuestaAgenteUseCase {
     //    window — a long thread must still hit the cap.
     const hiloDesc = await this.cargarHilo(conversacionId);
     const limiteAlcanzado =
-      hiloDesc.filter((mensaje) => mensaje.emisor === 'IA').length >= this.config.maxIntercambios;
+      hiloDesc.filter((mensaje) => mensaje.emisor === 'IA').length >= config.maxIntercambios;
 
     // 5. The trigger: the last IN/CLIENTE cuerpo (the thread is
     //    newest-first, so the FIRST match scanning down IS the last
@@ -414,7 +424,7 @@ export class GenerarRespuestaAgenteUseCase {
       (conIndicacion ||
         (respuesta.enScope &&
           !respuesta.requiereAyudaHumana &&
-          respuesta.scoreConfianza >= this.config.umbralConfianza));
+          respuesta.scoreConfianza >= config.umbralConfianza));
     if (conIndicacion && respuesta !== null && respuesta.requiereAyudaHumana) {
       // The human already intervened (the indicación) — answering is
       // right, but the model asking for help anyway deserves a warn.
@@ -427,7 +437,7 @@ export class GenerarRespuestaAgenteUseCase {
     const textoFinal =
       respuesta !== null && responder
         ? limpiarCitasRespuesta(respuesta.texto)
-        : this.config.textoEscalado;
+        : config.textoEscalado;
     // Audit: null score/modelo ONLY on the limit escalation (no
     // generation happened); a confidence-based escalation still audits
     // the score the model reported. E4·T1: promptVersion follows the
