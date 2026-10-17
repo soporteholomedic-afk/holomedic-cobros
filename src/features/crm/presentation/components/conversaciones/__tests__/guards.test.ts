@@ -6,6 +6,7 @@ import {
   esFichaConversacion,
   esHiloConversacion,
   esListadoMemorias,
+  esMensajeCierreAgente,
   esMensajeCrm,
   esSolicitudAyuda,
   esUsuariosAsignables,
@@ -13,6 +14,7 @@ import {
   previsualizarUltimoMensaje,
 } from '../guards';
 import type { ConversacionListada, MensajeCrm } from '../../../../domain/entities';
+import { TEXTO_CONFIRMACION_CIERRE } from '../../../../domain/textosCierreAgente';
 
 /**
  * Guard + pure-helper contract for the E2·T6 bandeja additions:
@@ -277,5 +279,21 @@ describe('esMensajeCrm fidelidad/deficiente (E4·T5)', () => {
   it('rechaza tipos extraños (fidelidad string, deficiente string)', () => {
     expect(esMensajeCrm(mensaje({ fidelidad: 'alta' as never }))).toBe(false);
     expect(esMensajeCrm(mensaje({ deficiente: 'si' as never }))).toBe(false);
+  });
+});
+
+// ---- E5·T10: marca de cierre de La Guía ----
+
+describe('esMensajeCierreAgente (E5·T10)', () => {
+  it('true con cada texto fijo de confirmación y tolera espacios', () => {
+    for (const texto of Object.values(TEXTO_CONFIRMACION_CIERRE)) {
+      expect(esMensajeCierreAgente(texto)).toBe(true);
+    }
+    expect(esMensajeCierreAgente(`  ${TEXTO_CONFIRMACION_CIERRE.CONVERSION_CLIENTE} `)).toBe(true);
+  });
+
+  it('false con texto parcial u otro', () => {
+    expect(esMensajeCierreAgente(TEXTO_CONFIRMACION_CIERRE.ACEPTACION.slice(0, 30))).toBe(false);
+    expect(esMensajeCierreAgente('Te confirmo el turno')).toBe(false);
   });
 });

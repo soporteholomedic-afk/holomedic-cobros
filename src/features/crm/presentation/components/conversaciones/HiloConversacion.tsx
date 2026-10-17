@@ -8,6 +8,7 @@ import { useHiloConversacion } from '../../hooks/useHiloConversacion';
 import { formatearFecha } from '../../etiquetas';
 import {
   ETIQUETA_ESTADO_CONVERSACION,
+  esMensajeCierreAgente,
   formatearTelefono,
   iniciales,
   parsearTitulosFuentes,
@@ -82,6 +83,7 @@ function Burbuja({
   // E4·T5: la fidelidad autoevaluada se muestra SOLO cuando la fila la
   // trae (guard tolerante — filas pre-E4 → undefined → sin línea).
   const fidelidad = esIa && typeof mensaje.fidelidad === 'number' ? mensaje.fidelidad : null;
+  const esCierre = esIa && esMensajeCierreAgente(mensaje.cuerpo);
   const puedeMarcarDeficiente = esIa && mensaje.deficiente !== true && onMarcarDeficiente !== undefined;
   return (
     <div
@@ -91,7 +93,7 @@ function Burbuja({
         {ETIQUETA_EMISOR[mensaje.emisor]}
       </span>
       <span className="whitespace-pre-wrap break-words">{mensaje.cuerpo}</span>
-      {(mensaje.score !== null && esIa) || titulosFuentes.length > 0 || fidelidad !== null ? (
+      {(mensaje.score !== null && esIa) || titulosFuentes.length > 0 || fidelidad !== null || esCierre ? (
         <span className="mt-1 flex flex-wrap items-center gap-1.5">
           {esIa && mensaje.score !== null && (
             <span className="inline-flex items-center rounded-full bg-white/20 px-2 py-0.5 text-[10px] font-semibold">
@@ -104,6 +106,14 @@ function Burbuja({
           {esIa && mensaje.deficiente === true && (
             <span className="inline-flex items-center rounded-full bg-amber-400/90 px-2 py-0.5 text-[10px] font-semibold text-amber-950">
               ⚠ marcada deficiente
+            </span>
+          )}
+          {/* E5·T10: el cierre autónomo deja su marca en el hilo (texto +
+              ícono, no solo color). */}
+          {esCierre && (
+            <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold text-emerald-900 dark:bg-emerald-900/60 dark:text-emerald-100">
+              <span aria-hidden="true">✓</span>
+              Cierre registrado por La Guía
             </span>
           )}
           {(titulosFuentes.length > 0 || fidelidad !== null) && (

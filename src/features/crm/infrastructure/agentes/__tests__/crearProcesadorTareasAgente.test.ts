@@ -224,6 +224,29 @@ describe('crearProcesadorTareasAgente — config en caliente (E5·T3 gap)', () =
   });
 });
 
+describe('crearProcesadorTareasAgente — cierre autónomo (E5·T10)', () => {
+  interface DepsMotorCierre {
+    cerrarTrato?: { execute?: unknown };
+    pipelines?: unknown;
+    whatsapp?: unknown;
+  }
+
+  it('el motor recibe la capacidad de cierre y el repo de pipelines del contenedor', async () => {
+    const pipeline = { obtenerPorEmpresaId: async () => null } as unknown as NonNullable<CrmDb['pipeline']>;
+    __setCrmDbForTests({
+      ...armarDb(new FakeTareas(), new FakeIngestas(), new FakeConocimiento()),
+      pipeline,
+      empresas: {} as NonNullable<CrmDb['empresas']>,
+    });
+
+    await crearProcesadorTareasAgente().procesar(1);
+
+    const deps = motorMocks.depsMotor.mock.calls[0]?.[0] as DepsMotorCierre;
+    expect(deps.cerrarTrato?.execute).toBeTypeOf('function');
+    expect(deps.pipelines).toBe(pipeline);
+  });
+});
+
 describe('crearProcesadorTareasAgente — cable INGESTAR_CONOCIMIENTO (E4·T7)', () => {
   it('una tarea INGESTAR reclamada se ingesta de punta a punta con los repos del contenedor y queda COMPLETADA', async () => {
     const tareas = new FakeTareas();

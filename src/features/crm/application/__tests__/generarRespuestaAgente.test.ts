@@ -38,12 +38,20 @@ import type {
   ModoConversacion,
   ObservacionDestilada,
   ObservacionMemoria,
+  PipelineEmpresa,
   RespuestaGenerada,
   ResultadoDestilacion,
   ResultadoGuardarMemoria,
   SolicitudAyuda,
 } from '../../domain/entities';
-import { enmascararTelefonos, GenerarRespuestaAgenteUseCase } from '../generarRespuestaAgente';
+import {
+  enmascararTelefonos,
+  GenerarRespuestaAgenteUseCase,
+  type GeneradorRespuestaAgenteDeps,
+} from '../generarRespuestaAgente';
+import type { CerrarTratoAgenteInput, ResultadoCierreAgente } from '../cerrarTratoAgente';
+import { ValidationError } from '../../domain/errors';
+
 import { crearConfigAgente, type ConfigAgente } from '../configAgente';
 
 /**
@@ -606,6 +614,8 @@ interface OverridesFakes {
   sinEmpresas?: boolean;
   /** E3·T4: el upsert de ficha rechaza (best-effort). */
   falloUpsertFicha?: Error;
+  /** E5·T10: deps opcionales extra del motor (cerrarTrato / pipelines). */
+  extras?: Partial<GeneradorRespuestaAgenteDeps>;
 }
 
 function crearFakes(overrides: OverridesFakes = {}): {
@@ -651,6 +661,7 @@ function crearFakes(overrides: OverridesFakes = {}): {
     whatsapp,
     ...(overrides.sinEmpresas === true ? {} : { empresas }),
     config: overrides.fuenteConfig ?? config,
+    ...overrides.extras,
   });
   return { conversaciones, mensajes, conocimiento, memoria, generador, whatsapp, empresas, useCase };
 }
@@ -700,6 +711,7 @@ describe('GenerarRespuestaAgenteUseCase — no-ops con cero efectos (E2·T4)', (
       mensajeId: null,
       score: null,
       senalCierre: null,
+      cierre: null,
     });
     sinEfectos(fakes);
   });
@@ -737,6 +749,7 @@ describe('GenerarRespuestaAgenteUseCase — no-ops con cero efectos (E2·T4)', (
       mensajeId: null,
       score: null,
       senalCierre: null,
+      cierre: null,
     });
     sinEfectos(fakes);
   });
@@ -813,6 +826,7 @@ describe('GenerarRespuestaAgenteUseCase — límite de intercambios (E2·T4)', (
       score: null,
 
       senalCierre: null,
+      cierre: null,
     });
     expect(fakes.generador.entradasGenerar).toEqual([]);
     expect(fakes.conocimiento.consultas).toEqual([]);
@@ -898,6 +912,7 @@ describe('GenerarRespuestaAgenteUseCase — happy path RESPONDIDO (E2·T4)', () 
       score: 0.9,
 
       senalCierre: null,
+      cierre: null,
     });
 
     // Recall: conocimiento con la consulta ORIGINAL y memoria solo por empresa.
@@ -987,6 +1002,7 @@ describe('GenerarRespuestaAgenteUseCase — fallo de envío (E2·T4)', () => {
       score: 0.9,
 
       senalCierre: null,
+      cierre: null,
     });
     expect(fakes.mensajes.filas.find((f) => f.id === 1000)?.estadoEnvio).toBe('FALLIDO');
     expect(fakes.conversaciones.filas[0]?.estado).toBe('ACTIVA_IA');
@@ -1994,6 +2010,7 @@ describe('GenerarRespuestaAgenteUseCase — config en caliente (E5·T3)', () => 
       mensajeId: null,
       score: null,
       senalCierre: null,
+      cierre: null,
     });
     expect(fakes.mensajes.escritas).toHaveLength(escritasPrevias);
     expect(fakes.whatsapp.envios).toHaveLength(enviosPrevios);
@@ -2015,5 +2032,233 @@ describe('GenerarRespuestaAgenteUseCase — config en caliente (E5·T3)', () => 
     const resultado = await fakes.useCase.ejecutar(1, AHORA);
 
     expect(resultado.resultado).toBe('AGENTE_DESHABILITADO');
+  });
+});
+
+describe('GenerarRespuestaAgenteUseCase — cierre autónomo (E5·T10)', () => {
+  const SENAL = { tipo: 'ACEPTACION', confianza: 0.9 } as const;
+  const CIERRE_OK: ResultadoCierreAgente = {
+    cerrado: true,
+    tipo: 'ACEPTACION',
+    confirmacion: 'ENVIADA',
+    mensajeId: 99,
+  };
+
+  function pipelineCadencia(): PipelineEmpresa {
+    return {
+      empresaId: 7,
+      flujo: 'OUTBOUND',
+      etapa: 'CADENCIA',
+      ciclo: 1,
+      enviosCiclo: 1,
+      fechaCicloInicio: null,
+      fechaUltimoEnvio: null,
+      descansoHasta: null,
+      rechazadoHasta: null,
+      motivoRechazo: null,
+      updatedBy: null,
+      updatedAt: '2026-05-01T10:00:00.000Z',
+    };
+  }
+
+  interface Armado {
+    fakes: ReturnType<typeof crearFakes>;
+    cerrarTrato: { execute: ReturnType<typeof vi.fn<(i: CerrarTratoAgenteInput) => Promise<ResultadoCierreAgente>>> };
+    pipelines: { obtenerPorEmpresaId: ReturnType<typeof vi.fn<(id: number) => Promise<PipelineEmpresa | null>>> };
+    log: string[];
+  }
+
+  function armar(
+    overrides: OverridesFakes = {},
+    opciones: { tipo?: Empresa['tipo']; sinCerrar?: boolean; sinPipelines?: boolean; sinEmpresas?: boolean } = {},
+  ): Armado {
+    const log: string[] = [];
+    const cerrarTrato = {
+      execute: vi.fn<(i: CerrarTratoAgenteInput) => Promise<ResultadoCierreAgente>>(async () => {
+        log.push('cerrar');
+        return CIERRE_OK;
+      }),
+    };
+    const pipelines = {
+      obtenerPorEmpresaId: vi.fn<(id: number) => Promise<PipelineEmpresa | null>>(async () => pipelineCadencia()),
+    };
+    const fakes = crearFakes({
+      ...overrides,
+      extras: {
+        ...(opciones.sinCerrar === true ? {} : { cerrarTrato }),
+        ...(opciones.sinPipelines === true ? {} : { pipelines }),
+      },
+    });
+    if (fakes.empresas !== null) {
+      const empresa = empresaCrm({ tipo: opciones.tipo ?? 'Cliente' });
+      fakes.empresas.obtenerPorId = vi.fn(async () => empresa);
+    }
+    const enviar = fakes.whatsapp.enviar.bind(fakes.whatsapp);
+    fakes.whatsapp.enviar = async (datos) => {
+      log.push('enviar');
+      return enviar(datos);
+    };
+    const destilar = fakes.generador.destilar.bind(fakes.generador);
+    fakes.generador.destilar = async (entrada) => {
+      log.push('destilar');
+      return destilar(entrada);
+    };
+    const identificar = fakes.generador.extraerIdentificacion.bind(fakes.generador);
+    fakes.generador.extraerIdentificacion = async (entrada) => {
+      log.push('identificar');
+      return identificar(entrada);
+    };
+    return { fakes, cerrarTrato, pipelines, log };
+  }
+
+  it('pasa cierresPosibles al generador cuando hay deps, empresa+contacto y posibilidades', async () => {
+    const { fakes } = armar();
+
+    await fakes.useCase.ejecutar(1, AHORA);
+
+    expect(fakes.generador.entradasGenerar[0]?.cierresPosibles).toEqual(['ACEPTACION']);
+  });
+
+  it('omite la clave cierresPosibles (forma vieja) cuando no hay posibilidades', async () => {
+    const { fakes, pipelines } = armar();
+    pipelines.obtenerPorEmpresaId.mockResolvedValue({ ...pipelineCadencia(), flujo: 'INBOUND', etapa: 'REGISTRADO' });
+
+    await fakes.useCase.ejecutar(1, AHORA);
+
+    expect(Object.keys(fakes.generador.entradasGenerar[0] ?? {})).not.toContain('cierresPosibles');
+  });
+
+  it('sin cerrarTrato / sin pipelines / sin empresas / desvinculada / con indicación: cero lookups y sin clave', async () => {
+    const casos: Array<[string, Armado, Parameters<GenerarRespuestaAgenteUseCase['ejecutar']>[2]?]> = [
+      ['sin cerrarTrato', armar({}, { sinCerrar: true })],
+      ['sin pipelines', armar({}, { sinPipelines: true })],
+      ['sin empresas', armar({ sinEmpresas: true })],
+      ['desvinculada', armar({ conversacion: conversacionDesvinculada() })],
+      ['con indicación', armar({}), { indicacionHumana: 'Respondé que sí' }],
+    ];
+    for (const [nombre, armado, opciones] of casos) {
+      await armado.fakes.useCase.ejecutar(1, AHORA, opciones);
+      expect(Object.keys(armado.fakes.generador.entradasGenerar[0] ?? {}), nombre).not.toContain('cierresPosibles');
+      expect(armado.pipelines.obtenerPorEmpresaId, nombre).not.toHaveBeenCalled();
+    }
+  });
+
+  it('un throw al cargar empresa/pipeline se loguea (solo ids) y la respuesta sale igual sin cierresPosibles', async () => {
+    const { fakes, pipelines } = armar();
+    pipelines.obtenerPorEmpresaId.mockRejectedValue(new Error('db caída con datos'));
+
+    const resultado = await fakes.useCase.ejecutar(1, AHORA);
+
+    expect(resultado.resultado).toBe('RESPONDIDO');
+    expect(Object.keys(fakes.generador.entradasGenerar[0] ?? {})).not.toContain('cierresPosibles');
+    expect(fakes.whatsapp.envios).toHaveLength(1);
+    expect(JSON.stringify(vi.mocked(console.error).mock.calls)).not.toContain('datos');
+  });
+
+  it('con señal llama a cerrarTrato UNA vez con la config de la corrida, DESPUÉS de enviar y destilar', async () => {
+    const { fakes, cerrarTrato, log } = armar({ respuesta: { senalCierre: SENAL } });
+
+    const resultado = await fakes.useCase.ejecutar(1, AHORA);
+
+    expect(cerrarTrato.execute).toHaveBeenCalledTimes(1);
+    const entrada = cerrarTrato.execute.mock.calls[0]?.[0];
+    expect(entrada?.conversacionId).toBe(1);
+    expect(entrada?.senal).toEqual(SENAL);
+    expect(entrada?.config.habilitado).toBe(true);
+    expect(log).toEqual(['enviar', 'destilar', 'cerrar']);
+    expect(resultado.cierre).toEqual(CIERRE_OK);
+    expect(resultado.senalCierre).toEqual(SENAL);
+  });
+
+  it('en una conversación sin contacto el cierre va después de la identificación', async () => {
+    const { fakes, cerrarTrato, log } = armar({
+      conversacion: conversacionDesvinculada(),
+      respuesta: { senalCierre: SENAL },
+    });
+
+    await fakes.useCase.ejecutar(1, AHORA);
+
+    expect(cerrarTrato.execute).toHaveBeenCalledTimes(1);
+    expect(log).toEqual(['enviar', 'identificar', 'cerrar']);
+  });
+
+  it('usa la MISMA config resuelta al inicio de la corrida', async () => {
+    let habilitado = true;
+    const { fakes, cerrarTrato } = armar({
+      respuesta: { senalCierre: SENAL },
+      fuenteConfig: async () => ({ ...crearConfigAgente({}), habilitado, umbralConfianza: 0.66 }),
+    });
+    cerrarTrato.execute.mockImplementation(async () => {
+      habilitado = false;
+      return CIERRE_OK;
+    });
+
+    await fakes.useCase.ejecutar(1, AHORA);
+
+    expect(cerrarTrato.execute.mock.calls[0]?.[0].config.umbralConfianza).toBe(0.66);
+    expect(cerrarTrato.execute.mock.calls[0]?.[0].config.habilitado).toBe(true);
+  });
+
+  it('no llama a cerrarTrato sin señal, sin dep, en ESCALADO, FALLIDO_ENVIO, límite, no-ops ni con indicación', async () => {
+    const sinSenal = armar();
+    await sinSenal.fakes.useCase.ejecutar(1, AHORA);
+
+    const sinDep = armar({ respuesta: { senalCierre: SENAL } }, { sinCerrar: true });
+    expect((await sinDep.fakes.useCase.ejecutar(1, AHORA)).cierre).toBeNull();
+
+    const escalado = armar({ respuesta: { scoreConfianza: 0.2, senalCierre: SENAL } });
+    await escalado.fakes.useCase.ejecutar(1, AHORA);
+
+    const fallido = armar({
+      respuesta: { senalCierre: SENAL },
+      envio: { ok: false, error: 'KAPSO_ERROR', detalle: 'x' },
+    });
+    await fallido.fakes.useCase.ejecutar(1, AHORA);
+
+    const limite = armar({
+      respuesta: { senalCierre: SENAL },
+      config: { maxIntercambios: 1 },
+      hilo: [mensajeDeHilo(1, 'CLIENTE', 'IN', CONSULTA), mensajeDeHilo(2, 'IA', 'OUT', 'previa')],
+    });
+    await limite.fakes.useCase.ejecutar(1, AHORA);
+
+    const noop = armar({ respuesta: { senalCierre: SENAL }, config: { habilitado: false } });
+    await noop.fakes.useCase.ejecutar(1, AHORA);
+
+    const indicacion = armar({ respuesta: { senalCierre: SENAL } });
+    await indicacion.fakes.useCase.ejecutar(1, AHORA, { indicacionHumana: 'Respondé que sí' });
+
+    for (const armado of [sinSenal, escalado, fallido, limite, noop, indicacion]) {
+      expect(armado.cerrarTrato.execute).not.toHaveBeenCalled();
+    }
+  });
+
+  it('un throw de cerrarTrato no cambia resultado/mensajeId/score y se loguea sin cuerpo ni teléfono', async () => {
+    const { fakes, cerrarTrato } = armar({ respuesta: { senalCierre: SENAL } });
+    cerrarTrato.execute.mockRejectedValue(
+      new ValidationError('ya es Cliente +595981234567'),
+    );
+    const base = armar({ respuesta: { senalCierre: SENAL } });
+    const esperado = await base.fakes.useCase.ejecutar(1, AHORA);
+
+    const resultado = await fakes.useCase.ejecutar(1, AHORA);
+
+    expect(resultado.resultado).toBe('RESPONDIDO');
+    expect(resultado.mensajeId).toBe(esperado.mensajeId);
+    expect(resultado.score).toBe(esperado.score);
+    expect(resultado.cierre).toBeNull();
+    const volcado = JSON.stringify(vi.mocked(console.error).mock.calls);
+    expect(volcado).toContain('"conversacionId":1');
+    expect(volcado).not.toContain('595981234567');
+    expect(volcado).not.toContain('examen');
+  });
+
+  it('un rechazo del caso de uso (cerrado:false) se propaga en cierre', async () => {
+    const { fakes, cerrarTrato } = armar({ respuesta: { senalCierre: SENAL } });
+    cerrarTrato.execute.mockResolvedValue({ cerrado: false, motivo: 'CIERRE_NO_APLICA' });
+
+    const resultado = await fakes.useCase.ejecutar(1, AHORA);
+
+    expect(resultado.cierre).toEqual({ cerrado: false, motivo: 'CIERRE_NO_APLICA' });
   });
 });

@@ -1,8 +1,10 @@
+import { CerrarTratoAgenteUseCase } from '../../application/cerrarTratoAgente';
 import { GenerarRespuestaAgenteUseCase } from '../../application/generarRespuestaAgente';
 import { resolverConfigAgente } from '../../application/resolverConfigAgente';
 import { ProcesarTareasAgenteUseCase } from '../../application/procesarTareasAgente';
 import type { ResultadoProcesarTareas } from '../../application/procesarTareasAgente';
 import { ProcesarIngestaConocimientoUseCase } from '../../application/conocimiento/procesarIngestaConocimiento';
+import type { Clock } from '../../domain/ports';
 import { getCrmDb } from '../getCrmDb';
 import { crearMemoriaConversacionConfigurable } from '../engram/crearMemoriaConversacion';
 import { crearGeneradorRespuesta } from '../llm/crearGeneradorRespuesta';
@@ -55,14 +57,28 @@ export function crearProcesadorTareasAgente(): ProcesadorTareasAgente {
       // E5·T3: hot config — when the CRM_Config repo exists the engine
       // re-reads the DB overrides on every run (env stays the fallback).
       const configRepo = db.config;
+      // E5·T10: the SAME enviador instance feeds the motor and the close
+      // confirmation, so both honor one canal configuration per drain.
+      const whatsapp = await crearEnviadorWhatsappConfigurable({ config: configRepo });
+      const clock: Clock = () => new Date();
+      const cerrarTrato = new CerrarTratoAgenteUseCase({
+        conversaciones: db.conversaciones,
+        mensajes: db.mensajes,
+        empresas: db.empresas,
+        pipelines: db.pipeline,
+        whatsapp,
+        clock,
+      });
       const motor = new GenerarRespuestaAgenteUseCase({
         conversaciones: db.conversaciones,
         mensajes: db.mensajes,
         conocimiento: db.conocimiento,
         memoria: await crearMemoriaConversacionConfigurable({ config: configRepo }),
         generador: crearGeneradorRespuesta(),
-        whatsapp: await crearEnviadorWhatsappConfigurable({ config: configRepo }),
+        whatsapp,
         empresas: db.empresas,
+        cerrarTrato,
+        pipelines: db.pipeline,
         ...(configRepo ? { config: () => resolverConfigAgente({ config: configRepo }) } : {}),
       });
       const useCase = new ProcesarTareasAgenteUseCase({

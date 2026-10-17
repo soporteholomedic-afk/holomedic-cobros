@@ -12,11 +12,13 @@ import type {
   RespuestaGenerada,
   ResultadoDestilacion,
   SenalCierre,
+  TipoCierreAgente,
 } from '../domain/entities';
 import type {
   ConocimientoCrmRepository,
   ConversacionCrmRepository,
   CrmEmpresaRepositoryPort,
+  CrmPipelineRepositoryPort,
   EnviadorWhatsappCrmPort,
   GeneradorRespuestaPort,
   ListarMensajesOpciones,
@@ -33,6 +35,11 @@ import {
   TOP_K_MEMORIA,
   type ConfigAgente,
 } from './configAgente';
+import {
+  cierresPosiblesDe,
+  type CerrarTratoAgenteInput,
+  type ResultadoCierreAgente,
+} from './cerrarTratoAgente';
 import { limpiarCitasRespuesta } from './limpiarCitasRespuesta';
 import { PROMPT_VERSION } from './prompt/promptGeneracion';
 import { rankearMemorias } from './rankearMemorias';
@@ -141,6 +148,12 @@ export interface ResultadoAgente {
    * path. The motor does not act on it (a later task validates it).
    */
   senalCierre: SenalCierre | null;
+  /**
+   * E5·T10: what the close attempt returned. null when there was no
+   * signal, no close capability, no RESPONDIDO outcome or the attempt
+   * threw (logged, never propagated).
+   */
+  cierre: ResultadoCierreAgente | null;
 }
 
 /**
@@ -169,6 +182,16 @@ export interface GeneradorRespuestaAgenteDeps {
    * conversations, it just cannot auto-vincular.
    */
   empresas?: CrmEmpresaRepositoryPort;
+  /**
+   * E5·T10: OPTIONAL close capability (structural — CerrarTratoAgente
+   * UseCase satisfies it). Absent ⇒ the engine never offers nor
+   * executes closes.
+   */
+  cerrarTrato?: {
+    execute(input: CerrarTratoAgenteInput): Promise<ResultadoCierreAgente>;
+  };
+  /** E5·T10: pipeline lookup feeding `cierresPosibles` (needs cerrarTrato + empresas). */
+  pipelines?: Pick<CrmPipelineRepositoryPort, 'obtenerPorEmpresaId'>;
   /**
    * Defaults to crearConfigAgente() (env-derived). A resolver is
    * awaited ONCE at the start of each `ejecutar` (E5·T3 hot config),
@@ -287,6 +310,7 @@ export class GenerarRespuestaAgenteUseCase {
       mensajeId: null,
       score: null,
       senalCierre: null,
+      cierre: null,
     });
 
     // E3·T2: a blank indicación is NO indicación — the plain path runs.
@@ -401,6 +425,13 @@ export class GenerarRespuestaAgenteUseCase {
       // "Temas tratados" line).
       const sintesisHilo = sintetizarHilo({ historial, memoriasChat });
 
+      // E5·T10: closes the generator may propose, only when a close is
+      // even conceivable. Key omitted when empty (old input shape).
+      const cierresPosibles =
+        conIndicacion || conversacion.empresaId === null || conversacion.contactoId === null
+          ? []
+          : await this.cargarCierresPosibles(conversacion.id, conversacion.empresaId);
+
       respuesta = await this.deps.generador.generarRespuesta({
         consulta: enmascararTelefonos(consultaOriginal),
         // E2·T9: unlinked conversations ask for nombre/empresa in the
@@ -419,6 +450,7 @@ export class GenerarRespuestaAgenteUseCase {
         // E3·T2: the operator instruction rides the LLM input masked
         // like every other body (PII policy — consulta precedent).
         indicacionHumana: conIndicacion ? enmascararTelefonos(indicacion) : undefined,
+        ...(cierresPosibles.length > 0 ? { cierresPosibles } : {}),
       });
     }
 
@@ -516,6 +548,7 @@ export class GenerarRespuestaAgenteUseCase {
         mensajeId: mensaje.id,
         score,
         senalCierre: null,
+        cierre: null,
       };
     }
 
@@ -624,13 +657,66 @@ export class GenerarRespuestaAgenteUseCase {
       });
     }
 
+    // 15. Autonomous close (E5·T10) — LAST, only on RESPONDIDO without an
+    //     indicación, so a close failure can never touch the steps above.
+    const senalCierre = responder ? (respuesta?.senalCierre ?? null) : null;
+    const cierre =
+      senalCierre !== null && !conIndicacion
+        ? await this.intentarCierre(conversacion.id, senalCierre, config)
+        : null;
+
     return {
       conversacionId,
       resultado: responder ? 'RESPONDIDO' : 'ESCALADO',
       mensajeId: mensajeFinal.id,
       score,
-      senalCierre: responder ? (respuesta?.senalCierre ?? null) : null,
+      senalCierre,
+      cierre,
     };
+  }
+
+  /**
+   * E5·T10: closes the agent may propose from the current pipeline
+   * state. Any lookup failure ⇒ [] (logged with ids only): it must
+   * never break the answer.
+   */
+  private async cargarCierresPosibles(
+    conversacionId: number,
+    empresaId: number,
+  ): Promise<TipoCierreAgente[]> {
+    const { cerrarTrato, pipelines, empresas } = this.deps;
+    if (cerrarTrato === undefined || pipelines === undefined || empresas === undefined) return [];
+    try {
+      const empresa = await empresas.obtenerPorId(empresaId);
+      const pipeline = await pipelines.obtenerPorEmpresaId(empresaId);
+      if (empresa === null || pipeline === null) return [];
+      return cierresPosiblesDe({ flujo: pipeline.flujo, etapa: pipeline.etapa }, empresa.tipo);
+    } catch (errorCierres) {
+      console.error('[generarRespuestaAgente] cargar cierres posibles falló', {
+        conversacionId,
+        empresaId,
+        error: codigoDeError(errorCierres),
+      });
+      return [];
+    }
+  }
+
+  /** E5·T10: best-effort close; every throw is logged (id + code) and swallowed. */
+  private async intentarCierre(
+    conversacionId: number,
+    senal: SenalCierre,
+    config: ConfigAgente,
+  ): Promise<ResultadoCierreAgente | null> {
+    if (this.deps.cerrarTrato === undefined) return null;
+    try {
+      return await this.deps.cerrarTrato.execute({ conversacionId, senal, config });
+    } catch (errorCierre) {
+      console.error('[generarRespuestaAgente] cierre autónomo falló', {
+        conversacionId,
+        error: codigoDeError(errorCierre),
+      });
+      return null;
+    }
   }
 
   /** Load the WHOLE thread newest-first, following the antesDeId cursor. */

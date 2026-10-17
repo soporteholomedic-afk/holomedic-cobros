@@ -151,6 +151,7 @@ function motorConGuion(guion: ScriptMotor[]): { motor: MotorLike; llamadas: Llam
         mensajeId: null,
         score: null,
         senalCierre: null,
+        cierre: null,
       };
     },
   };

@@ -12,6 +12,7 @@ import type {
   ResumenNotificaciones,
 } from '../../../domain/entities';
 import type { ContactoConEmpresa } from '../../../domain/ports';
+import { esTextoConfirmacionCierre } from '../../../domain/textosCierreAgente';
 
 /**
  * Guards + display helpers for the bandeja (agente-ia-crm E1). The
@@ -403,6 +404,15 @@ export function parsearTitulosFuentes(fuentes: string | null): string[] {
       ? [(entrada as { titulo: string }).titulo]
       : [],
   );
+}
+
+/**
+ * E5·T10: true when an IA message body is one of the fixed close
+ * confirmations La Guía sends after registering a close. Callers must
+ * only inspect IA bubbles (a client typing the same text is not a close).
+ */
+export function esMensajeCierreAgente(cuerpo: string): boolean {
+  return esTextoConfirmacionCierre(cuerpo);
 }
 
 /** Preview cut length (chars of cuerpo, glyph excluded — E2·T6). */

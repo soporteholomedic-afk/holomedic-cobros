@@ -4,6 +4,7 @@ import userEvent from '@testing-library/user-event';
 
 import { HiloConversacion } from '../HiloConversacion';
 import type { ConversacionListada, MensajeCrm } from '../../../../domain/entities';
+import { TEXTO_CONFIRMACION_CIERRE } from '../../../../domain/textosCierreAgente';
 
 /**
  * Render contract for the IA additions of HiloConversacion (E2·T6):
@@ -520,5 +521,33 @@ describe('HiloConversacion calidad medible (E4·T5)', () => {
 
     expect(await screen.findByText('Te confirmo los horarios')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: '⚠ Marcar deficiente' })).not.toBeInTheDocument();
+  });
+});
+
+describe('HiloConversacion marca de cierre (E5·T10)', () => {
+  const CIERRE = TEXTO_CONFIRMACION_CIERRE.ACEPTACION;
+  const MARCA = 'Cierre registrado por La Guía';
+
+  it('burbuja IA con el texto fijo de confirmación muestra la marca', async () => {
+    montar([mensaje({ id: 2, direccion: 'OUT', emisor: 'IA', cuerpo: CIERRE, estadoEnvio: 'ENVIADO' })]);
+
+    expect(await screen.findByText(MARCA)).toBeInTheDocument();
+  });
+
+  it('burbuja IA con otro texto no la muestra', async () => {
+    montar([mensaje({ id: 2, direccion: 'OUT', emisor: 'IA', cuerpo: 'Hola', estadoEnvio: 'ENVIADO' })]);
+
+    await screen.findByText('Hola');
+    expect(screen.queryByText(MARCA)).not.toBeInTheDocument();
+  });
+
+  it('el mismo texto enviado por CLIENTE u HUMANO no la muestra', async () => {
+    montar([
+      mensaje({ id: 2, direccion: 'IN', emisor: 'CLIENTE', cuerpo: CIERRE }),
+      mensaje({ id: 3, direccion: 'OUT', emisor: 'HUMANO', cuerpo: CIERRE, estadoEnvio: 'ENVIADO' }),
+    ]);
+
+    await waitFor(() => expect(screen.getAllByText(CIERRE)).toHaveLength(2));
+    expect(screen.queryByText(MARCA)).not.toBeInTheDocument();
   });
 });

@@ -4,6 +4,7 @@ import type {
   TipoCierreAgente,
   TipoEmpresa,
 } from '../domain/entities';
+import { TEXTO_CONFIRMACION_CIERRE } from '../domain/textosCierreAgente';
 import type { EstadoPipeline } from '../domain/maquinaEstados';
 import type {
   Clock,
@@ -23,18 +24,8 @@ export const USUARIO_AGENTE = 'La Guía (agente)';
 /** Closing is higher-stakes than answering: the configured umbral never lowers this floor. */
 export const UMBRAL_CIERRE_MINIMO = 0.8;
 
-/**
- * Fixed client confirmation per close. NEVER LLM-generated and never
- * promises prices, dates or deliverables.
- */
-export const TEXTO_CONFIRMACION_CIERRE: Readonly<Record<TipoCierreAgente, string>> = {
-  ACEPTACION:
-    '¡Gracias! Dejé registrado tu interés y en breve un asesor de Holomedic se comunica con vos para los próximos pasos.',
-  CONFIRMACION_PRESENTACION:
-    '¡Perfecto! Dejé registrada la confirmación de la presentación. Cualquier cambio, avisame por acá.',
-  CONVERSION_CLIENTE:
-    '¡Bienvenido a Holomedic! Dejé registrado el alta y un asesor te acompaña con los siguientes pasos.',
-};
+/** Fixed client confirmations now live in the domain (shared with the thread UI). */
+export { TEXTO_CONFIRMACION_CIERRE };
 
 export type MotivoCierreRechazado =
   | 'AGENTE_DESHABILITADO'
