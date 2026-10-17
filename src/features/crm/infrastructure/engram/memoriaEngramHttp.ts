@@ -17,7 +17,8 @@ import type { EntradaGuardarMemoria, MemoriaConversacionPort } from '../../domai
  * - GET /observations/save-result?operation_id=X → 200 {"id","status":
  *   "committed"} once committed; 404 while pending. Bounded poll
  *   (250 ms interval, max 8 tries ≈ 2 s); still-uncommitted is
- *   NON-fatal ({estado:'guardado'}).
+ *   NON-fatal ({estado:'guardado'}). 400/405 (older Engram without
+ *   the route) stop the poll at once, also NON-fatal.
  * - GET /search?q&project&limit → 200 array (NO server-side session
  *   filter — the client filters session_id). Timestamps are UTC
  *   "YYYY-MM-DD HH:MM:SS" strings.
@@ -224,6 +225,8 @@ export class MemoriaEngramHttp implements MemoriaConversacionPort {
       q: consulta,
       project: proyecto,
       limit: String(limite),
+      // Engram por defecto exige TODAS las palabras (AND): una frase natural devuelve [].
+      match_mode: 'any',
     });
     const respuesta = await this.llamar('GET', `/search?${parametros.toString()}`);
     // Igual que /context: proyecto inexistente = memoria vacía.
@@ -372,7 +375,9 @@ export class MemoriaEngramHttp implements MemoriaConversacionPort {
   /**
    * Bounded poll of the save-result endpoint: 404 = not yet committed
    * (keep trying, 250 ms apart, max 8 tries ≈ 2 s), 200 = committed
-   * (per contract), anything else = MEMORIA_ERROR. Exhausted poll is
+   * (per contract), 400/405 = older Engram without the route (Engram
+   * 3.2.1 routes it to /observations/{id} → 400): stop polling at once,
+   * NON-fatal, anything else = MEMORIA_ERROR. Exhausted poll is
    * NON-fatal: the write stands with its id, only the confirmation is
    * pending — log the id ONLY (content is PII, never logged).
    */
@@ -382,6 +387,13 @@ export class MemoriaEngramHttp implements MemoriaConversacionPort {
       if (intento > 1) await dormir(POLL_INTERVALO_MS);
       const respuesta = await this.llamar('GET', ruta);
       if (respuesta.status === 404) continue;
+      if (respuesta.status === 400 || respuesta.status === 405) {
+        console.log(
+          `[crm-memoria] observación ${id} guardada sin confirmación de commit ` +
+            `(HTTP ${respuesta.status}: el servidor no tiene ruta de confirmación de commit)`,
+        );
+        return { id, estado: 'guardado' };
+      }
       this.exigirOk(respuesta, '/observations/save-result');
       return { id, estado: 'comprometido' };
     }

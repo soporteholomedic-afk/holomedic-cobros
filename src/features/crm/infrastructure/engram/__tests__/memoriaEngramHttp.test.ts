@@ -243,6 +243,46 @@ describe('MemoriaEngramHttp — guardar (E2·T2)', () => {
     expect(linea).not.toContain(ENTRADA_CHAT.contenido);
     expect(linea).not.toContain(ENTRADA_CHAT.titulo);
   });
+
+  it.each([
+    [400, { error: 'invalid observation id' }],
+    [405, { error: 'method not allowed' }],
+  ])(
+    'poll con HTTP %i (Engram viejo sin ruta save-result) → NO fatal: guardado, sin más polls, log sin contenido',
+    async (status, cuerpo) => {
+      const { fetchMock } = stubFetch({
+        'POST /sessions': [{ status: 201, cuerpo: { id: 'chat-7', status: 'created' } }],
+        'POST /observations': [{ status: 201, cuerpo: { id: 61, status: 'saved' } }],
+        'GET /observations/save-result': [{ status, cuerpo }],
+      });
+
+      await expect(
+        new MemoriaEngramHttp({ urlBase: URL_BASE }).guardar(ENTRADA_CHAT),
+      ).resolves.toEqual({ id: 61, estado: 'guardado' });
+
+      // 2 writes + exactamente 1 poll: corta de inmediato, sin reintentos.
+      expect(fetchMock).toHaveBeenCalledTimes(3);
+      // El log lleva id y status — JAMÁS título ni contenido (PII).
+      expect(console.log).toHaveBeenCalledTimes(1);
+      const linea = String(vi.mocked(console.log).mock.calls[0]?.[0]);
+      expect(linea).toContain('61');
+      expect(linea).toContain(String(status));
+      expect(linea).not.toContain(ENTRADA_CHAT.contenido);
+      expect(linea).not.toContain(ENTRADA_CHAT.titulo);
+    },
+  );
+
+  it('poll con HTTP 500 sigue siendo fatal → MEMORIA_ERROR (guarda de regresión)', async () => {
+    stubFetch({
+      'POST /sessions': [{ status: 201, cuerpo: { id: 'chat-7', status: 'created' } }],
+      'POST /observations': [{ status: 201, cuerpo: { id: 62, status: 'saved' } }],
+      'GET /observations/save-result': [{ status: 500, cuerpo: { error: 'boom' } }],
+    });
+
+    await expect(
+      new MemoriaEngramHttp({ urlBase: URL_BASE }).guardar(ENTRADA_CHAT),
+    ).rejects.toMatchObject({ codigo: 'MEMORIA_ERROR' });
+  });
 });
 
 describe('MemoriaEngramHttp — buscar (E2·T2)', () => {
@@ -308,6 +348,23 @@ describe('MemoriaEngramHttp — buscar (E2·T2)', () => {
     expect(llamadas[0]!.url).toContain('project=crm-emp-3');
     expect(llamadas[0]!.url).toContain('limit=10');
     expect(llamadas[0]!.url.startsWith(`${URL_BASE}/search?`)).toBe(true);
+  });
+
+  it('pide /search con match_mode=any junto a q, project y limit', async () => {
+    const { llamadas } = stubFetch({ 'GET /search': [{ status: 200, cuerpo: [] }] });
+
+    await new MemoriaEngramHttp({ urlBase: URL_BASE }).buscar(
+      'A que hora y por que canal prefiero que me contacten?',
+      3,
+      7,
+      10,
+    );
+
+    const parametros = new URL(llamadas[0]!.url).searchParams;
+    expect(parametros.get('match_mode')).toBe('any');
+    expect(parametros.get('q')).toBe('A que hora y por que canal prefiero que me contacten?');
+    expect(parametros.get('project')).toBe('crm-emp-3');
+    expect(parametros.get('limit')).toBe('10');
   });
 
   it('respeta el limite tras el filtro de sesión', async () => {
