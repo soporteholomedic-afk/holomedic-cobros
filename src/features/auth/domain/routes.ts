@@ -78,6 +78,10 @@ export const RUTAS_PROTEGIDAS: RutaProtegida[] = [
   // own entry it would fall under the plain-`crm` /api/crm gate.
   { path: '/admin/crm/conocimiento',        permiso: 'crm_conocimiento', label: 'Conocimiento' },
   { path: '/api/crm/conocimiento/ingestas', permiso: 'crm_conocimiento', label: 'Conocimiento' },
+  // agente-ia-crm (E5·T4): agent configuration has its OWN permiso;
+  // both entries are longer prefixes than the generic admin/crm gates.
+  { path: '/admin/crm/configuracion',       permiso: 'crm_configuracion', label: 'Configuración' },
+  { path: '/api/crm/configuracion',         permiso: 'crm_configuracion', label: 'Configuración' },
   { path: '/api/crm',             permiso: 'crm',              label: 'API CRM' },
   { path: '/crm',                 permiso: 'crm',              label: 'CRM' },
 ];

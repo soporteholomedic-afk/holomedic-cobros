@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { IngestaConocimiento, TareaAgente } from '@/features/crm/domain/entities';
 import type {
@@ -11,6 +11,21 @@ import type {
 } from '@/features/crm/domain/ports';
 import { __setCrmDbForTests, type CrmDb } from '../../getCrmDb';
 import { crearProcesadorTareasAgente } from '../crearProcesadorTareasAgente';
+
+const motorMocks = vi.hoisted(() => ({ depsMotor: vi.fn() }));
+
+vi.mock('../../../application/generarRespuestaAgente', async (importOriginal) => {
+  const original = await importOriginal<typeof import('../../../application/generarRespuestaAgente')>();
+  return {
+    ...original,
+    GenerarRespuestaAgenteUseCase: class extends original.GenerarRespuestaAgenteUseCase {
+      constructor(deps: ConstructorParameters<typeof original.GenerarRespuestaAgenteUseCase>[0]) {
+        super(deps);
+        motorMocks.depsMotor(deps);
+      }
+    },
+  };
+});
 
 /**
  * Test de despacho de la factory (agente-ia-crm E4·T7) — el ÚNICO
@@ -165,6 +180,48 @@ function armarDb(tareas: FakeTareas, ingestas: FakeIngestas, conocimiento: FakeC
 
 afterEach(() => {
   __setCrmDbForTests(null);
+  motorMocks.depsMotor.mockClear();
+});
+
+describe('crearProcesadorTareasAgente — config en caliente (E5·T3 gap)', () => {
+  interface DepsMotor {
+    config?: () => Promise<{ umbralConfianza: number }>;
+  }
+
+  it('inyecta un resolver al motor cuando db.config existe (la fila de DB manda sobre env)', async () => {
+    vi.stubEnv('AGENTE_UMBRAL_CONF', '0.5');
+    const db = armarDb(new FakeTareas(), new FakeIngestas(), new FakeConocimiento());
+    __setCrmDbForTests({
+      ...db,
+      config: {
+        listar: async () => [
+          {
+            clave: 'agente.umbralConfianza',
+            valor: '0.9',
+            esSecreto: false,
+            actualizadoPor: 'admin',
+            actualizadoEn: new Date(),
+          },
+        ],
+      } as unknown as NonNullable<CrmDb['config']>,
+    });
+
+    await crearProcesadorTareasAgente().procesar(1);
+
+    const deps = motorMocks.depsMotor.mock.calls[0]?.[0] as DepsMotor;
+    expect(deps.config).toBeTypeOf('function');
+    expect((await deps.config?.())?.umbralConfianza).toBe(0.9);
+    vi.unstubAllEnvs();
+  });
+
+  it('sin db.config el motor no recibe resolver (cae a env)', async () => {
+    __setCrmDbForTests(armarDb(new FakeTareas(), new FakeIngestas(), new FakeConocimiento()));
+
+    await crearProcesadorTareasAgente().procesar(1);
+
+    const deps = motorMocks.depsMotor.mock.calls[0]?.[0] as DepsMotor;
+    expect(deps.config).toBeUndefined();
+  });
 });
 
 describe('crearProcesadorTareasAgente — cable INGESTAR_CONOCIMIENTO (E4·T7)', () => {

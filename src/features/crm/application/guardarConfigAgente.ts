@@ -105,6 +105,7 @@ export class GuardarConfigAgenteUseCase {
       clave: CLAVES_CONFIG_AGENTE[campo],
       valor: serializar(campo, cambios),
     }));
+    // Writes are sequential: the ConfigCrmRepository port has no batch method, so atomicity is per key (validation above prevents bad-payload partials).
     for (const escritura of escrituras) {
       await this.deps.config.guardar({ ...escritura, esSecreto: false, usuario });
     }

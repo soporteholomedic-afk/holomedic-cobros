@@ -184,3 +184,35 @@ describe('RUTAS_PROTEGIDAS — conocimiento entries (E4·T8)', () => {
     expect(res.status).toBe(200);
   });
 });
+
+// ---- agente-ia-crm E5·T4: agent configuration rides its OWN crm_configuracion permiso ----
+
+describe('RUTAS_PROTEGIDAS — configuracion entries (E5·T4)', () => {
+  it('registers the crm_configuracion permiso in the single source of truth', () => {
+    expect(PERMISOS).toContain('crm_configuracion');
+  });
+
+  it('gates the admin page and the API by crm_configuracion with label Configuración', () => {
+    expect(permisoParaRuta('/admin/crm/configuracion')).toBe('crm_configuracion');
+    expect(permisoParaRuta('/api/crm/configuracion/agente')).toBe('crm_configuracion');
+    expect(buscarRutaProtegida('/admin/crm/configuracion')?.label).toBe('Configuración');
+    expect(buscarRutaProtegida('/api/crm/configuracion/auditoria')?.label).toBe('Configuración');
+  });
+
+  it('longest-first: both entries beat the generic /admin/usuarios and /api/crm gates', () => {
+    expect(permisoParaRuta('/admin/crm/configuracion')).not.toBe('admin');
+    expect(permisoParaRuta('/api/crm/configuracion/agente/kill-switch')).not.toBe('crm');
+  });
+
+  it('a session with only crm does NOT pass /api/crm/configuracion', () => {
+    mockVerify.mockReturnValue({ permisos: ['crm'] });
+    const res = proxy(makeRequest('/api/crm/configuracion/agente', 'a.jwt.token'));
+    expect(res.status).not.toBe(200);
+  });
+
+  it('crm_configuracion session → pass', () => {
+    mockVerify.mockReturnValue({ permisos: ['crm_configuracion'] });
+    const res = proxy(makeRequest('/admin/crm/configuracion', 'a.jwt.token'));
+    expect(res.status).toBe(200);
+  });
+});

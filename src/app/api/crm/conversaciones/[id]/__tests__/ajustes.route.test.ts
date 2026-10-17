@@ -14,12 +14,16 @@ const mocks = vi.hoisted(() => ({
   obtenerMock: vi.fn(),
   actualizarMock: vi.fn(),
   sessionMock: vi.fn(),
+  depsMock: vi.fn(),
 }));
 
 vi.mock('@/lib/auth', () => ({ getSession: mocks.sessionMock }));
 
 vi.mock('@/features/crm/application/ajustesConversacion', () => ({
   AjustesConversacionUseCase: class AjustesConversacionUseCaseFake {
+    constructor(deps: unknown) {
+      mocks.depsMock(deps);
+    }
     obtener = mocks.obtenerMock;
     actualizarMemoriaActiva = mocks.actualizarMock;
   },
@@ -46,6 +50,22 @@ function setDb(): void {
     panel: {} as never,
     conversaciones: {} as never,
   } satisfies CrmDb);
+}
+
+function setDbConConfig(filas: Array<{ clave: string; valor: string }>): void {
+  __setCrmDbForTests({
+    pool: {} as never,
+    conversaciones: {} as never,
+    config: {
+      listar: async () =>
+        filas.map((fila) => ({
+          ...fila,
+          esSecreto: false,
+          actualizadoPor: 'admin',
+          actualizadoEn: new Date(),
+        })),
+    } as never,
+  } as unknown as CrmDb);
 }
 
 function routeContext(id: string): { params: Promise<{ id: string }> } {
@@ -129,6 +149,43 @@ describe('GET /api/crm/conversaciones/[id]/ajustes (E3·T5)', () => {
       routeContext('1'),
     );
     expect(sinPermiso.status).toBe(403);
+  });
+});
+
+describe('GET ajustes — config injection (E5·T3 gap)', () => {
+  interface DepsCapturadas {
+    config?: () => Promise<{ umbralConfianza: number }>;
+  }
+
+  async function llamarGet(): Promise<DepsCapturadas> {
+    mocks.obtenerMock.mockResolvedValueOnce(AJUSTES);
+    await GET(
+      new Request('http://localhost/api/crm/conversaciones/1/ajustes') as Parameters<typeof GET>[0],
+      routeContext('1'),
+    );
+    return mocks.depsMock.mock.calls[0]?.[0] as DepsCapturadas;
+  }
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  it('injects the DB-backed resolver when db.config exists: a DB row overrides env', async () => {
+    vi.stubEnv('AGENTE_UMBRAL_CONF', '0.5');
+    setDbConConfig([{ clave: 'agente.umbralConfianza', valor: '0.9' }]);
+
+    const deps = await llamarGet();
+
+    expect(deps.config).toBeTypeOf('function');
+    expect((await deps.config?.())?.umbralConfianza).toBe(0.9);
+  });
+
+  it('falls back to env (no resolver injected) when db.config is absent', async () => {
+    vi.stubEnv('AGENTE_UMBRAL_CONF', '0.5');
+
+    const deps = await llamarGet();
+
+    expect(deps.config).toBeUndefined();
   });
 });
 
