@@ -4,7 +4,7 @@
 
 ## Qué es
 
-La Guía es el agente IA del CRM: responde **sola** las conversaciones en estado `ACTIVA_IA` por WhatsApp, apoyada en la base de conocimiento curada (`CRM_Conocimiento`) y la memoria episódica (Engram). Cuando no puede responder con confianza, **deriva**: envía un texto seguro y pasa la conversación a `REQUIERE_HUMANO`. No cierra tratos ni negocia condiciones — el cierre comercial es alcance de E4 (ver [Limitaciones](#limitaciones-de-e2)). E3 agrega el **patrón de ayuda**: la derivación queda persistida como solicitud, el operador responde con una indicación y la Guía retoma (ver [Patrón de ayuda](#patrón-de-ayuda-e3)).
+La Guía es el agente IA del CRM: responde **sola** las conversaciones en estado `ACTIVA_IA` por WhatsApp, apoyada en la base de conocimiento curada (`CRM_Conocimiento`) y la memoria episódica (Engram). Cuando no puede responder con confianza, **deriva**: envía un texto seguro y pasa la conversación a `REQUIERE_HUMANO`. Desde E5 **cierra tratos por sí sola** bajo reglas deterministas (ver [Cierre autónomo](#cierre-autónomo-del-trato-e5)); sigue sin negociar condiciones ni prometer precios o fechas. Todo se opera desde `/admin/crm/configuracion` (ver [Panel de configuración](#panel-de-configuración-admincrmconfiguracion-permiso-crm_configuracion)). E3 agrega el **patrón de ayuda**: la derivación queda persistida como solicitud, el operador responde con una indicación y la Guía retoma (ver [Patrón de ayuda](#patrón-de-ayuda-e3)).
 
 ## Circuito
 
@@ -119,11 +119,13 @@ E3 **no agrega variables de entorno**: reutiliza `ENGRAM_CRM_*`, los guardrails 
 |---|---|---|
 | `LLM_API_KEY` | — | **Selector único**: seteada → adaptador OpenAI-compatible en cualquier entorno; vacía + dev → generador simulado (warn 1×/proceso); vacía + prod → **fail-closed** (`GENERADOR_NO_CONFIGURADA`: producción nunca simula) |
 | `LLM_BASE_URL` | `https://api.z.ai/api/paas/v4/` | Endpoint OpenAI-compatible (Z.ai) |
-| `LLM_MODELO` | `glm-5.3-flash` | Modelo bloqueado por decisión E2 (E4 lo mueve a DB + admin UI) |
+| `LLM_MODELO` | `glm-5.3-flash` | Solo env; la config del proveedor LLM no está en el panel de E5 |
 | `LLM_TIMEOUT_MS` | `30000` | Timeout por llamada |
 | `LLM_MAX_TOKENS` | `700` | Tope de tokens de la respuesta |
 
 ### Guardrails del agente (todos opcionales; valor inválido → default, nunca crash)
+
+> Desde E5 estas variables son el **fallback**: si existe la clave en `CRM_Config`, la DB gana (ver [Configuración en caliente](#configuración-en-caliente-e5)).
 
 | Variable | Default | Semántica |
 |---|---|---|
@@ -134,6 +136,8 @@ E3 **no agrega variables de entorno**: reutiliza `ENGRAM_CRM_*`, los guardrails 
 | `AGENTE_TEXTO_ESCALADO` | texto seguro por defecto | Se envía en cada escalado |
 
 ### Memoria (`MemoriaConversacionPort`)
+
+> Desde E5 estas variables son el **fallback** de `memoria.*` en `CRM_Config`.
 
 | Variable | Default | Semántica |
 |---|---|---|
@@ -171,12 +175,12 @@ Ranking (`recuperarConocimiento`): prefilter LIKE **por términos** (NFD, >2 cha
 
 ## Cerebro de calidad (E4)
 
-### Prompt v2 modular y versionado (`application/prompt/promptGeneracion.ts`)
+### Prompt modular y versionado (v2 en E4, v3 en E5) (`application/prompt/promptGeneracion.ts`)
 
 El armado del prompt es dueño de la capa aplicación — los adapters LLM son transporte puro. `armarPromptGeneracion(entrada)` compone system base (persona La Guía/Holomedic, voseo cálido, formato WhatsApp, anti-invención dura, cierre con próximo paso) + bloques condicionales (indicación → PRIORIDAD MÁXIMA, contactoNuevo → PRESENTACIÓN INICIAL, KB hit → fragmentos `[id N]` / miss → FUERA DE COBERTURA, memorias vs primera interacción) sobre el user de secciones etiquetadas (INDICACIÓN → CONSULTA → SINTESIS DEL HILO → HISTORIAL → CONOCIMIENTO → MEMORIAS → CONTACTO NUEVO).
 
-- `PROMPT_VERSION='v2'` se estampa en `CRM_Mensajes.promptVersion` junto a score/modelo/fuentes — cada iteración de prompt queda auditada y comparable en el hilo.
-- Contrato JSON de generación: `{texto, scoreConfianza, fidelidad, enScope, requiereAyudaHumana, idsConocimiento}` — `fidelidad` es el self-score de apego a fuentes (clamp [0,1]; ausente → NULL = sin dato, nunca 0).
+- `PROMPT_VERSION='v3'` (E5 agrega el bloque **CIERRE AUTÓNOMO**, solo cuando hay `cierresPosibles` no vacío; ver [Cierre autónomo](#cierre-autónomo-del-trato-e5)) se estampa en `CRM_Mensajes.promptVersion` junto a score/modelo/fuentes — cada iteración de prompt queda auditada y comparable en el hilo.
+- Contrato JSON de generación: `{texto, scoreConfianza, fidelidad, enScope, requiereAyudaHumana, idsConocimiento}` (+ `senalCierre` opcional desde E5) — `fidelidad` es el self-score de apego a fuentes (clamp [0,1]; ausente → NULL = sin dato, nunca 0).
 - Destilación v2: observaciones autocontenidas (con sujeto y contexto), títulos accionables ≤8 palabras, `pinear` solo acuerdos/compromisos que obligan a una parte, jamás datos sensibles, montos/fechas literales.
 
 ### Recall híbrido de memorias (`rankearMemorias`)
@@ -201,6 +205,110 @@ Pegar texto o subir PDF/TXT/DOCX (≤5 MB) → extracción en upload (`pdf-parse
 
 Regla de iteración: **cada cambio de prompt = bump de `PROMPT_VERSION` (y de `PROMPT_GOLDEN_VERSION` si cambia el corpus o sus expectativas) + golden en verde antes de commitear.** Un caso fallido señala la edición: `termino_faltante` → el prompt no está logrando citar la fuente esperada (revisá el bloque condicional o la regla de uso del CONOCIMIENTO); `dato_inventado`/`termino_prohibido` → la respuesta promete datos sin respaldo (endurecé la regla anti-invención); `formato_*`/`largo_excesivo` → violación del contrato WhatsApp; `respuesta_corta`/`respuesta_vacia` → la Guía dejó de responder (o escaló una cortesía). Los fragmentos de KB y memorias de los casos son fixtures autocontenidos escritos a mano — el golden set nunca lee la base.
 
+## Configuración en caliente (E5)
+
+**Qué cambió**: la config del agente, el canal Kapso y la memoria ya no dependen solo de `.env`; se edita en vivo y rige desde la próxima corrida/request.
+
+| Tabla | Uso |
+|---|---|
+| `CRM_Config` | Una fila por clave (PK `clave`); `esSecreto` marca valores cifrados |
+| `CRM_ConfigAuditoria` | Traza de cambios (sin FK: sobrevive al borrado); los secretos nunca guardan valor |
+
+**Precedencia** por clave: DB > env > default. Se resuelve **por corrida / por request, sin caché** — el kill switch aplica en la próxima corrida del motor. Si la DB falla, el resolver cae a env (warn sin valores).
+
+| Prefijo | Claves (DB) | Variable de env (fallback) |
+|---|---|---|
+| `agente.` | `habilitado`, `umbralConfianza`, `maxIntercambios`, `horarioDesde`, `horarioHasta`, `textoEscalado` | `AGENTE_HABILITADO`, `AGENTE_UMBRAL_CONF`, `AGENTE_MAX_INTERCAMBIOS`, `AGENTE_HORARIO_DESDE`, `AGENTE_HORARIO_HASTA`, `AGENTE_TEXTO_ESCALADO` |
+| `canal.kapso.` | `modo`, `apiKey`*, `phoneNumberId`, `webhookSecret`*, `timeoutMs` | `KAPSO_MODO`, `KAPSO_API_KEY`, `KAPSO_PHONE_NUMBER_ID`, `KAPSO_WEBHOOK_SECRET`, `KAPSO_TIMEOUT_MS` |
+| `memoria.` | `url`, `token`*, `timeoutMs`, `retencionMeses` | `ENGRAM_CRM_URL`, `ENGRAM_CRM_TOKEN`, `ENGRAM_CRM_TIMEOUT_MS` (`retencionMeses` no tiene env) |
+
+\* secreto. Las fábricas `…Configurable` (`crearEnviadorWhatsappConfigurable`, `esModoSimuladoConfigurable`, `crearMemoriaConversacionConfigurable`) re-resuelven en cada llamada.
+
+### Secretos y `CRM_CONFIG_KEY`
+
+- Cifrado **AES-256-GCM**, payload `v1:<iv>:<tag>:<ct>`. Clave maestra `CRM_CONFIG_KEY`: 32 bytes en base64 o hex (64 caracteres).
+- **Fail-closed**: sin la clave, un `PUT` que toca un secreto responde **503 `CLAVE_NO_CONFIGURADA`** y no escribe nada.
+- Un secreto guardado que no se puede descifrar se muestra como `ilegible`.
+- **Webhook Kapso ESTRICTO**: secreto en DB presente pero no descifrable ⇒ **503 `WEBHOOK_NO_CONFIGURADO`**, nunca cae a env (el secret viejo de env no revive). Sin fila en DB ⇒ env; DB inaccesible ⇒ env. (`apiKey` sí conserva su fallback.)
+- Los secretos jamás aparecen en auditoría ni en respuestas: solo `{configurado, mascara, ilegible}`.
+- En un `PUT`, un secreto ausente o `''` significa **mantener** el valor guardado; `null` lo **borra**; un texto lo **reemplaza** (cifrado antes de escribir).
+
+### Rotar `CRM_CONFIG_KEY`
+
+NO hay re-cifrado automático. Cambiar la clave **deja ilegibles** los secretos ya guardados hasta que un admin los vuelva a ingresar en el panel (mientras tanto el webhook responde 503 si el `webhookSecret` queda ilegible). Procedimiento: cambiar la clave → reingresar `apiKey`, `webhookSecret` (o regenerarlo y actualizarlo en Kapso) y `token`.
+
+### Provisión
+
+`CRM_CONFIG_KEY` **nunca se sincroniza** al share del SDK (`.env*` excluidos): hay que ponerla a mano en `C:\HOLOMEDIC\.env.local`. Generar con `openssl rand -base64 32`; no commitear valores reales.
+
+## Panel de configuración (`/admin/crm/configuracion`, permiso `crm_configuracion`)
+
+| Zona | Contenido |
+|---|---|
+| Barra fija de kill switch | Enciende/apaga el agente en caliente (`agente.habilitado`), sin UI optimista; confirmación solo al encender; auditado con el usuario |
+| Pestaña Agente | Umbral, máx. intercambios, horario, texto de escalado; muestra la fuente (`db`/`env`/`default`) |
+| Pestaña Canal Kapso | Modo, API key, phone number id, webhook secret, timeout; secretos solo con máscara (Reemplazar/Quitar) |
+| Pestaña Memoria | URL, token, timeout, retención |
+| Pestaña Conocimiento | Resumen de conteos (manual/subido/ingestas) |
+
+Entrada de Sidebar «Configuración IA», visible solo con `crm_configuracion`. Cada pestaña muestra el historial de cambios filtrado por prefijo.
+
+### Rutas (`src/app/api/crm/configuracion/**`)
+
+| Método y ruta | Uso |
+|---|---|
+| `GET \| PUT /api/crm/configuracion/agente` | Leer (con `fuentes`) / guardar config del agente |
+| `PUT /api/crm/configuracion/agente/kill-switch` | Kill switch (boolean estricto) |
+| `GET \| PUT /api/crm/configuracion/canal` | Leer / guardar canal Kapso; `accion: 'regenerarWebhookSecret'` regenera el secret |
+| `POST /api/crm/configuracion/canal/probar` | Probe del canal |
+| `GET \| PUT /api/crm/configuracion/memoria` | Leer / guardar memoria |
+| `POST /api/crm/configuracion/memoria/probar` | Probe de Engram |
+| `GET /api/crm/configuracion/conocimiento` | Conteos de KB e ingestas |
+| `GET /api/crm/configuracion/auditoria?prefijo=&limite=` | Historial (default 50, tope 200; sin valores de secretos) |
+
+### Comportamientos clave
+
+- **Regenerar webhook secret**: el texto en claro se devuelve **una sola vez** y la UI lo descarta al cerrar, cambiar de pestaña o guardar.
+- **Probes** (timeout 5 s, mensajes genéricos): Kapso usa `phoneNumbers.settings.get` del SDK; Engram usa `GET /context?project=crm-probe`. La forma real de la respuesta del probe de Kapso solo está verificada contra mocks.
+- **Faltante a propósito**: la lista de plantillas WhatsApp aprobadas (requiere `businessAccountId`, no está en la config) y la config del proveedor LLM.
+- **Revisión visual** en navegador (claro/oscuro, foco, responsive): pendiente al momento de escribir esto.
+
+## Cierre autónomo del trato (E5)
+
+**Qué cambió**: tras responder, la Guía puede cerrar el trato (etapa/tipo + confirmación al cliente). **Decisión híbrida**: el LLM (prompt v3) solo *propone* `senalCierre {tipo, confianza}`; la validación determinista de `CerrarTratoAgenteUseCase` (`application/cerrarTratoAgente.ts`) decide.
+
+| Tipo de cierre | Evento / efecto |
+|---|---|
+| `ACEPTACION` | `AceptaciónInbound` (T17): OUTBOUND/CADENCIA → ACEPTADO, emite el resultado `AceptaciónOutbound` |
+| `CONFIRMACION_PRESENTACION` | `ConfirmaciónPresentación` (T4): INBOUND/PRESENTACION → CONFIRMADA |
+| `CONVERSION_CLIENTE` | Cambio de tipo Prospecto → Cliente (T16), sin cambio de etapa |
+
+### Reglas de validación (en orden; cualquier fallo = cero efectos)
+
+1. Kill switch re-chequeado (`AGENTE_DESHABILITADO`).
+2. Confianza ≥ `max(umbral configurado, UMBRAL_CIERRE_MINIMO = 0.8)`.
+3. Conversación existente, `ACTIVA_IA`, con empresa + contacto + teléfono.
+4. El tipo debe estar en `cierresPosiblesDe(estado, tipoEmpresa)` (misma función que el motor usa para ofrecer `cierresPosibles` al prompt; también vuelve idempotente la repetición).
+
+### Ejecución
+
+- Orden: **primero se persiste el estado**, luego se envía el texto **fijo** por tipo (`TEXTO_CONFIRMACION_CIERRE` en `domain/textosCierreAgente.ts`, nunca generado por el LLM) vía outbox-lite.
+- Una confirmación fallida **no deshace** el cierre: resultado `confirmacion: 'FALLIDA'`.
+- Auditoría: actor `La Guía (agente)` + motivo con tipo y confianza.
+- `AceptaciónInbound` solo se acepta con `actor: 'AGENTE'`; la ruta HTTP de transiciones nunca lo pasa → responde 400.
+
+### En el motor
+
+El cierre corre **al final** (después de envío, destilación e identificación), solo en `RESPONDIDO`, con señal y sin indicación humana; nunca en `ESCALADO`/`FALLIDO_ENVIO`. Cualquier error del cierre (incluido un cierre concurrente) se captura y se loguea (id + código) sin alterar el resultado ya enviado. Sin las deps `cerrarTrato`/`pipelines` el motor se comporta como antes.
+
+### Marcador en el hilo
+
+Chip «Cierre registrado por La Guía» en la burbuja IA. **Limitación**: se infiere del texto fijo de confirmación (no hay columna de tipo de evento); si ese texto cambia, los cierres históricos dejarían de marcarse.
+
+### Golden set v3
+
+`PROMPT_GOLDEN_VERSION='v3'` suma `CASOS_GOLDEN_CIERRE` (3 positivos, 4 negativos) con `evaluarSenalCierreGolden`. **No se corrió en vivo** contra un LLM real: la señal del modelo real solo está probada con respuestas mockeadas.
+
 ## Demo (DoD de E2)
 
 1. `pnpm dev` y sembrar la KB: `node scripts/crm-sembrar-conocimiento.mjs` (dry-run) → `--apply`.
@@ -218,6 +326,19 @@ Regla de iteración: **cada cambio de prompt = bump de `PROMPT_VERSION` (y de `P
 - **Horario duro**: la ventana es muro, no soft limit.
 - **Sin editor de KB**: `CRM_Conocimiento` es de solo lectura hasta E5 (el script de siembra es la única vía); los huecos `ABIERTO` de E3 esperan esa cola.
 - ~~**Sin tomar/devolver explícitos**~~: resuelto en E3 — `tomar`/`devolver`/`escalar` con `asignadaA`.
+- ~~**Sin cierre de tratos / kill switch solo en env**~~: resuelto en E5 (ver [Cierre autónomo](#cierre-autónomo-del-trato-e5) y [Configuración en caliente](#configuración-en-caliente-e5)).
+
+## Limitaciones conocidas de E5
+
+- `eliminar` de secretos nulos corre **fuera** de la transacción del lote de `guardarVarios`.
+- Si `GET /agente` falla, el kill switch queda deshabilitado en la UI sin reintento.
+- No se restaura el foco al cancelar una confirmación inline.
+- Los borradores sin guardar de una pestaña se pierden al cambiar de pestaña.
+- `crearEnviadorWhatsapp`, `esModoSimulado` y `crearMemoriaConversacion` (fábricas síncronas) no tienen llamadores de producción.
+- El probe de Kapso solo se verificó con mocks (probar una vez con key real).
+- La ruta `conocimiento` pone `no-store` solo en el 200.
+- El golden set v3 y la señal de cierre del LLM real nunca se corrieron en vivo; el chip de cierre no se vio en un navegador (solo jsdom); el cierre no se probó contra adapters SQL reales.
+- Marcador de cierre inferido del texto fijo (ver arriba).
 
 ## Observabilidad
 
