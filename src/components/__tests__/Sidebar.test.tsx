@@ -204,41 +204,63 @@ describe('Sidebar Component', () => {
     expect(brandLink).toHaveAttribute('href', '/');
   });
 
-  it('debe mostrar el enlace Usuarios para usuarios con permiso admin', async () => {
-    mockAuthMe(adminUser);
-    renderSidebar();
-    expect(await screen.findByText('Admin General')).toBeInTheDocument();
-    expect(screen.getByText('Usuarios')).toBeInTheDocument();
-  });
+  // configuracion-tabs (S2/S4): ONE "Configuración" entry replaces the
+  // separate "Usuarios" and "Mi firma" entries. Gate: `admin` OR
+  // `firma_correo`; each holder lands on the FIRST tab it can open.
+  describe('Configuración entry (admin OR firma_correo)', () => {
+    const adminFirmaUser: AuthUser = {
+      idUsuario: 'u-admin-firma',
+      usuario: 'aadminfirma',
+      nombre: 'Admin Firma',
+      area: 'Sistemas',
+      permisos: ['admin', 'firma_correo'],
+      activo: true,
+    };
 
-  it('debe ocultar el enlace Usuarios para usuarios sin permiso admin', async () => {
-    renderSidebar();
-    expect(await screen.findByText('Ana Cobranza')).toBeInTheDocument();
-    expect(screen.queryByText('Usuarios')).not.toBeInTheDocument();
-  });
-
-  // editor-firmas PR3 — task 3.7: "Mi firma" → /admin/plantillas/firma
-  describe('Mi firma entry (permiso firma_correo)', () => {
-    it('debe mostrar "Mi firma" para un usuario con permiso firma_correo y enlazar a /admin/plantillas/firma', async () => {
-      mockAuthMe(firmaUser);
-      renderSidebar();
-      expect(await screen.findByText('Julián Firma')).toBeInTheDocument();
-
-      const link = screen.getByText('Mi firma').closest('a');
-      expect(link).toHaveAttribute('href', '/admin/plantillas/firma');
-    });
-
-    it('debe ocultar "Mi firma" para un usuario sin permiso firma_correo', async () => {
-      renderSidebar();
-      expect(await screen.findByText('Ana Cobranza')).toBeInTheDocument();
-      expect(screen.queryByText('Mi firma')).not.toBeInTheDocument();
-    });
-
-    it('debe ocultar "Mi firma" incluso para un admin sin permiso firma_correo', async () => {
+    it('muestra "Configuración" para un admin y enlaza a la primera tab (/configuracion/usuarios)', async () => {
       mockAuthMe(adminUser);
       renderSidebar();
       expect(await screen.findByText('Admin General')).toBeInTheDocument();
+      const link = screen.getByText('Configuración').closest('a');
+      expect(link).toHaveAttribute('href', '/configuracion/usuarios');
+    });
+
+    it('muestra "Configuración" para un usuario SOLO firma_correo y enlaza a /configuracion/firma', async () => {
+      mockAuthMe(firmaUser);
+      renderSidebar();
+      expect(await screen.findByText('Julián Firma')).toBeInTheDocument();
+      const link = screen.getByText('Configuración').closest('a');
+      expect(link).toHaveAttribute('href', '/configuracion/firma');
+    });
+
+    it('oculta "Configuración" sin admin ni firma_correo', async () => {
+      renderSidebar();
+      expect(await screen.findByText('Ana Cobranza')).toBeInTheDocument();
+      expect(screen.queryByText('Configuración')).not.toBeInTheDocument();
+    });
+
+    it('S4: ya NO muestra las entradas sueltas "Usuarios" ni "Mi firma" (ni siquiera con ambos permisos)', async () => {
+      mockAuthMe(adminFirmaUser);
+      renderSidebar();
+      expect(await screen.findByText('Admin Firma')).toBeInTheDocument();
+      expect(screen.queryByText('Usuarios')).not.toBeInTheDocument();
       expect(screen.queryByText('Mi firma')).not.toBeInTheDocument();
+      expect(screen.getByText('Configuración')).toBeInTheDocument();
+    });
+
+    it('marca activa la entrada en sub-rutas de /configuracion', async () => {
+      mockUsePathname.mockReturnValue('/configuracion/usuarios');
+      mockAuthMe(adminUser);
+      renderSidebar();
+      const link = (await screen.findByText('Configuración')).closest('a');
+      expect(link?.className).toContain('text-sky-300');
+    });
+
+    it('la entrada del CRM "Configuración IA" sigue siendo un texto distinto e independiente', async () => {
+      mockAuthMe(adminUser);
+      renderSidebar();
+      expect(await screen.findByText('Configuración')).toBeInTheDocument();
+      expect(screen.queryByText('Configuración IA')).not.toBeInTheDocument();
     });
   });
 

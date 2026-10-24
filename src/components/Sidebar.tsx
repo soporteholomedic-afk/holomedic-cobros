@@ -3,7 +3,7 @@
 import { useState, useCallback } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Activity, Building2, FileSpreadsheet, Home, DollarSign, FileText, Mail, Menu, X, Users, LogOut, MessageSquare, PenLine, Gauge, BookOpen, SlidersHorizontal } from 'lucide-react';
+import { Activity, Building2, FileSpreadsheet, Home, DollarSign, FileText, Mail, Menu, X, LogOut, MessageSquare, Gauge, BookOpen, SlidersHorizontal, Settings } from 'lucide-react';
 import AreasMenuItem from './AreasMenuItem';
 import { useAuth } from '@/features/auth/presentation/hooks/useAuth';
 import { useNotificacionesConversaciones } from '@/features/crm/presentation/hooks/useNotificacionesConversaciones';
@@ -46,10 +46,25 @@ export default function Sidebar() {
     canConversaciones === true,
   );
   const requiereAyuda = resumenNotificaciones?.requiereAyuda ?? 0;
-  // editor-firmas: "Mi firma" is gated by its OWN permiso — NOT by
-  // admin nor plantillas (design D1/D6; the page route requires
-  // exactly `firma_correo` via RUTAS_PROTEGIDAS).
+  // configuracion-tabs (S4): `firma_correo` no longer opens a separate
+  // "Mi firma" entry — it now feeds the shared "Configuración" entry
+  // below. The MI FIRMA tab route keeps its own `firma_correo` gate in
+  // RUTAS_PROTEGIDAS (design D1/D6 unchanged at the route level).
   const canEditFirma = user?.permisos.includes('firma_correo');
+  // configuracion-tabs (S2/S3): ONE "Configuración" entry replaces the
+  // separate "Usuarios" and "Mi firma" entries. Visible with `admin`
+  // OR `firma_correo`; each holder lands on the FIRST tab it can open
+  // — the tabs bar inside the page filters the rest, and every
+  // /configuracion sub-route keeps its own per-tab permiso in
+  // RUTAS_PROTEGIDAS.
+  const canSeccionConfiguracion = isAdmin === true || canEditFirma === true;
+  const configuracionHref = isAdmin
+    ? '/configuracion/usuarios'
+    : '/configuracion/firma';
+  // Boundary-safe prefix: /configuracion plus any sub-route, without
+  // matching lookalikes like /configuracion-otros.
+  const configuracionSectionActiva =
+    pathname === '/configuracion' || pathname.startsWith('/configuracion/');
   // E3·T6 active-state: exact match or any sub-route of the bandeja.
   const conversacionesActiva =
     pathname === '/crm/conversaciones' || pathname.startsWith('/crm/conversaciones/');
@@ -269,37 +284,19 @@ export default function Sidebar() {
             </Link>
           )}
 
-          {canEditFirma && (
+          {canSeccionConfiguracion && (
             <Link
-              href="/admin/plantillas/firma"
+              href={configuracionHref}
               onClick={closeMobile}
               className={`flex items-center space-x-3 px-4 py-3 rounded-xl text-sm font-medium transition-all duration-200 ${
-                pathname === '/admin/plantillas/firma'
+                configuracionSectionActiva
                   ? 'bg-sky-950/50 text-sky-300 border border-sky-800/30 shadow-sm'
                   : 'text-slate-400 hover:text-white hover:bg-slate-800/50'
               }`}
             >
-              <PenLine className="w-5 h-5" />
-              <span>Mi firma</span>
-              {pathname === '/admin/plantillas/firma' && (
-                <span className="ml-auto w-1.5 h-1.5 rounded-full bg-sky-400 shadow-sm shadow-sky-400/50" />
-              )}
-            </Link>
-          )}
-
-          {isAdmin && (
-            <Link
-              href="/admin/usuarios"
-              onClick={closeMobile}
-              className={`flex items-center space-x-3 px-4 py-3 rounded-xl text-sm font-medium transition-all duration-200 ${
-                pathname === '/admin/usuarios'
-                  ? 'bg-sky-950/50 text-sky-300 border border-sky-800/30 shadow-sm'
-                  : 'text-slate-400 hover:text-white hover:bg-slate-800/50'
-              }`}
-            >
-              <Users className="w-5 h-5" />
-              <span>Usuarios</span>
-              {pathname === '/admin/usuarios' && (
+              <Settings className="w-5 h-5" />
+              <span>Configuración</span>
+              {configuracionSectionActiva && (
                 <span className="ml-auto w-1.5 h-1.5 rounded-full bg-sky-400 shadow-sm shadow-sky-400/50" />
               )}
             </Link>
