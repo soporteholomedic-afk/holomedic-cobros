@@ -4,10 +4,10 @@ Guía operativa de los dos entornos de ejecución del proyecto: el **contenedor 
 
 ## Ruta rápida (deploy Docker)
 
-1. `docker build -t holomedic-cobros:latest .`
+1. Construir la imagen desde el commit mergeado: `git archive <sha> | docker build -t holomedic-cobros:<sha-corto> -t holomedic-cobros:latest -`.
 2. Extraer las variables de entorno del contenedor actual a un env-file (sin imprimirlas).
-3. Rotar el contenedor actual a `holomedic-cobros-app-old` (rollback).
-4. `docker run` del nuevo contenedor en el puerto 3000.
+3. Rotar el contenedor actual a `holomedic-cobros-app-prev-<sha>` (rollback).
+4. `docker run` del nuevo contenedor con `--network host` — escucha directo en el puerto 3000 del host, **sin `-p`**.
 5. Verificar HTTP 200.
 
 Detalle completo en [A. Deploy Docker](#a-deploy-docker-producción-linux).
@@ -24,8 +24,16 @@ Paso a paso confirmado por el maintainer. Ejecutar desde la raíz del checkout d
 
 **1. Construir la imagen**
 
+Convención de tags: **hash corto del commit desplegado** + `latest`. Construir desde el árbol exacto del commit (evita arrastrar archivos sin trackear del checkout):
+
 ```bash
-docker build -t holomedic-cobros:latest .
+git archive <sha> | docker build -t holomedic-cobros:<sha-corto> -t holomedic-cobros:latest -
+```
+
+Alternativa desde el checkout (verificar antes que el árbol de trabajo corresponde al commit a desplegar):
+
+```bash
+docker build -t holomedic-cobros:<sha-corto> -t holomedic-cobros:latest .
 ```
 
 **2. Extraer el entorno de runtime del contenedor actual — SIN imprimirlo**
@@ -35,22 +43,25 @@ El env-file se genera desde el contenedor en ejecución, filtrando solo los pref
 ```bash
 docker inspect holomedic-cobros-app \
   --format '{{range .Config.Env}}{{println .}}{{end}}' \
-  | grep -E '^(SMTP_|DB_|HOLOMEDIC_DB_)' > /root/holomedic-cobros.env
+  | grep -vE '^(PATH|NODE_VERSION|YARN_VERSION)=' > "$HOME/holomedic-cobros.env"
 
-chmod 600 /root/holomedic-cobros.env
+chmod 600 "$HOME/holomedic-cobros.env"
 ```
 
-> **Advertencia sobre el filtro**: el patrón `^(SMTP_|DB_|HOLOMEDIC_DB_)` captura credenciales SMTP (incluidas las variantes por propósito `SMTP_USER_FACTURACION`, etc.) y de base de datos, pero **no** captura otras variables de runtime que el código lee: `JWT_SECRET`, `COOKIE_SECURE`, `FILE_SERVER_BASE_PATH` y `PDFCLI_*`. Si el contenedor actual las define, agregarlas al `grep` o al env-file manualmente antes del paso 4.
+> **Por qué este filtro**: se captura **todo el env del contenedor** excepto las variables que la imagen base inyecta (`PATH`, `NODE_VERSION`, `YARN_VERSION` — el nuevo contenedor las recibe igual de la imagen). Así ninguna variable de runtime definida a mano (`JWT_SECRET`, `COOKIE_SECURE`, `FILE_SERVER_BASE_PATH`, `PDFCLI_*`, `PDF_COMPRESSION_PROFILE`, además de las de credenciales `SMTP_*` / `DB_*` / `HOLOMEDIC_DB_*`) puede quedar afuera. Nunca hacer `cat` ni `echo` del resultado: contiene contraseñas.
+>
+> **Ruta del env-file**: usar `$HOME` (o otra ruta escribible por el usuario de deploy). `/root/` NO es escribible por `sysadmin` sin sudo.
 
 **3. Rotar el contenedor actual a `-old` (patrón de rollback)**
 
 ```bash
-# Eliminar el -old de la rotación anterior, si existe
-docker rm -f holomedic-cobros-app-old
+# Eliminar el rollback de la rotación anterior (se conserva UNO solo)
+docker rm -f holomedic-cobros-app-prev-<sha-anterior>
 
-# Renombrar el actual y detenerlo: queda como rollback instantáneo
-docker rename holomedic-cobros-app holomedic-cobros-app-old
-docker stop holomedic-cobros-app-old
+# Renombrar el actual y detenerlo: queda como rollback instantáneo.
+# El nombre lleva el sha de la imagen que contiene (la del deploy anterior).
+docker rename holomedic-cobros-app holomedic-cobros-app-prev-<sha-anterior>
+docker stop holomedic-cobros-app-prev-<sha-anterior>
 ```
 
 **4. Lanzar el nuevo contenedor**
@@ -59,11 +70,13 @@ docker stop holomedic-cobros-app-old
 docker run -d \
   --name holomedic-cobros-app \
   --restart unless-stopped \
-  -p 3000:3000 \
-  --env-file /root/holomedic-cobros.env \
+  --network host \
+  --env-file "$HOME/holomedic-cobros.env" \
   -v /mnt/sigla:/mnt/sigla \
-  holomedic-cobros:latest
+  holomedic-cobros:<sha-corto>
 ```
+
+> **Red**: el contenedor corre en modo **`host`** — el proceso escucha directo en el `:3000` del host, así que **no se usa `-p`** (con host networking es ignorado). Que `docker port holomedic-cobros-app` no muestre nada es lo esperado; verificar con `curl http://localhost:3000`. Config confirmada contra producción (2026-10-24); no volver a `-p 3000:3000` sin una decisión explícita.
 
 El volumen `/mnt/sigla` es el share SMB del archivo de pacientes. En Linux, `src/lib/platform.ts` resuelve `FILE_SERVER_BASE_PATH` por defecto a `/mnt/sigla` (en Windows usa la ruta UNC `\\172.16.10.12\sigla`); por eso el mount debe existir con ese nombre exacto, salvo que se sobrescriba la variable de entorno.
 
@@ -71,21 +84,21 @@ El volumen `/mnt/sigla` es el share SMB del archivo de pacientes. En Linux, `src
 
 ### Rollback
 
-El contenedor `-old` queda detenido como imagen de rollback instantáneo. Para volver a la versión anterior:
+El contenedor `holomedic-cobros-app-prev-<sha>` queda detenido como rollback instantáneo. Para volver a la versión anterior:
 
 ```bash
 # Detener y eliminar el contenedor nuevo (el que falló)
 docker rm -f holomedic-cobros-app
 
-# Restaurar el -old: renombrar y arrancar
-docker rename holomedic-cobros-app-old holomedic-cobros-app
+# Restaurar el -prev: renombrar y arrancar
+docker rename holomedic-cobros-app-prev-<sha-anterior> holomedic-cobros-app
 docker start holomedic-cobros-app
 
 # Verificar
 curl -s -o /dev/null -w '%{http_code}\n' http://localhost:3000
 ```
 
-Nota: el rollback reutiliza el env-file y la imagen del contenedor `-old` tal como estaban; no requiere reconstruir nada.
+Nota: el rollback reutiliza el env-file y la imagen del contenedor `-prev` tal como estaban; no requiere reconstruir nada.
 
 ### Verificación post-deploy
 
@@ -98,9 +111,10 @@ docker ps --filter name=holomedic-cobros-app
 docker logs --tail 50 holomedic-cobros-app
 ```
 
-- **200** → deploy OK. El contenedor `-old` queda detenido como rollback.
+- **200** → deploy OK. El contenedor `-prev-<sha>` queda detenido como rollback.
 - **Otro código / reinicios en loop** → revisar `docker logs` (falta una env var, SQL Server inalcanzable, mount `/mnt/sigla` ausente) y evaluar el rollback.
 - Verificación funcional mínima recomendada: login en la app y una descarga de un informe que toque el share de archivos.
+- Verificación opcional de que la imagen nueva es la que corre: `grep` de una cadena distintiva del cambio dentro del bundle, p. ej. `docker exec holomedic-cobros-app grep -rl '<cadena del feature>' .next/server/chunks .next/static/chunks`.
 
 ---
 
@@ -322,10 +336,10 @@ Para el checklist ordenado de puesta en producción (verificación de TZ del hos
 ## Checklist de deploy completo
 
 - [ ] Cambio mergeado en `develop` y promovido a `master` (ver `docs/DEVELOPMENT.md`).
-- [ ] `docker build -t holomedic-cobros:latest .` sin errores.
-- [ ] Env-file extraído del contenedor actual con `chmod 600`, sin imprimirlo; filtro revisado contra las variables que el código realmente lee.
-- [ ] Contenedor actual rotado a `-old` y detenido.
-- [ ] `docker run` con `--restart unless-stopped`, `-p 3000:3000`, `--env-file`, `-v /mnt/sigla:/mnt/sigla`.
+- [ ] Imagen construida desde el commit mergeado y taggeada `holomedic-cobros:<sha-corto>` + `latest` (ver sección A paso 1).
+- [ ] Env-file extraído del contenedor actual (todo el env menos `PATH`/`NODE_VERSION`/`YARN_VERSION`) con `chmod 600`, sin imprimirlo.
+- [ ] Contenedor actual rotado a `-prev-<sha>` y detenido.
+- [ ] `docker run` con `--restart unless-stopped`, `--network host` (sin `-p`), `--env-file`, `-v /mnt/sigla:/mnt/sigla`.
 - [ ] HTTP 200 verificado; logs sin errores.
 - [ ] Si el cambio toca el SDK Windows: sync ejecutado (`./sync-sdk.sh` o `.\sync-sdk.ps1`) y `.env.local` de `C:\HOLOMEDIC` actualizado si cambió alguna variable.
 - [ ] Si el deploy incluye el worker de asistencia: instalación de la [sección D](#d-deploy-del-worker-de-asistencia-linux) ejecutada y runbook de go-live completado con su evidencia.
