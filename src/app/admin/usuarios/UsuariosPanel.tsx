@@ -18,6 +18,13 @@ interface Usuario {
   updatedAt: string;
 }
 
+/** Slim area view from GET /api/areas (feature areas-crud). */
+interface AreaOption {
+  idArea: string;
+  nombre: string;
+  activo: boolean;
+}
+
 const initialForm = { usuario: '', nombre: '', area: '', correo: '', contrasena: '', permisos: [] as Permiso[] };
 
 /**
@@ -41,6 +48,8 @@ export function UsuariosPanel() {
   const [saving, setSaving] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [showPass, setShowPass] = useState(false);
+  /** Area catalog for the Área dropdown (feature areas-crud). */
+  const [areas, setAreas] = useState<AreaOption[]>([]);
 
   useEffect(() => {
     if (authLoading) return;
@@ -61,6 +70,32 @@ export function UsuariosPanel() {
         }
       } finally {
         if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [authLoading, user]);
+
+  /** Load the area catalog for the dropdown; failure shows the shared
+   *  error banner but never blocks usuarios management. */
+  useEffect(() => {
+    if (authLoading) return;
+    if (!user?.permisos.includes('admin')) {
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch('/api/areas');
+        if (cancelled) return;
+        if (!res.ok) throw new Error('No se pudo cargar el catálogo de áreas');
+        const data = await res.json();
+        if (!cancelled) setAreas(data.areas ?? []);
+      } catch (err) {
+        if (!cancelled) {
+          setError(
+            err instanceof Error ? err.message : 'No se pudo cargar el catálogo de áreas',
+          );
+        }
       }
     })();
     return () => { cancelled = true; };
@@ -184,6 +219,15 @@ export function UsuariosPanel() {
   // usuarios-nombre-firma — search matches usuario, nombre OR area
   // (extracted pure helper, unit-tested in filterUsuarios.test.ts).
   const filtered = filterUsuarios(usuarios, searchTerm);
+
+  // Dropdown options: ACTIVE catalog areas, plus the form's current
+  // value as a fallback so a legacy free-text area (or one deleted
+  // after the user was assigned) stays visible and preserved on save.
+  const areasActivas = areas.filter((a) => a.activo).map((a) => a.nombre);
+  const areaOptions =
+    form.area && !areasActivas.some((n) => n.toLowerCase() === form.area.toLowerCase())
+      ? [...areasActivas, form.area]
+      : areasActivas;
 
   if (authLoading) {
     return <LoadingSkeleton />;
@@ -328,38 +372,48 @@ export function UsuariosPanel() {
 
             <form onSubmit={handleSubmit} className="p-6 space-y-4">
               <div>
-                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Usuario</label>
-                <input
-                  type="text"
-                  value={form.usuario}
-                  onChange={(e) => setForm((p) => ({ ...p, usuario: e.target.value }))}
-                  required
-                  placeholder="Identificador para iniciar sesión (ej: jdoe)"
-                  className="w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-white text-sm focus:ring-2 focus:ring-sky-500 focus:border-transparent outline-none"
-                />
+                <label className="block">
+                  <span className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Usuario</span>
+                  <input
+                    type="text"
+                    value={form.usuario}
+                    onChange={(e) => setForm((p) => ({ ...p, usuario: e.target.value }))}
+                    required
+                    placeholder="Identificador para iniciar sesión (ej: jdoe)"
+                    className="w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-white text-sm focus:ring-2 focus:ring-sky-500 focus:border-transparent outline-none"
+                  />
+                </label>
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Nombre</label>
-                <input
-                  type="text"
-                  value={form.nombre}
-                  onChange={(e) => setForm((p) => ({ ...p, nombre: e.target.value }))}
-                  required
-                  placeholder="Nombre completo (ej: John Doe)"
-                  className="w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-white text-sm focus:ring-2 focus:ring-sky-500 focus:border-transparent outline-none"
-                />
+                <label className="block">
+                  <span className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Nombre</span>
+                  <input
+                    type="text"
+                    value={form.nombre}
+                    onChange={(e) => setForm((p) => ({ ...p, nombre: e.target.value }))}
+                    required
+                    placeholder="Nombre completo (ej: John Doe)"
+                    className="w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-white text-sm focus:ring-2 focus:ring-sky-500 focus:border-transparent outline-none"
+                  />
+                </label>
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Área</label>
-                <input
-                  type="text"
-                  value={form.area}
-                  onChange={(e) => setForm((p) => ({ ...p, area: e.target.value }))}
-                  required
-                  className="w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-white text-sm focus:ring-2 focus:ring-sky-500 focus:border-transparent outline-none"
-                />
+                <label className="block">
+                  <span className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Área</span>
+                  <select
+                    value={form.area}
+                    onChange={(e) => setForm((p) => ({ ...p, area: e.target.value }))}
+                    required
+                    className="w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-white text-sm focus:ring-2 focus:ring-sky-500 focus:border-transparent outline-none"
+                  >
+                    <option value="" disabled>Seleccioná un área</option>
+                    {areaOptions.map((nombre) => (
+                      <option key={nombre} value={nombre}>{nombre}</option>
+                    ))}
+                  </select>
+                </label>
               </div>
 
               <div>

@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import UsuariosPage from '../page';
-
 // Mock useAuth — the table renders only for an admin session.
 vi.mock('@/features/auth/presentation/hooks/useAuth', () => ({
   useAuth: () => ({
@@ -59,6 +59,102 @@ async function renderUsuariosTable() {
 
 afterEach(() => {
   vi.restoreAllMocks();
+});
+
+// ---- Feature areas-crud: the usuarios form picks the area from the
+// ---- /api/areas catalog instead of free text.
+
+const areas = [
+  { idArea: 'a-1', nombre: 'Ventas', descripcion: null, activo: true, createdAt: '', updatedAt: '' },
+  { idArea: 'a-2', nombre: 'Enfermería', descripcion: null, activo: true, createdAt: '', updatedAt: '' },
+  { idArea: 'a-3', nombre: 'Legajos', descripcion: null, activo: false, createdAt: '', updatedAt: '' },
+];
+
+function mockFetchConCatalogo() {
+  return vi.spyOn(globalThis, 'fetch').mockImplementation((input, init) => {
+    const url = typeof input === 'string' ? input : input instanceof Request ? input.url : String(input);
+    void init;
+    if (url === '/api/areas') {
+      return new Response(JSON.stringify({ success: true, areas }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
+    return new Response(JSON.stringify({ success: true, usuarios }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    });
+  });
+}
+
+describe('UsuariosPage — dropdown de áreas (feature areas-crud)', () => {
+  it('el formulario elige el área de un select alimentado por el catálogo', async () => {
+    const user = userEvent.setup();
+    mockFetchConCatalogo();
+    render(<UsuariosPage />);
+    await waitFor(() => {
+      expect(screen.getByText('María López')).toBeInTheDocument();
+    });
+
+    await user.click(screen.getByRole('button', { name: /nuevo usuario/i }));
+
+    const select = screen.getByLabelText('Área');
+    expect(select.tagName).toBe('SELECT');
+    const opciones = within(select)
+      .getAllByRole('option')
+      .map((o) => o.textContent);
+    // Only ACTIVE catalog areas are offered (soft-deleted ones are not assignable).
+    expect(opciones).toEqual(['Seleccioná un área', 'Ventas', 'Enfermería']);
+  });
+
+  it('conserva el área actual del usuario aunque no esté en el catálogo', async () => {
+    const user = userEvent.setup();
+    mockFetchConCatalogo();
+    render(<UsuariosPage />);
+    await waitFor(() => {
+      expect(screen.getByText('María López')).toBeInTheDocument();
+    });
+
+    // María belongs to 'cobranza', which the catalog does not list.
+    await user.click(screen.getAllByTitle('Editar')[0]);
+
+    const select = screen.getByLabelText('Área');
+    const opciones = within(select)
+      .getAllByRole('option')
+      .map((o) => o.textContent);
+    expect(opciones).toContain('cobranza');
+    expect(select).toHaveValue('cobranza');
+  });
+
+  it('envía el área elegida del catálogo al crear el usuario', async () => {
+    const user = userEvent.setup();
+    const fetchSpy = mockFetchConCatalogo();
+    const { container } = render(<UsuariosPage />);
+    await waitFor(() => {
+      expect(screen.getByText('María López')).toBeInTheDocument();
+    });
+
+    await user.click(screen.getByRole('button', { name: /nuevo usuario/i }));
+    await user.type(screen.getByLabelText('Usuario'), 'nuevo1');
+    await user.type(screen.getByLabelText('Nombre'), 'Nuevo Usuario');
+    await user.selectOptions(screen.getByLabelText('Área'), 'Ventas');
+    await user.type(container.querySelector('input[type="password"]') as HTMLInputElement, 'clave123');
+    // El botón de envío exige al menos un permiso (form.permisos.length > 0).
+    await user.click(container.querySelector('input[type="checkbox"]') as HTMLInputElement);
+    await user.click(screen.getByRole('button', { name: /crear usuario/i }));
+
+    await waitFor(() => {
+      expect(fetchSpy).toHaveBeenCalledWith(
+        '/api/usuarios',
+        expect.objectContaining({ method: 'POST' }),
+      );
+    });
+    const createCall = fetchSpy.mock.calls.find(
+      ([, init]) => (init as RequestInit | undefined)?.method === 'POST',
+    );
+    const body = JSON.parse((createCall?.[1] as RequestInit).body as string);
+    expect(body.area).toBe('Ventas');
+  });
 });
 
 describe('UsuariosPage — correo column', () => {
