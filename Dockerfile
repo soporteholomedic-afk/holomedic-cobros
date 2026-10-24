@@ -15,6 +15,14 @@ COPY . .
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV NODE_ENV=production
 RUN pnpm build
+# pdfjs-dist (via pdf-parse) needs @napi-rs/canvas to polyfill DOMMatrix.
+# The standalone tracer copies canvas next to pdfjs but not its platform
+# binary package, so place the musl binary beside canvas' js-binding (it
+# tries `./skia.linux-x64-musl.node` first). Fail the build if missing.
+RUN set -e; for d in .next/standalone/node_modules/.pnpm/pdfjs-dist@*/node_modules/@napi-rs/canvas; do \
+      cp node_modules/.pnpm/@napi-rs+canvas-linux-x64-musl@*/node_modules/@napi-rs/canvas-linux-x64-musl/skia.linux-x64-musl.node "$d/"; \
+    done; \
+    ls .next/standalone/node_modules/.pnpm/pdfjs-dist@*/node_modules/@napi-rs/canvas/skia.linux-x64-musl.node
 
 FROM node:22-alpine AS runner
 WORKDIR /app

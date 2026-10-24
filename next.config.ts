@@ -5,7 +5,11 @@ const nextConfig: NextConfig = {
   // exceljs resolves modules dynamically and sharp is a native module —
   // keep both out of the server bundle so the standalone output can
   // require them at runtime.
-  serverExternalPackages: ['exceljs', 'sharp'],
+  // pdf-parse -> pdfjs-dist evaluates `DOMMatrix` on load and polyfills it
+  // from the native @napi-rs/canvas via a runtime `require`. Bundled, that
+  // require is lost and the module throws `DOMMatrix is not defined`; kept
+  // external, the real packages are traced into the standalone output.
+  serverExternalPackages: ['exceljs', 'sharp', 'pdf-parse', 'pdfjs-dist', '@napi-rs/canvas'],
   // The standalone tracer (@vercel/nft) copies sharp's JS and the platform
   // `.node` binaries, but drops the ELF shared libraries those binaries
   // load via the dynamic linker (DT_NEEDED) — `libvips-cpp.so.8.18.6` +
@@ -25,6 +29,18 @@ const nextConfig: NextConfig = {
       'node_modules/.pnpm/@img+sharp-linux-x64@*/**/*',
       'node_modules/.pnpm/@img+sharp-linuxmusl-x64@*/**/*',
       'node_modules/.pnpm/@img+sharp-win32-x64@*/**/*',
+      // @napi-rs/canvas picks its platform binary with a dynamic require the
+      // tracer cannot follow; include the three platform families explicitly.
+      'node_modules/.pnpm/@napi-rs+canvas@*/**/*',
+      'node_modules/.pnpm/@napi-rs+canvas-linux-x64-gnu@*/**/*',
+      'node_modules/.pnpm/@napi-rs+canvas-linux-x64-musl@*/**/*',
+      'node_modules/.pnpm/@napi-rs+canvas-win32-x64-msvc@*/**/*',
+      // pdfjs-dist resolves `@napi-rs/canvas` through its own pnpm symlink;
+      // the tracer drops that link, so pdfjs cannot find canvas at runtime.
+      'node_modules/.pnpm/pdfjs-dist@*/node_modules/@napi-rs/canvas',
+      'node_modules/.pnpm/pdfjs-dist@*/node_modules/@napi-rs/canvas/**/*',
+      // pdfjs loads its worker with a dynamic import the tracer cannot see.
+      'node_modules/.pnpm/pdfjs-dist@*/node_modules/pdfjs-dist/legacy/build/pdf.worker.mjs',
     ],
   },
   allowedDevOrigins: ['172.16.10.20'],
