@@ -1,5 +1,4 @@
 import mammoth from 'mammoth';
-import { PDFParse } from 'pdf-parse';
 
 import type { TipoIngesta } from '../../domain/entities';
 
@@ -33,8 +32,17 @@ function textoPlano(datos: Buffer): string {
   return datos.toString('utf8').replace(/^\uFEFF/, '');
 }
 
-/** pdf-parse 2.x: instancia por documento + getText + destroy. */
+/**
+ * pdf-parse 2.x: instancia por documento + getText + destroy.
+ *
+ * Import diferido a propósito: pdfjs-dist (dependencia de pdf-parse)
+ * evalúa `DOMMatrix` al cargarse y, sin @napi-rs/canvas disponible,
+ * lanza en el import. Con un import estático eso tumbaba TODA la ruta
+ * de ingestas (incluido el listado GET); diferido, solo falla la
+ * extracción de PDF y lo hace como `ExtraccionError`.
+ */
 async function extraerPdf(datos: Buffer): Promise<string> {
+  const { PDFParse } = await import('pdf-parse');
   const parser = new PDFParse({ data: new Uint8Array(datos) });
   try {
     const resultado = await parser.getText();
