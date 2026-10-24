@@ -113,8 +113,44 @@ Resumen operativo; la norma completa está en `AGENTS.md`.
 
 ### Base de datos SIGLA
 
-- Exploración de SIGLA: **solo** perfil `EXPLORADOR_DATOS` (`HOLOMEDIC_DB_USER=explorar_datos`, solo lectura).
+- Exploración de SIGLA: **solo** perfil `EXPLORADOR_DATOS` (usuario `explorar_datos`, solo lectura).
 - **Nunca** usar `SA` (`DB_USER=sa`) para exploración interactiva.
+
+### Base de datos HOLOMEDIC en desarrollo (local)
+
+En desarrollo, `HOLOMEDIC` (CRM, usuarios, plantillas, cobranza, asistencia — todo lo que la app **escribe**) vive en un SQL Server local en Docker. `SIGLA` sigue remota (172.16.10.14) y la app solo la lee. Nunca apuntar el dev local a la HOLOMEDIC de producción.
+
+1. Levantar el SQL Server local (una vez; el volumen `holomedic_dev_sql` persiste los datos):
+
+   ```bash
+   docker run -d --name holomedic-dev-sql --restart unless-stopped \
+     -e ACCEPT_EULA=Y -e MSSQL_PID=Developer -e MSSQL_COLLATION=Latin1_General_CI_AI \
+     -e MSSQL_SA_PASSWORD="<password local>" \
+     -p 127.0.0.1:1433:1433 -v holomedic_dev_sql:/var/opt/mssql \
+     mcr.microsoft.com/mssql/server:2022-latest
+   ```
+
+2. Clonar producción → local con `scripts/dev-db-dump.mjs`. Lee producción con el perfil de solo lectura `explorar_datos` (`SRC_*`) y **borra y recrea** la base local (`DST_*`; el script se niega a escribir en un host que no sea `localhost`/`127.0.0.1`). Copia tablas, columnas, defaults, checks, índices (incluidos los filtrados), datos, contadores de identidad y FKs, y termina comparando el conteo de filas de cada tabla (exit 1 si alguna difiere):
+
+   ```bash
+   SRC_HOST=172.16.10.14 SRC_USER=explorar_datos SRC_PASSWORD=... SRC_DB=HOLOMEDIC \
+   DST_HOST=127.0.0.1 DST_USER=sa DST_PASSWORD="<password local>" DST_DB=HOLOMEDIC \
+   node scripts/dev-db-dump.mjs
+   ```
+
+   Los datos copiados incluyen PII y hashes de contraseñas de producción: no exponer el puerto fuera de `127.0.0.1` ni compartir el volumen.
+
+3. En `.env.local`:
+
+   ```bash
+   HOLOMEDIC_DB_NAME=HOLOMEDIC
+   HOLOMEDIC_DB_HOST=127.0.0.1
+   HOLOMEDIC_DB_PORT=1433
+   HOLOMEDIC_DB_USER=sa
+   HOLOMEDIC_DB_PASSWORD=<password local>
+   ```
+
+   `DB_*` (SIGLA) no cambia. Para refrescar los datos, volver a correr el paso 2.
 
 ## Auth y protección de rutas
 
