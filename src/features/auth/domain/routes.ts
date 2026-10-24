@@ -42,6 +42,19 @@ export const RUTAS_PROTEGIDAS: RutaProtegida[] = [
   { path: '/api/plantillas/firma',                permiso: 'firma_correo', label: 'API Mi Firma' },
   { path: '/admin/usuarios',      permiso: 'admin',            label: 'Gestión de Usuarios' },
   { path: '/api/usuarios',        permiso: 'admin',            label: 'API Usuarios' },
+  // configuracion-tabs: the /configuracion section groups the user-
+  // management, areas and own-signature surfaces behind per-tab entries.
+  // Each tab keeps EXACTLY ONE permiso (proxy contract): `admin` for the
+  // usuarios/areas tabs, `firma_correo` for the firma tab — reused from
+  // the existing registry, NO new PERMISOS entry. The prefixes are
+  // independent of `/admin/...`, so longest-first startsWith matching
+  // never leaks these gates onto legacy routes (and vice versa). The
+  // bare `/configuracion` redirect page is deliberately UNREGISTERED:
+  // it is public and renders no content, only a session-aware redirect
+  // to the first allowed tab.
+  { path: '/configuracion/usuarios', permiso: 'admin',         label: 'Usuarios (Configuración)' },
+  { path: '/configuracion/areas',    permiso: 'admin',         label: 'Áreas (Configuración)' },
+  { path: '/configuracion/firma',    permiso: 'firma_correo',  label: 'Mi Firma (Configuración)' },
   // asistencia-rrhh (Fase 1): session-gated RRHH surface (ADR-6). The
   // device namespace `/api/asistencia/*` is deliberately NOT registered —
   // devices authenticate with their own Bearer token inside the route
