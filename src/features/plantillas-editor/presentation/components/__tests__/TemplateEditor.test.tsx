@@ -342,4 +342,106 @@ describe('TemplateEditor', () => {
       expect(screen.getByTestId('editor-view-mock')).toBeInTheDocument();
     });
   });
+
+  describe('delete (soft delete via DELETE /api/plantillas/:id)', () => {
+    it('disables Eliminar until a saved template is selected', async () => {
+      const tpl = makeTemplate({ id: 'tpl-1', name: 'Welcome' });
+      await renderEditor({ templates: [tpl] });
+
+      const deleteButton = screen.getByRole('button', { name: /eliminar/i });
+      expect(deleteButton).toBeDisabled();
+
+      fireEvent.change(screen.getByRole('combobox', { name: /plantilla/i }), {
+        target: { value: 'tpl-1' },
+      });
+      expect(deleteButton).toBeEnabled();
+    });
+
+    it('asks for confirmation, DELETEs the template, removes it from the selector, and resets to nueva plantilla', async () => {
+      const fetchMock = vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: async () => ({ id: 'tpl-1', deletedAt: '2026-01-02T00:00:00.000Z' }),
+      });
+      global.fetch = fetchMock as unknown as typeof fetch;
+      const tpl = makeTemplate({ id: 'tpl-1', name: 'Welcome' });
+      await renderEditor({ templates: [tpl] });
+
+      fireEvent.change(screen.getByRole('combobox', { name: /plantilla/i }), {
+        target: { value: 'tpl-1' },
+      });
+      fireEvent.click(screen.getByRole('button', { name: /eliminar/i }));
+
+      // Confirmation dialog names the template; nothing deleted yet.
+      const dialog = screen.getByRole('dialog', { name: /welcome/i });
+      expect(fetchMock).not.toHaveBeenCalled();
+
+      fireEvent.click(within(dialog).getByRole('button', { name: /^eliminar/i }));
+
+      await waitFor(() => {
+        expect(fetchMock).toHaveBeenCalledTimes(1);
+      });
+      const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+      expect(url).toBe('/api/plantillas/tpl-1');
+      expect(init.method).toBe('DELETE');
+
+      // The template is gone from the selector and the form is reset.
+      const select = screen.getByRole('combobox', { name: /plantilla/i });
+      expect(within(select).queryByRole('option', { name: 'Welcome' })).not.toBeInTheDocument();
+      expect(select).toHaveValue('');
+      // dnd-kit also renders a role="status" live region — assert on content.
+      expect(
+        screen.getAllByRole('status').some((el) => /eliminada/i.test(el.textContent ?? '')),
+      ).toBe(true);
+    });
+
+    it('keeps the template and performs no request when the confirmation is cancelled', async () => {
+      const fetchMock = vi.fn();
+      global.fetch = fetchMock as unknown as typeof fetch;
+      const tpl = makeTemplate({ id: 'tpl-1', name: 'Welcome' });
+      await renderEditor({ templates: [tpl] });
+
+      fireEvent.change(screen.getByRole('combobox', { name: /plantilla/i }), {
+        target: { value: 'tpl-1' },
+      });
+      fireEvent.click(screen.getByRole('button', { name: /eliminar/i }));
+      const dialog = screen.getByRole('dialog', { name: /welcome/i });
+      fireEvent.click(within(dialog).getByRole('button', { name: /cancelar/i }));
+
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+      expect(fetchMock).not.toHaveBeenCalled();
+      expect(
+        within(screen.getByRole('combobox', { name: /plantilla/i })).getByRole('option', {
+          name: 'Welcome',
+        }),
+      ).toBeInTheDocument();
+    });
+
+    it('surfaces an error and keeps the template when the delete API rejects', async () => {
+      global.fetch = vi.fn().mockResolvedValue({
+        ok: false,
+        status: 500,
+        json: async () => ({ success: false, error: 'No se pudo eliminar la plantilla', code: 'INTERNAL_ERROR' }),
+      }) as unknown as typeof fetch;
+      const tpl = makeTemplate({ id: 'tpl-1', name: 'Welcome' });
+      await renderEditor({ templates: [tpl] });
+
+      fireEvent.change(screen.getByRole('combobox', { name: /plantilla/i }), {
+        target: { value: 'tpl-1' },
+      });
+      fireEvent.click(screen.getByRole('button', { name: /eliminar/i }));
+      const dialog = screen.getByRole('dialog', { name: /welcome/i });
+      fireEvent.click(within(dialog).getByRole('button', { name: /^eliminar/i }));
+
+      await waitFor(() => {
+        expect(screen.getByRole('alert')).toHaveTextContent(/no se pudo eliminar/i);
+      });
+      // The template stays in the selector (soft delete did not happen).
+      expect(
+        within(screen.getByRole('combobox', { name: /plantilla/i })).getByRole('option', {
+          name: 'Welcome',
+        }),
+      ).toBeInTheDocument();
+    });
+  });
 });
