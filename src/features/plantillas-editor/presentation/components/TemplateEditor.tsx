@@ -29,6 +29,7 @@ import { ColumnPicker } from './ColumnPicker';
 import { buildPreviewHtml } from '../helpers/buildPreviewHtml';
 import { buildTableCellColorCSS } from './tableCellColors';
 import { saveTemplateApi } from '../helpers/saveTemplateApi';
+import { deleteTemplateApi } from '../helpers/deleteTemplateApi';
 import {
   handlePaletteDragEnd,
   BODY_DROP_ID,
@@ -103,6 +104,10 @@ interface PickerState {
  * handle so it never imports `@blocknote/react` directly.
  */
 export function TemplateEditor({ areaConfig, templates }: TemplateEditorProps) {
+  // --- template list ---
+  // Working copy of the server-seeded props: a successful soft delete removes
+  // the entry client-side so the selector stops offering it immediately.
+  const [templateList, setTemplateList] = useState<Template[]>(templates);
   // --- form state ---
   const [selectedTemplateId, setSelectedTemplateId] = useState<string>('');
   const [name, setName] = useState('');
@@ -122,6 +127,10 @@ export function TemplateEditor({ areaConfig, templates }: TemplateEditorProps) {
 
   // --- column picker state ---
   const [picker, setPicker] = useState<PickerState | null>(null);
+
+  // --- delete state ---
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   // --- drag-and-drop state ---
   const [activeDragAttrs, setActiveDragAttrs] = useState<TokenAttrs | null>(null);
@@ -176,7 +185,7 @@ export function TemplateEditor({ areaConfig, templates }: TemplateEditorProps) {
       editorViewRef.current?.loadHtml('<p></p>');
       return;
     }
-    const tpl = templates.find((t) => t.id === id);
+    const tpl = templateList.find((t) => t.id === id);
     if (!tpl) return;
     setName(tpl.name);
     setType(tpl.type);
@@ -232,6 +241,33 @@ export function TemplateEditor({ areaConfig, templates }: TemplateEditorProps) {
       setSaveError(error instanceof Error ? error.message : 'No se pudo guardar la plantilla');
     } finally {
       setSaving(false);
+    }
+  }
+
+  /**
+   * Soft-deletes the selected template after the confirmation dialog. On
+   * success the template is removed from the working list, the form resets
+   * to "nueva plantilla", and the shared status slot reports the outcome;
+   * on failure the error slot surfaces the API message and the template
+   * stays selected. The soft delete is recoverable via the restore route,
+   * so the confirm dialog frames it as a move to the trash.
+   */
+  async function handleDeleteConfirmed() {
+    if (!selectedTemplateId) return;
+    const deleted = templateList.find((t) => t.id === selectedTemplateId);
+    setDeleting(true);
+    setSaveError(null);
+    setSaveMessage(null);
+    try {
+      await deleteTemplateApi(selectedTemplateId);
+      setTemplateList((prev) => prev.filter((t) => t.id !== selectedTemplateId));
+      handleSelectTemplate('');
+      setShowDeleteConfirm(false);
+      setSaveMessage(`Plantilla "${deleted?.name ?? selectedTemplateId}" eliminada.`);
+    } catch (error) {
+      setSaveError(error instanceof Error ? error.message : 'No se pudo eliminar la plantilla');
+    } finally {
+      setDeleting(false);
     }
   }
 
@@ -293,7 +329,7 @@ export function TemplateEditor({ areaConfig, templates }: TemplateEditorProps) {
                       className="min-h-11 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus-visible:border-sky-600 focus-visible:ring-2 focus-visible:ring-sky-500 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100"
                     >
                       <option value="">— Nueva plantilla —</option>
-                      {templates.map((t) => (
+                      {templateList.map((t) => (
                         <option key={t.id} value={t.id}>
                           {t.name}
                         </option>
@@ -416,6 +452,14 @@ export function TemplateEditor({ areaConfig, templates }: TemplateEditorProps) {
                   >
                     {showPreview ? 'Ocultar previsualización' : 'Previsualizar'}
                   </button>
+                  <button
+                    type="button"
+                    onClick={() => setShowDeleteConfirm(true)}
+                    disabled={!selectedTemplateId || deleting}
+                    className="min-h-11 rounded-lg border border-red-300 px-5 py-2 text-sm font-medium text-red-700 hover:bg-red-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-500 disabled:cursor-not-allowed disabled:opacity-50 dark:border-red-900 dark:text-red-300 dark:hover:bg-red-950"
+                  >
+                    Eliminar
+                  </button>
                 </div>
                 {!name.trim() || !subject.trim() ? (
                   <p className="mt-3 text-sm text-slate-600 dark:text-slate-300">Completa el nombre y el asunto para guardar.</p>
@@ -461,6 +505,49 @@ export function TemplateEditor({ areaConfig, templates }: TemplateEditorProps) {
               onCancel={() => setPicker(null)}
               initialCols={picker.mode === 'edit' ? picker.editAttrs?.cols : undefined}
             />
+          </div>
+        </div>
+      )}
+
+      {/* Delete confirmation dialog (modal overlay, recoverable soft delete) */}
+      {showDeleteConfirm && selectedTemplateId !== '' && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
+          onClick={() => {
+            if (!deleting) setShowDeleteConfirm(false);
+          }}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="delete-confirm-heading"
+            className="w-full max-w-md rounded-xl border border-slate-200 bg-white p-6 shadow-lg dark:border-slate-700 dark:bg-slate-800"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2 id="delete-confirm-heading" className="text-lg font-semibold">
+              ¿Eliminar la plantilla «{templateList.find((t) => t.id === selectedTemplateId)?.name ?? selectedTemplateId}»?
+            </h2>
+            <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">
+              La plantilla se moverá a la papelera y podrás restaurarla más tarde.
+            </p>
+            <div className="mt-5 flex justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => setShowDeleteConfirm(false)}
+                disabled={deleting}
+                className="min-h-11 rounded-lg border border-slate-300 px-5 py-2 text-sm font-medium text-slate-800 hover:bg-slate-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-500 disabled:cursor-not-allowed disabled:opacity-50 dark:border-slate-600 dark:text-slate-100 dark:hover:bg-slate-700"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={handleDeleteConfirmed}
+                disabled={deleting}
+                className="min-h-11 rounded-lg bg-red-600 px-5 py-2 text-sm font-semibold text-white hover:bg-red-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-500 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-red-500 dark:text-white dark:hover:bg-red-400"
+              >
+                {deleting ? 'Eliminando…' : 'Eliminar'}
+              </button>
+            </div>
           </div>
         </div>
       )}
