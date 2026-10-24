@@ -1,8 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { __setTemplateDbForTests } from '@/features/plantillas-editor/infrastructure/getTemplateDb';
+import { __setAreaDbForTests } from '@/features/areas/infrastructure/getAreaDb';
 import { TemplateDefaultConflictError } from '@/features/plantillas-editor/infrastructure/sqlserver';
 import type { ITemplateRepository } from '@/features/plantillas-editor/domain/ports';
+import type { IAreaRepository } from '@/features/areas/domain/ports';
+import type { Area } from '@/features/areas/domain/entities';
 import type { Template } from '@/features/plantillas-editor/domain/entities';
 
 // ---- Import under test (after mocks) ----
@@ -45,6 +48,25 @@ function makeMockRepo(repo: Partial<ITemplateRepository> = {}): ITemplateReposit
   };
 }
 
+function makeMockAreaRepo(catalog: Array<{ nombre: string; activo: boolean }> = []): IAreaRepository {
+  const areas: Area[] = catalog.map((row, i) => ({
+    idArea: `area-${i}`,
+    nombre: row.nombre,
+    descripcion: null,
+    activo: row.activo,
+    createdAt: '2026-01-01T00:00:00.000Z',
+    updatedAt: '2026-01-01T00:00:00.000Z',
+  }));
+  return {
+    getById: vi.fn().mockResolvedValue(null),
+    findByNombre: vi.fn().mockResolvedValue(null),
+    list: vi.fn().mockResolvedValue(areas),
+    create: vi.fn().mockResolvedValue(areas[0] ?? null) as IAreaRepository['create'],
+    update: vi.fn().mockResolvedValue(areas[0] ?? null) as IAreaRepository['update'],
+    softDelete: vi.fn().mockResolvedValue(undefined),
+  };
+}
+
 function makeGetRequest(query: Record<string, string>): Request {
   const url = new URL('http://localhost/api/plantillas');
   for (const [k, v] of Object.entries(query)) url.searchParams.set(k, v);
@@ -59,13 +81,19 @@ function makePostRequest(body: unknown): Request {
   });
 }
 
+const emptyCatalogRepo = (): IAreaRepository => makeMockAreaRepo();
+
 beforeEach(() => {
   vi.clearAllMocks();
   __setTemplateDbForTests(makeMockRepo());
+  // Default: empty catalog — registry areas resolve, catalog areas 400.
+  // Catalog-driven tests override with their own rows.
+  __setAreaDbForTests(emptyCatalogRepo());
 });
 
 afterEach(() => {
   __setTemplateDbForTests(null);
+  __setAreaDbForTests(null);
 });
 
 describe('GET /api/plantillas (list active)', () => {
@@ -318,5 +346,64 @@ describe('POST /api/plantillas (save)', () => {
 
     expect(response.status).toBe(500);
     expect(body.code).toBe('INTERNAL_ERROR');
+  });
+});
+
+describe('catalog-driven areas (plantillas-area-usuario)', () => {
+  it('GET resolves an active catalog area to a generic config (200, no spitches yet)', async () => {
+    __setAreaDbForTests(makeMockAreaRepo([{ nombre: 'Facturación', activo: true }]));
+    const listByArea = vi.fn().mockResolvedValue([]);
+    __setTemplateDbForTests(makeMockRepo({ listByArea }));
+
+    const response = await GET(makeGetRequest({ area: 'facturacion' }));
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.spitches).toEqual([]);
+    expect(listByArea).toHaveBeenCalledWith('facturacion');
+  });
+
+  it('GET still returns 400 Unknown area when the slug is neither registered nor cataloged', async () => {
+    __setAreaDbForTests(makeMockAreaRepo([{ nombre: 'Facturación', activo: true }]));
+
+    const response = await GET(makeGetRequest({ area: 'no-existe' }));
+    const body = await response.json();
+
+    expect(response.status).toBe(400);
+    expect(body.error).toMatch(/unknown area/i);
+  });
+
+  it('GET ignores inactive catalog rows (400)', async () => {
+    __setAreaDbForTests(makeMockAreaRepo([{ nombre: 'Facturación', activo: false }]));
+
+    const response = await GET(makeGetRequest({ area: 'facturacion' }));
+
+    expect(response.status).toBe(400);
+  });
+
+  it('POST saves a template for an active catalog area (201)', async () => {
+    __setAreaDbForTests(makeMockAreaRepo([{ nombre: 'Medicina General', activo: true }]));
+    const save = vi.fn().mockResolvedValue(makeTemplate({ area: 'medicina-general' }));
+    __setTemplateDbForTests(makeMockRepo({ save }));
+
+    const response = await POST(makePostRequest({
+      area: 'medicina-general',
+      type: 'company',
+      name: 'Bienvenida',
+      subject: 'Hola {{empresa}}',
+      bodyHtml: '<p>{{empresa}}</p>',
+    }));
+    const body = await response.json();
+
+    expect(response.status).toBe(201);
+    expect(save).toHaveBeenCalledTimes(1);
+    expect(body.id).toBe('tpl-1');
+  });
+
+  it('registry areas keep precedence — cobranza resolves with an EMPTY catalog', async () => {
+    // beforeEach already installs an empty-catalog repo.
+    const response = await GET(makeGetRequest({ area: 'cobranza' }));
+
+    expect(response.status).toBe(200);
   });
 });

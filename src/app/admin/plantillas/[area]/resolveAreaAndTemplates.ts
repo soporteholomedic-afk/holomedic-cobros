@@ -1,7 +1,8 @@
-import { getAreaConfig } from '@/features/plantillas-editor/infrastructure/areaConfigRegistry';
+import { getAreaConfig, resolveAreaConfig } from '@/features/plantillas-editor/infrastructure/areaConfigRegistry';
+import type { AreaConfig, CatalogAreaRow } from '@/features/plantillas-editor/infrastructure/areaConfigRegistry';
+import { listCatalogAreas as sharedListCatalogAreas } from '@/features/plantillas-editor/infrastructure/catalogAreas';
 import { getTemplateDb } from '@/features/plantillas-editor/infrastructure/getTemplateDb';
 import { ListTemplatesUseCase } from '@/features/plantillas-editor/application/listTemplates';
-import type { AreaConfig } from '@/features/plantillas-editor/infrastructure/areaConfigRegistry';
 import type { Template } from '@/features/plantillas-editor/domain/entities';
 
 /**
@@ -25,9 +26,14 @@ import type { Template } from '@/features/plantillas-editor/domain/entities';
  * Spec `area-template-config` / "Dynamic route resolution":
  *  - "Known area renders editor" — `areaConfig` is defined, `templates` is the
  *    active list (possibly empty for first-use).
- *  - "Unknown area returns 404" — `notFound: true` for any area not in
- *    `AREA_CONFIGS` (including reserved-but-unpopulated `cobranza` and
- *    `valoraciones`).
+ *  - "Unknown area returns 404" — `notFound: true` for any area neither in
+ *    `AREA_CONFIGS` nor in the active areas catalog.
+ *
+ * Spec `plantillas-area-usuario` (catalog-driven areas): besides the three
+ * rich code configs, ANY active area of the `dbo.areas` catalog resolves to
+ * a generic editor config matched by normalized slug ("Facturación" →
+ * "facturacion"). Registry areas keep precedence and never query the
+ * catalog; the catalog is only fetched when the registry misses.
  */
 export interface ResolvedArea {
   notFound: false;
@@ -41,13 +47,21 @@ export interface NotFoundResult {
 
 export type ResolveResult = ResolvedArea | NotFoundResult;
 
-export async function resolveAreaAndTemplates(area: string): Promise<ResolveResult> {
-  const areaConfig = getAreaConfig(area);
+/** Injectable seams — tests pass a stub `listCatalogAreas`; production uses the shared default. */
+export interface ResolveDeps {
+  /** Active/inactive area rows of `dbo.areas`. Defaults to `catalogAreas.listCatalogAreas`. */
+  listCatalogAreas?: () => Promise<CatalogAreaRow[]>;
+}
+
+export async function resolveAreaAndTemplates(area: string, deps: ResolveDeps = {}): Promise<ResolveResult> {
+  const listCatalogAreas = deps.listCatalogAreas ?? sharedListCatalogAreas;
+  // Registry fast path first — rich configs never touch the catalog DB.
+  const areaConfig = getAreaConfig(area) ?? resolveAreaConfig(area, await listCatalogAreas());
   if (!areaConfig) {
     return { notFound: true };
   }
   const repo = await getTemplateDb();
   const useCase = new ListTemplatesUseCase(repo);
-  const templates = await useCase.listActive(area);
+  const templates = await useCase.listActive(areaConfig.area);
   return { notFound: false, areaConfig, templates };
 }

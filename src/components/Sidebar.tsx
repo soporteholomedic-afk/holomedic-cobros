@@ -7,6 +7,7 @@ import { Activity, Building2, FileSpreadsheet, Home, DollarSign, FileText, Mail,
 import AreasMenuItem from './AreasMenuItem';
 import { useAuth } from '@/features/auth/presentation/hooks/useAuth';
 import { useNotificacionesConversaciones } from '@/features/crm/presentation/hooks/useNotificacionesConversaciones';
+import { plantillasEntryHref } from '@/features/plantillas-editor/infrastructure/areaConfigRegistry';
 
 const navItems = [
   { href: '/', label: 'Inicio', icon: Home },
@@ -20,6 +21,15 @@ export default function Sidebar() {
   const pathname = usePathname();
   const [isMobileOpen, setIsMobileOpen] = useState(false);
   const { user, logout, loading } = useAuth();
+
+  // plantillas-area-usuario: the Plantillas entry opens the editor of the
+  // logged-in user's area (slug of user.area, e.g. "Facturación" →
+  // /admin/plantillas/facturacion). Users without an area keep the
+  // historical consolidados entry (plantillasEntryHref fallback).
+  const plantillasHref = plantillasEntryHref(user?.area);
+  const navItemsConPlantillas = navItems.map((item) =>
+    item.label === 'Plantillas' ? { ...item, href: plantillasHref } : item,
+  );
 
   const closeMobile = useCallback(() => {
     setIsMobileOpen(false);
@@ -125,8 +135,8 @@ export default function Sidebar() {
         </Link>
 
         <nav className="flex-1 px-3 py-6 space-y-1 overflow-y-auto">
-          {navItems
-            .filter((item) => item.href !== '/admin/plantillas/consolidados')
+          {navItemsConPlantillas
+            .filter((item) => item.label !== 'Plantillas')
             .map((item) => {
               const isActive = pathname === item.href;
               const Icon = item.icon;
@@ -153,8 +163,8 @@ export default function Sidebar() {
 
           <AreasMenuItem onItemClick={closeMobile} />
 
-          {navItems
-            .filter((item) => item.href === '/admin/plantillas/consolidados')
+          {navItemsConPlantillas
+            .filter((item) => item.label === 'Plantillas')
             .map((item) => {
               const isActive = pathname === item.href;
               const Icon = item.icon;

@@ -6,14 +6,21 @@ const mocks = vi.hoisted(() => ({
   templates: [] as unknown[],
 }));
 
-// Mock the areaConfigRegistry — controlled per test.
-vi.mock('@/features/plantillas-editor/infrastructure/areaConfigRegistry', () => ({
-  getAreaConfig: (area: string) => {
-    if (area === 'consolidados') return mocks.areaConfig;
-    return undefined;
-  },
-  AREA_CONFIGS: new Map(),
-}));
+// Mock the areaConfigRegistry — controlled per test. The REAL helpers
+// (resolveAreaConfig, buildGenericAreaConfig, areaSlug…) stay live so the
+// catalog-driven composition is exercised against genuine normalization.
+vi.mock('@/features/plantillas-editor/infrastructure/areaConfigRegistry', async (importOriginal) => {
+  const actual = await importOriginal<
+    typeof import('@/features/plantillas-editor/infrastructure/areaConfigRegistry')
+  >();
+  return {
+    ...actual,
+    getAreaConfig: (area: string) => {
+      if (area === 'consolidados') return mocks.areaConfig;
+      return undefined;
+    },
+  };
+});
 
 // Mock getTemplateDb — returns a stub repo whose listByArea resolves to mocks.templates.
 vi.mock('@/features/plantillas-editor/infrastructure/getTemplateDb', () => ({
@@ -114,24 +121,83 @@ describe('resolveAreaAndTemplates', () => {
   });
 
   describe('spec scenario: Unknown area returns 404', () => {
-    it('returns notFound for an unknown area (not cobranza/valoraciones — those are reserved but unpopulated)', async () => {
-      const result = await resolveAreaAndTemplates('unknown');
+    it('returns notFound for an unknown area (not in registry nor catalog)', async () => {
+      const result = await resolveAreaAndTemplates('unknown', {
+        listCatalogAreas: async () => [],
+      });
       expect(result).toEqual({ notFound: true });
     });
 
-    it('returns notFound for a reserved-but-unpopulated area (cobranza)', async () => {
-      const result = await resolveAreaAndTemplates('cobranza');
-      expect(result).toEqual({ notFound: true });
+    it('resolves cobranza from the code registry (rich config)', async () => {
+      const result = await resolveAreaAndTemplates('cobranza', {
+        listCatalogAreas: async () => [],
+      });
+      expect(result.notFound).toBe(false);
+      if (result.notFound) throw new Error('expected resolved');
+      expect(result.areaConfig.area).toBe('cobranza');
+      expect(result.areaConfig.label).toBe('Cobranza');
+      // Rich config marker: cobranza predefined tables exist only in code.
+      expect(result.areaConfig.predefinedTables.length).toBeGreaterThan(0);
     });
 
-    it('returns notFound for a reserved-but-unpopulated area (valoraciones)', async () => {
-      const result = await resolveAreaAndTemplates('valoraciones');
-      expect(result).toEqual({ notFound: true });
+    it('resolves valoraciones from the code registry (rich config)', async () => {
+      const result = await resolveAreaAndTemplates('valoraciones', {
+        listCatalogAreas: async () => [],
+      });
+      expect(result.notFound).toBe(false);
+      if (result.notFound) throw new Error('expected resolved');
+      expect(result.areaConfig.area).toBe('valoraciones');
+      expect(result.areaConfig.label).toBe('Valorizaciones');
+      expect(result.areaConfig.predefinedTables.length).toBeGreaterThan(0);
     });
 
     it('does NOT call ListTemplatesUseCase when the area is unknown (avoids wasted DB work)', async () => {
-      await resolveAreaAndTemplates('unknown');
+      await resolveAreaAndTemplates('unknown', { listCatalogAreas: async () => [] });
       expect(mockListActive).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('spec scenario: catalog-driven areas (plantillas-area-usuario)', () => {
+    const catalog = [
+      { nombre: 'admin', activo: true },
+      { nombre: 'Consolidados', activo: true },
+      { nombre: 'Facturación', activo: true },
+      { nombre: 'Medicina General', activo: true },
+    ];
+
+    it('resolves an active catalog area to a generic editor config', async () => {
+      mockListActive.mockResolvedValue([]);
+      const result = await resolveAreaAndTemplates('facturacion', {
+        listCatalogAreas: async () => catalog,
+      });
+      expect(result.notFound).toBe(false);
+      if (result.notFound) throw new Error('expected resolved');
+      expect(result.areaConfig.area).toBe('facturacion');
+      expect(result.areaConfig.label).toBe('Facturación');
+    });
+
+    it('lists templates under the resolved config area (not a hardcoded value)', async () => {
+      mockListActive.mockResolvedValue([]);
+      await resolveAreaAndTemplates('medicina-general', {
+        listCatalogAreas: async () => catalog,
+      });
+      expect(mockListActive).toHaveBeenCalledWith('medicina-general');
+    });
+
+    it('ignores inactive catalog rows (notFound)', async () => {
+      const result = await resolveAreaAndTemplates('facturacion', {
+        listCatalogAreas: async () => [{ nombre: 'Facturación', activo: false }],
+      });
+      expect(result).toEqual({ notFound: true });
+      expect(mockListActive).not.toHaveBeenCalled();
+    });
+
+    it('does NOT query the catalog for registry areas (no wasted DB work)', async () => {
+      const listCatalogAreas = vi.fn(async () => catalog);
+      mockListActive.mockResolvedValue([]);
+      const result = await resolveAreaAndTemplates('consolidados', { listCatalogAreas });
+      expect(result.notFound).toBe(false);
+      expect(listCatalogAreas).not.toHaveBeenCalled();
     });
   });
 });

@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'vitest';
 
-import { AREA_CONFIGS, getAreaConfig } from '../areaConfigRegistry';
+import {
+  AREA_CONFIGS,
+  areaSlug,
+  buildGenericAreaConfig,
+  getAreaConfig,
+  plantillasEntryHref,
+  resolveAreaConfig,
+} from '../areaConfigRegistry';
 
 /**
  * Registry tests for the `areaConfig` code registry.
@@ -285,6 +292,109 @@ describe('areaConfigRegistry', () => {
       expect(cfg).toBeDefined();
       expect(cfg!.mockPreviewData.periodo).toBeUndefined();
       expect(cfg!.mockPreviewData.tablaValoraciones).toBeUndefined();
+    });
+  });
+});
+
+/**
+ * Catalog-driven areas (plantillas-area-usuario).
+ *
+ * The areas catalog (`dbo.areas`, areas-crud feature) is now the source of
+ * truth for user areas. The editor must serve ANY active catalog area with
+ * a generic config (base tokens only), while the three rich code configs
+ * keep registry precedence. `areaSlug` normalizes display names to URL
+ * slugs; `plantillasEntryHref` builds the per-user sidebar entry with the
+ * historical consolidados fallback for area-less users.
+ */
+describe('catalog-driven area resolution', () => {
+  describe('areaSlug', () => {
+    it('lowercases and strips diacritics', () => {
+      expect(areaSlug('Facturación')).toBe('facturacion');
+      expect(areaSlug('ÁÉÍÓÚ ñ')).toBe('aeiou-n');
+    });
+
+    it('maps inner whitespace to a single hyphen and trims the edges', () => {
+      expect(areaSlug('Medicina General')).toBe('medicina-general');
+      expect(areaSlug('  Consolidados  ')).toBe('consolidados');
+    });
+
+    it('keeps the empty string empty (fallback lives in plantillasEntryHref)', () => {
+      expect(areaSlug('')).toBe('');
+    });
+  });
+
+  describe('plantillasEntryHref', () => {
+    it('builds the editor entry for the user area slug', () => {
+      expect(plantillasEntryHref('Facturación')).toBe('/admin/plantillas/facturacion');
+      expect(plantillasEntryHref('Cobranza')).toBe('/admin/plantillas/cobranza');
+    });
+
+    it('falls back to consolidados when the user has no area', () => {
+      expect(plantillasEntryHref(undefined)).toBe('/admin/plantillas/consolidados');
+      expect(plantillasEntryHref('')).toBe('/admin/plantillas/consolidados');
+    });
+  });
+
+  describe('buildGenericAreaConfig', () => {
+    it('carries the catalog display name as label and the slug as area', () => {
+      const cfg = buildGenericAreaConfig('Facturación');
+      expect(cfg.area).toBe('facturacion');
+      expect(cfg.label).toBe('Facturación');
+    });
+
+    it('offers the base token palette (empresa/fecha/firma) and no predefined tables', () => {
+      const cfg = buildGenericAreaConfig('Medicina General');
+      const keys = cfg.availableTokens.flatMap((cat) => cat.tokens.map((t) => t.key));
+      expect(keys).toEqual(expect.arrayContaining(['empresa', 'fecha', 'firma']));
+      expect(cfg.predefinedTables).toHaveLength(0);
+    });
+
+    it('mock preview data carries the slug area and required base fields', () => {
+      const cfg = buildGenericAreaConfig('Facturación');
+      expect(cfg.mockPreviewData.area).toBe('facturacion');
+      expect(typeof cfg.mockPreviewData.companyName).toBe('string');
+      expect(cfg.mockPreviewData.firma.length).toBeGreaterThan(0);
+    });
+  });
+
+  describe('resolveAreaConfig', () => {
+    const catalog = [
+      { nombre: 'admin', activo: true },
+      { nombre: 'Consolidados', activo: true },
+      { nombre: 'Facturación', activo: true },
+      { nombre: 'Medicina General', activo: true },
+    ];
+
+    it('registry configs take precedence over same-name catalog rows (rich tokens kept)', () => {
+      const cfg = resolveAreaConfig('consolidados', catalog);
+      expect(cfg).toBeDefined();
+      expect(cfg!.label).toBe('Consolidados');
+      // Rich config marker: the consolidados predefined tables exist only in code.
+      expect(cfg!.predefinedTables.length).toBeGreaterThan(0);
+    });
+
+    it('resolves registry areas without any catalog rows (cobranza/valoraciones stay reachable)', () => {
+      expect(resolveAreaConfig('cobranza', [])).toBeDefined();
+      expect(resolveAreaConfig('valoraciones', [])).toBeDefined();
+    });
+
+    it('resolves active catalog areas to a generic config matched by slug', () => {
+      const cfg = resolveAreaConfig('facturacion', catalog);
+      expect(cfg).toBeDefined();
+      expect(cfg!.area).toBe('facturacion');
+      expect(cfg!.label).toBe('Facturación');
+
+      const mg = resolveAreaConfig('medicina-general', catalog);
+      expect(mg).toBeDefined();
+      expect(mg!.label).toBe('Medicina General');
+    });
+
+    it('ignores inactive catalog rows', () => {
+      expect(resolveAreaConfig('facturacion', [{ nombre: 'Facturación', activo: false }])).toBeUndefined();
+    });
+
+    it('returns undefined for slugs neither in the registry nor in the catalog', () => {
+      expect(resolveAreaConfig('no-existe', catalog)).toBeUndefined();
     });
   });
 });
