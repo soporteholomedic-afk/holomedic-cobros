@@ -416,3 +416,98 @@ export const AREA_CONFIGS: ReadonlyMap<string, AreaConfig> = new Map([
 export function getAreaConfig(area: string): AreaConfig | undefined {
   return AREA_CONFIGS.get(area);
 }
+
+// ---- Catalog-driven area resolution (plantillas-area-usuario) ----
+
+/**
+ * Normalize an area display name ("Facturación", "Medicina General") to
+ * the URL slug used by `/admin/plantillas/[area]` ("facturacion",
+ * "medicina-general"): trim, lowercase, strip diacritics, collapse
+ * whitespace to single hyphens. Registry keys are already slugs, so
+ * `areaSlug('Consolidados') === 'consolidados'` keeps them aligned.
+ */
+export function areaSlug(nombre: string): string {
+  return nombre
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, '-');
+}
+
+/**
+ * Sidebar href of the Plantillas entry for a user with the given area.
+ * A user WITHOUT an area gets `null`: the entry must BLOCK navigation
+ * (disabled item), never fall back to consolidados.
+ */
+export function plantillasEntryHref(area: string | undefined): string | null {
+  const slug = area ? areaSlug(area) : '';
+  return slug ? `/admin/plantillas/${slug}` : null;
+}
+
+/**
+ * Generic config for a catalog area without a rich code config: the base
+ * token palette only (empresa/fecha/firma — all resolvable by the shared
+ * token registry) and no predefined tables. The catalog display name
+ * becomes the editor label; the slug becomes the storage area key.
+ */
+export function buildGenericAreaConfig(nombre: string): AreaConfig {
+  const slug = areaSlug(nombre);
+  return {
+    area: slug,
+    label: nombre,
+    availableTokens: [
+      {
+        category: 'Empresa',
+        tokens: [
+          { key: 'empresa', label: 'Empresa' },
+          { key: 'fecha', label: 'Fecha' },
+        ],
+      },
+      {
+        category: 'Firma',
+        tokens: [{ key: 'firma', label: 'Firma' }],
+      },
+    ],
+    predefinedTables: [],
+    mockPreviewData: {
+      companyName: nombre,
+      patientNames: [],
+      fileNames: [],
+      firma: `<p>Área de ${nombre}</p>`,
+      area: slug,
+      today: '2026-01-15',
+      pacienteDni: '',
+      pacienteNombre: '',
+      destino: '',
+    },
+  };
+}
+
+/** Minimal shape the resolver needs from the areas catalog (`dbo.areas`). */
+export interface CatalogAreaRow {
+  nombre: string;
+  activo: boolean;
+}
+
+/**
+ * Resolve the `AreaConfig` for an editor area slug: the code registry
+ * first (consolidados/cobranza/valoraciones keep precedence and their
+ * rich tokens), then any ACTIVE catalog area matched by normalized slug
+ * via a generic config. `undefined` = neither registered nor cataloged
+ * (callers reject with 404/400 as before).
+ *
+ * If two catalog rows normalize to the same slug, the first active match
+ * wins (the catalog guards exact-name duplicates, not slug collisions).
+ */
+export function resolveAreaConfig(
+  area: string,
+  catalogAreas: ReadonlyArray<CatalogAreaRow>,
+): AreaConfig | undefined {
+  const registered = getAreaConfig(area);
+  if (registered) {
+    return registered;
+  }
+  const match = catalogAreas.find((row) => row.activo && areaSlug(row.nombre) === area);
+  return match ? buildGenericAreaConfig(match.nombre) : undefined;
+}

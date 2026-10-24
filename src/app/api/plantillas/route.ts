@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 
 import { SPITCH_TYPES, type SpitchType, type SaveTemplateInput } from '@/features/plantillas-editor/domain/entities';
-import { getAreaConfig } from '@/features/plantillas-editor/infrastructure/areaConfigRegistry';
+import { resolveEditorAreaConfig } from '@/features/plantillas-editor/infrastructure/catalogAreas';
 import { getTemplateDb } from '@/features/plantillas-editor/infrastructure/getTemplateDb';
 import { TemplateDefaultConflictError, TemplateNotFoundError } from '@/features/plantillas-editor/infrastructure/sqlserver';
 import { ListTemplatesUseCase } from '@/features/plantillas-editor/application/listTemplates';
@@ -85,7 +85,9 @@ export async function GET(request: Request): Promise<NextResponse<GetResponse>> 
     if (!area) {
       return buildError('VALIDATION_ERROR', '"area" query parameter is required', 400);
     }
-    if (!getAreaConfig(area)) {
+    // Registry first, then active areas catalog (plantillas-area-usuario):
+    // generic catalog areas are first-class editor areas.
+    if (!(await resolveEditorAreaConfig(area))) {
       return buildError('VALIDATION_ERROR', `Unknown area: ${area}`, 400);
     }
 
@@ -148,7 +150,9 @@ export async function POST(request: Request): Promise<NextResponse<PostResponse>
       );
     }
 
-    if (!getAreaConfig(body.area)) {
+    // Registry first, then active areas catalog (plantillas-area-usuario):
+    // templates can be saved for any active catalog area.
+    if (!(await resolveEditorAreaConfig(body.area))) {
       return buildError('VALIDATION_ERROR', `Unknown area: ${body.area}`, 400);
     }
     if (!isSpitchType(body.type)) {
