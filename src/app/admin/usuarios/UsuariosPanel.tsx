@@ -20,7 +20,17 @@ interface Usuario {
 
 const initialForm = { usuario: '', nombre: '', area: '', correo: '', contrasena: '', permisos: [] as Permiso[] };
 
-export default function UsuariosPage() {
+/**
+ * The user-management CRUD surface (feature `configuracion-tabs` T3).
+ *
+ * Extracted verbatim from the legacy `/admin/usuarios` page so BOTH
+ * entries render the same component: the legacy route (kept working
+ * for bookmarks, S4) re-exports this as its default page, and the
+ * `/configuracion/usuarios` tab renders `<UsuariosPanel />` inside the
+ * tabs layout. Behavior is unchanged — same hooks, same fetches, same
+ * markup (page.test.tsx pins it through the legacy entry).
+ */
+export function UsuariosPanel() {
   const { user, loading: authLoading } = useAuth();
   const [usuarios, setUsuarios] = useState<Usuario[]>([]);
   const [loading, setLoading] = useState(true);
