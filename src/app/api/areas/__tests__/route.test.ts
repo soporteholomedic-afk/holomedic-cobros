@@ -2,7 +2,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { __setAreaDbForTests } from '@/features/areas/infrastructure/getAreaDb';
 import type { IAreaRepository } from '@/features/areas/domain/ports';
 import type { Area } from '@/features/areas/domain/entities';
-import { AreaDuplicadaError } from '@/features/areas/domain/errors';
 
 // ---- Mock auth session (usuarios route.test.ts precedent) ----
 

@@ -71,7 +71,7 @@ const areas = [
 ];
 
 function mockFetchConCatalogo() {
-  return vi.spyOn(globalThis, 'fetch').mockImplementation((input, init) => {
+  return vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
     const url = typeof input === 'string' ? input : input instanceof Request ? input.url : String(input);
     void init;
     if (url === '/api/areas') {

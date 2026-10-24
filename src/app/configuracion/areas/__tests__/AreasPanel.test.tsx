@@ -51,7 +51,7 @@ const areas = [
 function mockFetch(
   handlers: Array<(url: string, init?: RequestInit) => Response | undefined> = [],
 ) {
-  return vi.spyOn(globalThis, 'fetch').mockImplementation((input, init) => {
+  return vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
     const url =
       typeof input === 'string' ? input : input instanceof Request ? input.url : String(input);
     for (const handler of handlers) {
