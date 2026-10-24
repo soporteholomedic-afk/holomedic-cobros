@@ -40,12 +40,16 @@ placeholder de áreas y el editor de firma propia. Reemplaza las entradas suelta
 | ID | Specs | Ruta | Commit |
 |----|-------|------|--------|
 | T1 | S1 | worktree `feature/configuracion` + dev 3001 | (setup, sin commit) |
-| T2 | S3 | `RUTAS_PROTEGIDAS` + `routes.configuracion.test.ts` | 1 |
-| T3 | S3 | extraer `UsuariosPanel` de `/admin/usuarios` | 2 |
-| T4 | S2, S3 | páginas `/configuracion/*` + tabs + tests | 3 |
-| T5 | S2, S4 | sidebar: alta "Configuración", baja "Usuarios"/"Mi firma" + tests | 4 |
-| T6 | — | suite focalizada + lint en modificados | transversal |
-| T7 | — | commits por unidad (400 líneas aprox.) | transversal |
+| T2 | S3 | `RUTAS_PROTEGIDAS` + `routes.configuracion.test.ts` | `8a9eb18` |
+| T3 | S3 | extraer `UsuariosPanel` de `/admin/usuarios` | `507f3bc` |
+| T4 | S2, S3 | páginas `/configuracion/*` + tabs + tests | `9dd1bdb` |
+| T5 | S2, S4 | sidebar: alta "Configuración", baja "Usuarios"/"Mi firma" + tests | `06104d5` |
+| T6 | — | suite focalizada (271 tests) + `tsc --noEmit` + ESLint + smoke curl | transversal |
+| T7 | — | commits por unidad | `8a9eb18`..`06104d5` + docs |
+
+Slice boundary (guía ~400 líneas): T3 cuenta ~1239 líneas porque el rename
+`page.tsx → UsuariosPanel.tsx` suma ambas caras del archivo; el cambio real es
+mecánico (extracción verbatim). Slices: [T2] [T3] [T4] [T5].
 
 ## Log
 
