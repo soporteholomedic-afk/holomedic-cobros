@@ -14,7 +14,6 @@ const navItems = [
   { href: '/cobranza', label: 'Cobranza', icon: DollarSign },
   { href: '/consolidados', label: 'Consolidados', icon: FileText },
   { href: '/valoraciones', label: 'Valoraciones', icon: FileSpreadsheet },
-  { href: '/admin/plantillas/consolidados', label: 'Plantillas', icon: Mail },
 ];
 
 export default function Sidebar() {
@@ -24,12 +23,11 @@ export default function Sidebar() {
 
   // plantillas-area-usuario: the Plantillas entry opens the editor of the
   // logged-in user's area (slug of user.area, e.g. "Facturación" →
-  // /admin/plantillas/facturacion). Users without an area keep the
-  // historical consolidados entry (plantillasEntryHref fallback).
+  // /admin/plantillas/facturacion). A user WITHOUT an area gets the entry
+  // BLOCKED (disabled, non-navigable) — never a consolidados fallback.
+  // While auth is loading the slot renders nothing (avoids a misleading
+  // disabled flash for users who do have an area).
   const plantillasHref = plantillasEntryHref(user?.area);
-  const navItemsConPlantillas = navItems.map((item) =>
-    item.label === 'Plantillas' ? { ...item, href: plantillasHref } : item,
-  );
 
   const closeMobile = useCallback(() => {
     setIsMobileOpen(false);
@@ -135,8 +133,7 @@ export default function Sidebar() {
         </Link>
 
         <nav className="flex-1 px-3 py-6 space-y-1 overflow-y-auto">
-          {navItemsConPlantillas
-            .filter((item) => item.label !== 'Plantillas')
+          {navItems
             .map((item) => {
               const isActive = pathname === item.href;
               const Icon = item.icon;
@@ -163,31 +160,34 @@ export default function Sidebar() {
 
           <AreasMenuItem onItemClick={closeMobile} />
 
-          {navItemsConPlantillas
-            .filter((item) => item.label === 'Plantillas')
-            .map((item) => {
-              const isActive = pathname === item.href;
-              const Icon = item.icon;
-
-              return (
-                <Link
-                  key={item.href}
-                  href={item.href}
-                  onClick={closeMobile}
-                  className={`flex items-center space-x-3 px-4 py-3 rounded-xl text-sm font-medium transition-all duration-200 ${
-                    isActive
-                      ? 'bg-sky-950/50 text-sky-300 border border-sky-800/30 shadow-sm'
-                      : 'text-slate-400 hover:text-white hover:bg-slate-800/50'
-                  }`}
-                >
-                  <Icon className="w-5 h-5" />
-                  <span>{item.label}</span>
-                  {isActive && (
-                    <span className="ml-auto w-1.5 h-1.5 rounded-full bg-sky-400 shadow-sm shadow-sky-400/50" />
-                  )}
-                </Link>
-              );
-            })}
+          {!loading &&
+            (plantillasHref ? (
+              <Link
+                href={plantillasHref}
+                onClick={closeMobile}
+                className={`flex items-center space-x-3 px-4 py-3 rounded-xl text-sm font-medium transition-all duration-200 ${
+                  pathname === plantillasHref
+                    ? 'bg-sky-950/50 text-sky-300 border border-sky-800/30 shadow-sm'
+                    : 'text-slate-400 hover:text-white hover:bg-slate-800/50'
+                }`}
+              >
+                <Mail className="w-5 h-5" />
+                <span>Plantillas</span>
+                {pathname === plantillasHref && (
+                  <span className="ml-auto w-1.5 h-1.5 rounded-full bg-sky-400 shadow-sm shadow-sky-400/50" />
+                )}
+              </Link>
+            ) : (
+              <span
+                data-plantillas-bloqueado=""
+                aria-disabled="true"
+                title="Sin área asignada: pedile a un administrador que te asigne una en Configuración → Usuarios"
+                className="flex items-center space-x-3 px-4 py-3 rounded-xl text-sm font-medium text-slate-500 opacity-60 cursor-not-allowed select-none"
+              >
+                <Mail className="w-5 h-5" />
+                <span>Plantillas</span>
+              </span>
+            ))}
 
           {canCrm && (
             <Link

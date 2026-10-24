@@ -134,14 +134,16 @@ describe('Sidebar Component', () => {
     expect(screen.getByText('Facturación')).toBeInTheDocument();
   });
 
-  it('debe mostrar los ítems de navegación: Inicio, Cobranza, Consolidados, Valoraciones, Areas, Plantillas', () => {
+  it('debe mostrar los ítems de navegación: Inicio, Cobranza, Consolidados, Valoraciones, Areas, Plantillas', async () => {
     renderSidebar();
     expect(screen.getByText('Inicio')).toBeInTheDocument();
     expect(screen.getByText('Cobranza')).toBeInTheDocument();
     expect(screen.getByText('Consolidados')).toBeInTheDocument();
     expect(screen.getByText('Valoraciones')).toBeInTheDocument();
     expect(screen.getByText('Areas')).toBeInTheDocument();
-    expect(screen.getByText('Plantillas')).toBeInTheDocument();
+    // plantillas-area-usuario: the Plantillas slot renders only after auth
+    // resolves (loading gate) — await it instead of a sync getByText.
+    expect(await screen.findByText('Plantillas')).toBeInTheDocument();
   });
 
   it('debe enlazar Inicio a "/"', () => {
@@ -188,12 +190,14 @@ describe('Sidebar Component', () => {
     });
   });
 
-  it('debe mantener el fallback a consolidados cuando el usuario no tiene área', async () => {
+  // plantillas-area-usuario L2: a user WITHOUT an area gets the entry
+  // BLOCKED — no link, no consolidados fallback.
+  it('debe bloquear la entrada (sin link) cuando el usuario no tiene área', async () => {
     mockAuthMe({ ...nonAdminUser, area: '' });
     renderSidebar();
-    await waitFor(() => {
-      expect(screen.getByText('Plantillas').closest('a')).toHaveAttribute('href', '/admin/plantillas/consolidados');
-    });
+    const item = await screen.findByText('Plantillas');
+    expect(item.closest('a')).toBeNull();
+    expect(item.closest('[data-plantillas-bloqueado]')).not.toBeNull();
   });
 
   it('marca Plantillas como activo cuando el pathname coincide con el editor del área del usuario', async () => {

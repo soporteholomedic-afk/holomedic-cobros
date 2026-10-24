@@ -329,9 +329,9 @@ describe('catalog-driven area resolution', () => {
       expect(plantillasEntryHref('Cobranza')).toBe('/admin/plantillas/cobranza');
     });
 
-    it('falls back to consolidados when the user has no area', () => {
-      expect(plantillasEntryHref(undefined)).toBe('/admin/plantillas/consolidados');
-      expect(plantillasEntryHref('')).toBe('/admin/plantillas/consolidados');
+    it('returns null when the user has no area — entry blocked, no consolidados fallback', () => {
+      expect(plantillasEntryHref(undefined)).toBeNull();
+      expect(plantillasEntryHref('')).toBeNull();
     });
   });
 

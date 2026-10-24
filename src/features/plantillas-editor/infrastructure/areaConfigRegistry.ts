@@ -419,9 +419,6 @@ export function getAreaConfig(area: string): AreaConfig | undefined {
 
 // ---- Catalog-driven area resolution (plantillas-area-usuario) ----
 
-/** The historical editor entry — fallback for users without an area. */
-const DEFAULT_AREA_SLUG = 'consolidados';
-
 /**
  * Normalize an area display name ("Facturación", "Medicina General") to
  * the URL slug used by `/admin/plantillas/[area]` ("facturacion",
@@ -440,12 +437,12 @@ export function areaSlug(nombre: string): string {
 
 /**
  * Sidebar href of the Plantillas entry for a user with the given area.
- * Users without an area (undefined/empty) keep the historical
- * consolidados entry — today's behavior unchanged.
+ * A user WITHOUT an area gets `null`: the entry must BLOCK navigation
+ * (disabled item), never fall back to consolidados.
  */
-export function plantillasEntryHref(area: string | undefined): string {
+export function plantillasEntryHref(area: string | undefined): string | null {
   const slug = area ? areaSlug(area) : '';
-  return `/admin/plantillas/${slug || DEFAULT_AREA_SLUG}`;
+  return slug ? `/admin/plantillas/${slug}` : null;
 }
 
 /**
