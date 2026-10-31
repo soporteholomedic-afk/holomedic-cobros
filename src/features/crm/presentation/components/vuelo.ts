@@ -3,7 +3,7 @@ import type { Etapa } from '../../domain/entities';
 /** Same curve as the approved design (Material "standard"). */
 export const EASE = 'cubic-bezier(0.4, 0, 0.2, 1)';
 
-type Foco = { tipo: 'tarjeta' } | { tipo: 'flecha'; mover: string } | null;
+export type Foco = { tipo: 'tarjeta' } | { tipo: 'flecha'; mover: string } | null;
 
 /** What the DOM looked like just before a card changed column. */
 export interface Captura {
@@ -33,17 +33,25 @@ function columna(etapa: string): HTMLElement | null {
   return [...document.querySelectorAll<HTMLElement>('section[data-etapa]')].find((s) => s.dataset.etapa === etapa) ?? null;
 }
 
-/** Take the "before" picture. Call it right before the list is replaced; `null` when the card is not on screen. */
-export function capturar(id: string, destino: Etapa): Captura | null {
+/** Where the focus is inside a card right now: on the card itself, on one of its arrows, or elsewhere (`null`). */
+export function focoEnTarjeta(id: string): Foco {
+  const el = tarjetaDe(id);
+  const activo = document.activeElement;
+  if (!el || !(activo instanceof HTMLElement)) return null;
+  if (activo === el) return { tipo: 'tarjeta' };
+  if (el.contains(activo) && activo.dataset.mover) return { tipo: 'flecha', mover: activo.dataset.mover };
+  return null;
+}
+
+/**
+ * Take the "before" picture. Call it right before the list is replaced; `null` when the card is not on screen.
+ * `focoPrevio` is where the focus was before a dialog took it (moving into Contactado or Perdido asks first).
+ */
+export function capturar(id: string, destino: Etapa, focoPrevio?: Foco): Captura | null {
   const el = tarjetaDe(id);
   if (!el) return null;
 
-  const activo = document.activeElement;
-  let foco: Foco = null;
-  if (activo === el) foco = { tipo: 'tarjeta' };
-  else if (activo instanceof HTMLElement && el.contains(activo) && activo.dataset.mover) {
-    foco = { tipo: 'flecha', mover: activo.dataset.mover };
-  }
+  const foco = focoPrevio !== undefined ? focoPrevio : focoEnTarjeta(id);
 
   const anima = !movimientoReducido() && typeof el.animate === 'function';
   const vecinas = new Map<string, DOMRect>();

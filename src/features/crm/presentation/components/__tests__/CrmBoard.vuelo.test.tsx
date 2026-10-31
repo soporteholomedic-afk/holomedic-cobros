@@ -325,6 +325,104 @@ describe('Movimiento de tarjetas — traslado y parpadeo', () => {
     expect(a.cancel).toHaveBeenCalled();
   });
 
+  it('moving through the medium dialog gives the focus back to the same arrow once the card lands', async () => {
+    instalarAnimate();
+    instalarMatchMedia(true);
+    instalarPosiciones();
+    mockApi();
+    render(<CrmBoard />);
+    await cargado();
+    const boton = flecha(CONSTRUCTORA, 'Contactado');
+    boton.focus();
+    fireEvent.click(boton);
+    const dialogo = await screen.findByRole('dialog', { name: /Cómo lo contactaste/ });
+    fireEvent.click(within(dialogo).getByRole('radio', { name: /Llamada/ }));
+    fireEvent.click(within(dialogo).getByRole('button', { name: /Guardar/ }));
+    await waitFor(() => expect(crudo('e-1').closest('section')).toHaveAttribute('data-etapa', 'contactado'));
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: /Cómo lo contactaste/ })).toBeNull());
+    expect(within(crudo('e-1')).getByRole('button', { name: /Mover .* a En seguimiento/ })).toHaveFocus();
+  });
+
+  it('same through the medium dialog when the card travels: the focus returns when the trip ends', async () => {
+    instalarAnimate();
+    instalarMatchMedia(false);
+    instalarPosiciones();
+    mockApi();
+    render(<CrmBoard />);
+    await cargado();
+    const boton = flecha(CONSTRUCTORA, 'Contactado');
+    boton.focus();
+    fireEvent.click(boton);
+    const dialogo = await screen.findByRole('dialog', { name: /Cómo lo contactaste/ });
+    fireEvent.click(within(dialogo).getByRole('radio', { name: /Llamada/ }));
+    fireEvent.click(within(dialogo).getByRole('button', { name: /Guardar/ }));
+    await waitFor(() => expect(copias()).toHaveLength(1));
+    animacionDe(copias()[0]!)!.onfinish?.();
+    expect(within(crudo('e-1')).getByRole('button', { name: /Mover .* a En seguimiento/ })).toHaveFocus();
+  });
+
+  it('moving through the reason dialog leaves the focus inside the moved card', async () => {
+    instalarAnimate();
+    instalarMatchMedia(true);
+    instalarPosiciones();
+    mockApi();
+    render(<CrmBoard />);
+    await cargado();
+    const boton = flecha('Agroindustrial Valle Verde S.A.C.', 'Perdido');
+    boton.focus();
+    fireEvent.click(boton);
+    const dialogo = await screen.findByRole('dialog', { name: /Motivo de la pérdida/ });
+    fireEvent.click(within(dialogo).getByRole('radio', { name: 'Sin interés' }));
+    fireEvent.click(within(dialogo).getByRole('button', { name: /Guardar/ }));
+    await waitFor(() => expect(crudo('e-4').closest('section')).toHaveAttribute('data-etapa', 'perdido'));
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: /Motivo de la pérdida/ })).toBeNull());
+    expect(crudo('e-4').contains(document.activeElement)).toBe(true);
+  });
+
+  it('a cancelled dialog leaves nothing behind: a later move with the focus elsewhere does not steal it', async () => {
+    instalarAnimate();
+    instalarMatchMedia(true);
+    instalarPosiciones();
+    mockApi();
+    render(<CrmBoard />);
+    await cargado();
+    const boton = flecha(CONSTRUCTORA, 'Contactado');
+    boton.focus();
+    fireEvent.click(boton);
+    fireEvent.click(await screen.findByRole('button', { name: 'Cancelar' }));
+    const buscar = screen.getByRole('searchbox');
+    buscar.focus();
+    fireEvent.click(flecha(CONSTRUCTORA, 'Contactado'));
+    const dialogo = await screen.findByRole('dialog', { name: /Cómo lo contactaste/ });
+    buscar.focus();
+    fireEvent.click(within(dialogo).getByRole('radio', { name: /Llamada/ }));
+    fireEvent.click(within(dialogo).getByRole('button', { name: /Guardar/ }));
+    await waitFor(() => expect(crudo('e-1').closest('section')).toHaveAttribute('data-etapa', 'contactado'));
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: /Cómo lo contactaste/ })).toBeNull());
+    expect(crudo('e-1').contains(document.activeElement)).toBe(false);
+  });
+
+  it('a cancelled dialog forgets the old focus: a later move without dialog does not pull it back to the card', async () => {
+    instalarAnimate();
+    instalarMatchMedia(true);
+    instalarPosiciones();
+    mockApi();
+    render(<CrmBoard />);
+    await cargado();
+    const boton = flecha(CONSTRUCTORA, 'Contactado');
+    boton.focus();
+    fireEvent.click(boton);
+    fireEvent.click(await screen.findByRole('button', { name: 'Cancelar' }));
+    // Por contactar -> En seguimiento needs no dialog; the user is typing in the search box meanwhile
+    const buscar = screen.getByRole('searchbox');
+    const dataTransfer = { setData: vi.fn(), getData: () => 'e-1', effectAllowed: '' };
+    fireEvent.dragStart(tarjeta(CONSTRUCTORA), { dataTransfer });
+    buscar.focus();
+    fireEvent.drop(screen.getByRole('region', { name: 'En seguimiento' }), { dataTransfer });
+    await waitFor(() => expect(crudo('e-1').closest('section')).toHaveAttribute('data-etapa', 'en_seguimiento'));
+    expect(buscar).toHaveFocus();
+  });
+
   it('the cards expose their column so the board can scroll to it', async () => {
     mockApi();
     render(<CrmBoard />);

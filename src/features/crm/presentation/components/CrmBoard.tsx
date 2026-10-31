@@ -18,7 +18,7 @@ import { CrmCard } from './CrmCard';
 import { DetallePanel, type DetalleHandle } from './DetallePanel';
 import { MedioDialog } from './MedioDialog';
 import { MotivoDialog } from './MotivoDialog';
-import { capturar, reproducir, type Captura, type Registro } from './vuelo';
+import { capturar, focoEnTarjeta, reproducir, type Captura, type Foco, type Registro } from './vuelo';
 
 const COLUMN_DOT: Record<Etapa, string> = {
   por_contactar: 'bg-slate-400',
@@ -85,6 +85,8 @@ export function CrmBoard() {
   // Trip of a card that just changed column: photographed before the list is replaced, played after.
   const pendienteVuelo = useRef<Captura | null>(null);
   const vuelos = useRef<Registro>(new Map());
+  // Where the focus was on a card when a dialog took it, so it can be given back when the card lands.
+  const focoDeOrigen = useRef<{ id: string; foco: Foco } | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -150,7 +152,10 @@ export function CrmBoard() {
     );
   }, [empresas, search]);
 
-  const cerrarDialogo = useCallback(() => setDialogo(null), []);
+  const cerrarDialogo = useCallback(() => {
+    focoDeOrigen.current = null;
+    setDialogo(null);
+  }, []);
 
   const cerrarPanel = useCallback(() => {
     setAlta('cerrada');
@@ -248,7 +253,9 @@ export function CrmBoard() {
   /** Put a card that changed column at the top of its new column, travelling there. */
   function colocar(nueva: Empresa) {
     // A trip still in the air ends now so its card is where it belongs before the next one starts.
-    const foco = capturar(nueva.idEmpresa, nueva.etapa);
+    const origen = focoDeOrigen.current;
+    focoDeOrigen.current = null;
+    const foco = capturar(nueva.idEmpresa, nueva.etapa, origen && origen.id === nueva.idEmpresa ? origen.foco : undefined);
     [...vuelos.current.values()].forEach((fin) => fin(false));
     pendienteVuelo.current = foco;
     reemplazar(nueva, true);
@@ -267,6 +274,9 @@ export function CrmBoard() {
   function mover(id: string, etapa: Etapa) {
     const actual = empresas.find((x) => x.idEmpresa === id);
     if (!actual || actual.etapa === etapa) return;
+    if (etapa === 'perdido' || (etapa === 'contactado' && !actual.medio)) {
+      focoDeOrigen.current = { id, foco: focoEnTarjeta(id) };
+    }
     if (etapa === 'perdido') {
       setDialogo({ tipo: 'motivo', id, modo: 'mover', inicial: null });
     } else if (etapa === 'contactado' && !actual.medio) {
