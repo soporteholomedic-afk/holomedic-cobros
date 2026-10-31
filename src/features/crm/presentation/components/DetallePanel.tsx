@@ -3,8 +3,8 @@
 import { Pencil, X } from 'lucide-react';
 import { useEffect, useId, useImperativeHandle, useRef, useState, type FormEvent, type Ref } from 'react';
 
-import type { Empresa } from '../../domain/entities';
-import { ALERTA, BOTON_PRIMARIO, BOTON_SECUNDARIO } from './crmUi';
+import { ETAPA_LABELS, type Empresa } from '../../domain/entities';
+import { ALERTA, BOTON_PRIMARIO, BOTON_SECUNDARIO, ETAPA_PUNTO } from './crmUi';
 import { DetalleForm } from './DetalleForm';
 import { DetalleVista } from './DetalleVista';
 import {
@@ -206,17 +206,23 @@ export function DetallePanel({
       role="dialog"
       aria-modal="false"
       aria-labelledby={tituloId}
-      className="fixed bottom-0 right-0 top-0 z-40 flex w-[440px] max-w-full flex-col overflow-y-auto border-l border-slate-200 bg-white shadow-[-10px_0_30px_rgba(15,23,42,0.14)] dark:border-slate-800 dark:bg-slate-900"
+      className="fixed bottom-0 right-0 top-0 z-40 flex w-[420px] max-w-full flex-col overflow-y-auto border-l border-slate-200 bg-white shadow-[-10px_0_30px_rgba(15,23,42,0.14)] dark:border-slate-800 dark:bg-slate-900"
     >
       <header className="sticky top-0 z-10 flex items-start gap-3 border-b border-slate-200 bg-white px-6 pb-3 pt-5 dark:border-slate-800 dark:bg-slate-900">
-        <h2
-          id={tituloId}
-          ref={titulo}
-          tabIndex={-1}
-          className="text-xl font-bold text-slate-900 outline-none dark:text-slate-100"
-        >
-          {empresa.razonSocial}
-        </h2>
+        <div className="min-w-0">
+          <h2
+            id={tituloId}
+            ref={titulo}
+            tabIndex={-1}
+            className="text-xl font-bold text-slate-900 outline-none dark:text-slate-100"
+          >
+            {empresa.razonSocial}
+          </h2>
+          <p className="mt-1 flex items-center gap-1.5 text-[13px] text-slate-600 dark:text-slate-400">
+            <span className={`h-2.5 w-2.5 rounded-full ${ETAPA_PUNTO[empresa.etapa]}`} aria-hidden="true" />
+            {ETAPA_LABELS[empresa.etapa]}
+          </p>
+        </div>
         <div className="ml-auto flex shrink-0 items-center gap-1">
           {!editando && (
             <button

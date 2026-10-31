@@ -1,6 +1,15 @@
 import { Mail, MessageCircle, Phone, type LucideIcon } from 'lucide-react';
 
-import { MOTIVO_CAMPOS, SECTORES_INICIALES, type Empresa, type Medio } from '../../domain/entities';
+import { MOTIVO_CAMPOS, SECTORES_INICIALES, type Empresa, type Etapa, type Medio } from '../../domain/entities';
+
+/** Color of the dot that goes next to each stage name (board columns and detail header). */
+export const ETAPA_PUNTO: Record<Etapa, string> = {
+  por_contactar: 'bg-slate-400',
+  contactado: 'bg-sky-500',
+  en_seguimiento: 'bg-amber-500',
+  cliente: 'bg-emerald-500',
+  perdido: 'bg-red-500',
+};
 
 export const INPUT =
   'w-full rounded-[10px] border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-500/30 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100';

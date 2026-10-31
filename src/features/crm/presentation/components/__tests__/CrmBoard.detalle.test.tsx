@@ -175,7 +175,8 @@ describe('Detalle — contenido', () => {
     expect(within(dialogo).getByRole('radio', { name: /Llamada/ })).toBeChecked();
     fireEvent.click(within(dialogo).getByRole('radio', { name: /Correo/ }));
     fireEvent.click(within(dialogo).getByRole('button', { name: /Guardar/ }));
-    await waitFor(() => expect(within(panel).getByText('Correo')).toBeInTheDocument());
+    const seguimiento = () => within(within(panel).getByRole('heading', { name: 'Seguimiento' }).closest('section') as HTMLElement);
+    await waitFor(() => expect(seguimiento().getByText('Correo')).toBeInTheDocument());
     expect(llamadas(fn, 'PATCH', /seguimiento$/)).toEqual([{ url: '/api/crm/empresas/e-3/seguimiento', body: { medio: 'correo' } }]);
     expect(within(tarjeta(TEXTILES)).getByRole('button', { name: /Medio: Correo/ })).toBeInTheDocument();
     expect(screen.getByRole('dialog', { name: TEXTILES })).toBeInTheDocument();

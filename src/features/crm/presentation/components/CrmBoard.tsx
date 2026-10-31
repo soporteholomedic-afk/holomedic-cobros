@@ -15,18 +15,11 @@ import {
 } from '../../domain/entities';
 import { AltaPanel } from './AltaPanel';
 import { CrmCard } from './CrmCard';
+import { ETAPA_PUNTO } from './crmUi';
 import { DetallePanel, type DetalleHandle } from './DetallePanel';
 import { MedioDialog } from './MedioDialog';
 import { MotivoDialog } from './MotivoDialog';
 import { capturar, focoEnTarjeta, reproducir, type Captura, type Foco, type Registro } from './vuelo';
-
-const COLUMN_DOT: Record<Etapa, string> = {
-  por_contactar: 'bg-slate-400',
-  contactado: 'bg-sky-500',
-  en_seguimiento: 'bg-amber-500',
-  cliente: 'bg-emerald-500',
-  perdido: 'bg-red-500',
-};
 
 interface ApiResult {
   ok: boolean;
@@ -404,7 +397,7 @@ export function CrmBoard() {
               }`}
             >
               <header className="flex items-center gap-2 px-3.5 pb-2.5 pt-3.5 text-sm font-bold text-slate-900 dark:text-slate-100">
-                <span className={`h-2.5 w-2.5 rounded-full ${COLUMN_DOT[etapa]}`} aria-hidden="true" />
+                <span className={`h-2.5 w-2.5 rounded-full ${ETAPA_PUNTO[etapa]}`} aria-hidden="true" />
                 {ETAPA_LABELS[etapa]}
                 <span className="ml-auto min-w-[26px] rounded-full border border-slate-300 bg-white px-2 py-px text-center text-xs font-bold text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200">
                   {tarjetas.length}
