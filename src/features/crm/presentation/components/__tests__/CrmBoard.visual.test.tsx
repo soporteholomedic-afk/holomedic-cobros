@@ -35,4 +35,20 @@ describe('Details of the approved design', () => {
     expect(pie.className).toMatch(/\bbottom-0\b/);
     expect(within(pie).getByRole('button', { name: 'Cancelar' })).toBeInTheDocument();
   });
+
+  it('the create form keeps Cancel and Create stuck to the bottom (short screens), and the form fields stay above them', async () => {
+    mockApi();
+    render(<CrmBoard />);
+    await screen.findByText('Constructora Andina S.A.C.');
+    fireEvent.click(screen.getByRole('button', { name: /Nueva empresa/ }));
+    const panel = screen.getByRole('dialog', { name: /Nueva empresa/ });
+    const pie = within(panel).getByRole('button', { name: 'Crear empresa' }).closest('[data-pie-alta]') as HTMLElement;
+    expect(pie).not.toBeNull();
+    expect(pie.className).toMatch(/\bsticky\b/);
+    expect(pie.className).toMatch(/\bbottom-0\b/);
+    expect(within(pie).getByRole('button', { name: 'Cancelar' })).toBeInTheDocument();
+    // the submit button still belongs to the form, so Enter and the click keep creating
+    expect(within(panel).getByRole('button', { name: 'Crear empresa' })).toHaveAttribute('type', 'submit');
+    expect(within(panel).getByRole('button', { name: 'Crear empresa' }).closest('form')).not.toBeNull();
+  });
 });

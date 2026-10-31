@@ -142,7 +142,7 @@ export function AltaPanel({ sectores, onCerrar, oculto, onCrearSector, onCrear }
         ))}
       </ol>
 
-      <form onSubmit={enviar} autoComplete="off" noValidate className="grid gap-3.5 px-6 pb-6 pt-3">
+      <form onSubmit={enviar} autoComplete="off" noValidate className="grid gap-3.5 px-6 pb-0 pt-3">
         <fieldset className="grid gap-3.5" onFocus={() => setPaso(0)}>
           <legend className={LEYENDA}>Empresa</legend>
           <label className={ETIQUETA}>
@@ -204,7 +204,10 @@ export function AltaPanel({ sectores, onCerrar, oculto, onCrearSector, onCrear }
           </p>
         )}
 
-        <div className="flex justify-end gap-2.5 pt-1.5">
+        <div
+          data-pie-alta
+          className="sticky bottom-0 -mx-6 flex justify-end gap-2.5 border-t border-slate-200 bg-white px-6 pb-4 pt-3 shadow-[0_-8px_12px_-8px_rgba(15,23,42,0.12)] dark:border-slate-800 dark:bg-slate-900"
+        >
           <button type="button" onClick={onCerrar} className={BOTON_SECUNDARIO}>
             Cancelar
           </button>
