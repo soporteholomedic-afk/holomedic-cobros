@@ -1,7 +1,8 @@
 'use client';
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type DragEvent } from 'react';
-import { Plus, Search } from 'lucide-react';
+import Link from 'next/link';
+import { Plus, Search, Upload } from 'lucide-react';
 import { toast } from 'sonner';
 
 import {
@@ -343,6 +344,13 @@ export function CrmBoard() {
             className="min-w-0 flex-1 bg-transparent text-sm text-slate-900 outline-none placeholder:text-slate-400 dark:text-slate-100"
           />
         </label>
+        <Link
+          href="/crm/importar"
+          className="inline-flex h-10 items-center gap-2 whitespace-nowrap rounded-xl border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-800 hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:hover:bg-slate-800"
+        >
+          <Upload className="h-4 w-4" aria-hidden="true" />
+          Importar empresas
+        </Link>
         <button
           ref={botonNueva}
           type="button"
