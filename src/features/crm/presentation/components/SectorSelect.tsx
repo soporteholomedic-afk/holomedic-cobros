@@ -59,7 +59,7 @@ export function SectorSelect({ id, sectores, valor, onCambio, onCrear }: Props) 
       </label>
       <select id={id} value={valor} onChange={(ev) => onCambio(ev.target.value)} className={INPUT}>
         <option value="">Sin definir</option>
-        {sectores.map((s) => (
+        {(valor && !sectores.includes(valor) ? [...sectores, valor] : sectores).map((s) => (
           <option key={s} value={s}>
             {s}
           </option>

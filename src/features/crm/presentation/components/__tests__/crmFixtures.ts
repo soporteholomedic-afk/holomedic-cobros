@@ -131,7 +131,24 @@ export function mockApi(api: Api = {}) {
       return json(
         api.put
           ? api.put(id, body)
-          : { status: 200, body: { success: true, empresa: { ...actual, ...body } } },
+          : {
+              status: 200,
+              body: {
+                success: true,
+                empresa: {
+                  ...actual,
+                  razonSocial: body.razonSocial,
+                  ruc: body.ruc,
+                  sector: body.sector ?? null,
+                  notas: body.notas ?? null,
+                  contactos: (body.contactos as { nombre: string; telefono: string; correo?: string }[]).map((c) => ({
+                    nombre: c.nombre,
+                    telefono: c.telefono,
+                    correo: c.correo ?? null,
+                  })),
+                },
+              },
+            },
       );
     }
     throw new Error(`unexpected request ${method} ${url}`);

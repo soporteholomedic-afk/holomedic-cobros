@@ -20,6 +20,9 @@ export const MEDIO_LABELS: Record<Medio, string> = {
   whatsapp: 'WhatsApp',
 };
 
+/** Most contacts one empresa can have. */
+export const MAX_CONTACTOS = 10;
+
 /** Why an empresa was lost (column "Perdido"). */
 export const MOTIVO_CATEGORIAS = [
   'precio',

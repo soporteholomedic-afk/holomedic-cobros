@@ -3,15 +3,8 @@
 import { ChevronLeft, ChevronRight, Phone, User } from 'lucide-react';
 import type { DragEvent } from 'react';
 
-import {
-  ETAPA_LABELS,
-  MEDIO_LABELS,
-  MOTIVO_CAMPOS,
-  MOTIVO_LABELS,
-  type Empresa,
-  type Etapa,
-} from '../../domain/entities';
-import { MEDIO_ESTILO, colorDeSector } from './crmUi';
+import { ETAPA_LABELS, MEDIO_LABELS, MOTIVO_LABELS, type Empresa, type Etapa } from '../../domain/entities';
+import { MEDIO_ESTILO, colorDeSector, lineasDeMotivo } from './crmUi';
 
 interface Props {
   empresa: Empresa;
@@ -20,24 +13,26 @@ interface Props {
   onMover: (id: string, etapa: Etapa) => void;
   onEditarMedio: (empresa: Empresa) => void;
   onEditarMotivo: (empresa: Empresa) => void;
+  onAbrir: (id: string) => void;
+  /** The detail panel is showing this card. */
+  seleccionada: boolean;
   onDragStart: (ev: DragEvent<HTMLElement>, id: string) => void;
 }
 
 const FLECHA =
   'grid h-7 w-7 place-items-center rounded-lg text-slate-600 hover:bg-slate-200 dark:text-slate-300 dark:hover:bg-slate-700';
 
-function lineasDeMotivo(e: Empresa): string[] {
-  const m = e.motivo;
-  if (!m) return [];
-  const campos = MOTIVO_CAMPOS[m.categoria];
-  const lineas: string[] = [];
-  if (campos.detalle1 && m.detalle1) lineas.push(`${campos.detalle1.resumen}: ${m.detalle1}`);
-  if (campos.detalle2 && m.detalle2) lineas.push(`${campos.detalle2.resumen}: ${m.detalle2}`);
-  if (m.notas) lineas.push(m.notas);
-  return lineas;
-}
-
-export function CrmCard({ empresa: e, anterior, siguiente, onMover, onEditarMedio, onEditarMotivo, onDragStart }: Props) {
+export function CrmCard({
+  empresa: e,
+  anterior,
+  siguiente,
+  onMover,
+  onEditarMedio,
+  onEditarMotivo,
+  onAbrir,
+  seleccionada,
+  onDragStart,
+}: Props) {
   const principal = e.contactos[0];
   const extra = e.contactos.length - 1;
   const perdida = e.etapa === 'perdido';
@@ -46,10 +41,23 @@ export function CrmCard({ empresa: e, anterior, siguiente, onMover, onEditarMedi
   return (
     <article
       draggable
+      tabIndex={0}
+      data-empresa-id={e.idEmpresa}
+      aria-current={seleccionada ? 'true' : undefined}
       onDragStart={(ev) => onDragStart(ev, e.idEmpresa)}
-      className={`group cursor-grab rounded-xl border bg-white px-3 pb-2 pt-3 shadow-sm hover:border-slate-400 dark:bg-slate-800 ${
-        perdida ? 'border-red-200 dark:border-red-900' : 'border-slate-200 dark:border-slate-700'
-      }`}
+      onClick={(ev) => {
+        // The buttons inside the card do their own thing.
+        if ((ev.target as HTMLElement).closest('button')) return;
+        onAbrir(e.idEmpresa);
+      }}
+      onKeyDown={(ev) => {
+        if (ev.target !== ev.currentTarget || (ev.key !== 'Enter' && ev.key !== ' ')) return;
+        ev.preventDefault();
+        onAbrir(e.idEmpresa);
+      }}
+      className={`group cursor-pointer rounded-xl border bg-white px-3 pb-2 pt-3 shadow-sm hover:border-slate-400 focus-visible:outline focus-visible:outline-2 focus-visible:outline-sky-500 dark:bg-slate-800 ${
+        seleccionada ? 'ring-2 ring-sky-500' : ''
+      } ${perdida ? 'border-red-200 dark:border-red-900' : 'border-slate-200 dark:border-slate-700'}`}
     >
       <h3 className="text-sm font-semibold leading-snug text-slate-900 dark:text-slate-100">{e.razonSocial}</h3>
       <p className="mb-2 mt-0.5 text-xs tabular-nums text-slate-500 dark:text-slate-400">RUC {e.ruc}</p>

@@ -11,6 +11,8 @@ import { SectorSelect } from './SectorSelect';
 interface Props {
   sectores: string[];
   onCerrar: () => void;
+  /** Hidden but mounted: the draft survives while the detail panel is open. */
+  oculto: boolean;
   onCrearSector: (nombre: string) => Promise<string | { error: string }>;
   /** Resolves to the created empresa, or `{ error }` to show in the panel. */
   onCrear: (cuerpo: Record<string, unknown>) => Promise<Empresa | { error: string }>;
@@ -25,7 +27,7 @@ const LEYENDA = 'mb-0.5 text-xs font-bold uppercase tracking-wider text-sky-700 
  * side of the screen without changing the layout of the board behind it
  * (design comment pr6cscqf).
  */
-export function AltaPanel({ sectores, onCerrar, onCrearSector, onCrear }: Props) {
+export function AltaPanel({ sectores, onCerrar, oculto, onCrearSector, onCrear }: Props) {
   const [razonSocial, setRazonSocial] = useState('');
   const [ruc, setRuc] = useState('');
   const [sector, setSector] = useState('');
@@ -40,6 +42,7 @@ export function AltaPanel({ sectores, onCerrar, onCrearSector, onCrear }: Props)
   });
 
   useEffect(() => {
+    if (oculto) return;
     document.getElementById('alta-razon')?.focus();
     function onKey(e: KeyboardEvent) {
       // A medium or reason dialog open over the panel takes the Escape for itself.
@@ -47,7 +50,7 @@ export function AltaPanel({ sectores, onCerrar, onCrearSector, onCrear }: Props)
     }
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
-  }, []);
+  }, [oculto]);
 
   function falla(mensaje: string, campo: string) {
     setError(mensaje);
@@ -90,6 +93,7 @@ export function AltaPanel({ sectores, onCerrar, onCrearSector, onCrear }: Props)
   return (
     <aside
       role="dialog"
+      hidden={oculto}
       aria-modal="false"
       aria-labelledby="crm-panel-title"
       className="fixed bottom-0 right-0 top-0 z-40 w-[420px] max-w-full overflow-y-auto border-l border-slate-200 bg-white shadow-[-10px_0_30px_rgba(15,23,42,0.14)] dark:border-slate-800 dark:bg-slate-900"

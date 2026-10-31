@@ -1,5 +1,6 @@
 import type { ICrmEmpresaRepository } from '../domain/ports';
 import {
+  MAX_CONTACTOS,
   MEDIOS,
   MOTIVO_CAMPOS,
   MOTIVO_CATEGORIAS,
@@ -15,7 +16,6 @@ import { DatosEmpresaInvalidosError, RucDuplicadoError } from '../domain/errors'
 import { isValidCorreo } from '@/features/auth/domain/correo';
 
 const RUC_RE = /^\d{11}$/;
-export const MAX_CONTACTOS = 10;
 
 export function opcional(valor: string | null | undefined): string | null {
   const t = (valor ?? '').trim();

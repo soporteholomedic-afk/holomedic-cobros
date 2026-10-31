@@ -15,6 +15,7 @@ import {
 } from '../../domain/entities';
 import { AltaPanel } from './AltaPanel';
 import { CrmCard } from './CrmCard';
+import { DetallePanel, type DetalleHandle } from './DetallePanel';
 import { MedioDialog } from './MedioDialog';
 import { MotivoDialog } from './MotivoDialog';
 
@@ -73,7 +74,10 @@ export function CrmBoard() {
   const [dragOver, setDragOver] = useState<Etapa | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
   const [dialogo, setDialogo] = useState<Dialogo | null>(null);
-  const [panelAbierto, setPanelAbierto] = useState(false);
+  // 'oculta': the create panel is mounted (draft kept) but hidden while a detail is open.
+  const [alta, setAlta] = useState<'cerrada' | 'visible' | 'oculta'>('cerrada');
+  const [detalleId, setDetalleId] = useState<string | null>(null);
+  const detalleRef = useRef<DetalleHandle>(null);
   const [sectores, setSectores] = useState<string[]>([]);
   const draggingId = useRef<string | null>(null);
   const botonNueva = useRef<HTMLButtonElement>(null);
@@ -130,9 +134,48 @@ export function CrmBoard() {
   const cerrarDialogo = useCallback(() => setDialogo(null), []);
 
   const cerrarPanel = useCallback(() => {
-    setPanelAbierto(false);
+    setAlta('cerrada');
     botonNueva.current?.focus();
   }, []);
+
+  /** Run `accion` now, or after the open detail panel lets go of its unsaved changes. */
+  function conGuardia(accion: () => void) {
+    if (detalleId && detalleRef.current) detalleRef.current.intentarSalir(accion);
+    else accion();
+  }
+
+  function abrirDetalle(id: string) {
+    if (id === detalleId) return;
+    conGuardia(() => {
+      setDetalleId(id);
+      if (alta === 'visible') {
+        setAlta('oculta');
+        toast.info('El borrador de “Nueva empresa” se conserva');
+      }
+    });
+  }
+
+  function cerrarDetalle() {
+    const id = detalleId;
+    setDetalleId(null);
+    if (id) document.querySelector<HTMLElement>(`[data-empresa-id="${id}"]`)?.focus();
+  }
+
+  function pedirNueva() {
+    conGuardia(() => {
+      setDetalleId(null);
+      setAlta('visible');
+      if (alta === 'visible') document.getElementById('alta-razon')?.focus();
+    });
+  }
+
+  async function guardarEmpresa(id: string, cuerpo: Record<string, unknown>): Promise<Empresa | { error: string }> {
+    const r = await patch(`/api/crm/empresas/${id}`, cuerpo);
+    if (!r.ok || !r.empresa) return { error: r.error ?? 'No se pudo guardar la empresa' };
+    reemplazar(r.empresa, false);
+    toast.success('Cambios guardados');
+    return r.empresa;
+  }
 
   async function crearSector(nombre: string): Promise<string | { error: string }> {
     try {
@@ -245,6 +288,7 @@ export function CrmBoard() {
     if (id) mover(id, etapa);
   }
 
+  const detalleEmpresa = detalleId ? empresas.find((x) => x.idEmpresa === detalleId) : undefined;
   const empresaDelDialogo = dialogo ? empresas.find((x) => x.idEmpresa === dialogo.id) : undefined;
 
   return (
@@ -269,7 +313,7 @@ export function CrmBoard() {
         <button
           ref={botonNueva}
           type="button"
-          onClick={() => setPanelAbierto(true)}
+          onClick={pedirNueva}
           className="inline-flex h-10 items-center gap-2 whitespace-nowrap rounded-xl bg-gradient-to-tr from-sky-600 to-blue-600 px-4 text-sm font-semibold text-white shadow-md shadow-sky-600/25 hover:brightness-110"
         >
           <Plus className="h-4 w-4" aria-hidden="true" />
@@ -344,6 +388,8 @@ export function CrmBoard() {
                     onEditarMotivo={(x) =>
                       setDialogo({ tipo: 'motivo', id: x.idEmpresa, modo: 'editar', inicial: x.motivo })
                     }
+                    onAbrir={abrirDetalle}
+                    seleccionada={e.idEmpresa === detalleId}
                     onDragStart={onDragStart}
                   />
                 ))}
@@ -353,9 +399,27 @@ export function CrmBoard() {
         })}
       </div>
 
-      {panelAbierto && (
+      {detalleEmpresa && (
+        <DetallePanel
+          key={detalleEmpresa.idEmpresa}
+          empresa={detalleEmpresa}
+          empresas={empresas}
+          sectores={sectores}
+          controlRef={detalleRef}
+          onCerrar={cerrarDetalle}
+          onGuardar={guardarEmpresa}
+          onCrearSector={crearSector}
+          onCambiarMedio={(x) =>
+            setDialogo({ tipo: 'medio', id: x.idEmpresa, modo: 'editar', inicial: x.medio, destino: x.etapa })
+          }
+          onEditarMotivo={(x) => setDialogo({ tipo: 'motivo', id: x.idEmpresa, modo: 'editar', inicial: x.motivo })}
+        />
+      )}
+
+      {alta !== 'cerrada' && (
         <AltaPanel
           sectores={sectores}
+          oculto={alta === 'oculta'}
           onCerrar={cerrarPanel}
           onCrearSector={crearSector}
           onCrear={crearEmpresa}

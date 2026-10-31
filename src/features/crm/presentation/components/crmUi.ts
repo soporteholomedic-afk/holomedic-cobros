@@ -1,6 +1,6 @@
 import { Mail, MessageCircle, Phone, type LucideIcon } from 'lucide-react';
 
-import type { Medio } from '../../domain/entities';
+import { MOTIVO_CAMPOS, type Empresa, type Medio } from '../../domain/entities';
 
 export const INPUT =
   'w-full rounded-[10px] border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-500/30 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100';
@@ -50,4 +50,16 @@ export function colorDeSector(sector: string | null): string {
   let h = 0;
   for (const ch of sector) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
   return SECTOR_COLORES[h % SECTOR_COLORES.length] ?? SECTOR_COLORES[0]!;
+}
+
+/** Summary lines of the loss reason, e.g. "Ofrecimos: S/ 7,000". */
+export function lineasDeMotivo(e: Empresa): string[] {
+  const m = e.motivo;
+  if (!m) return [];
+  const campos = MOTIVO_CAMPOS[m.categoria];
+  const lineas: string[] = [];
+  if (campos.detalle1 && m.detalle1) lineas.push(`${campos.detalle1.resumen}: ${m.detalle1}`);
+  if (campos.detalle2 && m.detalle2) lineas.push(`${campos.detalle2.resumen}: ${m.detalle2}`);
+  if (m.notas) lineas.push(m.notas);
+  return lineas;
 }
