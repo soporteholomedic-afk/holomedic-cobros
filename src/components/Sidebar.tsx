@@ -38,8 +38,7 @@ export default function Sidebar() {
 
   const isAdmin = user?.permisos.includes('admin');
   // crm (S1a/pr1): the CRM entry is gated by its OWN permiso — the
-  // route requires exactly `crm` via RUTAS_PROTETGIDAS; crm_admin is a
-  // separate elevation for the import surface and never shown here.
+  // route requires exactly `crm` via RUTAS_PROTEGIDAS, import view included.
   const canCrm = user?.permisos.includes('crm');
   // configuracion-tabs (S4): `firma_correo` no longer opens a separate
   // "Mi firma" entry — it now feeds the shared "Configuración" entry

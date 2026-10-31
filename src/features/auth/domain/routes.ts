@@ -61,12 +61,9 @@ export const RUTAS_PROTEGIDAS: RutaProtegida[] = [
   // (REQ-F1-14); the routes.asistencia.test.ts guard pins that exclusion.
   { path: '/asistencia',          permiso: 'asistencia',       label: 'Asistencia' },
   { path: '/api/asistencia-rrhh', permiso: 'asistencia',       label: 'API Asistencia RRHH' },
-  // crm (S1a/pr1): the plain-`crm` entries cover the CRM pages and the
-  // whole /api/crm prefix; the admin-only import entries are LONGER
-  // prefixes, so longest-first startsWith matching denies plain-`crm`
-  // sessions on the import surface (design D2, firma_correo pattern).
-  { path: '/crm/importar',        permiso: 'crm_admin',        label: 'Importar Empresas CRM' },
-  { path: '/api/crm/import',      permiso: 'crm_admin',        label: 'API Importación CRM' },
+  // crm: the plain-`crm` entries cover every CRM page (including the
+  // Excel import view /crm/importar) and the whole /api/crm prefix
+  // (including /api/crm/importar). Anyone who can use the CRM can import.
   { path: '/api/crm',             permiso: 'crm',              label: 'API CRM' },
   { path: '/crm',                 permiso: 'crm',              label: 'CRM' },
 ];
