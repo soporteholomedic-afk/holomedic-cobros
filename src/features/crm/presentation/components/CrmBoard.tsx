@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent } from 'react';
-import { Search } from 'lucide-react';
+import { Plus, Search } from 'lucide-react';
 import { toast } from 'sonner';
 
 import {
@@ -13,6 +13,7 @@ import {
   type Medio,
   type Motivo,
 } from '../../domain/entities';
+import { AltaPanel } from './AltaPanel';
 import { CrmCard } from './CrmCard';
 import { MedioDialog } from './MedioDialog';
 import { MotivoDialog } from './MotivoDialog';
@@ -72,7 +73,10 @@ export function CrmBoard() {
   const [dragOver, setDragOver] = useState<Etapa | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
   const [dialogo, setDialogo] = useState<Dialogo | null>(null);
+  const [panelAbierto, setPanelAbierto] = useState(false);
+  const [sectores, setSectores] = useState<string[]>([]);
   const draggingId = useRef<string | null>(null);
+  const botonNueva = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -95,6 +99,23 @@ export function CrmBoard() {
     };
   }, [reloadKey]);
 
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch('/api/crm/sectores');
+        if (!res.ok) return;
+        const data = (await res.json()) as { sectores?: string[] };
+        if (!cancelled && Array.isArray(data.sectores)) setSectores(data.sectores);
+      } catch {
+        // the panel still works without the list: the sector is optional
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   const visibles = useMemo(() => {
     const q = search.trim().toLowerCase();
     if (!q) return empresas;
@@ -107,6 +128,51 @@ export function CrmBoard() {
   }, [empresas, search]);
 
   const cerrarDialogo = useCallback(() => setDialogo(null), []);
+
+  const cerrarPanel = useCallback(() => {
+    setPanelAbierto(false);
+    botonNueva.current?.focus();
+  }, []);
+
+  async function crearSector(nombre: string): Promise<string | { error: string }> {
+    try {
+      const res = await fetch('/api/crm/sectores', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ nombre }),
+      });
+      let data: { error?: string; sector?: string } = {};
+      try {
+        data = await res.json();
+      } catch {
+        // not JSON
+      }
+      if (!res.ok || !data.sector) return { error: data.error ?? 'No se pudo crear el sector.' };
+      const creado = data.sector;
+      setSectores((prev) => [...prev, creado].sort((a, b) => a.localeCompare(b, 'es')));
+      return creado;
+    } catch {
+      return { error: 'No se pudo crear el sector.' };
+    }
+  }
+
+  async function crearEmpresa(cuerpo: Record<string, unknown>): Promise<Empresa | { error: string }> {
+    try {
+      const res = await fetch('/api/crm/empresas', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(cuerpo),
+      });
+      const r = await leerRespuesta(res);
+      if (!r.ok || !r.empresa) return { error: r.error ?? 'No se pudo crear la empresa' };
+      reemplazar(r.empresa, true);
+      cerrarPanel();
+      toast.success('Empresa creada en “Por contactar”');
+      return r.empresa;
+    } catch {
+      return { error: 'No se pudo crear la empresa' };
+    }
+  }
 
   /** Put the server's version of an empresa in the list; a move sends it to the top of its column. */
   function reemplazar(nueva: Empresa, alFrente: boolean) {
@@ -200,6 +266,15 @@ export function CrmBoard() {
             className="min-w-0 flex-1 bg-transparent text-sm text-slate-900 outline-none placeholder:text-slate-400 dark:text-slate-100"
           />
         </label>
+        <button
+          ref={botonNueva}
+          type="button"
+          onClick={() => setPanelAbierto(true)}
+          className="inline-flex h-10 items-center gap-2 whitespace-nowrap rounded-xl bg-gradient-to-tr from-sky-600 to-blue-600 px-4 text-sm font-semibold text-white shadow-md shadow-sky-600/25 hover:brightness-110"
+        >
+          <Plus className="h-4 w-4" aria-hidden="true" />
+          Nueva empresa
+        </button>
       </div>
 
       {loadError && (
@@ -277,6 +352,15 @@ export function CrmBoard() {
           );
         })}
       </div>
+
+      {panelAbierto && (
+        <AltaPanel
+          sectores={sectores}
+          onCerrar={cerrarPanel}
+          onCrearSector={crearSector}
+          onCrear={crearEmpresa}
+        />
+      )}
 
       {dialogo?.tipo === 'medio' && empresaDelDialogo && (
         <MedioDialog
