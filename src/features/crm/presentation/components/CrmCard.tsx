@@ -115,13 +115,14 @@ export function CrmCard({
           <button
             type="button"
             aria-label={`Mover ${e.razonSocial} a ${ETAPA_LABELS[anterior]}`}
+            data-mover="-1"
             onClick={() => onMover(e.idEmpresa, anterior)}
             className={FLECHA}
           >
             <ChevronLeft className="h-4 w-4" aria-hidden="true" />
           </button>
         ) : (
-          <button type="button" disabled aria-label="Sin columna anterior" className={`${FLECHA} opacity-30`}>
+          <button type="button" disabled aria-label="Sin columna anterior" data-mover="-1" className={`${FLECHA} opacity-30`}>
             <ChevronLeft className="h-4 w-4" aria-hidden="true" />
           </button>
         )}
@@ -129,13 +130,14 @@ export function CrmCard({
           <button
             type="button"
             aria-label={`Mover ${e.razonSocial} a ${ETAPA_LABELS[siguiente]}`}
+            data-mover="1"
             onClick={() => onMover(e.idEmpresa, siguiente)}
             className={FLECHA}
           >
             <ChevronRight className="h-4 w-4" aria-hidden="true" />
           </button>
         ) : (
-          <button type="button" disabled aria-label="Sin columna siguiente" className={`${FLECHA} opacity-30`}>
+          <button type="button" disabled aria-label="Sin columna siguiente" data-mover="1" className={`${FLECHA} opacity-30`}>
             <ChevronRight className="h-4 w-4" aria-hidden="true" />
           </button>
         )}

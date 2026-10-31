@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type DragEvent } from 'react';
 import { Plus, Search } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -18,6 +18,7 @@ import { CrmCard } from './CrmCard';
 import { DetallePanel, type DetalleHandle } from './DetallePanel';
 import { MedioDialog } from './MedioDialog';
 import { MotivoDialog } from './MotivoDialog';
+import { capturar, reproducir, type Captura, type Registro } from './vuelo';
 
 const COLUMN_DOT: Record<Etapa, string> = {
   por_contactar: 'bg-slate-400',
@@ -81,6 +82,9 @@ export function CrmBoard() {
   const [sectores, setSectores] = useState<string[]>([]);
   const draggingId = useRef<string | null>(null);
   const botonNueva = useRef<HTMLButtonElement>(null);
+  // Trip of a card that just changed column: photographed before the list is replaced, played after.
+  const pendienteVuelo = useRef<Captura | null>(null);
+  const vuelos = useRef<Registro>(new Map());
 
   useEffect(() => {
     let cancelled = false;
@@ -117,6 +121,21 @@ export function CrmBoard() {
     })();
     return () => {
       cancelled = true;
+    };
+  }, []);
+
+  useLayoutEffect(() => {
+    const c = pendienteVuelo.current;
+    if (!c) return;
+    pendienteVuelo.current = null;
+    reproducir(c, vuelos.current);
+  }, [empresas]);
+
+  useEffect(() => {
+    const enVuelo = vuelos.current;
+    return () => {
+      // Leaving the page mid-trip: remove the flying copy.
+      [...enVuelo.values()].forEach((fin) => fin(false));
     };
   }, []);
 
@@ -226,13 +245,22 @@ export function CrmBoard() {
     );
   }
 
+  /** Put a card that changed column at the top of its new column, travelling there. */
+  function colocar(nueva: Empresa) {
+    // A trip still in the air ends now so its card is where it belongs before the next one starts.
+    const foco = capturar(nueva.idEmpresa, nueva.etapa);
+    [...vuelos.current.values()].forEach((fin) => fin(false));
+    pendienteVuelo.current = foco;
+    reemplazar(nueva, true);
+  }
+
   async function moverSinDialogo(id: string, body: Record<string, unknown>): Promise<boolean> {
     const r = await patch(`/api/crm/empresas/${id}/etapa`, body);
     if (!r.ok || !r.empresa) {
       toast.error(r.error ?? 'No se pudo mover la empresa');
       return false;
     }
-    reemplazar(r.empresa, true);
+    colocar(r.empresa);
     return true;
   }
 
@@ -255,7 +283,8 @@ export function CrmBoard() {
       editar ? { medio } : { etapa: d.destino, medio },
     );
     if (!r.ok || !r.empresa) return r.error ?? 'No se pudo guardar el medio de contacto';
-    reemplazar(r.empresa, !editar);
+    if (editar) reemplazar(r.empresa, false);
+    else colocar(r.empresa);
     setDialogo(null);
     if (editar) toast.success('Medio de contacto actualizado');
     return null;
@@ -268,7 +297,8 @@ export function CrmBoard() {
       editar ? { motivo } : { etapa: 'perdido', motivo },
     );
     if (!r.ok || !r.empresa) return r.error ?? 'No se pudo guardar el motivo';
-    reemplazar(r.empresa, !editar);
+    if (editar) reemplazar(r.empresa, false);
+    else colocar(r.empresa);
     setDialogo(null);
     if (editar) toast.success('Motivo actualizado');
     return null;
@@ -348,6 +378,7 @@ export function CrmBoard() {
             <section
               key={etapa}
               aria-label={ETAPA_LABELS[etapa]}
+              data-etapa={etapa}
               onDragOver={(ev) => {
                 ev.preventDefault();
                 setDragOver(etapa);
