@@ -28,6 +28,7 @@ export async function leerJson(request: Request): Promise<unknown | undefined> {
 
 const POR_NOMBRE: Record<string, { status: number; mensaje?: string }> = {
   DatosEmpresaInvalidosError: { status: 400 },
+  ArchivoImportacionInvalidoError: { status: 400 },
   EtapaInvalidaError: { status: 400 },
   RucDuplicadoError: { status: 409 },
   SectorDuplicadoError: { status: 409 },
