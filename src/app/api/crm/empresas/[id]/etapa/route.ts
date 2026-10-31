@@ -1,57 +1,44 @@
 import { NextResponse } from 'next/server';
-import { getSession } from '@/lib/auth';
 import { getCrmDb } from '@/features/crm/infrastructure/getCrmDb';
 import { MoverEmpresaUseCase } from '@/features/crm/application/moverEmpresa';
+import type { MotivoDatos } from '@/features/crm/domain/entities';
+import {
+  buildError,
+  errorDeCrm,
+  esMotivo,
+  esObjeto,
+  exigirCrm,
+  leerJson,
+} from '../../../_lib/http';
 
-interface ErrorResponse {
-  success: false;
-  error: string;
-}
-
-function buildError(error: string, status: number): NextResponse<ErrorResponse> {
-  return NextResponse.json({ success: false, error }, { status });
-}
-
-function isEtapaBody(v: unknown): v is { etapa: string } {
-  if (typeof v !== 'object' || v === null) return false;
-  return typeof (v as Record<string, unknown>).etapa === 'string';
-}
-
+/** Move an empresa to another column; `medio` and `motivo` travel with the move. */
 export async function PATCH(
   request: Request,
   { params }: { params: Promise<{ id: string }> },
 ): Promise<NextResponse> {
   try {
-    const session = await getSession();
-    if (!session || !session.permisos.includes('crm')) {
-      return buildError('No autorizado', 401);
-    }
+    const denegado = await exigirCrm();
+    if (denegado) return denegado;
 
     const { id } = await params;
-
-    let body: unknown;
-    try {
-      body = await request.json();
-    } catch {
-      return buildError('El cuerpo debe ser JSON válido', 400);
-    }
-
-    if (!isEtapaBody(body)) {
-      return buildError('Cuerpo inválido. Requiere: {etapa}', 400);
+    const body = await leerJson(request);
+    if (body === undefined) return buildError('El cuerpo debe ser JSON válido', 400);
+    if (
+      !esObjeto(body) ||
+      typeof body.etapa !== 'string' ||
+      !(body.medio === undefined || body.medio === null || typeof body.medio === 'string') ||
+      !(body.motivo === undefined || body.motivo === null || esMotivo(body.motivo))
+    ) {
+      return buildError('Cuerpo inválido. Requiere: {etapa, medio?, motivo?}', 400);
     }
 
     const repo = await getCrmDb();
-    const empresa = await new MoverEmpresaUseCase(repo).execute(id, body.etapa);
-
+    const empresa = await new MoverEmpresaUseCase(repo).execute(id, body.etapa, {
+      medio: body.medio as string | null | undefined,
+      motivo: body.motivo as MotivoDatos | null | undefined,
+    });
     return NextResponse.json({ success: true, empresa });
   } catch (error) {
-    if (error instanceof Error && error.name === 'EtapaInvalidaError') {
-      return buildError(error.message, 400);
-    }
-    if (error instanceof Error && error.name === 'EmpresaNotFoundError') {
-      return buildError('Empresa no encontrada', 404);
-    }
-    console.error('PATCH /api/crm/empresas/[id]/etapa failed:', error);
-    return buildError('Error al mover la empresa', 500);
+    return errorDeCrm(error, 'PATCH /api/crm/empresas/[id]/etapa', 'Error al mover la empresa');
   }
 }
