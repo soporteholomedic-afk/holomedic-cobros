@@ -7,17 +7,10 @@ const mockUsePathname = vi.hoisted(() => vi.fn().mockReturnValue('/'));
 // por llamada re-armaría el polling en cada render del Sidebar).
 const routerMock = vi.hoisted(() => ({ push: vi.fn() }));
 const mockUseRouter = vi.hoisted(() => vi.fn(() => routerMock));
-const toastMock = vi.hoisted(() => Object.assign(vi.fn(), { dismiss: vi.fn() }));
 
 vi.mock('next/navigation', () => ({
   usePathname: mockUsePathname,
   useRouter: mockUseRouter,
-}));
-
-// E3·T6: el Sidebar monta useNotificacionesConversaciones (badge +
-// toasts globales) — sonner se moquea para no emitir toasts reales.
-vi.mock('sonner', () => ({
-  toast: toastMock,
 }));
 
 vi.mock('next/link', () => ({
@@ -58,19 +51,6 @@ const firmaUser: AuthUser = {
   activo: true,
 };
 
-// agente-ia-crm E3·T6: the "Conversaciones" entry is gated by its
-// OWN permiso `crm_conversaciones` — independent of `crm` (the CRM
-// panel entry): an operator with only crm_conversaciones sees the
-// bandeja entry but NOT the CRM panel.
-const conversacionesUser: AuthUser = {
-  idUsuario: 'u-conversaciones',
-  usuario: 'mconversa',
-  nombre: 'Marcos Conversa',
-  area: 'Cobranza',
-  permisos: ['crm_conversaciones'],
-  activo: true,
-};
-
 const crmUser: AuthUser = {
   idUsuario: 'u-crm',
   usuario: 'vcrm',
@@ -89,32 +69,6 @@ function mockAuthMe(user: AuthUser | null): void {
       : Promise.resolve({ ok: true, json: () => Promise.resolve({}) }),
   ) as unknown as typeof fetch;
 }
-
-// E3·T6: auth + resumen de notificaciones en un solo mock de fetch —
-// el badge vive del GET /api/crm/conversaciones/notificaciones.
-function mockAuthMeNotificaciones(user: AuthUser, payload: unknown): void {
-  global.fetch = vi.fn().mockImplementation((url: string) =>
-    url === '/api/auth/me'
-      ? Promise.resolve({ ok: true, json: () => Promise.resolve({ usuario: user }) })
-      : url === '/api/crm/conversaciones/notificaciones'
-        ? Promise.resolve({ ok: true, json: () => Promise.resolve(payload) })
-        : Promise.resolve({ ok: true, json: () => Promise.resolve({}) }),
-  ) as unknown as typeof fetch;
-}
-
-const resumenConAyuda = {
-  success: true,
-  requiereAyuda: 2,
-  pendienteVinculacion: 0,
-  total: 12,
-  ultimaActividad: '2026-06-15T12:30:00.000Z',
-  requiereAyudaDetalle: [],
-};
-
-const resumenSinAyuda = {
-  ...resumenConAyuda,
-  requiereAyuda: 0,
-};
 
 const renderSidebar = () =>
   render(
@@ -383,257 +337,24 @@ describe('Sidebar Component', () => {
     });
   });
 
-  // agente-ia-crm E3·T6: entrada global "Conversaciones" + badge de ayuda
-  describe('Conversaciones entry (permiso crm_conversaciones, E3·T6)', () => {
+  // crm: the "CRM" entry is gated by its OWN permiso `crm` and links to /crm.
+  describe('CRM entry (permiso crm)', () => {
     beforeEach(() => {
       mockUsePathname.mockReturnValue('/');
-      mockUseRouter.mockClear();
-      toastMock.mockClear();
-      toastMock.dismiss.mockClear();
     });
 
-    it('debe mostrar "Conversaciones" y enlazar a /crm/conversaciones con el permiso', async () => {
-      mockAuthMe(conversacionesUser);
-      renderSidebar();
-      expect(await screen.findByText('Marcos Conversa')).toBeInTheDocument();
-
-      const link = screen.getByText('Conversaciones').closest('a');
-      expect(link).toHaveAttribute('href', '/crm/conversaciones');
-    });
-
-    it('permiso propio: con SOLO crm_conversaciones ve Conversaciones pero NO el panel CRM', async () => {
-      mockAuthMe(conversacionesUser);
-      renderSidebar();
-      expect(await screen.findByText('Conversaciones')).toBeInTheDocument();
-      expect(screen.queryByText('CRM')).not.toBeInTheDocument();
-    });
-
-    it('permiso propio: con SOLO crm ve el panel CRM pero NO Conversaciones', async () => {
+    it('muestra "CRM" con enlace a /crm para un usuario con permiso crm', async () => {
       mockAuthMe(crmUser);
       renderSidebar();
-      expect(await screen.findByText('CRM')).toBeInTheDocument();
-      expect(screen.queryByText('Conversaciones')).not.toBeInTheDocument();
+      expect(await screen.findByText('Vera Crm')).toBeInTheDocument();
+      expect(screen.getByText('CRM').closest('a')).toHaveAttribute('href', '/crm');
     });
 
-    it('debe ocultar "Conversaciones" sin el permiso crm_conversaciones', async () => {
-      mockAuthMe(nonAdminUser);
+    it('oculta "CRM" para un usuario sin el permiso crm', async () => {
+      mockAuthMe(firmaUser);
       renderSidebar();
-      expect(await screen.findByText('Ana Cobranza')).toBeInTheDocument();
-      expect(screen.queryByText('Conversaciones')).not.toBeInTheDocument();
-    });
-
-    it('marca activa la entrada en /crm/conversaciones', async () => {
-      mockUsePathname.mockReturnValue('/crm/conversaciones');
-      mockAuthMe(conversacionesUser);
-      renderSidebar();
-      const link = (await screen.findByText('Conversaciones')).closest('a');
-      expect(link?.className).toContain('text-sky-300');
-    });
-
-    it('badge: cuenta requiereAyuda con aria-label cuando > 0', async () => {
-      mockAuthMeNotificaciones(conversacionesUser, resumenConAyuda);
-      renderSidebar();
-
-      const badge = await screen.findByLabelText('2 conversaciones necesitan ayuda');
-      expect(badge).toHaveTextContent('2');
-    });
-
-    it('badge: oculto cuando requiereAyuda es 0', async () => {
-      mockAuthMeNotificaciones(conversacionesUser, resumenSinAyuda);
-      renderSidebar();
-      expect(await screen.findByText('Marcos Conversa')).toBeInTheDocument();
-
-      await waitFor(() =>
-        expect(global.fetch).toHaveBeenCalledWith(
-          '/api/crm/conversaciones/notificaciones',
-          expect.anything(),
-        ),
-      );
-      expect(screen.queryByLabelText(/conversaciones necesitan ayuda/)).not.toBeInTheDocument();
-    });
-
-    it('sin permiso no polea notificaciones (ni badge ni fetch)', async () => {
-      const fetchSpy = vi.fn().mockImplementation((url: string) =>
-        url === '/api/auth/me'
-          ? Promise.resolve({ ok: true, json: () => Promise.resolve({ usuario: nonAdminUser }) })
-          : Promise.resolve({ ok: true, json: () => Promise.resolve({}) }),
-      );
-      global.fetch = fetchSpy as unknown as typeof fetch;
-      renderSidebar();
-      expect(await screen.findByText('Ana Cobranza')).toBeInTheDocument();
-
-      expect(
-        fetchSpy.mock.calls.filter((c) => String(c[0]).includes('notificaciones')),
-      ).toHaveLength(0);
-    });
-  });
-
-  // agente-ia-crm E4·T6: entrada global "Calidad" — el panel de
-  // métricas vive en el MISMO permiso crm_conversaciones que la
-  // bandeja (ruta prefijo más largo /crm/calidad).
-  describe('Calidad entry (permiso crm_conversaciones, E4·T6)', () => {
-    beforeEach(() => {
-      mockUsePathname.mockReturnValue('/');
-      mockUseRouter.mockClear();
-      toastMock.mockClear();
-      toastMock.dismiss.mockClear();
-    });
-
-    it('debe mostrar "Calidad" y enlazar a /crm/calidad con el permiso', async () => {
-      mockAuthMe(conversacionesUser);
-      renderSidebar();
-      expect(await screen.findByText('Marcos Conversa')).toBeInTheDocument();
-
-      const link = screen.getByText('Calidad').closest('a');
-      expect(link).toHaveAttribute('href', '/crm/calidad');
-    });
-
-    it('permiso propio: con SOLO crm_conversaciones ve Calidad pero NO el panel CRM', async () => {
-      mockAuthMe(conversacionesUser);
-      renderSidebar();
-      expect(await screen.findByText('Calidad')).toBeInTheDocument();
+      expect(await screen.findByText('Julián Firma')).toBeInTheDocument();
       expect(screen.queryByText('CRM')).not.toBeInTheDocument();
-    });
-
-    it('permiso propio: con SOLO crm ve el panel CRM pero NO Calidad', async () => {
-      mockAuthMe(crmUser);
-      renderSidebar();
-      expect(await screen.findByText('CRM')).toBeInTheDocument();
-      expect(screen.queryByText('Calidad')).not.toBeInTheDocument();
-    });
-
-    it('debe ocultar "Calidad" sin el permiso crm_conversaciones', async () => {
-      mockAuthMe(nonAdminUser);
-      renderSidebar();
-      expect(await screen.findByText('Ana Cobranza')).toBeInTheDocument();
-      expect(screen.queryByText('Calidad')).not.toBeInTheDocument();
-    });
-
-    it('marca activa la entrada en /crm/calidad', async () => {
-      mockUsePathname.mockReturnValue('/crm/calidad');
-      mockAuthMe(conversacionesUser);
-      renderSidebar();
-      const link = (await screen.findByText('Calidad')).closest('a');
-      expect(link?.className).toContain('text-sky-300');
-    });
-  });
-
-  // agente-ia-crm E4·T8: entrada global "Conocimiento" — la carga de
-  // conocimiento vive en su PROPIO permiso crm_conocimiento (ruta
-  // /admin/crm/conocimiento), independiente de crm/admin.
-  describe('Conocimiento entry (permiso crm_conocimiento, E4·T8)', () => {
-    const conocimientoUser: AuthUser = {
-      idUsuario: 'u-conocimiento',
-      usuario: 'cconocim',
-      nombre: 'Carla Conocimiento',
-      area: 'Comercial',
-      permisos: ['crm_conocimiento'],
-      activo: true,
-    };
-
-    beforeEach(() => {
-      mockUsePathname.mockReturnValue('/');
-      mockUseRouter.mockClear();
-      toastMock.mockClear();
-      toastMock.dismiss.mockClear();
-    });
-
-    it('debe mostrar "Conocimiento" y enlazar a /admin/crm/conocimiento con el permiso', async () => {
-      mockAuthMe(conocimientoUser);
-      renderSidebar();
-      expect(await screen.findByText('Carla Conocimiento')).toBeInTheDocument();
-
-      const link = screen.getByText('Conocimiento').closest('a');
-      expect(link).toHaveAttribute('href', '/admin/crm/conocimiento');
-    });
-
-    it('permiso propio: con SOLO crm_conocimiento ve Conocimiento pero NO el panel CRM', async () => {
-      mockAuthMe(conocimientoUser);
-      renderSidebar();
-      expect(await screen.findByText('Conocimiento')).toBeInTheDocument();
-      expect(screen.queryByText('CRM')).not.toBeInTheDocument();
-    });
-
-    it('permiso propio: con SOLO crm ve el panel CRM pero NO Conocimiento', async () => {
-      mockAuthMe(crmUser);
-      renderSidebar();
-      expect(await screen.findByText('CRM')).toBeInTheDocument();
-      expect(screen.queryByText('Conocimiento')).not.toBeInTheDocument();
-    });
-
-    it('debe ocultar "Conocimiento" sin el permiso crm_conocimiento', async () => {
-      mockAuthMe(nonAdminUser);
-      renderSidebar();
-      expect(await screen.findByText('Ana Cobranza')).toBeInTheDocument();
-      expect(screen.queryByText('Conocimiento')).not.toBeInTheDocument();
-    });
-
-    it('marca activa la entrada en /admin/crm/conocimiento', async () => {
-      mockUsePathname.mockReturnValue('/admin/crm/conocimiento');
-      mockAuthMe(conocimientoUser);
-      renderSidebar();
-      const link = (await screen.findByText('Conocimiento')).closest('a');
-      expect(link?.className).toContain('text-sky-300');
-    });
-  });
-
-  // agente-ia-crm E5·T6: entrada global "Configuración IA" — gobernada
-  // SOLO por crm_configuracion (ruta /admin/crm/configuracion),
-  // independiente de crm/admin/crm_conocimiento.
-  describe('Configuración IA entry (permiso crm_configuracion, E5·T6)', () => {
-    const configuracionUser: AuthUser = {
-      idUsuario: 'u-config',
-      usuario: 'cconfig',
-      nombre: 'Carla Configura',
-      area: 'Sistemas',
-      permisos: ['crm_configuracion'],
-      activo: true,
-    };
-
-    beforeEach(() => {
-      mockUsePathname.mockReturnValue('/');
-      mockUseRouter.mockClear();
-      toastMock.mockClear();
-      toastMock.dismiss.mockClear();
-    });
-
-    it('debe mostrar "Configuración IA" y enlazar a /admin/crm/configuracion con el permiso', async () => {
-      mockAuthMe(configuracionUser);
-      renderSidebar();
-      expect(await screen.findByText('Carla Configura')).toBeInTheDocument();
-
-      const link = screen.getByText('Configuración IA').closest('a');
-      expect(link).toHaveAttribute('href', '/admin/crm/configuracion');
-    });
-
-    it('debe ocultar "Configuración IA" sin el permiso crm_configuracion', async () => {
-      mockAuthMe(nonAdminUser);
-      renderSidebar();
-      expect(await screen.findByText('Ana Cobranza')).toBeInTheDocument();
-      expect(screen.queryByText('Configuración IA')).not.toBeInTheDocument();
-    });
-
-    it('permiso propio: con SOLO crm_configuracion ve Configuración IA pero NO CRM ni Conocimiento', async () => {
-      mockAuthMe(configuracionUser);
-      renderSidebar();
-      expect(await screen.findByText('Configuración IA')).toBeInTheDocument();
-      expect(screen.queryByText('CRM')).not.toBeInTheDocument();
-      expect(screen.queryByText('Conocimiento')).not.toBeInTheDocument();
-    });
-
-    it('permiso propio: crm_conocimiento y crm NO muestran Configuración IA', async () => {
-      mockAuthMe({ ...configuracionUser, permisos: ['crm', 'crm_conocimiento'] });
-      renderSidebar();
-      expect(await screen.findByText('Conocimiento')).toBeInTheDocument();
-      expect(screen.queryByText('Configuración IA')).not.toBeInTheDocument();
-    });
-
-    it('marca activa la entrada en /admin/crm/configuracion', async () => {
-      mockUsePathname.mockReturnValue('/admin/crm/configuracion');
-      mockAuthMe(configuracionUser);
-      renderSidebar();
-      const link = (await screen.findByText('Configuración IA')).closest('a');
-      expect(link?.className).toContain('text-sky-300');
     });
   });
 });
