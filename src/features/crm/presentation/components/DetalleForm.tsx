@@ -62,7 +62,7 @@ export function DetalleForm({
             className={INPUT}
           />
         </label>
-        <div className="grid grid-cols-2 items-start gap-3.5">
+        <div className="grid gap-3.5">
           <label className={ETIQUETA}>
             <span>
               RUC <em className="not-italic text-red-700">*</em>
@@ -94,13 +94,14 @@ export function DetalleForm({
             key={c.clave}
             className="grid gap-3.5 rounded-xl border border-slate-200 p-3.5 dark:border-slate-700"
           >
-            <legend className="px-1 text-[13px] font-bold text-slate-800 dark:text-slate-200">
-              {i === 0 ? `Contacto ${i + 1} · Principal` : `Contacto ${i + 1}`}
+            <legend className="px-1 text-xs font-bold uppercase tracking-wider text-sky-700 dark:text-sky-400">
+              {i === 0 ? 'Contacto principal' : `Contacto ${i + 1}`}
             </legend>
             <ContactoFields
               prefijo={`det-c${c.clave}`}
               contacto={c}
               invalido={invalido}
+              disposicion="apilada"
               onCambio={(nuevo) => cambiarContacto(i, { ...c, ...nuevo })}
             />
             <div className="flex flex-wrap justify-between gap-2">

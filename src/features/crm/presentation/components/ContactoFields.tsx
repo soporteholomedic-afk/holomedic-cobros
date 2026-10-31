@@ -17,18 +17,23 @@ interface Props {
   onCambio: (c: ContactoForm) => void;
   /** DOM id of the field a validation rejected, if it is one of these. */
   invalido?: string | null;
+  /** Name and phone side by side (create panel) or one under the other (edit panel). */
+  disposicion?: 'dos-columnas' | 'apilada';
 }
 
 const ETIQUETA = 'grid gap-1.5 text-[13px] font-semibold text-slate-800 dark:text-slate-200';
 
 /** Name, phone and email of one contact. Used by the create and the edit panels. */
-export function ContactoFields({ prefijo, contacto, onCambio, invalido }: Props) {
+export function ContactoFields({ prefijo, contacto, onCambio, invalido, disposicion = 'dos-columnas' }: Props) {
   const marca = (campo: string) => (invalido === `${prefijo}-${campo}` ? true : undefined);
   const set = (campo: keyof ContactoForm) => (ev: { target: { value: string } }) =>
     onCambio({ ...contacto, [campo]: ev.target.value });
   return (
     <>
-      <div className="grid grid-cols-2 gap-3.5">
+      <div
+        data-disposicion={disposicion}
+        className={disposicion === 'apilada' ? 'grid gap-3.5' : 'grid grid-cols-2 gap-3.5'}
+      >
         <label className={ETIQUETA}>
           <span>
             Nombre <em className="not-italic text-red-700">*</em>

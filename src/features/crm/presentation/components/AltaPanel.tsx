@@ -35,6 +35,8 @@ export function AltaPanel({ sectores, onCerrar, oculto, onCrearSector, onCrear }
   const [notas, setNotas] = useState('');
   const [error, setError] = useState('');
   const [guardando, setGuardando] = useState(false);
+  // Which half of the form the user is in: 0 = empresa, 1 = contacto. It follows the focus.
+  const [paso, setPaso] = useState<0 | 1>(0);
   const cerrar = useRef(onCerrar);
 
   useEffect(() => {
@@ -117,8 +119,31 @@ export function AltaPanel({ sectores, onCerrar, oculto, onCrearSector, onCrear }
         </button>
       </header>
 
+      <ol aria-label="Pasos" className="m-0 flex list-none gap-2 px-6 pb-1 pt-2">
+        {(['Empresa', 'Contacto'] as const).map((nombre, i) => (
+          <li
+            key={nombre}
+            aria-current={paso === i ? 'step' : undefined}
+            className={`flex flex-1 items-center gap-2 rounded-[10px] px-2.5 py-2 text-[13px] font-semibold ${
+              paso === i
+                ? 'bg-sky-100 text-sky-800 dark:bg-sky-950/60 dark:text-sky-200'
+                : 'bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400'
+            }`}
+          >
+            <b
+              className={`grid h-[22px] w-[22px] place-items-center rounded-full text-xs ${
+                paso === i ? 'bg-sky-600 text-white' : 'bg-slate-300 text-slate-900'
+              }`}
+            >
+              {i + 1}
+            </b>
+            {nombre}
+          </li>
+        ))}
+      </ol>
+
       <form onSubmit={enviar} autoComplete="off" noValidate className="grid gap-3.5 px-6 pb-6 pt-3">
-        <fieldset className="grid gap-3.5">
+        <fieldset className="grid gap-3.5" onFocus={() => setPaso(0)}>
           <legend className={LEYENDA}>Empresa</legend>
           <label className={ETIQUETA}>
             <span>
@@ -157,7 +182,7 @@ export function AltaPanel({ sectores, onCerrar, oculto, onCrearSector, onCrear }
           </div>
         </fieldset>
 
-        <fieldset className="grid gap-3.5">
+        <fieldset className="grid gap-3.5" onFocus={() => setPaso(1)}>
           <legend className={LEYENDA}>Contacto principal</legend>
           <ContactoFields prefijo="alta-c0" contacto={contacto} onCambio={setContacto} />
           <label className={ETIQUETA}>
