@@ -60,7 +60,11 @@ async function conVista(filas: Fila[]) {
   return fn;
 }
 
+const desplazar = vi.fn();
+
 beforeEach(() => {
+  desplazar.mockReset();
+  Element.prototype.scrollIntoView = desplazar;
   push.mockReset();
   Object.values(mockToast).forEach((m) => m.mockReset());
 });
@@ -122,6 +126,21 @@ describe('Importar empresas — revisar el archivo', () => {
     const tabla = screen.getByRole('table', { name: 'Filas leídas del archivo' });
     expect(within(tabla).getAllByRole('row')).toHaveLength(4);
     expect(within(tabla).getByText('Escuela Norte S.A.C.')).toBeInTheDocument();
+  });
+
+  it('scrolls the whole review into view so the confirm button is not left below the fold', async () => {
+    await conVista([OK, ERR, DUP]);
+    expect(desplazar).toHaveBeenCalledTimes(1);
+    expect(desplazar).toHaveBeenCalledWith({ block: 'nearest' });
+    expect(desplazar.mock.contexts[0]).toBe(screen.getByRole('heading', { name: /Revisa y confirma/ }).closest('section'));
+  });
+
+  it('does not scroll while there is no review (reading, error, or before choosing a file)', async () => {
+    mockFetch(() => responde({ success: false, error: 'El archivo está vacío.' }, 400));
+    render(<ImportarEmpresas />);
+    elegir(excel());
+    await screen.findByRole('alert');
+    expect(desplazar).not.toHaveBeenCalled();
   });
 
   it('summarizes the rows in plural', async () => {

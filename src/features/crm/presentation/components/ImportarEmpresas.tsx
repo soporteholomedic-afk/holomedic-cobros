@@ -74,7 +74,10 @@ export function ImportarEmpresas() {
   }, []);
 
   useEffect(() => {
-    if (revision) tituloRevision.current?.focus();
+    if (!revision) return;
+    tituloRevision.current?.focus();
+    // Bring the whole review (table and confirm button) into view, as the design does.
+    tituloRevision.current?.closest('section')?.scrollIntoView({ block: 'nearest' });
   }, [revision]);
 
   async function revisar(archivo: File | undefined) {
