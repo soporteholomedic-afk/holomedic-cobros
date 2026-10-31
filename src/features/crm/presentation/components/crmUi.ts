@@ -1,6 +1,6 @@
 import { Mail, MessageCircle, Phone, type LucideIcon } from 'lucide-react';
 
-import { MOTIVO_CAMPOS, type Empresa, type Medio } from '../../domain/entities';
+import { MOTIVO_CAMPOS, SECTORES_INICIALES, type Empresa, type Medio } from '../../domain/entities';
 
 export const INPUT =
   'w-full rounded-[10px] border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-500/30 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100';
@@ -33,23 +33,32 @@ export const MEDIO_ESTILO: Record<Medio, { icono: LucideIcon; chip: string; casi
   },
 };
 
-const SECTOR_COLORES = [
+/** The six initial sectors keep the color of the approved design, by position. */
+const COLOR_INICIALES = [
   'bg-amber-100 text-amber-800',
   'bg-slate-200 text-slate-700',
   'bg-blue-100 text-blue-800',
   'bg-teal-100 text-teal-800',
   'bg-pink-100 text-pink-800',
   'bg-violet-100 text-violet-800',
+] as const;
+
+/** Sectors created later get one of these, picked from the name so it never changes. */
+const COLOR_NUEVOS = [
   'bg-lime-100 text-lime-800',
   'bg-orange-100 text-orange-800',
-];
+  'bg-cyan-100 text-cyan-800',
+  'bg-fuchsia-100 text-fuchsia-800',
+] as const;
 
-/** Same sector, same color on every render: derived from the name, not from its position. */
 export function colorDeSector(sector: string | null): string {
   if (!sector) return 'bg-slate-200 text-slate-700';
+  const minuscula = sector.toLowerCase();
+  const inicial = SECTORES_INICIALES.findIndex((x) => x.toLowerCase() === minuscula);
+  if (inicial >= 0) return COLOR_INICIALES[inicial] ?? COLOR_INICIALES[0];
   let h = 0;
-  for (const ch of sector) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
-  return SECTOR_COLORES[h % SECTOR_COLORES.length] ?? SECTOR_COLORES[0]!;
+  for (const ch of minuscula) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
+  return COLOR_NUEVOS[h % COLOR_NUEVOS.length] ?? COLOR_NUEVOS[0];
 }
 
 /** Summary lines of the loss reason, e.g. "Ofrecimos: S/ 7,000". */

@@ -241,7 +241,7 @@ export function DetallePanel({
       </header>
 
       {borrador ? (
-        <form onSubmit={guardar} autoComplete="off" noValidate>
+        <form onSubmit={guardar} autoComplete="off" noValidate className="flex flex-1 flex-col">
           <DetalleForm
             borrador={borrador}
             sectores={sectores}
@@ -253,7 +253,10 @@ export function DetallePanel({
             onQuitar={quitar}
             onHacerPrincipal={hacerPrincipal}
           />
-          <div className="grid gap-3 px-6 pb-6">
+          <div
+            data-pie-detalle
+            className="sticky bottom-0 mt-auto grid gap-3 border-t border-slate-200 bg-white px-6 pb-4 pt-3 shadow-[0_-8px_12px_-8px_rgba(15,23,42,0.12)] dark:border-slate-800 dark:bg-slate-900"
+          >
             {error && (
               <p role="alert" className={ALERTA}>
                 {error}

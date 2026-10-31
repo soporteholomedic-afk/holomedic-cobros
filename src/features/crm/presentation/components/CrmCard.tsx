@@ -57,7 +57,9 @@ export function CrmCard({
       }}
       className={`group cursor-pointer rounded-xl border bg-white px-3 pb-2 pt-3 shadow-sm hover:border-slate-400 focus-visible:outline focus-visible:outline-2 focus-visible:outline-sky-500 dark:bg-slate-800 ${
         seleccionada ? 'ring-2 ring-sky-500' : ''
-      } ${perdida ? 'border-red-200 dark:border-red-900' : 'border-slate-200 dark:border-slate-700'}`}
+      } ${perdida
+          ? 'border-red-200 border-l-[3px] border-l-red-300 dark:border-red-900 dark:border-l-red-800'
+          : 'border-slate-200 dark:border-slate-700'}`}
     >
       <h3 className="text-sm font-semibold leading-snug text-slate-900 dark:text-slate-100">{e.razonSocial}</h3>
       <p className="mb-2 mt-0.5 text-xs tabular-nums text-slate-500 dark:text-slate-400">RUC {e.ruc}</p>
@@ -96,7 +98,7 @@ export function CrmCard({
 
       {perdida && e.motivo && (
         <div className="mt-2 grid gap-0.5 rounded-lg border border-red-200 bg-red-50 px-2.5 py-2 text-xs text-red-900 dark:border-red-900 dark:bg-red-950/40 dark:text-red-100">
-          <span className="font-bold">{`Motivo · ${MOTIVO_LABELS[e.motivo.categoria]}`}</span>
+          <span className="text-[11px] font-bold uppercase tracking-wider text-red-700 dark:text-red-300">{`Motivo · ${MOTIVO_LABELS[e.motivo.categoria]}`}</span>
           {lineasDeMotivo(e).map((l) => (
             <span key={l}>{l}</span>
           ))}
