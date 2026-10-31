@@ -32,3 +32,10 @@ export class DatosEmpresaInvalidosError extends Error {
     this.name = 'DatosEmpresaInvalidosError';
   }
 }
+
+export class ArchivoImportacionInvalidoError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'ArchivoImportacionInvalidoError';
+  }
+}
