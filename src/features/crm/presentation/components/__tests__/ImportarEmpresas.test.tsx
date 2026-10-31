@@ -349,6 +349,22 @@ describe('Importar empresas — confirmar', () => {
     await waitFor(() => expect(push).toHaveBeenCalledTimes(1));
   });
 
+  it('after a successful import the button stays disabled while the navigation runs, so a late click sends nothing', async () => {
+    const fn = mockFetch((url) =>
+      url.endsWith('/vista-previa') ? responde(vista([OK])) : responde({ success: true, importadas: 1, sectoresNuevos: 0, omitidas: 0 }),
+    );
+    render(<ImportarEmpresas />);
+    elegir(excel());
+    await screen.findByRole('heading', { name: /Revisa y confirma/ });
+    fireEvent.click(screen.getByRole('button', { name: 'Importar 1 empresa' }));
+    await waitFor(() => expect(push).toHaveBeenCalledWith('/crm'));
+    const boton = screen.getByRole('button', { name: 'Importar 1 empresa' });
+    expect(boton).toBeDisabled();
+    fireEvent.click(boton);
+    expect(fn.mock.calls.filter(([u]) => u === '/api/crm/importar')).toHaveLength(1);
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+
   it('keeps the review and shows the error when the import fails, with no notice and no navigation', async () => {
     mockFetch((url) => (url.endsWith('/vista-previa') ? responde(vista([OK])) : responde({ success: false, error: 'Error al importar las empresas' }, 500)));
     render(<ImportarEmpresas />);

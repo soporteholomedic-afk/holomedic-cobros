@@ -118,6 +118,9 @@ export function ImportarEmpresas() {
     importando.current = true;
     setEnviando(true);
     setErrorImportar('');
+    // After a success the button stays disabled: the page is leaving, and a late
+    // click would send the same file again and be told nothing was imported.
+    let importado = false;
     try {
       const cuerpo = new FormData();
       cuerpo.append('archivo', revision.archivo);
@@ -145,10 +148,13 @@ export function ImportarEmpresas() {
       toast.success(
         `${importadas} ${plural(importadas, 'empresa importada', 'empresas importadas')} en “Por contactar”${sectores}`,
       );
+      importado = true;
       router.push('/crm');
     } finally {
-      importando.current = false;
-      setEnviando(false);
+      if (!importado) {
+        importando.current = false;
+        setEnviando(false);
+      }
     }
   }
 
