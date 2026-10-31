@@ -12,6 +12,13 @@ export class RucDuplicadoError extends Error {
   }
 }
 
+export class SectorDuplicadoError extends Error {
+  constructor(nombre: string) {
+    super(`Ya existe el sector: ${nombre}`);
+    this.name = 'SectorDuplicadoError';
+  }
+}
+
 export class EtapaInvalidaError extends Error {
   constructor(etapa: string) {
     super(`Etapa inválida: ${etapa}`);
