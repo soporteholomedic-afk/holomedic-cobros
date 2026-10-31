@@ -264,7 +264,7 @@ export function ImportarEmpresas() {
 
         {revision && (
           <section className={CAJA} aria-labelledby="imp-h3">
-            <h2 id="imp-h3" ref={tituloRevision} tabIndex={-1} className={`${TITULO_PASO} outline-none`}>
+            <h2 id="imp-h3" ref={tituloRevision} tabIndex={-1} className={`${TITULO_PASO} rounded-md focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-600`}>
               <b className={NUMERO_PASO}>3</b>Revisa y confirma
             </h2>
             <p className={TEXTO}>Archivo: {revision.archivo.name}</p>

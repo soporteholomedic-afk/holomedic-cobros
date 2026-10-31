@@ -143,6 +143,14 @@ describe('Importar empresas — revisar el archivo', () => {
     expect(desplazar).not.toHaveBeenCalled();
   });
 
+  it('keeps a visible focus ring on the review title (no outline-none), since it takes the focus on its own', async () => {
+    await conVista([OK]);
+    const titulo = screen.getByRole('heading', { name: /Revisa y confirma/ });
+    expect(titulo.className).not.toMatch(/outline-none/);
+    expect(titulo.className).toMatch(/focus-visible:outline-2/);
+    expect(titulo.className).toMatch(/focus-visible:outline-sky-600/);
+  });
+
   it('summarizes the rows in plural', async () => {
     await conVista([OK, OK2, ERR, ERR, DUP, DUP].map((f, i) => ({ ...f, fila: i + 2 })));
     expect(screen.getByText('6 filas leídas')).toBeInTheDocument();
