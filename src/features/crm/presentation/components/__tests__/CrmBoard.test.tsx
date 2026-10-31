@@ -1,70 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 
-import type { Empresa } from '../../../domain/entities';
-
 const toastMock = vi.hoisted(() => ({ success: vi.fn(), error: vi.fn() }));
 vi.mock('sonner', () => ({ toast: toastMock }));
 
 import { CrmBoard } from '../CrmBoard';
-
-// ---- Helpers ----
-
-function empresa(overrides: Partial<Empresa> = {}): Empresa {
-  return {
-    idEmpresa: 'e-1',
-    razonSocial: 'Constructora Andina S.A.C.',
-    ruc: '20512345678',
-    sector: 'Construcción',
-    contactoNombre: 'Marcela Quispe',
-    contactoTelefono: '987 654 321',
-    contactoCorreo: null,
-    notas: null,
-    etapa: 'por_contactar',
-    createdAt: '2026-01-01T00:00:00.000Z',
-    updatedAt: '2026-01-01T00:00:00.000Z',
-    ...overrides,
-  };
-}
-
-const LISTA: Empresa[] = [
-  empresa(),
-  empresa({ idEmpresa: 'e-2', razonSocial: 'Minera Los Tres Picos S.A.', ruc: '20601234567', sector: 'Minería y Energía', contactoNombre: 'Jorge Salazar', contactoTelefono: '954 112 308' }),
-  empresa({ idEmpresa: 'e-3', razonSocial: 'Textiles Pacífico S.A.C.', ruc: '20556677889', sector: 'Fábrica y Producción', contactoNombre: 'Renzo Vargas', contactoTelefono: '998 201 456', etapa: 'contactado' }),
-  empresa({ idEmpresa: 'e-4', razonSocial: 'Agroindustrial Valle Verde S.A.C.', ruc: '20534128790', sector: null, contactoNombre: 'Ana Torres', contactoTelefono: '936 018 552', etapa: 'cliente' }),
-];
-
-type Respuesta = { status: number; body: unknown };
-
-function json(r: Respuesta): Response {
-  return { ok: r.status < 400, status: r.status, json: async () => r.body } as Response;
-}
-
-interface Api {
-  lista?: Respuesta;
-  post?: (body: Record<string, unknown>) => Respuesta;
-  patch?: (id: string, body: Record<string, unknown>) => Respuesta;
-}
-
-function mockApi(api: Api = {}) {
-  const fn = vi.fn(async (url: string, init?: RequestInit) => {
-    const method = init?.method ?? 'GET';
-    const body = init?.body ? (JSON.parse(String(init.body)) as Record<string, unknown>) : {};
-    if (url === '/api/crm/empresas' && method === 'GET') {
-      return json(api.lista ?? { status: 200, body: { success: true, empresas: LISTA } });
-    }
-    if (url === '/api/crm/empresas' && method === 'POST') {
-      return json(api.post ? api.post(body) : { status: 201, body: { success: true, empresa: empresa({ idEmpresa: 'e-9', ...(body as Partial<Empresa>), etapa: 'por_contactar' }) } });
-    }
-    const m = url.match(/^\/api\/crm\/empresas\/([^/]+)\/etapa$/);
-    if (m && method === 'PATCH') {
-      return json(api.patch ? api.patch(m[1], body) : { status: 200, body: { success: true, empresa: empresa({ idEmpresa: m[1], etapa: body.etapa as Empresa['etapa'] }) } });
-    }
-    throw new Error(`unexpected request ${method} ${url}`);
-  });
-  global.fetch = fn as unknown as typeof fetch;
-  return fn;
-}
+import { LISTA, empresa, llamadas, mockApi } from './crmFixtures';
 
 function columna(nombre: string): HTMLElement {
   return screen.getByRole('region', { name: nombre });
@@ -74,23 +15,26 @@ async function cargado() {
   await screen.findByText('Constructora Andina S.A.C.');
 }
 
-function abrirPanel() {
-  fireEvent.click(screen.getByRole('button', { name: /Nueva empresa/ }));
-  return screen.getByRole('dialog', { name: /Nueva empresa/ });
+function tarjeta(nombre: string): HTMLElement {
+  const h = screen.getByRole('heading', { name: nombre });
+  return h.closest('article') as HTMLElement;
 }
 
-function llenar(panel: HTMLElement, valores: Record<string, string>) {
-  for (const [etiqueta, valor] of Object.entries(valores)) {
-    fireEvent.change(within(panel).getByLabelText(new RegExp(etiqueta)), { target: { value: valor } });
-  }
+function mover(nombre: string, hacia: string) {
+  fireEvent.click(within(tarjeta(nombre)).getByRole('button', { name: new RegExp(`Mover .* a ${hacia}`) }));
 }
 
-const FORM_VALIDO = {
-  'Razón social': 'Ferretería Industrial Norte S.A.C.',
-  RUC: '20123456789',
-  Nombre: 'Elena Mendoza',
-  Teléfono: '955 201 334',
-};
+function soltar(nombre: string, enColumna: string) {
+  const data = new Map<string, string>();
+  const dataTransfer = {
+    setData: (k: string, v: string) => data.set(k, v),
+    getData: (k: string) => data.get(k) ?? '',
+    effectAllowed: '',
+  };
+  fireEvent.dragStart(tarjeta(nombre), { dataTransfer });
+  fireEvent.dragOver(columna(enColumna), { dataTransfer });
+  fireEvent.drop(columna(enColumna), { dataTransfer });
+}
 
 beforeEach(() => {
   toastMock.success.mockClear();
@@ -101,311 +45,299 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-// ---- Board ----
-
 describe('CrmBoard — tablero', () => {
-  it('shows each empresa in its own column with the column counts', async () => {
+  it('shows the five columns in order, each empresa in its own column with the counts', async () => {
     mockApi();
     render(<CrmBoard />);
     await cargado();
-
-    const porContactar = columna('Por contactar');
-    expect(within(porContactar).getByText('Minera Los Tres Picos S.A.')).toBeInTheDocument();
-    expect(within(porContactar).getAllByRole('article')).toHaveLength(2);
-    expect(within(porContactar).getByText('2')).toBeInTheDocument();
-    expect(within(columna('Contactado')).getByText('Textiles Pacífico S.A.C.')).toBeInTheDocument();
-    expect(within(columna('En seguimiento')).queryAllByRole('article')).toHaveLength(0);
-    expect(within(columna('Cliente')).getByText('Agroindustrial Valle Verde S.A.C.')).toBeInTheDocument();
-  });
-
-  it('renders the four columns in order and a card with its RUC, sector and contact', async () => {
-    mockApi();
-    render(<CrmBoard />);
-    await cargado();
-
     const nombres = screen.getAllByRole('region').map((r) => r.getAttribute('aria-label'));
-    expect(nombres).toEqual(['Por contactar', 'Contactado', 'En seguimiento', 'Cliente']);
-
-    const tarjeta = within(columna('Por contactar')).getAllByRole('article')[0];
-    expect(within(tarjeta).getByText('RUC 20512345678')).toBeInTheDocument();
-    expect(within(tarjeta).getByText('Construcción')).toBeInTheDocument();
-    expect(within(tarjeta).getByText('Marcela Quispe')).toBeInTheDocument();
-    expect(within(tarjeta).getByText('987 654 321')).toBeInTheDocument();
-  });
-
-  it('shows an empty hint in a column with no empresas', async () => {
-    mockApi();
-    render(<CrmBoard />);
-    await cargado();
+    expect(nombres).toEqual(['Por contactar', 'Contactado', 'En seguimiento', 'Cliente', 'Perdido']);
+    expect(within(columna('Por contactar')).getAllByRole('heading', { level: 3 })).toHaveLength(2);
+    expect(within(columna('Contactado')).getByText('Textiles Pacífico S.A.C.')).toBeInTheDocument();
+    expect(within(columna('Cliente')).getByText('Agroindustrial Valle Verde S.A.C.')).toBeInTheDocument();
+    expect(within(columna('Perdido')).getByText('Ferretería El Maestro S.R.L.')).toBeInTheDocument();
+    expect(within(columna('Por contactar')).getByText('2')).toBeInTheDocument();
     expect(within(columna('En seguimiento')).getByText('Arrastra una empresa aquí')).toBeInTheDocument();
   });
 
+  it('shows the principal contact, "+1 contacto" for extra contacts, the medium chip and no medium before contact', async () => {
+    mockApi();
+    render(<CrmBoard />);
+    await cargado();
+    const sin = tarjeta('Constructora Andina S.A.C.');
+    expect(within(sin).getByText('Marcela Quispe')).toBeInTheDocument();
+    expect(within(sin).getByText('987 654 321')).toBeInTheDocument();
+    expect(within(sin).queryByText(/contacto/)).toBeNull();
+    expect(within(sin).queryByText(/Medio:/)).toBeNull();
+    const varios = tarjeta('Textiles Pacífico S.A.C.');
+    expect(within(varios).getByText('Renzo Vargas')).toBeInTheDocument();
+    expect(within(varios).getByText('+1 contacto')).toBeInTheDocument();
+    expect(within(varios).queryByText('Lucía Prado')).toBeNull();
+    expect(within(varios).getByRole('button', { name: /Medio: Llamada/ })).toBeInTheDocument();
+  });
+
+  it('shows the loss reason summary on a lost empresa', async () => {
+    mockApi();
+    render(<CrmBoard />);
+    await cargado();
+    const t = tarjeta('Ferretería El Maestro S.R.L.');
+    expect(within(t).getByText(/Ya tienen proveedor/)).toBeInTheDocument();
+    expect(within(t).getByText(/Proveedor: Distribuidora Norte S\.A\.C\./)).toBeInTheDocument();
+    expect(within(t).getByText(/Contrato hasta: diciembre 2027/)).toBeInTheDocument();
+  });
+
+  it('filters by empresa, RUC, sector and by ANY contact, not only the principal', async () => {
+    mockApi();
+    render(<CrmBoard />);
+    await cargado();
+    const buscar = screen.getByRole('searchbox', { name: 'Buscar empresa o contacto' });
+    fireEvent.change(buscar, { target: { value: 'lucía' } });
+    expect(screen.getByText('Textiles Pacífico S.A.C.')).toBeInTheDocument();
+    expect(screen.queryByText('Constructora Andina S.A.C.')).toBeNull();
+    fireEvent.change(buscar, { target: { value: '20601' } });
+    expect(screen.getByText('Minera Los Tres Picos S.A.')).toBeInTheDocument();
+    expect(screen.queryByText('Textiles Pacífico S.A.C.')).toBeNull();
+    fireEvent.change(buscar, { target: { value: 'comercio' } });
+    expect(screen.getByText('Ferretería El Maestro S.R.L.')).toBeInTheDocument();
+  });
+
   it('shows an error with a retry button when the list cannot be loaded', async () => {
-    const fn = mockApi({ lista: { status: 500, body: { success: false, error: 'Error al listar empresas' } } });
+    mockApi({ lista: { status: 500, body: { success: false, error: 'x' } } });
     render(<CrmBoard />);
     expect(await screen.findByRole('alert')).toHaveTextContent('No se pudieron cargar las empresas');
-    expect(screen.queryAllByRole('article')).toHaveLength(0);
-
-    const antes = fn.mock.calls.length;
+    const fn = mockApi();
     fireEvent.click(screen.getByRole('button', { name: 'Reintentar' }));
-    await waitFor(() => expect(fn.mock.calls.length).toBe(antes + 1));
+    await cargado();
+    expect(llamadas(fn, 'GET', '/api/crm/empresas')).toHaveLength(1);
   });
 
-  it('filters the cards by empresa, RUC or contact while searching', async () => {
+  it('disables the previous arrow in the first column and the next arrow in the last', async () => {
     mockApi();
     render(<CrmBoard />);
     await cargado();
-
-    fireEvent.change(screen.getByLabelText('Buscar empresa o contacto'), { target: { value: 'minera' } });
-    expect(screen.getAllByRole('article')).toHaveLength(1);
-    expect(screen.getByText('Minera Los Tres Picos S.A.')).toBeInTheDocument();
-
-    fireEvent.change(screen.getByLabelText('Buscar empresa o contacto'), { target: { value: '20556677889' } });
-    expect(screen.getByText('Textiles Pacífico S.A.C.')).toBeInTheDocument();
-    expect(screen.getAllByRole('article')).toHaveLength(1);
-
-    fireEvent.change(screen.getByLabelText('Buscar empresa o contacto'), { target: { value: 'ana torres' } });
-    expect(screen.getByText('Agroindustrial Valle Verde S.A.C.')).toBeInTheDocument();
+    expect(within(tarjeta('Constructora Andina S.A.C.')).getByRole('button', { name: 'Sin columna anterior' })).toBeDisabled();
+    expect(within(tarjeta('Ferretería El Maestro S.R.L.')).getByRole('button', { name: 'Sin columna siguiente' })).toBeDisabled();
   });
 });
 
-// ---- Side panel ----
-
-describe('CrmBoard — panel lateral', () => {
-  it('opens the panel floating OVER the board without altering the board layout (comment pr6cscqf)', async () => {
-    mockApi();
-    render(<CrmBoard />);
-    await cargado();
-
-    const raiz = screen.getByTestId('crm-root');
-    const tablero = screen.getByTestId('crm-board');
-    const clasesRaiz = raiz.className;
-    const clasesTablero = tablero.className;
-    const tarjetasAntes = screen.getAllByRole('article').map((a) => a.className);
-
-    const panel = abrirPanel();
-
-    expect(panel.className).toMatch(/\bfixed\b/);
-    expect(raiz.className).toBe(clasesRaiz);
-    expect(tablero.className).toBe(clasesTablero);
-    expect(raiz.getAttribute('style')).toBeNull();
-    expect(screen.getAllByRole('article').map((a) => a.className)).toEqual(tarjetasAntes);
-    expect(raiz.contains(panel)).toBe(true);
-    // the board stays reachable: it is not hidden from assistive tech nor made inert
-    expect(tablero).not.toHaveAttribute('inert');
-    expect(tablero).not.toHaveAttribute('aria-hidden');
-  });
-
-  it('moves the focus to the first field when it opens', async () => {
-    mockApi();
-    render(<CrmBoard />);
-    await cargado();
-    const panel = abrirPanel();
-    expect(within(panel).getByLabelText(/Razón social/)).toHaveFocus();
-  });
-
-  it('closes with Escape and with Cancelar, returning the focus to the button', async () => {
-    mockApi();
-    render(<CrmBoard />);
-    await cargado();
-    const boton = screen.getByRole('button', { name: /Nueva empresa/ });
-
-    abrirPanel();
-    fireEvent.keyDown(document, { key: 'Escape' });
-    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
-    expect(boton).toHaveFocus();
-
-    const panel = abrirPanel();
-    fireEvent.click(within(panel).getByRole('button', { name: 'Cancelar' }));
-    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
-  });
-
-  it('clears what was typed when it is closed and opened again', async () => {
-    mockApi();
-    render(<CrmBoard />);
-    await cargado();
-    let panel = abrirPanel();
-    llenar(panel, { 'Razón social': 'Algo a medias' });
-    fireEvent.keyDown(document, { key: 'Escape' });
-
-    panel = abrirPanel();
-    expect(within(panel).getByLabelText(/Razón social/)).toHaveValue('');
-  });
-});
-
-// ---- Create ----
-
-describe('CrmBoard — crear empresa', () => {
-  it('sends the form, puts the card first in "Por contactar", closes the panel and shows a notice', async () => {
+describe('CrmBoard — mover', () => {
+  it('moves an empresa that already has a medium with just {etapa}, with no dialog', async () => {
     const fn = mockApi();
     render(<CrmBoard />);
     await cargado();
-
-    const panel = abrirPanel();
-    llenar(panel, FORM_VALIDO);
-    fireEvent.change(within(panel).getByLabelText(/Sector/), { target: { value: 'Construcción' } });
-    fireEvent.click(within(panel).getByRole('button', { name: 'Crear empresa' }));
-
-    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
-
-    const post = fn.mock.calls.find(([, init]) => init?.method === 'POST');
-    expect(post?.[0]).toBe('/api/crm/empresas');
-    expect(JSON.parse(String(post?.[1]?.body))).toEqual({
-      razonSocial: 'Ferretería Industrial Norte S.A.C.',
-      ruc: '20123456789',
-      sector: 'Construcción',
-      contactoNombre: 'Elena Mendoza',
-      contactoTelefono: '955 201 334',
-    });
-
-    const tarjetas = within(columna('Por contactar')).getAllByRole('article');
-    expect(tarjetas).toHaveLength(3);
-    expect(within(tarjetas[0]).getByText('Ferretería Industrial Norte S.A.C.')).toBeInTheDocument();
-    expect(toastMock.success).toHaveBeenCalledWith('Empresa creada en “Por contactar”');
+    mover('Textiles Pacífico S.A.C.', 'En seguimiento');
+    await waitFor(() => expect(within(columna('En seguimiento')).getByText('Textiles Pacífico S.A.C.')).toBeInTheDocument());
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(llamadas(fn, 'PATCH', /etapa$/)).toEqual([{ url: '/api/crm/empresas/e-3/etapa', body: { etapa: 'en_seguimiento' } }]);
   });
 
-  it('keeps the panel open with the server message when the RUC already exists', async () => {
-    mockApi({ post: () => ({ status: 409, body: { success: false, error: 'Ya existe una empresa con el RUC: 20123456789' } }) });
-    render(<CrmBoard />);
-    await cargado();
-
-    const panel = abrirPanel();
-    llenar(panel, FORM_VALIDO);
-    fireEvent.click(within(panel).getByRole('button', { name: 'Crear empresa' }));
-
-    expect(await within(panel).findByRole('alert')).toHaveTextContent('Ya existe una empresa con el RUC: 20123456789');
-    expect(screen.getByRole('dialog')).toBeInTheDocument();
-    expect(within(columna('Por contactar')).getAllByRole('article')).toHaveLength(2);
-    expect(within(panel).getByLabelText(/Razón social/)).toHaveValue('Ferretería Industrial Norte S.A.C.');
-    expect(toastMock.success).not.toHaveBeenCalled();
-  });
-
-  it('does not call the server for a malformed RUC and says why', async () => {
+  it('asks for the medium when entering Contactado without one, and the card does not move until it is saved', async () => {
     const fn = mockApi();
     render(<CrmBoard />);
     await cargado();
-
-    const panel = abrirPanel();
-    llenar(panel, { ...FORM_VALIDO, RUC: '1234' });
-    const form = panel.querySelector('form') as HTMLFormElement;
-    fireEvent.submit(form);
-
-    expect(within(panel).getByRole('alert')).toHaveTextContent('El RUC debe tener 11 dígitos');
-    expect(fn.mock.calls.some(([, init]) => init?.method === 'POST')).toBe(false);
-    expect(within(columna('Por contactar')).getAllByRole('article')).toHaveLength(2);
-  });
-
-  it('limits the RUC field to 11 characters and marks the required fields', async () => {
-    mockApi();
-    render(<CrmBoard />);
-    await cargado();
-    const panel = abrirPanel();
-    expect(within(panel).getByLabelText(/RUC/)).toHaveAttribute('maxlength', '11');
-    for (const etiqueta of ['Razón social', 'RUC', 'Nombre', 'Teléfono']) {
-      expect(within(panel).getByLabelText(new RegExp(etiqueta))).toBeRequired();
-    }
-    for (const etiqueta of ['Sector', 'Correo', 'Notas']) {
-      expect(within(panel).getByLabelText(new RegExp(etiqueta))).not.toBeRequired();
-    }
-  });
-
-  it('disables the submit button while the request is in flight', async () => {
-    let liberar: (r: Response) => void = () => {};
-    const fn = vi.fn(async (url: string, init?: RequestInit) => {
-      if ((init?.method ?? 'GET') === 'GET') return json({ status: 200, body: { success: true, empresas: LISTA } });
-      void url;
-      return new Promise<Response>((resolve) => { liberar = resolve; });
-    });
-    global.fetch = fn as unknown as typeof fetch;
-    render(<CrmBoard />);
-    await cargado();
-
-    const panel = abrirPanel();
-    llenar(panel, FORM_VALIDO);
-    fireEvent.click(within(panel).getByRole('button', { name: 'Crear empresa' }));
-    await waitFor(() => expect(within(panel).getByRole('button', { name: /Creando/ })).toBeDisabled());
-
-    liberar(json({ status: 201, body: { success: true, empresa: empresa({ idEmpresa: 'e-9' }) } }));
-    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
-  });
-});
-
-// ---- Move ----
-
-describe('CrmBoard — mover tarjetas', () => {
-  it('moves an empresa to the next column with its button and persists it', async () => {
-    const fn = mockApi();
-    render(<CrmBoard />);
-    await cargado();
-
-    fireEvent.click(screen.getByRole('button', { name: 'Mover Constructora Andina S.A.C. a Contactado' }));
-
-    await waitFor(() =>
-      expect(within(columna('Contactado')).getByText('Constructora Andina S.A.C.')).toBeInTheDocument(),
-    );
-    expect(within(columna('Por contactar')).queryByText('Constructora Andina S.A.C.')).not.toBeInTheDocument();
-    const patch = fn.mock.calls.find(([, init]) => init?.method === 'PATCH');
-    expect(patch?.[0]).toBe('/api/crm/empresas/e-1/etapa');
-    expect(JSON.parse(String(patch?.[1]?.body))).toEqual({ etapa: 'contactado' });
-    expect(toastMock.error).not.toHaveBeenCalled();
-  });
-
-  it('puts the empresa back and warns when the move cannot be saved', async () => {
-    mockApi({ patch: () => ({ status: 500, body: { success: false, error: 'Error al mover la empresa' } }) });
-    render(<CrmBoard />);
-    await cargado();
-
-    fireEvent.click(screen.getByRole('button', { name: 'Mover Constructora Andina S.A.C. a Contactado' }));
-
-    await waitFor(() => expect(toastMock.error).toHaveBeenCalledWith('No se pudo mover la empresa'));
+    mover('Constructora Andina S.A.C.', 'Contactado');
+    const dialogo = screen.getByRole('dialog', { name: /Cómo lo contactaste/ });
+    expect(within(dialogo).getAllByRole('radio').map((r) => (r as HTMLInputElement).value)).toEqual(['llamada', 'correo', 'whatsapp']);
     expect(within(columna('Por contactar')).getByText('Constructora Andina S.A.C.')).toBeInTheDocument();
-    expect(within(columna('Contactado')).queryByText('Constructora Andina S.A.C.')).not.toBeInTheDocument();
+    expect(llamadas(fn, 'PATCH', /etapa$/)).toHaveLength(0);
+
+    fireEvent.click(within(dialogo).getByRole('button', { name: /Guardar/ }));
+    expect(within(dialogo).getByRole('alert')).toHaveTextContent('Elige el medio de contacto');
+    expect(llamadas(fn, 'PATCH', /etapa$/)).toHaveLength(0);
+
+    fireEvent.click(within(dialogo).getByRole('radio', { name: /WhatsApp/ }));
+    fireEvent.click(within(dialogo).getByRole('button', { name: /Guardar/ }));
+    await waitFor(() => expect(within(columna('Contactado')).getByText('Constructora Andina S.A.C.')).toBeInTheDocument());
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(llamadas(fn, 'PATCH', /etapa$/)).toEqual([{ url: '/api/crm/empresas/e-1/etapa', body: { etapa: 'contactado', medio: 'whatsapp' } }]);
+    expect(within(tarjeta('Constructora Andina S.A.C.')).getByRole('button', { name: /Medio: WhatsApp/ })).toBeInTheDocument();
   });
 
-  it('has no previous column for the first one and no next column for the last one', async () => {
+  it.each([
+    ['Cancelar', () => fireEvent.click(screen.getByRole('button', { name: 'Cancelar' }))],
+    ['Escape', () => fireEvent.keyDown(document, { key: 'Escape' })],
+  ])('%s on the medium dialog leaves the empresa where it was and sends nothing', async (_n, cerrar) => {
+    const fn = mockApi();
+    render(<CrmBoard />);
+    await cargado();
+    mover('Constructora Andina S.A.C.', 'Contactado');
+    cerrar();
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(within(columna('Por contactar')).getByText('Constructora Andina S.A.C.')).toBeInTheDocument();
+    expect(llamadas(fn, 'PATCH', /etapa$/)).toHaveLength(0);
+  });
+
+  it('going back to Por contactar sends {etapa} and the card loses its medium chip', async () => {
+    const fn = mockApi();
+    render(<CrmBoard />);
+    await cargado();
+    mover('Textiles Pacífico S.A.C.', 'Por contactar');
+    await waitFor(() => expect(within(columna('Por contactar')).getByText('Textiles Pacífico S.A.C.')).toBeInTheDocument());
+    expect(llamadas(fn, 'PATCH', /etapa$/)[0]?.body).toEqual({ etapa: 'por_contactar' });
+    expect(within(tarjeta('Textiles Pacífico S.A.C.')).queryByText(/Medio:/)).toBeNull();
+  });
+
+  it('asks for the reason when entering Perdido: category required, details required by category, then moves', async () => {
+    const fn = mockApi();
+    render(<CrmBoard />);
+    await cargado();
+    mover('Agroindustrial Valle Verde S.A.C.', 'Perdido');
+    const dialogo = screen.getByRole('dialog', { name: /Motivo de la pérdida/ });
+    expect(within(dialogo).getAllByRole('radio').map((r) => (r as HTMLInputElement).value)).toEqual([
+      'precio', 'proveedor', 'sin_interes', 'no_contestan', 'otro',
+    ]);
+    fireEvent.click(within(dialogo).getByRole('button', { name: /Guardar/ }));
+    expect(within(dialogo).getByRole('alert')).toHaveTextContent('Elige el motivo');
+
+    fireEvent.click(within(dialogo).getByRole('radio', { name: 'Precio' }));
+    fireEvent.click(within(dialogo).getByRole('button', { name: /Guardar/ }));
+    expect(within(dialogo).getByRole('alert')).toHaveTextContent('Precio que les ofrecimos');
+    expect(llamadas(fn, 'PATCH', /etapa$/)).toHaveLength(0);
+    expect(within(columna('Cliente')).getByText('Agroindustrial Valle Verde S.A.C.')).toBeInTheDocument();
+
+    fireEvent.change(within(dialogo).getByLabelText(/Precio que les ofrecimos/), { target: { value: 'S/ 7,000' } });
+    fireEvent.change(within(dialogo).getByLabelText(/Notas/), { target: { value: 'Muy caro' } });
+    fireEvent.click(within(dialogo).getByRole('button', { name: /Guardar/ }));
+    await waitFor(() => expect(within(columna('Perdido')).getByText('Agroindustrial Valle Verde S.A.C.')).toBeInTheDocument());
+    expect(llamadas(fn, 'PATCH', /etapa$/)).toEqual([
+      { url: '/api/crm/empresas/e-4/etapa', body: { etapa: 'perdido', motivo: { categoria: 'precio', detalle1: 'S/ 7,000', detalle2: null, notas: 'Muy caro' } } },
+    ]);
+    expect(within(tarjeta('Agroindustrial Valle Verde S.A.C.')).getByText(/Ofrecimos: S\/ 7,000/)).toBeInTheDocument();
+  });
+
+  it('the supplier field is optional, "Otro" needs a detail, and the fields change with the category', async () => {
+    const fn = mockApi();
+    render(<CrmBoard />);
+    await cargado();
+    mover('Agroindustrial Valle Verde S.A.C.', 'Perdido');
+    const dialogo = screen.getByRole('dialog', { name: /Motivo de la pérdida/ });
+    fireEvent.click(within(dialogo).getByRole('radio', { name: 'Otro' }));
+    fireEvent.click(within(dialogo).getByRole('button', { name: /Guardar/ }));
+    expect(within(dialogo).getByRole('alert')).toHaveTextContent('Cuéntanos el motivo');
+    fireEvent.click(within(dialogo).getByRole('radio', { name: 'Ya tienen proveedor' }));
+    expect(within(dialogo).queryByLabelText(/Cuéntanos el motivo/)).toBeNull();
+    fireEvent.click(within(dialogo).getByRole('button', { name: /Guardar/ }));
+    await waitFor(() => expect(llamadas(fn, 'PATCH', /etapa$/)).toHaveLength(1));
+    expect(llamadas(fn, 'PATCH', /etapa$/)[0]?.body).toEqual({
+      etapa: 'perdido',
+      motivo: { categoria: 'proveedor', detalle1: null, detalle2: null, notas: null },
+    });
+  });
+
+  it('Cancelar on the reason dialog leaves the empresa and sends nothing', async () => {
+    const fn = mockApi();
+    render(<CrmBoard />);
+    await cargado();
+    mover('Agroindustrial Valle Verde S.A.C.', 'Perdido');
+    fireEvent.click(screen.getByRole('button', { name: 'Cancelar' }));
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(within(columna('Cliente')).getByText('Agroindustrial Valle Verde S.A.C.')).toBeInTheDocument();
+    expect(llamadas(fn, 'PATCH', /etapa$/)).toHaveLength(0);
+  });
+
+  it('leaving Perdido removes the reason from the card', async () => {
     mockApi();
     render(<CrmBoard />);
     await cargado();
-
-    expect(screen.queryByRole('button', { name: /Mover Constructora Andina S.A.C. a .*anterior/ })).not.toBeInTheDocument();
-    const primera = within(columna('Por contactar')).getAllByRole('article')[0];
-    expect(within(primera).getByRole('button', { name: /a Contactado$/ })).toBeEnabled();
-    expect(within(primera).getByRole('button', { name: 'Sin columna anterior' })).toBeDisabled();
-
-    const ultima = within(columna('Cliente')).getAllByRole('article')[0];
-    expect(within(ultima).getByRole('button', { name: 'Sin columna siguiente' })).toBeDisabled();
-    expect(within(ultima).getByRole('button', { name: /a En seguimiento$/ })).toBeEnabled();
+    mover('Ferretería El Maestro S.R.L.', 'Cliente');
+    await waitFor(() => expect(within(columna('Cliente')).getByText('Ferretería El Maestro S.R.L.')).toBeInTheDocument());
+    expect(within(tarjeta('Ferretería El Maestro S.R.L.')).queryByText(/Ya tienen proveedor/)).toBeNull();
   });
 
-  it('moves an empresa dragged and dropped onto another column', async () => {
+  it('keeps the empresa where it was and shows the server message when the move is rejected', async () => {
+    mockApi({ etapa: () => ({ status: 400, body: { success: false, error: 'Elige cómo se contactó a la empresa' } }) });
+    render(<CrmBoard />);
+    await cargado();
+    mover('Textiles Pacífico S.A.C.', 'En seguimiento');
+    await waitFor(() => expect(toastMock.error).toHaveBeenCalledWith('Elige cómo se contactó a la empresa'));
+    expect(within(columna('Contactado')).getByText('Textiles Pacífico S.A.C.')).toBeInTheDocument();
+  });
+
+  it('keeps the empresa and shows a generic message when the request fails', async () => {
+    const fn = mockApi();
+    fn.mockImplementation(async (url: string, init?: RequestInit) => {
+      if ((init?.method ?? 'GET') === 'PATCH') throw new Error('network');
+      return url === '/api/crm/sectores'
+        ? ({ ok: true, status: 200, json: async () => ({ success: true, sectores: [] }) } as Response)
+        : ({ ok: true, status: 200, json: async () => ({ success: true, empresas: LISTA }) } as Response);
+    });
+    render(<CrmBoard />);
+    await cargado();
+    mover('Textiles Pacífico S.A.C.', 'En seguimiento');
+    await waitFor(() => expect(toastMock.error).toHaveBeenCalledWith('No se pudo mover la empresa'));
+    expect(within(columna('Contactado')).getByText('Textiles Pacífico S.A.C.')).toBeInTheDocument();
+  });
+
+  it('dragging onto a column follows the same rules: Contactado asks for the medium', async () => {
     const fn = mockApi();
     render(<CrmBoard />);
     await cargado();
+    soltar('Constructora Andina S.A.C.', 'Contactado');
+    expect(screen.getByRole('dialog', { name: /Cómo lo contactaste/ })).toBeInTheDocument();
+    expect(llamadas(fn, 'PATCH', /etapa$/)).toHaveLength(0);
+    fireEvent.click(screen.getByRole('button', { name: 'Cancelar' }));
 
-    const dataTransfer = { setData: vi.fn(), getData: vi.fn(() => 'e-2'), effectAllowed: '', dropEffect: '' };
-    const tarjeta = screen.getByText('Minera Los Tres Picos S.A.').closest('article') as HTMLElement;
-    fireEvent.dragStart(tarjeta, { dataTransfer });
-    fireEvent.dragOver(columna('En seguimiento'), { dataTransfer });
-    fireEvent.drop(columna('En seguimiento'), { dataTransfer });
-
-    await waitFor(() =>
-      expect(within(columna('En seguimiento')).getByText('Minera Los Tres Picos S.A.')).toBeInTheDocument(),
-    );
-    const patch = fn.mock.calls.find(([, init]) => init?.method === 'PATCH');
-    expect(patch?.[0]).toBe('/api/crm/empresas/e-2/etapa');
-    expect(JSON.parse(String(patch?.[1]?.body))).toEqual({ etapa: 'en_seguimiento' });
+    soltar('Textiles Pacífico S.A.C.', 'Cliente');
+    await waitFor(() => expect(within(columna('Cliente')).getByText('Textiles Pacífico S.A.C.')).toBeInTheDocument());
+    expect(llamadas(fn, 'PATCH', /etapa$/)).toEqual([{ url: '/api/crm/empresas/e-3/etapa', body: { etapa: 'cliente' } }]);
   });
 
-  it('does nothing when an empresa is dropped on the column it already is in', async () => {
+  it('dropping on the column the empresa is already in does nothing', async () => {
     const fn = mockApi();
     render(<CrmBoard />);
     await cargado();
+    soltar('Textiles Pacífico S.A.C.', 'Contactado');
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(llamadas(fn, 'PATCH', /./)).toHaveLength(0);
+  });
+});
 
-    const dataTransfer = { setData: vi.fn(), getData: vi.fn(() => 'e-1'), effectAllowed: '', dropEffect: '' };
-    const tarjeta = screen.getByText('Constructora Andina S.A.C.').closest('article') as HTMLElement;
-    fireEvent.dragStart(tarjeta, { dataTransfer });
-    fireEvent.drop(columna('Por contactar'), { dataTransfer });
+describe('CrmBoard — editar medio y motivo desde la tarjeta', () => {
+  it('the medium chip opens the dialog with the current medium selected and PATCHes /seguimiento without moving', async () => {
+    const fn = mockApi();
+    render(<CrmBoard />);
+    await cargado();
+    fireEvent.click(within(tarjeta('Textiles Pacífico S.A.C.')).getByRole('button', { name: /Medio: Llamada/ }));
+    const dialogo = screen.getByRole('dialog', { name: /Editar medio de contacto/ });
+    expect(within(dialogo).getByRole('radio', { name: /Llamada/ })).toBeChecked();
+    fireEvent.click(within(dialogo).getByRole('radio', { name: /Correo/ }));
+    fireEvent.click(within(dialogo).getByRole('button', { name: /Guardar/ }));
+    await waitFor(() => expect(within(tarjeta('Textiles Pacífico S.A.C.')).getByRole('button', { name: /Medio: Correo/ })).toBeInTheDocument());
+    expect(llamadas(fn, 'PATCH', /seguimiento$/)).toEqual([{ url: '/api/crm/empresas/e-3/seguimiento', body: { medio: 'correo' } }]);
+    expect(within(columna('Contactado')).getByText('Textiles Pacífico S.A.C.')).toBeInTheDocument();
+  });
 
-    expect(fn.mock.calls.some(([, init]) => init?.method === 'PATCH')).toBe(false);
+  it('"Editar motivo" opens the reason dialog prefilled and PATCHes /seguimiento with the new reason', async () => {
+    const fn = mockApi();
+    render(<CrmBoard />);
+    await cargado();
+    fireEvent.click(within(tarjeta('Ferretería El Maestro S.R.L.')).getByRole('button', { name: /Editar motivo/ }));
+    const dialogo = screen.getByRole('dialog', { name: /Motivo de la pérdida/ });
+    expect(within(dialogo).getByRole('radio', { name: 'Ya tienen proveedor' })).toBeChecked();
+    expect(within(dialogo).getByLabelText(/¿Qué proveedor tienen/)).toHaveValue('Distribuidora Norte S.A.C.');
+    fireEvent.click(within(dialogo).getByRole('radio', { name: 'Precio' }));
+    fireEvent.change(within(dialogo).getByLabelText(/Precio que les ofrecimos/), { target: { value: 'S/ 9,000' } });
+    fireEvent.click(within(dialogo).getByRole('button', { name: /Guardar/ }));
+    await waitFor(() => expect(within(tarjeta('Ferretería El Maestro S.R.L.')).getByText(/Ofrecimos: S\/ 9,000/)).toBeInTheDocument());
+    expect(llamadas(fn, 'PATCH', /seguimiento$/)[0]?.body).toEqual({
+      motivo: { categoria: 'precio', detalle1: 'S/ 9,000', detalle2: null, notas: null },
+    });
+    expect(within(columna('Perdido')).getByText('Ferretería El Maestro S.R.L.')).toBeInTheDocument();
+  });
+
+  it('the buttons inside a card do not trigger the card click', async () => {
+    mockApi();
+    render(<CrmBoard />);
+    await cargado();
+    fireEvent.click(within(tarjeta('Textiles Pacífico S.A.C.')).getByRole('button', { name: /Medio: Llamada/ }));
+    expect(screen.queryByRole('dialog', { name: /Textiles Pacífico/ })).toBeNull();
+  });
+});
+
+describe('CrmBoard — datos', () => {
+  it('the page used to ship with one contact per row: an empresa without contacts does not crash the board', async () => {
+    mockApi({ lista: { status: 200, body: { success: true, empresas: [empresa({ contactos: [] })] } } });
+    render(<CrmBoard />);
+    expect(await screen.findByText('Constructora Andina S.A.C.')).toBeInTheDocument();
   });
 });

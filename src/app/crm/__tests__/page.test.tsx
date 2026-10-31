@@ -18,11 +18,11 @@ describe('/crm page', () => {
             razonSocial: 'Constructora Andina S.A.C.',
             ruc: '20512345678',
             sector: 'Construcción',
-            contactoNombre: 'Marcela Quispe',
-            contactoTelefono: '987 654 321',
-            contactoCorreo: null,
+            contactos: [{ nombre: 'Marcela Quispe', telefono: '987 654 321', correo: null }],
             notas: null,
             etapa: 'por_contactar',
+            medio: null,
+            motivo: null,
             createdAt: '2026-01-01T00:00:00.000Z',
             updatedAt: '2026-01-01T00:00:00.000Z',
           },
@@ -34,6 +34,7 @@ describe('/crm page', () => {
 
     expect(screen.getByRole('heading', { level: 1, name: 'CRM' })).toBeInTheDocument();
     expect(await screen.findByText('Constructora Andina S.A.C.')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Nueva empresa/ })).toBeInTheDocument();
+    expect(screen.getByText('Marcela Quispe')).toBeInTheDocument();
+    expect(screen.getAllByRole('region')).toHaveLength(5);
   });
 });
