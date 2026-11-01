@@ -63,7 +63,7 @@ const ok = (ruc: string): Respuesta => ({
 });
 const conflicto: Respuesta = {
   status: 409,
-  body: { success: false, error: 'Ese RUC ya existe', otra: { idEmpresa: 'e-1', razonSocial: OTRA, etapa: 'por_contactar' } },
+  body: { success: false, error: `Este RUC ya es de ${OTRA} («Por contactar»). ¿Unir las dos tarjetas?`, otra: { idEmpresa: 'e-1', razonSocial: OTRA, etapa: 'por_contactar' } },
 };
 
 beforeEach(() => {

@@ -87,12 +87,12 @@ describe('CrmBoard — sugerencia de Perdido (S2)', () => {
     expect(screen.queryByRole('dialog')).toBeNull();
   });
 
-  it('a 409 shows the server error and leaves the card unchanged', async () => {
-    conSugerencia(() => ({ status: 409, body: { error: 'X' } }));
+  it('a 400 (the suggestion no longer applies) shows the server error and leaves the card unchanged', async () => {
+    conSugerencia(() => ({ status: 400, body: { success: false, error: 'La sugerencia ya no corresponde a esta tarjeta.' } }));
     render(<CrmBoard />);
     await screen.findByText(NOMBRE);
     fireEvent.click(within(card(NOMBRE)).getByRole('button', { name: 'Pasar a Perdido' }));
-    await waitFor(() => expect(toastMock.error).toHaveBeenCalledWith('X'));
+    await waitFor(() => expect(toastMock.error).toHaveBeenCalledWith('La sugerencia ya no corresponde a esta tarjeta.'));
     expect(toastMock.success).not.toHaveBeenCalled();
     expect(within(screen.getByRole('region', { name: 'Contactado' })).getByText(NOMBRE)).toBeInTheDocument();
     expect(within(card(NOMBRE)).getByRole('group')).toBeInTheDocument();
