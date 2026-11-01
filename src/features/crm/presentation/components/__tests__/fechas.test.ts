@@ -5,6 +5,7 @@ import {
   esPasada,
   formatoCorto,
   formatoRelativo,
+  hoyEnZona,
   mesDe,
   primerDiaHabil,
   semanasDelMes,
@@ -77,5 +78,13 @@ describe('fechas', () => {
     expect(mesDe('2026-10-31')).toBe('2026-10');
     expect(sumarMeses('2026-12', 1)).toBe('2027-01');
     expect(sumarMeses('2026-01', -1)).toBe('2025-12');
+  });
+
+  it('hoyEnZona gives the Lima calendar day, not the UTC one, late in the evening', () => {
+    // 2026-11-01 02:30 UTC is still 21:30 of 31 Oct in Lima (UTC-5).
+    expect(hoyEnZona(new Date('2026-11-01T02:30:00Z'))).toBe('2026-10-31');
+    // 05:00 UTC is midnight in Lima: the day has turned.
+    expect(hoyEnZona(new Date('2026-11-01T05:00:00Z'))).toBe('2026-11-01');
+    expect(hoyEnZona(new Date('2026-11-01T02:30:00Z'), 'UTC')).toBe('2026-11-01');
   });
 });

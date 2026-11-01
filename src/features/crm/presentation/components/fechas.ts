@@ -79,6 +79,11 @@ export function sumarMesesADia(dia: string, n: number): string {
   return `${mes}-${String(Math.min(Number(dia.slice(8)), ultimo)).padStart(2, '0')}`;
 }
 
+/** Calendar day (`YYYY-MM-DD`) of the instant `ahora` in `zona`; late evening in Lima is still "today" there. */
+export function hoyEnZona(ahora: Date, zona = 'America/Lima'): string {
+  return new Intl.DateTimeFormat('en-CA', { timeZone: zona, year: 'numeric', month: '2-digit', day: '2-digit' }).format(ahora);
+}
+
 export const esPasada = (dia: string, hoy: string): boolean => dia < hoy;
 
 /** "sáb 31 oct". */

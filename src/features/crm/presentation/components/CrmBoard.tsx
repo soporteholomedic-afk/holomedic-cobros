@@ -20,6 +20,7 @@ import { ETAPA_PUNTO } from './crmUi';
 import { DetallePanel, type DetalleHandle } from './DetallePanel';
 import { MedioDialog } from './MedioDialog';
 import { MotivoDialog } from './MotivoDialog';
+import { hoyEnZona } from './fechas';
 import { capturar, focoEnTarjeta, reproducir, type Captura, type Foco, type Registro } from './vuelo';
 
 interface ApiResult {
@@ -36,6 +37,19 @@ async function leerRespuesta(res: Response): Promise<ApiResult> {
     // body is not JSON: fall through with the status only
   }
   return { ok: res.ok, error: data.error, empresa: data.empresa };
+}
+
+async function post(url: string, body: unknown): Promise<ApiResult> {
+  try {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    return await leerRespuesta(res);
+  } catch {
+    return { ok: false };
+  }
 }
 
 async function patch(url: string, body: unknown): Promise<ApiResult> {
@@ -139,7 +153,7 @@ export function CrmBoard() {
     const q = search.trim().toLowerCase();
     if (!q) return empresas;
     return empresas.filter((e) =>
-      [e.razonSocial, e.ruc ?? '', e.sector ?? '', ...e.contactos.flatMap((c) => [c.nombre ?? '', c.telefono ?? '', c.correo ?? ''])]
+      [e.razonSocial, e.ruc ?? '', e.sector ?? '', e.medioOtro ?? '', ...e.contactos.flatMap((c) => [c.nombre ?? '', c.telefono ?? '', c.correo ?? ''])]
         .join(' ')
         .toLowerCase()
         .includes(q),
@@ -308,6 +322,21 @@ export function CrmBoard() {
     return null;
   }
 
+  async function responderSugerencia(id: string, accion: 'perder' | 'seguir') {
+    const r = await post(`/api/crm/empresas/${id}/sugerencia`, { accion });
+    if (!r.ok || !r.empresa) {
+      toast.error(r.error ?? 'No se pudo guardar la sugerencia');
+      return;
+    }
+    if (accion === 'perder') colocar(r.empresa);
+    else reemplazar(r.empresa, false);
+    toast.success(
+      accion === 'perder'
+        ? `${r.empresa.razonSocial} pasó a «Perdido» con el motivo «No contestan».`
+        : 'Sugerencia ocultada. Vuelve a aparecer si suma otro intento sin respuesta.',
+    );
+  }
+
   function onDragStart(ev: DragEvent<HTMLElement>, id: string) {
     draggingId.current = id;
     ev.dataTransfer.setData('text/plain', id);
@@ -322,6 +351,8 @@ export function CrmBoard() {
     if (id) mover(id, etapa);
   }
 
+  const ahora = new Date();
+  const hoy = hoyEnZona(ahora);
   const detalleEmpresa = detalleId ? empresas.find((x) => x.idEmpresa === detalleId) : undefined;
   const empresaDelDialogo = dialogo ? empresas.find((x) => x.idEmpresa === dialogo.id) : undefined;
 
@@ -433,6 +464,9 @@ export function CrmBoard() {
                     onAbrir={abrirDetalle}
                     seleccionada={e.idEmpresa === detalleId}
                     onDragStart={onDragStart}
+                    ahora={ahora}
+                    hoy={hoy}
+                    onSugerencia={(id, accion) => void responderSugerencia(id, accion)}
                   />
                 ))}
               </div>
