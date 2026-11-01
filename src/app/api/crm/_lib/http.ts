@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getSession } from '@/lib/auth';
+import type { Etapa } from '@/features/crm/domain/entities';
+import { RucDeOtraEmpresaError } from '@/features/crm/domain/errors';
 
 interface ErrorResponse {
   success: false;
@@ -17,6 +19,18 @@ export async function exigirCrm(): Promise<NextResponse<ErrorResponse> | null> {
   return null;
 }
 
+export interface UsuarioCrm {
+  sub: string;
+  nombre: string;
+}
+
+/** The session user when it holds the `crm` permiso, otherwise the 401 to return. */
+export async function usuarioCrm(): Promise<{ usuario: UsuarioCrm } | { denegado: NextResponse<ErrorResponse> }> {
+  const session = await getSession();
+  if (!session || !session.permisos.includes('crm')) return { denegado: buildError('No autorizado', 401) };
+  return { usuario: { sub: session.sub, nombre: session.nombre } };
+}
+
 /** Parse the JSON body; `undefined` means the body was not valid JSON. */
 export async function leerJson(request: Request): Promise<unknown | undefined> {
   try {
@@ -24,6 +38,10 @@ export async function leerJson(request: Request): Promise<unknown | undefined> {
   } catch {
     return undefined;
   }
+}
+
+interface ErrorRucDeOtra extends ErrorResponse {
+  otra: { idEmpresa: string; razonSocial: string; etapa: Etapa };
 }
 
 const POR_NOMBRE: Record<string, { status: number; mensaje?: string }> = {
@@ -36,7 +54,14 @@ const POR_NOMBRE: Record<string, { status: number; mensaje?: string }> = {
 };
 
 /** Map a domain error to its HTTP answer; anything else is a logged 500. */
-export function errorDeCrm(error: unknown, contexto: string, fallo: string): NextResponse<ErrorResponse> {
+export function errorDeCrm(
+  error: unknown,
+  contexto: string,
+  fallo: string,
+): NextResponse<ErrorResponse | ErrorRucDeOtra> {
+  if (error instanceof RucDeOtraEmpresaError) {
+    return NextResponse.json({ success: false, error: error.message, otra: error.otra }, { status: 409 });
+  }
   const regla = error instanceof Error ? POR_NOMBRE[error.name] : undefined;
   if (regla && error instanceof Error) return buildError(regla.mensaje ?? error.message, regla.status);
   console.error(`${contexto} failed:`, error);
