@@ -86,3 +86,42 @@ export function lineasDeMotivo(e: Empresa): string[] {
   if (m.notas) lineas.push(m.notas);
   return lineas;
 }
+
+/**
+ * Closed control of the custom menu and date picker (spec S9). The highlight
+ * uses one border color plus an inset ring, so all four sides look the same.
+ */
+export const CAMPO_ELEGIBLE = {
+  base: 'flex min-h-10 w-full cursor-pointer items-center gap-2.5 rounded-[10px] border px-3 py-2 text-left text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-500/30',
+  vacio: 'border-slate-300 bg-white text-slate-900 hover:border-slate-400 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100',
+  elegido:
+    'border-sky-500 bg-sky-100 font-semibold text-sky-800 ring-1 ring-inset ring-sky-500 hover:border-sky-600 hover:ring-sky-600 dark:bg-sky-950/60 dark:text-sky-200',
+  invalido: 'border-red-500 bg-white text-slate-900 ring-1 ring-inset ring-red-500 dark:bg-slate-900 dark:text-slate-100',
+  abierto: 'shadow-[0_0_0_3px_rgb(14_165_233/0.3)]',
+} as const;
+
+const EVENTO_POPUP = 'crm:popup-abierto';
+
+/** Announce that the popup `id` opens, so any other open menu or calendar closes. */
+export function cerrarOtrosPopups(id: string): void {
+  document.dispatchEvent(new CustomEvent(EVENTO_POPUP, { detail: id }));
+}
+
+/**
+ * While a popup is open: close it when another one opens or on a pointer press
+ * outside `raiz`. Returns the cleanup for `useEffect`.
+ */
+export function escucharCierre(id: string, raiz: { current: HTMLElement | null }, cerrar: () => void): () => void {
+  const otro = (ev: Event) => {
+    if ((ev as CustomEvent<string>).detail !== id) cerrar();
+  };
+  const fuera = (ev: PointerEvent) => {
+    if (raiz.current && !raiz.current.contains(ev.target as Node)) cerrar();
+  };
+  document.addEventListener(EVENTO_POPUP, otro);
+  document.addEventListener('pointerdown', fuera);
+  return () => {
+    document.removeEventListener(EVENTO_POPUP, otro);
+    document.removeEventListener('pointerdown', fuera);
+  };
+}
