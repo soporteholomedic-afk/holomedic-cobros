@@ -1,3 +1,5 @@
+import { ETAPA_LABELS, type Etapa } from './entities';
+
 export class EmpresaNotFoundError extends Error {
   constructor(id: string) {
     super(`Empresa not found: ${id}`);
@@ -9,6 +11,17 @@ export class RucDuplicadoError extends Error {
   constructor(ruc: string) {
     super(`Ya existe una empresa con el RUC: ${ruc}`);
     this.name = 'RucDuplicadoError';
+  }
+}
+
+/** The RUC being completed already belongs to another empresa; the caller may confirm a merge. */
+export class RucDeOtraEmpresaError extends Error {
+  readonly otra: { idEmpresa: string; razonSocial: string; etapa: Etapa };
+
+  constructor(otra: { idEmpresa: string; razonSocial: string; etapa: Etapa }) {
+    super(`Este RUC ya es de ${otra.razonSocial} («${ETAPA_LABELS[otra.etapa]}»). ¿Unir las dos tarjetas?`);
+    this.name = 'RucDeOtraEmpresaError';
+    this.otra = { idEmpresa: otra.idEmpresa, razonSocial: otra.razonSocial, etapa: otra.etapa };
   }
 }
 

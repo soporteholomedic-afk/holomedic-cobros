@@ -20,7 +20,12 @@ import { CrearSectorUseCase, ListarSectoresUseCase } from '../sectores';
 
 const NOW = '2026-01-01T00:00:00.000Z';
 
-type Fake = ICrmEmpresaRepository & { rows: Empresa[]; sectores: string[]; escrituras: number };
+type Fake = ICrmEmpresaRepository & {
+  rows: Empresa[];
+  sectores: string[];
+  escrituras: number;
+  seguimientos: number;
+};
 
 function makeFakeRepo(seed: Empresa[] = []): Fake {
   const rows: Empresa[] = seed.map((r) => structuredClone(r));
@@ -29,6 +34,7 @@ function makeFakeRepo(seed: Empresa[] = []): Fake {
     rows,
     sectores,
     escrituras: 0,
+    seguimientos: 0,
     async getById(id) {
       const row = rows.find((r) => r.idEmpresa === id);
       return row ? structuredClone(row) : null;
@@ -81,11 +87,24 @@ function makeFakeRepo(seed: Empresa[] = []): Fake {
       if (!row) throw new EmpresaNotFoundError(id);
       row.etapa = estado.etapa;
       row.medio = estado.medio;
+      if (estado.medio !== 'otro') row.medioOtro = null;
       row.motivo = estado.motivo ? { ...estado.motivo } : null;
       return structuredClone(row);
     },
-    async updateSeguimiento() {
-      throw new Error('not used');
+    async updateSeguimiento(id, s) {
+      repo.escrituras++;
+      repo.seguimientos++;
+      const row = rows.find((r) => r.idEmpresa === id);
+      if (!row) throw new EmpresaNotFoundError(id);
+      row.etapa = s.etapa;
+      row.medio = s.medio;
+      row.medioOtro = s.medioOtro;
+      row.motivo = s.motivo ? { ...s.motivo } : null;
+      row.intentosSinRespuesta = s.intentosSinRespuesta;
+      row.faltaResponderDesde = s.faltaResponderDesde;
+      row.proximaAccion = s.proximaAccion ? { ...s.proximaAccion } : null;
+      row.sugerenciaDescartadaEn = s.sugerenciaDescartadaEn;
+      return structuredClone(row);
     },
     async addInteraccion() {
       throw new Error('not used');
@@ -330,6 +349,62 @@ describe('MoverEmpresaUseCase', () => {
     ]);
     const e = await mover(repo).execute('e-1', 'contactado', { medio: 'correo' });
     expect(e).toMatchObject({ etapa: 'contactado', medio: 'correo', motivo: null });
+  });
+
+  it('a normal move (Por contactar → Contactado → En seguimiento) still goes through updateEstado and keeps the follow-up state', async () => {
+    const accion = { tipo: 'llamar' as const, detalle: null, fecha: '2026-11-03' };
+    const repo = makeFakeRepo([empresa({ proximaAccion: accion, intentosSinRespuesta: 2, faltaResponderDesde: NOW })]);
+    await mover(repo).execute('e-1', 'contactado', { medio: 'llamada' });
+    const e = await mover(repo).execute('e-1', 'en_seguimiento');
+    expect(e).toMatchObject({ etapa: 'en_seguimiento', medio: 'llamada', proximaAccion: accion, intentosSinRespuesta: 2, faltaResponderDesde: NOW });
+    expect(repo.seguimientos).toBe(0);
+    expect(repo.escrituras).toBe(2);
+  });
+
+  it('moving to Cliente or Perdido clears the next action and keeps everything else (L6)', async () => {
+    const accion = { tipo: 'cotizar' as const, detalle: null, fecha: '2026-11-03' };
+    const base = { etapa: 'contactado' as const, medio: 'correo' as const, proximaAccion: accion, intentosSinRespuesta: 2, faltaResponderDesde: NOW, sugerenciaDescartadaEn: 3 };
+    const aCliente = makeFakeRepo([empresa(base)]);
+    const c = await mover(aCliente).execute('e-1', 'cliente');
+    expect(c).toMatchObject({ etapa: 'cliente', medio: 'correo', proximaAccion: null, intentosSinRespuesta: 2, faltaResponderDesde: NOW, sugerenciaDescartadaEn: 3 });
+    const aPerdido = makeFakeRepo([empresa(base)]);
+    const p = await mover(aPerdido).execute('e-1', 'perdido', { motivo: { categoria: 'sin_interes' } });
+    expect(p).toMatchObject({ etapa: 'perdido', medio: 'correo', proximaAccion: null, motivo: { categoria: 'sin_interes' } });
+    expect(aPerdido.rows[0]?.proximaAccion).toBeNull();
+  });
+
+  it('moving to Cliente keeps the free-text medium when the stored medium is "otro"', async () => {
+    const repo = makeFakeRepo([empresa({ etapa: 'contactado', medio: 'otro', medioOtro: 'Feria' })]);
+    const c = await mover(repo).execute('e-1', 'cliente');
+    expect(c).toMatchObject({ medio: 'otro', medioOtro: 'Feria' });
+  });
+
+  it('a rejected move to Perdido leaves the next action in place', async () => {
+    const repo = makeFakeRepo([empresa({ etapa: 'contactado', medio: 'llamada', proximaAccion: { tipo: 'llamar', detalle: null, fecha: '2026-11-03' } })]);
+    await expect(mover(repo).execute('e-1', 'perdido')).rejects.toThrow(/motivo/i);
+    expect(repo.escrituras).toBe(0);
+    expect(repo.rows[0]?.proximaAccion).not.toBeNull();
+  });
+
+  it('the stage move rejects medium "otro": it cannot carry "¿Cuál?" (the contact flow is the place to pick it)', async () => {
+    const repo = makeFakeRepo([empresa()]);
+    await expect(mover(repo).execute('e-1', 'contactado', { medio: 'otro' })).rejects.toThrow(
+      'Elige el medio de contacto: llamada, correo o WhatsApp',
+    );
+    expect(repo.escrituras).toBe(0);
+    expect(repo.rows[0]?.etapa).toBe('por_contactar');
+  });
+
+  it('moving with an already stored medium "otro" keeps it and its free text', async () => {
+    const repo = makeFakeRepo([empresa({ etapa: 'contactado', medio: 'otro', medioOtro: 'Feria' })]);
+    const e = await mover(repo).execute('e-1', 'en_seguimiento');
+    expect(e).toMatchObject({ medio: 'otro', medioOtro: 'Feria' });
+  });
+
+  it('a move back to Por contactar clears the medium and its free text', async () => {
+    const repo = makeFakeRepo([empresa({ etapa: 'contactado', medio: 'otro', medioOtro: 'Feria' })]);
+    const e = await mover(repo).execute('e-1', 'por_contactar');
+    expect(e).toMatchObject({ medio: null, medioOtro: null });
   });
 
   it('a stage change never touches the empresa data or contacts', async () => {

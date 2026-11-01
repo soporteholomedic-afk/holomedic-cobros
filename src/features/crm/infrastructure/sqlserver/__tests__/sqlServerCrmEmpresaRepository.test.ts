@@ -3,6 +3,7 @@ import type * as mssql from 'mssql';
 
 import { SqlServerCrmEmpresaRepository } from '../sqlServerCrmEmpresaRepository';
 import {
+  DatosEmpresaInvalidosError,
   EmpresaNotFoundError,
   RucDuplicadoError,
   SectorDuplicadoError,
@@ -296,6 +297,20 @@ describe('SqlServerCrmEmpresaRepository — estado', () => {
     });
   });
 
+  it('clears medioOtro unless the medium stays "otro" (a stage move never leaves a stale free text)', async () => {
+    const { pool, consultas } = makeFakePool((sql) =>
+      /UPDATE\s+dbo\.CrmEmpresa/i.test(sql) ? { recordset: [{ idEmpresa: 'e-1' }] } : conFila(sql),
+    );
+    await new SqlServerCrmEmpresaRepository(pool).updateEstado('e-1', {
+      etapa: 'contactado',
+      medio: 'correo',
+      motivo: null,
+    });
+    expect(consultas[0]?.sql).toMatch(
+      /medioOtro\s*=\s*CASE\s+WHEN\s+@medio\s*=\s*N?'otro'\s+THEN\s+medioOtro\s+ELSE\s+NULL\s+END/i,
+    );
+  });
+
   it('throws EmpresaNotFoundError when no row matches the id', async () => {
     const { pool } = makeFakePool(() => ({ recordset: [] }));
     await expect(
@@ -431,6 +446,23 @@ const FILA_INTERACCION = (id: number, fecha: string) => ({
   resumen: null,
 });
 
+describe('SqlServerCrmEmpresaRepository — interacciones (unknown empresa)', () => {
+  it('maps the foreign key violation (547) to EmpresaNotFoundError', async () => {
+    const { pool } = makeFakePool(() => errorSql(547, 'FK_CrmInteraccion_empresa'));
+    const error = await new SqlServerCrmEmpresaRepository(pool)
+      .addInteraccion('nope', INTERACCION)
+      .catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(EmpresaNotFoundError);
+    expect((error as Error).message).toContain('nope');
+  });
+
+  it('rethrows any other database error of addInteraccion untouched', async () => {
+    const boom = errorSql(1205, 'deadlock');
+    const { pool } = makeFakePool(() => boom);
+    await expect(new SqlServerCrmEmpresaRepository(pool).addInteraccion('e-1', INTERACCION)).rejects.toBe(boom);
+  });
+});
+
 describe('SqlServerCrmEmpresaRepository — interacciones', () => {
   it('adds an interaction with the user snapshot as parameters', async () => {
     const { pool, consultas } = makeFakePool(() => ({
@@ -541,17 +573,48 @@ describe('SqlServerCrmEmpresaRepository — fusionar', () => {
     expect(consultas[0]?.sql).toMatch(/ISNULL\(d\.nombre/i);
   });
 
-  it('fails with EmpresaNotFoundError when origin or destination is missing', async () => {
+  it('reports the missing origin with the origin id', async () => {
     const { pool } = makeFakePool(() => errorSql(50404));
-    await expect(new SqlServerCrmEmpresaRepository(pool).fusionar('a', 'b')).rejects.toBeInstanceOf(
-      EmpresaNotFoundError,
-    );
+    const error = await new SqlServerCrmEmpresaRepository(pool).fusionar('a', 'b').catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(EmpresaNotFoundError);
+    expect((error as Error).message).toContain('a');
+    expect((error as Error).message).not.toContain('b');
   });
 
-  it('refuses to merge an empresa with itself', async () => {
+  it('reports the missing destination with the destination id', async () => {
+    const { pool, consultas } = makeFakePool(() => errorSql(50405));
+    const error = await new SqlServerCrmEmpresaRepository(pool)
+      .fusionar('origen-1', 'destino-2')
+      .catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(EmpresaNotFoundError);
+    expect((error as Error).message).toContain('destino-2');
+    expect((error as Error).message).not.toContain('origen-1');
+    // The two checks raise different numbers so the caller can tell them apart.
+    expect(consultas[0]?.sql).toMatch(/NOT\s+EXISTS[^;]*@origen[^;]*THROW\s+50404/i);
+    expect(consultas[0]?.sql).toMatch(/NOT\s+EXISTS[^;]*@destino[^;]*THROW\s+50405/i);
+  });
+
+  it('refuses to merge an empresa with itself with a domain error and a Spanish message', async () => {
     const { pool, consultas } = makeFakePool(conFila);
-    await expect(new SqlServerCrmEmpresaRepository(pool).fusionar('a', 'a')).rejects.toThrow();
+    const error = await new SqlServerCrmEmpresaRepository(pool).fusionar('a', 'a').catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(DatosEmpresaInvalidosError);
+    expect((error as Error).message).toBe('No se puede unir una tarjeta consigo misma.');
     expect(consultas).toHaveLength(0);
+  });
+
+  it('appends the origin notes to the destination notes before deleting the origin, never dropping them', async () => {
+    const { pool, consultas } = makeFakePool(conFila);
+    await new SqlServerCrmEmpresaRepository(pool).fusionar('e-origen', 'e-1');
+    const sql = consultas[0]?.sql ?? '';
+    const notas = sql.search(/SET\s+d?\.?notas\s*=\s*CASE/i);
+    expect(notas).toBeGreaterThan(-1);
+    expect(notas).toBeLessThan(sql.search(/DELETE\s+FROM\s+dbo\.CrmEmpresa/i));
+    expect(sql).toMatch(/o\.notas\s+IS\s+NULL\s+THEN\s+d\.notas/i);
+    expect(sql).toMatch(/d\.notas\s+IS\s+NULL\s+THEN\s+o\.notas/i);
+    expect(sql).toMatch(/d\.notas\s*\+\s*CHAR\(10\)\s*\+\s*CHAR\(10\)\s*\+\s*o\.notas/i);
+    expect(sql).toMatch(/d\.notas\s*=\s*o\.notas\s+THEN\s+d\.notas/i);
+    // Nothing else of the destination is touched: RUC, sector and counters stay.
+    expect(sql).not.toMatch(/SET[^;]*\b(ruc|idSector|intentosSinRespuesta)\b/i);
   });
 });
 

@@ -22,6 +22,7 @@ import type {
   SeguimientoEmpresa,
 } from '../../domain/entities';
 import {
+  DatosEmpresaInvalidosError,
   EmpresaNotFoundError,
   RucDuplicadoError,
   SectorDuplicadoError,
@@ -76,6 +77,10 @@ interface InteraccionDbRow {
 const UNIQUE_VIOLATION = new Set([2627, 2601]);
 /** Raised by our own `THROW` when an UPDATE matched no empresa. */
 const NOT_FOUND = 50404;
+/** Raised by `fusionar` when the destination does not exist (the origin uses `NOT_FOUND`). */
+const NOT_FOUND_DESTINO = 50405;
+/** Foreign key violation: the interaction points to an empresa that does not exist. */
+const FK_VIOLATION = 547;
 
 function numeroDeError(error: unknown): number | undefined {
   return (error as { number?: number } | null)?.number;
@@ -320,6 +325,7 @@ export class SqlServerCrmEmpresaRepository implements ICrmEmpresaRepository {
       .input('motivoNotas', mssql.NVarChar(300), m?.notas ?? null).query(`
         UPDATE dbo.CrmEmpresa
            SET etapa = @etapa, medio = @medio,
+               medioOtro = CASE WHEN @medio = N'otro' THEN medioOtro ELSE NULL END,
                motivoCategoria = @motivoCategoria, motivoDetalle1 = @motivoDetalle1,
                motivoDetalle2 = @motivoDetalle2, motivoNotas = @motivoNotas,
                updatedAt = SYSUTCDATETIME()
@@ -393,7 +399,9 @@ export class SqlServerCrmEmpresaRepository implements ICrmEmpresaRepository {
   async addInteraccion(idEmpresa: string, interaccion: NuevaInteraccion): Promise<Interaccion> {
     const request = this.pool.request().input('idEmpresa', mssql.NVarChar(50), idEmpresa);
     inputsInteraccion(request, interaccion);
-    const result = await request.query<InteraccionDbRow>(`
+    let result: mssql.IResult<InteraccionDbRow>;
+    try {
+      result = await request.query<InteraccionDbRow>(`
       ${INSERT_INTERACCION.replace(
         'VALUES',
         `OUTPUT INSERTED.idInteraccion, INSERTED.idEmpresa, INSERTED.fecha, INSERTED.idUsuario,
@@ -402,6 +410,10 @@ export class SqlServerCrmEmpresaRepository implements ICrmEmpresaRepository {
     VALUES`,
       )}
     `);
+    } catch (error) {
+      if (numeroDeError(error) === FK_VIOLATION) throw new EmpresaNotFoundError(idEmpresa);
+      throw error;
+    }
     const fila = result.recordset[0];
     if (!fila) throw new Error(`Interacción not readable right after insert for ${idEmpresa}`);
     return rowToInteraccion(fila);
@@ -420,7 +432,9 @@ export class SqlServerCrmEmpresaRepository implements ICrmEmpresaRepository {
   }
 
   async fusionar(idOrigen: string, idDestino: string): Promise<Empresa> {
-    if (idOrigen === idDestino) throw new Error('No se puede unir una empresa consigo misma');
+    if (idOrigen === idDestino) {
+      throw new DatosEmpresaInvalidosError('No se puede unir una tarjeta consigo misma.');
+    }
     try {
       await this.pool
         .request()
@@ -429,8 +443,9 @@ export class SqlServerCrmEmpresaRepository implements ICrmEmpresaRepository {
         SET XACT_ABORT ON;
         BEGIN TRAN;
         IF NOT EXISTS (SELECT 1 FROM dbo.CrmEmpresa WHERE idEmpresa = @origen)
-          OR NOT EXISTS (SELECT 1 FROM dbo.CrmEmpresa WHERE idEmpresa = @destino)
-          THROW ${NOT_FOUND}, 'empresa no encontrada', 1;
+          THROW ${NOT_FOUND}, 'empresa de origen no encontrada', 1;
+        IF NOT EXISTS (SELECT 1 FROM dbo.CrmEmpresa WHERE idEmpresa = @destino)
+          THROW ${NOT_FOUND_DESTINO}, 'empresa de destino no encontrada', 1;
         UPDATE dbo.CrmInteraccion SET idEmpresa = @destino WHERE idEmpresa = @origen;
         UPDATE o SET idEmpresa = @destino, esPrincipal = 0,
                      orden = o.orden + 1000
@@ -442,12 +457,22 @@ export class SqlServerCrmEmpresaRepository implements ICrmEmpresaRepository {
                 AND ISNULL(d.nombre, N'') = ISNULL(o.nombre, N'')
                 AND ISNULL(d.telefono, N'') = ISNULL(o.telefono, N'')
                 AND ISNULL(d.correo, N'') = ISNULL(o.correo, N''));
+        UPDATE d SET notas = CASE
+                       WHEN o.notas IS NULL THEN d.notas
+                       WHEN d.notas IS NULL THEN o.notas
+                       WHEN d.notas = o.notas THEN d.notas
+                       ELSE d.notas + CHAR(10) + CHAR(10) + o.notas END,
+                     updatedAt = SYSUTCDATETIME()
+          FROM dbo.CrmEmpresa d
+          JOIN dbo.CrmEmpresa o ON o.idEmpresa = @origen
+         WHERE d.idEmpresa = @destino;
         DELETE FROM dbo.CrmEmpresa WHERE idEmpresa = @origen;
-        UPDATE dbo.CrmEmpresa SET updatedAt = SYSUTCDATETIME() WHERE idEmpresa = @destino;
         COMMIT;
       `);
     } catch (error) {
-      if (numeroDeError(error) === NOT_FOUND) throw new EmpresaNotFoundError(idOrigen);
+      const number = numeroDeError(error);
+      if (number === NOT_FOUND) throw new EmpresaNotFoundError(idOrigen);
+      if (number === NOT_FOUND_DESTINO) throw new EmpresaNotFoundError(idDestino);
       throw error;
     }
     const destino = await this.getById(idDestino);

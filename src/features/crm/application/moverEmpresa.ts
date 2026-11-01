@@ -5,6 +5,7 @@ import {
   EmpresaNotFoundError,
   EtapaInvalidaError,
 } from '../domain/errors';
+import { seguimientoDe } from './seguimiento';
 import { validarMedio, validarMotivo } from './validar';
 
 export interface MoverExtras {
@@ -19,6 +20,11 @@ export interface MoverExtras {
  * - Por contactar clears the medium.
  * - Contactado needs a medium (the one sent, or the one already stored).
  * - En seguimiento / Cliente keep the stored medium unless a new one is sent.
+ * - Cliente and Perdido have no next action (L6): moving there clears it. That
+ *   needs the follow-up write; when there is no next action to clear the
+ *   plain stage write is used, exactly as before.
+ * - The medium sent here is one of llamada/correo/whatsapp: "otro" needs its
+ *   "¿Cuál?" and is picked in the contact flow. A stored "otro" is kept.
  */
 export class MoverEmpresaUseCase {
   constructor(private readonly repo: ICrmEmpresaRepository) {}
@@ -38,6 +44,14 @@ export class MoverEmpresaUseCase {
     }
     if (destino === 'contactado' && medio === null) {
       throw new DatosEmpresaInvalidosError('Elige cómo se contactó a la empresa');
+    }
+    const limpiaAccion = (destino === 'cliente' || destino === 'perdido') && actual.proximaAccion !== null;
+    if (limpiaAccion) {
+      return this.repo.updateSeguimiento(
+        id,
+        { ...seguimientoDe(actual), etapa: destino, medio, medioOtro: medio === 'otro' ? actual.medioOtro : null, motivo, proximaAccion: null },
+        null,
+      );
     }
     return this.repo.updateEstado(id, { etapa: destino, medio, motivo });
   }
