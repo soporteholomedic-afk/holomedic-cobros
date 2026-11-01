@@ -116,6 +116,12 @@ describe('sqlserver crm migrate()', () => {
       /^SET\s+XACT_ABORT\s+ON;\s*BEGIN\s+TRAN;\s*DECLARE\s+@lock\s+INT;\s*EXEC\s+@lock\s*=\s*sp_getapplock\s+@Resource\s*=\s*N?'crm-migrate',\s*@LockMode\s*=\s*'Exclusive',\s*@LockOwner\s*=\s*'Transaction',\s*@LockTimeout\s*=\s*\d+;\s*IF\s+@lock\s*<\s*0\s+BEGIN\s+THROW\s+\d+,\s*N?'[^']+',\s*1;\s*END;/i,
     );
     expect(sql).toMatch(/\nCOMMIT;$/i);
+    // The lock wait must end before the driver's default 15 s request timeout,
+    // so a busy lock surfaces as the clear THROW and not as a generic ETIMEOUT
+    // (observed on SQL Server 2019, odd/evidence/crm-contactos-rehearsal-2019.md).
+    const espera = Number(/@LockTimeout\s*=\s*(\d+)/i.exec(sql)?.[1]);
+    expect(espera).toBeGreaterThan(0);
+    expect(espera).toBeLessThan(15000);
     expect(sql.match(/\bBEGIN\s+TRAN\b/gi)).toHaveLength(1);
     expect(sql.match(/\bCOMMIT\b/gi)).toHaveLength(1);
     expect(sql).not.toMatch(/\bROLLBACK\b/i);

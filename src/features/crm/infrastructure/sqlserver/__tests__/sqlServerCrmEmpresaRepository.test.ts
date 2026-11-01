@@ -448,12 +448,26 @@ const FILA_INTERACCION = (id: number, fecha: string) => ({
 
 describe('SqlServerCrmEmpresaRepository — interacciones (unknown empresa)', () => {
   it('maps the foreign key violation (547) to EmpresaNotFoundError', async () => {
-    const { pool } = makeFakePool(() => errorSql(547, 'FK_CrmInteraccion_empresa'));
+    const { pool } = makeFakePool(() =>
+      errorSql(
+        547,
+        'The INSERT statement conflicted with the FOREIGN KEY constraint "FK_CrmInteraccion_empresa". The conflict occurred in database "HOLOMEDIC", table "dbo.CrmEmpresa", column \'idEmpresa\'.',
+      ),
+    );
     const error = await new SqlServerCrmEmpresaRepository(pool)
       .addInteraccion('nope', INTERACCION)
       .catch((e: unknown) => e);
     expect(error).toBeInstanceOf(EmpresaNotFoundError);
     expect((error as Error).message).toContain('nope');
+  });
+
+  it('rethrows a CHECK violation (also 547) untouched: the empresa exists, the data is wrong', async () => {
+    const check = errorSql(
+      547,
+      'The INSERT statement conflicted with the CHECK constraint "CK_CrmInteraccion_resultado". The conflict occurred in database "HOLOMEDIC", table "dbo.CrmInteraccion", column \'resultado\'.',
+    );
+    const { pool } = makeFakePool(() => check);
+    await expect(new SqlServerCrmEmpresaRepository(pool).addInteraccion('e-1', INTERACCION)).rejects.toBe(check);
   });
 
   it('rethrows any other database error of addInteraccion untouched', async () => {

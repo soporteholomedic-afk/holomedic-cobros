@@ -411,7 +411,10 @@ export class SqlServerCrmEmpresaRepository implements ICrmEmpresaRepository {
       )}
     `);
     } catch (error) {
-      if (numeroDeError(error) === FK_VIOLATION) throw new EmpresaNotFoundError(idEmpresa);
+      // 547 covers FOREIGN KEY and CHECK violations; only the foreign key means a missing empresa.
+      if (numeroDeError(error) === FK_VIOLATION && /FOREIGN KEY/i.test((error as Error).message)) {
+        throw new EmpresaNotFoundError(idEmpresa);
+      }
       throw error;
     }
     const fila = result.recordset[0];

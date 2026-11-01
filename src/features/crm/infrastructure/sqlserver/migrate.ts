@@ -27,7 +27,9 @@ import {
  *   and rolls back the whole batch (DDL is transactional in SQL Server), so a
  *   failure never leaves a half-upgraded schema.
  * - Lock-protected: the first statement takes an exclusive application lock
- *   (`sp_getapplock`, owner = transaction) and throws if it is not granted,
+ *   (`sp_getapplock`, owner = transaction, 10 s wait: shorter than the
+ *   driver's 15 s request timeout so a busy lock reports this clear error)
+ *   and throws if it is not granted,
  *   so two processes starting together cannot both pass the existence guards.
  * - Idempotent and self-healing, with no version table: every step is gated
  *   by `sys.tables` / `sys.columns` / `sys.indexes` / `sys.key_constraints` /
@@ -62,7 +64,7 @@ SET XACT_ABORT ON;
 BEGIN TRAN;
 
 DECLARE @lock INT;
-EXEC @lock = sp_getapplock @Resource = N'crm-migrate', @LockMode = 'Exclusive', @LockOwner = 'Transaction', @LockTimeout = 30000;
+EXEC @lock = sp_getapplock @Resource = N'crm-migrate', @LockMode = 'Exclusive', @LockOwner = 'Transaction', @LockTimeout = 10000;
 IF @lock < 0
 BEGIN
   THROW 50001, N'CRM migration: could not get the application lock', 1;
