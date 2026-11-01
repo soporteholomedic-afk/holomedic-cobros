@@ -1,5 +1,5 @@
 import { vi } from 'vitest';
-import type { Empresa } from '../../../domain/entities';
+import type { Empresa, Sector } from '../../../domain/entities';
 
 export function empresa(overrides: Partial<Empresa> = {}): Empresa {
   return {
@@ -66,7 +66,12 @@ export const LISTA: Empresa[] = [
   }),
 ];
 
-export const SECTORES = ['Comercio y Tiendas', 'Construcción', 'Fábrica y Producción', 'Minería y Energía'];
+export const SECTORES: Sector[] = [
+  { nombre: 'Comercio y Tiendas', icono: 'tienda' },
+  { nombre: 'Construcción', icono: 'casco' },
+  { nombre: 'Fábrica y Producción', icono: 'fabrica' },
+  { nombre: 'Minería y Energía', icono: null },
+];
 
 export type Respuesta = { status: number; body: unknown };
 
@@ -98,7 +103,7 @@ export function mockApi(api: Api = {}) {
       return json(api.sectores ?? { status: 200, body: { success: true, sectores: SECTORES } });
     }
     if (url === '/api/crm/sectores' && method === 'POST') {
-      return json(api.sector ? api.sector(body) : { status: 201, body: { success: true, sector: String(body.nombre) } });
+      return json(api.sector ? api.sector(body) : { status: 201, body: { success: true, sector: { nombre: String(body.nombre), icono: body.icono ?? null } } });
     }
     if (url === '/api/crm/empresas' && method === 'POST') {
       return json(

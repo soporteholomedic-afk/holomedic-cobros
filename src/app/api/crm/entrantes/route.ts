@@ -16,7 +16,7 @@ export async function POST(request: Request): Promise<NextResponse> {
       !esObjeto(body) ||
       typeof body.razonSocial !== 'string' ||
       typeof body.medio !== 'string' ||
-      !['medioOtro', 'persona', 'telefono', 'correo', 'ruc', 'necesita', 'origen'].every((k) => esTextoOpcional(body[k]))
+      !['medioOtro', 'persona', 'telefono', 'correo', 'ruc', 'necesita', 'origen', 'sector'].every((k) => esTextoOpcional(body[k]))
     ) {
       return buildError('Cuerpo inválido. Requiere: {razonSocial, medio, telefono o correo, proximaAccion}', 400);
     }

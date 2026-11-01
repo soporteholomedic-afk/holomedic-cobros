@@ -4,6 +4,8 @@ import {
   ACCIONES,
   DIRECCIONES,
   ETAPAS,
+  ICONOS_INICIALES,
+  ICONOS_SECTOR,
   MEDIOS,
   MOTIVO_CATEGORIAS,
   ORIGENES,
@@ -15,7 +17,7 @@ import {
  * SQL Server schema of the simple CRM board (features crm-simple and
  * crm-contactos):
  *
- * - `dbo.CrmSector`      sector names, created from the UI (seeded).
+ * - `dbo.CrmSector`      sector names and their optional icon key, created from the UI (seeded).
  * - `dbo.CrmEmpresa`     one row per empresa: stage, medium, loss reason,
  *                        follow-up state. The RUC is NULL-able, unique when present.
  * - `dbo.CrmContacto`    several contacts per empresa, exactly one principal.
@@ -58,6 +60,22 @@ BEGIN
   ALTER TABLE dbo.CrmEmpresa ADD ${columna} ${definicion};
 END;
 `;
+
+/**
+ * Icons of the six initial sectors, set only where `icono IS NULL` so a value
+ * chosen later is never overwritten. `icono` is added earlier in the SAME
+ * batch, and SQL Server compiles a batch statement by statement before running
+ * it, so a plain UPDATE would fail with "Invalid column name": it goes through
+ * dynamic SQL, which compiles when it runs.
+ */
+const SEMILLA_ICONOS_SQL = `IF EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('dbo.CrmSector') AND name = 'icono')
+BEGIN
+  EXEC(N'UPDATE s SET s.icono = v.icono
+    FROM dbo.CrmSector s
+    JOIN (VALUES ${SECTORES_INICIALES.map((n, i) => `(N\'\'${n}\'\', \'\'${ICONOS_INICIALES[i]}\'\')`).join(', ')}) AS v (nombre, icono)
+      ON s.nombre = v.nombre
+    WHERE s.icono IS NULL;');
+END;`;
 
 const SCHEMA_SQL = /* sql */ `
 SET XACT_ABORT ON;
@@ -153,6 +171,15 @@ IF NOT EXISTS (SELECT 1 FROM sys.check_constraints WHERE name = 'CK_CrmEmpresa_m
 BEGIN
   ALTER TABLE dbo.CrmEmpresa ADD CONSTRAINT CK_CrmEmpresa_medio CHECK (medio IN (${lista(MEDIOS)}));
 END;
+
+-- ---- Sector icon (S12): guarded ADD, then a seed that only fills NULL icons ----
+
+IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('dbo.CrmSector') AND name = 'icono')
+BEGIN
+  ALTER TABLE dbo.CrmSector ADD icono NVARCHAR(20) NULL CONSTRAINT CK_CrmSector_icono CHECK (icono IN (${lista(ICONOS_SECTOR)}));
+END;
+
+${SEMILLA_ICONOS_SQL}
 
 ${columnaEmpresa('medioOtro', 'NVARCHAR(40) NULL')}
 ${columnaEmpresa('intentosSinRespuesta', 'INT NOT NULL CONSTRAINT DF_CrmEmpresa_intentosSinRespuesta DEFAULT 0')}

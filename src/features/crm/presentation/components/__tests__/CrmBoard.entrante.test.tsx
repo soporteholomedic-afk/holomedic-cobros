@@ -6,7 +6,7 @@ vi.mock('sonner', () => ({ toast: toastMock }));
 
 import type { Empresa } from '../../../domain/entities';
 import { CrmBoard } from '../CrmBoard';
-import { empresa, llamadas, mockApi, type Respuesta } from './crmFixtures';
+import { empresa, llamadas, mockApi, type Api, type Respuesta } from './crmFixtures';
 
 const ANDINA = 'Constructora Andina S.A.C.';
 const TEXTILES = 'Textiles Pacífico S.A.C.';
@@ -34,8 +34,8 @@ const columna = (nombre: string) => screen.getByRole('region', { name: nombre })
 const panel = () => screen.getByRole('dialog', { name: 'Nos contactaron' });
 const boton = () => screen.getByRole('button', { name: 'Nos contactaron' });
 
-function montar(entrante?: (body: Record<string, unknown>) => Respuesta, lista: Empresa[] = BASE) {
-  return mockApi({ lista: { status: 200, body: { success: true, empresas: lista } }, entrante });
+function montar(entrante?: (body: Record<string, unknown>) => Respuesta, lista: Empresa[] = BASE, extra: Api = {}) {
+  return mockApi({ lista: { status: 200, body: { success: true, empresas: lista } }, entrante, ...extra });
 }
 
 async function abrir() {
@@ -455,5 +455,308 @@ describe('CrmBoard — errores del servidor y cierre del panel "Nos contactaron"
     fireEvent.click(boton());
     expect(screen.queryByRole('dialog', { name: 'Registrar contacto' })).toBeNull();
     expect(panel()).toBeInTheDocument();
+  });
+});
+
+describe('CrmBoard — sector en "Nos contactaron" (S12)', () => {
+  const menuSector = (p: HTMLElement) => within(p).getByRole('button', { name: /^Sector/ });
+  const abrirMenu = (p: HTMLElement) => fireEvent.click(menuSector(p));
+  const caja = (p: HTMLElement) => within(p).getByRole('group', { name: 'Nuevo sector' });
+  const nombre = (p: HTMLElement) => within(caja(p)).getByLabelText('Nombre');
+  const agregar = (p: HTMLElement) => fireEvent.click(within(caja(p)).getByRole('button', { name: 'Agregar sector' }));
+  const abrirCaja = (p: HTMLElement) => {
+    abrirMenu(p);
+    fireEvent.click(within(p).getByRole('option', { name: /^Crear otro sector/ }));
+  };
+
+  it('puts the optional Sector menu below the RUC, "Sin definir" by default, with the stored sectors and "Crear otro sector" last', async () => {
+    montar();
+    render(<CrmBoard />);
+    const p = await abrir();
+    expect(p.querySelector('#ent-sector-l')).toHaveTextContent('Sector(opcional)');
+    expect(menuSector(p)).toHaveTextContent('Sin definir');
+    const ruc = campo(p, /^RUC/);
+    expect(ruc.compareDocumentPosition(menuSector(p)) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    abrirMenu(p);
+    const opciones = within(p).getAllByRole('option');
+    expect(opciones.map((o) => o.textContent)).toEqual([
+      expect.stringContaining('Sin definir'),
+      expect.stringContaining('Comercio y Tiendas'),
+      expect.stringContaining('Construcción'),
+      expect.stringContaining('Fábrica y Producción'),
+      expect.stringContaining('Minería y Energía'),
+      expect.stringContaining('Crear otro sector'),
+    ]);
+    expect(opciones[0]).toHaveTextContent('Se completa después');
+    expect(opciones[5]).toHaveTextContent('Elige su nombre y su ícono');
+    expect(opciones[5]?.className).toMatch(/border-t/);
+    // every option carries an icon (the sector's own, or the neutral tag)
+    for (const o of opciones) expect(o.querySelector('svg')).not.toBeNull();
+    expect(opciones[1]?.querySelector('svg')?.getAttribute('class')).toMatch(/lucide-store/);
+    expect(opciones[4]?.querySelector('svg')?.getAttribute('class')).toMatch(/lucide-tag/);
+    expect(opciones[0]?.querySelector('svg')?.getAttribute('class')).toMatch(/lucide-info/);
+    expect(opciones[5]?.querySelector('svg')?.getAttribute('class')).toMatch(/lucide-plus/);
+  });
+
+  it('sends the chosen sector in POST /api/crm/entrantes, and none when it stays "Sin definir"', async () => {
+    const fn = montar(() => creada());
+    render(<CrmBoard />);
+    const p = await abrir();
+    escribir(campo(p, /^Empresa/), NUEVA);
+    escribir(campo(p, /^Teléfono o correo/), '945 210 334');
+    elegirOpcion(p, /^Sector/, 'Construcción');
+    expect(menuSector(p)).toHaveTextContent('Construcción');
+    guardar(p);
+    await waitFor(() => expect(llamadas(fn, 'POST', '/api/crm/entrantes')).toHaveLength(1));
+    expect(llamadas(fn, 'POST', '/api/crm/entrantes')[0]!.body).toMatchObject({ razonSocial: NUEVA, sector: 'Construcción' });
+  });
+
+  it('does not send a sector while it is "Sin definir" (also after going back to it)', async () => {
+    const fn = montar(() => creada());
+    render(<CrmBoard />);
+    const p = await abrir();
+    escribir(campo(p, /^Empresa/), NUEVA);
+    escribir(campo(p, /^Teléfono o correo/), '945 210 334');
+    elegirOpcion(p, /^Sector/, 'Construcción');
+    elegirOpcion(p, /^Sector/, 'Sin definir');
+    guardar(p);
+    await waitFor(() => expect(llamadas(fn, 'POST', '/api/crm/entrantes')).toHaveLength(1));
+    expect(llamadas(fn, 'POST', '/api/crm/entrantes')[0]!.body).not.toHaveProperty('sector');
+  });
+
+  it('hides the menu while the name or RUC is already in the CRM, and sends no sector', async () => {
+    const fn = montar(() => creada({ idEmpresa: 'e-3', razonSocial: TEXTILES, medio: 'llamada' }, true));
+    render(<CrmBoard />);
+    const p = await abrir();
+    elegirOpcion(p, /^Sector/, 'Construcción');
+    escribir(campo(p, /^Empresa/), TEXTILES);
+    expect(within(p).queryByRole('button', { name: /^Sector/ })).toBeNull();
+    escribir(campo(p, /^Teléfono o correo/), '998 201 456');
+    guardar(p);
+    await waitFor(() => expect(llamadas(fn, 'POST', '/api/crm/entrantes')).toHaveLength(1));
+    expect(llamadas(fn, 'POST', '/api/crm/entrantes')[0]!.body).not.toHaveProperty('sector');
+    // and it comes back, with its choice, when the name no longer matches
+  });
+
+  it('the menu comes back with its choice when the typed name stops matching', async () => {
+    montar();
+    render(<CrmBoard />);
+    const p = await abrir();
+    elegirOpcion(p, /^Sector/, 'Construcción');
+    escribir(campo(p, /^Empresa/), TEXTILES);
+    expect(within(p).queryByRole('button', { name: /^Sector/ })).toBeNull();
+    escribir(campo(p, /^Empresa/), 'Otra');
+    expect(menuSector(p)).toHaveTextContent('Construcción');
+  });
+
+  it('hides it when the RUC matches too', async () => {
+    montar();
+    render(<CrmBoard />);
+    const p = await abrir();
+    escribir(campo(p, /^RUC/), '20534128790');
+    expect(within(p).queryByRole('button', { name: /^Sector/ })).toBeNull();
+  });
+
+  it('"Crear otro sector" opens the "Nuevo sector" box: Nombre (max 50, focused), 12 icons (first checked), note, buttons', async () => {
+    montar();
+    render(<CrmBoard />);
+    const p = await abrir();
+    expect(within(p).queryByRole('group', { name: 'Nuevo sector' })).toBeNull();
+    abrirCaja(p);
+    const c = caja(p);
+    expect(menuSector(p)).toHaveTextContent('Crear otro sector');
+    expect(nombre(p)).toHaveAttribute('maxlength', '50');
+    expect(nombre(p)).toHaveFocus();
+    const grupo = within(c).getByRole('radiogroup', { name: 'Ícono' });
+    const radios = within(grupo).getAllByRole('radio');
+    expect(radios.map((r) => r.getAttribute('aria-label'))).toEqual([
+      'Edificio', 'Casco de obra', 'Pico', 'Fábrica', 'Camión', 'Tienda', 'Maletín', 'Salud', 'Agro', 'Educación', 'Tecnología', 'Alimentos',
+    ]);
+    expect(radios.map((r) => (r as HTMLInputElement).type)).toEqual(Array(12).fill('radio'));
+    expect(radios[0]).toBeChecked();
+    expect(radios.filter((r) => (r as HTMLInputElement).checked)).toHaveLength(1);
+    fireEvent.click(within(grupo).getByRole('radio', { name: 'Salud' }));
+    expect(within(grupo).getByRole('radio', { name: 'Salud' })).toBeChecked();
+    expect(within(grupo).getByRole('radio', { name: 'Edificio' })).not.toBeChecked();
+    expect(within(grupo).getByRole('radio', { name: 'Salud' }).closest('label')?.className).toMatch(/from-sky-600/);
+    expect(within(grupo).getByRole('radio', { name: 'Edificio' }).closest('label')?.className).not.toMatch(/from-sky-600/);
+    expect(within(c).getByText('Queda disponible para todas las empresas.')).toBeInTheDocument();
+    expect(within(c).getByRole('button', { name: 'Cancelar' })).toBeInTheDocument();
+    expect(within(c).getByRole('button', { name: 'Agregar sector' })).toBeInTheDocument();
+  });
+
+  it('"Agregar sector" posts {nombre, icono}, adds it to the list, selects it, toasts and closes the box', async () => {
+    const fn = montar(() => creada({ sector: 'Clínicas y Salud' }));
+    render(<CrmBoard />);
+    const p = await abrir();
+    abrirCaja(p);
+    escribir(nombre(p), '  Clínicas   y Salud ');
+    fireEvent.click(within(caja(p)).getByRole('radio', { name: 'Salud' }));
+    agregar(p);
+    await waitFor(() => expect(within(p).queryByRole('group', { name: 'Nuevo sector' })).toBeNull());
+    expect(llamadas(fn, 'POST', '/api/crm/sectores')[0]!.body).toEqual({ nombre: 'Clínicas y Salud', icono: 'salud' });
+    expect(menuSector(p)).toHaveTextContent('Clínicas y Salud');
+    expect(toastMock.success).toHaveBeenCalledWith('Sector «Clínicas y Salud» creado y elegido.');
+    abrirMenu(p);
+    const opciones = within(p).getAllByRole('option').map((o) => o.textContent);
+    expect(opciones.some((t) => t?.includes('Clínicas y Salud'))).toBe(true);
+    expect(opciones[opciones.length - 1]).toContain('Crear otro sector');
+    fireEvent.keyDown(within(p).getByRole('listbox'), { key: 'Escape' });
+    escribir(campo(p, /^Empresa/), NUEVA);
+    escribir(campo(p, /^Teléfono o correo/), '945 210 334');
+    guardar(p);
+    await waitFor(() => expect(llamadas(fn, 'POST', '/api/crm/entrantes')).toHaveLength(1));
+    expect(llamadas(fn, 'POST', '/api/crm/entrantes')[0]!.body).toMatchObject({ sector: 'Clínicas y Salud' });
+  });
+
+  it('Enter in Nombre adds the sector (and does not submit the panel)', async () => {
+    const fn = montar(() => creada());
+    render(<CrmBoard />);
+    const p = await abrir();
+    abrirCaja(p);
+    escribir(nombre(p), 'Educación privada');
+    fireEvent.keyDown(nombre(p), { key: 'Enter' });
+    await waitFor(() => expect(llamadas(fn, 'POST', '/api/crm/sectores')).toHaveLength(1));
+    expect(llamadas(fn, 'POST', '/api/crm/sectores')[0]!.body).toEqual({ nombre: 'Educación privada', icono: 'edificio' });
+    await waitFor(() => expect(menuSector(p)).toHaveTextContent('Educación privada'));
+    expect(llamadas(fn, 'POST', '/api/crm/entrantes')).toHaveLength(0);
+  });
+
+  it('an empty name shows "Escribe el nombre del sector." on Nombre, focuses it and calls nothing; typing clears it', async () => {
+    const fn = montar();
+    render(<CrmBoard />);
+    const p = await abrir();
+    abrirCaja(p);
+    agregar(p);
+    const aviso = within(caja(p)).getByText('Escribe el nombre del sector.');
+    expect(aviso).toHaveAttribute('role', 'alert');
+    expect(nombre(p)).toHaveAttribute('aria-invalid', 'true');
+    expect(nombre(p).getAttribute('aria-describedby')).toContain(aviso.id);
+    expect(nombre(p)).toHaveFocus();
+    expect(llamadas(fn, 'POST', '/api/crm/sectores')).toHaveLength(0);
+    escribir(nombre(p), 'E');
+    expect(within(caja(p)).queryByText('Escribe el nombre del sector.')).toBeNull();
+    expect(nombre(p)).not.toHaveAttribute('aria-invalid');
+  });
+
+  it('a name that exists in any case answers with the stored name, from the local list, without calling the server', async () => {
+    const fn = montar();
+    render(<CrmBoard />);
+    const p = await abrir();
+    abrirCaja(p);
+    escribir(nombre(p), 'CONSTRUCCIÓN');
+    agregar(p);
+    expect(within(caja(p)).getByText('«Construcción» ya existe. Elígelo en la lista.')).toHaveAttribute('role', 'alert');
+    expect(nombre(p)).toHaveFocus();
+    expect(llamadas(fn, 'POST', '/api/crm/sectores')).toHaveLength(0);
+    escribir(nombre(p), 'CONSTRUCCIÓN ');
+    expect(within(caja(p)).queryByText(/ya existe/)).toBeNull();
+  });
+
+  it('a server 409 shows the same "ya existe" message and keeps the box open', async () => {
+    montar(undefined, BASE, { sector: () => ({ status: 409, body: { success: false, error: 'Ya existe el sector: Logística' } }) });
+    render(<CrmBoard />);
+    const p = await abrir();
+    abrirCaja(p);
+    escribir(nombre(p), 'Logística');
+    agregar(p);
+    expect(await within(caja(p)).findByText('«Logística» ya existe. Elígelo en la lista.')).toBeInTheDocument();
+    expect(nombre(p)).toHaveFocus();
+    expect(toastMock.success).not.toHaveBeenCalled();
+  });
+
+  it('shows another server error as is and keeps the box', async () => {
+    montar(undefined, BASE, { sector: () => ({ status: 500, body: { success: false, error: 'Error al crear el sector' } }) });
+    render(<CrmBoard />);
+    const p = await abrir();
+    abrirCaja(p);
+    escribir(nombre(p), 'Logística');
+    agregar(p);
+    expect(await within(caja(p)).findByText('Error al crear el sector')).toBeInTheDocument();
+  });
+
+  it('saving the panel with the box open shows "Agrega el sector nuevo o cancélalo." on Nombre, focuses it and sends nothing', async () => {
+    const fn = montar(() => creada());
+    render(<CrmBoard />);
+    const p = await abrir();
+    escribir(campo(p, /^Empresa/), NUEVA);
+    escribir(campo(p, /^Teléfono o correo/), '945 210 334');
+    abrirCaja(p);
+    guardar(p);
+    const aviso = within(caja(p)).getByText('Agrega el sector nuevo o cancélalo.');
+    expect(aviso).toHaveAttribute('role', 'alert');
+    expect(nombre(p)).toHaveAttribute('aria-invalid', 'true');
+    expect(nombre(p)).toHaveFocus();
+    expect(llamadas(fn, 'POST', '/api/crm/entrantes')).toHaveLength(0);
+    escribir(nombre(p), 'x');
+    expect(within(caja(p)).queryByText('Agrega el sector nuevo o cancélalo.')).toBeNull();
+  });
+
+  it('Cancelar closes the box and goes back to the previous choice', async () => {
+    const fn = montar(() => creada());
+    render(<CrmBoard />);
+    const p = await abrir();
+    elegirOpcion(p, /^Sector/, 'Construcción');
+    abrirCaja(p);
+    expect(menuSector(p)).toHaveTextContent('Crear otro sector');
+    fireEvent.click(within(caja(p)).getByRole('button', { name: 'Cancelar' }));
+    expect(within(p).queryByRole('group', { name: 'Nuevo sector' })).toBeNull();
+    expect(menuSector(p)).toHaveTextContent('Construcción');
+    expect(menuSector(p)).toHaveFocus();
+    escribir(campo(p, /^Empresa/), NUEVA);
+    escribir(campo(p, /^Teléfono o correo/), '945 210 334');
+    guardar(p);
+    await waitFor(() => expect(llamadas(fn, 'POST', '/api/crm/entrantes')).toHaveLength(1));
+    expect(llamadas(fn, 'POST', '/api/crm/entrantes')[0]!.body).toMatchObject({ sector: 'Construcción' });
+    expect(llamadas(fn, 'POST', '/api/crm/sectores')).toHaveLength(0);
+  });
+
+  it('Cancelar from "Sin definir" goes back to "Sin definir"', async () => {
+    montar();
+    render(<CrmBoard />);
+    const p = await abrir();
+    abrirCaja(p);
+    fireEvent.click(within(caja(p)).getByRole('button', { name: 'Cancelar' }));
+    expect(menuSector(p)).toHaveTextContent('Sin definir');
+  });
+
+  it('Escape in the box cancels it and keeps the panel open', async () => {
+    montar();
+    render(<CrmBoard />);
+    const p = await abrir();
+    elegirOpcion(p, /^Sector/, 'Construcción');
+    abrirCaja(p);
+    escribir(campo(p, /^Empresa/), NUEVA);
+    fireEvent.keyDown(nombre(p), { key: 'Escape' });
+    expect(within(p).queryByRole('group', { name: 'Nuevo sector' })).toBeNull();
+    expect(screen.getByRole('dialog', { name: 'Nos contactaron' })).toBeInTheDocument();
+    expect(campo(p, /^Empresa/)).toHaveValue(NUEVA);
+    expect(menuSector(p)).toHaveTextContent('Construcción');
+  });
+
+  it('choosing "Crear otro sector" twice does not duplicate the box, and picking a sector closes an open box', async () => {
+    montar();
+    render(<CrmBoard />);
+    const p = await abrir();
+    abrirCaja(p);
+    abrirCaja(p);
+    expect(within(p).getAllByRole('group', { name: 'Nuevo sector' })).toHaveLength(1);
+    elegirOpcion(p, /^Sector/, 'Construcción');
+    expect(within(p).queryByRole('group', { name: 'Nuevo sector' })).toBeNull();
+    expect(menuSector(p)).toHaveTextContent('Construcción');
+  });
+
+  it('the sector of the empresa form ("Nuevo sector", name only) still posts only the name', async () => {
+    const fn = montar();
+    render(<CrmBoard />);
+    await screen.findByText(ANDINA);
+    fireEvent.click(screen.getByRole('button', { name: /Nueva empresa/ }));
+    const alta = screen.getByRole('dialog', { name: /Nueva empresa/ });
+    fireEvent.click(within(alta).getByRole('button', { name: /Nuevo sector/ }));
+    fireEvent.change(within(alta).getByLabelText(/Sector nuevo/), { target: { value: 'Pesca' } });
+    fireEvent.click(within(alta).getByRole('button', { name: 'Agregar sector' }));
+    await waitFor(() => expect(llamadas(fn, 'POST', '/api/crm/sectores')).toHaveLength(1));
+    expect(llamadas(fn, 'POST', '/api/crm/sectores')[0]!.body).toEqual({ nombre: 'Pesca' });
+    expect(llamadas(fn, 'POST', '/api/crm/sectores')[0]!.body).not.toHaveProperty('icono');
   });
 });

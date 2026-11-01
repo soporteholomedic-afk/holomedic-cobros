@@ -2,9 +2,11 @@ import type {
   DatosEmpresa,
   Empresa,
   EstadoEmpresa,
+  IconoSector,
   Interaccion,
   NuevaEmpresa,
   NuevaInteraccion,
+  Sector,
   SeguimientoEmpresa,
 } from './entities';
 
@@ -43,8 +45,8 @@ export interface ICrmEmpresaRepository {
    * Throws `EmpresaNotFoundError` when either does not exist.
    */
   fusionar(idOrigen: string, idDestino: string): Promise<Empresa>;
-  /** Sector names, alphabetical. */
-  listSectores(): Promise<string[]>;
-  /** Throws `SectorDuplicadoError` (case-insensitive). Returns the stored name. */
-  createSector(nombre: string): Promise<string>;
+  /** Sectors with their icon, alphabetical by name. */
+  listSectores(): Promise<Sector[]>;
+  /** Throws `SectorDuplicadoError` (case-insensitive). Returns the stored sector. */
+  createSector(nombre: string, icono: IconoSector | null): Promise<Sector>;
 }

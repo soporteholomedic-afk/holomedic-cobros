@@ -10,6 +10,7 @@ import type {
   Empresa,
   Etapa,
   EstadoEmpresa,
+  IconoSector,
   Interaccion,
   Medio,
   Motivo,
@@ -19,8 +20,10 @@ import type {
   Origen,
   ProximaAccion,
   Resultado,
+  Sector,
   SeguimientoEmpresa,
 } from '../../domain/entities';
+import { esIconoSector } from '../../domain/entities';
 import {
   DatosEmpresaInvalidosError,
   EmpresaNotFoundError,
@@ -483,26 +486,33 @@ export class SqlServerCrmEmpresaRepository implements ICrmEmpresaRepository {
     return destino;
   }
 
-  async listSectores(): Promise<string[]> {
+  async listSectores(): Promise<Sector[]> {
     const result = await this.pool
       .request()
-      .query<{ nombre: string }>(`SELECT nombre FROM dbo.CrmSector ORDER BY nombre`);
-    return result.recordset.map((r) => r.nombre);
+      .query<{ nombre: string; icono: string | null }>(`SELECT nombre, icono FROM dbo.CrmSector ORDER BY nombre`);
+    return result.recordset.map(filaSector);
   }
 
-  async createSector(nombre: string): Promise<string> {
+  async createSector(nombre: string, icono: IconoSector | null): Promise<Sector> {
     try {
       const result = await this.pool
         .request()
         .input('nombre', mssql.NVarChar(50), nombre)
-        .query<{ nombre: string }>(
-          `INSERT INTO dbo.CrmSector (nombre) OUTPUT INSERTED.nombre VALUES (@nombre)`,
+        .input('icono', mssql.NVarChar(20), icono)
+        .query<{ nombre: string; icono: string | null }>(
+          `INSERT INTO dbo.CrmSector (nombre, icono) OUTPUT INSERTED.nombre, INSERTED.icono VALUES (@nombre, @icono)`,
         );
-      return result.recordset[0]?.nombre ?? nombre;
+      const fila = result.recordset[0];
+      return fila ? filaSector(fila) : { nombre, icono };
     } catch (error) {
       const number = numeroDeError(error);
       if (number !== undefined && UNIQUE_VIOLATION.has(number)) throw new SectorDuplicadoError(nombre);
       throw error;
     }
   }
+}
+
+/** A stored icon that is not in the closed list (edited by hand) reads as "no icon". */
+function filaSector(fila: { nombre: string; icono?: string | null }): Sector {
+  return { nombre: fila.nombre, icono: esIconoSector(fila.icono) ? fila.icono : null };
 }

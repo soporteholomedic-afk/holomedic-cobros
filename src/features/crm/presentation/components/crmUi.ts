@@ -1,4 +1,30 @@
-import { Check, FileText, Globe, Info, Mail, MessageCircle, MoreHorizontal, Phone, Reply, Users, X, type LucideIcon } from 'lucide-react';
+import {
+  BookOpen,
+  Briefcase,
+  Building2,
+  Check,
+  Cpu,
+  Factory,
+  FileText,
+  Globe,
+  HardHat,
+  HeartPulse,
+  Info,
+  Mail,
+  MessageCircle,
+  MoreHorizontal,
+  Phone,
+  Pickaxe,
+  Reply,
+  Sprout,
+  Store,
+  Tag,
+  Truck,
+  Users,
+  UtensilsCrossed,
+  X,
+  type LucideIcon,
+} from 'lucide-react';
 
 import {
   MOTIVO_CAMPOS,
@@ -6,6 +32,7 @@ import {
   type AccionTipo,
   type Empresa,
   type Etapa,
+  type IconoSector,
   type Medio,
   type Origen,
 } from '../../domain/entities';
@@ -85,6 +112,27 @@ export const ORIGEN_ESTILO: Record<Origen, { icono: LucideIcon; descripcion: str
   conocia: { icono: Check, descripcion: 'Trabajó con nosotros o nos ubicaba' },
   internet: { icono: Globe, descripcion: 'Google, redes sociales o nuestra web' },
 };
+
+/** Lucide icon of each sector icon key (spec S12). */
+export const ICONO_SECTOR_ESTILO: Record<IconoSector, LucideIcon> = {
+  edificio: Building2,
+  casco: HardHat,
+  pico: Pickaxe,
+  fabrica: Factory,
+  camion: Truck,
+  tienda: Store,
+  maletin: Briefcase,
+  salud: HeartPulse,
+  agro: Sprout,
+  educacion: BookOpen,
+  tecnologia: Cpu,
+  alimentos: UtensilsCrossed,
+};
+
+/** Icon of a sector; a neutral tag for one without icon (older, or created without it). */
+export function iconoDeSector(icono: IconoSector | null): LucideIcon {
+  return icono ? ICONO_SECTOR_ESTILO[icono] : Tag;
+}
 
 /** The six initial sectors keep the color of the approved design, by position. */
 const COLOR_INICIALES = [

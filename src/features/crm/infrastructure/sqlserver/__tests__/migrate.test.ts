@@ -5,6 +5,8 @@ import {
   ACCIONES,
   DIRECCIONES,
   ETAPAS,
+  ICONOS_INICIALES,
+  ICONOS_SECTOR,
   MEDIOS,
   MOTIVO_CATEGORIAS,
   ORIGENES,
@@ -300,6 +302,49 @@ describe('sqlserver crm migrate()', () => {
     expect(origen).toMatch(/^NVARCHAR\(20\)\s+NULL\s+CONSTRAINT\s+CK_CrmEmpresa_origen\s+CHECK/i);
     expect(ORIGENES).toEqual(['nose', 'referido', 'conocia', 'internet']);
     expect(valoresCheck(origen, 'origen')).toEqual([...ORIGENES]);
+  });
+
+  it('adds CrmSector.icono: guarded by sys.columns, NULL-able, CHECK limited to the 12 icon keys', async () => {
+    const sql = await sqlDeMigrate();
+    const def = columnaNueva(sql, 'CrmSector', 'icono');
+    expect(def).toMatch(/^NVARCHAR\(20\)\s+NULL\s+CONSTRAINT\s+CK_CrmSector_icono\s+CHECK/i);
+    expect(valoresCheck(def, 'icono')).toEqual([...ICONOS_SECTOR]);
+    expect([...ICONOS_SECTOR]).toEqual([
+      'edificio', 'casco', 'pico', 'fabrica', 'camion', 'tienda', 'maletin', 'salud', 'agro', 'educacion', 'tecnologia', 'alimentos',
+    ]);
+    // The fresh-database CREATE TABLE stays as it was: the guarded ADD runs after it.
+    expect(tabla(sql, 'CrmSector')).not.toMatch(/icono/i);
+    expect(sql.search(/ADD\s+icono\s/i)).toBeGreaterThan(sql.search(/CREATE\s+TABLE\s+dbo\.CrmSector/i));
+  });
+
+  it('seeds the icons of the six initial sectors only where icono IS NULL and the name matches, through dynamic SQL', async () => {
+    const sql = await sqlDeMigrate();
+    expect([...ICONOS_INICIALES]).toEqual(['casco', 'pico', 'fabrica', 'camion', 'tienda', 'maletin']);
+    const bloque = bloqueQueContiene(sql, /UPDATE\s+s\s+SET\s+s\.icono/i);
+    // A column added in this same batch cannot be referenced by a statically compiled statement.
+    expect(bloque).toMatch(/EXEC\s*\(\s*N'/i);
+    expect(bloque).toMatch(/^IF\s+EXISTS\s*\(\s*SELECT\s+1\s+FROM\s+sys\.columns[\s\S]*dbo\.CrmSector[\s\S]*name\s*=\s*'icono'/i);
+    expect(bloque).toMatch(/WHERE\s+s\.icono\s+IS\s+NULL/i);
+    SECTORES_INICIALES.forEach((nombre, i) => {
+      expect(bloque).toContain(`(N''${nombre}'', ''${ICONOS_INICIALES[i]}'')`);
+    });
+    expect(bloque).toMatch(/ON\s+s\.nombre\s*=\s*v\.nombre/i);
+    // Non-destructive: it only sets icono, never renames or rewrites other columns.
+    expect(bloque).not.toMatch(/SET\s+s\.nombre/i);
+    expect(bloque.match(/\bSET\b/gi)).toHaveLength(1);
+    // Only dynamic SQL touches the new column outside its own ADD.
+    const fuera = sql.replace(bloque, '').replace(bloqueQueContiene(sql, /ADD\s+icono\s/i), '');
+    expect(fuera).not.toMatch(/\bicono\b/i);
+  });
+
+  it('runs the icon ADD before the seed, and both before COMMIT', async () => {
+    const sql = (await sqlDeMigrate()).trim();
+    const alta = sql.search(/ADD\s+icono\s/i);
+    const semilla = sql.search(/UPDATE\s+s\s+SET\s+s\.icono/i);
+    expect(alta).toBeGreaterThan(0);
+    expect(semilla).toBeGreaterThan(alta);
+    expect(sql.lastIndexOf('COMMIT')).toBeGreaterThan(semilla);
+    expect(sql.match(/\bBEGIN\s+TRAN\b/gi)).toHaveLength(1);
   });
 
   it('creates CrmInteraccion with its columns, CHECKs, cascade FK and (idEmpresa, fecha DESC) index', async () => {

@@ -1,7 +1,22 @@
 import { describe, expect, it } from 'vitest';
 
-import { SECTORES_INICIALES } from '../../../domain/entities';
-import { colorDeSector } from '../crmUi';
+import { Briefcase, Building2, Tag } from 'lucide-react';
+
+import { ICONOS_SECTOR, SECTORES_INICIALES } from '../../../domain/entities';
+import { ICONO_SECTOR_ESTILO, colorDeSector, iconoDeSector } from '../crmUi';
+
+describe('iconoDeSector', () => {
+  it('maps every icon key of the closed list to a lucide icon', () => {
+    expect(Object.keys(ICONO_SECTOR_ESTILO)).toEqual([...ICONOS_SECTOR]);
+    for (const k of ICONOS_SECTOR) expect(iconoDeSector(k)).toBeTruthy();
+    expect(iconoDeSector('maletin')).toBe(Briefcase);
+    expect(iconoDeSector('edificio')).toBe(Building2);
+  });
+
+  it('uses the neutral tag icon for a sector without icon', () => {
+    expect(iconoDeSector(null)).toBe(Tag);
+  });
+});
 
 describe('colorDeSector', () => {
   it('gives the six initial sectors the colors of the approved design, in order', () => {

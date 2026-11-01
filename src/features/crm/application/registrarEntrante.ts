@@ -21,6 +21,8 @@ export interface RegistrarEntranteDatos {
   /** "¿Qué necesita?", stored as the summary of the first interaction. */
   necesita?: string | null;
   origen?: string | null;
+  /** Optional sector name; used only when a new card is created, ignored on an existing empresa. */
+  sector?: string | null;
   /** Raw next action; required unless the empresa it lands on is a Cliente. */
   proximaAccion?: unknown;
 }
@@ -75,6 +77,8 @@ export class RegistrarEntranteUseCase {
     const origen = validarOrigen(datos.origen);
 
     const existente = await this.buscarExistente(razonSocial, ruc);
+    // Only a new card takes a sector, and it is checked before any write.
+    const sector = existente ? null : await this.resolverSector(datos.sector);
     const previo: EstadoPrevio = existente ?? {
       etapa: 'por_contactar',
       motivo: null,
@@ -104,7 +108,7 @@ export class RegistrarEntranteUseCase {
     const creada = await this.repo.create({
       razonSocial,
       ruc,
-      sector: null,
+      sector,
       contactos: [{ nombre: persona, telefono, correo }],
       notas: null,
       etapa: 'contactado',
@@ -112,6 +116,15 @@ export class RegistrarEntranteUseCase {
     });
     const empresa = await this.repo.updateSeguimiento(creada.idEmpresa, seguimiento, interaccion);
     return { empresa, existente: false };
+  }
+
+  /** Stored spelling of the sector, or `null` when none was given. Unknown → DatosEmpresaInvalidosError. */
+  private async resolverSector(texto: string | null | undefined): Promise<string | null> {
+    const pedido = opcional(texto);
+    if (pedido === null) return null;
+    const hallado = (await this.repo.listSectores()).find((s) => s.nombre.toLowerCase() === pedido.toLowerCase());
+    if (!hallado) throw new DatosEmpresaInvalidosError(`Sector desconocido: ${pedido}`);
+    return hallado.nombre;
   }
 
   private async buscarExistente(razonSocial: string, ruc: string | null): Promise<Empresa | null> {

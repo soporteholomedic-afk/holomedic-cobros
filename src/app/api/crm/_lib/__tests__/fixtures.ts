@@ -75,8 +75,13 @@ export function makeMockRepo(overrides: Partial<ICrmEmpresaRepository> = {}): IC
     })),
     listInteracciones: vi.fn().mockResolvedValue([]),
     fusionar: vi.fn().mockImplementation(async () => FILA),
-    listSectores: vi.fn().mockResolvedValue(['Construcción', 'Comercio y Tiendas']),
-    createSector: vi.fn().mockImplementation(async (nombre: string) => nombre),
+    listSectores: vi.fn().mockResolvedValue([
+      { nombre: 'Construcción', icono: 'casco' },
+      { nombre: 'Comercio y Tiendas', icono: 'tienda' },
+    ]),
+    createSector: vi
+      .fn()
+      .mockImplementation(async (nombre: string, icono: string | null) => ({ nombre, icono })),
     ...overrides,
   };
 }

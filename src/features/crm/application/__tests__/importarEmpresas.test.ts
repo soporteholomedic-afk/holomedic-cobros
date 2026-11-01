@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import type { Empresa } from '../../domain/entities';
+import type { Empresa, Sector } from '../../domain/entities';
 import { RucDuplicadoError } from '../../domain/errors';
 import type { ICrmEmpresaRepository } from '../../domain/ports';
 import type { FilaExcelEmpresa } from '../../infrastructure/excel/leerExcelEmpresas';
@@ -8,11 +8,11 @@ import { ImportarEmpresasUseCase, evaluarImportacion } from '../importarEmpresas
 
 const NOW = '2026-01-01T00:00:00.000Z';
 
-type Fake = ICrmEmpresaRepository & { rows: Empresa[]; sectores: string[]; escrituras: number };
+type Fake = ICrmEmpresaRepository & { rows: Empresa[]; sectores: Sector[]; escrituras: number };
 
 function makeFake(seed: Empresa[] = [], sectores = ['Construcción', 'Comercio y Tiendas']): Fake {
   const rows = seed.map((r) => structuredClone(r));
-  const lista = [...sectores];
+  const lista: Sector[] = sectores.map((nombre) => ({ nombre, icono: null }));
   const repo: Fake = {
     rows,
     sectores: lista,
@@ -65,12 +65,13 @@ function makeFake(seed: Empresa[] = [], sectores = ['Construcción', 'Comercio y
       throw new Error('not used');
     },
     async listSectores() {
-      return [...lista].sort();
+      return [...lista].sort((a, b) => a.nombre.localeCompare(b.nombre));
     },
-    async createSector(nombre) {
+    async createSector(nombre, icono) {
       repo.escrituras++;
-      lista.push(nombre);
-      return nombre;
+      const creado: Sector = { nombre, icono };
+      lista.push(creado);
+      return creado;
     },
   };
   return repo;
@@ -221,7 +222,7 @@ describe('evaluarImportacion', () => {
     await evaluarImportacion([fila(2, { sector: 'Educación' }), fila(3)], repo);
     expect(repo.escrituras).toBe(0);
     expect(repo.rows).toHaveLength(0);
-    expect(repo.sectores).toEqual(['Construcción', 'Comercio y Tiendas']);
+    expect(repo.sectores.map((s) => s.nombre)).toEqual(['Construcción', 'Comercio y Tiendas']);
   });
 });
 
@@ -253,7 +254,7 @@ describe('ImportarEmpresasUseCase', () => {
     const repo = makeFake();
     await new ImportarEmpresasUseCase(repo).execute([fila(2, { sector: 'construcción' })]);
     expect(repo.rows[0].sector).toBe('Construcción');
-    expect(repo.sectores).toEqual(['Construcción', 'Comercio y Tiendas']);
+    expect(repo.sectores.map((s) => s.nombre)).toEqual(['Construcción', 'Comercio y Tiendas']);
   });
 
   it('creates a new sector once for many rows, before the empresas that use it', async () => {
@@ -264,7 +265,8 @@ describe('ImportarEmpresasUseCase', () => {
       fila(4, { sector: 'Salud' }),
     ]);
     expect(r).toEqual({ importadas: 3, sectoresNuevos: 2, omitidas: 0 });
-    expect(repo.sectores).toEqual(['Construcción', 'Comercio y Tiendas', 'Educación', 'Salud']);
+    expect(repo.sectores.slice(2).map((s) => s.icono)).toEqual([null, null]);
+    expect(repo.sectores.map((s) => s.nombre)).toEqual(['Construcción', 'Comercio y Tiendas', 'Educación', 'Salud']);
     expect(repo.rows.map((x) => x.sector)).toEqual(['Educación', 'Educación', 'Salud']);
   });
 
@@ -278,14 +280,14 @@ describe('ImportarEmpresasUseCase', () => {
     ]);
     expect(r).toEqual({ importadas: 1, sectoresNuevos: 0, omitidas: 3 });
     expect(repo.rows.map((x) => x.ruc)).toEqual(['20512345678', fila(2).ruc]);
-    expect(repo.sectores).toEqual(['Construcción', 'Comercio y Tiendas']);
+    expect(repo.sectores.map((s) => s.nombre)).toEqual(['Construcción', 'Comercio y Tiendas']);
   });
 
   it('does not create the sector of a repeated row, nor store that row', async () => {
     const repo = makeFake([EXISTENTE]);
     const r = await new ImportarEmpresasUseCase(repo).execute([fila(2, { ruc: '20512345678', sector: 'Educación' })]);
     expect(r).toEqual({ importadas: 0, sectoresNuevos: 0, omitidas: 1 });
-    expect(repo.sectores).toEqual(['Construcción', 'Comercio y Tiendas']);
+    expect(repo.sectores.map((s) => s.nombre)).toEqual(['Construcción', 'Comercio y Tiendas']);
     expect(repo.rows).toHaveLength(1);
   });
 

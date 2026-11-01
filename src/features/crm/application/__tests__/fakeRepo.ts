@@ -1,5 +1,5 @@
 import type { ICrmEmpresaRepository } from '../../domain/ports';
-import type { Empresa, Interaccion } from '../../domain/entities';
+import type { Empresa, IconoSector, Interaccion, Sector } from '../../domain/entities';
 import { EmpresaNotFoundError, RucDuplicadoError } from '../../domain/errors';
 
 export const NOW = '2026-10-31T15:00:00.000Z';
@@ -10,6 +10,7 @@ export const USUARIO = { sub: 'u-1', nombre: 'Scott Palomino' };
 export interface FakeRepo extends ICrmEmpresaRepository {
   rows: Empresa[];
   interacciones: Interaccion[];
+  sectores: Sector[];
   /** Every call that changes storage (create, update, updateEstado, updateSeguimiento, addInteraccion, fusionar). */
   escrituras: number;
   /** Calls to `updateSeguimiento` only. */
@@ -50,9 +51,14 @@ export function makeFakeRepo(seed: Empresa[] = [], historial: Interaccion[] = []
     if (!row) throw new EmpresaNotFoundError(id);
     return row;
   };
+  const sectores: Sector[] = [
+    { nombre: 'Construcción', icono: 'casco' },
+    { nombre: 'Comercio y Tiendas', icono: 'tienda' },
+  ];
   const repo: FakeRepo = {
     rows,
     interacciones,
+    sectores,
     escrituras: 0,
     seguimientos: 0,
     async getById(id) {
@@ -148,11 +154,13 @@ export function makeFakeRepo(seed: Empresa[] = [], historial: Interaccion[] = []
       return structuredClone(destino);
     },
     async listSectores() {
-      return ['Construcción', 'Comercio y Tiendas'];
+      return [...sectores].sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'));
     },
-    async createSector(nombre) {
+    async createSector(nombre, icono: IconoSector | null) {
       repo.escrituras++;
-      return nombre;
+      const creado: Sector = { nombre, icono };
+      sectores.push(creado);
+      return { ...creado };
     },
   };
   return repo;

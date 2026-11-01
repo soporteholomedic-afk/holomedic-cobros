@@ -18,12 +18,16 @@ const EXISTENTE = ['Constructora Andina S.A.C.', '20512345678', 'Construcción',
 
 /** Repository whose sectors really grow when one is created, like the real one. */
 function repoConSectores(over: Partial<ICrmEmpresaRepository> = {}): ICrmEmpresaRepository {
-  const sectores = ['Construcción', 'Comercio y Tiendas'];
+  const sectores: { nombre: string; icono: string | null }[] = [
+    { nombre: 'Construcción', icono: null },
+    { nombre: 'Comercio y Tiendas', icono: null },
+  ];
   return makeMockRepo({
     listSectores: vi.fn().mockImplementation(async () => [...sectores]),
-    createSector: vi.fn().mockImplementation(async (n: string) => {
-      sectores.push(n);
-      return n;
+    createSector: vi.fn().mockImplementation(async (n: string, icono: string | null) => {
+      const creado = { nombre: n, icono };
+      sectores.push(creado);
+      return creado;
     }),
     ...over,
   });
@@ -43,7 +47,7 @@ describe('POST /api/crm/importar', () => {
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ success: true, importadas: 2, sectoresNuevos: 1, omitidas: 1 });
     expect(repo.createSector).toHaveBeenCalledTimes(1);
-    expect(repo.createSector).toHaveBeenCalledWith('Educación');
+    expect(repo.createSector).toHaveBeenCalledWith('Educación', null);
     expect(repo.create).toHaveBeenCalledTimes(2);
     expect(repo.create).toHaveBeenNthCalledWith(1, {
       razonSocial: 'Escuela Norte S.A.C.',

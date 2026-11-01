@@ -200,3 +200,31 @@ describe('RegistrarEntranteUseCase — existing empresa (L8, S5)', () => {
     await rechaza({ ...DATOS, proximaAccion: null }, 'Elige la próxima acción.', [SEED]);
   });
 });
+
+describe('RegistrarEntranteUseCase — sector (S12)', () => {
+  it('a new card takes the sector, resolved case-insensitively to the stored name', async () => {
+    const repo = makeFakeRepo();
+    const r = await entrante(repo, { ...DATOS, sector: '  comercio y tiendas ' });
+    expect(r.existente).toBe(false);
+    expect(r.empresa.sector).toBe('Comercio y Tiendas');
+    expect(repo.rows[0]?.sector).toBe('Comercio y Tiendas');
+  });
+
+  it('without sector (or blank) the card keeps "Sin definir"', async () => {
+    const repo = makeFakeRepo();
+    await entrante(repo, { ...DATOS, sector: '   ' });
+    expect(repo.rows[0]?.sector).toBeNull();
+  });
+
+  it('an existing empresa ignores the sector, even an unknown one', async () => {
+    const repo = makeFakeRepo([empresa({ razonSocial: 'Textiles Pacífico S.A.C.', ruc: null, sector: 'Construcción' })]);
+    const r = await entrante(repo, { ...DATOS, ruc: '', sector: 'Astrología' });
+    expect(r.existente).toBe(true);
+    expect(r.empresa.sector).toBe('Construcción');
+    expect(repo.rows[0]?.sector).toBe('Construcción');
+  });
+
+  it('an unknown sector is rejected BEFORE any write', async () => {
+    await rechaza({ ...DATOS, sector: 'Astrología' }, 'Sector desconocido: Astrología', []);
+  });
+});

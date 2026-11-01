@@ -74,9 +74,9 @@ export async function validarDatosEmpresa(
   const sectorTxt = opcional(datos.sector);
   if (sectorTxt !== null) {
     const existentes = await repo.listSectores();
-    const hallado = existentes.find((s) => s.toLowerCase() === sectorTxt.toLowerCase());
+    const hallado = existentes.find((s) => s.nombre.toLowerCase() === sectorTxt.toLowerCase());
     if (!hallado) throw new DatosEmpresaInvalidosError(`Sector desconocido: ${sectorTxt}`);
-    sector = hallado;
+    sector = hallado.nombre;
   }
 
   const otra = await repo.findByRuc(ruc);

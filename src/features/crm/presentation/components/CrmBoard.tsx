@@ -13,7 +13,9 @@ import {
   type Empresa,
   type Etapa,
   type Medio,
+  type IconoSector,
   type Motivo,
+  type Sector,
 } from '../../domain/entities';
 import { AltaPanel } from './AltaPanel';
 import { CrmCard } from './CrmCard';
@@ -22,6 +24,7 @@ import type { OtraEmpresa, ResultadoRuc } from './RucFaltante';
 import { DetallePanel, type DetalleHandle } from './DetallePanel';
 import { MedioDialog } from './MedioDialog';
 import { MotivoDialog } from './MotivoDialog';
+import type { ResultadoSector } from './NuevoSectorBox';
 import { etiquetaDeTarjeta } from './etiquetas';
 import { hoyEnZona } from './fechas';
 import { EntrantePanel } from './EntrantePanel';
@@ -97,7 +100,8 @@ export function CrmBoard() {
   const [entranteAbierto, setEntranteAbierto] = useState(false);
   const botonEntrante = useRef<HTMLButtonElement>(null);
   const detalleRef = useRef<DetalleHandle>(null);
-  const [sectores, setSectores] = useState<string[]>([]);
+  const [sectores, setSectores] = useState<Sector[]>([]);
+  const nombresSector = useMemo(() => sectores.map((s) => s.nombre), [sectores]);
   const draggingId = useRef<string | null>(null);
   const botonNueva = useRef<HTMLButtonElement>(null);
   // Trip of a card that just changed column: photographed before the list is replaced, played after.
@@ -133,7 +137,7 @@ export function CrmBoard() {
       try {
         const res = await fetch('/api/crm/sectores');
         if (!res.ok) return;
-        const data = (await res.json()) as { sectores?: string[] };
+        const data = (await res.json()) as { sectores?: Sector[] };
         if (!cancelled && Array.isArray(data.sectores)) setSectores(data.sectores);
       } catch {
         // the panel still works without the list: the sector is optional
@@ -330,26 +334,35 @@ export function CrmBoard() {
     return { tipo: 'error' };
   }
 
-  async function crearSector(nombre: string): Promise<string | { error: string }> {
+  /** Store a sector (with its icon when given) and add it to the list. A 409 is reported as `duplicado`. */
+  async function crearSector(nombre: string, icono?: IconoSector): Promise<ResultadoSector> {
     try {
       const res = await fetch('/api/crm/sectores', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ nombre }),
+        body: JSON.stringify(icono ? { nombre, icono } : { nombre }),
       });
-      let data: { error?: string; sector?: string } = {};
+      let data: { error?: string; sector?: Sector } = {};
       try {
         data = await res.json();
       } catch {
         // not JSON
       }
-      if (!res.ok || !data.sector) return { error: data.error ?? 'No se pudo crear el sector.' };
+      if (!res.ok || !data.sector) {
+        return { error: data.error ?? 'No se pudo crear el sector.', duplicado: res.status === 409 };
+      }
       const creado = data.sector;
-      setSectores((prev) => [...prev, creado].sort((a, b) => a.localeCompare(b, 'es')));
+      setSectores((prev) => [...prev, creado].sort((a, b) => a.nombre.localeCompare(b.nombre, 'es')));
       return creado;
     } catch {
       return { error: 'No se pudo crear el sector.' };
     }
+  }
+
+  /** Name-only variant for the empresa forms ("Nuevo sector" without icon). */
+  async function crearSectorPorNombre(nombre: string): Promise<string | { error: string }> {
+    const r = await crearSector(nombre);
+    return 'error' in r ? { error: r.error } : r.nombre;
   }
 
   async function crearEmpresa(cuerpo: Record<string, unknown>): Promise<Empresa | { error: string }> {
@@ -613,11 +626,11 @@ export function CrmBoard() {
           key={detalleEmpresa.idEmpresa}
           empresa={detalleEmpresa}
           empresas={empresas}
-          sectores={sectores}
+          sectores={nombresSector}
           controlRef={detalleRef}
           onCerrar={cerrarDetalle}
           onGuardar={guardarEmpresa}
-          onCrearSector={crearSector}
+          onCrearSector={crearSectorPorNombre}
           onCambiarMedio={(x) =>
             setDialogo({ tipo: 'medio', id: x.idEmpresa, modo: 'editar', inicial: x.medio, destino: x.etapa })
           }
@@ -628,7 +641,14 @@ export function CrmBoard() {
       )}
 
       {entranteAbierto && (
-        <EntrantePanel empresas={empresas} hoy={hoy} onCerrar={cerrarEntrante} onGuardado={entranteGuardado} />
+        <EntrantePanel
+          empresas={empresas}
+          sectores={sectores}
+          hoy={hoy}
+          onCerrar={cerrarEntrante}
+          onGuardado={entranteGuardado}
+          onCrearSector={crearSector}
+        />
       )}
 
       {registroEmpresa && registro && (
@@ -645,10 +665,10 @@ export function CrmBoard() {
 
       {alta !== 'cerrada' && (
         <AltaPanel
-          sectores={sectores}
+          sectores={nombresSector}
           oculto={alta === 'oculta'}
           onCerrar={cerrarPanel}
-          onCrearSector={crearSector}
+          onCrearSector={crearSectorPorNombre}
           onCrear={crearEmpresa}
         />
       )}

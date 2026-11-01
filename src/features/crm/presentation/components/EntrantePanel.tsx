@@ -1,9 +1,10 @@
 'use client';
 
-import { Info, X } from 'lucide-react';
+import { Info, Plus, X } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react';
+import { toast } from 'sonner';
 
-import { ORIGENES, ORIGEN_LABELS, type Empresa, type Origen } from '../../domain/entities';
+import { ORIGENES, ORIGEN_LABELS, type Empresa, type IconoSector, type Origen, type Sector } from '../../domain/entities';
 import {
   ORDEN_ENTRANTE,
   agendaDe,
@@ -17,23 +18,43 @@ import {
   type EntranteForm,
   type Fallos,
 } from './contactoForm';
-import { BOTON_PRIMARIO, BOTON_SECUNDARIO, ERROR_CAMPO, ETIQUETA_CAMPO, INPUT_VALIDABLE, LEYENDA, ORIGEN_ESTILO } from './crmUi';
+import {
+  BOTON_PRIMARIO,
+  BOTON_SECUNDARIO,
+  ERROR_CAMPO,
+  ETIQUETA_CAMPO,
+  INPUT_VALIDABLE,
+  LEYENDA,
+  ORIGEN_ESTILO,
+  iconoDeSector,
+} from './crmUi';
 import { CrmSelect, type OpcionSelect } from './CrmSelect';
 import { MedioPills } from './MedioPills';
+import { NuevoSectorBox, type ResultadoSector } from './NuevoSectorBox';
 import { ProximaAccionCampos } from './ProximaAccionCampos';
 import { useEntrante } from './useEntrante';
 
 interface Props {
   /** Every empresa, to recognize a name or RUC that is already in the CRM and to mark the calendar. */
   empresas: Empresa[];
+  /** Stored sectors with their icon. */
+  sectores: Sector[];
   /** Today as `YYYY-MM-DD` in the business time zone. */
   hoy: string;
   onCerrar: () => void;
   /** The server saved the contact: the empresa as it is now, and whether it already existed. */
   onGuardado: (empresa: Empresa, existente: boolean) => void;
+  /** Stores a new sector with its icon (the board owns the request). */
+  onCrearSector: (nombre: string, icono: IconoSector) => Promise<ResultadoSector>;
 }
 
+/** Keys of the sector menu options that are not a stored sector. */
+const SIN_SECTOR = 'sin';
+const NUEVO_SECTOR = 'nuevo';
+const claveSector = (i: number) => `s${i}`;
+
 const BASE = 'ent';
+const ID_SECTOR = `${BASE}-sector`;
 const CAMPO: Record<CampoContacto, string> = {
   razon: `${BASE}-razon`,
   ruc: `${BASE}-ruc`,
@@ -88,18 +109,42 @@ const Opcional = ({ texto = '(opcional)' }: { texto?: string }) => (
  * contact: a new card in Contactado marked "Falta responder", or, when the
  * name or RUC is already in the CRM, a new entry on that card (spec S5, L8).
  */
-export function EntrantePanel({ empresas, hoy, onCerrar, onGuardado }: Props) {
+export function EntrantePanel({ empresas, sectores, hoy, onCerrar, onGuardado, onCrearSector }: Props) {
   const [form, setForm] = useState<EntranteForm>(() => entranteInicial(hoy));
   const [fallos, setFallos] = useState<Fallos>({});
   const { guardando, registrar } = useEntrante();
   const cerrar = useRef(onCerrar);
+  // The "Nuevo sector" box. The chosen sector (`form.sector`) is not touched while it is open, so Cancelar needs no copy.
+  const [cajaAbierta, setCajaAbierta] = useState(false);
+  const [errorSector, setErrorSector] = useState('');
+  const devolverFoco = useRef(false);
 
   const destino = useMemo(() => empresaCoincidente(empresas, form.razonSocial, form.ruc), [empresas, form.razonSocial, form.ruc]);
   const marcados = useMemo(() => agendaDe(empresas, destino?.idEmpresa ?? null), [empresas, destino]);
 
+  const mostrarCaja = cajaAbierta && !destino;
+  const opcionesSector = useMemo<OpcionSelect<string>[]>(
+    () => [
+      { value: SIN_SECTOR, label: 'Sin definir', icon: Info, description: 'Se completa después' },
+      ...sectores.map((s, i) => ({ value: claveSector(i), label: s.nombre, icon: iconoDeSector(s.icono) })),
+      { value: NUEVO_SECTOR, label: 'Crear otro sector', icon: Plus, description: 'Elige su nombre y su ícono', separada: true },
+    ],
+    [sectores],
+  );
+  const indiceSector = sectores.findIndex((s) => s.nombre === form.sector);
+  const valorSector = mostrarCaja ? NUEVO_SECTOR : indiceSector >= 0 ? claveSector(indiceSector) : SIN_SECTOR;
+
   useEffect(() => {
     cerrar.current = onCerrar;
   });
+
+  useEffect(() => {
+    // The menu button is back in place once the box closes: hand it the focus.
+    if (!mostrarCaja && devolverFoco.current) {
+      devolverFoco.current = false;
+      document.getElementById(ID_SECTOR)?.focus();
+    }
+  }, [mostrarCaja]);
 
   useEffect(() => {
     document.getElementById(CAMPO.razon)?.focus();
@@ -116,9 +161,40 @@ export function EntrantePanel({ empresas, hoy, onCerrar, onGuardado }: Props) {
     setFallos({});
   }
 
+  function elegirSector(clave: string) {
+    if (clave === NUEVO_SECTOR) {
+      setErrorSector('');
+      setCajaAbierta(true);
+      return;
+    }
+    setCajaAbierta(false);
+    setErrorSector('');
+    const i = sectores.findIndex((_, k) => claveSector(k) === clave);
+    setForm((f) => ({ ...f, sector: i >= 0 ? (sectores[i]?.nombre ?? '') : '' }));
+  }
+
+  function cancelarCaja() {
+    devolverFoco.current = true;
+    setErrorSector('');
+    setCajaAbierta(false);
+  }
+
+  function sectorCreado(sector: Sector) {
+    devolverFoco.current = true;
+    setForm((f) => ({ ...f, sector: sector.nombre }));
+    setErrorSector('');
+    setCajaAbierta(false);
+    toast.success(`Sector «${sector.nombre}» creado y elegido.`);
+  }
+
   async function enviar(ev: FormEvent) {
     ev.preventDefault();
     if (guardando) return;
+    if (mostrarCaja) {
+      setErrorSector('Agrega el sector nuevo o cancélalo.');
+      document.getElementById(`${BASE}-sec-nom`)?.focus();
+      return;
+    }
     const malos = validarEntrante(form, hoy, destino);
     const primero = primerFallo(malos, ORDEN_ENTRANTE);
     if (primero) {
@@ -127,7 +203,7 @@ export function EntrantePanel({ empresas, hoy, onCerrar, onGuardado }: Props) {
       return;
     }
     setFallos({});
-    const r = await registrar(cuerpoEntrante(form));
+    const r = await registrar(cuerpoEntrante(form, destino));
     if (r) onGuardado(r.empresa, r.existente);
   }
 
@@ -189,6 +265,30 @@ export function EntrantePanel({ empresas, hoy, onCerrar, onGuardado }: Props) {
                 />
               )}
             </Campo>
+            {!destino && (
+              <div className="grid gap-3">
+                <CrmSelect<string>
+                  id={ID_SECTOR}
+                  label="Sector"
+                  nota="(opcional)"
+                  value={valorSector}
+                  options={opcionesSector}
+                  placeholder="Sin definir"
+                  onChange={elegirSector}
+                />
+                {mostrarCaja && (
+                  <NuevoSectorBox
+                    base={BASE}
+                    sectores={sectores}
+                    error={errorSector}
+                    onError={setErrorSector}
+                    onCrear={onCrearSector}
+                    onCreado={sectorCreado}
+                    onCancelar={cancelarCaja}
+                  />
+                )}
+              </div>
+            )}
           </fieldset>
 
           <MedioPills

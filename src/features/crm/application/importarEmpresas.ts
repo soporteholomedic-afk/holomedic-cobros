@@ -58,7 +58,7 @@ export async function evaluarImportacion(
   filas: readonly FilaExcelEmpresa[],
   repo: ICrmEmpresaRepository,
 ): Promise<{ filas: FilaEvaluada[]; resumen: ResumenImportacion }> {
-  const sectores = new Set((await repo.listSectores()).map((s) => s.toLowerCase()));
+  const sectores = new Set((await repo.listSectores()).map((s) => s.nombre.toLowerCase()));
   const rucsGuardados = new Set((await repo.list()).map((e) => e.ruc));
   const primeraVez = new Map<string, number>();
 
@@ -102,7 +102,7 @@ export class ImportarEmpresasUseCase {
     const crearSector = new CrearSectorUseCase(this.repo);
     for (const nombre of nuevos.values()) await crearSector.execute(nombre);
 
-    const guardados = new Map((await this.repo.listSectores()).map((s) => [s.toLowerCase(), s]));
+    const guardados = new Map((await this.repo.listSectores()).map((s) => [s.nombre.toLowerCase(), s.nombre]));
     let importadas = 0;
     for (const f of listas) {
       try {

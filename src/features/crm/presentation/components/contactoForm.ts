@@ -190,6 +190,8 @@ export interface EntranteForm {
   dato: string;
   necesita: string;
   origen: Origen | null;
+  /** Name of the chosen sector; '' is "Sin definir". */
+  sector: string;
   accion: AccionForm;
 }
 
@@ -203,6 +205,7 @@ export function entranteInicial(hoy: string): EntranteForm {
     dato: '',
     necesita: '',
     origen: 'nose',
+    sector: '',
     accion: { tipo: 'responder', detalle: '', fecha: hoy },
   };
 }
@@ -258,8 +261,11 @@ function opcionalObligatorio(valor: string): string {
   return valor.trim();
 }
 
-/** JSON body of `POST /api/crm/entrantes`. */
-export function cuerpoEntrante(f: EntranteForm): Record<string, unknown> {
+/**
+ * JSON body of `POST /api/crm/entrantes`. The sector goes only for a new card:
+ * when the contact lands on an existing empresa (`destino`) it keeps its own.
+ */
+export function cuerpoEntrante(f: EntranteForm, destino: Empresa | null = null): Record<string, unknown> {
   const texto = (v: string) => v.trim() || undefined;
   return {
     razonSocial: f.razonSocial.trim(),
@@ -270,6 +276,7 @@ export function cuerpoEntrante(f: EntranteForm): Record<string, unknown> {
     ...partirDato(f.dato),
     ...(texto(f.necesita) ? { necesita: f.necesita.trim() } : {}),
     ...(f.origen ? { origen: f.origen } : {}),
+    ...(f.sector && !destino ? { sector: f.sector } : {}),
     proximaAccion: accionACuerpo(f.accion),
   };
 }

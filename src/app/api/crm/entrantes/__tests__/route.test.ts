@@ -60,6 +60,29 @@ describe('POST /api/crm/entrantes', () => {
     );
   });
 
+  it('a new card takes the chosen sector, resolved to the stored name', async () => {
+    const repo = makeMockRepo();
+    __setCrmDbForTests(repo);
+    const res = await POST(createJsonRequest({ ...BODY(), sector: 'construcción' }));
+    expect(res.status).toBe(201);
+    expect(repo.create).toHaveBeenCalledWith(expect.objectContaining({ sector: 'Construcción' }));
+  });
+
+  it('answers 400 "Sector desconocido" for an unknown sector and stores nothing', async () => {
+    const repo = makeMockRepo();
+    __setCrmDbForTests(repo);
+    const res = await POST(createJsonRequest({ ...BODY(), sector: 'Astrología' }));
+    expect(res.status).toBe(400);
+    expect(await res.json()).toEqual({ success: false, error: 'Sector desconocido: Astrología' });
+    expect(repo.create).not.toHaveBeenCalled();
+    expect(repo.updateSeguimiento).not.toHaveBeenCalled();
+  });
+
+  it('answers 400 for a non-text sector', async () => {
+    __setCrmDbForTests(makeMockRepo());
+    expect((await POST(createJsonRequest({ ...BODY(), sector: 4 }))).status).toBe(400);
+  });
+
   it('adds the contact to an existing empresa and answers existente: true', async () => {
     const repo = makeMockRepo({
       findByRuc: vi.fn().mockResolvedValue(FILA),

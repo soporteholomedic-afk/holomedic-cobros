@@ -633,23 +633,42 @@ describe('SqlServerCrmEmpresaRepository — fusionar', () => {
 });
 
 describe('SqlServerCrmEmpresaRepository — sectores', () => {
-  it('lists the sector names', async () => {
-    const { pool } = makeFakePool(() => ({ recordset: [{ nombre: 'Comercio' }, { nombre: 'Minería' }] }));
+  it('lists the sectors with their icon, ordered by name, NULL icon as null', async () => {
+    const { pool, consultas } = makeFakePool(() => ({
+      recordset: [
+        { nombre: 'Comercio', icono: 'tienda' },
+        { nombre: 'Minería', icono: undefined },
+      ],
+    }));
     expect(await new SqlServerCrmEmpresaRepository(pool).listSectores()).toEqual([
-      'Comercio',
-      'Minería',
+      { nombre: 'Comercio', icono: 'tienda' },
+      { nombre: 'Minería', icono: null },
     ]);
+    expect(consultas[0]?.sql).toMatch(/SELECT\s+nombre,\s*icono\s+FROM\s+dbo\.CrmSector\s+ORDER\s+BY\s+nombre/i);
   });
 
-  it('creates a sector and returns the stored name', async () => {
-    const { pool, consultas } = makeFakePool(() => ({ recordset: [{ nombre: 'Educación' }] }));
-    expect(await new SqlServerCrmEmpresaRepository(pool).createSector('Educación')).toBe('Educación');
-    expect(consultas[0]?.inputs).toEqual({ nombre: 'Educación' });
+  it('creates a sector with its icon and returns the stored sector', async () => {
+    const { pool, consultas } = makeFakePool(() => ({ recordset: [{ nombre: 'Educación', icono: 'educacion' }] }));
+    expect(await new SqlServerCrmEmpresaRepository(pool).createSector('Educación', 'educacion')).toEqual({
+      nombre: 'Educación',
+      icono: 'educacion',
+    });
+    expect(consultas[0]?.inputs).toEqual({ nombre: 'Educación', icono: 'educacion' });
+    expect(consultas[0]?.sql).toMatch(/INSERT\s+INTO\s+dbo\.CrmSector\s*\(nombre,\s*icono\)/i);
+  });
+
+  it('stores a NULL icon when none is given', async () => {
+    const { pool, consultas } = makeFakePool(() => ({ recordset: [{ nombre: 'Educación', icono: null }] }));
+    expect(await new SqlServerCrmEmpresaRepository(pool).createSector('Educación', null)).toEqual({
+      nombre: 'Educación',
+      icono: null,
+    });
+    expect(consultas[0]?.inputs).toEqual({ nombre: 'Educación', icono: null });
   });
 
   it('rejects a duplicate name with SectorDuplicadoError', async () => {
     const { pool } = makeFakePool(() => errorSql(2627));
-    await expect(new SqlServerCrmEmpresaRepository(pool).createSector('Comercio')).rejects.toBeInstanceOf(
+    await expect(new SqlServerCrmEmpresaRepository(pool).createSector('Comercio', null)).rejects.toBeInstanceOf(
       SectorDuplicadoError,
     );
   });

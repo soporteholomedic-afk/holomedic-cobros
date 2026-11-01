@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import type { ICrmEmpresaRepository } from '../../domain/ports';
-import type { Empresa } from '../../domain/entities';
+import type { Empresa, Sector } from '../../domain/entities';
 import {
   DatosEmpresaInvalidosError,
   EmpresaNotFoundError,
@@ -22,14 +22,17 @@ const NOW = '2026-01-01T00:00:00.000Z';
 
 type Fake = ICrmEmpresaRepository & {
   rows: Empresa[];
-  sectores: string[];
+  sectores: Sector[];
   escrituras: number;
   seguimientos: number;
 };
 
 function makeFakeRepo(seed: Empresa[] = []): Fake {
   const rows: Empresa[] = seed.map((r) => structuredClone(r));
-  const sectores = ['Construcción', 'Comercio y Tiendas'];
+  const sectores: Sector[] = [
+    { nombre: 'Construcción', icono: 'casco' },
+    { nombre: 'Comercio y Tiendas', icono: 'tienda' },
+  ];
   const repo: Fake = {
     rows,
     sectores,
@@ -118,11 +121,12 @@ function makeFakeRepo(seed: Empresa[] = []): Fake {
     async listSectores() {
       return [...sectores];
     },
-    async createSector(nombre) {
+    async createSector(nombre, icono) {
       repo.escrituras++;
-      if (sectores.some((s) => s.toLowerCase() === nombre.toLowerCase())) throw new SectorDuplicadoError(nombre);
-      sectores.push(nombre);
-      return nombre;
+      if (sectores.some((s) => s.nombre.toLowerCase() === nombre.toLowerCase())) throw new SectorDuplicadoError(nombre);
+      const creado: Sector = { nombre, icono };
+      sectores.push(creado);
+      return creado;
     },
   };
   return repo;
@@ -451,9 +455,36 @@ describe('ActualizarSeguimientoUseCase', () => {
 describe('sectores', () => {
   it('lists and creates sectors, trimming and collapsing spaces', async () => {
     const repo = makeFakeRepo();
-    expect(await new ListarSectoresUseCase(repo).execute()).toEqual(['Construcción', 'Comercio y Tiendas']);
-    expect(await new CrearSectorUseCase(repo).execute('  Educación   y   Cultura ')).toBe('Educación y Cultura');
-    expect(repo.sectores).toContain('Educación y Cultura');
+    expect(await new ListarSectoresUseCase(repo).execute()).toEqual([
+      { nombre: 'Construcción', icono: 'casco' },
+      { nombre: 'Comercio y Tiendas', icono: 'tienda' },
+    ]);
+    expect(await new CrearSectorUseCase(repo).execute('  Educación   y   Cultura ')).toEqual({
+      nombre: 'Educación y Cultura',
+      icono: null,
+    });
+    expect(repo.sectores).toContainEqual({ nombre: 'Educación y Cultura', icono: null });
+  });
+
+  it('stores the icon when one is given and returns the stored sector', async () => {
+    const repo = makeFakeRepo();
+    expect(await new CrearSectorUseCase(repo).execute('Clínicas', 'salud')).toEqual({ nombre: 'Clínicas', icono: 'salud' });
+    expect(repo.sectores).toContainEqual({ nombre: 'Clínicas', icono: 'salud' });
+  });
+
+  it('treats a null or undefined icon as "no icon"', async () => {
+    const repo = makeFakeRepo();
+    expect((await new CrearSectorUseCase(repo).execute('A', null)).icono).toBeNull();
+    expect((await new CrearSectorUseCase(repo).execute('B', undefined)).icono).toBeNull();
+  });
+
+  it('rejects an unknown icon key with DatosEmpresaInvalidosError and stores nothing', async () => {
+    const repo = makeFakeRepo();
+    await expect(new CrearSectorUseCase(repo).execute('Clínicas', 'cohete')).rejects.toBeInstanceOf(
+      DatosEmpresaInvalidosError,
+    );
+    expect(repo.sectores).toHaveLength(2);
+    expect(repo.escrituras).toBe(0);
   });
 
   it('rejects empty names, names over 50 characters and duplicates in any case', async () => {

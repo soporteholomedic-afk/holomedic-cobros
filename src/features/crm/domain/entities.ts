@@ -126,6 +126,51 @@ export const SECTORES_INICIALES = [
   'Oficinas y Servicios',
 ] as const;
 
+/** Closed list of sector icon keys (stored in `CrmSector.icono`). */
+export const ICONOS_SECTOR = [
+  'edificio',
+  'casco',
+  'pico',
+  'fabrica',
+  'camion',
+  'tienda',
+  'maletin',
+  'salud',
+  'agro',
+  'educacion',
+  'tecnologia',
+  'alimentos',
+] as const;
+export type IconoSector = (typeof ICONOS_SECTOR)[number];
+
+export const ICONO_SECTOR_LABELS: Record<IconoSector, string> = {
+  edificio: 'Edificio',
+  casco: 'Casco de obra',
+  pico: 'Pico',
+  fabrica: 'Fábrica',
+  camion: 'Camión',
+  tienda: 'Tienda',
+  maletin: 'Maletín',
+  salud: 'Salud',
+  agro: 'Agro',
+  educacion: 'Educación',
+  tecnologia: 'Tecnología',
+  alimentos: 'Alimentos',
+};
+
+/** Icon of each initial sector, in the order of `SECTORES_INICIALES`. */
+export const ICONOS_INICIALES: readonly IconoSector[] = ['casco', 'pico', 'fabrica', 'camion', 'tienda', 'maletin'];
+
+/** A stored sector; `icono` is null for older sectors and those created without one. */
+export interface Sector {
+  nombre: string;
+  icono: IconoSector | null;
+}
+
+export function esIconoSector(valor: unknown): valor is IconoSector {
+  return typeof valor === 'string' && (ICONOS_SECTOR as readonly string[]).includes(valor);
+}
+
 export interface Motivo {
   categoria: MotivoCategoria;
   detalle1: string | null;
