@@ -9,6 +9,7 @@ import {
   ETAPAS,
   ETAPA_LABELS,
   MEDIO_LABELS,
+  type Direccion,
   type Empresa,
   type Etapa,
   type Medio,
@@ -21,7 +22,9 @@ import type { OtraEmpresa, ResultadoRuc } from './RucFaltante';
 import { DetallePanel, type DetalleHandle } from './DetallePanel';
 import { MedioDialog } from './MedioDialog';
 import { MotivoDialog } from './MotivoDialog';
+import { etiquetaDeTarjeta } from './etiquetas';
 import { hoyEnZona } from './fechas';
+import { RegistrarContactoPanel } from './RegistrarContactoPanel';
 import { capturar, focoEnTarjeta, reproducir, type Captura, type Foco, type Registro } from './vuelo';
 
 interface ApiResult {
@@ -87,6 +90,9 @@ export function CrmBoard() {
   // 'oculta': the create panel is mounted (draft kept) but hidden while a detail is open.
   const [alta, setAlta] = useState<'cerrada' | 'visible' | 'oculta'>('cerrada');
   const [detalleId, setDetalleId] = useState<string | null>(null);
+  // The "Registrar contacto" panel: which card, and who started the contact when it opened.
+  const [registro, setRegistro] = useState<{ id: string; direccion: Direccion } | null>(null);
+  const abridorRegistro = useRef<HTMLElement | null>(null);
   const detalleRef = useRef<DetalleHandle>(null);
   const [sectores, setSectores] = useState<string[]>([]);
   const draggingId = useRef<string | null>(null);
@@ -180,6 +186,7 @@ export function CrmBoard() {
   function abrirDetalle(id: string) {
     if (id === detalleId) return;
     conGuardia(() => {
+      setRegistro(null);
       setDetalleId(id);
       if (alta === 'visible') {
         setAlta('oculta');
@@ -194,8 +201,50 @@ export function CrmBoard() {
     if (id) document.querySelector<HTMLElement>(`[data-empresa-id="${id}"]`)?.focus();
   }
 
+  /** Open the contact panel for a card; the detail and the create panels step aside. */
+  function abrirRegistro(id: string, direccion: Direccion) {
+    const opener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    conGuardia(() => {
+      abridorRegistro.current = opener;
+      setDetalleId(null);
+      if (alta === 'visible') {
+        setAlta('oculta');
+        toast.info('El borrador de “Nueva empresa” se conserva');
+      }
+      setRegistro({ id, direccion });
+    });
+  }
+
+  /** Close the contact panel and give the focus back to what opened it, or to the card when that is gone. */
+  function cerrarRegistro() {
+    const id = registro?.id;
+    const opener = abridorRegistro.current;
+    abridorRegistro.current = null;
+    setRegistro(null);
+    if (opener?.isConnected) opener.focus();
+    else if (id) document.querySelector<HTMLElement>(`[data-empresa-id="${id}"]`)?.focus();
+  }
+
+  function contactoGuardado(nueva: Empresa) {
+    const antes = empresas.find((x) => x.idEmpresa === nueva.idEmpresa);
+    const etiqueta = etiquetaDeTarjeta(nueva, new Date());
+    abridorRegistro.current = null;
+    setRegistro(null);
+    if (antes && antes.etapa !== nueva.etapa) {
+      focoDeOrigen.current = { id: nueva.idEmpresa, foco: { tipo: 'tarjeta' } };
+      colocar(nueva);
+    } else {
+      reemplazar(nueva, false);
+      document.querySelector<HTMLElement>(`[data-empresa-id="${nueva.idEmpresa}"]`)?.focus();
+    }
+    toast.success(
+      `Contacto guardado en «${nueva.razonSocial}». Está en «${ETAPA_LABELS[nueva.etapa]}»${etiqueta ? ` · ${etiqueta.texto}` : ''}.`,
+    );
+  }
+
   function pedirNueva() {
     conGuardia(() => {
+      setRegistro(null);
       setDetalleId(null);
       setAlta('visible');
       if (alta === 'visible') document.getElementById('alta-razon')?.focus();
@@ -389,6 +438,7 @@ export function CrmBoard() {
   const ahora = new Date();
   const hoy = hoyEnZona(ahora);
   const detalleEmpresa = detalleId ? empresas.find((x) => x.idEmpresa === detalleId) : undefined;
+  const registroEmpresa = registro ? empresas.find((x) => x.idEmpresa === registro.id) : undefined;
   const empresaDelDialogo = dialogo ? empresas.find((x) => x.idEmpresa === dialogo.id) : undefined;
 
   return (
@@ -502,6 +552,7 @@ export function CrmBoard() {
                     ahora={ahora}
                     hoy={hoy}
                     onSugerencia={(id, accion) => void responderSugerencia(id, accion)}
+                    onRegistrar={(id) => abrirRegistro(id, 'saliente')}
                   />
                 ))}
               </div>
@@ -525,6 +576,19 @@ export function CrmBoard() {
           }
           onEditarMotivo={(x) => setDialogo({ tipo: 'motivo', id: x.idEmpresa, modo: 'editar', inicial: x.motivo })}
           onGuardarRuc={guardarRuc}
+          onRegistrar={(id) => abrirRegistro(id, 'saliente')}
+        />
+      )}
+
+      {registroEmpresa && registro && (
+        <RegistrarContactoPanel
+          key={registroEmpresa.idEmpresa}
+          empresa={registroEmpresa}
+          empresas={empresas}
+          direccion={registro.direccion}
+          hoy={hoy}
+          onCerrar={cerrarRegistro}
+          onGuardado={contactoGuardado}
         />
       )}
 

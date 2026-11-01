@@ -1,6 +1,14 @@
-import { Mail, MessageCircle, MoreHorizontal, Phone, type LucideIcon } from 'lucide-react';
+import { Check, FileText, Globe, Info, Mail, MessageCircle, MoreHorizontal, Phone, Reply, Users, X, type LucideIcon } from 'lucide-react';
 
-import { MOTIVO_CAMPOS, SECTORES_INICIALES, type Empresa, type Etapa, type Medio } from '../../domain/entities';
+import {
+  MOTIVO_CAMPOS,
+  SECTORES_INICIALES,
+  type AccionTipo,
+  type Empresa,
+  type Etapa,
+  type Medio,
+  type Origen,
+} from '../../domain/entities';
 
 /** Color of the dot that goes next to each stage name (board columns and detail header). */
 export const ETAPA_PUNTO: Record<Etapa, string> = {
@@ -13,6 +21,17 @@ export const ETAPA_PUNTO: Record<Etapa, string> = {
 
 export const INPUT =
   'w-full rounded-[10px] border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-500/30 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100';
+
+/** Same as INPUT, with the red border the form shows while `aria-invalid` is set. */
+export const INPUT_VALIDABLE = `${INPUT} aria-invalid:border-red-500 aria-invalid:ring-1 aria-invalid:ring-red-500`;
+
+/** Section title inside the side-panel forms. */
+export const LEYENDA = 'mb-0.5 text-xs font-bold uppercase tracking-wider text-sky-700 dark:text-sky-400';
+
+export const ETIQUETA_CAMPO = 'grid gap-1.5 text-[13px] font-semibold text-slate-800 dark:text-slate-200';
+
+/** Message under a field that failed validation. */
+export const ERROR_CAMPO = 'text-xs font-semibold text-red-800 dark:text-red-300';
 
 export const BOTON_PRIMARIO =
   'h-10 rounded-xl bg-gradient-to-tr from-sky-600 to-blue-600 px-4 text-sm font-semibold text-white shadow-md shadow-sky-600/25 hover:brightness-110 disabled:opacity-60';
@@ -45,6 +64,26 @@ export const MEDIO_ESTILO: Record<Medio, { icono: LucideIcon; chip: string; casi
     chip: 'border-slate-300 bg-slate-100 text-slate-700 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200',
     casilla: 'text-slate-700 has-[:checked]:border-slate-500 has-[:checked]:bg-slate-100 dark:text-slate-200 dark:has-[:checked]:bg-slate-800',
   },
+};
+
+/** Icon and help text of each next action in the custom menu (spec S8). */
+export const ACCION_ESTILO: Record<AccionTipo | 'ninguna', { icono: LucideIcon; descripcion: string }> = {
+  ninguna: { icono: X, descripcion: 'No queda nada pendiente con esta empresa' },
+  responder: { icono: Reply, descripcion: 'Contestar a quien nos escribió o llamó' },
+  llamar: { icono: Phone, descripcion: 'Llamada de seguimiento o de cierre' },
+  cotizar: { icono: FileText, descripcion: 'Mandar la propuesta con precios' },
+  info: { icono: Mail, descripcion: 'Brochure, servicios o requisitos' },
+  whatsapp: { icono: MessageCircle, descripcion: 'Mensaje corto de seguimiento' },
+  reunion: { icono: Users, descripcion: 'En la empresa, en la clínica o por videollamada' },
+  otro: { icono: MoreHorizontal, descripcion: 'Escribe cuál en el detalle' },
+};
+
+/** Icon and help text of each "¿Cómo nos conoció?" option (spec S9). */
+export const ORIGEN_ESTILO: Record<Origen, { icono: LucideIcon; descripcion: string }> = {
+  nose: { icono: Info, descripcion: 'No lo mencionó' },
+  referido: { icono: Users, descripcion: 'Un cliente actual nos recomendó' },
+  conocia: { icono: Check, descripcion: 'Trabajó con nosotros o nos ubicaba' },
+  internet: { icono: Globe, descripcion: 'Google, redes sociales o nuestra web' },
 };
 
 /** The six initial sectors keep the color of the approved design, by position. */

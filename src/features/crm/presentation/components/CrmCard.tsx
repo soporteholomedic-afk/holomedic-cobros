@@ -1,6 +1,6 @@
 'use client';
 
-import { AlertCircle, CalendarDays, Check, ChevronLeft, ChevronRight, Clock, Phone, User, type LucideIcon } from 'lucide-react';
+import { AlertCircle, CalendarDays, Check, ChevronLeft, ChevronRight, ClipboardPlus, Clock, Phone, User, type LucideIcon } from 'lucide-react';
 import type { DragEvent } from 'react';
 
 import { ACCION_LABELS, ETAPA_LABELS, MEDIO_LABELS, MOTIVO_LABELS, type Empresa, type Etapa } from '../../domain/entities';
@@ -25,6 +25,8 @@ interface Props {
   hoy: string;
   /** The user answered the "Pasar a Perdido" suggestion. */
   onSugerencia: (id: string, accion: 'perder' | 'seguir') => void;
+  /** "Registrar contacto" / "Responder": opens the contact panel for this card. */
+  onRegistrar: (id: string) => void;
 }
 
 const ETIQUETA_BASE = 'inline-flex w-fit items-center gap-1.5 rounded-lg border px-2 py-[3px] text-xs font-semibold';
@@ -45,6 +47,12 @@ const ETIQUETA_ESTILO: Record<TipoEtiqueta, { clase: string; icono: LucideIcon |
 const FLECHA =
   'grid h-7 w-7 place-items-center rounded-lg text-slate-600 hover:bg-slate-200 dark:text-slate-300 dark:hover:bg-slate-700';
 
+const BOTON_REGISTRAR =
+  'inline-flex h-8 items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-2.5 text-xs font-semibold text-slate-800 hover:bg-slate-100 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100 dark:hover:bg-slate-800';
+
+const BOTON_RESPONDER =
+  'inline-flex h-8 items-center gap-1.5 rounded-lg bg-gradient-to-tr from-sky-600 to-blue-600 px-2.5 text-xs font-semibold text-white shadow-md shadow-sky-600/25 hover:brightness-110';
+
 const BOTON_SUG =
   'h-7 rounded-lg border border-slate-300 bg-white px-2.5 text-xs font-semibold text-slate-800 hover:bg-slate-100 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100 dark:hover:bg-slate-800';
 
@@ -61,6 +69,7 @@ export function CrmCard({
   ahora,
   hoy,
   onSugerencia,
+  onRegistrar,
 }: Props) {
   const principal = e.contactos[0];
   const extra = e.contactos.length - 1;
@@ -190,6 +199,27 @@ export function CrmCard({
               Seguir intentando
             </button>
           </div>
+        </div>
+      )}
+
+      {!perdida && (
+        <div className="mt-2.5">
+          {/* Safari does not focus a button on click: focus it first so the panel gives the focus back here. */}
+          <button
+            type="button"
+            onClick={(ev) => {
+              ev.currentTarget.focus();
+              onRegistrar(e.idEmpresa);
+            }}
+            className={etiqueta?.tipo === 'falta_responder' ? BOTON_RESPONDER : BOTON_REGISTRAR}
+          >
+            {etiqueta?.tipo === 'falta_responder' ? (
+              <Check className="h-3.5 w-3.5" aria-hidden="true" />
+            ) : (
+              <ClipboardPlus className="h-3.5 w-3.5" aria-hidden="true" />
+            )}
+            {etiqueta?.tipo === 'falta_responder' ? 'Responder' : 'Registrar contacto'}
+          </button>
         </div>
       )}
 

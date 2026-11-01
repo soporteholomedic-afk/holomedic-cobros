@@ -67,7 +67,7 @@ describe('CrmBoard — tablero', () => {
     const sin = tarjeta('Constructora Andina S.A.C.');
     expect(within(sin).getByText('Marcela Quispe')).toBeInTheDocument();
     expect(within(sin).getByText('987 654 321')).toBeInTheDocument();
-    expect(within(sin).queryByText(/contacto/)).toBeNull();
+    expect(within(sin).queryByText(/^\+\d+ contactos?$/)).toBeNull();
     expect(within(sin).queryByText(/Medio:/)).toBeNull();
     const varios = tarjeta('Textiles Pacífico S.A.C.');
     expect(within(varios).getByText('Renzo Vargas')).toBeInTheDocument();

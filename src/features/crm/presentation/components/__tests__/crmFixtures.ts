@@ -82,6 +82,8 @@ export interface Api {
   etapa?: (id: string, body: Record<string, unknown>) => Respuesta;
   seguimiento?: (id: string, body: Record<string, unknown>) => Respuesta;
   sector?: (body: Record<string, unknown>) => Respuesta;
+  contacto?: (id: string, body: Record<string, unknown>) => Respuesta;
+  entrante?: (body: Record<string, unknown>) => Respuesta;
 }
 
 /** Fake of the CRM API. Unexpected requests throw so a test cannot pass by accident. */
@@ -105,6 +107,10 @@ export function mockApi(api: Api = {}) {
           : { status: 201, body: { success: true, empresa: empresa({ idEmpresa: 'e-9', ...(body as Partial<Empresa>), etapa: 'por_contactar' }) } },
       );
     }
+    const c = url.match(/^\/api\/crm\/empresas\/([^/]+)\/contactos$/);
+    if (c && method === 'POST' && api.contacto) return json(api.contacto(c[1] ?? '', body));
+    if (url === '/api/crm/entrantes' && method === 'POST' && api.entrante) return json(api.entrante(body));
+    if (/\/historial$/.test(url) && method === 'GET') return json({ status: 200, body: { success: true, interacciones: [] } });
     const m = url.match(/^\/api\/crm\/empresas\/([^/]+)(\/etapa|\/seguimiento)?$/);
     if (m && method === 'PATCH') {
       const [, id = '', sub] = m;

@@ -23,6 +23,7 @@ function pintar(e: Empresa, extra: { onAbrir?: (id: string) => void; onSugerenci
       ahora={AHORA}
       hoy={HOY}
       onSugerencia={extra.onSugerencia ?? vi.fn()}
+      onRegistrar={vi.fn()}
     />,
   );
   return screen.getByRole('article');

@@ -39,6 +39,8 @@ interface Props {
   onCambiarMedio: (e: Empresa) => void;
   onEditarMotivo: (e: Empresa) => void;
   onGuardarRuc: (id: string, ruc: string, unir: boolean) => Promise<ResultadoRuc>;
+  /** Opens the "Registrar contacto" panel for this empresa. */
+  onRegistrar: (id: string) => void;
 }
 
 /**
@@ -57,6 +59,7 @@ export function DetallePanel({
   onCambiarMedio,
   onEditarMotivo,
   onGuardarRuc,
+  onRegistrar,
 }: Props) {
   const tituloId = useId();
   const [borrador, setBorrador] = useState<Borrador | null>(null);
@@ -317,6 +320,23 @@ export function DetallePanel({
           ahora={ahora}
           hoy={hoyEnZona(ahora)}
         />
+      )}
+      {!editando && empresa.etapa !== 'perdido' && (
+        <div
+          data-pie-detalle
+          className="sticky bottom-0 mt-auto flex justify-end border-t border-slate-200 bg-white px-6 pb-4 pt-3 shadow-[0_-8px_12px_-8px_rgba(15,23,42,0.12)] dark:border-slate-800 dark:bg-slate-900"
+        >
+          <button
+            type="button"
+            onClick={(ev) => {
+              ev.currentTarget.focus();
+              onRegistrar(empresa.idEmpresa);
+            }}
+            className={BOTON_PRIMARIO}
+          >
+            Registrar contacto
+          </button>
+        </div>
       )}
     </aside>
   );
