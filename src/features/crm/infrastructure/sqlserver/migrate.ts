@@ -12,32 +12,40 @@ import {
 } from '../../domain/entities';
 
 /**
- * SQL Server schema of the simple CRM board (feature crm-simple):
+ * SQL Server schema of the simple CRM board (features crm-simple and
+ * crm-contactos):
  *
- * - `dbo.CrmSector`   sector names, created from the UI (six seeded).
- * - `dbo.CrmEmpresa`  one row per empresa: stage, contact medium, loss reason.
- * - `dbo.CrmContacto` several contacts per empresa, exactly one principal.
- *
- * The table names deliberately avoid the underscore-prefixed namespace of
- * the discarded CRM: production may still run code that recreates those
- * tables on startup, and SQL Server names are case-insensitive.
- *
+ * - `dbo.CrmSector`      sector names, created from the UI (seeded).
+ * - `dbo.CrmEmpresa`     one row per empresa: stage, medium, loss reason,
+ *                        follow-up state. The RUC is NULL-able, unique when present.
+ * - `dbo.CrmContacto`    several contacts per empresa, exactly one principal.
  * - `dbo.CrmInteraccion` contact history, one row per contact, deleted with the empresa.
  *
- * Idempotency is structural (no version table): each CREATE TABLE is gated
- * by `sys.tables`, and the upgrade steps that bring a database created by
- * the first version to the current schema (L6 of crm-contactos) are each
- * gated by `sys.columns` / `sys.indexes` / `sys.key_constraints` /
- * `sys.check_constraints`. The same script therefore converges on the final
- * schema from an empty database and from the old one. It never drops a
- * table nor deletes rows; the only things it drops are the RUC unique
- * constraint and the `medio` CHECK, both recreated right away.
+ * Guarantees of the generated script (one batch):
+ *
+ * - Atomic: `SET XACT_ABORT ON; BEGIN TRAN; ... COMMIT;`. Any error aborts
+ *   and rolls back the whole batch (DDL is transactional in SQL Server), so a
+ *   failure never leaves a half-upgraded schema.
+ * - Lock-protected: the first statement takes an exclusive application lock
+ *   (`sp_getapplock`, owner = transaction) and throws if it is not granted,
+ *   so two processes starting together cannot both pass the existence guards.
+ * - Idempotent and self-healing, with no version table: every step is gated
+ *   by `sys.tables` / `sys.columns` / `sys.indexes` / `sys.key_constraints` /
+ *   `sys.check_constraints`. A recreated object uses two independent guards
+ *   ("drop if wrong", then "add if missing"), so it converges from an empty
+ *   database, from the first version (3ea38d5) and from any partial state.
+ * - Non-destructive: it never issues DROP TABLE, DELETE or TRUNCATE. The only
+ *   objects it drops are the RUC unique constraint and a `medio` CHECK that
+ *   lacks 'otro', each recreated by the next guarded step.
+ * - Never touches the discarded `CRM_` namespace: production may still
+ *   recreate those tables on startup, and SQL Server names are case-insensitive.
  *
  * The database itself guards the invariants the UI relies on: the RUC is
- * unique when present and exactly 11 digits (VARCHAR + CHECK: a CHAR(11) would silently
- * pad a shorter value with a space), `etapa`/`medio`/loss category only hold
- * known values, only "perdido" carries a loss reason, "por_contactar" never
- * has a medium, and an empresa can have at most one principal contact.
+ * unique when present and exactly 11 digits (VARCHAR + CHECK: a CHAR(11) would
+ * silently pad a shorter value with a space), `etapa`/`medio`/loss category
+ * only hold known values, only "perdido" carries a loss reason,
+ * "por_contactar" never has a medium, and an empresa can have at most one
+ * principal contact.
  */
 const lista = (valores: readonly string[]): string => valores.map((v) => `'${v}'`).join(', ');
 
@@ -50,6 +58,16 @@ END;
 `;
 
 const SCHEMA_SQL = /* sql */ `
+SET XACT_ABORT ON;
+BEGIN TRAN;
+
+DECLARE @lock INT;
+EXEC @lock = sp_getapplock @Resource = N'crm-migrate', @LockMode = 'Exclusive', @LockOwner = 'Transaction', @LockTimeout = 30000;
+IF @lock < 0
+BEGIN
+  THROW 50001, N'CRM migration: could not get the application lock', 1;
+END;
+
 IF NOT EXISTS (SELECT 1 FROM sys.tables WHERE name = 'CrmSector' AND schema_id = SCHEMA_ID('dbo'))
 BEGIN
   CREATE TABLE dbo.CrmSector (
@@ -127,6 +145,10 @@ END;
 IF EXISTS (SELECT 1 FROM sys.check_constraints WHERE name = 'CK_CrmEmpresa_medio' AND parent_object_id = OBJECT_ID('dbo.CrmEmpresa') AND definition NOT LIKE N'%''otro''%')
 BEGIN
   ALTER TABLE dbo.CrmEmpresa DROP CONSTRAINT CK_CrmEmpresa_medio;
+END;
+
+IF NOT EXISTS (SELECT 1 FROM sys.check_constraints WHERE name = 'CK_CrmEmpresa_medio' AND parent_object_id = OBJECT_ID('dbo.CrmEmpresa'))
+BEGIN
   ALTER TABLE dbo.CrmEmpresa ADD CONSTRAINT CK_CrmEmpresa_medio CHECK (medio IN (${lista(MEDIOS)}));
 END;
 
@@ -170,6 +192,8 @@ BEGIN
   );
   CREATE INDEX IX_CrmInteraccion_empresa ON dbo.CrmInteraccion (idEmpresa, fecha DESC);
 END;
+
+COMMIT;
 `;
 
 export async function migrate(pool: mssql.ConnectionPool): Promise<void> {

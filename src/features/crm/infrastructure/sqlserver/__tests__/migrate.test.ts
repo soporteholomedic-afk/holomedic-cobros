@@ -15,8 +15,9 @@ import {
 /**
  * Schema contract for `dbo.CrmSector`, `dbo.CrmEmpresa` and `dbo.CrmContacto`.
  * The fake pool captures the SQL so the suite pins exactly what ships in
- * `migrate.ts`; the real creation is verified against HOLOMEDIC inside a
- * transaction that is rolled back.
+ * `migrate.ts`. These are static assertions on the generated script: they do
+ * not execute it. Execution was rehearsed separately on a throwaway database
+ * of the LOCAL dev server (never on the shared HOLOMEDIC).
  */
 
 function makePool(calls: string[]) {
@@ -109,6 +110,19 @@ describe('sqlserver crm migrate()', () => {
     }
   });
 
+  it('is atomic and lock-protected: XACT_ABORT ON, BEGIN TRAN, exclusive app lock with return-code check, ends with COMMIT', async () => {
+    const sql = (await sqlDeMigrate()).trim();
+    expect(sql).toMatch(
+      /^SET\s+XACT_ABORT\s+ON;\s*BEGIN\s+TRAN;\s*DECLARE\s+@lock\s+INT;\s*EXEC\s+@lock\s*=\s*sp_getapplock\s+@Resource\s*=\s*N?'crm-migrate',\s*@LockMode\s*=\s*'Exclusive',\s*@LockOwner\s*=\s*'Transaction',\s*@LockTimeout\s*=\s*\d+;\s*IF\s+@lock\s*<\s*0\s+BEGIN\s+THROW\s+\d+,\s*N?'[^']+',\s*1;\s*END;/i,
+    );
+    expect(sql).toMatch(/\nCOMMIT;$/i);
+    expect(sql.match(/\bBEGIN\s+TRAN\b/gi)).toHaveLength(1);
+    expect(sql.match(/\bCOMMIT\b/gi)).toHaveLength(1);
+    expect(sql).not.toMatch(/\bROLLBACK\b/i);
+    // COMMIT is the last statement: every structural change sits between the lock and it.
+    expect(sql.lastIndexOf('COMMIT')).toBeGreaterThan(sql.lastIndexOf('CREATE TABLE dbo.CrmInteraccion'));
+  });
+
   it('never touches the old CRM_* namespace (production still recreates those tables)', async () => {
     const sql = await sqlDeMigrate();
     expect(sql).not.toMatch(/CRM_/i);
@@ -155,6 +169,17 @@ describe('sqlserver crm migrate()', () => {
     expect(sql).not.toMatch(/DROP\s+CONSTRAINT\s+CK_CrmEmpresa_ruc/i);
   });
 
+  it('RUC unique index converges with two independent guards: drop UQ if present, create UX if missing', async () => {
+    const sql = await sqlDeMigrate();
+    const soltar = bloqueQueContiene(sql, /DROP\s+CONSTRAINT\s+UQ_CrmEmpresa_ruc/i);
+    expect(soltar).toMatch(/^IF\s+EXISTS[\s\S]*sys\.key_constraints[\s\S]*UQ_CrmEmpresa_ruc/i);
+    expect(soltar).not.toMatch(/CREATE/i);
+    const crear = bloqueQueContiene(sql, /CREATE\s+UNIQUE\s+INDEX\s+UX_CrmEmpresa_ruc/i);
+    expect(crear).toMatch(/^IF\s+NOT\s+EXISTS[\s\S]*sys\.indexes[\s\S]*UX_CrmEmpresa_ruc/i);
+    expect(crear).not.toMatch(/\bDROP\b/i);
+    expect(soltar).not.toBe(crear);
+  });
+
   it('drops the old unique constraint before the column becomes NULL-able', async () => {
     const sql = await sqlDeMigrate();
     expect(sql.search(/DROP\s+CONSTRAINT\s+UQ_CrmEmpresa_ruc/i)).toBeLessThan(
@@ -173,13 +198,21 @@ describe('sqlserver crm migrate()', () => {
     expect(valoresCheck(empresa, 'motivoCategoria')).toEqual([...MOTIVO_CATEGORIAS]);
   });
 
-  it('accepts medio "otro": the named CHECK is dropped and recreated only while it lacks it, plus medioOtro', async () => {
-    expect(MEDIOS).toContain('otro');
+  it('accepts medio "otro": two independent guards (drop if it lacks otro, add if missing), plus medioOtro', async () => {
     const sql = await sqlDeMigrate();
-    const bloque = bloqueQueContiene(sql, /DROP\s+CONSTRAINT\s+CK_CrmEmpresa_medio\b/i);
-    expect(bloque).toMatch(/^IF\s+EXISTS[\s\S]*sys\.check_constraints[\s\S]*CK_CrmEmpresa_medio/i);
-    expect(bloque).toMatch(/NOT\s+LIKE\s+N?'%''otro''%'/i);
-    expect(valoresCheck(bloque.slice(bloque.search(/ADD\s+CONSTRAINT/i)), 'medio')).toEqual([...MEDIOS]);
+    const LITERAL = ['llamada', 'correo', 'whatsapp', 'otro'];
+    const soltar = bloqueQueContiene(sql, /DROP\s+CONSTRAINT\s+CK_CrmEmpresa_medio\b/i);
+    expect(soltar).toMatch(/^IF\s+EXISTS[\s\S]*sys\.check_constraints[\s\S]*CK_CrmEmpresa_medio/i);
+    expect(soltar).toMatch(/NOT\s+LIKE\s+N?'%''otro''%'/i);
+    expect(soltar).not.toMatch(/ADD\s+CONSTRAINT/i);
+    const agregar = bloqueQueContiene(sql, /ADD\s+CONSTRAINT\s+CK_CrmEmpresa_medio\b/i);
+    expect(agregar).toMatch(/^IF\s+NOT\s+EXISTS[\s\S]*sys\.check_constraints[\s\S]*CK_CrmEmpresa_medio/i);
+    expect(agregar).not.toMatch(/\bDROP\b/i);
+    expect(valoresCheck(agregar.slice(agregar.search(/ADD\s+CONSTRAINT/i)), 'medio')).toEqual(LITERAL);
+    expect(valoresCheck(tabla(sql, 'CrmEmpresa'), 'medio')).toEqual(LITERAL);
+    expect(sql.search(/DROP\s+CONSTRAINT\s+CK_CrmEmpresa_medio\b/i)).toBeLessThan(
+      sql.search(/ADD\s+CONSTRAINT\s+CK_CrmEmpresa_medio\b/i),
+    );
     expect(columnaNueva(sql, 'CrmEmpresa', 'medioOtro')).toMatch(/^NVARCHAR\(40\)\s+NULL$/i);
   });
 
