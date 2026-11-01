@@ -139,7 +139,7 @@ export function CrmBoard() {
     const q = search.trim().toLowerCase();
     if (!q) return empresas;
     return empresas.filter((e) =>
-      [e.razonSocial, e.ruc, e.sector ?? '', ...e.contactos.flatMap((c) => [c.nombre, c.telefono, c.correo ?? ''])]
+      [e.razonSocial, e.ruc ?? '', e.sector ?? '', ...e.contactos.flatMap((c) => [c.nombre ?? '', c.telefono ?? '', c.correo ?? ''])]
         .join(' ')
         .toLowerCase()
         .includes(q),

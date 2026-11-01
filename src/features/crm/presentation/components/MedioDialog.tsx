@@ -6,6 +6,9 @@ import { MEDIOS, MEDIO_LABELS, type Medio } from '../../domain/entities';
 import { ALERTA, BOTON_PRIMARIO, BOTON_SECUNDARIO, MEDIO_ESTILO } from './crmUi';
 import { ModalFrame } from './ModalFrame';
 
+/** T5 replaces this dialog; until then it offers only the original three media. */
+const MEDIOS_DEL_DIALOGO = MEDIOS.filter((m) => m !== 'otro');
+
 interface Props {
   titulo: string;
   subtitulo: string;
@@ -41,7 +44,7 @@ export function MedioDialog({ titulo, subtitulo, inicial, onCancelar, onGuardar 
       <form onSubmit={enviar} noValidate className="mt-4 grid gap-4">
         <fieldset className="grid gap-2">
           <legend className="sr-only">Medio de contacto</legend>
-          {MEDIOS.map((m) => {
+          {MEDIOS_DEL_DIALOGO.map((m) => {
             const { icono: Icono, casilla } = MEDIO_ESTILO[m];
             return (
               <label

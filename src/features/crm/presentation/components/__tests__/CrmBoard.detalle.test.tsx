@@ -574,7 +574,7 @@ describe('Detalle — datos', () => {
     await cargado();
     for (const e of LISTA) {
       const panel = abrir(e.razonSocial);
-      expect(within(panel).getByText(e.ruc)).toBeInTheDocument();
+      expect(within(panel).getByText(e.ruc ?? '')).toBeInTheDocument();
       fireEvent.click(screen.getByRole('button', { name: 'Cerrar detalle' }));
     }
   });

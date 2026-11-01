@@ -34,7 +34,7 @@ function makeFakeRepo(seed: Empresa[] = []): Fake {
       return row ? structuredClone(row) : null;
     },
     async findByRuc(ruc) {
-      const row = rows.find((r) => r.ruc === ruc);
+      const row = ruc === null ? undefined : rows.find((r) => r.ruc === ruc);
       return row ? structuredClone(row) : null;
     },
     async list() {
@@ -42,7 +42,7 @@ function makeFakeRepo(seed: Empresa[] = []): Fake {
     },
     async create(input) {
       repo.escrituras++;
-      if (rows.some((r) => r.ruc === input.ruc)) throw new RucDuplicadoError(input.ruc);
+      if (input.ruc !== null && rows.some((r) => r.ruc === input.ruc)) throw new RucDuplicadoError(input.ruc);
       const row: Empresa = {
         idEmpresa: `e-${rows.length + 1}`,
         razonSocial: input.razonSocial,
@@ -53,6 +53,12 @@ function makeFakeRepo(seed: Empresa[] = []): Fake {
         etapa: input.etapa,
         medio: null,
         motivo: null,
+        medioOtro: null,
+        intentosSinRespuesta: 0,
+        faltaResponderDesde: null,
+        proximaAccion: null,
+        origen: null,
+        sugerenciaDescartadaEn: null,
         createdAt: NOW,
         updatedAt: NOW,
       };
@@ -63,7 +69,9 @@ function makeFakeRepo(seed: Empresa[] = []): Fake {
       repo.escrituras++;
       const row = rows.find((r) => r.idEmpresa === id);
       if (!row) throw new EmpresaNotFoundError(id);
-      if (rows.some((r) => r.idEmpresa !== id && r.ruc === datos.ruc)) throw new RucDuplicadoError(datos.ruc);
+      if (datos.ruc !== null && rows.some((r) => r.idEmpresa !== id && r.ruc === datos.ruc)) {
+        throw new RucDuplicadoError(datos.ruc);
+      }
       Object.assign(row, structuredClone(datos));
       return structuredClone(row);
     },
@@ -75,6 +83,18 @@ function makeFakeRepo(seed: Empresa[] = []): Fake {
       row.medio = estado.medio;
       row.motivo = estado.motivo ? { ...estado.motivo } : null;
       return structuredClone(row);
+    },
+    async updateSeguimiento() {
+      throw new Error('not used');
+    },
+    async addInteraccion() {
+      throw new Error('not used');
+    },
+    async listInteracciones() {
+      return [];
+    },
+    async fusionar() {
+      throw new Error('not used');
     },
     async listSectores() {
       return [...sectores];
@@ -100,6 +120,12 @@ function empresa(parcial: Partial<Empresa> = {}): Empresa {
     etapa: 'por_contactar',
     medio: null,
     motivo: null,
+    medioOtro: null,
+    intentosSinRespuesta: 0,
+    faltaResponderDesde: null,
+    proximaAccion: null,
+    origen: null,
+    sugerenciaDescartadaEn: null,
     createdAt: NOW,
     updatedAt: NOW,
     ...parcial,

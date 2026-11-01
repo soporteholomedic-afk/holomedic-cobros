@@ -38,7 +38,7 @@ export function DetalleVista({ empresa: e, onCambiarMedio, onEditarMotivo }: Pro
         <dl className="grid gap-3 text-sm text-slate-900 dark:text-slate-100">
           <div className="grid gap-0.5">
             <dt className={ETIQUETA}>RUC</dt>
-            <dd className="tabular-nums">{e.ruc}</dd>
+            <dd className="tabular-nums">{e.ruc ?? 'Falta RUC'}</dd>
           </div>
           <div className="grid gap-0.5">
             <dt className={ETIQUETA}>Sector</dt>
@@ -73,7 +73,7 @@ export function DetalleVista({ empresa: e, onCambiarMedio, onEditarMotivo }: Pro
               className="grid gap-2 rounded-xl border border-slate-200 px-3.5 py-3 text-sm dark:border-slate-700"
             >
               <div className="flex items-center gap-2">
-                <span className="text-base font-semibold text-slate-900 dark:text-slate-100">{c.nombre}</span>
+                <span className="text-base font-semibold text-slate-900 dark:text-slate-100">{c.nombre ?? 'Sin nombre'}</span>
                 {varios && i === 0 && (
                   <span className="rounded-full bg-sky-100 px-2 py-px text-[11px] font-semibold text-sky-800 dark:bg-sky-950/60 dark:text-sky-200">
                     Principal
@@ -82,9 +82,13 @@ export function DetalleVista({ empresa: e, onCambiarMedio, onEditarMotivo }: Pro
               </div>
               <div className="grid gap-0.5">
                 <span className={ETIQUETA}>Teléfono</span>
-                <a href={`tel:${c.telefono.replace(/\D/g, '')}`} className={ENLACE}>
-                  {c.telefono}
-                </a>
+                {c.telefono ? (
+                  <a href={`tel:${c.telefono.replace(/\D/g, '')}`} className={ENLACE}>
+                    {c.telefono}
+                  </a>
+                ) : (
+                  <span className="text-sm text-slate-500 dark:text-slate-400">Sin teléfono</span>
+                )}
               </div>
               <div className="grid gap-0.5">
                 <span className={ETIQUETA}>Correo</span>

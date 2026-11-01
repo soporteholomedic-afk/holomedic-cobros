@@ -1,4 +1,4 @@
-import { Mail, MessageCircle, Phone, type LucideIcon } from 'lucide-react';
+import { Mail, MessageCircle, MoreHorizontal, Phone, type LucideIcon } from 'lucide-react';
 
 import { MOTIVO_CAMPOS, SECTORES_INICIALES, type Empresa, type Etapa, type Medio } from '../../domain/entities';
 
@@ -39,6 +39,11 @@ export const MEDIO_ESTILO: Record<Medio, { icono: LucideIcon; chip: string; casi
     icono: MessageCircle,
     chip: 'border-emerald-300 bg-emerald-50 text-emerald-800 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-200',
     casilla: 'text-emerald-800 has-[:checked]:border-emerald-500 has-[:checked]:bg-emerald-50 dark:text-emerald-200 dark:has-[:checked]:bg-emerald-950/40',
+  },
+  otro: {
+    icono: MoreHorizontal,
+    chip: 'border-slate-300 bg-slate-100 text-slate-700 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200',
+    casilla: 'text-slate-700 has-[:checked]:border-slate-500 has-[:checked]:bg-slate-100 dark:text-slate-200 dark:has-[:checked]:bg-slate-800',
   },
 };
 

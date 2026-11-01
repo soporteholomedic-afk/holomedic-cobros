@@ -21,19 +21,25 @@ function makeFake(seed: Empresa[] = [], sectores = ['Construcción', 'Comercio y
       return rows.find((r) => r.idEmpresa === id) ?? null;
     },
     async findByRuc(ruc) {
-      return rows.find((r) => r.ruc === ruc) ?? null;
+      return ruc === null ? null : (rows.find((r) => r.ruc === ruc) ?? null);
     },
     async list() {
       return rows.map((r) => structuredClone(r));
     },
     async create(input) {
       repo.escrituras++;
-      if (rows.some((r) => r.ruc === input.ruc)) throw new RucDuplicadoError(input.ruc);
+      if (input.ruc !== null && rows.some((r) => r.ruc === input.ruc)) throw new RucDuplicadoError(input.ruc);
       const row: Empresa = {
         idEmpresa: `e-${rows.length + 1}`,
         ...structuredClone(input),
         medio: null,
         motivo: null,
+        medioOtro: null,
+        intentosSinRespuesta: 0,
+        faltaResponderDesde: null,
+        proximaAccion: null,
+        origen: null,
+        sugerenciaDescartadaEn: null,
         createdAt: NOW,
         updatedAt: NOW,
       };
@@ -44,6 +50,18 @@ function makeFake(seed: Empresa[] = [], sectores = ['Construcción', 'Comercio y
       throw new Error('not used');
     },
     async updateEstado() {
+      throw new Error('not used');
+    },
+    async updateSeguimiento() {
+      throw new Error('not used');
+    },
+    async addInteraccion() {
+      throw new Error('not used');
+    },
+    async listInteracciones() {
+      return [];
+    },
+    async fusionar() {
       throw new Error('not used');
     },
     async listSectores() {
@@ -68,6 +86,12 @@ const EXISTENTE: Empresa = {
   etapa: 'por_contactar',
   medio: null,
   motivo: null,
+  medioOtro: null,
+  intentosSinRespuesta: 0,
+  faltaResponderDesde: null,
+  proximaAccion: null,
+  origen: null,
+  sugerenciaDescartadaEn: null,
   createdAt: NOW,
   updatedAt: NOW,
 };

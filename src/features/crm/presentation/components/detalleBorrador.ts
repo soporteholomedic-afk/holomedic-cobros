@@ -36,13 +36,13 @@ export function contactoVacio(): ContactoBorrador {
 export function desdeEmpresa(e: Empresa): Borrador {
   return {
     razonSocial: e.razonSocial,
-    ruc: e.ruc,
+    ruc: e.ruc ?? '',
     sector: e.sector ?? '',
     notas: e.notas ?? '',
     contactos: e.contactos.map((c) => ({
       clave: nuevaClave(),
-      nombre: c.nombre,
-      telefono: c.telefono,
+      nombre: c.nombre ?? '',
+      telefono: c.telefono ?? '',
       correo: c.correo ?? '',
     })),
   };

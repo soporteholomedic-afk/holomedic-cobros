@@ -7,7 +7,7 @@ import {
   RucDuplicadoError,
   SectorDuplicadoError,
 } from '../../../domain/errors';
-import type { DatosEmpresa, NuevaEmpresa } from '../../../domain/entities';
+import type { DatosEmpresa, NuevaEmpresa, SeguimientoEmpresa } from '../../../domain/entities';
 
 interface Consulta {
   sql: string;
@@ -57,6 +57,14 @@ const FILA = {
   motivoDetalle1: null,
   motivoDetalle2: null,
   motivoNotas: null,
+  medioOtro: null,
+  intentosSinRespuesta: 0,
+  faltaResponderDesde: null,
+  proximaAccionTipo: null,
+  proximaAccionDetalle: null,
+  proximaAccionFecha: null,
+  origen: null,
+  sugerenciaDescartadaEn: null,
   createdAt: new Date('2026-10-31T10:00:00.000Z'),
   updatedAt: new Date('2026-10-31T11:00:00.000Z'),
 };
@@ -99,7 +107,13 @@ describe('SqlServerCrmEmpresaRepository — reading', () => {
       notas: 'Llegó por referido.',
       etapa: 'contactado',
       medio: 'llamada',
+      medioOtro: null,
       motivo: null,
+      intentosSinRespuesta: 0,
+      faltaResponderDesde: null,
+      proximaAccion: null,
+      origen: null,
+      sugerenciaDescartadaEn: null,
       contactos: [
         { nombre: 'Marcela Quispe', telefono: '987 654 321', correo: null },
         { nombre: 'Luis Prado', telefono: '998 220 145', correo: 'lprado@a.pe' },
@@ -291,6 +305,239 @@ describe('SqlServerCrmEmpresaRepository — estado', () => {
         motivo: null,
       }),
     ).rejects.toBeInstanceOf(EmpresaNotFoundError);
+  });
+});
+
+describe('SqlServerCrmEmpresaRepository — follow-up columns', () => {
+  it('maps NULL RUC, NULL contact fields, next action, origin and pending reply', async () => {
+    const fila = {
+      ...FILA,
+      ruc: null,
+      etapa: 'contactado',
+      medio: 'otro',
+      medioOtro: 'Feria',
+      intentosSinRespuesta: 2,
+      faltaResponderDesde: new Date('2026-10-30T15:00:00.000Z'),
+      proximaAccionTipo: 'llamar',
+      proximaAccionDetalle: 'Confirmar fecha',
+      proximaAccionFecha: new Date('2026-11-03T00:00:00.000Z'),
+      origen: 'referido',
+      sugerenciaDescartadaEn: 3,
+    };
+    const contactos = [
+      { idEmpresa: 'e-1', nombre: null, telefono: null, correo: 'a@b.pe', esPrincipal: true },
+    ];
+    const { pool } = makeFakePool(() => ({ recordsets: [[fila], contactos] }));
+    const e = await new SqlServerCrmEmpresaRepository(pool).getById('e-1');
+    expect(e).toMatchObject({
+      ruc: null,
+      medio: 'otro',
+      medioOtro: 'Feria',
+      intentosSinRespuesta: 2,
+      faltaResponderDesde: '2026-10-30T15:00:00.000Z',
+      proximaAccion: { tipo: 'llamar', detalle: 'Confirmar fecha', fecha: '2026-11-03' },
+      origen: 'referido',
+      sugerenciaDescartadaEn: 3,
+      contactos: [{ nombre: null, telefono: null, correo: 'a@b.pe' }],
+    });
+  });
+
+  it('selects the new columns', async () => {
+    const { pool, consultas } = makeFakePool(conFila);
+    await new SqlServerCrmEmpresaRepository(pool).getById('e-1');
+    for (const col of [
+      'medioOtro',
+      'intentosSinRespuesta',
+      'faltaResponderDesde',
+      'proximaAccionTipo',
+      'proximaAccionDetalle',
+      'proximaAccionFecha',
+      'origen',
+      'sugerenciaDescartadaEn',
+    ]) {
+      expect(consultas[0]?.sql).toContain(col);
+    }
+  });
+
+  it('stores an empresa without RUC as NULL and a contact with only an email', async () => {
+    const { pool, consultas } = makeFakePool(conFila);
+    await new SqlServerCrmEmpresaRepository(pool).create({
+      ...NUEVA,
+      ruc: null,
+      contactos: [{ nombre: null, telefono: null, correo: 'a@b.pe' }],
+    });
+    expect(consultas[0]?.inputs).toMatchObject({ ruc: null, c0n: null, c0t: null, c0c: 'a@b.pe' });
+  });
+
+  it('turns the filtered unique index violation (2601) into RucDuplicadoError on update', async () => {
+    const { pool } = makeFakePool(() => errorSql(2601));
+    await expect(new SqlServerCrmEmpresaRepository(pool).update('e-1', DATOS)).rejects.toBeInstanceOf(
+      RucDuplicadoError,
+    );
+  });
+
+  it('finds nothing by a NULL RUC without querying', async () => {
+    const { pool, consultas } = makeFakePool(conFila);
+    expect(await new SqlServerCrmEmpresaRepository(pool).findByRuc(null)).toBeNull();
+    expect(consultas).toHaveLength(0);
+  });
+});
+
+const SEGUIMIENTO: SeguimientoEmpresa = {
+  etapa: 'contactado',
+  medio: 'otro',
+  medioOtro: 'Feria',
+  motivo: null,
+  intentosSinRespuesta: 1,
+  faltaResponderDesde: null,
+  proximaAccion: { tipo: 'otro', detalle: 'x', fecha: '2026-11-03' },
+  sugerenciaDescartadaEn: null,
+};
+
+const INTERACCION = {
+  idUsuario: 'u-1',
+  nombreUsuario: 'Scott Palomino',
+  direccion: 'saliente' as const,
+  medio: 'llamada' as const,
+  medioOtro: null,
+  resultado: 'no_contesto' as const,
+  resumen: 'No contestó',
+};
+
+const FILA_INTERACCION = (id: number, fecha: string) => ({
+  idInteraccion: id,
+  idEmpresa: 'e-1',
+  fecha: new Date(fecha),
+  idUsuario: 'u-1',
+  nombreUsuario: 'Scott Palomino',
+  direccion: 'saliente',
+  medio: 'llamada',
+  medioOtro: null,
+  resultado: 'no_contesto',
+  resumen: null,
+});
+
+describe('SqlServerCrmEmpresaRepository — interacciones', () => {
+  it('adds an interaction with the user snapshot as parameters', async () => {
+    const { pool, consultas } = makeFakePool(() => ({
+      recordset: [FILA_INTERACCION(7, '2026-10-31T12:00:00.000Z')],
+    }));
+    const i = await new SqlServerCrmEmpresaRepository(pool).addInteraccion('e-1', INTERACCION);
+    expect(consultas[0]?.sql).toMatch(/INSERT\s+INTO\s+dbo\.CrmInteraccion/i);
+    expect(consultas[0]?.inputs).toMatchObject({
+      idEmpresa: 'e-1',
+      idUsuario: 'u-1',
+      nombreUsuario: 'Scott Palomino',
+      direccion: 'saliente',
+      imedio: 'llamada',
+      imedioOtro: null,
+      resultado: 'no_contesto',
+      resumen: 'No contestó',
+    });
+    expect(i).toMatchObject({ idInteraccion: 7, fecha: '2026-10-31T12:00:00.000Z' });
+  });
+
+  it('lists the history newest first, mapped to the domain', async () => {
+    const { pool, consultas } = makeFakePool(() => ({
+      recordset: [
+        FILA_INTERACCION(2, '2026-10-31T12:00:00.000Z'),
+        FILA_INTERACCION(1, '2026-10-30T12:00:00.000Z'),
+      ],
+    }));
+    const lista = await new SqlServerCrmEmpresaRepository(pool).listInteracciones('e-1');
+    expect(consultas[0]?.sql).toMatch(/ORDER\s+BY\s+fecha\s+DESC\s*,\s*idInteraccion\s+DESC/i);
+    expect(consultas[0]?.inputs).toEqual({ idEmpresa: 'e-1' });
+    expect(lista.map((i) => i.idInteraccion)).toEqual([2, 1]);
+    expect(lista[0]?.fecha).toBe('2026-10-31T12:00:00.000Z');
+    expect(lista[0]?.resumen).toBeNull();
+  });
+});
+
+describe('SqlServerCrmEmpresaRepository — updateSeguimiento', () => {
+  const ok = (sql: string): Respuesta =>
+    /UPDATE\s+dbo\.CrmEmpresa/i.test(sql) ? { recordset: [{ idEmpresa: 'e-1' }] } : conFila(sql);
+
+  it('writes the follow-up state and the new interaction in ONE transaction', async () => {
+    const { pool, consultas } = makeFakePool(ok);
+    await new SqlServerCrmEmpresaRepository(pool).updateSeguimiento('e-1', SEGUIMIENTO, INTERACCION);
+    const q = consultas[0];
+    expect(q?.sql).toMatch(/SET\s+XACT_ABORT\s+ON/i);
+    expect(q?.sql).toMatch(/BEGIN\s+TRAN/i);
+    expect(q?.sql).toMatch(/COMMIT/i);
+    expect(q?.sql).toMatch(/UPDATE\s+dbo\.CrmEmpresa/i);
+    expect(q?.sql.match(/INSERT\s+INTO\s+dbo\.CrmInteraccion/gi)).toHaveLength(1);
+    expect(q?.sql).toMatch(/50404/);
+    expect(q?.inputs).toMatchObject({
+      id: 'e-1',
+      etapa: 'contactado',
+      medio: 'otro',
+      medioOtro: 'Feria',
+      intentosSinRespuesta: 1,
+      faltaResponderDesde: null,
+      proximaAccionTipo: 'otro',
+      proximaAccionDetalle: 'x',
+      proximaAccionFecha: '2026-11-03',
+      sugerenciaDescartadaEn: null,
+      motivoCategoria: null,
+      idUsuario: 'u-1',
+      resultado: 'no_contesto',
+    });
+    // The write is a single round trip plus the read-back.
+    expect(consultas).toHaveLength(2);
+  });
+
+  it('skips the INSERT when there is no interaction (card moved or suggestion dismissed)', async () => {
+    const { pool, consultas } = makeFakePool(ok);
+    await new SqlServerCrmEmpresaRepository(pool).updateSeguimiento('e-1', SEGUIMIENTO, null);
+    expect(consultas[0]?.sql).not.toMatch(/CrmInteraccion/i);
+  });
+
+  it('maps "no row updated" to EmpresaNotFoundError', async () => {
+    const { pool } = makeFakePool(() => errorSql(50404));
+    await expect(
+      new SqlServerCrmEmpresaRepository(pool).updateSeguimiento('nope', SEGUIMIENTO, INTERACCION),
+    ).rejects.toBeInstanceOf(EmpresaNotFoundError);
+  });
+});
+
+describe('SqlServerCrmEmpresaRepository — fusionar', () => {
+  it('moves interactions and contacts into the destination and deletes the origin, in one transaction', async () => {
+    const { pool, consultas } = makeFakePool(conFila);
+    const e = await new SqlServerCrmEmpresaRepository(pool).fusionar('e-origen', 'e-1');
+    const q = consultas[0];
+    expect(q?.sql).toMatch(/SET\s+XACT_ABORT\s+ON/i);
+    expect(q?.sql).toMatch(/BEGIN\s+TRAN/i);
+    expect(q?.sql).toMatch(/COMMIT/i);
+    expect(q?.inputs).toEqual({ origen: 'e-origen', destino: 'e-1' });
+    // Interactions move.
+    expect(q?.sql).toMatch(/UPDATE\s+dbo\.CrmInteraccion\s+SET\s+idEmpresa\s*=\s*@destino\s+WHERE\s+idEmpresa\s*=\s*@origen/i);
+    // Contacts move only when the destination has no identical one, never as principal.
+    expect(q?.sql).toMatch(/UPDATE\s+o\s+SET\s+idEmpresa\s*=\s*@destino,\s*esPrincipal\s*=\s*0/i);
+    expect(q?.sql).toMatch(/NOT\s+EXISTS[\s\S]*d\.nombre[\s\S]*d\.telefono[\s\S]*d\.correo/i);
+    // The origin row goes last; its leftover duplicate contacts go with it by cascade.
+    expect(q?.sql).toMatch(/DELETE\s+FROM\s+dbo\.CrmEmpresa\s+WHERE\s+idEmpresa\s*=\s*@origen/i);
+    expect(q?.sql.indexOf('CrmInteraccion')).toBeLessThan(q?.sql.search(/DELETE\s+FROM\s+dbo\.CrmEmpresa/i) ?? 0);
+    expect(e.idEmpresa).toBe('e-1');
+    expect(consultas).toHaveLength(2);
+  });
+
+  it('compares nullable contact fields NULL-safely', async () => {
+    const { pool, consultas } = makeFakePool(conFila);
+    await new SqlServerCrmEmpresaRepository(pool).fusionar('e-origen', 'e-1');
+    expect(consultas[0]?.sql).toMatch(/ISNULL\(d\.nombre/i);
+  });
+
+  it('fails with EmpresaNotFoundError when origin or destination is missing', async () => {
+    const { pool } = makeFakePool(() => errorSql(50404));
+    await expect(new SqlServerCrmEmpresaRepository(pool).fusionar('a', 'b')).rejects.toBeInstanceOf(
+      EmpresaNotFoundError,
+    );
+  });
+
+  it('refuses to merge an empresa with itself', async () => {
+    const { pool, consultas } = makeFakePool(conFila);
+    await expect(new SqlServerCrmEmpresaRepository(pool).fusionar('a', 'a')).rejects.toThrow();
+    expect(consultas).toHaveLength(0);
   });
 });
 

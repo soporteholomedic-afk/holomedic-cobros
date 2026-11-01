@@ -11,13 +11,63 @@ export const ETAPA_LABELS: Record<Etapa, string> = {
 };
 
 /** How the empresa was contacted. */
-export const MEDIOS = ['llamada', 'correo', 'whatsapp'] as const;
+export const MEDIOS = ['llamada', 'correo', 'whatsapp', 'otro'] as const;
 export type Medio = (typeof MEDIOS)[number];
 
 export const MEDIO_LABELS: Record<Medio, string> = {
   llamada: 'Llamada',
   correo: 'Correo',
   whatsapp: 'WhatsApp',
+  otro: 'Otro',
+};
+
+/** Direction of a contact: we reached out, or they reached out to us. */
+export const DIRECCIONES = ['saliente', 'entrante'] as const;
+export type Direccion = (typeof DIRECCIONES)[number];
+
+export const DIRECCION_LABELS: Record<Direccion, string> = {
+  saliente: 'Nosotros contactamos',
+  entrante: 'Nos contactaron',
+};
+
+/** Outcome of one contact. */
+export const RESULTADOS = ['conversamos', 'no_contesto', 'deje_mensaje', 'pendiente', 'respondido'] as const;
+export type Resultado = (typeof RESULTADOS)[number];
+
+export const RESULTADO_LABELS: Record<Resultado, string> = {
+  conversamos: 'Conversamos',
+  no_contesto: 'No contestó',
+  deje_mensaje: 'Dejé mensaje',
+  pendiente: 'Falta responder',
+  respondido: 'Respondido',
+};
+
+/** Failed attempts in a row from which the system suggests moving the card to Perdido. */
+export const UMBRAL_INTENTOS = 3;
+
+/** Kinds of next action. */
+export const ACCIONES = ['responder', 'llamar', 'cotizar', 'info', 'whatsapp', 'reunion', 'otro'] as const;
+export type AccionTipo = (typeof ACCIONES)[number];
+
+export const ACCION_LABELS: Record<AccionTipo, string> = {
+  responder: 'Responder',
+  llamar: 'Llamar',
+  cotizar: 'Enviar cotización',
+  info: 'Enviar información',
+  whatsapp: 'Escribir por WhatsApp',
+  reunion: 'Reunión o visita',
+  otro: 'Otro',
+};
+
+/** How an inbound empresa says it knew us. */
+export const ORIGENES = ['nose', 'referido', 'conocia', 'internet'] as const;
+export type Origen = (typeof ORIGENES)[number];
+
+export const ORIGEN_LABELS: Record<Origen, string> = {
+  nose: 'No lo sé',
+  referido: 'Referido por un cliente',
+  conocia: 'Ya nos conocía',
+  internet: 'Búsqueda en internet',
 };
 
 /** Most contacts one empresa can have. */
@@ -84,18 +134,53 @@ export interface Motivo {
 }
 
 export interface Contacto {
-  nombre: string;
-  /** Free text, but always holds exactly 9 digits. */
-  telefono: string;
+  /** NULL for an inbound contact that gave no name. */
+  nombre: string | null;
+  /** Free text, 9 digits when given; NULL when only an email is known. */
+  telefono: string | null;
   correo: string | null;
+}
+
+export interface ProximaAccion {
+  tipo: AccionTipo;
+  detalle: string | null;
+  /** Calendar day, `YYYY-MM-DD`. */
+  fecha: string;
+}
+
+/** One entry of the contact history of an empresa. */
+export interface Interaccion {
+  idInteraccion: number;
+  idEmpresa: string;
+  /** ISO timestamp. */
+  fecha: string;
+  idUsuario: string;
+  /** Snapshot of the user name at registration time. */
+  nombreUsuario: string;
+  direccion: Direccion;
+  medio: Medio;
+  medioOtro: string | null;
+  resultado: Resultado;
+  resumen: string | null;
+}
+
+/** Validated interaction ready to be stored. */
+export interface NuevaInteraccion {
+  idUsuario: string;
+  nombreUsuario: string;
+  direccion: Direccion;
+  medio: Medio;
+  medioOtro: string | null;
+  resultado: Resultado;
+  resumen: string | null;
 }
 
 /** A company to contact. `contactos[0]` is the principal contact. */
 export interface Empresa {
   idEmpresa: string;
   razonSocial: string;
-  /** Exactly 11 digits. Unique across empresas. */
-  ruc: string;
+  /** Exactly 11 digits, unique across empresas; NULL while unknown ("Falta RUC"). */
+  ruc: string | null;
   sector: string | null;
   /** At least one; the first one is the principal. */
   contactos: Contacto[];
@@ -103,8 +188,18 @@ export interface Empresa {
   etapa: Etapa;
   /** Only meaningful outside "Por contactar". */
   medio: Medio | null;
+  /** Free-text medium, only when `medio` is "otro". */
+  medioOtro: string | null;
   /** Only present in "Perdido". */
   motivo: Motivo | null;
+  /** Failed attempts in a row (reset by a real conversation). */
+  intentosSinRespuesta: number;
+  /** Since when an inbound contact waits for our reply; NULL when none does. */
+  faltaResponderDesde: string | null;
+  proximaAccion: ProximaAccion | null;
+  origen: Origen | null;
+  /** Attempt count at which "Seguir intentando" was pressed. */
+  sugerenciaDescartadaEn: number | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -139,7 +234,8 @@ export interface MotivoDatos {
 /** Validated empresa data ready to be stored (what the repository receives). */
 export interface DatosEmpresa {
   razonSocial: string;
-  ruc: string;
+  /** NULL for an empresa whose RUC is not known yet. */
+  ruc: string | null;
   sector: string | null;
   contactos: Contacto[];
   notas: string | null;
@@ -154,4 +250,14 @@ export interface EstadoEmpresa {
   etapa: Etapa;
   medio: Medio | null;
   motivo: Motivo | null;
+}
+
+/** Follow-up state written together with an optional new interaction. */
+export interface SeguimientoEmpresa extends EstadoEmpresa {
+  medioOtro: string | null;
+  intentosSinRespuesta: number;
+  /** ISO timestamp or NULL. */
+  faltaResponderDesde: string | null;
+  proximaAccion: ProximaAccion | null;
+  sugerenciaDescartadaEn: number | null;
 }
