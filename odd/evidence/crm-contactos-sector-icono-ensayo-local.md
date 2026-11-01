@@ -35,3 +35,22 @@
 - **Sectors as it would leave them:** Comercio y Tiendas tienda, Construcción casco, Fábrica y Producción fabrica, Minería y Energía pico, Oficinas y Servicios maletin, Transporte y Almacén camion. "Desarrollo de Software" was created from the UI and stays without an icon.
 - **Row counts inside the rehearsal:** unchanged (7 / 2 / 2 / 1).
 - **After the rollback:** schema, data and `modify_date` were all identical to before. Result: the database was left exactly as it was.
+
+## Shared database: applied (2026-11-01 19:04 UTC)
+
+- **User OK:** "Aplicarlo y actualizar la vista previa (recomendado)".
+- **Fresh backup first:** `svrnode:~/backups-crm/crm-antes-de-aplicar-icono-sector-2026-11-01T19-04-53-730Z.json` (8400 bytes), with every row of the 4 Crm tables.
+- **SQL:** sha256 prefix `7836077fb203418a`, the same batch as the rehearsal. It ran in 72 ms, and trancount afterwards was 0.
+- **Changes:** 2 added and 0 removed, as rehearsed:
+  - `CrmSector.icono` NVARCHAR(20) NULL.
+  - `CK_CrmSector_icono`.
+- **Data:**
+  - CrmEmpresa, CrmContacto and CrmInteraccion are identical to before.
+  - In CrmSector, every original column is identical to the backup, row by row.
+  - Icons now: Construcción casco, Minería y Energía pico, Fábrica y Producción fabrica, Transporte y Almacén camion, Comercio y Tiendas tienda, Oficinas y Servicios maletin. "Desarrollo de Software" has none.
+- **Second run:** a no-op.
+- **SIGLA:** untouched. The script aborts unless it is connected to `HOLOMEDIC` on 172.16.10.14.
+- **Preview:**
+  - The server worktree `crm-simple` was fast-forwarded through a git bundle to 5acb9ba.
+  - On http://172.16.10.20:3001, `/auth/login` answers 200, and `/api/crm/sectores` and `/api/crm/entrantes` answer 401 without a session.
+  - Production on :3000 is unchanged and answers 200.
