@@ -52,6 +52,7 @@ describe('POST /api/crm/importar', () => {
       contactos: [{ nombre: 'Rosa Mendoza', telefono: '987111222', correo: 'rosa@norte.pe' }],
       notas: null,
       etapa: 'por_contactar',
+      origen: null,
     });
     expect(repo.create).toHaveBeenNthCalledWith(2, expect.objectContaining({ ruc: '20601112224', sector: 'Educación', etapa: 'por_contactar' }));
   });

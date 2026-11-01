@@ -113,6 +113,7 @@ export class ImportarEmpresasUseCase {
           contactos: [{ nombre: f.contacto.trim(), telefono: f.telefono.trim(), correo: opcional(f.correo) }],
           notas: null,
           etapa: 'por_contactar',
+          origen: null,
         });
         importadas++;
       } catch (error) {

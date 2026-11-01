@@ -85,7 +85,7 @@ const DATOS: DatosEmpresa = {
   ],
 };
 
-const NUEVA: NuevaEmpresa = { ...DATOS, etapa: 'por_contactar' };
+const NUEVA: NuevaEmpresa = { ...DATOS, etapa: 'por_contactar', origen: null };
 
 function errorSql(number: number, message = 'sql error'): Error {
   return Object.assign(new Error(message), { number });
@@ -367,6 +367,20 @@ describe('SqlServerCrmEmpresaRepository — follow-up columns', () => {
       contactos: [{ nombre: null, telefono: null, correo: 'a@b.pe' }],
     });
     expect(consultas[0]?.inputs).toMatchObject({ ruc: null, c0n: null, c0t: null, c0c: 'a@b.pe' });
+  });
+
+  it('binds the inbound origin on create and inserts it into the origen column', async () => {
+    const { pool, consultas } = makeFakePool(conFila);
+    await new SqlServerCrmEmpresaRepository(pool).create({ ...NUEVA, origen: 'referido' });
+    expect(consultas[0]?.inputs).toMatchObject({ origen: 'referido' });
+    expect(consultas[0]?.sql).toMatch(/INSERT\s+INTO\s+dbo\.CrmEmpresa\s*\([^)]*\borigen\b[^)]*\)/i);
+    expect(consultas[0]?.sql).toContain('@origen');
+  });
+
+  it('binds a NULL origin on create when the empresa has none (manual create, import)', async () => {
+    const { pool, consultas } = makeFakePool(conFila);
+    await new SqlServerCrmEmpresaRepository(pool).create(NUEVA);
+    expect(consultas[0]?.inputs).toHaveProperty('origen', null);
   });
 
   it('turns the filtered unique index violation (2601) into RucDuplicadoError on update', async () => {

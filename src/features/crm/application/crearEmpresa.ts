@@ -11,6 +11,6 @@ export class CrearEmpresaUseCase {
 
   async execute(datos: CrearEmpresaDatos): Promise<Empresa> {
     const validos = await validarDatosEmpresa(datos, this.repo);
-    return this.repo.create({ ...validos, etapa: 'por_contactar' });
+    return this.repo.create({ ...validos, etapa: 'por_contactar', origen: null });
   }
 }

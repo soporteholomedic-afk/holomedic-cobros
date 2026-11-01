@@ -245,14 +245,15 @@ export class SqlServerCrmEmpresaRepository implements ICrmEmpresaRepository {
         .input('ruc', mssql.VarChar(11), input.ruc)
         .input('sector', mssql.NVarChar(50), input.sector)
         .input('notas', mssql.NVarChar(mssql.MAX), input.notas)
-        .input('etapa', mssql.NVarChar(20), input.etapa);
+        .input('etapa', mssql.NVarChar(20), input.etapa)
+        .input('origen', mssql.NVarChar(20), input.origen);
       const contactos = inputsContactos(request, input.contactos);
       await request.query(`
         SET XACT_ABORT ON;
         BEGIN TRAN;
-        INSERT INTO dbo.CrmEmpresa (idEmpresa, razonSocial, ruc, idSector, notas, etapa)
+        INSERT INTO dbo.CrmEmpresa (idEmpresa, razonSocial, ruc, idSector, notas, etapa, origen)
         VALUES (@idEmpresa, @razonSocial, @ruc,
-                (SELECT idSector FROM dbo.CrmSector WHERE nombre = @sector), @notas, @etapa);
+                (SELECT idSector FROM dbo.CrmSector WHERE nombre = @sector), @notas, @etapa, @origen);
         ${contactos}
         COMMIT;
       `);

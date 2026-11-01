@@ -243,6 +243,8 @@ export interface DatosEmpresa {
 
 export interface NuevaEmpresa extends DatosEmpresa {
   etapa: Etapa;
+  /** How an inbound empresa knew us; set only at creation, NULL for manual create and import. */
+  origen: Origen | null;
 }
 
 /** Validated follow-up state written in one step. */
