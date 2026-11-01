@@ -18,7 +18,7 @@ Visual spec: `design/crm-flujos-contacto/04-prototipo-flujos.html` (canvas desig
 ## Tasks
 - T1 (S1, S2, S3, S4, S6, S7, S8, S11): Storage. New table `dbo.CrmInteraccion`; `CrmEmpresa` allows a NULL RUC (unique only when present) and gains columns for the failed-attempt counter, pending reply, the next action and the inbound origin; `medio` accepts `otro` plus a free-text detail. Migration: additive, idempotent, rehearsed on the local dev DB first. Route: worker (+ inline type fixes). Commit: 00893d7 (+ 5c1ac31: `create` now stores the inbound origin, which T1 read but never wrote). Independent verification: running.
 - T2 (S1–S8): Domain and use cases: `registrarContacto` (outbound and inbound reply), `registrarEntrante`, `completarRuc` with merge, `pasarAPerdidoPorNoContestan`, plus validation. Route: inline. Commit: ff9bed4
-- T3 (S1–S8): API: `POST /api/crm/entrantes`, `POST /api/crm/empresas/[id]/contactos`, `GET /api/crm/empresas/[id]/historial`, `PATCH /api/crm/empresas/[id]/ruc` (with merge confirmation). Same `crm` permiso. Route: inline. Commit: pending
+- T3 (S1–S8): API: `POST /api/crm/entrantes`, `POST /api/crm/empresas/[id]/contactos`, `GET /api/crm/empresas/[id]/historial`, `PATCH /api/crm/empresas/[id]/ruc` (with merge confirmation). Same `crm` permiso. Route: inline. Commit: 3587bfb
 - T4 (S2, S4, S6, S8): Board card: labels, Falta RUC, next action (overdue), 3-attempt suggestion, "Registrar contacto" / "Responder" buttons, header "Nos contactaron". Route: inline. Commit: pending
 - T5 (S5, S7, S8, S9): Panels "Nos contactaron" and "Registrar contacto" with the custom menu and calendar components. Route: inline. Commit: pending
 - T6 (S1, S6): Detail panel: history timeline, add RUC with merge. Route: inline. Commit: pending
