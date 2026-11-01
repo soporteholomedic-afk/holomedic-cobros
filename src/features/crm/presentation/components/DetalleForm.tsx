@@ -64,9 +64,7 @@ export function DetalleForm({
         </label>
         <div className="grid gap-3.5">
           <label className={ETIQUETA}>
-            <span>
-              RUC <em className="not-italic text-red-700">*</em>
-            </span>
+            <span>RUC</span>
             <input
               id="det-ruc"
               inputMode="numeric"

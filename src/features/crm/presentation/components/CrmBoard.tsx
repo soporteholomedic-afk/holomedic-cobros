@@ -17,6 +17,7 @@ import {
 import { AltaPanel } from './AltaPanel';
 import { CrmCard } from './CrmCard';
 import { ETAPA_PUNTO } from './crmUi';
+import type { OtraEmpresa, ResultadoRuc } from './RucFaltante';
 import { DetallePanel, type DetalleHandle } from './DetallePanel';
 import { MedioDialog } from './MedioDialog';
 import { MotivoDialog } from './MotivoDialog';
@@ -207,6 +208,40 @@ export function CrmBoard() {
     reemplazar(r.empresa, false);
     toast.success('Cambios guardados');
     return r.empresa;
+  }
+
+  /** Complete the RUC of a card. A RUC owned by another empresa comes back as a conflict to confirm. */
+  async function guardarRuc(id: string, ruc: string, unir: boolean): Promise<ResultadoRuc> {
+    try {
+      const res = await fetch(`/api/crm/empresas/${id}/ruc`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(unir ? { ruc, unir: true } : { ruc }),
+      });
+      let data: { error?: string; empresa?: Empresa; otra?: OtraEmpresa } = {};
+      try {
+        data = await res.json();
+      } catch {
+        // not JSON
+      }
+      if (res.ok && data.empresa) {
+        const nueva = data.empresa;
+        if (unir) {
+          setEmpresas((prev) => prev.filter((x) => x.idEmpresa !== id).map((x) => (x.idEmpresa === nueva.idEmpresa ? nueva : x)));
+          setDetalleId(nueva.idEmpresa);
+          toast.success(`Tarjetas unidas. El historial quedó en «${nueva.razonSocial}».`);
+        } else {
+          reemplazar(nueva, false);
+          toast.success('RUC guardado.');
+        }
+        return { tipo: 'ok' };
+      }
+      if (res.status === 409 && data.otra && !unir) return { tipo: 'conflicto', otra: data.otra };
+      toast.error(data.error ?? 'No se pudo guardar el RUC');
+    } catch {
+      toast.error('No se pudo guardar el RUC');
+    }
+    return { tipo: 'error' };
   }
 
   async function crearSector(nombre: string): Promise<string | { error: string }> {
@@ -489,6 +524,7 @@ export function CrmBoard() {
             setDialogo({ tipo: 'medio', id: x.idEmpresa, modo: 'editar', inicial: x.medio, destino: x.etapa })
           }
           onEditarMotivo={(x) => setDialogo({ tipo: 'motivo', id: x.idEmpresa, modo: 'editar', inicial: x.motivo })}
+          onGuardarRuc={guardarRuc}
         />
       )}
 

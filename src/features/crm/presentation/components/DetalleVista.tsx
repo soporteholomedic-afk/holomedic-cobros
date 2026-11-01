@@ -1,12 +1,25 @@
 'use client';
 
-import { MEDIO_LABELS, MOTIVO_LABELS, type Empresa } from '../../domain/entities';
+import { CalendarDays } from 'lucide-react';
+
+import { ACCION_LABELS, MEDIO_LABELS, MOTIVO_LABELS, type Empresa } from '../../domain/entities';
 import { MEDIO_ESTILO, colorDeSector, lineasDeMotivo } from './crmUi';
+import { estadoProximaAccion, faltaRuc } from './etiquetas';
+import { formatoCorto } from './fechas';
+import { HistorialContactos } from './HistorialContactos';
+import { RucFaltante, type ResultadoRuc } from './RucFaltante';
+import type { EstadoHistorial } from './useHistorial';
 
 interface Props {
   empresa: Empresa;
   onCambiarMedio: (e: Empresa) => void;
   onEditarMotivo: (e: Empresa) => void;
+  onGuardarRuc: (ruc: string, unir: boolean) => Promise<ResultadoRuc>;
+  historial: EstadoHistorial;
+  onReintentarHistorial: () => void;
+  ahora: Date;
+  /** Calendar day of today in Lima, to tell an overdue next action. */
+  hoy: string;
 }
 
 const TITULO = 'text-xs font-bold uppercase tracking-wider text-sky-700 dark:text-sky-400';
@@ -28,9 +41,25 @@ function conFoco(accion: () => void) {
 }
 
 /** Read-only view of an empresa inside the detail panel. */
-export function DetalleVista({ empresa: e, onCambiarMedio, onEditarMotivo }: Props) {
+export function DetalleVista({
+  empresa: e,
+  onCambiarMedio,
+  onEditarMotivo,
+  onGuardarRuc,
+  historial,
+  onReintentarHistorial,
+  ahora,
+  hoy,
+}: Props) {
   const varios = e.contactos.length > 1;
   const estiloMedio = e.medio ? MEDIO_ESTILO[e.medio] : null;
+  const estadoAccion = estadoProximaAccion(e, hoy);
+  const accion = estadoAccion !== 'ninguna' ? e.proximaAccion : null;
+  const textoAccion = accion
+    ? accion.tipo === 'otro' && accion.detalle
+      ? accion.detalle
+      : `${ACCION_LABELS[accion.tipo]}${accion.detalle ? `: ${accion.detalle}` : ''}`
+    : '';
   return (
     <div className="grid gap-5 px-6 pb-6 pt-3">
       <section className="grid gap-3">
@@ -38,7 +67,9 @@ export function DetalleVista({ empresa: e, onCambiarMedio, onEditarMotivo }: Pro
         <dl className="grid gap-3 text-sm text-slate-900 dark:text-slate-100">
           <div className="grid gap-0.5">
             <dt className={ETIQUETA}>RUC</dt>
-            <dd className="tabular-nums">{e.ruc ?? 'Falta RUC'}</dd>
+            <dd className="grid gap-1.5 tabular-nums">
+              {faltaRuc(e) ? <RucFaltante razonSocial={e.razonSocial} onGuardar={onGuardarRuc} /> : e.ruc}
+            </dd>
           </div>
           <div className="grid gap-0.5">
             <dt className={ETIQUETA}>Sector</dt>
@@ -46,6 +77,23 @@ export function DetalleVista({ empresa: e, onCambiarMedio, onEditarMotivo }: Pro
               <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${colorDeSector(e.sector)}`}>
                 {e.sector ?? 'Sin sector'}
               </span>
+            </dd>
+          </div>
+          <div className="grid gap-0.5">
+            <dt className={ETIQUETA}>Próxima acción</dt>
+            <dd>
+              {accion ? (
+                <span
+                  className={`inline-flex w-fit items-center gap-1.5 ${
+                    estadoAccion === 'vencida' ? 'font-semibold text-red-700 dark:text-red-300' : ''
+                  }`}
+                >
+                  <CalendarDays className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                  {`${estadoAccion === 'vencida' ? 'Vencida: ' : ''}${textoAccion} · ${formatoCorto(accion.fecha)}`}
+                </span>
+              ) : (
+                <span className="text-slate-500 dark:text-slate-400">Sin próxima acción</span>
+              )}
             </dd>
           </div>
         </dl>
@@ -104,6 +152,8 @@ export function DetalleVista({ empresa: e, onCambiarMedio, onEditarMotivo }: Pro
           ))}
         </ul>
       </section>
+
+      <HistorialContactos historial={historial} onReintentar={onReintentarHistorial} ahora={ahora} />
 
       <section className="grid gap-2">
         <h3 className={TITULO}>Seguimiento</h3>

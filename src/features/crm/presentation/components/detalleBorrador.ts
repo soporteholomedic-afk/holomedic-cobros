@@ -64,8 +64,9 @@ export const estaSucio = (b: Borrador, e: Empresa): boolean => sinClaves(b) !== 
 export function validar(b: Borrador, empresas: Empresa[], idActual: string): FalloDeValidacion | null {
   if (!b.razonSocial.trim()) return { mensaje: 'Falta la razón social.', campo: 'det-razon' };
   const ruc = b.ruc.trim();
-  if (!/^\d{11}$/.test(ruc)) return { mensaje: 'El RUC debe tener 11 dígitos.', campo: 'det-ruc' };
-  if (empresas.some((x) => x.ruc === ruc && x.idEmpresa !== idActual)) {
+  // An empresa without RUC stays editable: empty is allowed, a typed one needs 11 digits.
+  if (ruc && !/^\d{11}$/.test(ruc)) return { mensaje: 'El RUC debe tener 11 dígitos.', campo: 'det-ruc' };
+  if (ruc && empresas.some((x) => x.ruc === ruc && x.idEmpresa !== idActual)) {
     return { mensaje: 'Ya existe otra empresa con ese RUC.', campo: 'det-ruc' };
   }
   if (b.contactos.length === 0) return { mensaje: 'Falta al menos un contacto.', campo: 'det-razon' };
@@ -89,7 +90,7 @@ export function validar(b: Borrador, empresas: Empresa[], idActual: string): Fal
 export function aCuerpo(b: Borrador): Record<string, unknown> {
   const cuerpo: Record<string, unknown> = {
     razonSocial: b.razonSocial.trim(),
-    ruc: b.ruc.trim(),
+    ruc: b.ruc.trim() || null,
     contactos: b.contactos.map((c) => {
       const o: Record<string, string> = { nombre: c.nombre.trim(), telefono: c.telefono.trim() };
       if (c.correo.trim()) o.correo = c.correo.trim();

@@ -4,7 +4,7 @@ import { fireEvent, render, screen, within } from '@testing-library/react';
 vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn(), info: vi.fn() } }));
 
 import { CrmBoard } from '../CrmBoard';
-import { mockApi } from './crmFixtures';
+import { json, llamadas, mockApi } from './crmFixtures';
 
 const TEXTILES = 'Textiles Pacífico S.A.C.';
 
@@ -62,5 +62,28 @@ describe('Detail view — layout of the approved design', () => {
     render(<CrmBoard />);
     await screen.findByText('Constructora Andina S.A.C.');
     expect(abrir(TEXTILES).className).toMatch(/w-\[420px\]/);
+  });
+});
+
+describe('Detail view — an empresa with RUC is unchanged by the RUC completion', () => {
+  it('shows the RUC as text without the inline field and still edits it with the 11-digit rule', async () => {
+    const fn = mockApi();
+    const base = global.fetch;
+    global.fetch = vi.fn(async (u: string, i?: RequestInit) =>
+      u.endsWith('/historial') ? json({ status: 200, body: { interacciones: [] } }) : base(u, i),
+    ) as unknown as typeof fetch;
+    render(<CrmBoard />);
+    await screen.findByText('Constructora Andina S.A.C.');
+    const panel = abrir(TEXTILES);
+    expect(within(panel).getByText('20556677889')).toBeInTheDocument();
+    expect(within(panel).queryByText('Falta RUC')).toBeNull();
+    expect(within(panel).queryByRole('button', { name: 'Guardar RUC' })).toBeNull();
+    fireEvent.click(within(panel).getByRole('button', { name: 'Editar' }));
+    const ruc = within(panel).getByLabelText(/^RUC/);
+    expect(ruc).toHaveValue('20556677889');
+    fireEvent.change(ruc, { target: { value: '20556677880' } });
+    fireEvent.click(within(panel).getByRole('button', { name: 'Guardar cambios' }));
+    await screen.findByText('20556677880');
+    expect(llamadas(fn, 'PATCH', /empresas\/e-3$/)[0]?.body).toMatchObject({ ruc: '20556677880' });
   });
 });

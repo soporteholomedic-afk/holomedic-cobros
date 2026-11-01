@@ -1,0 +1,142 @@
+'use client';
+
+import { AlertCircle } from 'lucide-react';
+import { useEffect, useId, useRef, useState } from 'react';
+
+import { ETAPA_LABELS, type Etapa } from '../../domain/entities';
+import { INPUT, ALERTA, BOTON_PRIMARIO, BOTON_SECUNDARIO } from './crmUi';
+
+export interface OtraEmpresa {
+  idEmpresa: string;
+  razonSocial: string;
+  etapa: Etapa;
+}
+
+/** What saving a RUC came to; the board turns it into toasts and board changes. */
+export type ResultadoRuc = { tipo: 'ok' } | { tipo: 'conflicto'; otra: OtraEmpresa } | { tipo: 'error' };
+
+interface Props {
+  razonSocial: string;
+  onGuardar: (ruc: string, unir: boolean) => Promise<ResultadoRuc>;
+}
+
+/** "Falta RUC" mark with the inline field to complete it, and the merge question when the RUC is taken. */
+export function RucFaltante({ razonSocial, onGuardar }: Props) {
+  const ids = useId();
+  const idInput = `${ids}-ruc`;
+  const idError = `${ids}-ruc-err`;
+  const [valor, setValor] = useState('');
+  const [error, setError] = useState('');
+  const [otra, setOtra] = useState<OtraEmpresa | null>(null);
+  const [enviando, setEnviando] = useState(false);
+  const input = useRef<HTMLInputElement>(null);
+  const botonUnir = useRef<HTMLButtonElement>(null);
+
+  const volverAlCampo = useRef(false);
+
+  useEffect(() => {
+    if (otra) botonUnir.current?.focus();
+    else if (volverAlCampo.current) {
+      volverAlCampo.current = false;
+      input.current?.focus();
+    }
+  }, [otra]);
+
+  async function guardar(unir: boolean) {
+    if (enviando) return;
+    const ruc = valor.trim();
+    if (!/^\d{11}$/.test(ruc)) {
+      setError('El RUC debe tener 11 dígitos.');
+      input.current?.focus();
+      return;
+    }
+    setError('');
+    setEnviando(true);
+    const r = await onGuardar(ruc, unir);
+    setEnviando(false);
+    if (r.tipo === 'conflicto') setOtra(r.otra);
+  }
+
+  function noUnir() {
+    volverAlCampo.current = true;
+    setOtra(null);
+  }
+
+  return (
+    <>
+      <span className="inline-flex w-fit items-center gap-1 rounded-full border border-amber-400/50 bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-800 dark:bg-amber-950/50 dark:text-amber-200">
+        <AlertCircle className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+        Falta RUC
+      </span>
+      {otra ? (
+        <div
+          role="alert"
+          className="grid gap-2 rounded-xl border border-amber-500 bg-amber-100 px-3 py-2.5 text-[13px] text-amber-800 dark:bg-amber-950/40 dark:text-amber-200"
+        >
+          <p>
+            Este RUC ya es de <b>{otra.razonSocial}</b> («{ETAPA_LABELS[otra.etapa]}»). ¿Unir las dos tarjetas?
+          </p>
+          <p className="text-slate-600 dark:text-slate-300">
+            {`El historial y los contactos de «${razonSocial}» pasan a «${otra.razonSocial}» y esta tarjeta desaparece.`}
+          </p>
+          <div className="flex gap-2">
+            <button
+              ref={botonUnir}
+              type="button"
+              disabled={enviando}
+              onClick={() => void guardar(true)}
+              className={`${BOTON_PRIMARIO} !h-9`}
+            >
+              Unir tarjetas
+            </button>
+            <button type="button" onClick={noUnir} className={`${BOTON_SECUNDARIO} !h-9`}>
+              No unir
+            </button>
+          </div>
+        </div>
+      ) : (
+        <>
+          <div className="flex gap-2">
+            <label htmlFor={idInput} className="sr-only">
+              RUC
+            </label>
+            <input
+              ref={input}
+              id={idInput}
+              inputMode="numeric"
+              maxLength={11}
+              placeholder="11 dígitos"
+              value={valor}
+              aria-invalid={error ? true : undefined}
+              aria-describedby={error ? idError : undefined}
+              onChange={(ev) => {
+                setValor(ev.target.value);
+                setError('');
+              }}
+              onKeyDown={(ev) => {
+                if (ev.key === 'Enter') {
+                  ev.preventDefault();
+                  void guardar(false);
+                }
+              }}
+              className={`${INPUT} min-w-0 flex-1`}
+            />
+            <button
+              type="button"
+              disabled={enviando}
+              onClick={() => void guardar(false)}
+              className={`${BOTON_SECUNDARIO} !h-9 shrink-0`}
+            >
+              Guardar RUC
+            </button>
+          </div>
+          {error && (
+            <p id={idError} role="alert" className={ALERTA}>
+              {error}
+            </p>
+          )}
+        </>
+      )}
+    </>
+  );
+}

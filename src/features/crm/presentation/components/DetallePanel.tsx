@@ -5,6 +5,10 @@ import { useEffect, useId, useImperativeHandle, useRef, useState, type FormEvent
 
 import { ETAPA_LABELS, type Empresa } from '../../domain/entities';
 import { ALERTA, BOTON_PRIMARIO, BOTON_SECUNDARIO, ETAPA_PUNTO } from './crmUi';
+import { etiquetaDeTarjeta } from './etiquetas';
+import { hoyEnZona } from './fechas';
+import type { ResultadoRuc } from './RucFaltante';
+import { useHistorial } from './useHistorial';
 import { DetalleForm } from './DetalleForm';
 import { DetalleVista } from './DetalleVista';
 import {
@@ -34,6 +38,7 @@ interface Props {
   onCrearSector: (nombre: string) => Promise<string | { error: string }>;
   onCambiarMedio: (e: Empresa) => void;
   onEditarMotivo: (e: Empresa) => void;
+  onGuardarRuc: (id: string, ruc: string, unir: boolean) => Promise<ResultadoRuc>;
 }
 
 /**
@@ -51,6 +56,7 @@ export function DetallePanel({
   onCrearSector,
   onCambiarMedio,
   onEditarMotivo,
+  onGuardarRuc,
 }: Props) {
   const tituloId = useId();
   const [borrador, setBorrador] = useState<Borrador | null>(null);
@@ -68,6 +74,10 @@ export function DetallePanel({
   const focoPendiente = useRef<string | null>(null);
   const devolverAEditar = useRef(false);
   const alEscape = useRef<() => void>(() => undefined);
+
+  const { reintentar, ...historial } = useHistorial(empresa.idEmpresa, empresa.updatedAt);
+  const ahora = new Date();
+  const etiqueta = etiquetaDeTarjeta(empresa, ahora);
 
   const editando = borrador !== null;
   const sucio = borrador !== null && estaSucio(borrador, empresa);
@@ -220,7 +230,8 @@ export function DetallePanel({
           </h2>
           <p className="mt-1 flex items-center gap-1.5 text-[13px] text-slate-600 dark:text-slate-400">
             <span className={`h-2.5 w-2.5 rounded-full ${ETAPA_PUNTO[empresa.etapa]}`} aria-hidden="true" />
-            {ETAPA_LABELS[empresa.etapa]}
+            <span>{ETAPA_LABELS[empresa.etapa]}</span>
+            {etiqueta && <span>{` · ${etiqueta.texto}`}</span>}
           </p>
         </div>
         <div className="ml-auto flex shrink-0 items-center gap-1">
@@ -296,7 +307,16 @@ export function DetallePanel({
           </div>
         </form>
       ) : (
-        <DetalleVista empresa={empresa} onCambiarMedio={onCambiarMedio} onEditarMotivo={onEditarMotivo} />
+        <DetalleVista
+          empresa={empresa}
+          onCambiarMedio={onCambiarMedio}
+          onEditarMotivo={onEditarMotivo}
+          onGuardarRuc={(ruc, unir) => onGuardarRuc(empresa.idEmpresa, ruc, unir)}
+          historial={historial}
+          onReintentarHistorial={reintentar}
+          ahora={ahora}
+          hoy={hoyEnZona(ahora)}
+        />
       )}
     </aside>
   );
