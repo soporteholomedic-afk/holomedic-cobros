@@ -4,15 +4,24 @@ import { SqlServerCrmEmpresaRepository, migrate } from './sqlserver';
 
 let cached: Promise<ICrmEmpresaRepository> | null = null;
 
+/**
+ * Repository over HOLOMEDIC, migrated once per process. A failed connection or
+ * migration (rolled back as a whole) is not cached: the next request retries,
+ * so a transient error does not leave the CRM down until a restart.
+ */
 export function getCrmDb(): Promise<ICrmEmpresaRepository> {
   if (cached) return cached;
-  cached = (async (): Promise<ICrmEmpresaRepository> => {
+  const intento = (async (): Promise<ICrmEmpresaRepository> => {
     const pool = await getHolomedicPool();
     await pool.connect();
     await migrate(pool);
     return new SqlServerCrmEmpresaRepository(pool);
   })();
-  return cached;
+  cached = intento;
+  intento.catch(() => {
+    if (cached === intento) cached = null;
+  });
+  return intento;
 }
 
 export function __setCrmDbForTests(repo: ICrmEmpresaRepository | null): void {
