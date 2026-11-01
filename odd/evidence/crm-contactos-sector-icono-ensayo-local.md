@@ -22,3 +22,16 @@
 | A failure forced after the icon steps (THROW before COMMIT) rolls back everything: data, columns and CHECKs identical to before | PASS | PASS |
 
 **About the first 2022 run:** the forced-failure row reported FAIL with "Invalid column name 'icono'". The cause was the fingerprint query of the rehearsal script itself, which read `icono` from the pre-migration schema. It now reads `SELECT *`, and the scenario passes.
+
+## Shared database: backup and rolled-back rehearsal (2026-11-01 18:55 UTC)
+
+- **Server:** SQL Server 15.0.2180.2, database `HOLOMEDIC` on 172.16.10.14. The script aborts unless `DB_NAME()` is `HOLOMEDIC`. SIGLA was not touched.
+- **SQL:** the same batch, sha256 prefix `7836077fb203418a`. It ran from the preview server worktree, and both scripts were deleted afterwards.
+- **Backup:** `svrnode:~/backups-crm/crm-antes-de-icono-sector-2026-11-01T18-55-16-780Z.json` (mode 600, 8400 bytes). It holds all the rows of CrmSector (7), CrmEmpresa (2), CrmContacto (2) and CrmInteraccion (1), plus the schema catalog. It was read back after writing.
+- **Rehearsal:** `BEGIN TRAN` → migration → read back → `ROLLBACK`. It ran in 138 ms. Trancount was 1 inside and 0 after.
+- **Changes the migration would make:** 2 added, 0 removed.
+  - `col CrmSector.icono nvarchar(40) NULL`. The catalog reports bytes, so this is NVARCHAR(20).
+  - `check CrmSector.CK_CrmSector_icono`, limited to the 12 icon keys.
+- **Sectors as it would leave them:** Comercio y Tiendas tienda, Construcción casco, Fábrica y Producción fabrica, Minería y Energía pico, Oficinas y Servicios maletin, Transporte y Almacén camion. "Desarrollo de Software" was created from the UI and stays without an icon.
+- **Row counts inside the rehearsal:** unchanged (7 / 2 / 2 / 1).
+- **After the rollback:** schema, data and `modify_date` were all identical to before. Result: the database was left exactly as it was.
