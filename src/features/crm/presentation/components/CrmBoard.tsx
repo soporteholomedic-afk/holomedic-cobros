@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type DragEvent } from 'react';
 import Link from 'next/link';
-import { Plus, Search, Upload } from 'lucide-react';
+import { ArrowDownLeft, Plus, Search, Upload } from 'lucide-react';
 import { toast } from 'sonner';
 
 import {
@@ -24,6 +24,7 @@ import { MedioDialog } from './MedioDialog';
 import { MotivoDialog } from './MotivoDialog';
 import { etiquetaDeTarjeta } from './etiquetas';
 import { hoyEnZona } from './fechas';
+import { EntrantePanel } from './EntrantePanel';
 import { RegistrarContactoPanel } from './RegistrarContactoPanel';
 import { capturar, focoEnTarjeta, reproducir, type Captura, type Foco, type Registro } from './vuelo';
 
@@ -93,6 +94,8 @@ export function CrmBoard() {
   // The "Registrar contacto" panel: which card, and who started the contact when it opened.
   const [registro, setRegistro] = useState<{ id: string; direccion: Direccion } | null>(null);
   const abridorRegistro = useRef<HTMLElement | null>(null);
+  const [entranteAbierto, setEntranteAbierto] = useState(false);
+  const botonEntrante = useRef<HTMLButtonElement>(null);
   const detalleRef = useRef<DetalleHandle>(null);
   const [sectores, setSectores] = useState<string[]>([]);
   const draggingId = useRef<string | null>(null);
@@ -187,6 +190,7 @@ export function CrmBoard() {
     if (id === detalleId) return;
     conGuardia(() => {
       setRegistro(null);
+      setEntranteAbierto(false);
       setDetalleId(id);
       if (alta === 'visible') {
         setAlta('oculta');
@@ -206,6 +210,7 @@ export function CrmBoard() {
     const opener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     conGuardia(() => {
       abridorRegistro.current = opener;
+      setEntranteAbierto(false);
       setDetalleId(null);
       if (alta === 'visible') {
         setAlta('oculta');
@@ -242,9 +247,41 @@ export function CrmBoard() {
     );
   }
 
+  /** Open the "Nos contactaron" panel; the detail, contact and create panels step aside. */
+  function pedirEntrante() {
+    conGuardia(() => {
+      setRegistro(null);
+      setDetalleId(null);
+      if (alta === 'visible') {
+        setAlta('oculta');
+        toast.info('El borrador de \u201cNueva empresa\u201d se conserva');
+      }
+      if (entranteAbierto) document.getElementById('ent-razon')?.focus();
+      setEntranteAbierto(true);
+    });
+  }
+
+  function cerrarEntrante() {
+    setEntranteAbierto(false);
+    botonEntrante.current?.focus();
+  }
+
+  function entranteGuardado(nueva: Empresa, existente: boolean) {
+    const antes = empresas.find((x) => x.idEmpresa === nueva.idEmpresa);
+    const etiqueta = etiquetaDeTarjeta(nueva, new Date());
+    setEntranteAbierto(false);
+    if (antes && antes.etapa !== nueva.etapa) colocar(nueva);
+    else reemplazar(nueva, !existente || !antes);
+    botonEntrante.current?.focus();
+    toast.success(
+      `${nueva.razonSocial} quedó en «${ETAPA_LABELS[nueva.etapa]}» como «${(etiqueta?.texto ?? 'Falta responder').split(' · ')[0]}».`,
+    );
+  }
+
   function pedirNueva() {
     conGuardia(() => {
       setRegistro(null);
+      setEntranteAbierto(false);
       setDetalleId(null);
       setAlta('visible');
       if (alta === 'visible') document.getElementById('alta-razon')?.focus();
@@ -468,6 +505,16 @@ export function CrmBoard() {
           Importar empresas
         </Link>
         <button
+          ref={botonEntrante}
+          type="button"
+          onClick={pedirEntrante}
+          aria-haspopup="dialog"
+          className="inline-flex h-10 items-center gap-2 whitespace-nowrap rounded-xl border border-sky-600 bg-white px-4 text-sm font-semibold text-sky-800 hover:bg-sky-50 dark:border-sky-500 dark:bg-slate-900 dark:text-sky-200 dark:hover:bg-slate-800"
+        >
+          <ArrowDownLeft className="h-4 w-4" aria-hidden="true" />
+          Nos contactaron
+        </button>
+        <button
           ref={botonNueva}
           type="button"
           onClick={pedirNueva}
@@ -578,6 +625,10 @@ export function CrmBoard() {
           onGuardarRuc={guardarRuc}
           onRegistrar={(id) => abrirRegistro(id, 'saliente')}
         />
+      )}
+
+      {entranteAbierto && (
+        <EntrantePanel empresas={empresas} hoy={hoy} onCerrar={cerrarEntrante} onGuardado={entranteGuardado} />
       )}
 
       {registroEmpresa && registro && (

@@ -5,10 +5,12 @@ import {
   type Direccion,
   type Empresa,
   type Medio,
+  type Origen,
   type Resultado,
 } from '../../domain/entities';
 import { DatosEmpresaInvalidosError } from '../../domain/errors';
-import { validarMedioContacto, validarProximaAccion, validarResumen } from '../../application/validar';
+import { validarMedioContacto, validarProximaAccion, validarResumen, validarRuc } from '../../application/validar';
+import { isValidCorreo } from '@/features/auth/domain/correo';
 import { sumarDiasHabiles } from './fechas';
 
 /** Fields a contact form can reject; each panel maps them to its own DOM ids. */
@@ -175,4 +177,105 @@ export function cuerpoRegistro(f: RegistroForm): Record<string, unknown> {
     ...(resumen ? { resumen } : {}),
     proximaAccion: accionACuerpo(f.accion),
   };
+}
+
+/** What the "Nos contactaron" panel holds. */
+export interface EntranteForm {
+  razonSocial: string;
+  ruc: string;
+  medio: Medio;
+  medioOtro: string;
+  persona: string;
+  /** One field: anything with "@" is an email, the rest a phone. */
+  dato: string;
+  necesita: string;
+  origen: Origen | null;
+  accion: AccionForm;
+}
+
+export function entranteInicial(hoy: string): EntranteForm {
+  return {
+    razonSocial: '',
+    ruc: '',
+    medio: 'whatsapp',
+    medioOtro: '',
+    persona: '',
+    dato: '',
+    necesita: '',
+    origen: 'nose',
+    accion: { tipo: 'responder', detalle: '', fecha: hoy },
+  };
+}
+
+/** Name key: case- and whitespace-insensitive (accents are kept), the same the server uses. */
+export const claveNombre = (nombre: string): string => nombre.trim().replace(/\s+/g, ' ').toLowerCase();
+
+/** The empresa the typed name or RUC already belongs to, if any. */
+export function empresaCoincidente(empresas: Empresa[], razonSocial: string, ruc: string): Empresa | null {
+  const clave = claveNombre(razonSocial);
+  const digitos = ruc.trim();
+  return (
+    (clave ? empresas.find((e) => claveNombre(e.razonSocial) === clave) : undefined) ??
+    (/^\d{11}$/.test(digitos) ? empresas.find((e) => e.ruc === digitos) : undefined) ??
+    null
+  );
+}
+
+/** Contact data of "Teléfono o correo": an "@" makes it an email, anything else a phone. */
+export function partirDato(dato: string): { telefono?: string; correo?: string } {
+  const t = dato.trim();
+  if (!t) return {};
+  return t.includes('@') ? { correo: t } : { telefono: t };
+}
+
+export const ORDEN_ENTRANTE: readonly CampoContacto[] = ['razon', 'ruc', 'otro', 'dato', 'accion', 'accionDetalle', 'fecha'];
+
+/** Same checks and messages as the server; `existente` relaxes the contact data (we already have it). */
+export function validarEntrante(f: EntranteForm, hoy: string, destino: Empresa | null): Fallos {
+  const fallos: Fallos = {};
+  const razon = mensajeDe(() => opcionalObligatorio(f.razonSocial));
+  if (razon) fallos.razon = razon;
+  if (f.ruc.trim()) {
+    const ruc = mensajeDe(() => validarRuc(f.ruc));
+    if (ruc) fallos.ruc = ruc;
+  }
+  Object.assign(fallos, validarMedio(f.medio, f.medioOtro));
+  const { telefono, correo } = partirDato(f.dato);
+  if (!telefono && !correo) {
+    if (!destino) fallos.dato = 'Escribe un teléfono o un correo para poder responder.';
+  } else if (telefono && telefono.replace(/\D/g, '').length !== 9) {
+    fallos.dato = 'El teléfono debe tener 9 dígitos.';
+  } else if (correo && !isValidCorreo(correo)) {
+    fallos.dato = 'El correo no es válido.';
+  }
+  const requerida = (destino?.etapa ?? 'contactado') !== 'cliente';
+  const accion = requerida && f.accion.tipo === 'ninguna' ? { ...f.accion, tipo: null } : f.accion;
+  return { ...fallos, ...validarAccion(accion, hoy) };
+}
+
+function opcionalObligatorio(valor: string): string {
+  if (!valor.trim()) throw new DatosEmpresaInvalidosError('La razón social es obligatoria');
+  return valor.trim();
+}
+
+/** JSON body of `POST /api/crm/entrantes`. */
+export function cuerpoEntrante(f: EntranteForm): Record<string, unknown> {
+  const texto = (v: string) => v.trim() || undefined;
+  return {
+    razonSocial: f.razonSocial.trim(),
+    ...(texto(f.ruc) ? { ruc: f.ruc.trim() } : {}),
+    medio: f.medio,
+    ...(f.medio === 'otro' ? { medioOtro: f.medioOtro.trim() } : {}),
+    ...(texto(f.persona) ? { persona: f.persona.trim() } : {}),
+    ...partirDato(f.dato),
+    ...(texto(f.necesita) ? { necesita: f.necesita.trim() } : {}),
+    ...(f.origen ? { origen: f.origen } : {}),
+    proximaAccion: accionACuerpo(f.accion),
+  };
+}
+
+/** Text under the form: what saving does (`pEntrante` of the artboard). */
+export function previaEntrante(destino: Empresa | null, ruc: string): string {
+  if (destino) return `Se agrega al historial de ${destino.razonSocial} y la tarjeta muestra «Falta responder».`;
+  return `Se crea una tarjeta en «Contactado» con la etiqueta «Falta responder»${ruc.trim() ? '' : ' y marcada «Falta RUC»'}.`;
 }
