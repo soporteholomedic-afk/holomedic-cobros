@@ -20,6 +20,11 @@ Dos frentes de notificación sobre las señales existentes del CRM: superficie i
 | T4 | S1, S2 | `useNotificacionesNavegador.ts` + `BannerNotificaciones.tsx` + wiring `SessionShell` + tests | 3 |
 | T5 | S1-S5 | Verificación: tests/lint de afectados, sync SDK, cierre por S# | — |
 
+## Evidencia
+
+- T1+T2 → `64660a9` (feat(crm): pending-alert computation and /api/crm/alertas endpoint)
+- T3 → `4047125` (feat(crm): Tu día panel above the board)
+
 ## Reglas de dominio (T1)
 
 - `accion_vencida`: etapa ∈ {contactado, en_seguimiento}, `proximaAccion != null`, `fecha < hoy`; `atraso` = días completos de atraso.
