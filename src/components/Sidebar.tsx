@@ -3,10 +3,9 @@
 import { useState, useCallback } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Activity, Building2, FileSpreadsheet, Home, DollarSign, FileText, Mail, Menu, X, LogOut, MessageSquare, Gauge, BookOpen, SlidersHorizontal, Settings } from 'lucide-react';
+import { Activity, Building2, FileSpreadsheet, Home, DollarSign, FileText, Mail, Menu, X, LogOut, Settings } from 'lucide-react';
 import AreasMenuItem from './AreasMenuItem';
 import { useAuth } from '@/features/auth/presentation/hooks/useAuth';
-import { useNotificacionesConversaciones } from '@/features/crm/presentation/hooks/useNotificacionesConversaciones';
 import { plantillasEntryHref } from '@/features/plantillas-editor/infrastructure/areaConfigRegistry';
 
 const navItems = [
@@ -39,21 +38,8 @@ export default function Sidebar() {
 
   const isAdmin = user?.permisos.includes('admin');
   // crm (S1a/pr1): the CRM entry is gated by its OWN permiso — the
-  // route requires exactly `crm` via RUTAS_PROTETGIDAS; crm_admin is a
-  // separate elevation for the import surface and never shown here.
+  // route requires exactly `crm` via RUTAS_PROTEGIDAS, import view included.
   const canCrm = user?.permisos.includes('crm');
-  // agente-ia-crm E3·T6: "Conversaciones" is gated by its OWN permiso
-  // too — INDEPENDENT of `crm` (the bandeja route requires exactly
-  // `crm_conversaciones`): an operator with only crm_conversaciones
-  // sees this entry but NOT the CRM panel.
-  const canConversaciones = user?.permisos.includes('crm_conversaciones');
-  // The polling (badge + toasts) lives exactly where the entry lives
-  // — the global shell. The hook call stays unconditional at the top
-  // level (rules-of-hooks); `habilitado` gates the fetches/timers.
-  const { resumen: resumenNotificaciones } = useNotificacionesConversaciones(
-    canConversaciones === true,
-  );
-  const requiereAyuda = resumenNotificaciones?.requiereAyuda ?? 0;
   // configuracion-tabs (S4): `firma_correo` no longer opens a separate
   // "Mi firma" entry — it now feeds the shared "Configuración" entry
   // below. The MI FIRMA tab route keeps its own `firma_correo` gate in
@@ -73,24 +59,6 @@ export default function Sidebar() {
   // matching lookalikes like /configuracion-otros.
   const configuracionSectionActiva =
     pathname === '/configuracion' || pathname.startsWith('/configuracion/');
-  // E3·T6 active-state: exact match or any sub-route of the bandeja.
-  const conversacionesActiva =
-    pathname === '/crm/conversaciones' || pathname.startsWith('/crm/conversaciones/');
-  // E4·T6: "Calidad" rides the SAME crm_conversaciones gate (the
-  // quality panel is a conversations-tier surface).
-  const calidadActiva = pathname === '/crm/calidad' || pathname.startsWith('/crm/calidad/');
-  // agente-ia-crm E4·T8: "Conocimiento" is gated by its OWN permiso
-  // crm_conocimiento (the /admin/crm/conocimiento upload surface) —
-  // independent of crm/admin, same additive pattern as the others.
-  const canConocimiento = user?.permisos.includes('crm_conocimiento');
-  const conocimientoActiva =
-    pathname === '/admin/crm/conocimiento' || pathname.startsWith('/admin/crm/conocimiento/');
-  // agente-ia-crm E5·T6: "Configuración IA" is gated by its OWN permiso
-  // crm_configuracion (the /admin/crm/configuracion surface) —
-  // independent of crm/admin/crm_conocimiento.
-  const canConfiguracion = user?.permisos.includes('crm_configuracion');
-  const configuracionActiva =
-    pathname === '/admin/crm/configuracion' || pathname.startsWith('/admin/crm/configuracion/');
 
   return (
     <>
@@ -202,93 +170,6 @@ export default function Sidebar() {
               <Building2 className="w-5 h-5" />
               <span>CRM</span>
               {pathname === '/crm' && (
-                <span className="ml-auto w-1.5 h-1.5 rounded-full bg-sky-400 shadow-sm shadow-sky-400/50" />
-              )}
-            </Link>
-          )}
-
-          {canConversaciones && (
-            <Link
-              href="/crm/conversaciones"
-              onClick={closeMobile}
-              className={`flex items-center space-x-3 px-4 py-3 rounded-xl text-sm font-medium transition-all duration-200 ${
-                conversacionesActiva
-                  ? 'bg-sky-950/50 text-sky-300 border border-sky-800/30 shadow-sm'
-                  : 'text-slate-400 hover:text-white hover:bg-slate-800/50'
-              }`}
-            >
-              <MessageSquare className="w-5 h-5" />
-              <span>Conversaciones</span>
-              {/* E3·T6 badge (ListaConversaciones noLeidos styling
-                  convention): requiereAyuda > 0 only, aria-label for
-                  screen readers. When present it owns the ml-auto and
-                  the active dot trails it. */}
-              {requiereAyuda > 0 && (
-                <span
-                  aria-label={`${requiereAyuda} conversaciones necesitan ayuda`}
-                  title="Conversaciones donde La Guía pide tu ayuda"
-                  className="ml-auto rounded-full bg-red-600 px-2 py-0.5 text-[10px] font-bold text-white"
-                >
-                  {requiereAyuda}
-                </span>
-              )}
-              {conversacionesActiva && (
-                <span
-                  className={`${requiereAyuda > 0 ? '' : 'ml-auto '}w-1.5 h-1.5 rounded-full bg-sky-400 shadow-sm shadow-sky-400/50`}
-                />
-              )}
-            </Link>
-          )}
-
-          {canConversaciones && (
-            <Link
-              href="/crm/calidad"
-              onClick={closeMobile}
-              className={`flex items-center space-x-3 px-4 py-3 rounded-xl text-sm font-medium transition-all duration-200 ${
-                calidadActiva
-                  ? 'bg-sky-950/50 text-sky-300 border border-sky-800/30 shadow-sm'
-                  : 'text-slate-400 hover:text-white hover:bg-slate-800/50'
-              }`}
-            >
-              <Gauge className="w-5 h-5" />
-              <span>Calidad</span>
-              {calidadActiva && (
-                <span className="ml-auto w-1.5 h-1.5 rounded-full bg-sky-400 shadow-sm shadow-sky-400/50" />
-              )}
-            </Link>
-          )}
-
-          {canConocimiento && (
-            <Link
-              href="/admin/crm/conocimiento"
-              onClick={closeMobile}
-              className={`flex items-center space-x-3 px-4 py-3 rounded-xl text-sm font-medium transition-all duration-200 ${
-                conocimientoActiva
-                  ? 'bg-sky-950/50 text-sky-300 border border-sky-800/30 shadow-sm'
-                  : 'text-slate-400 hover:text-white hover:bg-slate-800/50'
-              }`}
-            >
-              <BookOpen className="w-5 h-5" />
-              <span>Conocimiento</span>
-              {conocimientoActiva && (
-                <span className="ml-auto w-1.5 h-1.5 rounded-full bg-sky-400 shadow-sm shadow-sky-400/50" />
-              )}
-            </Link>
-          )}
-
-          {canConfiguracion && (
-            <Link
-              href="/admin/crm/configuracion"
-              onClick={closeMobile}
-              className={`flex items-center space-x-3 px-4 py-3 rounded-xl text-sm font-medium transition-all duration-200 ${
-                configuracionActiva
-                  ? 'bg-sky-950/50 text-sky-300 border border-sky-800/30 shadow-sm'
-                  : 'text-slate-400 hover:text-white hover:bg-slate-800/50'
-              }`}
-            >
-              <SlidersHorizontal className="w-5 h-5" />
-              <span>Configuración IA</span>
-              {configuracionActiva && (
                 <span className="ml-auto w-1.5 h-1.5 rounded-full bg-sky-400 shadow-sm shadow-sky-400/50" />
               )}
             </Link>

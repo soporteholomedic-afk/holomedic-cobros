@@ -1,180 +1,29 @@
-import type { ConnectionPool } from 'mssql';
-
+import type { ICrmEmpresaRepository } from '../domain/ports';
 import { getHolomedicPool } from '@/lib/db';
+import { SqlServerCrmEmpresaRepository, migrate } from './sqlserver';
 
-import { migrate } from './sqlserver/migrate';
-import { SqlServerEmpresaRepository } from './sqlserver/sqlServerEmpresaRepository';
-import { SqlServerPipelineRepository } from './sqlserver/sqlServerPipelineRepository';
-import { SqlServerAsignacionesRepository } from './sqlserver/sqlServerAsignacionesRepository';
-import { SqlServerConversacionRepository } from './sqlserver/sqlServerConversacionRepository';
-import { SqlServerMensajeRepository } from './sqlserver/sqlServerMensajeRepository';
-import { SqlServerConocimientoRepository } from './sqlserver/sqlServerConocimientoRepository';
-import { SqlServerIngestaConocimientoRepository } from './sqlserver/sqlServerIngestaConocimientoRepository';
-import { SqlServerCalidadRepository } from './sqlserver/sqlServerCalidadRepository';
-import { SqlServerTareaAgenteRepository } from './sqlserver/sqlServerTareaAgenteRepository';
-import { SqlServerConfigRepository } from './sqlserver/sqlServerConfigRepository';
-import { SqlServerCrmImportador } from './importar/importadorCrm';
-import type {
-  ConversacionCrmRepository,
-  CrmActividadesRepositoryPort,
-  CrmAsignacionesRepositoryPort,
-  CrmEmpresaRepositoryPort,
-  CrmEnviosCorreoRepositoryPort,
-  CrmHandoffsRepositoryPort,
-  CrmImportadorPort,
-  CrmPanelRepositoryPort,
-  CrmPipelineRepositoryPort,
-  CrmResultadosRepositoryPort,
-  CrmTransicionesRepositoryPort,
-  CalidadRepository,
-  ConfigCrmRepository,
-  ConocimientoCrmRepository,
-  IngestaConocimientoRepository,
-  MensajeCrmRepository,
-  TareaAgenteRepository,
-} from '../domain/ports';
+let cached: Promise<ICrmEmpresaRepository> | null = null;
 
 /**
- * The CRM feature container (ADR-3): one factory owning ONE pool and
- * ONE idempotent `migrate()`. pr3 adds the first SQL Server adapter —
- * the empresa registry repository — bound to the migrated pool; pr10
- * adds the pipeline adapter, ONE class implementing the four pipeline
- * roles (the transition write is genuinely cross-table, design §2b).
- *
- * Mirrors `getUsuarioDb`/`getAsistenciaDb`: lazy singleton, async
- * signature for uniform `await` at call sites.
+ * Repository over HOLOMEDIC, migrated once per process. A failed connection or
+ * migration (rolled back as a whole) is not cached: the next request retries,
+ * so a transient error does not leave the CRM down until a restart.
  */
-export interface CrmDb {
-  /** Shared HOLOMEDIC pool, connected and schema-migrated. */
-  pool: ConnectionPool;
-  /** Empresa registry adapter (registro de empresas, spec G1). */
-  empresas: CrmEmpresaRepositoryPort;
-  /** Import execution adapter (spec G2, pr6). */
-  importador: CrmImportadorPort;
-  /** Pipeline state adapter (spec G4, pr10). */
-  pipeline: CrmPipelineRepositoryPort;
-  /** Transition audit adapter (spec G4: who/when/from/to). */
-  transiciones: CrmTransicionesRepositoryPort;
-  /** Result-event adapter (spec G6 productivity). */
-  resultados: CrmResultadosRepositoryPort;
-  /** Handoff record adapter (spec G4). */
-  handoffs: CrmHandoffsRepositoryPort;
-  /**
-   * Activity adapter (tasks pr13/WU1): the ENVIO_CADENCIA write is
-   * cross-table (activity + pipeline counters + derived audit), so the
-   * SAME adapter instance implements this port (design §2c).
-   */
-  actividades: CrmActividadesRepositoryPort;
-  /**
-   * Assignment adapter (tasks pr14/WU2, spec G5): the assignment write
-   * is cross-table (empresa.responsable + CRM_Asignaciones event in
-   * ONE transaction, design §2d).
-   */
-  asignaciones: CrmAsignacionesRepositoryPort;
-  /**
-   * Send-log adapter (rediseno-crm-panel task 4.2, design D3): the
-   * CRM_EnviosCorreos dispatch log (ENVIADO/FALLIDO) — the SAME
-   * pipeline adapter instance implements this port too (ADR-3).
-   */
-  envios: CrmEnviosCorreoRepositoryPort;
-  /**
-   * Panel read adapter (rediseno-crm-panel task 7.1, design D4): the
-   * ONE-fetch aggregate behind GET /api/crm/panel — the SAME pipeline
-   * adapter instance implements this port too (ADR-3).
-   */
-  panel: CrmPanelRepositoryPort;
-  /**
-   * Conversation adapter (agente-ia-crm E1): the CRM_Conversaciones
-   * lifecycle (bandeja, vinculación, estado) on the same migrated
-   * pool. Optional (Contacto.cargo precedent) so pre-existing
-   * route-test containers stay valid; the real factory ALWAYS
-   * provides it — E1+ call sites consume it through getCrmDb().
-   */
-  conversaciones?: ConversacionCrmRepository;
-  /** Thread adapter (agente-ia-crm E1): the CRM_Mensajes rows (same
-   * optional-for-fakes rule as conversaciones). */
-  mensajes?: MensajeCrmRepository;
-  /**
-   * Knowledge-base adapter (agente-ia-crm E2·T1): the read-only
-   * CRM_Conocimiento prefilter la Guía ranks from (same
-   * optional-for-fakes rule as conversaciones/mensajes; the E5
-   * editor adds the write side).
-   */
-  conocimiento?: ConocimientoCrmRepository;
-  /**
-   * Agent-task queue adapter (agente-ia-crm E2·T5): the durable
-   * CRM_AgenteTareas rows the webhook hook enqueues and the sweeper
-   * drains (same optional-for-fakes rule as conversaciones/mensajes;
-   * the real factory ALWAYS provides it).
-   */
-  tareas?: TareaAgenteRepository;
-  /**
-   * Quality-metrics adapter (agente-ia-crm E4·T6): the READ-ONLY
-   * aggregate behind GET /api/crm/calidad y /crm/calidad (same
-   * optional-for-fakes rule as conversaciones/mensajes; the real
-   * factory ALWAYS provides it).
-   */
-  calidad?: CalidadRepository;
-  /**
-   * Knowledge-ingestion adapter (agente-ia-crm E4·T7): las filas de
-   * CRM_IngestasConocimiento que la ruta de subida (T8) crea y el
-   * procesador INGESTAR_CONOCIMIENTO drena (same optional-for-fakes
-   * rule; the real factory ALWAYS provides it).
-   */
-  ingestaConocimiento?: IngestaConocimientoRepository;
-  /**
-   * Platform-configuration adapter (agente-ia-crm E5·T2): CRM_Config
-   * key/value rows + audit trail the admin edits at runtime (same
-   * optional-for-fakes rule; the real factory ALWAYS provides it).
-   */
-  config?: ConfigCrmRepository;
-}
-
-let cached: Promise<CrmDb> | null = null;
-
-/**
- * Return the process-wide CRM container (a cached Promise). The first
- * call opens the singleton `HOLOMEDIC` pool via `getHolomedicPool()`,
- * connects it and runs the idempotent `migrate()` so the schema exists
- * on first connection; every subsequent call returns the same promise.
- */
-export function getCrmDb(): Promise<CrmDb> {
+export function getCrmDb(): Promise<ICrmEmpresaRepository> {
   if (cached) return cached;
-  cached = (async (): Promise<CrmDb> => {
+  const intento = (async (): Promise<ICrmEmpresaRepository> => {
     const pool = await getHolomedicPool();
     await pool.connect();
     await migrate(pool);
-    const pipelines = new SqlServerPipelineRepository(pool);
-    return {
-      pool,
-      empresas: new SqlServerEmpresaRepository(pool),
-      importador: new SqlServerCrmImportador(pool),
-      pipeline: pipelines,
-      transiciones: pipelines,
-      resultados: pipelines,
-      handoffs: pipelines,
-      actividades: pipelines,
-      asignaciones: new SqlServerAsignacionesRepository(pool),
-      envios: pipelines,
-      panel: pipelines,
-      conversaciones: new SqlServerConversacionRepository(pool),
-      mensajes: new SqlServerMensajeRepository(pool),
-      conocimiento: new SqlServerConocimientoRepository(pool),
-      ingestaConocimiento: new SqlServerIngestaConocimientoRepository(pool),
-      calidad: new SqlServerCalidadRepository(pool),
-      tareas: new SqlServerTareaAgenteRepository(pool),
-      config: new SqlServerConfigRepository(pool),
-    };
+    return new SqlServerCrmEmpresaRepository(pool);
   })();
-  return cached;
+  cached = intento;
+  intento.catch(() => {
+    if (cached === intento) cached = null;
+  });
+  return intento;
 }
 
-/**
- * Test seam — replaces (or clears) the cached container so API-route
- * and use-case suites can inject a mock `CrmDb` without ever opening a
- * real SQL Server connection. Pass `null` to clear so the next
- * `getCrmDb()` call rebuilds the real container.
- */
-export function __setCrmDbForTests(db: CrmDb | null): void {
-  cached = db ? Promise.resolve(db) : null;
+export function __setCrmDbForTests(repo: ICrmEmpresaRepository | null): void {
+  cached = repo ? Promise.resolve(repo) : null;
 }

@@ -1,47 +1,54 @@
-/**
- * Typed error surface for the CRM application boundary (design §4:
- * plantillas-style typed codes — the pr4 API routes map `code` to HTTP
- * status: VALIDATION_ERROR → 400, CONFLICT_ERROR → 409, NOT_FOUND →
- * 404). Living in the DOMAIN layer so both the use cases (which raise
- * them) and the SQL Server adapter (which maps DB unique violations to
- * `ConflictError`) can reference them without an outward dependency.
- *
- * Messages are Spanish on purpose — they surface verbatim in the UI
- * through the API error body (repo convention).
- */
+import { ETAPA_LABELS, type Etapa } from './entities';
 
-/** Business-rule violation in the input (e.g. contacto sin correo). */
-export class ValidationError extends Error {
-  readonly code = 'VALIDATION_ERROR' as const;
-
-  constructor(message: string) {
-    super(message);
-    this.name = 'ValidationError';
+export class EmpresaNotFoundError extends Error {
+  constructor(id: string) {
+    super(`Empresa not found: ${id}`);
+    this.name = 'EmpresaNotFoundError';
   }
 }
 
-/**
- * Registry-conflict: the write collides with an existing row —
- * duplicated normalized RUC, duplicated contacto name within the same
- * empresa, duplicated correo, or a second principal (filtered index
- * backstop). The adapter raises it on SQL Server 2601/2627; the API
- * maps it to HTTP 409.
- */
-export class ConflictError extends Error {
-  readonly code = 'CONFLICT_ERROR' as const;
-
-  constructor(message: string) {
-    super(message);
-    this.name = 'ConflictError';
+export class RucDuplicadoError extends Error {
+  constructor(ruc: string) {
+    super(`Ya existe una empresa con el RUC: ${ruc}`);
+    this.name = 'RucDuplicadoError';
   }
 }
 
-/** The requested empresa does not exist (API maps it to HTTP 404). */
-export class NotFoundError extends Error {
-  readonly code = 'NOT_FOUND_ERROR' as const;
+/** The RUC being completed already belongs to another empresa; the caller may confirm a merge. */
+export class RucDeOtraEmpresaError extends Error {
+  readonly otra: { idEmpresa: string; razonSocial: string; etapa: Etapa };
 
-  constructor(message = 'Empresa no encontrada') {
+  constructor(otra: { idEmpresa: string; razonSocial: string; etapa: Etapa }) {
+    super(`Este RUC ya es de ${otra.razonSocial} («${ETAPA_LABELS[otra.etapa]}»). ¿Unir las dos tarjetas?`);
+    this.name = 'RucDeOtraEmpresaError';
+    this.otra = { idEmpresa: otra.idEmpresa, razonSocial: otra.razonSocial, etapa: otra.etapa };
+  }
+}
+
+export class SectorDuplicadoError extends Error {
+  constructor(nombre: string) {
+    super(`Ya existe el sector: ${nombre}`);
+    this.name = 'SectorDuplicadoError';
+  }
+}
+
+export class EtapaInvalidaError extends Error {
+  constructor(etapa: string) {
+    super(`Etapa inválida: ${etapa}`);
+    this.name = 'EtapaInvalidaError';
+  }
+}
+
+export class DatosEmpresaInvalidosError extends Error {
+  constructor(message: string) {
     super(message);
-    this.name = 'NotFoundError';
+    this.name = 'DatosEmpresaInvalidosError';
+  }
+}
+
+export class ArchivoImportacionInvalidoError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'ArchivoImportacionInvalidoError';
   }
 }

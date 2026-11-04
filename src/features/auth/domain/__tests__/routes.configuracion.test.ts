@@ -70,8 +70,6 @@ describe('RUTAS_PROTEGIDAS — configuracion tab entries', () => {
     // Legacy routes keep their own gates (S4: bookmarks keep working).
     expect(permisoParaRuta('/admin/usuarios')).toBe('admin');
     expect(permisoParaRuta('/admin/plantillas/firma')).toBe('firma_correo');
-    // The CRM agent-config surface is a DIFFERENT "configuración".
-    expect(permisoParaRuta('/admin/crm/configuracion')).toBe('crm_configuracion');
   });
 });
 

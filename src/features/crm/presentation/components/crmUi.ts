@@ -1,0 +1,214 @@
+import {
+  BookOpen,
+  Briefcase,
+  Building2,
+  Check,
+  Cpu,
+  Factory,
+  FileText,
+  Globe,
+  HardHat,
+  HeartPulse,
+  Info,
+  Mail,
+  MessageCircle,
+  MoreHorizontal,
+  Phone,
+  Pickaxe,
+  Reply,
+  Sprout,
+  Store,
+  Tag,
+  Truck,
+  Users,
+  UtensilsCrossed,
+  X,
+  type LucideIcon,
+} from 'lucide-react';
+
+import {
+  MOTIVO_CAMPOS,
+  SECTORES_INICIALES,
+  type AccionTipo,
+  type Empresa,
+  type Etapa,
+  type IconoSector,
+  type Medio,
+  type Origen,
+} from '../../domain/entities';
+
+/** Color of the dot that goes next to each stage name (board columns and detail header). */
+export const ETAPA_PUNTO: Record<Etapa, string> = {
+  por_contactar: 'bg-slate-400',
+  contactado: 'bg-sky-500',
+  en_seguimiento: 'bg-amber-500',
+  cliente: 'bg-emerald-500',
+  perdido: 'bg-red-500',
+};
+
+export const INPUT =
+  'w-full rounded-[10px] border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-500/30 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100';
+
+/** Same as INPUT, with the red border the form shows while `aria-invalid` is set. */
+export const INPUT_VALIDABLE = `${INPUT} aria-invalid:border-red-500 aria-invalid:ring-1 aria-invalid:ring-red-500`;
+
+/** Section title inside the side-panel forms. */
+export const LEYENDA = 'mb-0.5 text-xs font-bold uppercase tracking-wider text-sky-700 dark:text-sky-400';
+
+export const ETIQUETA_CAMPO = 'grid gap-1.5 text-[13px] font-semibold text-slate-800 dark:text-slate-200';
+
+/** Message under a field that failed validation. */
+export const ERROR_CAMPO = 'text-xs font-semibold text-red-800 dark:text-red-300';
+
+export const BOTON_PRIMARIO =
+  'h-10 rounded-xl bg-gradient-to-tr from-sky-600 to-blue-600 px-4 text-sm font-semibold text-white shadow-md shadow-sky-600/25 hover:brightness-110 disabled:opacity-60';
+
+export const BOTON_SECUNDARIO =
+  'h-10 rounded-xl border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-800 hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:hover:bg-slate-800';
+
+export const ALERTA =
+  'rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-[13px] text-red-800 dark:border-red-900 dark:bg-red-950/40 dark:text-red-200';
+
+/** Icon and colors of each contact medium: chip on the card, tile in the dialog. */
+export const MEDIO_ESTILO: Record<Medio, { icono: LucideIcon; chip: string; casilla: string }> = {
+  llamada: {
+    icono: Phone,
+    chip: 'border-sky-300 bg-sky-50 text-sky-800 dark:border-sky-800 dark:bg-sky-950/40 dark:text-sky-200',
+    casilla: 'text-sky-800 has-[:checked]:border-sky-500 has-[:checked]:bg-sky-50 dark:text-sky-200 dark:has-[:checked]:bg-sky-950/40',
+  },
+  correo: {
+    icono: Mail,
+    chip: 'border-red-300 bg-red-50 text-red-800 dark:border-red-800 dark:bg-red-950/40 dark:text-red-200',
+    casilla: 'text-red-800 has-[:checked]:border-red-500 has-[:checked]:bg-red-50 dark:text-red-200 dark:has-[:checked]:bg-red-950/40',
+  },
+  whatsapp: {
+    icono: MessageCircle,
+    chip: 'border-emerald-300 bg-emerald-50 text-emerald-800 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-200',
+    casilla: 'text-emerald-800 has-[:checked]:border-emerald-500 has-[:checked]:bg-emerald-50 dark:text-emerald-200 dark:has-[:checked]:bg-emerald-950/40',
+  },
+  otro: {
+    icono: MoreHorizontal,
+    chip: 'border-slate-300 bg-slate-100 text-slate-700 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200',
+    casilla: 'text-slate-700 has-[:checked]:border-slate-500 has-[:checked]:bg-slate-100 dark:text-slate-200 dark:has-[:checked]:bg-slate-800',
+  },
+};
+
+/** Icon and help text of each next action in the custom menu (spec S8). */
+export const ACCION_ESTILO: Record<AccionTipo | 'ninguna', { icono: LucideIcon; descripcion: string }> = {
+  ninguna: { icono: X, descripcion: 'No queda nada pendiente con esta empresa' },
+  responder: { icono: Reply, descripcion: 'Contestar a quien nos escribió o llamó' },
+  llamar: { icono: Phone, descripcion: 'Llamada de seguimiento o de cierre' },
+  cotizar: { icono: FileText, descripcion: 'Mandar la propuesta con precios' },
+  info: { icono: Mail, descripcion: 'Brochure, servicios o requisitos' },
+  whatsapp: { icono: MessageCircle, descripcion: 'Mensaje corto de seguimiento' },
+  reunion: { icono: Users, descripcion: 'En la empresa, en la clínica o por videollamada' },
+  otro: { icono: MoreHorizontal, descripcion: 'Escribe cuál en el detalle' },
+};
+
+/** Icon and help text of each "¿Cómo nos conoció?" option (spec S9). */
+export const ORIGEN_ESTILO: Record<Origen, { icono: LucideIcon; descripcion: string }> = {
+  nose: { icono: Info, descripcion: 'No lo mencionó' },
+  referido: { icono: Users, descripcion: 'Un cliente actual nos recomendó' },
+  conocia: { icono: Check, descripcion: 'Trabajó con nosotros o nos ubicaba' },
+  internet: { icono: Globe, descripcion: 'Google, redes sociales o nuestra web' },
+};
+
+/** Lucide icon of each sector icon key (spec S12). */
+export const ICONO_SECTOR_ESTILO: Record<IconoSector, LucideIcon> = {
+  edificio: Building2,
+  casco: HardHat,
+  pico: Pickaxe,
+  fabrica: Factory,
+  camion: Truck,
+  tienda: Store,
+  maletin: Briefcase,
+  salud: HeartPulse,
+  agro: Sprout,
+  educacion: BookOpen,
+  tecnologia: Cpu,
+  alimentos: UtensilsCrossed,
+};
+
+/** Icon of a sector; a neutral tag for one without icon (older, or created without it). */
+export function iconoDeSector(icono: IconoSector | null): LucideIcon {
+  return icono ? ICONO_SECTOR_ESTILO[icono] : Tag;
+}
+
+/** The six initial sectors keep the color of the approved design, by position. */
+const COLOR_INICIALES = [
+  'bg-amber-100 text-amber-800',
+  'bg-slate-200 text-slate-700',
+  'bg-blue-100 text-blue-800',
+  'bg-teal-100 text-teal-800',
+  'bg-pink-100 text-pink-800',
+  'bg-violet-100 text-violet-800',
+] as const;
+
+/** Sectors created later get one of these, picked from the name so it never changes. */
+const COLOR_NUEVOS = [
+  'bg-lime-100 text-lime-800',
+  'bg-orange-100 text-orange-800',
+  'bg-cyan-100 text-cyan-800',
+  'bg-fuchsia-100 text-fuchsia-800',
+] as const;
+
+export function colorDeSector(sector: string | null): string {
+  if (!sector) return 'bg-slate-200 text-slate-700';
+  const minuscula = sector.toLowerCase();
+  const inicial = SECTORES_INICIALES.findIndex((x) => x.toLowerCase() === minuscula);
+  if (inicial >= 0) return COLOR_INICIALES[inicial] ?? COLOR_INICIALES[0];
+  let h = 0;
+  for (const ch of minuscula) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
+  return COLOR_NUEVOS[h % COLOR_NUEVOS.length] ?? COLOR_NUEVOS[0];
+}
+
+/** Summary lines of the loss reason, e.g. "Ofrecimos: S/ 7,000". */
+export function lineasDeMotivo(e: Empresa): string[] {
+  const m = e.motivo;
+  if (!m) return [];
+  const campos = MOTIVO_CAMPOS[m.categoria];
+  const lineas: string[] = [];
+  if (campos.detalle1 && m.detalle1) lineas.push(`${campos.detalle1.resumen}: ${m.detalle1}`);
+  if (campos.detalle2 && m.detalle2) lineas.push(`${campos.detalle2.resumen}: ${m.detalle2}`);
+  if (m.notas) lineas.push(m.notas);
+  return lineas;
+}
+
+/**
+ * Closed control of the custom menu and date picker (spec S9). The highlight
+ * uses one border color plus an inset ring, so all four sides look the same.
+ */
+export const CAMPO_ELEGIBLE = {
+  base: 'flex min-h-10 w-full cursor-pointer items-center gap-2.5 rounded-[10px] border px-3 py-2 text-left text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-500/30',
+  vacio: 'border-slate-300 bg-white text-slate-900 hover:border-slate-400 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100',
+  elegido:
+    'border-sky-500 bg-sky-100 font-semibold text-sky-800 ring-1 ring-inset ring-sky-500 hover:border-sky-600 hover:ring-sky-600 dark:bg-sky-950/60 dark:text-sky-200',
+  invalido: 'border-red-500 bg-white text-slate-900 ring-1 ring-inset ring-red-500 dark:bg-slate-900 dark:text-slate-100',
+  abierto: 'shadow-[0_0_0_3px_rgb(14_165_233/0.3)]',
+} as const;
+
+const EVENTO_POPUP = 'crm:popup-abierto';
+
+/** Announce that the popup `id` opens, so any other open menu or calendar closes. */
+export function cerrarOtrosPopups(id: string): void {
+  document.dispatchEvent(new CustomEvent(EVENTO_POPUP, { detail: id }));
+}
+
+/**
+ * While a popup is open: close it when another one opens or on a pointer press
+ * outside `raiz`. Returns the cleanup for `useEffect`.
+ */
+export function escucharCierre(id: string, raiz: { current: HTMLElement | null }, cerrar: () => void): () => void {
+  const otro = (ev: Event) => {
+    if ((ev as CustomEvent<string>).detail !== id) cerrar();
+  };
+  const fuera = (ev: PointerEvent) => {
+    if (raiz.current && !raiz.current.contains(ev.target as Node)) cerrar();
+  };
+  document.addEventListener(EVENTO_POPUP, otro);
+  document.addEventListener('pointerdown', fuera);
+  return () => {
+    document.removeEventListener(EVENTO_POPUP, otro);
+    document.removeEventListener('pointerdown', fuera);
+  };
+}

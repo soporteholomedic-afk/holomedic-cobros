@@ -61,40 +61,9 @@ export const RUTAS_PROTEGIDAS: RutaProtegida[] = [
   // (REQ-F1-14); the routes.asistencia.test.ts guard pins that exclusion.
   { path: '/asistencia',          permiso: 'asistencia',       label: 'Asistencia' },
   { path: '/api/asistencia-rrhh', permiso: 'asistencia',       label: 'API Asistencia RRHH' },
-  // crm (S1a/pr1): the plain-`crm` entries cover the CRM pages and the
-  // whole /api/crm prefix; the admin-only import entries are LONGER
-  // prefixes, so longest-first startsWith matching denies plain-`crm`
-  // sessions on the import surface (design D2, firma_correo pattern).
-  { path: '/crm/importar',        permiso: 'crm_admin',        label: 'Importar Empresas CRM' },
-  { path: '/api/crm/import',      permiso: 'crm_admin',        label: 'API Importación CRM' },
-  // agente-ia-crm (E1): the conversations surface has its OWN permiso.
-  // Both entries are LONGER prefixes than `/crm` and `/api/crm`, so
-  // longest-first startsWith matching gates them independently of the
-  // generic crm entries (firma_correo pattern); order below is kept
-  // specific-before-generic for consistency, though the sort makes it
-  // moot.
-  { path: '/crm/conversaciones',     permiso: 'crm_conversaciones', label: 'Conversaciones' },
-  { path: '/api/crm/conversaciones', permiso: 'crm_conversaciones', label: 'Conversaciones' },
-  // agente-ia-crm (E4·T6): the quality panel rides the SAME
-  // crm_conversaciones permiso — LONGER prefix than `/crm`, so
-  // longest-first startsWith matching gates it independently of the
-  // generic crm entry (firma_correo pattern). The API surface
-  // /api/crm/calidad stays under the generic /api/crm gate in the
-  // proxy and re-checks crm_conversaciones IN-ROUTE (productividad
-  // pattern).
-  { path: '/crm/calidad',            permiso: 'crm_conversaciones', label: 'Calidad' },
-  // agente-ia-crm (E4·T8): knowledge upload has its OWN permiso.
-  // Both entries are LONGER prefixes than /admin/usuarios and /api/crm,
-  // so longest-first startsWith matching gates them independently of
-  // the generic admin/crm entries (crm_conversaciones pattern). The
-  // API surface is registered EXPLICITLY (E1 precedent): without its
-  // own entry it would fall under the plain-`crm` /api/crm gate.
-  { path: '/admin/crm/conocimiento',        permiso: 'crm_conocimiento', label: 'Conocimiento' },
-  { path: '/api/crm/conocimiento/ingestas', permiso: 'crm_conocimiento', label: 'Conocimiento' },
-  // agente-ia-crm (E5·T4): agent configuration has its OWN permiso;
-  // both entries are longer prefixes than the generic admin/crm gates.
-  { path: '/admin/crm/configuracion',       permiso: 'crm_configuracion', label: 'Configuración' },
-  { path: '/api/crm/configuracion',         permiso: 'crm_configuracion', label: 'Configuración' },
+  // crm: the plain-`crm` entries cover every CRM page (including the
+  // Excel import view /crm/importar) and the whole /api/crm prefix
+  // (including /api/crm/importar). Anyone who can use the CRM can import.
   { path: '/api/crm',             permiso: 'crm',              label: 'API CRM' },
   { path: '/crm',                 permiso: 'crm',              label: 'CRM' },
 ];
