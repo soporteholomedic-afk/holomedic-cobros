@@ -24,6 +24,7 @@ Dos frentes de notificación sobre las señales existentes del CRM: superficie i
 
 - T1+T2 → `64660a9` (feat(crm): pending-alert computation and /api/crm/alertas endpoint)
 - T3 → `4047125` (feat(crm): Tu día panel above the board)
+- T4 → `4864e4d` (feat(crm): browser notifications with opt-in switch and persistent banner)
 
 ## Reglas de dominio (T1)
 
@@ -37,6 +38,7 @@ Dos frentes de notificación sobre las señales existentes del CRM: superficie i
 - L1: "vamos a trabajar en el modulo de CRM, quiero implementar un sistema de notificaciones, ayudame a aterrizar la idea para hacer una buena feature. Crea una skill pata desarrollar feature pensando en el producto y usuario. Luego continua con el desarrollo"
 - L2: decisiones de producto (batch): ambas señales; calculadas en vivo; todos los de CRM; panel dentro de /crm.
 - L3: "quiero que lq notificacion se en 2 frentes. En el misma plataforma y otra a nivel de navegador, las notificaciones deben poder activarse con un switch. si el usuario no las activa, el bagner no desparece de la parte superior de navbar" → agrega frente navegador + switch + banner permanente; S1/S2 reescritas; T4 abierta.
+- L4 (verificación T5): RED→GREEN por tarea (calcularAlertas 14 tests, PanelDia 5, CrmBoard.dia 2, hook navegador 7, banner 5); suite afectada crm+componentes 700/700; ESLint limpio en todos los tocados; tsc sin errores en src/ (resto: artefactos pre-existentes de .next/dev y temp/); RDD assess: autoverificación del writer, sin verificador independiente; sync SDK en dry-run — la ejecución live queda como decisión de entrega (reflejar esta rama borra del share archivos de otra rama).
 
 ## No-goals (v1)
 

@@ -1,6 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 
+const toastMock = vi.hoisted(() => ({ success: vi.fn(), error: vi.fn(), info: vi.fn() }));
+vi.mock('sonner', () => ({ toast: toastMock }));
+
 import { BannerNotificaciones } from '../BannerNotificaciones';
 import type { AuthUser } from '@/features/auth/presentation/hooks/useAuth';
 
@@ -27,6 +30,8 @@ const USUARIO: AuthUser = {
 
 beforeEach(() => {
   localStorage.clear();
+  toastMock.error.mockClear();
+  toastMock.success.mockClear();
   FakeNotification.permission = 'default';
   FakeNotification.requestPermission = vi.fn(async (): Promise<FakePermiso> => 'granted');
   vi.stubGlobal('Notification', FakeNotification);
@@ -61,7 +66,25 @@ describe('BannerNotificaciones (S2)', () => {
     render(<BannerNotificaciones />);
     const banner = await screen.findByRole('status');
     expect(banner).toHaveTextContent('bloqueadas');
+    expect(banner).toHaveTextContent('candado');
     expect(screen.getByRole('switch', { name: 'Activar notificaciones del navegador' })).toBeDisabled();
+  });
+
+  it('warns with the reason when the browser has no Notification API (insecure context)', async () => {
+    vi.unstubAllGlobals();
+    render(<BannerNotificaciones />);
+    const banner = await screen.findByRole('status');
+    expect(banner).toHaveTextContent('localhost');
+    expect(screen.getByRole('switch', { name: 'Activar notificaciones del navegador' })).toBeDisabled();
+  });
+
+  it('toasts an error and flips the banner to denied when the browser silently denies', async () => {
+    FakeNotification.requestPermission = vi.fn(async (): Promise<FakePermiso> => 'denied');
+    render(<BannerNotificaciones />);
+    const banner = await screen.findByRole('status');
+    fireEvent.click(screen.getByRole('switch', { name: 'Activar notificaciones del navegador' }));
+    await waitFor(() => expect(toastMock.error).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(banner).toHaveTextContent('bloqueadas'));
   });
 
   it('offers the switch off when activated', async () => {
@@ -74,14 +97,9 @@ describe('BannerNotificaciones (S2)', () => {
     expect(localStorage.getItem('crm-notificaciones-nav:u-1')).toBeNull();
   });
 
-  it('renders nothing for users without the crm permiso or unsupported browsers', () => {
+  it('renders nothing for users without the crm permiso', () => {
     useAuthMock.user = { ...USUARIO, permisos: [] };
     const { container } = render(<BannerNotificaciones />);
     expect(container).toBeEmptyDOMElement();
-
-    useAuthMock.user = USUARIO;
-    vi.unstubAllGlobals();
-    const sinApi = render(<BannerNotificaciones />);
-    expect(sinApi.container).toBeEmptyDOMElement();
   });
 });
