@@ -3,7 +3,6 @@
 import { usePathname } from 'next/navigation';
 import Sidebar from './Sidebar';
 import { ToasterClient } from './ToasterClient';
-import { BannerNotificaciones } from '@/features/crm/presentation/components/BannerNotificaciones';
 
 export default function SessionShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
@@ -25,8 +24,6 @@ export default function SessionShell({ children }: { children: React.ReactNode }
       <Sidebar />
       <ToasterClient />
       <main className="flex-1 md:ml-64 min-h-screen flex flex-col bg-slate-50 dark:bg-slate-950 transition-colors duration-300">
-        {/* crm-notificaciones (S1/S2): activation banner + browser-notifications poller. */}
-        <BannerNotificaciones />
         {children}
       </main>
     </div>
