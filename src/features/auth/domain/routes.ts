@@ -73,6 +73,36 @@ export function buscarRutaProtegida(pathname: string): RutaProtegida | null {
   return sorted.find((r) => pathname.startsWith(r.path)) ?? null;
 }
 
+/**
+ * Session-only routes (login-at-entry): navigating here requires a valid
+ * session cookie but NO specific permiso — any authenticated user passes.
+ * Checked by the proxy ONLY when no `RUTAS_PROTEGIDAS` entry matched, so
+ * longer permiso gates (e.g. `/areas/medicina/jjc` → `jjc`) always win.
+ *
+ * `exact: true` is load-bearing for `/`: a prefix match would catch every
+ * path and silently flip the proxy to deny-by-default, breaking the
+ * deliberately unregistered device API (`/api/asistencia/*` authenticates
+ * with its own Bearer token inside the route).
+ */
+export interface RutaSoloSesion {
+  path: string;
+  label: string;
+  exact: boolean;
+}
+
+export const RUTAS_SOLO_SESION: RutaSoloSesion[] = [
+  { path: '/',      label: 'Inicio', exact: true },
+  { path: '/areas', label: 'Áreas',  exact: false },
+];
+
+export function buscarRutaSoloSesion(pathname: string): RutaSoloSesion | null {
+  return (
+    RUTAS_SOLO_SESION.find((r) =>
+      r.exact ? pathname === r.path : pathname.startsWith(r.path),
+    ) ?? null
+  );
+}
+
 export function permisoParaRuta(pathname: string): Permiso | null {
   return buscarRutaProtegida(pathname)?.permiso ?? null;
 }
