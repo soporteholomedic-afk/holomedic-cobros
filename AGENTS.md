@@ -157,17 +157,22 @@ Al agregar una nueva página que requiera autenticación:
 
 ### Permission Model
 
-Cada ruta protegida requiere exactamente un permiso. El usuario debe tenerlo en su array `permisos` para acceder. Rutas no listadas en `RUTAS_PROTEGIDAS` son públicas (home, login, acceso denegado).
+Cada ruta protegida requiere exactamente un permiso. El usuario debe tenerlo en su array `permisos` para acceder.
+
+Además de `RUTAS_PROTEGIDAS`, el array `RUTAS_SOLO_SESION` (mismo archivo) lista superficies que exigen **solo sesión válida, sin permiso específico** — cualquier usuario autenticado pasa. Entrada a la plataforma: `/` (match exacto) y `/areas` (prefijo; los índices de Medicina, Calidad y Musculoesquelética). El match longest-first de `RUTAS_PROTEGIDAS` siempre gana sobre la gate de sesión (p. ej. `/areas/medicina/jjc` sigue exigiendo `jjc`).
+
+Rutas que no caen ni en `RUTAS_PROTEGIDAS` ni en `RUTAS_SOLO_SESION` siguen públicas: `/auth/login`, `/auth/denegado` y las APIs no registradas (p. ej. `/api/asistencia/*`, que se autentica con Bearer dentro de la ruta).
 
 ### Comportamiento del Proxy
 
-El proxy (`src/proxy.ts`) evalúa toda navegación a rutas internas con 3 resultados posibles:
+El proxy (`src/proxy.ts`) evalúa toda navegación a rutas internas con 4 resultados posibles:
 
 | Estado | Resultado |
 |---|---|
 | Logueado + tiene permiso | Pasa directo (`NextResponse.next()`) |
-| No logueado | Redirige a `/auth/login?redirect=<ruta>` |
-| Logueado pero sin permiso | Redirige a `/auth/denegado?permiso=<permiso>&label=<label>&ruta=<ruta>` |
+| Logueado, ruta de solo sesión (`RUTAS_SOLO_SESION`), sin permiso requerido | Pasa directo (`NextResponse.next()`) |
+| No logueado | Redirige a `/auth/login?redirect=<ruta>` (APIs: 401 JSON) |
+| Logueado pero sin permiso | Redirige a `/auth/denegado?permiso=<permiso>&label=<label>&ruta=<ruta>` (APIs: 403 JSON) |
 
 ## External Workspace Permissions
 
