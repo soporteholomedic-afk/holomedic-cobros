@@ -28,6 +28,7 @@ import type { ResultadoSector } from './NuevoSectorBox';
 import { etiquetaDeTarjeta } from './etiquetas';
 import { hoyEnZona } from './fechas';
 import { EntrantePanel } from './EntrantePanel';
+import { PanelDia } from './PanelDia';
 import { RegistrarContactoPanel } from './RegistrarContactoPanel';
 import { capturar, focoEnTarjeta, reproducir, type Captura, type Foco, type Registro } from './vuelo';
 
@@ -553,6 +554,10 @@ export function CrmBoard() {
           </button>
         </div>
       )}
+
+      {/* crm-notificaciones (S1/S5): "Tu día" above the board; every board
+          mutation bumps reloadKey, so the alerts always mirror the columns. */}
+      <PanelDia reloadKey={reloadKey} onAbrir={abrirDetalle} />
 
       <div
         data-testid="crm-board"
