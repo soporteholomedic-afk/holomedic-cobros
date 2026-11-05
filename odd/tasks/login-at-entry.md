@@ -52,5 +52,16 @@ honoring `?redirect=` so the user lands back where they were headed.
 - L3: Implemented. RED 5 failed → GREEN 111 passed (12 files: proxy + all
   routes domain tests). eslint clean on touched files; tsc clean in src
   (only pre-existing temp/*.mts errors). AGENTS.md Permission Model and
-  Proxy table updated. Evidence commit: ec9e092 (feat(auth): require
+  Proxy table updated. Evidence commit: 9eec184 (feat(auth): require
   session at platform entry).
+- L4: Live verification against `pnpm dev` (Next 16 picks up src/proxy.ts):
+  no cookie → /, /cobranza, /areas/medicina, /areas/calidad all 307 to
+  /auth/login?redirect=<path>; session cookie with empty permisos → / and
+  /areas/medicina 200; same session → /areas/medicina/jjc still 307
+  (permiso gate intact). NOTE: port 3000 held a pre-existing older server;
+  verification ran on 3001.
+- L5: SDK sync NOT executed live. `sync-sdk.mjs --dry-run` plans 225 copies
+  and 67 DELETIONS of files present on the share but absent from this
+  checkout (routes.conversaciones.test.ts, crm presentation files, etc.) —
+  the share holds a different branch snapshot. A live mirror from here
+  would destroy that state; needs a human decision before running.
