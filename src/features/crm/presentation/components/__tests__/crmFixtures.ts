@@ -82,6 +82,8 @@ export function json(r: Respuesta): Response {
 export interface Api {
   lista?: Respuesta;
   sectores?: Respuesta;
+  /** GET /api/crm/alertas; defaults to an empty day so the panel renders nothing. */
+  alertas?: Respuesta;
   post?: (body: Record<string, unknown>) => Respuesta;
   put?: (id: string, body: Record<string, unknown>) => Respuesta;
   etapa?: (id: string, body: Record<string, unknown>) => Respuesta;
@@ -101,6 +103,9 @@ export function mockApi(api: Api = {}) {
     }
     if (url === '/api/crm/sectores' && method === 'GET') {
       return json(api.sectores ?? { status: 200, body: { success: true, sectores: SECTORES } });
+    }
+    if (url === '/api/crm/alertas' && method === 'GET') {
+      return json(api.alertas ?? { status: 200, body: { success: true, alertas: [], resumen: { vencidas: 0, hoy: 0, sinResponder: 0 } } });
     }
     if (url === '/api/crm/sectores' && method === 'POST') {
       return json(api.sector ? api.sector(body) : { status: 201, body: { success: true, sector: { nombre: String(body.nombre), icono: body.icono ?? null } } });
