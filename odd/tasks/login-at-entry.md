@@ -65,3 +65,12 @@ honoring `?redirect=` so the user lands back where they were headed.
   checkout (routes.conversaciones.test.ts, crm presentation files, etc.) —
   the share holds a different branch snapshot. A live mirror from here
   would destroy that state; needs a human decision before running.
+- L6: Deployed. develop 94bd3bc pushed; master promoted c34df1f pushed.
+  Image holomedic-cobros:c34df1f built via `git archive c34df1f | docker
+  build` (job ~48s). Previous container rotated to rollback
+  holomedic-cobros-app-prev-5fb680f (stopped). New container running with
+  --network host, --env-file (32 vars), /mnt/sigla mount, unless-stopped.
+  Post-deploy live: / → 307 /auth/login?redirect=%2F, /auth/login → 200,
+  /areas/medicina → 307, /cobranza → 307; container Up, no restart loop
+  (optional bundle grep for RUTAS_SOLO_SESION inconclusive — identifier
+  minified; the 307-on-/ behavior is itself proof of the new image).
