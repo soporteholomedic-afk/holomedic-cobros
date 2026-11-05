@@ -57,3 +57,45 @@ describe('proxy — PDF API route protection', () => {
     expect(res.headers.get('location')).toContain('/auth/login');
   });
 });
+
+describe('proxy — session-only routes (login at platform entry)', () => {
+  it('home / unauthenticated → redirect to login with redirect=%2F', () => {
+    const res = proxy(fakeRequest('/'));
+    expect(res.status).toBe(307);
+    const location = res.headers.get('location') ?? '';
+    expect(location).toContain('/auth/login');
+    expect(location).toContain(`redirect=${encodeURIComponent('/')}`);
+  });
+
+  it('home / with any valid session (even zero permisos) → pass', () => {
+    const res = proxy(fakeRequest('/', tokenFor([])));
+    expect(res).toBeInstanceOf(NextResponse);
+    expect(res.status).toBe(200);
+  });
+
+  it('area index /areas/medicina unauthenticated → login redirect', () => {
+    const res = proxy(fakeRequest('/areas/medicina'));
+    expect(res.status).toBe(307);
+    expect(res.headers.get('location')).toContain('/auth/login');
+  });
+
+  it('area index /areas/medicina with session but no matching permiso → pass (session-only, no permiso gate)', () => {
+    const res = proxy(fakeRequest('/areas/medicina', tokenFor(['cobranza'])));
+    expect(res).toBeInstanceOf(NextResponse);
+    expect(res.status).toBe(200);
+  });
+
+  it('registered permiso route wins longest-first: /areas/medicina/jjc without jjc → denegado', () => {
+    const res = proxy(fakeRequest('/areas/medicina/jjc', tokenFor(['cobranza'])));
+    expect(res.status).toBe(307);
+    const location = res.headers.get('location') ?? '';
+    expect(location).toContain('/auth/denegado');
+    expect(location).toContain('permiso=jjc');
+  });
+
+  it('unregistered device API /api/asistencia/heartbeat still passes with no cookie (Bearer in-route)', () => {
+    const res = proxy(fakeRequest('/api/asistencia/heartbeat'));
+    expect(res).toBeInstanceOf(NextResponse);
+    expect(res.status).toBe(200);
+  });
+});
