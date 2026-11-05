@@ -103,15 +103,17 @@ Nota: el rollback reutiliza el env-file y la imagen del contenedor `-prev` tal c
 ### Verificación post-deploy
 
 ```bash
-# HTTP 200 esperado
-curl -s -o /dev/null -w '%{http_code}\n' http://localhost:3000
+# La home exige sesión desde login-at-entry: 307 → /auth/login es el
+# resultado esperado para /; 200 para /auth/login (página de login).
+curl -s -o /dev/null -w '%{http_code} %{redirect_url}\n' http://localhost:3000/
+curl -s -o /dev/null -w '%{http_code}\n' http://localhost:3000/auth/login
 
 # El contenedor corre y no reinicia en loop
 docker ps --filter name=holomedic-cobros-app
 docker logs --tail 50 holomedic-cobros-app
 ```
 
-- **200** → deploy OK. El contenedor `-prev-<sha>` queda detenido como rollback.
+- **307 en / + 200 en /auth/login** → deploy OK. El contenedor `-prev-<sha>` queda detenido como rollback.
 - **Otro código / reinicios en loop** → revisar `docker logs` (falta una env var, SQL Server inalcanzable, mount `/mnt/sigla` ausente) y evaluar el rollback.
 - Verificación funcional mínima recomendada: login en la app y una descarga de un informe que toque el share de archivos.
 - Verificación opcional de que la imagen nueva es la que corre: `grep` de una cadena distintiva del cambio dentro del bundle, p. ej. `docker exec holomedic-cobros-app grep -rl '<cadena del feature>' .next/server/chunks .next/static/chunks`.
