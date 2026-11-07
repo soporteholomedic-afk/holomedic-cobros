@@ -392,9 +392,20 @@ describe('sqlserver crm migrate()', () => {
     );
     expect(retirada.indexOf('CK_CrmEmpresa_motivo')).toBeLessThan(retirada.indexOf('DROP COLUMN'));
     // The inline (named or auto-named) constraints are discovered and dropped
-    // through dynamic SQL, by parent_object_id + column.
+    // through dynamic SQL, by parent_object_id + column, AND by dependency for
+    // table-level multi-column CHECKs that reference a retired column.
     expect(retirada).toMatch(/sys\.check_constraints[\s\S]*parent_object_id[\s\S]*parent_column_id/i);
     expect(retirada).toMatch(/sys\.default_constraints[\s\S]*parent_object_id[\s\S]*parent_column_id/i);
+    expect(retirada).toMatch(
+      /sys\.sql_expression_dependencies[\s\S]*referenced_minor_id/i,
+    );
+    // EXEC arguments accept only literals and variables: building the name with
+    // QUOTENAME directly inside EXEC('...' + QUOTENAME(x)) is invalid T-SQL whose
+    // compile error does NOT abort the outer batch — the sweep would silently
+    // drop nothing and DROP COLUMN would fail later (found by the container
+    // rehearsal). The name must go through a variable first.
+    expect(retirada).toMatch(/SET\s+@\w+\s*=\s*N?''[^']*''\s*\+\s*QUOTENAME\(@\w+\)[\s\S]*EXEC\(@\w+\)/i);
+    expect(retirada).not.toMatch(/EXEC\(\s*''[^']*''\s*\+\s*QUOTENAME/i);
     expect(retirada).toMatch(/QUOTENAME/i);
     // Then every column goes, in one DROP COLUMN statement.
     const dropColumna = retirada.match(/ALTER\s+TABLE\s+dbo\.CrmEmpresa\s+DROP\s+COLUMN\s+([^;]+);/i)?.[1] ?? '';

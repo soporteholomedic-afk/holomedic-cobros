@@ -343,13 +343,26 @@ BEGIN
   -- Inline constraints (named or auto-named CHECK/DEFAULT attached to the
   -- columns) are discovered by parent_object_id + column and dropped through
   -- dynamic SQL: SQL Server auto-names them, so they have no fixed name.
+  -- CHECK predicates are matched BOTH by parent_column_id (single-column
+  -- inline checks) and by sys.sql_expression_dependencies (table-level
+  -- multi-column checks referencing a retired column, e.g. etapa).
+  -- The constraint name is built into a VARIABLE first: EXEC('literal' +
+  -- QUOTENAME(x)) is invalid T-SQL (EXEC arguments accept only literals and
+  -- variables), and its compile error does NOT abort the outer batch — the
+  -- sweep would silently drop nothing and DROP COLUMN would fail later.
   EXEC(N'DECLARE @constrainte sysname;
+DECLARE @sql nvarchar(600);
 DECLARE retirar CURSOR LOCAL FAST_FORWARD FOR
   SELECT dc.name FROM sys.check_constraints dc
    WHERE dc.parent_object_id = OBJECT_ID(''dbo.CrmEmpresa'')
-     AND dc.parent_column_id IN (SELECT k.column_id FROM sys.columns k
-                                  WHERE k.object_id = dc.parent_object_id
-                                    AND k.name IN (${listaDinamica(COLUMNAS_RETIRADAS)}))
+     AND (dc.parent_column_id IN (SELECT k.column_id FROM sys.columns k
+                                   WHERE k.object_id = dc.parent_object_id
+                                     AND k.name IN (${listaDinamica(COLUMNAS_RETIRADAS)}))
+       OR dc.object_id IN (SELECT d.referencing_id FROM sys.sql_expression_dependencies d
+                            WHERE d.referenced_id = OBJECT_ID(''dbo.CrmEmpresa'')
+                              AND d.referenced_minor_id IN (SELECT k.column_id FROM sys.columns k
+                                                             WHERE k.object_id = OBJECT_ID(''dbo.CrmEmpresa'')
+                                                               AND k.name IN (${listaDinamica(COLUMNAS_RETIRADAS)}))))
   UNION ALL
   SELECT dc.name FROM sys.default_constraints dc
    WHERE dc.parent_object_id = OBJECT_ID(''dbo.CrmEmpresa'')
@@ -360,7 +373,8 @@ OPEN retirar;
 FETCH NEXT FROM retirar INTO @constrainte;
 WHILE @@FETCH_STATUS = 0
 BEGIN
-  EXEC(''ALTER TABLE dbo.CrmEmpresa DROP CONSTRAINT '' + QUOTENAME(@constrainte));
+  SET @sql = N''ALTER TABLE dbo.CrmEmpresa DROP CONSTRAINT '' + QUOTENAME(@constrainte);
+  EXEC(@sql);
   FETCH NEXT FROM retirar INTO @constrainte;
 END;
 CLOSE retirar;
