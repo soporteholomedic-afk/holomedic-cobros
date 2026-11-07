@@ -64,6 +64,14 @@ export const RUTAS_PROTEGIDAS: RutaProtegida[] = [
   // crm: the plain-`crm` entries cover every CRM page (including the
   // Excel import view /crm/importar) and the whole /api/crm prefix
   // (including /api/crm/importar). Anyone who can use the CRM can import.
+  // crm-consulta-sunat (T2, S2/S5): the apifacturacion (SUNAT lookup)
+  // token + URL are administered at /admin/crm/configuracion and its API
+  // at /api/crm/configuracion with the DEDICATED crm_configuracion
+  // permiso — NOT the plain-crm gate. Both entries are LONGER prefixes
+  // than the generic admin/crm gates, so longest-first startsWith
+  // matching resolves to them first.
+  { path: '/admin/crm/configuracion', permiso: 'crm_configuracion', label: 'Configuración' },
+  { path: '/api/crm/configuracion',   permiso: 'crm_configuracion', label: 'Configuración' },
   { path: '/api/crm',             permiso: 'crm',              label: 'API CRM' },
   { path: '/crm',                 permiso: 'crm',              label: 'CRM' },
 ];
