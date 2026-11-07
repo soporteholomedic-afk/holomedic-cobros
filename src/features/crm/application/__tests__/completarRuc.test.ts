@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { MAX_CONTACTOS, type Contacto, type Empresa } from '../../domain/entities';
+import { MAX_CONTACTOS, type Contacto, type DatosEmpresa, type Empresa } from '../../domain/entities';
 import {
   DatosEmpresaInvalidosError,
   EmpresaNotFoundError,
@@ -47,6 +47,18 @@ describe('CompletarRucUseCase — free RUC (S6)', () => {
     const repo = makeFakeRepo([empresa({ idEmpresa: 'e-1', ruc: '20512345678' })]);
     const e = await completar(repo, '20512345678', false, 'e-1');
     expect(e.ruc).toBe('20512345678');
+  });
+
+  it('forwards the stored direccion to update, so completing the RUC never wipes the fiscal address', async () => {
+    const repo = makeFakeRepo([empresa({ ...SIN_RUC, direccion: 'Av. Los Próceres 210, San Isidro' })]);
+    let recibida: string | null | undefined;
+    const original = repo.update.bind(repo);
+    repo.update = async (id: string, datos: DatosEmpresa) => {
+      recibida = datos.direccion;
+      return original(id, datos);
+    };
+    await completar(repo, '20601234567');
+    expect(recibida).toBe('Av. Los Próceres 210, San Isidro');
   });
 });
 

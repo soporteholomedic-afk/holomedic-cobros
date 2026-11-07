@@ -7,6 +7,7 @@ export function empresa(overrides: Partial<Empresa> = {}): Empresa {
     razonSocial: 'Constructora Andina S.A.C.',
     ruc: '20512345678',
     sector: 'Construcción',
+    direccion: null,
     contactos: [{ nombre: 'Marcela Quispe', telefono: '987 654 321', correo: null }],
     notas: null,
     etapa: 'por_contactar',

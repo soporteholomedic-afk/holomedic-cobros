@@ -230,6 +230,8 @@ export interface Empresa {
   /** At least one; the first one is the principal. */
   contactos: Contacto[];
   notas: string | null;
+  /** Fiscal address (e.g. from the SUNAT lookup); NULL when unknown. */
+  direccion: string | null;
   etapa: Etapa;
   /** Only meaningful outside "Por contactar". */
   medio: Medio | null;
@@ -263,6 +265,8 @@ export interface CrearEmpresaDatos {
   contactos: ContactoDatos[];
   sector?: string | null;
   notas?: string | null;
+  /** Optional fiscal address, at most 300 characters after trim. */
+  direccion?: string | null;
 }
 
 /** Same shape when editing: the contacts list replaces the stored one. */
@@ -284,6 +288,8 @@ export interface DatosEmpresa {
   sector: string | null;
   contactos: Contacto[];
   notas: string | null;
+  /** Fiscal address (NULL when unknown); at most 300 characters. */
+  direccion: string | null;
 }
 
 export interface NuevaEmpresa extends DatosEmpresa {
@@ -307,4 +313,49 @@ export interface SeguimientoEmpresa extends EstadoEmpresa {
   faltaResponderDesde: string | null;
   proximaAccion: ProximaAccion | null;
   sugerenciaDescartadaEn: number | null;
+}
+
+// ---------------------------------------------------------------------------
+// Platform configuration (agente-ia-crm E5·T2) — key/value rows the admin
+// edits at runtime (agent guardrails, Kapso channel, memory). Secret rows
+// hold an already-ENCRYPTED payload (cifradoSecretos); the audit trail never
+// stores secret values, only the fact that they changed.
+// ---------------------------------------------------------------------------
+
+/** One CrmConfig row. `valor` is ciphertext when `esSecreto`. */
+export interface EntradaConfigCrm {
+  clave: string;
+  valor: string;
+  esSecreto: boolean;
+  actualizadoPor: string;
+  actualizadoEn: Date;
+}
+
+/** One CrmConfigAuditoria row. Values are null for secrets (never stored) and for absent old/new sides. */
+export interface AuditoriaConfigCrm {
+  id: number;
+  clave: string;
+  usuario: string;
+  valorAnterior: string | null;
+  valorNuevo: string | null;
+  esSecreto: boolean;
+  creadoEn: Date;
+}
+
+// ---------------------------------------------------------------------------
+// SUNAT lookup (crm-consulta-sunat T4, S1) — empresa data as returned by
+// apifacturacion.com AFTER runtime validation. The adapter maps the
+// external snake_case JSON (razon_social, direccion, estado, condicion);
+// unknown fields are ignored and unusable ones become null.
+// ---------------------------------------------------------------------------
+
+/** Empresa data from one SUNAT lookup (apifacturacion.com). */
+export interface DatosSunat {
+  razonSocial: string;
+  /** Fiscal address; null when the service omits it or it is not text. */
+  direccion: string | null;
+  /** SUNAT state (e.g. "ACTIVO"); null when not text. */
+  estado: string | null;
+  /** SUNAT condition (e.g. "HABIDO"); null when not text. */
+  condicion: string | null;
 }

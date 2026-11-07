@@ -45,16 +45,20 @@ export const RUTAS_PROTEGIDAS: RutaProtegida[] = [
   // configuracion-tabs: the /configuracion section groups the user-
   // management, areas and own-signature surfaces behind per-tab entries.
   // Each tab keeps EXACTLY ONE permiso (proxy contract): `admin` for the
-  // usuarios/areas tabs, `firma_correo` for the firma tab — reused from
-  // the existing registry, NO new PERMISOS entry. The prefixes are
-  // independent of `/admin/...`, so longest-first startsWith matching
-  // never leaks these gates onto legacy routes (and vice versa). The
-  // bare `/configuracion` redirect page is deliberately UNREGISTERED:
-  // it is public and renders no content, only a session-aware redirect
-  // to the first allowed tab.
+  // usuarios/areas tabs, `firma_correo` for the firma tab, and —
+  // crm-consulta-sunat (T8, S2) — `crm_configuracion` for the
+  // consulta-sunat tab (apifacturacion token + URL, relocated from the
+  // dedicated /admin/crm/configuracion page, which is REMOVED). All
+  // permisos are reused from the existing registry, NO new PERMISOS
+  // entry. The prefixes are independent of `/admin/...`, so longest-
+  // first startsWith matching never leaks these gates onto legacy
+  // routes (and vice versa). The bare `/configuracion` redirect page is
+  // deliberately UNREGISTERED: it is public and renders no content,
+  // only a session-aware redirect to the first allowed tab.
   { path: '/configuracion/usuarios', permiso: 'admin',         label: 'Usuarios (Configuración)' },
   { path: '/configuracion/areas',    permiso: 'admin',         label: 'Áreas (Configuración)' },
   { path: '/configuracion/firma',    permiso: 'firma_correo',  label: 'Mi Firma (Configuración)' },
+  { path: '/configuracion/consulta-sunat', permiso: 'crm_configuracion', label: 'Consulta SUNAT (Configuración)' },
   // asistencia-rrhh (Fase 1): session-gated RRHH surface (ADR-6). The
   // device namespace `/api/asistencia/*` is deliberately NOT registered —
   // devices authenticate with their own Bearer token inside the route
@@ -64,6 +68,15 @@ export const RUTAS_PROTEGIDAS: RutaProtegida[] = [
   // crm: the plain-`crm` entries cover every CRM page (including the
   // Excel import view /crm/importar) and the whole /api/crm prefix
   // (including /api/crm/importar). Anyone who can use the CRM can import.
+  // crm-consulta-sunat (T2→T8, S2/S5): the apifacturacion (SUNAT lookup)
+  // token + URL are administered at the /configuracion/consulta-sunat
+  // tab (see above) and its API at /api/crm/configuracion with the
+  // DEDICATED crm_configuracion permiso — NOT the plain-crm gate. Both
+  // entries are LONGER prefixes than the generic gates around them, so
+  // longest-first startsWith matching resolves to them first. The old
+  // /admin/crm/configuracion page entry was removed in T8 (tab
+  // replacement).
+  { path: '/api/crm/configuracion',   permiso: 'crm_configuracion', label: 'Configuración' },
   { path: '/api/crm',             permiso: 'crm',              label: 'API CRM' },
   { path: '/crm',                 permiso: 'crm',              label: 'CRM' },
 ];

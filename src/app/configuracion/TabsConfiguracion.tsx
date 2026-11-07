@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Layers, PenLine, Users } from 'lucide-react';
+import { Layers, Landmark, PenLine, Users } from 'lucide-react';
 
 import { useAuth } from '@/features/auth/presentation/hooks/useAuth';
 
@@ -11,13 +11,17 @@ interface TabEntry {
   label: string;
   icon: typeof Users;
   /** The tab is visible only to sessions holding this permiso. */
-  permiso: 'admin' | 'firma_correo';
+  permiso: 'admin' | 'firma_correo' | 'crm_configuracion';
 }
 
 const TABS: readonly TabEntry[] = [
   { href: '/configuracion/usuarios', label: 'Usuarios', icon: Users, permiso: 'admin' },
   { href: '/configuracion/areas', label: 'Áreas', icon: Layers, permiso: 'admin' },
   { href: '/configuracion/firma', label: 'Mi Firma', icon: PenLine, permiso: 'firma_correo' },
+  // crm-consulta-sunat (T8, L8): the apifacturacion (SUNAT) config is
+  // the LAST tab, gated by the DEDICATED crm_configuracion permiso —
+  // it replaces the removed /admin/crm/configuracion page.
+  { href: '/configuracion/consulta-sunat', label: 'Consulta SUNAT', icon: Landmark, permiso: 'crm_configuracion' },
 ] as const;
 
 /**
@@ -27,9 +31,10 @@ const TABS: readonly TabEntry[] = [
  *
  * Each tab maps 1:1 to a sub-route gated by exactly ONE permiso (see
  * RUTAS_PROTEGIDAS), so the bar simply filters by the session permisos:
- * `admin` → Usuarios + Áreas, `firma_correo` → Mi Firma. A session
- * holding no tab permiso renders nothing (the proxy would have denied
- * the page long before this bar mounts).
+ * `admin` → Usuarios + Áreas, `firma_correo` → Mi Firma,
+ * `crm_configuracion` → Consulta SUNAT (crm-consulta-sunat T8). A
+ * session holding no tab permiso renders nothing (the proxy would
+ * have denied the page long before this bar mounts).
  */
 export default function TabsConfiguracion() {
   const pathname = usePathname();

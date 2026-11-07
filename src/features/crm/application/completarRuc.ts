@@ -42,6 +42,7 @@ export class CompletarRucUseCase {
         sector: actual.sector,
         contactos: actual.contactos,
         notas: actual.notas,
+        direccion: actual.direccion,
       });
     }
     if (!opciones.unir) {

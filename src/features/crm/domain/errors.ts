@@ -52,3 +52,29 @@ export class ArchivoImportacionInvalidoError extends Error {
     this.name = 'ArchivoImportacionInvalidoError';
   }
 }
+
+/** The SUNAT lookup found no usable data for the RUC (no `razon_social`). */
+export class RucNoEncontradoError extends Error {
+  constructor(ruc: string) {
+    super(`No se encontraron datos SUNAT para el RUC: ${ruc}`);
+    this.name = 'RucNoEncontradoError';
+  }
+}
+
+/** The lookup cannot run: no apifacturacion token is configured (S5). */
+export class ConsultaNoConfiguradaError extends Error {
+  constructor() {
+    super(
+      'La consulta SUNAT no está configurada. Configura el token de apifacturacion en Configuración.',
+    );
+    this.name = 'ConsultaNoConfiguradaError';
+  }
+}
+
+/** apifacturacion is unreachable, timed out, or answered an unusable HTTP/JSON response. */
+export class ServicioConsultaError extends Error {
+  constructor(mensaje: string) {
+    super(mensaje);
+    this.name = 'ServicioConsultaError';
+  }
+}

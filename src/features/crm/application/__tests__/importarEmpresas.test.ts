@@ -84,6 +84,7 @@ const EXISTENTE: Empresa = {
   sector: 'Construcción',
   contactos: [{ nombre: 'Marcela Quispe', telefono: '987 654 321', correo: null }],
   notas: null,
+  direccion: null,
   etapa: 'por_contactar',
   medio: null,
   motivo: null,

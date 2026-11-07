@@ -98,10 +98,10 @@ function columnaNueva(sql: string, tabla: string, columna: string): string {
 }
 
 describe('sqlserver crm migrate()', () => {
-  it('creates the four tables, each guarded by IF NOT EXISTS on sys.tables', async () => {
+  it('creates the six tables, each guarded by IF NOT EXISTS on sys.tables', async () => {
     const sql = await sqlDeMigrate();
-    expect(sql.match(/CREATE\s+TABLE/gi)).toHaveLength(4);
-    for (const nombre of ['CrmSector', 'CrmEmpresa', 'CrmContacto', 'CrmInteraccion']) {
+    expect(sql.match(/CREATE\s+TABLE/gi)).toHaveLength(6);
+    for (const nombre of ['CrmSector', 'CrmEmpresa', 'CrmContacto', 'CrmInteraccion', 'CrmConfig', 'CrmConfigAuditoria']) {
       expect(sql).toMatch(new RegExp(`CREATE\\s+TABLE\\s+dbo\\.${nombre}\\s*\\(`, 'i'));
       expect(sql).toMatch(
         new RegExp(
@@ -302,6 +302,18 @@ describe('sqlserver crm migrate()', () => {
     expect(origen).toMatch(/^NVARCHAR\(20\)\s+NULL\s+CONSTRAINT\s+CK_CrmEmpresa_origen\s+CHECK/i);
     expect(ORIGENES).toEqual(['nose', 'referido', 'conocia', 'internet']);
     expect(valoresCheck(origen, 'origen')).toEqual([...ORIGENES]);
+  });
+
+  it('adds the fiscal address column direccion to CrmEmpresa: guarded by sys.columns, NULL-able, NVARCHAR(300)', async () => {
+    const sql = await sqlDeMigrate();
+    expect(columnaNueva(sql, 'CrmEmpresa', 'direccion')).toMatch(/^NVARCHAR\(300\)\s+NULL$/i);
+    // Grouped with the other guarded CrmEmpresa ADDs, and before COMMIT.
+    expect(sql.search(/ADD\s+direccion\s/i)).toBeGreaterThan(sql.search(/ADD\s+sugerenciaDescartadaEn\s/i));
+    expect(sql.lastIndexOf('COMMIT')).toBeGreaterThan(sql.search(/ADD\s+direccion\s/i));
+    // The fresh-database CREATE TABLE set stays as it was: six tables, direccion only via the guarded ADD.
+    expect(sql.match(/CREATE\s+TABLE/gi)).toHaveLength(6);
+    expect(tabla(sql, 'CrmEmpresa')).not.toMatch(/\bdireccion\b/i);
+    expect(sql).not.toMatch(/CRM_/i);
   });
 
   it('adds CrmSector.icono: guarded by sys.columns, NULL-able, CHECK limited to the 12 icon keys', async () => {
