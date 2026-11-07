@@ -230,6 +230,8 @@ export interface Empresa {
   /** At least one; the first one is the principal. */
   contactos: Contacto[];
   notas: string | null;
+  /** Fiscal address (e.g. from the SUNAT lookup); NULL when unknown. */
+  direccion: string | null;
   etapa: Etapa;
   /** Only meaningful outside "Por contactar". */
   medio: Medio | null;
@@ -263,6 +265,8 @@ export interface CrearEmpresaDatos {
   contactos: ContactoDatos[];
   sector?: string | null;
   notas?: string | null;
+  /** Optional fiscal address, at most 300 characters after trim. */
+  direccion?: string | null;
 }
 
 /** Same shape when editing: the contacts list replaces the stored one. */
@@ -284,6 +288,8 @@ export interface DatosEmpresa {
   sector: string | null;
   contactos: Contacto[];
   notas: string | null;
+  /** Fiscal address (NULL when unknown); at most 300 characters. */
+  direccion: string | null;
 }
 
 export interface NuevaEmpresa extends DatosEmpresa {

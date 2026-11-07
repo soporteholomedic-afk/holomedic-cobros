@@ -189,6 +189,7 @@ ${columnaEmpresa('proximaAccionDetalle', 'NVARCHAR(80) NULL')}
 ${columnaEmpresa('proximaAccionFecha', 'DATE NULL')}
 ${columnaEmpresa('origen', `NVARCHAR(20) NULL CONSTRAINT CK_CrmEmpresa_origen CHECK (origen IN (${lista(ORIGENES)}))`)}
 ${columnaEmpresa('sugerenciaDescartadaEn', 'INT NULL')}
+${columnaEmpresa('direccion', 'NVARCHAR(300) NULL')}
 
 IF EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('dbo.CrmContacto') AND name = 'nombre' AND is_nullable = 0)
 BEGIN

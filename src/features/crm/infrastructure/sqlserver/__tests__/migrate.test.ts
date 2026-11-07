@@ -304,6 +304,18 @@ describe('sqlserver crm migrate()', () => {
     expect(valoresCheck(origen, 'origen')).toEqual([...ORIGENES]);
   });
 
+  it('adds the fiscal address column direccion to CrmEmpresa: guarded by sys.columns, NULL-able, NVARCHAR(300)', async () => {
+    const sql = await sqlDeMigrate();
+    expect(columnaNueva(sql, 'CrmEmpresa', 'direccion')).toMatch(/^NVARCHAR\(300\)\s+NULL$/i);
+    // Grouped with the other guarded CrmEmpresa ADDs, and before COMMIT.
+    expect(sql.search(/ADD\s+direccion\s/i)).toBeGreaterThan(sql.search(/ADD\s+sugerenciaDescartadaEn\s/i));
+    expect(sql.lastIndexOf('COMMIT')).toBeGreaterThan(sql.search(/ADD\s+direccion\s/i));
+    // The fresh-database CREATE TABLE set stays as it was: six tables, direccion only via the guarded ADD.
+    expect(sql.match(/CREATE\s+TABLE/gi)).toHaveLength(6);
+    expect(tabla(sql, 'CrmEmpresa')).not.toMatch(/\bdireccion\b/i);
+    expect(sql).not.toMatch(/CRM_/i);
+  });
+
   it('adds CrmSector.icono: guarded by sys.columns, NULL-able, CHECK limited to the 12 icon keys', async () => {
     const sql = await sqlDeMigrate();
     const def = columnaNueva(sql, 'CrmSector', 'icono');

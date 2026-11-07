@@ -25,6 +25,7 @@ export function empresa(parcial: Partial<Empresa> = {}): Empresa {
     sector: 'Construcción',
     contactos: [{ nombre: 'Marcela Quispe', telefono: '987 654 321', correo: null }],
     notas: null,
+    direccion: null,
     etapa: 'por_contactar',
     medio: null,
     medioOtro: null,
@@ -82,6 +83,7 @@ export function makeFakeRepo(seed: Empresa[] = [], historial: Interaccion[] = []
         sector: input.sector,
         contactos: structuredClone(input.contactos),
         notas: input.notas,
+        direccion: input.direccion,
         etapa: input.etapa,
         origen: input.origen,
       });
