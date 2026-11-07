@@ -222,6 +222,38 @@ BEGIN
   CREATE INDEX IX_CrmInteraccion_empresa ON dbo.CrmInteraccion (idEmpresa, fecha DESC);
 END;
 
+IF NOT EXISTS (SELECT 1 FROM sys.tables WHERE name = 'CrmConfig' AND schema_id = SCHEMA_ID('dbo'))
+BEGIN
+  -- E5·T2 (agente-ia-crm, portada por crm-consulta-sunat): platform key/value
+  -- configuration the admin edits at runtime (apifacturacion token/URL).
+  -- Secret rows (esSecreto = 1) hold an already-ENCRYPTED payload
+  -- (cifradoSecretos, AES-256-GCM); encryption is the caller's job.
+  CREATE TABLE dbo.CrmConfig (
+    clave          NVARCHAR(100)  NOT NULL CONSTRAINT PK_CrmConfig PRIMARY KEY,
+    valor          NVARCHAR(2000) NOT NULL,
+    esSecreto      BIT            NOT NULL CONSTRAINT DF_CrmConfig_EsSecreto DEFAULT 0,
+    actualizadoPor NVARCHAR(200)  NOT NULL,
+    actualizadoEn  DATETIME2(0)   NOT NULL CONSTRAINT DF_CrmConfig_ActualizadoEn DEFAULT SYSDATETIME()
+  );
+END;
+IF NOT EXISTS (SELECT 1 FROM sys.tables WHERE name = 'CrmConfigAuditoria' AND schema_id = SCHEMA_ID('dbo'))
+BEGIN
+  -- E5·T2: append-only change trail. NO foreign key to CrmConfig on
+  -- purpose — the trail must outlive a deleted key. valorAnterior /
+  -- valorNuevo are NULL for secrets (the value is never recorded, only
+  -- the fact of the change) and for the absent side of an insert or removal.
+  CREATE TABLE dbo.CrmConfigAuditoria (
+    id            BIGINT         IDENTITY(1,1) NOT NULL CONSTRAINT PK_CrmConfigAuditoria PRIMARY KEY,
+    clave         NVARCHAR(100)  NOT NULL,
+    usuario       NVARCHAR(200)  NOT NULL,
+    valorAnterior NVARCHAR(2000) NULL,
+    valorNuevo    NVARCHAR(2000) NULL,
+    esSecreto     BIT            NOT NULL CONSTRAINT DF_CrmConfigAuditoria_EsSecreto DEFAULT 0,
+    creadoEn      DATETIME2(3)   NOT NULL CONSTRAINT DF_CrmConfigAuditoria_CreadoEn DEFAULT SYSDATETIME()
+  );
+  CREATE INDEX IX_CrmConfigAuditoria_Clave ON dbo.CrmConfigAuditoria (clave, id DESC);
+END;
+
 COMMIT;
 `;
 

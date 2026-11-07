@@ -98,10 +98,10 @@ function columnaNueva(sql: string, tabla: string, columna: string): string {
 }
 
 describe('sqlserver crm migrate()', () => {
-  it('creates the four tables, each guarded by IF NOT EXISTS on sys.tables', async () => {
+  it('creates the six tables, each guarded by IF NOT EXISTS on sys.tables', async () => {
     const sql = await sqlDeMigrate();
-    expect(sql.match(/CREATE\s+TABLE/gi)).toHaveLength(4);
-    for (const nombre of ['CrmSector', 'CrmEmpresa', 'CrmContacto', 'CrmInteraccion']) {
+    expect(sql.match(/CREATE\s+TABLE/gi)).toHaveLength(6);
+    for (const nombre of ['CrmSector', 'CrmEmpresa', 'CrmContacto', 'CrmInteraccion', 'CrmConfig', 'CrmConfigAuditoria']) {
       expect(sql).toMatch(new RegExp(`CREATE\\s+TABLE\\s+dbo\\.${nombre}\\s*\\(`, 'i'));
       expect(sql).toMatch(
         new RegExp(
