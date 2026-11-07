@@ -1,6 +1,7 @@
 import type {
   AuditoriaConfigCrm,
   DatosEmpresa,
+  DatosSunat,
   Empresa,
   EntradaConfigCrm,
   EstadoEmpresa,
@@ -89,4 +90,16 @@ export interface ConfigCrmRepository {
   /** Delete + audit row in ONE transaction; no-op when the key is absent. */
   eliminar(input: EliminarConfigInput): Promise<void>;
   listarAuditoria(input?: ListarAuditoriaConfigInput): Promise<AuditoriaConfigCrm[]>;
+}
+
+// ---------------------------------------------------------------------------
+// SUNAT lookup port (crm-consulta-sunat T4, S1). One adapter
+// (ApiFacturacionCliente) talks to apifacturacion.com; tests replace it
+// whole with a fake servicio.
+// ---------------------------------------------------------------------------
+
+/** SUNAT data of one RUC, ready for the UI autocomplete (S3). */
+export interface IConsultaRucServicio {
+  /** Throws `ConsultaNoConfiguradaError`, `RucNoEncontradoError` or `ServicioConsultaError`. */
+  consultar(ruc: string): Promise<DatosSunat>;
 }

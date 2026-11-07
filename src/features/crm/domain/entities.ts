@@ -341,3 +341,21 @@ export interface AuditoriaConfigCrm {
   esSecreto: boolean;
   creadoEn: Date;
 }
+
+// ---------------------------------------------------------------------------
+// SUNAT lookup (crm-consulta-sunat T4, S1) — empresa data as returned by
+// apifacturacion.com AFTER runtime validation. The adapter maps the
+// external snake_case JSON (razon_social, direccion, estado, condicion);
+// unknown fields are ignored and unusable ones become null.
+// ---------------------------------------------------------------------------
+
+/** Empresa data from one SUNAT lookup (apifacturacion.com). */
+export interface DatosSunat {
+  razonSocial: string;
+  /** Fiscal address; null when the service omits it or it is not text. */
+  direccion: string | null;
+  /** SUNAT state (e.g. "ACTIVO"); null when not text. */
+  estado: string | null;
+  /** SUNAT condition (e.g. "HABIDO"); null when not text. */
+  condicion: string | null;
+}
