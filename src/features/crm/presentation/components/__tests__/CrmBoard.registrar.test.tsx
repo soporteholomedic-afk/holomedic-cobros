@@ -142,21 +142,21 @@ describe('CrmBoard — botones de la tarjeta (S4)', () => {
     expect(screen.queryByRole('dialog', { name: ANDINA })).toBeNull();
   });
 
-  it('the detail footer "Registrar contacto" opens the flow linked to the ficha\'s first OPEN deal (S4)', async () => {
+  it('the detail footer "Registrar actividad" opens the flow linked to the ficha\'s first OPEN deal (S4)', async () => {
     montar();
     render(<CrmBoard />);
     await screen.findByText(ANDINA);
     fireEvent.click(within(card(FERRETERIA)).getByRole('heading', { level: 3 }));
     const detalle = screen.getByRole('dialog', { name: FERRETERIA });
     // Every deal of Ferretería is lost: the footer is still offered (S3/S6.4) and opens the flow in GENERAL mode.
-    fireEvent.click(within(detalle).getByRole('button', { name: 'Registrar contacto' }));
+    fireEvent.click(within(detalle).getByRole('button', { name: 'Registrar actividad' }));
     let p = panel();
     expect(selectorOportunidad(p)).toHaveTextContent('Actividad general (sin oportunidad)');
     fireEvent.click(within(p).getByRole('button', { name: 'Cancelar' }));
 
     fireEvent.click(within(card(ANDINA)).getByRole('heading', { level: 3 }));
     const detalleAndina = screen.getByRole('dialog', { name: ANDINA });
-    fireEvent.click(within(detalleAndina).getByRole('button', { name: 'Registrar contacto' }));
+    fireEvent.click(within(detalleAndina).getByRole('button', { name: 'Registrar actividad' }));
     p = panel();
     // Andina's only deal is open (Por contactar): the flow comes linked to it.
     expect(selectorOportunidad(p)).toHaveTextContent('Equipos de protección para obra · Por contactar');

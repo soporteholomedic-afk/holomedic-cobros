@@ -43,7 +43,7 @@ export function focoEnTarjeta(id: string): Foco {
 
 /**
  * Take the "before" picture. Call it right before the list is replaced; `null` when the card is not on screen.
- * `focoPrevio` is where the focus was before a dialog took it (moving into Contactado or Perdido asks first).
+ * `focoPrevio` is where the focus was before a dialog took it (moving into Contactado or Perdida asks first).
  */
 export function capturar(id: string, destino: string, focoPrevio?: Foco): Captura | null {
   const el = tarjetaDe(id);
