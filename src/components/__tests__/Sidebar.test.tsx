@@ -60,6 +60,17 @@ const crmUser: AuthUser = {
   activo: true,
 };
 
+// crm-consulta-sunat (T7): the "Consulta SUNAT" entry is gated by the
+// dedicated `crm_configuracion` permiso alone — NOT by `crm` nor `admin`.
+const crmConfigUser: AuthUser = {
+  idUsuario: 'u-crm-config',
+  usuario: 'mconfig',
+  nombre: 'Marta Config',
+  area: 'Sistemas',
+  permisos: ['crm', 'crm_configuracion'],
+  activo: true,
+};
+
 function mockAuthMe(user: AuthUser | null): void {
   global.fetch = vi.fn().mockImplementation((url: string) =>
     url === '/api/auth/me'
@@ -355,6 +366,29 @@ describe('Sidebar Component', () => {
       renderSidebar();
       expect(await screen.findByText('Julián Firma')).toBeInTheDocument();
       expect(screen.queryByText('CRM')).not.toBeInTheDocument();
+    });
+  });
+
+  // crm-consulta-sunat (T7): "Consulta SUNAT" opens /admin/crm/configuracion
+  // and is gated by `crm_configuracion` alone (same additive pattern as crm).
+  describe('Consulta SUNAT entry (permiso crm_configuracion)', () => {
+    beforeEach(() => {
+      mockUsePathname.mockReturnValue('/');
+    });
+
+    it('muestra "Consulta SUNAT" con enlace a /admin/crm/configuracion para un usuario con crm_configuracion', async () => {
+      mockAuthMe(crmConfigUser);
+      renderSidebar();
+      expect(await screen.findByText('Marta Config')).toBeInTheDocument();
+      expect(screen.getByText('Consulta SUNAT').closest('a')).toHaveAttribute('href', '/admin/crm/configuracion');
+    });
+
+    it('oculta "Consulta SUNAT" para un usuario solo con crm (sin crm_configuracion)', async () => {
+      mockAuthMe(crmUser);
+      renderSidebar();
+      expect(await screen.findByText('Vera Crm')).toBeInTheDocument();
+      expect(screen.getByText('CRM')).toBeInTheDocument();
+      expect(screen.queryByText('Consulta SUNAT')).not.toBeInTheDocument();
     });
   });
 });
