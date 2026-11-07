@@ -3,13 +3,16 @@ import { fireEvent, render, screen, waitFor, within } from '@testing-library/rea
 
 const toastMock = vi.hoisted(() => ({ success: vi.fn(), error: vi.fn(), info: vi.fn() }));
 vi.mock('sonner', () => ({ toast: toastMock }));
+// T7/T8 own the side panels: these suites test the board and its cards only.
+vi.mock('../PanelDia', () => ({ PanelDia: () => null }));
+vi.mock('../DetallePanel', () => ({ DetallePanel: () => null }));
+vi.mock('../EntrantePanel', () => ({ EntrantePanel: () => null }));
+vi.mock('../RegistrarContactoPanel', () => ({ RegistrarContactoPanel: () => null }));
+vi.mock('../AltaPanel', () => ({ AltaPanel: () => null }));
 
-import { ETAPAS } from '../../../domain/entities';
+import { ETAPAS_OPORTUNIDAD } from '../../../domain/entities';
 import { CrmBoard } from '../CrmBoard';
 import { mockApi } from './crmFixtures';
-
-const TEXTILES = 'Textiles Pacífico S.A.C.';
-const CONSTRUCTORA = 'Constructora Andina S.A.C.';
 
 interface Animacion {
   el: Element;
@@ -50,7 +53,7 @@ function instalarPosiciones() {
   vi.spyOn(Element.prototype, 'getBoundingClientRect').mockImplementation(function (this: Element) {
     const seccion = this.closest('section[data-etapa]');
     if (!this.hasAttribute('data-empresa-id') || !seccion) return caja(0, 0);
-    const col = ETAPAS.indexOf(seccion.getAttribute('data-etapa') as (typeof ETAPAS)[number]);
+    const col = ETAPAS_OPORTUNIDAD.indexOf(seccion.getAttribute('data-etapa') as (typeof ETAPAS_OPORTUNIDAD)[number]);
     const fila = [...seccion.querySelectorAll('[data-empresa-id]')].indexOf(this);
     return caja(col * 300, fila * 100);
   });
@@ -60,14 +63,11 @@ const copias = () => document.querySelectorAll<HTMLElement>('[data-testid="crm-g
 const crudo = (id: string) => document.querySelector<HTMLElement>(`[data-empresa-id="${id}"]`) as HTMLElement;
 const animacionDe = (el: Element) => animaciones.find((a) => a.el === el);
 
-function tarjeta(nombre: string): HTMLElement {
-  return screen.getByRole('heading', { level: 3, name: nombre }).closest('article') as HTMLElement;
-}
-const flecha = (nombre: string, destino: string) =>
-  within(tarjeta(nombre)).getByRole('button', { name: new RegExp(`Mover .* a ${destino}`) });
+const flecha = (id: string, destino: string) =>
+  within(crudo(id)).getByRole('button', { name: new RegExp(`Mover .* a ${destino}`) });
 
 async function cargado() {
-  await screen.findByText(CONSTRUCTORA);
+  await screen.findByText('Constructora Andina S.A.C.');
 }
 
 beforeEach(() => {
@@ -89,7 +89,7 @@ describe('Movimiento de tarjetas — traslado y parpadeo', () => {
     mockApi();
     render(<CrmBoard />);
     await cargado();
-    fireEvent.click(flecha(TEXTILES, 'En seguimiento'));
+    fireEvent.click(flecha('o-3', 'En seguimiento'));
     await waitFor(() => expect(copias()).toHaveLength(1));
     const copia = copias()[0]!;
     expect(copia).toHaveAttribute('aria-hidden', 'true');
@@ -97,7 +97,7 @@ describe('Movimiento de tarjetas — traslado y parpadeo', () => {
     expect(copia.className).toMatch(/\bfixed\b/);
     expect(copia.className).toMatch(/pointer-events-none/);
     expect([copia.style.left, copia.style.top, copia.style.width, copia.style.height]).toEqual(['300px', '0px', '260px', '90px']);
-    const real = crudo('e-3');
+    const real = crudo('o-3');
     expect(real.style.visibility).toBe('hidden');
     expect(real.closest('section')).toHaveAttribute('data-etapa', 'en_seguimiento');
     const a = animacionDe(copia)!;
@@ -118,16 +118,16 @@ describe('Movimiento de tarjetas — traslado y parpadeo', () => {
     mockApi();
     render(<CrmBoard />);
     await cargado();
-    const boton = flecha(TEXTILES, 'En seguimiento');
+    const boton = flecha('o-3', 'En seguimiento');
     boton.focus();
     fireEvent.click(boton);
     await waitFor(() => expect(copias()).toHaveLength(1));
     animacionDe(copias()[0]!)!.onfinish?.();
     expect(copias()).toHaveLength(0);
-    const real = crudo('e-3');
+    const real = crudo('o-3');
     expect(real.style.visibility).toBe('');
     expect(real).toHaveAttribute('data-destello', 'normal');
-    expect(within(real).getByRole('button', { name: /Mover .* a Cliente/ })).toHaveFocus();
+    expect(within(real).getByRole('button', { name: /Mover .* a Cotizado/ })).toHaveFocus();
   });
 
   it('the blink ends with the animation; a second finish call does nothing more', async () => {
@@ -137,15 +137,15 @@ describe('Movimiento de tarjetas — traslado y parpadeo', () => {
     mockApi();
     render(<CrmBoard />);
     await cargado();
-    fireEvent.click(flecha(TEXTILES, 'En seguimiento'));
+    fireEvent.click(flecha('o-3', 'En seguimiento'));
     await waitFor(() => expect(copias()).toHaveLength(1));
     const a = animacionDe(copias()[0]!)!;
     a.onfinish?.();
-    expect(crudo('e-3')).toHaveAttribute('data-destello', 'normal');
-    fireEvent.animationEnd(crudo('e-3'));
-    expect(crudo('e-3')).not.toHaveAttribute('data-destello');
+    expect(crudo('o-3')).toHaveAttribute('data-destello', 'normal');
+    fireEvent.animationEnd(crudo('o-3'));
+    expect(crudo('o-3')).not.toHaveAttribute('data-destello');
     a.onfinish?.();
-    expect(crudo('e-3')).not.toHaveAttribute('data-destello');
+    expect(crudo('o-3')).not.toHaveAttribute('data-destello');
   });
 
   it('a long trip (dragging across three columns) lasts longer than a short one', async () => {
@@ -155,8 +155,8 @@ describe('Movimiento de tarjetas — traslado y parpadeo', () => {
     mockApi();
     render(<CrmBoard />);
     await cargado();
-    const dataTransfer = { setData: vi.fn(), getData: () => 'e-4', effectAllowed: '' };
-    fireEvent.dragStart(tarjeta('Agroindustrial Valle Verde S.A.C.'), { dataTransfer });
+    const dataTransfer = { setData: vi.fn(), getData: () => 'o-6', effectAllowed: '' };
+    fireEvent.dragStart(crudo('o-6'), { dataTransfer });
     fireEvent.drop(screen.getByRole('region', { name: 'Por contactar' }), { dataTransfer });
     await waitFor(() => expect(copias()).toHaveLength(1));
     expect(animacionDe(copias()[0]!)!.opciones.duration).toBe(725);
@@ -170,16 +170,16 @@ describe('Movimiento de tarjetas — traslado y parpadeo', () => {
     mockApi();
     render(<CrmBoard />);
     await cargado();
-    fireEvent.click(flecha(CONSTRUCTORA, 'Contactado'));
+    fireEvent.click(flecha('o-1', 'Contactado'));
     const dialogo = await screen.findByRole('dialog', { name: /Cómo lo contactaste/ });
     fireEvent.click(within(dialogo).getByRole('radio', { name: /Llamada/ }));
     fireEvent.click(within(dialogo).getByRole('button', { name: /Guardar/ }));
     await waitFor(() => expect(copias()).toHaveLength(1));
-    // e-2 was second in Por contactar and is now first; e-3 was first in Contactado and is now second
-    expect(animacionDe(crudo('e-2'))!.keyframes).toEqual([{ transform: 'translate(0px, 100px)' }, { transform: 'none' }]);
-    expect(animacionDe(crudo('e-2'))!.opciones).toMatchObject({ duration: 320 });
-    expect(animacionDe(crudo('e-3'))!.keyframes).toEqual([{ transform: 'translate(0px, -100px)' }, { transform: 'none' }]);
-    expect(animacionDe(crudo('e-5'))).toBeUndefined();
+    // o-2 was second in Por contactar and is now first; o-3 was first in Contactado and is now second
+    expect(animacionDe(crudo('o-2'))!.keyframes).toEqual([{ transform: 'translate(0px, 100px)' }, { transform: 'none' }]);
+    expect(animacionDe(crudo('o-2'))!.opciones).toMatchObject({ duration: 320 });
+    expect(animacionDe(crudo('o-3'))!.keyframes).toEqual([{ transform: 'translate(0px, -100px)' }, { transform: 'none' }]);
+    expect(animacionDe(crudo('o-5'))).toBeUndefined();
   });
 
   it('with prefers-reduced-motion nothing travels or slides: the card is just there, blinking softly, focus kept', async () => {
@@ -189,15 +189,15 @@ describe('Movimiento de tarjetas — traslado y parpadeo', () => {
     mockApi();
     render(<CrmBoard />);
     await cargado();
-    const boton = flecha(TEXTILES, 'En seguimiento');
+    const boton = flecha('o-3', 'En seguimiento');
     boton.focus();
     fireEvent.click(boton);
-    await waitFor(() => expect(crudo('e-3').closest('section')).toHaveAttribute('data-etapa', 'en_seguimiento'));
+    await waitFor(() => expect(crudo('o-3').closest('section')).toHaveAttribute('data-etapa', 'en_seguimiento'));
     expect(copias()).toHaveLength(0);
     expect(animaciones).toHaveLength(0);
-    expect(crudo('e-3').style.visibility).toBe('');
-    expect(crudo('e-3')).toHaveAttribute('data-destello', 'reducido');
-    expect(within(crudo('e-3')).getByRole('button', { name: /Mover .* a Cliente/ })).toHaveFocus();
+    expect(crudo('o-3').style.visibility).toBe('');
+    expect(crudo('o-3')).toHaveAttribute('data-destello', 'reducido');
+    expect(within(crudo('o-3')).getByRole('button', { name: /Mover .* a Cotizado/ })).toHaveFocus();
   });
 
   it('without Element.animate (old browsers) the move still happens and the card still blinks', async () => {
@@ -206,10 +206,10 @@ describe('Movimiento de tarjetas — traslado y parpadeo', () => {
     mockApi();
     render(<CrmBoard />);
     await cargado();
-    fireEvent.click(flecha(TEXTILES, 'En seguimiento'));
-    await waitFor(() => expect(crudo('e-3').closest('section')).toHaveAttribute('data-etapa', 'en_seguimiento'));
+    fireEvent.click(flecha('o-3', 'En seguimiento'));
+    await waitFor(() => expect(crudo('o-3').closest('section')).toHaveAttribute('data-etapa', 'en_seguimiento'));
     expect(copias()).toHaveLength(0);
-    expect(crudo('e-3')).toHaveAttribute('data-destello', 'normal');
+    expect(crudo('o-3')).toHaveAttribute('data-destello', 'normal');
   });
 
   it('does not touch the focus when it was not on the card that moved', async () => {
@@ -220,9 +220,9 @@ describe('Movimiento de tarjetas — traslado y parpadeo', () => {
     render(<CrmBoard />);
     await cargado();
     const buscar = screen.getByRole('searchbox');
-    fireEvent.click(flecha(TEXTILES, 'En seguimiento'));
+    fireEvent.click(flecha('o-3', 'En seguimiento'));
     buscar.focus();
-    await waitFor(() => expect(crudo('e-3').closest('section')).toHaveAttribute('data-etapa', 'en_seguimiento'));
+    await waitFor(() => expect(crudo('o-3').closest('section')).toHaveAttribute('data-etapa', 'en_seguimiento'));
     expect(buscar).toHaveFocus();
   });
 
@@ -233,15 +233,15 @@ describe('Movimiento de tarjetas — traslado y parpadeo', () => {
     mockApi();
     render(<CrmBoard />);
     await cargado();
-    const boton = flecha(TEXTILES, 'En seguimiento');
+    const boton = flecha('o-3', 'En seguimiento');
     boton.focus();
     fireEvent.click(boton);
     await waitFor(() => expect(copias()).toHaveLength(1));
     const buscar = screen.getByRole('searchbox');
     buscar.focus();
-    fireEvent.click(flecha('Agroindustrial Valle Verde S.A.C.', 'En seguimiento'));
-    await waitFor(() => expect(crudo('e-4').closest('section')).toHaveAttribute('data-etapa', 'en_seguimiento'));
-    expect(crudo('e-3').style.visibility).toBe('');
+    fireEvent.click(flecha('o-6', 'En seguimiento'));
+    await waitFor(() => expect(crudo('o-6').closest('section')).toHaveAttribute('data-etapa', 'en_seguimiento'));
+    expect(crudo('o-3').style.visibility).toBe('');
     expect(buscar).toHaveFocus();
   });
 
@@ -252,11 +252,11 @@ describe('Movimiento de tarjetas — traslado y parpadeo', () => {
     mockApi();
     render(<CrmBoard />);
     await cargado();
-    fireEvent.click(flecha(TEXTILES, 'En seguimiento'));
-    await waitFor(() => expect(crudo('e-3').closest('section')).toHaveAttribute('data-etapa', 'en_seguimiento'));
+    fireEvent.click(flecha('o-3', 'En seguimiento'));
+    await waitFor(() => expect(crudo('o-3').closest('section')).toHaveAttribute('data-etapa', 'en_seguimiento'));
     expect(copias()).toHaveLength(0);
-    expect(crudo('e-3').style.visibility).toBe('');
-    expect(crudo('e-3')).toHaveAttribute('data-destello', 'normal');
+    expect(crudo('o-3').style.visibility).toBe('');
+    expect(crudo('o-3')).toHaveAttribute('data-destello', 'normal');
   });
 
   it('a failed move shows no travel and no blink', async () => {
@@ -266,7 +266,7 @@ describe('Movimiento de tarjetas — traslado y parpadeo', () => {
     mockApi({ etapa: () => ({ status: 500, body: { success: false, error: 'Error' } }) });
     render(<CrmBoard />);
     await cargado();
-    fireEvent.click(flecha(TEXTILES, 'En seguimiento'));
+    fireEvent.click(flecha('o-3', 'En seguimiento'));
     await waitFor(() => expect(toastMock.error).toHaveBeenCalled());
     expect(copias()).toHaveLength(0);
     expect(animaciones).toHaveLength(0);
@@ -280,12 +280,12 @@ describe('Movimiento de tarjetas — traslado y parpadeo', () => {
     const fn = mockApi();
     render(<CrmBoard />);
     await cargado();
-    fireEvent.click(within(tarjeta(TEXTILES)).getByRole('button', { name: /Medio: Llamada/ }));
+    fireEvent.click(within(crudo('o-3')).getByRole('button', { name: /Medio: Llamada/ }));
     const dialogo = screen.getByRole('dialog', { name: /Editar medio de contacto/ });
     fireEvent.click(within(dialogo).getByRole('radio', { name: /Correo/ }));
     fireEvent.click(within(dialogo).getByRole('button', { name: /Guardar/ }));
     await waitFor(() => expect(fn.mock.calls.some(([u]) => String(u).endsWith('/seguimiento'))).toBe(true));
-    await waitFor(() => expect(within(tarjeta(TEXTILES)).getByRole('button', { name: /Medio: Correo/ })).toBeInTheDocument());
+    await waitFor(() => expect(within(crudo('o-3')).getByRole('button', { name: /Medio: Correo/ })).toBeInTheDocument());
     expect(copias()).toHaveLength(0);
     expect(animaciones).toHaveLength(0);
     expect(document.querySelector('[data-destello]')).toBeNull();
@@ -298,16 +298,16 @@ describe('Movimiento de tarjetas — traslado y parpadeo', () => {
     mockApi();
     render(<CrmBoard />);
     await cargado();
-    fireEvent.click(flecha(TEXTILES, 'En seguimiento'));
+    fireEvent.click(flecha('o-3', 'En seguimiento'));
     await waitFor(() => expect(copias()).toHaveLength(1));
     const primera = animacionDe(copias()[0]!)!;
-    fireEvent.click(flecha('Agroindustrial Valle Verde S.A.C.', 'En seguimiento'));
+    fireEvent.click(flecha('o-6', 'En seguimiento'));
     await waitFor(() => expect(primera.cancel).toHaveBeenCalled());
-    await waitFor(() => expect(crudo('e-4').closest('section')).toHaveAttribute('data-etapa', 'en_seguimiento'));
+    await waitFor(() => expect(crudo('o-6').closest('section')).toHaveAttribute('data-etapa', 'en_seguimiento'));
     expect(copias()).toHaveLength(1);
-    expect(crudo('e-3').style.visibility).toBe('');
-    expect(crudo('e-3')).toHaveAttribute('data-destello', 'normal');
-    expect(crudo('e-4').style.visibility).toBe('hidden');
+    expect(crudo('o-3').style.visibility).toBe('');
+    expect(crudo('o-3')).toHaveAttribute('data-destello', 'normal');
+    expect(crudo('o-6').style.visibility).toBe('hidden');
   });
 
   it('leaving the page in the middle of a trip removes the copy', async () => {
@@ -317,7 +317,7 @@ describe('Movimiento de tarjetas — traslado y parpadeo', () => {
     mockApi();
     const { unmount } = render(<CrmBoard />);
     await cargado();
-    fireEvent.click(flecha(TEXTILES, 'En seguimiento'));
+    fireEvent.click(flecha('o-3', 'En seguimiento'));
     await waitFor(() => expect(copias()).toHaveLength(1));
     const a = animacionDe(copias()[0]!)!;
     unmount();
@@ -332,15 +332,15 @@ describe('Movimiento de tarjetas — traslado y parpadeo', () => {
     mockApi();
     render(<CrmBoard />);
     await cargado();
-    const boton = flecha(CONSTRUCTORA, 'Contactado');
+    const boton = flecha('o-1', 'Contactado');
     boton.focus();
     fireEvent.click(boton);
     const dialogo = await screen.findByRole('dialog', { name: /Cómo lo contactaste/ });
     fireEvent.click(within(dialogo).getByRole('radio', { name: /Llamada/ }));
     fireEvent.click(within(dialogo).getByRole('button', { name: /Guardar/ }));
-    await waitFor(() => expect(crudo('e-1').closest('section')).toHaveAttribute('data-etapa', 'contactado'));
+    await waitFor(() => expect(crudo('o-1').closest('section')).toHaveAttribute('data-etapa', 'contactado'));
     await waitFor(() => expect(screen.queryByRole('dialog', { name: /Cómo lo contactaste/ })).toBeNull());
-    expect(within(crudo('e-1')).getByRole('button', { name: /Mover .* a En seguimiento/ })).toHaveFocus();
+    expect(within(crudo('o-1')).getByRole('button', { name: /Mover .* a En seguimiento/ })).toHaveFocus();
   });
 
   it('same through the medium dialog when the card travels: the focus returns when the trip ends', async () => {
@@ -350,7 +350,7 @@ describe('Movimiento de tarjetas — traslado y parpadeo', () => {
     mockApi();
     render(<CrmBoard />);
     await cargado();
-    const boton = flecha(CONSTRUCTORA, 'Contactado');
+    const boton = flecha('o-1', 'Contactado');
     boton.focus();
     fireEvent.click(boton);
     const dialogo = await screen.findByRole('dialog', { name: /Cómo lo contactaste/ });
@@ -358,7 +358,7 @@ describe('Movimiento de tarjetas — traslado y parpadeo', () => {
     fireEvent.click(within(dialogo).getByRole('button', { name: /Guardar/ }));
     await waitFor(() => expect(copias()).toHaveLength(1));
     animacionDe(copias()[0]!)!.onfinish?.();
-    expect(within(crudo('e-1')).getByRole('button', { name: /Mover .* a En seguimiento/ })).toHaveFocus();
+    expect(within(crudo('o-1')).getByRole('button', { name: /Mover .* a En seguimiento/ })).toHaveFocus();
   });
 
   it('moving through the reason dialog leaves the focus inside the moved card', async () => {
@@ -368,15 +368,15 @@ describe('Movimiento de tarjetas — traslado y parpadeo', () => {
     mockApi();
     render(<CrmBoard />);
     await cargado();
-    const boton = flecha('Agroindustrial Valle Verde S.A.C.', 'Perdido');
+    const boton = flecha('o-4', 'Perdida');
     boton.focus();
     fireEvent.click(boton);
     const dialogo = await screen.findByRole('dialog', { name: /Motivo de la pérdida/ });
     fireEvent.click(within(dialogo).getByRole('radio', { name: 'Sin interés' }));
     fireEvent.click(within(dialogo).getByRole('button', { name: /Guardar/ }));
-    await waitFor(() => expect(crudo('e-4').closest('section')).toHaveAttribute('data-etapa', 'perdido'));
+    await waitFor(() => expect(crudo('o-4').closest('section')).toHaveAttribute('data-etapa', 'perdida'));
     await waitFor(() => expect(screen.queryByRole('dialog', { name: /Motivo de la pérdida/ })).toBeNull());
-    expect(crudo('e-4').contains(document.activeElement)).toBe(true);
+    expect(crudo('o-4').contains(document.activeElement)).toBe(true);
   });
 
   it('a cancelled dialog leaves nothing behind: a later move with the focus elsewhere does not steal it', async () => {
@@ -386,20 +386,20 @@ describe('Movimiento de tarjetas — traslado y parpadeo', () => {
     mockApi();
     render(<CrmBoard />);
     await cargado();
-    const boton = flecha(CONSTRUCTORA, 'Contactado');
+    const boton = flecha('o-1', 'Contactado');
     boton.focus();
     fireEvent.click(boton);
     fireEvent.click(await screen.findByRole('button', { name: 'Cancelar' }));
     const buscar = screen.getByRole('searchbox');
     buscar.focus();
-    fireEvent.click(flecha(CONSTRUCTORA, 'Contactado'));
+    fireEvent.click(flecha('o-1', 'Contactado'));
     const dialogo = await screen.findByRole('dialog', { name: /Cómo lo contactaste/ });
     buscar.focus();
     fireEvent.click(within(dialogo).getByRole('radio', { name: /Llamada/ }));
     fireEvent.click(within(dialogo).getByRole('button', { name: /Guardar/ }));
-    await waitFor(() => expect(crudo('e-1').closest('section')).toHaveAttribute('data-etapa', 'contactado'));
+    await waitFor(() => expect(crudo('o-1').closest('section')).toHaveAttribute('data-etapa', 'contactado'));
     await waitFor(() => expect(screen.queryByRole('dialog', { name: /Cómo lo contactaste/ })).toBeNull());
-    expect(crudo('e-1').contains(document.activeElement)).toBe(false);
+    expect(crudo('o-1').contains(document.activeElement)).toBe(false);
   });
 
   it('a cancelled dialog forgets the old focus: a later move without dialog does not pull it back to the card', async () => {
@@ -409,17 +409,17 @@ describe('Movimiento de tarjetas — traslado y parpadeo', () => {
     mockApi();
     render(<CrmBoard />);
     await cargado();
-    const boton = flecha(CONSTRUCTORA, 'Contactado');
+    const boton = flecha('o-1', 'Contactado');
     boton.focus();
     fireEvent.click(boton);
     fireEvent.click(await screen.findByRole('button', { name: 'Cancelar' }));
     // Por contactar -> En seguimiento needs no dialog; the user is typing in the search box meanwhile
     const buscar = screen.getByRole('searchbox');
-    const dataTransfer = { setData: vi.fn(), getData: () => 'e-1', effectAllowed: '' };
-    fireEvent.dragStart(tarjeta(CONSTRUCTORA), { dataTransfer });
+    const dataTransfer = { setData: vi.fn(), getData: () => 'o-1', effectAllowed: '' };
+    fireEvent.dragStart(crudo('o-1'), { dataTransfer });
     buscar.focus();
     fireEvent.drop(screen.getByRole('region', { name: 'En seguimiento' }), { dataTransfer });
-    await waitFor(() => expect(crudo('e-1').closest('section')).toHaveAttribute('data-etapa', 'en_seguimiento'));
+    await waitFor(() => expect(crudo('o-1').closest('section')).toHaveAttribute('data-etapa', 'en_seguimiento'));
     expect(buscar).toHaveFocus();
   });
 
@@ -427,7 +427,7 @@ describe('Movimiento de tarjetas — traslado y parpadeo', () => {
     mockApi();
     render(<CrmBoard />);
     await cargado();
-    for (const etapa of ETAPAS) {
+    for (const etapa of ETAPAS_OPORTUNIDAD) {
       expect(document.querySelectorAll(`section[data-etapa="${etapa}"]`)).toHaveLength(1);
     }
   });

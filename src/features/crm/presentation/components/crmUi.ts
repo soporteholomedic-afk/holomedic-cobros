@@ -30,20 +30,21 @@ import {
   MOTIVO_CAMPOS,
   SECTORES_INICIALES,
   type AccionTipo,
-  type Empresa,
-  type Etapa,
+  type EtapaOportunidad,
   type IconoSector,
   type Medio,
   type Origen,
+  type Oportunidad,
 } from '../../domain/entities';
 
 /** Color of the dot that goes next to each stage name (board columns and detail header). */
-export const ETAPA_PUNTO: Record<Etapa, string> = {
+export const ETAPA_PUNTO: Record<EtapaOportunidad, string> = {
   por_contactar: 'bg-slate-400',
   contactado: 'bg-sky-500',
   en_seguimiento: 'bg-amber-500',
-  cliente: 'bg-emerald-500',
-  perdido: 'bg-red-500',
+  cotizado: 'bg-violet-500',
+  ganada: 'bg-emerald-500',
+  perdida: 'bg-red-500',
 };
 
 export const INPUT =
@@ -163,8 +164,8 @@ export function colorDeSector(sector: string | null): string {
 }
 
 /** Summary lines of the loss reason, e.g. "Ofrecimos: S/ 7,000". */
-export function lineasDeMotivo(e: Empresa): string[] {
-  const m = e.motivo;
+export function lineasDeMotivo(o: Oportunidad): string[] {
+  const m = o.motivo;
   if (!m) return [];
   const campos = MOTIVO_CAMPOS[m.categoria];
   const lineas: string[] = [];
@@ -172,6 +173,11 @@ export function lineasDeMotivo(e: Empresa): string[] {
   if (campos.detalle2 && m.detalle2) lineas.push(`${campos.detalle2.resumen}: ${m.detalle2}`);
   if (m.notas) lineas.push(m.notas);
   return lineas;
+}
+
+/** Estimated amount of a deal, formatted for the card, e.g. "S/ 12,000". */
+export function textoMonto(monto: number): string {
+  return `S/ ${monto.toLocaleString('es-PE', { maximumFractionDigits: 2 })}`;
 }
 
 /**
