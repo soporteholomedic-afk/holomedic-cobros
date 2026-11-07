@@ -5,22 +5,37 @@ import { buscarRutaProtegida, permisoParaRuta } from '../routes';
 
 /**
  * Route protection for the apifacturacion configuration surface
- * (crm-consulta-sunat T2, spec S2/S5). The token + URL of
- * apifacturacion.com are administered at /admin/crm/configuracion and
- * /api/crm/configuracion with the DEDICATED `crm_configuracion` permiso
- * — NOT the plain `crm` gate of the broader prefixes. Both entries are
- * longer prefixes than the generic `/api/crm` and `/crm` entries, so
- * `buscarRutaProtegida`'s longest-first `startsWith` match resolves to
- * them first.
+ * (crm-consulta-sunat, spec S2/S5; relocation to the /configuracion
+ * tabs in T8 — log L8). The token + URL of apifacturacion.com are
+ * administered at the LAST tab of /configuracion,
+ * `/configuracion/consulta-sunat`, and at `/api/crm/configuracion`,
+ * with the DEDICATED `crm_configuracion` permiso — NOT the plain `crm`
+ * gate of the broader prefixes. The API entry is a longer prefix than
+ * the generic `/api/crm`, so `buscarRutaProtegida`'s longest-first
+ * `startsWith` match resolves to it first. The dedicated
+ * `/admin/crm/configuracion` page was REMOVED in T8 and is no longer
+ * registered.
  */
 describe('RUTAS_PROTEGIDAS — CRM configuración (apifacturacion)', () => {
   it('crm_configuracion existe en el registro de PERMISOS', () => {
     expect(PERMISOS).toContain('crm_configuracion');
   });
 
-  it('gates /admin/crm/configuracion on crm_configuracion', () => {
-    expect(permisoParaRuta('/admin/crm/configuracion')).toBe('crm_configuracion');
-    expect(buscarRutaProtegida('/admin/crm/configuracion')?.path).toBe('/admin/crm/configuracion');
+  it('gates /configuracion/consulta-sunat and its subpaths on crm_configuracion', () => {
+    for (const ruta of [
+      '/configuracion/consulta-sunat',
+      '/configuracion/consulta-sunat/detalle',
+    ]) {
+      expect(permisoParaRuta(ruta)).toBe('crm_configuracion');
+      expect(buscarRutaProtegida(ruta)?.path).toBe('/configuracion/consulta-sunat');
+    }
+  });
+
+  it('the dedicated /admin/crm/configuracion page is NO LONGER registered (T8 removal)', () => {
+    // The page directory was deleted with the tab replacement; the path
+    // falls through every RUTAS_PROTEGIDAS prefix (and 404s in the app).
+    expect(permisoParaRuta('/admin/crm/configuracion')).toBeNull();
+    expect(buscarRutaProtegida('/admin/crm/configuracion')).toBeNull();
   });
 
   it('gates /api/crm/configuracion and its subpaths on crm_configuracion', () => {
@@ -44,7 +59,9 @@ describe('RUTAS_PROTEGIDAS — CRM configuración (apifacturacion)', () => {
   });
 
   it('labels the entries for the denegado page', () => {
-    expect(buscarRutaProtegida('/admin/crm/configuracion')?.label).toBe('Configuración');
+    expect(buscarRutaProtegida('/configuracion/consulta-sunat')?.label).toBe(
+      'Consulta SUNAT (Configuración)',
+    );
     expect(buscarRutaProtegida('/api/crm/configuracion/apifacturacion')?.label).toBe('Configuración');
   });
 });

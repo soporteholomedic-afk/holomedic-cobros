@@ -5,8 +5,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { PanelApifacturacion } from '../PanelApifacturacion';
 
 /**
- * UI contract of /admin/crm/configuracion (crm-consulta-sunat T2, spec
- * S2/S5): the panel administers the apifacturacion token (masked,
+ * UI contract of the apifacturacion panel (crm-consulta-sunat T2, spec
+ * S2/S5; T8: rendered at the /configuracion/consulta-sunat tab): the
+ * panel administers the apifacturacion token (masked,
  * replace/remove) and URL, shows the configured/source badge and runs
  * the paid "probar conexión" probe. fetch is stubbed at the global
  * boundary (useLookup.test precedent); NO backend module is mocked.

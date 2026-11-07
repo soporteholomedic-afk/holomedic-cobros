@@ -31,9 +31,9 @@ export const PERMISOS = [
   // Separate from `crm` so uploading to La Guía's knowledge base can
   // be granted on its own — same additive pattern as crm_conversaciones.
   'crm_conocimiento',
-  // agente-ia-crm (E5·T4): dedicated gate for the agent configuration
-  // tab (/admin/crm/configuracion + /api/crm/configuracion). Separate
-  // from `crm` so the kill switch and audit trail are admin-grantable.
+  // agente-ia-crm (E5·T4), reubicado por crm-consulta-sunat (T8): dedicated
+  // gate for the configuration tab (/configuracion/consulta-sunat +
+  // /api/crm/configuracion). Separate from `crm` so it is admin-grantable.
   'crm_configuracion',
 ] as const;
 

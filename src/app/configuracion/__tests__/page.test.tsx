@@ -7,6 +7,7 @@
  *  - no session      → /auth/login?redirect=%2Fconfiguracion (TM1)
  *  - `admin`         → /configuracion/usuarios
  *  - `firma_correo`  → /configuracion/firma
+ *  - `crm_configuracion` → /configuracion/consulta-sunat (T8)
  *  - neither         → /auth/denegado with the proxy's exact params
  *
  * Mock fidelity: the `next/navigation` redirect mock THROWS like the
@@ -58,6 +59,16 @@ describe('bare /configuracion page — session-aware redirect', () => {
     getSessionMock.mockResolvedValue({ permisos: ['firma_correo'] });
     await expect(ConfiguracionRedirectPage()).rejects.toThrow(
       'NEXT_REDIRECT:/configuracion/firma',
+    );
+  });
+
+  // crm-consulta-sunat (T8, L8): a crm_configuracion-only holder lands
+  // on the LAST tab, /configuracion/consulta-sunat — the redirect page
+  // mirrors the sidebar's first-openable-tab precedence exactly.
+  it('con SOLO crm_configuracion → /configuracion/consulta-sunat', async () => {
+    getSessionMock.mockResolvedValue({ permisos: ['crm_configuracion'] });
+    await expect(ConfiguracionRedirectPage()).rejects.toThrow(
+      'NEXT_REDIRECT:/configuracion/consulta-sunat',
     );
   });
 

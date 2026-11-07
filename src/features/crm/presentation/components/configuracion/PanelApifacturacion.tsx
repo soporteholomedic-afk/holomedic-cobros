@@ -18,7 +18,8 @@ import { useConfigApifacturacion } from './useConfigApifacturacion';
 
 /**
  * PanelApifacturacion (crm-consulta-sunat T2, specs S2/S5): administers
- * the apifacturacion.com (SUNAT) credentials at /admin/crm/configuracion.
+ * the apifacturacion.com (SUNAT) credentials — since T8 inside the
+ * /configuracion view as the LAST tab (/configuracion/consulta-sunat).
  * The token is masked (CampoSecreto, never rendered in clear), the URL
  * is a plain field with a default, and "Probar conexión" runs ONE real
  * lookup — a paid query, so the panel says so up front. All server

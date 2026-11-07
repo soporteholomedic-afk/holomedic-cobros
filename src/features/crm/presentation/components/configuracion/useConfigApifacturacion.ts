@@ -6,7 +6,8 @@ import type { VistaSecreto } from './CampoSecreto';
 
 /**
  * useConfigApifacturacion (crm-consulta-sunat T2): all browser/server
- * interaction of /admin/crm/configuracion — load the state on mount and
+ * interaction of the /configuracion/consulta-sunat tab — load the state
+ * on mount and
  * after every change (`recargaKey` bump, useAlertasDia pattern), save
  * the URL, replace/remove the token, run the paid probe. The panel
  * stays presentation-only (no raw fetch in components).

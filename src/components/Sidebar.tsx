@@ -3,7 +3,7 @@
 import { useState, useCallback } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Activity, Building2, FileSpreadsheet, Home, DollarSign, FileText, Landmark, Mail, Menu, X, LogOut, Settings } from 'lucide-react';
+import { Activity, Building2, FileSpreadsheet, Home, DollarSign, FileText, Mail, Menu, X, LogOut, Settings } from 'lucide-react';
 import AreasMenuItem from './AreasMenuItem';
 import { useAuth } from '@/features/auth/presentation/hooks/useAuth';
 import { plantillasEntryHref } from '@/features/plantillas-editor/infrastructure/areaConfigRegistry';
@@ -40,11 +40,12 @@ export default function Sidebar() {
   // crm (S1a/pr1): the CRM entry is gated by its OWN permiso — the
   // route requires exactly `crm` via RUTAS_PROTEGIDAS, import view included.
   const canCrm = user?.permisos.includes('crm');
-  // crm-consulta-sunat (T7): "Consulta SUNAT" opens /admin/crm/configuracion
-  // (apifacturacion token + URL) and is gated by the DEDICATED
-  // `crm_configuracion` permiso alone — same additive pattern as `crm`;
-  // plain-CRM holders do NOT see it.
-  const canConfigCrm = user?.permisos.includes('crm_configuracion');
+  // crm-consulta-sunat (T8, L8): the Consulta SUNAT config is now the
+  // LAST tab of /configuracion (/configuracion/consulta-sunat), gated
+  // by the DEDICATED `crm_configuracion` permiso alone — same additive
+  // pattern as `crm`; plain-CRM holders do NOT get the Configuración
+  // entry. The dedicated "Consulta SUNAT" sidebar entry was REMOVED.
+  const canConsultaSunat = user?.permisos.includes('crm_configuracion');
   // configuracion-tabs (S4): `firma_correo` no longer opens a separate
   // "Mi firma" entry — it now feeds the shared "Configuración" entry
   // below. The MI FIRMA tab route keeps its own `firma_correo` gate in
@@ -52,14 +53,16 @@ export default function Sidebar() {
   const canEditFirma = user?.permisos.includes('firma_correo');
   // configuracion-tabs (S2/S3): ONE "Configuración" entry replaces the
   // separate "Usuarios" and "Mi firma" entries. Visible with `admin`
-  // OR `firma_correo`; each holder lands on the FIRST tab it can open
-  // — the tabs bar inside the page filters the rest, and every
-  // /configuracion sub-route keeps its own per-tab permiso in
-  // RUTAS_PROTEGIDAS.
-  const canSeccionConfiguracion = isAdmin === true || canEditFirma === true;
+  // OR `firma_correo` OR — crm-consulta-sunat (T8) — `crm_configuracion`;
+  // each holder lands on the FIRST tab it can open — the tabs bar
+  // inside the page filters the rest, and every /configuracion
+  // sub-route keeps its own per-tab permiso in RUTAS_PROTEGIDAS.
+  const canSeccionConfiguracion = isAdmin === true || canEditFirma === true || canConsultaSunat === true;
   const configuracionHref = isAdmin
     ? '/configuracion/usuarios'
-    : '/configuracion/firma';
+    : canEditFirma
+      ? '/configuracion/firma'
+      : '/configuracion/consulta-sunat';
   // Boundary-safe prefix: /configuracion plus any sub-route, without
   // matching lookalikes like /configuracion-otros.
   const configuracionSectionActiva =
@@ -175,24 +178,6 @@ export default function Sidebar() {
               <Building2 className="w-5 h-5" />
               <span>CRM</span>
               {pathname === '/crm' && (
-                <span className="ml-auto w-1.5 h-1.5 rounded-full bg-sky-400 shadow-sm shadow-sky-400/50" />
-              )}
-            </Link>
-          )}
-
-          {canConfigCrm && (
-            <Link
-              href="/admin/crm/configuracion"
-              onClick={closeMobile}
-              className={`flex items-center space-x-3 px-4 py-3 rounded-xl text-sm font-medium transition-all duration-200 ${
-                pathname === '/admin/crm/configuracion'
-                  ? 'bg-sky-950/50 text-sky-300 border border-sky-800/30 shadow-sm'
-                  : 'text-slate-400 hover:text-white hover:bg-slate-800/50'
-              }`}
-            >
-              <Landmark className="w-5 h-5" />
-              <span>Consulta SUNAT</span>
-              {pathname === '/admin/crm/configuracion' && (
                 <span className="ml-auto w-1.5 h-1.5 rounded-full bg-sky-400 shadow-sm shadow-sky-400/50" />
               )}
             </Link>

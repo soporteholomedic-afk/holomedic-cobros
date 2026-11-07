@@ -1,12 +1,16 @@
 import { render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import PaginaConfiguracionCrm from '../page';
+import ConfiguracionConsultaSunatPage from '../page';
 
 /**
- * The page shell (crm-consulta-sunat T2): a default export that renders
- * PanelApifacturacion. Proxy-level gating of /admin/crm/configuracion is
- * pinned in routes.crm-configuracion.test.ts.
+ * The CONSULTA SUNAT tab page shell (crm-consulta-sunat T8, log L8):
+ * a default export that renders PanelApifacturacion inside the
+ * /configuracion tabs layout — the SAME panel the dedicated
+ * /admin/crm/configuracion page used to render (removed in T8).
+ * Proxy-level gating of /configuracion/consulta-sunat (denegado path
+ * included) is pinned in routes.crm-configuracion.test.ts, exactly the
+ * pattern the other per-tab pages (usuarios/areas/firma) use.
  */
 
 beforeEach(() => {
@@ -33,9 +37,9 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-describe('/admin/crm/configuracion', () => {
+describe('/configuracion/consulta-sunat', () => {
   it('renders the apifacturacion panel with its state', async () => {
-    render(<PaginaConfiguracionCrm />);
+    render(<ConfiguracionConsultaSunatPage />);
     expect(screen.getByRole('heading', { name: 'API apifacturacion (SUNAT)' })).toBeInTheDocument();
     expect(await screen.findByText('Configurado')).toBeInTheDocument();
     expect(screen.getByLabelText('URL de la API')).toBeInTheDocument();

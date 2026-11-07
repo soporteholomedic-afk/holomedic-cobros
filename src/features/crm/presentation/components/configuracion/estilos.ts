@@ -1,6 +1,7 @@
 /**
- * Shared Tailwind class sets for the /admin/crm/configuracion surface
- * (ported from agente-ia-crm E5·T6 for crm-consulta-sunat T2). Every
+ * Shared Tailwind class sets for the /configuracion/consulta-sunat tab
+ * surface (ported from agente-ia-crm E5·T6 for crm-consulta-sunat T2;
+ * relocated into the /configuracion tabs in T8). Every
  * colored surface ships paired light/dark variants, every interactive
  * control a visible focus ring and every transition respects
  * `prefers-reduced-motion`.
