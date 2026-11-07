@@ -53,12 +53,13 @@ describe('POST /api/crm/importar', () => {
       razonSocial: 'Escuela Norte S.A.C.',
       ruc: '20601112223',
       sector: 'Educación',
+      direccion: null,
       contactos: [{ nombre: 'Rosa Mendoza', telefono: '987111222', correo: 'rosa@norte.pe' }],
       notas: null,
       etapa: 'por_contactar',
       origen: null,
     });
-    expect(repo.create).toHaveBeenNthCalledWith(2, expect.objectContaining({ ruc: '20601112224', sector: 'Educación', etapa: 'por_contactar' }));
+    expect(repo.create).toHaveBeenNthCalledWith(2, expect.objectContaining({ ruc: '20601112224', sector: 'Educación', etapa: 'por_contactar', direccion: null }));
   });
 
   it('reads and checks the file again on the server: a list of rows sent by the client is ignored', async () => {
