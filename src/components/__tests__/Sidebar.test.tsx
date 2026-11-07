@@ -60,6 +60,19 @@ const crmUser: AuthUser = {
   activo: true,
 };
 
+// crm-consulta-sunat (T8): the Consulta SUNAT TAB of /configuracion is
+// gated by the dedicated `crm_configuracion` permiso alone — NOT by
+// `crm` nor `admin`. This fixture holds ONLY that permiso, so the
+// Configuración entry must land on /configuracion/consulta-sunat.
+const crmConfigUser: AuthUser = {
+  idUsuario: 'u-crm-config',
+  usuario: 'mconfig',
+  nombre: 'Marta Config',
+  area: 'Sistemas',
+  permisos: ['crm_configuracion'],
+  activo: true,
+};
+
 function mockAuthMe(user: AuthUser | null): void {
   global.fetch = vi.fn().mockImplementation((url: string) =>
     url === '/api/auth/me'
@@ -194,9 +207,10 @@ describe('Sidebar Component', () => {
     expect(brandLink).toHaveAttribute('href', '/');
   });
 
-  // configuracion-tabs (S2/S4): ONE "Configuración" entry replaces the
-  // separate "Usuarios" and "Mi firma" entries. Gate: `admin` OR
-  // `firma_correo`; each holder lands on the FIRST tab it can open.
+  // configuracion-tabs (S2/S4) + crm-consulta-sunat (T8): ONE "Configuración"
+  // entry replaces the separate "Usuarios", "Mi firma" and "Consulta SUNAT"
+  // entries. Gate: `admin` OR `firma_correo` OR `crm_configuracion`; each
+  // holder lands on the FIRST tab it can open.
   describe('Configuración entry (admin OR firma_correo)', () => {
     const adminFirmaUser: AuthUser = {
       idUsuario: 'u-admin-firma',
@@ -355,6 +369,41 @@ describe('Sidebar Component', () => {
       renderSidebar();
       expect(await screen.findByText('Julián Firma')).toBeInTheDocument();
       expect(screen.queryByText('CRM')).not.toBeInTheDocument();
+    });
+  });
+
+  // crm-consulta-sunat (T8, L8): the dedicated "Consulta SUNAT" entry is
+  // GONE — the apifacturacion config is now the LAST tab of the shared
+  // "Configuración" entry, gated by `crm_configuracion` alone. A holder
+  // lands on /configuracion/consulta-sunat (the first tab it can open,
+  // after admin→usuarios and firma_correo→firma in the precedence);
+  // plain-crm holders still see NO Configuración entry.
+  describe('Configuración landing for crm_configuracion holders (T8)', () => {
+    beforeEach(() => {
+      mockUsePathname.mockReturnValue('/');
+    });
+
+    it('muestra "Configuración" enlazando a /configuracion/consulta-sunat para un usuario SOLO crm_configuracion', async () => {
+      mockAuthMe(crmConfigUser);
+      renderSidebar();
+      expect(await screen.findByText('Marta Config')).toBeInTheDocument();
+      expect(screen.getByText('Configuración').closest('a')).toHaveAttribute('href', '/configuracion/consulta-sunat');
+    });
+
+    it('ya NO muestra la entrada dedicada "Consulta SUNAT" (ni siquiera con crm_configuracion)', async () => {
+      mockAuthMe(crmConfigUser);
+      renderSidebar();
+      expect(await screen.findByText('Marta Config')).toBeInTheDocument();
+      expect(screen.queryByText('Consulta SUNAT')).not.toBeInTheDocument();
+    });
+
+    it('oculta "Configuración" para un usuario solo con crm (sin crm_configuracion)', async () => {
+      mockAuthMe(crmUser);
+      renderSidebar();
+      expect(await screen.findByText('Vera Crm')).toBeInTheDocument();
+      expect(screen.getByText('CRM')).toBeInTheDocument();
+      expect(screen.queryByText('Configuración')).not.toBeInTheDocument();
+      expect(screen.queryByText('Consulta SUNAT')).not.toBeInTheDocument();
     });
   });
 });

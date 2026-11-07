@@ -1,5 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+
+import type { DatosSunat } from '../../../domain/entities';
 
 const toastMock = vi.hoisted(() => ({ success: vi.fn(), error: vi.fn(), info: vi.fn() }));
 vi.mock('sonner', () => ({ toast: toastMock }));
@@ -34,6 +36,21 @@ function montar(ruc: Rutas) {
   const fn = vi.fn(async (url: string, init?: RequestInit) => {
     const method = init?.method ?? 'GET';
     if (url === URL_RUC && method === 'PATCH') return json(ruc(JSON.parse(String(init?.body))));
+    if (url.endsWith('/historial')) return json({ status: 200, body: { success: true, interacciones: [] } });
+    return base(url, init);
+  });
+  global.fetch = fn as unknown as typeof fetch;
+  return fn;
+}
+
+/** Like `montar`, but also answers the SUNAT lookup GET /api/crm/ruc/{RUC_LIBRE}. */
+function montarConConsulta(consulta: Respuesta, rucResponde: Rutas = () => ok(RUC_LIBRE)) {
+  mockApi({ lista: { status: 200, body: { success: true, empresas: LISTA_RUC } } });
+  const base = global.fetch;
+  const fn = vi.fn(async (url: string, init?: RequestInit) => {
+    const method = init?.method ?? 'GET';
+    if (url === URL_RUC && method === 'PATCH') return json(rucResponde(JSON.parse(String(init?.body))));
+    if (url === `/api/crm/ruc/${RUC_LIBRE}` && method === 'GET') return json(consulta);
     if (url.endsWith('/historial')) return json({ status: 200, body: { success: true, interacciones: [] } });
     return base(url, init);
   });
@@ -311,5 +328,56 @@ describe('Detalle — editar una empresa sin RUC', () => {
     fireEvent.click(within(panel).getByRole('button', { name: 'Guardar cambios' }));
     await waitFor(() => expect(put).toHaveBeenCalledTimes(1));
     expect(put.mock.calls[0]![1]).toMatchObject({ razonSocial: SIN_RUC, ruc: null });
+  });
+});
+
+describe('Detalle — consulta SUNAT al completar el RUC (T6, S3)', () => {
+  const DATOS_SUNAT: DatosSunat = {
+    razonSocial: 'Clínica Santa Rosa S.A.C.',
+    direccion: 'Jr. Las Palmas 456, Lima',
+    estado: 'ACTIVO',
+    condicion: 'HABIDO',
+  };
+
+  const esperarConsulta = async () => {
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 650));
+    });
+  };
+
+  it('shows the SUNAT preview above the save buttons and the PATCH body stays {ruc}', async () => {
+    const fn = montarConConsulta({ status: 200, body: { success: true, datos: DATOS_SUNAT } });
+    render(<CrmBoard />);
+    const panel = await abierto();
+
+    escribir(campoRuc(panel), RUC_LIBRE);
+    await esperarConsulta();
+    expect(within(panel).getByText('Clínica Santa Rosa S.A.C.')).toBeInTheDocument();
+    expect(within(panel).getByText('ACTIVO · HABIDO')).toBeInTheDocument();
+
+    guardar(panel);
+    await waitFor(() => expect(toastMock.success).toHaveBeenCalledWith('RUC guardado.'));
+    expect(llamadas(fn, 'PATCH', /ruc$/)).toEqual([{ url: URL_RUC, body: { ruc: RUC_LIBRE } }]);
+  });
+
+  it('a lookup failure (503) is non-blocking: inline message and the save still PATCHes the typed RUC', async () => {
+    const fn = montarConConsulta({
+      status: 503,
+      body: {
+        success: false,
+        error: 'La consulta SUNAT no está configurada. Configura el token de apifacturacion en Configuración.',
+      },
+    });
+    render(<CrmBoard />);
+    const panel = await abierto();
+
+    escribir(campoRuc(panel), RUC_LIBRE);
+    await esperarConsulta();
+    expect(within(panel).getByText(/no está configurada/)).toBeInTheDocument();
+    expect(within(panel).queryByText('ACTIVO · HABIDO')).toBeNull();
+
+    guardar(panel);
+    await waitFor(() => expect(toastMock.success).toHaveBeenCalledWith('RUC guardado.'));
+    expect(llamadas(fn, 'PATCH', /ruc$/)).toEqual([{ url: URL_RUC, body: { ruc: RUC_LIBRE } }]);
   });
 });

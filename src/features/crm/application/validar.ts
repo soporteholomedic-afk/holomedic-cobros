@@ -82,7 +82,18 @@ export async function validarDatosEmpresa(
   const otra = await repo.findByRuc(ruc);
   if (otra && otra.idEmpresa !== excluirId) throw new RucDuplicadoError(ruc);
 
-  return { razonSocial, ruc, sector, contactos, notas: opcional(datos.notas) };
+  return { razonSocial, ruc, sector, contactos, notas: opcional(datos.notas), direccion: validarDireccion(datos.direccion) };
+}
+
+const MAX_DIRECCION = 300;
+
+/** Fiscal address: trimmed, at most 300 characters, optional (empty means NULL). */
+export function validarDireccion(valor: string | null | undefined): string | null {
+  const t = opcional(valor);
+  if (t !== null && t.length > MAX_DIRECCION) {
+    throw new DatosEmpresaInvalidosError(`La dirección admite hasta ${MAX_DIRECCION} caracteres.`);
+  }
+  return t;
 }
 
 const MENSAJE_MEDIO = 'Elige el medio de contacto: llamada, correo o WhatsApp';

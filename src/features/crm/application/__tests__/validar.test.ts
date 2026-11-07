@@ -1,8 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
+import type { ICrmEmpresaRepository } from '../../domain/ports';
 import { DatosEmpresaInvalidosError } from '../../domain/errors';
 import {
   hoyEnLima,
+  validarDatosEmpresa,
+  validarDireccion,
   validarMedio,
   validarMedioContacto,
   validarOrigen,
@@ -105,6 +108,46 @@ describe('validarResumen', () => {
     expect(validarResumen(null, false)).toBeNull();
     expect(mensaje(() => validarResumen('x'.repeat(1001), false))).toBe('El resumen admite hasta 1000 caracteres.');
     expect(validarResumen('x'.repeat(1000), true)).toHaveLength(1000);
+  });
+});
+
+describe('validarDireccion', () => {
+  it('trims, keeps up to 300 characters, and turns empty into null', () => {
+    expect(validarDireccion('  Av. Los Próceres 210, San Isidro  ')).toBe('Av. Los Próceres 210, San Isidro');
+    expect(validarDireccion('x'.repeat(300))).toHaveLength(300);
+    expect(validarDireccion('')).toBeNull();
+    expect(validarDireccion('   ')).toBeNull();
+    expect(validarDireccion(null)).toBeNull();
+    expect(validarDireccion(undefined)).toBeNull();
+  });
+
+  it('rejects more than 300 characters', () => {
+    expect(mensaje(() => validarDireccion('x'.repeat(301)))).toBe('La dirección admite hasta 300 caracteres.');
+  });
+});
+
+describe('validarDatosEmpresa — direccion', () => {
+  const BASE = {
+    razonSocial: 'Andina',
+    ruc: '20512345678',
+    contactos: [{ nombre: 'Ana', telefono: '900111222' }],
+  };
+  const repoVacio = {
+    findByRuc: async () => null,
+    listSectores: async () => [],
+  } as unknown as ICrmEmpresaRepository;
+
+  it('flows the trimmed address through and defaults to null when absent', async () => {
+    const con = await validarDatosEmpresa({ ...BASE, direccion: '  Av. Los Próceres 210  ' }, repoVacio);
+    expect(con.direccion).toBe('Av. Los Próceres 210');
+    const sin = await validarDatosEmpresa(BASE, repoVacio);
+    expect(sin.direccion).toBeNull();
+  });
+
+  it('rejects a 301-character address', async () => {
+    await expect(
+      validarDatosEmpresa({ ...BASE, direccion: 'x'.repeat(301) }, repoVacio),
+    ).rejects.toThrow('La dirección admite hasta 300 caracteres.');
   });
 });
 

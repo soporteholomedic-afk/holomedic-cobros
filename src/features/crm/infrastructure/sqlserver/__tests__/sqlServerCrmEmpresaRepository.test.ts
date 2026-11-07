@@ -52,6 +52,7 @@ const FILA = {
   ruc: '20512345678',
   sector: 'Construcción',
   notas: 'Llegó por referido.',
+  direccion: 'Av. Los Próceres 210, San Isidro',
   etapa: 'contactado',
   medio: 'llamada',
   motivoCategoria: null,
@@ -80,6 +81,7 @@ const DATOS: DatosEmpresa = {
   ruc: '20512345678',
   sector: 'Construcción',
   notas: null,
+  direccion: null,
   contactos: [
     { nombre: 'Marcela Quispe', telefono: '987 654 321', correo: null },
     { nombre: 'Luis Prado', telefono: '998 220 145', correo: 'lprado@a.pe' },
@@ -106,6 +108,7 @@ describe('SqlServerCrmEmpresaRepository — reading', () => {
       ruc: '20512345678',
       sector: 'Construcción',
       notas: 'Llegó por referido.',
+      direccion: 'Av. Los Próceres 210, San Isidro',
       etapa: 'contactado',
       medio: 'llamada',
       medioOtro: null,
@@ -179,6 +182,12 @@ describe('SqlServerCrmEmpresaRepository — reading', () => {
     const e = await new SqlServerCrmEmpresaRepository(pool).getById('e-1');
     expect(e?.contactos).toEqual([]);
   });
+
+  it('reads a NULL direccion as null (empresas created before the column keep working)', async () => {
+    const { pool } = makeFakePool(() => ({ recordsets: [[{ ...FILA, direccion: null }], CONTACTOS] }));
+    const e = await new SqlServerCrmEmpresaRepository(pool).getById('e-1');
+    expect(e?.direccion).toBeNull();
+  });
 });
 
 describe('SqlServerCrmEmpresaRepository — create', () => {
@@ -246,6 +255,13 @@ describe('SqlServerCrmEmpresaRepository — update', () => {
     await expect(new SqlServerCrmEmpresaRepository(pool).update('nope', DATOS)).rejects.toBeInstanceOf(
       EmpresaNotFoundError,
     );
+  });
+
+  it('replaces the fiscal address on update (writes the whole DatosEmpresa)', async () => {
+    const { pool, consultas } = makeFakePool(conFila);
+    await new SqlServerCrmEmpresaRepository(pool).update('e-1', { ...DATOS, direccion: 'Jr. Unión 500, Cercado' });
+    expect(consultas[0]?.inputs).toMatchObject({ id: 'e-1', direccion: 'Jr. Unión 500, Cercado' });
+    expect(consultas[0]?.sql).toMatch(/direccion\s*=\s*@direccion/i);
   });
 
   it('maps a RUC that belongs to another empresa to RucDuplicadoError', async () => {
@@ -369,6 +385,7 @@ describe('SqlServerCrmEmpresaRepository — follow-up columns', () => {
       'proximaAccionFecha',
       'origen',
       'sugerenciaDescartadaEn',
+      'direccion',
     ]) {
       expect(consultas[0]?.sql).toContain(col);
     }
@@ -396,6 +413,20 @@ describe('SqlServerCrmEmpresaRepository — follow-up columns', () => {
     const { pool, consultas } = makeFakePool(conFila);
     await new SqlServerCrmEmpresaRepository(pool).create(NUEVA);
     expect(consultas[0]?.inputs).toHaveProperty('origen', null);
+  });
+
+  it('persists the fiscal address on create: column in the INSERT list, value bound', async () => {
+    const { pool, consultas } = makeFakePool(conFila);
+    await new SqlServerCrmEmpresaRepository(pool).create({ ...NUEVA, direccion: 'Av. Los Próceres 210, San Isidro' });
+    expect(consultas[0]?.inputs).toMatchObject({ direccion: 'Av. Los Próceres 210, San Isidro' });
+    expect(consultas[0]?.sql).toMatch(/INSERT\s+INTO\s+dbo\.CrmEmpresa\s*\([^)]*\bdireccion\b[^)]*\)/i);
+    expect(consultas[0]?.sql).toContain('@direccion');
+  });
+
+  it('stores a NULL direccion when the create has none', async () => {
+    const { pool, consultas } = makeFakePool(conFila);
+    await new SqlServerCrmEmpresaRepository(pool).create(NUEVA);
+    expect(consultas[0]?.inputs).toHaveProperty('direccion', null);
   });
 
   it('turns the filtered unique index violation (2601) into RucDuplicadoError on update', async () => {

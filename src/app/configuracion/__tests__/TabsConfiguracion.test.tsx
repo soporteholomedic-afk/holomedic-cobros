@@ -1,13 +1,14 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 
 /**
  * Tests for the `/configuracion` tab bar (feature `configuracion-tabs`).
  *
- * The bar is a pure projection of the session permisos onto the three
- * tab routes: `admin` → Usuarios + Áreas, `firma_correo` → Mi Firma.
- * Active state follows the pathname with a trailing-slash-safe prefix
- * match.
+ * The bar is a pure projection of the session permisos onto the tab
+ * routes: `admin` → Usuarios + Áreas, `firma_correo` → Mi Firma,
+ * `crm_configuracion` → Consulta SUNAT (crm-consulta-sunat T8, last
+ * tab). Active state follows the pathname with a trailing-slash-safe
+ * prefix match.
  */
 
 const mockUsePathname = vi.hoisted(() => vi.fn(() => '/configuracion/usuarios'));
@@ -60,6 +61,78 @@ describe('TabsConfiguracion — visibilidad por permiso', () => {
     mockSesion([]);
     const { container } = render(<TabsConfiguracion />);
     expect(container).toBeEmptyDOMElement();
+  });
+});
+
+// crm-consulta-sunat (T8, L8): the apifacturacion (SUNAT) config moves
+// INSIDE /configuracion as the LAST tab, gated by the DEDICATED
+// `crm_configuracion` permiso — same strict per-tab contract as the
+// other tabs (admin does NOT see it without holding the permiso).
+describe('TabsConfiguracion — tab Consulta SUNAT (crm_configuracion)', () => {
+  beforeEach(() => {
+    mockUsePathname.mockReturnValue('/configuracion/consulta-sunat');
+  });
+
+  it('muestra SOLO Consulta SUNAT para una sesión crm_configuracion sin admin ni firma_correo', () => {
+    mockSesion(['crm_configuracion']);
+    render(<TabsConfiguracion />);
+    expect(screen.getByText('Consulta SUNAT')).toBeInTheDocument();
+    expect(screen.queryByText('Usuarios')).not.toBeInTheDocument();
+    expect(screen.queryByText('Áreas')).not.toBeInTheDocument();
+    expect(screen.queryByText('Mi Firma')).not.toBeInTheDocument();
+  });
+
+  it('oculta Consulta SUNAT para un admin sin crm_configuracion', () => {
+    mockSesion(['admin']);
+    render(<TabsConfiguracion />);
+    expect(screen.getByText('Usuarios')).toBeInTheDocument();
+    expect(screen.queryByText('Consulta SUNAT')).not.toBeInTheDocument();
+  });
+
+  it('oculta Consulta SUNAT para una sesión firma_correo sin crm_configuracion', () => {
+    mockSesion(['firma_correo']);
+    render(<TabsConfiguracion />);
+    expect(screen.getByText('Mi Firma')).toBeInTheDocument();
+    expect(screen.queryByText('Consulta SUNAT')).not.toBeInTheDocument();
+  });
+
+  it('enlaza a /configuracion/consulta-sunat', () => {
+    mockSesion(['crm_configuracion']);
+    render(<TabsConfiguracion />);
+    expect(screen.getByText('Consulta SUNAT').closest('a')).toHaveAttribute(
+      'href',
+      '/configuracion/consulta-sunat',
+    );
+  });
+
+  it('marca Consulta SUNAT como activa en su ruta (aria-current)', () => {
+    mockSesion(['crm_configuracion']);
+    render(<TabsConfiguracion />);
+    expect(screen.getByText('Consulta SUNAT').closest('a')).toHaveAttribute(
+      'aria-current',
+      'page',
+    );
+  });
+
+  it('marca Consulta SUNAT como activa también en sub-rutas', () => {
+    mockSesion(['crm_configuracion']);
+    mockUsePathname.mockReturnValue('/configuracion/consulta-sunat/detalle');
+    render(<TabsConfiguracion />);
+    expect(screen.getByText('Consulta SUNAT').closest('a')).toHaveAttribute(
+      'aria-current',
+      'page',
+    );
+  });
+
+  it('Consulta SUNAT es la ÚLTIMA tab, después de Mi Firma, con todos los permisos', () => {
+    mockSesion(['admin', 'firma_correo', 'crm_configuracion']);
+    render(<TabsConfiguracion />);
+    const labels = within(
+      screen.getByRole('navigation', { name: 'Secciones de configuración' }),
+    )
+      .getAllByRole('link')
+      .map((link) => link.textContent);
+    expect(labels).toEqual(['Usuarios', 'Áreas', 'Mi Firma', 'Consulta SUNAT']);
   });
 });
 

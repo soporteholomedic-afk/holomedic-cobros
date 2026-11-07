@@ -112,6 +112,7 @@ export class ImportarEmpresasUseCase {
           sector: guardados.get(limpiarSector(f.sector).toLowerCase()) ?? limpiarSector(f.sector),
           contactos: [{ nombre: f.contacto.trim(), telefono: f.telefono.trim(), correo: opcional(f.correo) }],
           notas: null,
+          direccion: null,
           etapa: 'por_contactar',
           origen: null,
         });

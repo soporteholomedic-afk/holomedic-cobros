@@ -111,6 +111,7 @@ export class RegistrarEntranteUseCase {
       sector,
       contactos: [{ nombre: persona, telefono, correo }],
       notas: null,
+      direccion: null,
       etapa: 'contactado',
       origen,
     });

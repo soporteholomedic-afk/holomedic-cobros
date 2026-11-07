@@ -1,6 +1,9 @@
 import type {
+  AuditoriaConfigCrm,
   DatosEmpresa,
+  DatosSunat,
   Empresa,
+  EntradaConfigCrm,
   EstadoEmpresa,
   IconoSector,
   Interaccion,
@@ -49,4 +52,54 @@ export interface ICrmEmpresaRepository {
   listSectores(): Promise<Sector[]>;
   /** Throws `SectorDuplicadoError` (case-insensitive). Returns the stored sector. */
   createSector(nombre: string, icono: IconoSector | null): Promise<Sector>;
+}
+
+// ---------------------------------------------------------------------------
+// Platform-configuration port (agente-ia-crm E5·T2, portado por
+// crm-consulta-sunat) — CrmConfig key/value rows + their audit trail.
+// Encryption is the CALLER's job (the port stores whatever string it is
+// given); the adapter only guarantees that secret values never reach the
+// audit trail. One SQL adapter implements it (SqlServerConfigRepository).
+// ---------------------------------------------------------------------------
+
+export interface GuardarConfigInput {
+  clave: string;
+  valor: string;
+  esSecreto: boolean;
+  usuario: string;
+}
+
+export interface EliminarConfigInput {
+  clave: string;
+  usuario: string;
+}
+
+export interface ListarAuditoriaConfigInput {
+  /** Exact key filter; omit for the whole trail. */
+  clave?: string;
+  /** Newest-first cap (default 50, max 200). */
+  limite?: number;
+}
+
+export interface ConfigCrmRepository {
+  obtener(clave: string): Promise<EntradaConfigCrm | null>;
+  /** Rows whose key starts with `prefijo` (literal match, wildcards escaped). */
+  listar(prefijo: string): Promise<EntradaConfigCrm[]>;
+  /** Upsert + audit row in ONE transaction. */
+  guardar(input: GuardarConfigInput): Promise<void>;
+  /** Delete + audit row in ONE transaction; no-op when the key is absent. */
+  eliminar(input: EliminarConfigInput): Promise<void>;
+  listarAuditoria(input?: ListarAuditoriaConfigInput): Promise<AuditoriaConfigCrm[]>;
+}
+
+// ---------------------------------------------------------------------------
+// SUNAT lookup port (crm-consulta-sunat T4, S1). One adapter
+// (ApiFacturacionCliente) talks to apifacturacion.com; tests replace it
+// whole with a fake servicio.
+// ---------------------------------------------------------------------------
+
+/** SUNAT data of one RUC, ready for the UI autocomplete (S3). */
+export interface IConsultaRucServicio {
+  /** Throws `ConsultaNoConfiguradaError`, `RucNoEncontradoError` or `ServicioConsultaError`. */
+  consultar(ruc: string): Promise<DatosSunat>;
 }

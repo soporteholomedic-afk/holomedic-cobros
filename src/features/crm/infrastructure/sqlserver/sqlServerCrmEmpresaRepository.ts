@@ -37,6 +37,7 @@ interface EmpresaDbRow {
   ruc: string | null;
   sector: string | null;
   notas: string | null;
+  direccion: string | null;
   etapa: string;
   medio: string | null;
   medioOtro: string | null;
@@ -129,6 +130,7 @@ function rowToEmpresa(row: EmpresaDbRow, contactos: ContactoDbRow[]): Empresa {
     ruc: row.ruc ?? null,
     sector: row.sector ?? null,
     notas: row.notas ?? null,
+    direccion: row.direccion ?? null,
     etapa: row.etapa as Etapa,
     medio: (row.medio as Medio | null) ?? null,
     medioOtro: row.medioOtro ?? null,
@@ -147,7 +149,7 @@ function rowToEmpresa(row: EmpresaDbRow, contactos: ContactoDbRow[]): Empresa {
 }
 
 const SELECT_EMPRESA = /* sql */ `
-  SELECT e.idEmpresa, e.razonSocial, e.ruc, s.nombre AS sector, e.notas, e.etapa, e.medio,
+  SELECT e.idEmpresa, e.razonSocial, e.ruc, s.nombre AS sector, e.notas, e.direccion, e.etapa, e.medio,
          e.medioOtro, e.intentosSinRespuesta, e.faltaResponderDesde, e.proximaAccionTipo,
          e.proximaAccionDetalle, e.proximaAccionFecha, e.origen, e.sugerenciaDescartadaEn,
          e.motivoCategoria, e.motivoDetalle1, e.motivoDetalle2, e.motivoNotas,
@@ -253,15 +255,16 @@ export class SqlServerCrmEmpresaRepository implements ICrmEmpresaRepository {
         .input('ruc', mssql.VarChar(11), input.ruc)
         .input('sector', mssql.NVarChar(50), input.sector)
         .input('notas', mssql.NVarChar(mssql.MAX), input.notas)
+        .input('direccion', mssql.NVarChar(300), input.direccion)
         .input('etapa', mssql.NVarChar(20), input.etapa)
         .input('origen', mssql.NVarChar(20), input.origen);
       const contactos = inputsContactos(request, input.contactos);
       await request.query(`
         SET XACT_ABORT ON;
         BEGIN TRAN;
-        INSERT INTO dbo.CrmEmpresa (idEmpresa, razonSocial, ruc, idSector, notas, etapa, origen)
+        INSERT INTO dbo.CrmEmpresa (idEmpresa, razonSocial, ruc, idSector, notas, etapa, origen, direccion)
         VALUES (@idEmpresa, @razonSocial, @ruc,
-                (SELECT idSector FROM dbo.CrmSector WHERE nombre = @sector), @notas, @etapa, @origen);
+                (SELECT idSector FROM dbo.CrmSector WHERE nombre = @sector), @notas, @etapa, @origen, @direccion);
         ${contactos}
         COMMIT;
       `);
@@ -287,13 +290,14 @@ export class SqlServerCrmEmpresaRepository implements ICrmEmpresaRepository {
         .input('razonSocial', mssql.NVarChar(200), datos.razonSocial)
         .input('ruc', mssql.VarChar(11), datos.ruc)
         .input('sector', mssql.NVarChar(50), datos.sector)
-        .input('notas', mssql.NVarChar(mssql.MAX), datos.notas);
+        .input('notas', mssql.NVarChar(mssql.MAX), datos.notas)
+        .input('direccion', mssql.NVarChar(300), datos.direccion);
       const contactos = inputsContactos(request, datos.contactos);
       await request.query(`
         SET XACT_ABORT ON;
         BEGIN TRAN;
         UPDATE dbo.CrmEmpresa
-           SET razonSocial = @razonSocial, ruc = @ruc, notas = @notas,
+           SET razonSocial = @razonSocial, ruc = @ruc, notas = @notas, direccion = @direccion,
                idSector = (SELECT idSector FROM dbo.CrmSector WHERE nombre = @sector),
                updatedAt = SYSUTCDATETIME()
          WHERE idEmpresa = @id;

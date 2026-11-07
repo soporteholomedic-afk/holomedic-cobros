@@ -1,8 +1,10 @@
-import type { ICrmEmpresaRepository } from '../domain/ports';
+import type { ConfigCrmRepository, ICrmEmpresaRepository } from '../domain/ports';
 import { getHolomedicPool } from '@/lib/db';
 import { SqlServerCrmEmpresaRepository, migrate } from './sqlserver';
+import { SqlServerConfigRepository } from './sqlserver/sqlServerConfigRepository';
 
 let cached: Promise<ICrmEmpresaRepository> | null = null;
+let cachedConfig: Promise<ConfigCrmRepository> | null = null;
 
 /**
  * Repository over HOLOMEDIC, migrated once per process. A failed connection or
@@ -26,4 +28,24 @@ export function getCrmDb(): Promise<ICrmEmpresaRepository> {
 
 export function __setCrmDbForTests(repo: ICrmEmpresaRepository | null): void {
   cached = repo ? Promise.resolve(repo) : null;
+}
+
+/**
+ * Platform-configuration repository over the SAME HOLOMEDIC pool and the
+ * same one-shot `migrate()` flow as `getCrmDb()` (E5·T2 port). Same cache
+ * semantics: a failed connection is not cached, so the next request retries.
+ */
+export function getCrmConfigRepository(): Promise<ConfigCrmRepository> {
+  if (cachedConfig) return cachedConfig;
+  const intento = (async (): Promise<ConfigCrmRepository> => {
+    const pool = await getHolomedicPool();
+    await pool.connect();
+    await migrate(pool);
+    return new SqlServerConfigRepository(pool);
+  })();
+  cachedConfig = intento;
+  intento.catch(() => {
+    if (cachedConfig === intento) cachedConfig = null;
+  });
+  return cachedConfig;
 }
