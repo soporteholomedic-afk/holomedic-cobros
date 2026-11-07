@@ -5,6 +5,7 @@ import { useEffect, useId, useRef, useState } from 'react';
 
 import { ETAPA_LABELS, type Etapa } from '../../domain/entities';
 import { INPUT, ALERTA, BOTON_PRIMARIO, BOTON_SECUNDARIO } from './crmUi';
+import { badgeSunat, useConsultaRuc } from './useConsultaRuc';
 
 export interface OtraEmpresa {
   idEmpresa: string;
@@ -31,6 +32,8 @@ export function RucFaltante({ razonSocial, onGuardar }: Props) {
   const [enviando, setEnviando] = useState(false);
   const input = useRef<HTMLInputElement>(null);
   const botonUnir = useRef<HTMLButtonElement>(null);
+
+  const consulta = useConsultaRuc(valor);
 
   const volverAlCampo = useRef(false);
 
@@ -96,6 +99,28 @@ export function RucFaltante({ razonSocial, onGuardar }: Props) {
         </div>
       ) : (
         <>
+          {consulta.estado.tipo === 'encontrada' && (() => {
+            const chip = badgeSunat(consulta.estado.datos);
+            return (
+              <p
+                role="status"
+                className="grid gap-1.5 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-[13px] text-slate-700 dark:border-slate-700 dark:bg-slate-800/60 dark:text-slate-200"
+              >
+                <b className="truncate">{consulta.estado.datos.razonSocial}</b>
+                {chip && <span className={chip.clase}>{chip.texto}</span>}
+              </p>
+            );
+          })()}
+          {consulta.estado.tipo === 'cargando' && (
+            <p aria-live="polite" className="text-xs font-semibold text-slate-500 dark:text-slate-400">
+              Consultando SUNAT…
+            </p>
+          )}
+          {'mensaje' in consulta.estado && (
+            <p role="status" className="text-xs font-semibold text-amber-700 dark:text-amber-300">
+              {consulta.estado.mensaje}
+            </p>
+          )}
           <div className="flex gap-2">
             <label htmlFor={idInput} className="sr-only">
               RUC

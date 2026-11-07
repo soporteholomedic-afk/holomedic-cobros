@@ -7,6 +7,7 @@ import type { Empresa } from '../../domain/entities';
 import { CONTACTO_VACIO, ContactoFields, type ContactoForm } from './ContactoFields';
 import { ALERTA, BOTON_PRIMARIO, BOTON_SECUNDARIO, INPUT } from './crmUi';
 import { SectorSelect } from './SectorSelect';
+import { badgeSunat, useConsultaRuc } from './useConsultaRuc';
 
 interface Props {
   sectores: string[];
@@ -30,6 +31,7 @@ const LEYENDA = 'mb-0.5 text-xs font-bold uppercase tracking-wider text-sky-700 
 export function AltaPanel({ sectores, onCerrar, oculto, onCrearSector, onCrear }: Props) {
   const [razonSocial, setRazonSocial] = useState('');
   const [ruc, setRuc] = useState('');
+  const [direccion, setDireccion] = useState('');
   const [sector, setSector] = useState('');
   const [contacto, setContacto] = useState<ContactoForm>(CONTACTO_VACIO);
   const [notas, setNotas] = useState('');
@@ -38,6 +40,18 @@ export function AltaPanel({ sectores, onCerrar, oculto, onCrearSector, onCrear }
   // Which half of the form the user is in: 0 = empresa, 1 = contacto. It follows the focus.
   const [paso, setPaso] = useState<0 | 1>(0);
   const cerrar = useRef(onCerrar);
+
+  const consulta = useConsultaRuc(ruc);
+  // Autofill (T5, S3/S4) as a render-phase adjustment (react.dev "you might
+  // not need an effect"): fill razón social and dirección only while empty
+  // and only once per SUNAT answer — manual typing always wins afterwards.
+  const [autollenadoPara, setAutollenadoPara] = useState<string | null>(null);
+  if (consulta.estado.tipo === 'encontrada' && autollenadoPara !== ruc.trim()) {
+    setAutollenadoPara(ruc.trim());
+    const { datos } = consulta.estado;
+    if (!razonSocial.trim()) setRazonSocial(datos.razonSocial);
+    if (!direccion.trim() && datos.direccion) setDireccion(datos.direccion);
+  }
 
   useEffect(() => {
     cerrar.current = onCerrar;
@@ -85,6 +99,7 @@ export function AltaPanel({ sectores, onCerrar, oculto, onCrearSector, onCrear }
     };
     if (sector) cuerpo.sector = sector;
     if (notas.trim()) cuerpo.notas = notas.trim();
+    if (direccion.trim()) cuerpo.direccion = direccion.trim();
     const r = await onCrear(cuerpo);
     if ('error' in r) {
       setError(r.error);
@@ -180,6 +195,30 @@ export function AltaPanel({ sectores, onCerrar, oculto, onCrearSector, onCrear }
               onCrear={onCrearSector}
             />
           </div>
+          {consulta.estado.tipo === 'encontrada' && (() => {
+            const chip = badgeSunat(consulta.estado.datos);
+            return chip ? <span className={chip.clase}>{chip.texto}</span> : null;
+          })()}
+          <label className={ETIQUETA}>
+            <span>Dirección fiscal</span>
+            <input
+              id="alta-direccion"
+              value={direccion}
+              onChange={(ev) => setDireccion(ev.target.value)}
+              placeholder="Se completa con SUNAT al escribir el RUC"
+              className={INPUT}
+            />
+          </label>
+          {consulta.estado.tipo === 'cargando' && (
+            <p aria-live="polite" className="text-xs font-semibold text-slate-500 dark:text-slate-400">
+              Consultando SUNAT…
+            </p>
+          )}
+          {'mensaje' in consulta.estado && (
+            <p role="status" className="text-[13px] font-semibold text-amber-800 dark:text-amber-300">
+              {consulta.estado.mensaje}
+            </p>
+          )}
         </fieldset>
 
         <fieldset className="grid gap-3.5" onFocus={() => setPaso(1)}>
