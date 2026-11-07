@@ -4,23 +4,43 @@ import { migrate } from '../migrate';
 import {
   ACCIONES,
   DIRECCIONES,
-  ETAPAS,
+  ETAPAS_OPORTUNIDAD,
   ICONOS_INICIALES,
   ICONOS_SECTOR,
   MEDIOS,
   MOTIVO_CATEGORIAS,
   ORIGENES,
+  RELACIONES,
   RESULTADOS,
   SECTORES_INICIALES,
 } from '../../../domain/entities';
 
 /**
- * Schema contract for `dbo.CrmSector`, `dbo.CrmEmpresa` and `dbo.CrmContacto`.
- * The fake pool captures the SQL so the suite pins exactly what ships in
- * `migrate.ts`. These are static assertions on the generated script: they do
- * not execute it. Execution was rehearsed separately on a throwaway database
- * of the LOCAL dev server (never on the shared HOLOMEDIC).
+ * Schema contract for `dbo.CrmSector`, `dbo.CrmEmpresa`, `dbo.CrmOportunidad`,
+ * `dbo.CrmContacto` and `dbo.CrmInteraccion`. The fake pool captures the SQL
+ * so the suite pins exactly what ships in `migrate.ts`. These are static
+ * assertions on the generated script: they do not execute it. Execution was
+ * rehearsed separately on a throwaway database of the LOCAL dev server (never
+ * on the shared HOLOMEDIC).
  */
+
+/** Columns the etapa→oportunidad migration removes from dbo.CrmEmpresa. */
+const COLUMNAS_RETIRADAS = [
+  'etapa',
+  'medio',
+  'medioOtro',
+  'motivoCategoria',
+  'motivoDetalle1',
+  'motivoDetalle2',
+  'motivoNotas',
+  'intentosSinRespuesta',
+  'faltaResponderDesde',
+  'proximaAccionTipo',
+  'proximaAccionDetalle',
+  'proximaAccionFecha',
+  'origen',
+  'sugerenciaDescartadaEn',
+];
 
 function makePool(calls: string[]) {
   return {
@@ -82,14 +102,14 @@ function bloqueQueContiene(sql: string, patron: RegExp): string {
 }
 
 /** Definition (after the column name) of `ALTER TABLE dbo.<t> ADD <columna> ...;`, guarded by sys.columns. */
-function columnaNueva(sql: string, tabla: string, columna: string): string {
+function columnaNueva(sql: string, tablaObjetivo: string, columna: string): string {
   const bloque = bloqueQueContiene(
     sql,
-    new RegExp(`ALTER\\s+TABLE\\s+dbo\\.${tabla}\\s+ADD\\s+${columna}\\s`, 'i'),
+    new RegExp(`ALTER\\s+TABLE\\s+dbo\\.${tablaObjetivo}\\s+ADD\\s+${columna}\\s`, 'i'),
   );
   expect(bloque).toMatch(
     new RegExp(
-      `^IF\\s+NOT\\s+EXISTS\\s*\\(\\s*SELECT\\s+1\\s+FROM\\s+sys\\.columns\\s+WHERE\\s+object_id\\s*=\\s*OBJECT_ID\\('dbo\\.${tabla}'\\)\\s+AND\\s+name\\s*=\\s*'${columna}'`,
+      `^IF\\s+NOT\\s+EXISTS\\s*\\(\\s*SELECT\\s+1\\s+FROM\\s+sys\\.columns\\s+WHERE\\s+object_id\\s*=\\s*OBJECT_ID\\('dbo\\.${tablaObjetivo}'\\)\\s+AND\\s+name\\s*=\\s*'${columna}'`,
       'i',
     ),
   );
@@ -98,10 +118,18 @@ function columnaNueva(sql: string, tabla: string, columna: string): string {
 }
 
 describe('sqlserver crm migrate()', () => {
-  it('creates the six tables, each guarded by IF NOT EXISTS on sys.tables', async () => {
+  it('creates the seven tables, each guarded by IF NOT EXISTS on sys.tables', async () => {
     const sql = await sqlDeMigrate();
-    expect(sql.match(/CREATE\s+TABLE/gi)).toHaveLength(6);
-    for (const nombre of ['CrmSector', 'CrmEmpresa', 'CrmContacto', 'CrmInteraccion', 'CrmConfig', 'CrmConfigAuditoria']) {
+    expect(sql.match(/CREATE\s+TABLE/gi)).toHaveLength(7);
+    for (const nombre of [
+      'CrmSector',
+      'CrmEmpresa',
+      'CrmOportunidad',
+      'CrmContacto',
+      'CrmInteraccion',
+      'CrmConfig',
+      'CrmConfigAuditoria',
+    ]) {
       expect(sql).toMatch(new RegExp(`CREATE\\s+TABLE\\s+dbo\\.${nombre}\\s*\\(`, 'i'));
       expect(sql).toMatch(
         new RegExp(
@@ -151,7 +179,7 @@ describe('sqlserver crm migrate()', () => {
     expect(peligrosos.length).toBeGreaterThan(0);
     for (const b of peligrosos) {
       expect(b, 'unguarded structural change').toMatch(/^IF\s+(NOT\s+)?EXISTS\s*\(/i);
-      expect(b).toMatch(/sys\.(columns|indexes|key_constraints|check_constraints|tables)/i);
+      expect(b).toMatch(/sys\.(columns|indexes|key_constraints|check_constraints|foreign_keys|tables)/i);
     }
   });
 
@@ -195,53 +223,198 @@ describe('sqlserver crm migrate()', () => {
     );
   });
 
-  it('restricts etapa to exactly the five board columns', async () => {
-    const empresa = tabla(await sqlDeMigrate(), 'CrmEmpresa');
-    expect(valoresCheck(empresa, 'etapa')).toEqual([...ETAPAS]);
-  });
-
-  it('restricts medio and the loss reason category to the known values', async () => {
-    const empresa = tabla(await sqlDeMigrate(), 'CrmEmpresa');
-    expect(valoresCheck(empresa, 'medio')).toEqual([...MEDIOS]);
-    expect(valoresCheck(empresa, 'motivoCategoria')).toEqual([...MOTIVO_CATEGORIAS]);
-  });
-
-  it('accepts medio "otro": two independent guards (drop if it lacks otro, add if missing), plus medioOtro', async () => {
+  it('creates the fresh CrmEmpresa without the old stage columns: the board lives on CrmOportunidad now', async () => {
     const sql = await sqlDeMigrate();
-    const LITERAL = ['llamada', 'correo', 'whatsapp', 'otro'];
-    const soltar = bloqueQueContiene(sql, /DROP\s+CONSTRAINT\s+CK_CrmEmpresa_medio\b/i);
-    expect(soltar).toMatch(/^IF\s+EXISTS[\s\S]*sys\.check_constraints[\s\S]*CK_CrmEmpresa_medio/i);
-    expect(soltar).toMatch(/NOT\s+LIKE\s+N?'%''otro''%'/i);
-    expect(soltar).not.toMatch(/ADD\s+CONSTRAINT/i);
-    const agregar = bloqueQueContiene(sql, /ADD\s+CONSTRAINT\s+CK_CrmEmpresa_medio\b/i);
-    expect(agregar).toMatch(/^IF\s+NOT\s+EXISTS[\s\S]*sys\.check_constraints[\s\S]*CK_CrmEmpresa_medio/i);
-    expect(agregar).not.toMatch(/\bDROP\b/i);
-    expect(valoresCheck(agregar.slice(agregar.search(/ADD\s+CONSTRAINT/i)), 'medio')).toEqual(LITERAL);
-    expect(valoresCheck(tabla(sql, 'CrmEmpresa'), 'medio')).toEqual(LITERAL);
-    expect(sql.search(/DROP\s+CONSTRAINT\s+CK_CrmEmpresa_medio\b/i)).toBeLessThan(
-      sql.search(/ADD\s+CONSTRAINT\s+CK_CrmEmpresa_medio\b/i),
-    );
-    expect(columnaNueva(sql, 'CrmEmpresa', 'medioOtro')).toMatch(/^NVARCHAR\(40\)\s+NULL$/i);
-  });
-
-  it('keeps the loss reason coherent with the stage inside the database', async () => {
-    const empresa = tabla(await sqlDeMigrate(), 'CrmEmpresa');
-    // Only "perdido" carries a reason, and it must carry one.
-    expect(empresa).toMatch(
-      /CHECK\s*\(\s*\(\s*etapa\s*=\s*'perdido'\s+AND\s+motivoCategoria\s+IS\s+NOT\s+NULL\s*\)\s+OR\s+\(\s*etapa\s*<>\s*'perdido'\s+AND\s+motivoCategoria\s+IS\s+NULL\s*\)\s*\)/i,
-    );
-    // "por_contactar" never has a medium.
-    expect(empresa).toMatch(
-      /CHECK\s*\(\s*etapa\s*<>\s*'por_contactar'\s+OR\s+medio\s+IS\s+NULL\s*\)/i,
+    const empresa = tabla(sql, 'CrmEmpresa');
+    for (const c of COLUMNAS_RETIRADAS) {
+      expect(empresa, `${c} must not come back in the fresh CrmEmpresa`).not.toMatch(new RegExp(`\\b${c}\\b`, 'i'));
+    }
+    // The dedicated medio CHECK upgrade step is gone with the column: the sweep
+    // of the retire block removes whatever CK_CrmEmpresa_medio still exists.
+    expect(sql).not.toMatch(/ADD\s+CONSTRAINT\s+CK_CrmEmpresa_medio\b/i);
+    // And the old guarded ADDs of the stage columns are gone too.
+    expect(sql).not.toMatch(
+      /ALTER\s+TABLE\s+dbo\.CrmEmpresa\s+ADD\s+(etapa|medio|medioOtro|motivoCategoria|intentosSinRespuesta|faltaResponderDesde|proximaAccionTipo|proximaAccionDetalle|proximaAccionFecha|origen|sugerenciaDescartadaEn)\s/i,
     );
   });
 
-  it('requires the empresa fields the form marks as required and allows the optional ones to be NULL', async () => {
-    const empresa = tabla(await sqlDeMigrate(), 'CrmEmpresa');
+  it('adds CrmEmpresa.relacion (prospecto|cliente) for upgrades, guarded by sys.columns, NOT NULL with default and CHECK', async () => {
+    const sql = await sqlDeMigrate();
+    expect([...RELACIONES]).toEqual(['prospecto', 'cliente']);
+    const relacion = columnaNueva(sql, 'CrmEmpresa', 'relacion');
+    expect(relacion).toMatch(
+      /^NVARCHAR\(20\)\s+NOT\s+NULL\s+CONSTRAINT\s+DF_CrmEmpresa_relacion\s+DEFAULT\s+N?'prospecto'\s+CONSTRAINT\s+CK_CrmEmpresa_relacion\s+CHECK/i,
+    );
+    expect(valoresCheck(relacion, 'relacion')).toEqual([...RELACIONES]);
+  });
+
+  it('keeps the required empresa fields and the guarded direccion ADD on CrmEmpresa', async () => {
+    const sql = await sqlDeMigrate();
+    const empresa = tabla(sql, 'CrmEmpresa');
     expect(empresa).toMatch(/razonSocial\s+NVARCHAR\(\d+\)\s+NOT\s+NULL/i);
     expect(empresa).toMatch(/notas\s+NVARCHAR\((\d+|MAX)\)\s+NULL/i);
     expect(empresa).toMatch(/idSector\s+INT\s+NULL/i);
     expect(empresa).toMatch(/FOREIGN\s+KEY\s*\(\s*idSector\s*\)\s+REFERENCES\s+dbo\.CrmSector/i);
+    expect(columnaNueva(sql, 'CrmEmpresa', 'direccion')).toMatch(/^NVARCHAR\(300\)\s+NULL$/i);
+  });
+
+  it('creates dbo.CrmOportunidad: PK, empresa FK with cascade, board columns, defaults and index', async () => {
+    const sql = await sqlDeMigrate();
+    const op = tabla(sql, 'CrmOportunidad');
+    expect(op).toMatch(/idOportunidad\s+NVARCHAR\(50\)\s+NOT\s+NULL\s+PRIMARY\s+KEY/i);
+    expect(op).toMatch(/idEmpresa\s+NVARCHAR\(50\)\s+NOT\s+NULL/i);
+    expect(op).toMatch(
+      /FOREIGN\s+KEY\s*\(\s*idEmpresa\s*\)\s+REFERENCES\s+dbo\.CrmEmpresa\s*\(\s*idEmpresa\s*\)\s+ON\s+DELETE\s+CASCADE/i,
+    );
+    expect(op).toMatch(/nombre\s+NVARCHAR\(120\)\s+NOT\s+NULL/i);
+    expect(op).toMatch(/responsableId\s+NVARCHAR\(50\)\s+NULL/i);
+    expect(op).toMatch(/responsableNombre\s+NVARCHAR\(200\)\s+NULL/i);
+    expect(op).toMatch(/servicio\s+NVARCHAR\(120\)\s+NULL/i);
+    expect(op).toMatch(/montoEstimado\s+DECIMAL\(12,\s*2\)\s+NULL/i);
+    expect(op).toMatch(/CHECK\s*\(\s*montoEstimado\s*>\s*0\s*\)/i);
+    expect(op).toMatch(/medioOtro\s+NVARCHAR\(80\)\s+NULL/i);
+    expect(op).toMatch(/intentosSinRespuesta\s+INT\s+NOT\s+NULL\s+CONSTRAINT\s+DF_\w+\s+DEFAULT\s+0/i);
+    expect(op).toMatch(/faltaResponderDesde\s+DATETIME2\(3\)\s+NULL/i);
+    expect(op).toMatch(/proximaAccionDetalle\s+NVARCHAR\(80\)\s+NULL/i);
+    expect(op).toMatch(/proximaAccionFecha\s+DATE\s+NULL/i);
+    expect(op).toMatch(/sugerenciaDescartadaEn\s+INT\s+NULL/i);
+    expect(op).toMatch(/migrada\s+BIT\s+NOT\s+NULL\s+CONSTRAINT\s+DF_\w+\s+DEFAULT\s+0/i);
+    expect(op).toMatch(/createdAt\s+DATETIME2\(3\)\s+NOT\s+NULL\s+DEFAULT\s+SYSUTCDATETIME\(\)/i);
+    expect(op).toMatch(/updatedAt\s+DATETIME2\(3\)\s+NOT\s+NULL\s+DEFAULT\s+SYSUTCDATETIME\(\)/i);
+    expect(sql).toMatch(
+      /CREATE\s+INDEX\s+IX_CrmOportunidad_empresa\s+ON\s+dbo\.CrmOportunidad\s*\(\s*idEmpresa\s*,\s*createdAt\s+DESC\s*\)/i,
+    );
+  });
+
+  it('restricts the oportunidad etapa to exactly the six board columns, defaulting to por_contactar', async () => {
+    const sql = await sqlDeMigrate();
+    expect([...ETAPAS_OPORTUNIDAD]).toEqual([
+      'por_contactar',
+      'contactado',
+      'en_seguimiento',
+      'cotizado',
+      'ganada',
+      'perdida',
+    ]);
+    const op = tabla(sql, 'CrmOportunidad');
+    expect(op).toMatch(/etapa\s+NVARCHAR\(20\)\s+NOT\s+NULL\s+CONSTRAINT\s+DF_\w+\s+DEFAULT\s+N?'por_contactar'/i);
+    expect(valoresCheck(op, 'etapa')).toEqual([...ETAPAS_OPORTUNIDAD]);
+  });
+
+  it('restricts the oportunidad medio, origin, next-action type and loss category to the known values', async () => {
+    const op = tabla(await sqlDeMigrate(), 'CrmOportunidad');
+    expect(op).toMatch(/medio\s+NVARCHAR\(20\)\s+NULL/i);
+    expect(valoresCheck(op, 'medio')).toEqual([...MEDIOS]);
+    const origen = op.match(/origen\s+NVARCHAR\(20\)\s+NULL\s+CONSTRAINT\s+CK_CrmOportunidad_origen\s+CHECK/i);
+    expect(origen, 'expected a named CHECK on origen').not.toBeNull();
+    expect(valoresCheck(op, 'origen')).toEqual([...ORIGENES]);
+    const accion = op.match(/proximaAccionTipo\s+NVARCHAR\(20\)\s+NULL\s+CONSTRAINT\s+CK_CrmOportunidad_proximaAccionTipo\s+CHECK/i);
+    expect(accion, 'expected a named CHECK on proximaAccionTipo').not.toBeNull();
+    expect(valoresCheck(op, 'proximaAccionTipo')).toEqual([...ACCIONES]);
+    expect(valoresCheck(op, 'motivoCategoria')).toEqual([...MOTIVO_CATEGORIAS]);
+  });
+
+  it('keeps the loss reason coherent with the etapa and keeps por_contactar medium-less, inside the database', async () => {
+    const op = tabla(await sqlDeMigrate(), 'CrmOportunidad');
+    // Only "perdida" carries a reason, and it must carry one; every other
+    // stage keeps all four motivo columns NULL.
+    expect(op).toMatch(
+      /CHECK\s*\(\s*\(\s*etapa\s*=\s*'perdida'\s+AND\s+motivoCategoria\s+IS\s+NOT\s+NULL\s*\)\s+OR\s+\(\s*etapa\s*<>\s*'perdida'\s+AND\s+motivoCategoria\s+IS\s+NULL\s+AND\s+motivoDetalle1\s+IS\s+NULL\s+AND\s+motivoDetalle2\s+IS\s+NULL\s+AND\s+motivoNotas\s+IS\s+NULL\s*\)\s*\)/i,
+    );
+    // "por_contactar" never has a medium.
+    expect(op).toMatch(/CHECK\s*\(\s*etapa\s*<>\s*'por_contactar'\s+OR\s+medio\s+IS\s+NULL\s*\)/i);
+  });
+
+  it('migrates the data while the etapa column still exists, guarded by sys.columns, through dynamic SQL', async () => {
+    const sql = await sqlDeMigrate();
+    const migracion = bloqueQueContiene(sql, /Gestión comercial inicial/i);
+    // Guard: only while the old etapa column still exists (fresh install = no-op).
+    expect(migracion).toMatch(
+      /^IF\s+EXISTS\s*\(\s*SELECT\s+1\s+FROM\s+sys\.columns\s+WHERE\s+object_id\s*=\s*OBJECT_ID\('dbo\.CrmEmpresa'\)\s+AND\s+name\s*=\s*'etapa'/i,
+    );
+    // Dynamic SQL: the old columns will not exist on a fresh install, so a
+    // statically compiled statement would break the whole batch.
+    expect(migracion).toMatch(/EXEC\s*\(\s*N'/i);
+    // cliente is a relationship, not a card: only the relacion moves (S8).
+    expect(migracion).toMatch(/UPDATE\s+dbo\.CrmEmpresa\s+SET\s+relacion\s*=\s*N''cliente''\s+WHERE\s+etapa\s*=\s*N''cliente''/i);
+    // One migrated oportunidad per empresa, skipping clientes and already-migrated empresas.
+    expect(migracion).toMatch(/INSERT\s+INTO\s+dbo\.CrmOportunidad/i);
+    expect(migracion).toMatch(
+      /NOT\s+EXISTS\s*\(\s*SELECT\s+1\s+FROM\s+dbo\.CrmOportunidad\s+o\s+WHERE\s+o\.idEmpresa\s*=\s*e\.idEmpresa\s+AND\s+o\.migrada\s*=\s*1\s*\)/i,
+    );
+    expect(migracion).toMatch(/e\.etapa\s*<>\s*N''cliente''/i);
+    expect(migracion).toMatch(/CASE\s+WHEN\s+e\.etapa\s*=\s*N''perdido''\s+THEN\s+N''perdida''/i);
+    expect(migracion).toMatch(/N''Gestión comercial inicial''/i);
+    expect(migracion).toMatch(/NEWID\(\)/i);
+    expect(migracion).toMatch(/\bmigrada\b/i);
+    // The follow-up state the user already set travels with the card.
+    for (const campo of [
+      'e.origen',
+      'e.medio',
+      'e.medioOtro',
+      'e.motivoCategoria',
+      'e.motivoDetalle1',
+      'e.motivoDetalle2',
+      'e.motivoNotas',
+      'e.intentosSinRespuesta',
+      'e.faltaResponderDesde',
+      'e.proximaAccionTipo',
+      'e.proximaAccionDetalle',
+      'e.proximaAccionFecha',
+      'e.sugerenciaDescartadaEn',
+      'e.createdAt',
+      'e.updatedAt',
+    ]) {
+      expect(migracion).toContain(campo);
+    }
+  });
+
+  it('runs the migration before dropping the old columns (the INSERT reads them)', async () => {
+    const sql = await sqlDeMigrate();
+    expect(sql.search(/Gestión comercial inicial/i)).toBeLessThan(sql.search(/DROP\s+COLUMN\s+etapa/i));
+    // And the relacion ADD precedes the migration UPDATE (it writes relacion).
+    expect(sql.search(/ADD\s+relacion\s/i)).toBeLessThan(sql.search(/SET\s+relacion\s*=\s*N''cliente''/i));
+  });
+
+  it('retires the etapa-era columns in one guarded step: named checks first, auto-named sweep, then DROP COLUMN', async () => {
+    const sql = await sqlDeMigrate();
+    const retirada = bloqueQueContiene(sql, /DROP\s+COLUMN\s+etapa/i);
+    // Guarded on the old etapa column: a fresh install never had it, so this is a no-op there.
+    expect(retirada).toMatch(
+      /^IF\s+EXISTS\s*\(\s*SELECT\s+1\s+FROM\s+sys\.columns\s+WHERE\s+object_id\s*=\s*OBJECT_ID\('dbo\.CrmEmpresa'\)\s+AND\s+name\s*=\s*'etapa'/i,
+    );
+    // The two named table-level CHECKs go first (they reference the columns).
+    expect(retirada).toMatch(
+      /IF\s+EXISTS\s*\(\s*SELECT\s+1\s+FROM\s+sys\.check_constraints\s+WHERE\s+name\s*=\s*'CK_CrmEmpresa_motivo'[\s\S]*DROP\s+CONSTRAINT\s+CK_CrmEmpresa_motivo/i,
+    );
+    expect(retirada).toMatch(
+      /IF\s+EXISTS\s*\(\s*SELECT\s+1\s+FROM\s+sys\.check_constraints\s+WHERE\s+name\s*=\s*'CK_CrmEmpresa_medioEtapa'[\s\S]*DROP\s+CONSTRAINT\s+CK_CrmEmpresa_medioEtapa/i,
+    );
+    expect(retirada.indexOf('CK_CrmEmpresa_motivo')).toBeLessThan(retirada.indexOf('DROP COLUMN'));
+    // The inline (named or auto-named) constraints are discovered and dropped
+    // through dynamic SQL, by parent_object_id + column.
+    expect(retirada).toMatch(/sys\.check_constraints[\s\S]*parent_object_id[\s\S]*parent_column_id/i);
+    expect(retirada).toMatch(/sys\.default_constraints[\s\S]*parent_object_id[\s\S]*parent_column_id/i);
+    expect(retirada).toMatch(/QUOTENAME/i);
+    // Then every column goes, in one DROP COLUMN statement.
+    const dropColumna = retirada.match(/ALTER\s+TABLE\s+dbo\.CrmEmpresa\s+DROP\s+COLUMN\s+([^;]+);/i)?.[1] ?? '';
+    for (const c of COLUMNAS_RETIRADAS) expect(dropColumna).toMatch(new RegExp(`\\b${c}\\b`, 'i'));
+    expect(dropColumna.match(/,/g)).toHaveLength(COLUMNAS_RETIRADAS.length - 1);
+  });
+
+  it('adds CrmInteraccion.idOportunidad: guarded ADD, FK added only when both sides exist, NO cascade', async () => {
+    const sql = await sqlDeMigrate();
+    expect(columnaNueva(sql, 'CrmInteraccion', 'idOportunidad')).toMatch(/^NVARCHAR\(50\)\s+NULL$/i);
+    const fk = bloqueQueContiene(sql, /FK_CrmInteraccion_oportunidad/i);
+    expect(fk).toMatch(/^IF\s+NOT\s+EXISTS\s*\(\s*SELECT\s+1\s+FROM\s+sys\.foreign_keys\s+WHERE\s+name\s*=\s*'FK_CrmInteraccion_oportunidad'/i);
+    // Both sides must exist before the FK is added.
+    expect(fk).toMatch(/sys\.tables[\s\S]*CrmOportunidad/i);
+    expect(fk).toMatch(/sys\.columns[\s\S]*idOportunidad/i);
+    expect(fk).toMatch(
+      /ADD\s+CONSTRAINT\s+FK_CrmInteraccion_oportunidad\s+FOREIGN\s+KEY\s*\(\s*idOportunidad\s*\)\s+REFERENCES\s+dbo\.CrmOportunidad\s*\(\s*idOportunidad\s*\)/i,
+    );
+    // No CASCADE: deletes flow through the empresa cascade, never through the activity.
+    expect(fk).not.toMatch(/CASCADE/i);
   });
 
   it('stores contacts in their own table: many per empresa, deleted with it, at most one principal', async () => {
@@ -269,6 +442,7 @@ describe('sqlserver crm migrate()', () => {
     const hastaSiguienteIf = bloque.search(/IF\s+NOT\s+EXISTS[\s\S]*?CrmEmpresa/i);
     expect(bloque.slice(0, hastaSiguienteIf)).toContain(`N'${SECTORES_INICIALES[0]}'`);
   });
+
   it('lets contact nombre and telefono be NULL (guarded ALTER COLUMN, widths kept)', async () => {
     const sql = await sqlDeMigrate();
     for (const [col, ancho] of [
@@ -283,37 +457,6 @@ describe('sqlserver crm migrate()', () => {
         new RegExp(`sys\\.columns[\\s\\S]*OBJECT_ID\\('dbo\\.CrmContacto'\\)[\\s\\S]*name\\s*=\\s*'${col}'[\\s\\S]*is_nullable\\s*=\\s*0`, 'i'),
       );
     }
-  });
-
-  it('adds the follow-up columns to CrmEmpresa, each guarded by sys.columns, with type, default and CHECK', async () => {
-    const sql = await sqlDeMigrate();
-    expect(columnaNueva(sql, 'CrmEmpresa', 'intentosSinRespuesta')).toMatch(
-      /^INT\s+NOT\s+NULL\s+CONSTRAINT\s+DF_\w+\s+DEFAULT\s+0$/i,
-    );
-    expect(columnaNueva(sql, 'CrmEmpresa', 'faltaResponderDesde')).toMatch(/^DATETIME2\(3\)\s+NULL$/i);
-    expect(columnaNueva(sql, 'CrmEmpresa', 'proximaAccionDetalle')).toMatch(/^NVARCHAR\(80\)\s+NULL$/i);
-    expect(columnaNueva(sql, 'CrmEmpresa', 'proximaAccionFecha')).toMatch(/^DATE\s+NULL$/i);
-    expect(columnaNueva(sql, 'CrmEmpresa', 'sugerenciaDescartadaEn')).toMatch(/^INT\s+NULL$/i);
-    const accion = columnaNueva(sql, 'CrmEmpresa', 'proximaAccionTipo');
-    expect(accion).toMatch(/^NVARCHAR\(20\)\s+NULL\s+CONSTRAINT\s+CK_CrmEmpresa_proximaAccionTipo\s+CHECK/i);
-    expect(ACCIONES).toEqual(['responder', 'llamar', 'cotizar', 'info', 'whatsapp', 'reunion', 'otro']);
-    expect(valoresCheck(accion, 'proximaAccionTipo')).toEqual([...ACCIONES]);
-    const origen = columnaNueva(sql, 'CrmEmpresa', 'origen');
-    expect(origen).toMatch(/^NVARCHAR\(20\)\s+NULL\s+CONSTRAINT\s+CK_CrmEmpresa_origen\s+CHECK/i);
-    expect(ORIGENES).toEqual(['nose', 'referido', 'conocia', 'internet']);
-    expect(valoresCheck(origen, 'origen')).toEqual([...ORIGENES]);
-  });
-
-  it('adds the fiscal address column direccion to CrmEmpresa: guarded by sys.columns, NULL-able, NVARCHAR(300)', async () => {
-    const sql = await sqlDeMigrate();
-    expect(columnaNueva(sql, 'CrmEmpresa', 'direccion')).toMatch(/^NVARCHAR\(300\)\s+NULL$/i);
-    // Grouped with the other guarded CrmEmpresa ADDs, and before COMMIT.
-    expect(sql.search(/ADD\s+direccion\s/i)).toBeGreaterThan(sql.search(/ADD\s+sugerenciaDescartadaEn\s/i));
-    expect(sql.lastIndexOf('COMMIT')).toBeGreaterThan(sql.search(/ADD\s+direccion\s/i));
-    // The fresh-database CREATE TABLE set stays as it was: six tables, direccion only via the guarded ADD.
-    expect(sql.match(/CREATE\s+TABLE/gi)).toHaveLength(6);
-    expect(tabla(sql, 'CrmEmpresa')).not.toMatch(/\bdireccion\b/i);
-    expect(sql).not.toMatch(/CRM_/i);
   });
 
   it('adds CrmSector.icono: guarded by sys.columns, NULL-able, CHECK limited to the 12 icon keys', async () => {

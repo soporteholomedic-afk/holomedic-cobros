@@ -3,25 +3,18 @@ import mssql from 'mssql';
 
 import type { ICrmEmpresaRepository } from '../../domain/ports';
 import type {
-  AccionTipo,
   Contacto,
   DatosEmpresa,
   Direccion,
   Empresa,
-  Etapa,
-  EstadoEmpresa,
   IconoSector,
   Interaccion,
   Medio,
-  Motivo,
-  MotivoCategoria,
   NuevaEmpresa,
   NuevaInteraccion,
-  Origen,
-  ProximaAccion,
+  Relacion,
   Resultado,
   Sector,
-  SeguimientoEmpresa,
 } from '../../domain/entities';
 import { esIconoSector } from '../../domain/entities';
 import {
@@ -38,20 +31,7 @@ interface EmpresaDbRow {
   sector: string | null;
   notas: string | null;
   direccion: string | null;
-  etapa: string;
-  medio: string | null;
-  medioOtro: string | null;
-  intentosSinRespuesta: number;
-  faltaResponderDesde: Date | null;
-  proximaAccionTipo: string | null;
-  proximaAccionDetalle: string | null;
-  proximaAccionFecha: Date | null;
-  origen: string | null;
-  sugerenciaDescartadaEn: number | null;
-  motivoCategoria: string | null;
-  motivoDetalle1: string | null;
-  motivoDetalle2: string | null;
-  motivoNotas: string | null;
+  relacion: string;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -67,6 +47,8 @@ interface ContactoDbRow {
 interface InteraccionDbRow {
   idInteraccion: number;
   idEmpresa: string;
+  /** Oportunidad the activity belongs to; NULL when it is a general activity. */
+  idOportunidad: string | null;
   fecha: Date;
   idUsuario: string;
   nombreUsuario: string;
@@ -94,6 +76,7 @@ function rowToInteraccion(row: InteraccionDbRow): Interaccion {
   return {
     idInteraccion: row.idInteraccion,
     idEmpresa: row.idEmpresa,
+    idOportunidad: row.idOportunidad ?? null,
     fecha: row.fecha.toISOString(),
     idUsuario: row.idUsuario,
     nombreUsuario: row.nombreUsuario,
@@ -106,24 +89,6 @@ function rowToInteraccion(row: InteraccionDbRow): Interaccion {
 }
 
 function rowToEmpresa(row: EmpresaDbRow, contactos: ContactoDbRow[]): Empresa {
-  const motivo: Motivo | null =
-    row.motivoCategoria === null
-      ? null
-      : {
-          categoria: row.motivoCategoria as MotivoCategoria,
-          detalle1: row.motivoDetalle1 ?? null,
-          detalle2: row.motivoDetalle2 ?? null,
-          notas: row.motivoNotas ?? null,
-        };
-  const proximaAccion: ProximaAccion | null =
-    row.proximaAccionTipo === null || row.proximaAccionFecha === null
-      ? null
-      : {
-          tipo: row.proximaAccionTipo as AccionTipo,
-          detalle: row.proximaAccionDetalle ?? null,
-          // A DATE column comes back as that day at 00:00 UTC.
-          fecha: row.proximaAccionFecha.toISOString().slice(0, 10),
-        };
   return {
     idEmpresa: row.idEmpresa,
     razonSocial: row.razonSocial,
@@ -131,15 +96,7 @@ function rowToEmpresa(row: EmpresaDbRow, contactos: ContactoDbRow[]): Empresa {
     sector: row.sector ?? null,
     notas: row.notas ?? null,
     direccion: row.direccion ?? null,
-    etapa: row.etapa as Etapa,
-    medio: (row.medio as Medio | null) ?? null,
-    medioOtro: row.medioOtro ?? null,
-    motivo,
-    intentosSinRespuesta: row.intentosSinRespuesta ?? 0,
-    faltaResponderDesde: row.faltaResponderDesde ? row.faltaResponderDesde.toISOString() : null,
-    proximaAccion,
-    origen: (row.origen as Origen | null) ?? null,
-    sugerenciaDescartadaEn: row.sugerenciaDescartadaEn ?? null,
+    relacion: row.relacion as Relacion,
     contactos: contactos.map(
       (c): Contacto => ({ nombre: c.nombre ?? null, telefono: c.telefono ?? null, correo: c.correo ?? null }),
     ),
@@ -149,10 +106,7 @@ function rowToEmpresa(row: EmpresaDbRow, contactos: ContactoDbRow[]): Empresa {
 }
 
 const SELECT_EMPRESA = /* sql */ `
-  SELECT e.idEmpresa, e.razonSocial, e.ruc, s.nombre AS sector, e.notas, e.direccion, e.etapa, e.medio,
-         e.medioOtro, e.intentosSinRespuesta, e.faltaResponderDesde, e.proximaAccionTipo,
-         e.proximaAccionDetalle, e.proximaAccionFecha, e.origen, e.sugerenciaDescartadaEn,
-         e.motivoCategoria, e.motivoDetalle1, e.motivoDetalle2, e.motivoNotas,
+  SELECT e.idEmpresa, e.razonSocial, e.ruc, s.nombre AS sector, e.notas, e.direccion, e.relacion,
          e.createdAt, e.updatedAt
   FROM dbo.CrmEmpresa e
   LEFT JOIN dbo.CrmSector s ON s.idSector = e.idSector`;
@@ -162,13 +116,14 @@ const SELECT_CONTACTOS = /* sql */ `
   FROM dbo.CrmContacto c`;
 
 const SELECT_INTERACCION = /* sql */ `
-  SELECT idInteraccion, idEmpresa, fecha, idUsuario, nombreUsuario, direccion, medio, medioOtro,
-         resultado, resumen
+  SELECT idInteraccion, idEmpresa, idOportunidad, fecha, idUsuario, nombreUsuario, direccion, medio,
+         medioOtro, resultado, resumen
   FROM dbo.CrmInteraccion`;
 
 /** Parameters of `INSERT INTO dbo.CrmInteraccion`, bound to `@idEmpresa` + the fields of `i`. */
 function inputsInteraccion(request: mssql.Request, i: NuevaInteraccion): void {
   request
+    .input('ioid', mssql.NVarChar(50), i.idOportunidad)
     .input('idUsuario', mssql.NVarChar(50), i.idUsuario)
     .input('nombreUsuario', mssql.NVarChar(200), i.nombreUsuario)
     .input('direccion', mssql.NVarChar(10), i.direccion)
@@ -180,8 +135,8 @@ function inputsInteraccion(request: mssql.Request, i: NuevaInteraccion): void {
 
 const INSERT_INTERACCION = /* sql */ `
   INSERT INTO dbo.CrmInteraccion
-    (idEmpresa, idUsuario, nombreUsuario, direccion, medio, medioOtro, resultado, resumen)
-  VALUES (@idEmpresa, @idUsuario, @nombreUsuario, @direccion, @imedio, @imedioOtro, @resultado, @resumen)`;
+    (idEmpresa, idOportunidad, idUsuario, nombreUsuario, direccion, medio, medioOtro, resultado, resumen)
+  VALUES (@idEmpresa, @ioid, @idUsuario, @nombreUsuario, @direccion, @imedio, @imedioOtro, @resultado, @resumen)`;
 
 /** Parameter names for contact `i`: n(ombre), t(eléfono), c(orreo), p(rincipal). */
 function inputsContactos(request: mssql.Request, contactos: Contacto[]): string {
@@ -256,15 +211,14 @@ export class SqlServerCrmEmpresaRepository implements ICrmEmpresaRepository {
         .input('sector', mssql.NVarChar(50), input.sector)
         .input('notas', mssql.NVarChar(mssql.MAX), input.notas)
         .input('direccion', mssql.NVarChar(300), input.direccion)
-        .input('etapa', mssql.NVarChar(20), input.etapa)
-        .input('origen', mssql.NVarChar(20), input.origen);
+        .input('relacion', mssql.NVarChar(20), input.relacion);
       const contactos = inputsContactos(request, input.contactos);
       await request.query(`
         SET XACT_ABORT ON;
         BEGIN TRAN;
-        INSERT INTO dbo.CrmEmpresa (idEmpresa, razonSocial, ruc, idSector, notas, etapa, origen, direccion)
+        INSERT INTO dbo.CrmEmpresa (idEmpresa, razonSocial, ruc, idSector, notas, relacion, direccion)
         VALUES (@idEmpresa, @razonSocial, @ruc,
-                (SELECT idSector FROM dbo.CrmSector WHERE nombre = @sector), @notas, @etapa, @origen, @direccion);
+                (SELECT idSector FROM dbo.CrmSector WHERE nombre = @sector), @notas, @relacion, @direccion);
         ${contactos}
         COMMIT;
       `);
@@ -319,85 +273,17 @@ export class SqlServerCrmEmpresaRepository implements ICrmEmpresaRepository {
     return editada;
   }
 
-  async updateEstado(id: string, estado: EstadoEmpresa): Promise<Empresa> {
-    const m = estado.motivo;
+  async updateRelacion(id: string, relacion: Relacion): Promise<Empresa> {
     const result = await this.pool
       .request()
       .input('id', mssql.NVarChar(50), id)
-      .input('etapa', mssql.NVarChar(20), estado.etapa)
-      .input('medio', mssql.NVarChar(10), estado.medio)
-      .input('motivoCategoria', mssql.NVarChar(20), m?.categoria ?? null)
-      .input('motivoDetalle1', mssql.NVarChar(200), m?.detalle1 ?? null)
-      .input('motivoDetalle2', mssql.NVarChar(200), m?.detalle2 ?? null)
-      .input('motivoNotas', mssql.NVarChar(300), m?.notas ?? null).query(`
+      .input('relacion', mssql.NVarChar(20), relacion).query(`
         UPDATE dbo.CrmEmpresa
-           SET etapa = @etapa, medio = @medio,
-               medioOtro = CASE WHEN @medio = N'otro' THEN medioOtro ELSE NULL END,
-               motivoCategoria = @motivoCategoria, motivoDetalle1 = @motivoDetalle1,
-               motivoDetalle2 = @motivoDetalle2, motivoNotas = @motivoNotas,
-               updatedAt = SYSUTCDATETIME()
+           SET relacion = @relacion, updatedAt = SYSUTCDATETIME()
         OUTPUT INSERTED.idEmpresa
          WHERE idEmpresa = @id
       `);
     if (result.recordset.length === 0) throw new EmpresaNotFoundError(id);
-    const actualizada = await this.getById(id);
-    if (!actualizada) throw new EmpresaNotFoundError(id);
-    return actualizada;
-  }
-
-  async updateSeguimiento(
-    id: string,
-    seguimiento: SeguimientoEmpresa,
-    interaccion: NuevaInteraccion | null,
-  ): Promise<Empresa> {
-    const m = seguimiento.motivo;
-    const a = seguimiento.proximaAccion;
-    const request = this.pool
-      .request()
-      .input('id', mssql.NVarChar(50), id)
-      .input('idEmpresa', mssql.NVarChar(50), id)
-      .input('etapa', mssql.NVarChar(20), seguimiento.etapa)
-      .input('medio', mssql.NVarChar(10), seguimiento.medio)
-      .input('medioOtro', mssql.NVarChar(40), seguimiento.medioOtro)
-      .input('motivoCategoria', mssql.NVarChar(20), m?.categoria ?? null)
-      .input('motivoDetalle1', mssql.NVarChar(200), m?.detalle1 ?? null)
-      .input('motivoDetalle2', mssql.NVarChar(200), m?.detalle2 ?? null)
-      .input('motivoNotas', mssql.NVarChar(300), m?.notas ?? null)
-      .input('intentosSinRespuesta', mssql.Int, seguimiento.intentosSinRespuesta)
-      .input(
-        'faltaResponderDesde',
-        mssql.DateTime2(3),
-        seguimiento.faltaResponderDesde ? new Date(seguimiento.faltaResponderDesde) : null,
-      )
-      .input('proximaAccionTipo', mssql.NVarChar(20), a?.tipo ?? null)
-      .input('proximaAccionDetalle', mssql.NVarChar(80), a?.detalle ?? null)
-      .input('proximaAccionFecha', mssql.VarChar(10), a?.fecha ?? null)
-      .input('sugerenciaDescartadaEn', mssql.Int, seguimiento.sugerenciaDescartadaEn);
-    if (interaccion) inputsInteraccion(request, interaccion);
-    try {
-      await request.query(`
-        SET XACT_ABORT ON;
-        BEGIN TRAN;
-        UPDATE dbo.CrmEmpresa
-           SET etapa = @etapa, medio = @medio, medioOtro = @medioOtro,
-               motivoCategoria = @motivoCategoria, motivoDetalle1 = @motivoDetalle1,
-               motivoDetalle2 = @motivoDetalle2, motivoNotas = @motivoNotas,
-               intentosSinRespuesta = @intentosSinRespuesta,
-               faltaResponderDesde = @faltaResponderDesde,
-               proximaAccionTipo = @proximaAccionTipo,
-               proximaAccionDetalle = @proximaAccionDetalle,
-               proximaAccionFecha = CONVERT(DATE, @proximaAccionFecha, 23),
-               sugerenciaDescartadaEn = @sugerenciaDescartadaEn,
-               updatedAt = SYSUTCDATETIME()
-         WHERE idEmpresa = @id;
-        IF @@ROWCOUNT = 0 THROW ${NOT_FOUND}, 'empresa no encontrada', 1;
-        ${interaccion ? `${INSERT_INTERACCION};` : ''}
-        COMMIT;
-      `);
-    } catch (error) {
-      if (numeroDeError(error) === NOT_FOUND) throw new EmpresaNotFoundError(id);
-      throw error;
-    }
     const actualizada = await this.getById(id);
     if (!actualizada) throw new EmpresaNotFoundError(id);
     return actualizada;
@@ -411,15 +297,20 @@ export class SqlServerCrmEmpresaRepository implements ICrmEmpresaRepository {
       result = await request.query<InteraccionDbRow>(`
       ${INSERT_INTERACCION.replace(
         'VALUES',
-        `OUTPUT INSERTED.idInteraccion, INSERTED.idEmpresa, INSERTED.fecha, INSERTED.idUsuario,
-           INSERTED.nombreUsuario, INSERTED.direccion, INSERTED.medio, INSERTED.medioOtro,
-           INSERTED.resultado, INSERTED.resumen
+        `OUTPUT INSERTED.idInteraccion, INSERTED.idEmpresa, INSERTED.idOportunidad, INSERTED.fecha,
+           INSERTED.idUsuario, INSERTED.nombreUsuario, INSERTED.direccion, INSERTED.medio,
+           INSERTED.medioOtro, INSERTED.resultado, INSERTED.resumen
     VALUES`,
       )}
     `);
     } catch (error) {
-      // 547 covers FOREIGN KEY and CHECK violations; only the foreign key means a missing empresa.
-      if (numeroDeError(error) === FK_VIOLATION && /FOREIGN KEY/i.test((error as Error).message)) {
+      // 547 covers FOREIGN KEY and CHECK violations; only the empresa foreign
+      // key means a missing empresa (a linked oportunidad that does not exist
+      // is the caller's bad data and must surface as-is).
+      if (
+        numeroDeError(error) === FK_VIOLATION &&
+        /FK_CrmInteraccion_empresa/i.test((error as Error).message)
+      ) {
         throw new EmpresaNotFoundError(idEmpresa);
       }
       throw error;
@@ -457,6 +348,9 @@ export class SqlServerCrmEmpresaRepository implements ICrmEmpresaRepository {
         IF NOT EXISTS (SELECT 1 FROM dbo.CrmEmpresa WHERE idEmpresa = @destino)
           THROW ${NOT_FOUND_DESTINO}, 'empresa de destino no encontrada', 1;
         UPDATE dbo.CrmInteraccion SET idEmpresa = @destino WHERE idEmpresa = @origen;
+        -- The oportunidades are cards of the empresa: they move with it too,
+        -- before the origin row (and its cascade) disappears.
+        UPDATE dbo.CrmOportunidad SET idEmpresa = @destino WHERE idEmpresa = @origen;
         UPDATE o SET idEmpresa = @destino, esPrincipal = 0,
                      orden = o.orden + 1000
           FROM dbo.CrmContacto o
