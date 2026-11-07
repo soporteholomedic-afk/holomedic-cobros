@@ -149,8 +149,14 @@ export interface Api {
   sectores?: Respuesta;
   /** GET /api/crm/alertas; defaults to an empty day (PanelDia is mocked in board suites). */
   alertas?: Respuesta;
+  /** GET /api/crm/empresas/{id}/historial; defaults to an empty history. */
+  historial?: (id: string) => Respuesta;
+  /** GET /api/crm/empresas/{id}/atencion; defaults to sin_informacion without a date. */
+  atencion?: (id: string) => Respuesta;
   post?: (body: Record<string, unknown>) => Respuesta;
   put?: (id: string, body: Record<string, unknown>) => Respuesta;
+  /** PATCH /api/crm/empresas/{id}/relacion. */
+  relacion?: (id: string, body: Record<string, unknown>) => Respuesta;
   etapa?: (id: string, body: Record<string, unknown>) => Respuesta;
   seguimiento?: (id: string, body: Record<string, unknown>) => Respuesta;
   sugerencia?: (id: string, body: Record<string, unknown>) => Respuesta;
@@ -173,6 +179,16 @@ export function mockApi(api: Api = {}) {
     }
     if (url === '/api/crm/alertas' && method === 'GET') {
       return json(api.alertas ?? { status: 200, body: { success: true, alertas: [], resumen: { vencidas: 0, hoy: 0, sinResponder: 0 } } });
+    }
+    const h = url.match(/^\/api\/crm\/empresas\/([^/]+)\/historial$/);
+    if (h && method === 'GET') {
+      return json(api.historial ? api.historial(h[1]!) : { status: 200, body: { success: true, interacciones: [] } });
+    }
+    const a = url.match(/^\/api\/crm\/empresas\/([^/]+)\/atencion$/);
+    if (a && method === 'GET') {
+      return json(
+        api.atencion ? api.atencion(a[1]!) : { status: 200, body: { success: true, actividad: { ultimaAtencion: null, ruc: null }, estado: 'sin_informacion' } },
+      );
     }
     if (url === '/api/crm/sectores' && method === 'POST') {
       return json(api.sector ? api.sector(body) : { status: 201, body: { success: true, sector: { nombre: String(body.nombre), icono: body.icono ?? null } } });
@@ -259,6 +275,16 @@ export function mockApi(api: Api = {}) {
       const [, id = ''] = p;
       const actual = LISTA.find((x) => x.idEmpresa === id) ?? empresa({ idEmpresa: id });
       return json(api.put ? api.put(id, body) : { status: 200, body: { success: true, empresa: { ...actual, ...body } as Empresa } });
+    }
+    const r = url.match(/^\/api\/crm\/empresas\/([^/]+)\/relacion$/);
+    if (r && method === 'PATCH') {
+      const [, id = ''] = r;
+      const actual = LISTA.find((x) => x.idEmpresa === id) ?? empresa({ idEmpresa: id });
+      return json(
+        api.relacion
+          ? api.relacion(id, body)
+          : { status: 200, body: { success: true, empresa: { ...actual, relacion: body.relacion } as Empresa } },
+      );
     }
     throw new Error(`unexpected request ${method} ${url}`);
   });

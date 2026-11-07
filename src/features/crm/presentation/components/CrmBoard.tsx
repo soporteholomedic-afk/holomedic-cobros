@@ -16,6 +16,7 @@ import {
   type IconoSector,
   type Motivo,
   type Oportunidad,
+  type Relacion,
   type Sector,
 } from '../../domain/entities';
 import { AltaPanel } from './AltaPanel';
@@ -318,6 +319,15 @@ export function CrmBoard() {
     return r.empresa;
   }
 
+  /** Manual relación change from the ficha (S6.3): a plain PATCH, never derived from a deal result. */
+  async function cambiarRelacion(id: string, relacion: Relacion): Promise<Empresa | { error: string }> {
+    const r = await patch(`/api/crm/empresas/${id}/relacion`, { relacion });
+    if (!r.ok || !r.empresa) return { error: r.error ?? 'No se pudo guardar la relación' };
+    reemplazarEmpresa(r.empresa, false);
+    toast.success(`La empresa ahora es ${relacion === 'cliente' ? 'cliente' : 'prospecto'}.`);
+    return r.empresa;
+  }
+
   /** Complete the RUC of a ficha. A RUC owned by another empresa comes back as a conflict to confirm. */
   async function guardarRuc(id: string, ruc: string, unir: boolean): Promise<ResultadoRuc> {
     try {
@@ -520,6 +530,16 @@ export function CrmBoard() {
   const oportunidadDelDialogo = dialogo ? oportunidades.find((o) => o.idOportunidad === dialogo.id) : undefined;
   const empresaDelDialogo = oportunidadDelDialogo ? empresaDe.get(oportunidadDelDialogo.idEmpresa) : undefined;
 
+  /** "Editar medio" of one oportunidad — from its card or from the ficha (both PATCH /seguimiento). */
+  function editarMedioDe(o: Oportunidad) {
+    setDialogo({ tipo: 'medio', id: o.idOportunidad, modo: 'editar', inicial: o.medio, destino: o.etapa });
+  }
+
+  /** "Editar motivo" of one oportunidad — from its card or from the ficha. */
+  function editarMotivoDe(o: Oportunidad) {
+    setDialogo({ tipo: 'motivo', id: o.idOportunidad, modo: 'editar', inicial: o.motivo });
+  }
+
   return (
     <div data-testid="crm-root" className="flex h-full flex-col px-8 py-7">
       <div className="mb-5 flex flex-wrap items-end gap-4">
@@ -634,12 +654,8 @@ export function CrmBoard() {
                     anterior={ETAPAS_OPORTUNIDAD[idx - 1]}
                     siguiente={ETAPAS_OPORTUNIDAD[idx + 1]}
                     onMover={mover}
-                    onEditarMedio={(x) =>
-                      setDialogo({ tipo: 'medio', id: x.idOportunidad, modo: 'editar', inicial: x.medio, destino: x.etapa })
-                    }
-                    onEditarMotivo={(x) =>
-                      setDialogo({ tipo: 'motivo', id: x.idOportunidad, modo: 'editar', inicial: x.motivo })
-                    }
+                    onEditarMedio={editarMedioDe}
+                    onEditarMotivo={editarMotivoDe}
                     onAbrir={abrirDetalle}
                     seleccionada={e.idEmpresa === detalleId}
                     onDragStart={onDragStart}
@@ -660,20 +676,20 @@ export function CrmBoard() {
           key={detalleEmpresa.idEmpresa}
           empresa={detalleEmpresa}
           empresas={empresas}
+          oportunidades={oportunidades}
           sectores={nombresSector}
           controlRef={detalleRef}
           onCerrar={cerrarDetalle}
           onGuardar={guardarEmpresa}
+          onCambiarRelacion={cambiarRelacion}
           onCrearSector={crearSectorPorNombre}
-          onCambiarMedio={() => {
-            // TODO('T7'): the ficha will pick the oportunidad whose medium is edited.
-          }}
-          onEditarMotivo={() => {
-            // TODO('T7'): the ficha will pick the oportunidad whose reason is edited.
-          }}
+          onCambiarMedio={editarMedioDe}
+          onEditarMotivo={editarMotivoDe}
           onGuardarRuc={guardarRuc}
-          onRegistrar={() => {
-            // TODO('T8'): the ficha will open the activity flow for one of its oportunidades.
+          onRegistrar={(idEmpresa) => {
+            // T8 lets the user pick the deal; for now the flow opens with the empresa's first oportunidad.
+            const primera = oportunidades.find((o) => o.idEmpresa === idEmpresa);
+            if (primera) abrirRegistro(primera.idOportunidad, 'saliente');
           }}
         />
       )}

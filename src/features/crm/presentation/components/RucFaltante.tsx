@@ -3,14 +3,15 @@
 import { AlertCircle } from 'lucide-react';
 import { useEffect, useId, useRef, useState } from 'react';
 
-import { ETAPA_LABELS, type Etapa } from '../../domain/entities';
+import { RELACION_LABELS } from '../../domain/entities';
 import { INPUT, ALERTA, BOTON_PRIMARIO, BOTON_SECUNDARIO } from './crmUi';
 import { badgeSunat, useConsultaRuc } from './useConsultaRuc';
 
 export interface OtraEmpresa {
   idEmpresa: string;
   razonSocial: string;
-  etapa: Etapa;
+  /** Plain string on purpose: it mirrors RucDeOtraEmpresaError.otra ("cliente" | "prospecto"). */
+  relacion: string;
 }
 
 /** What saving a RUC came to; the board turns it into toasts and board changes. */
@@ -20,6 +21,10 @@ interface Props {
   razonSocial: string;
   onGuardar: (ruc: string, unir: boolean) => Promise<ResultadoRuc>;
 }
+
+/** Label of the other ficha's relación; mirrors the domain error message. */
+const etiquetaRelacion = (relacion: string): string =>
+  relacion === 'cliente' ? RELACION_LABELS.cliente : relacion === 'prospecto' ? RELACION_LABELS.prospecto : relacion;
 
 /** "Falta RUC" mark with the inline field to complete it, and the merge question when the RUC is taken. */
 export function RucFaltante({ razonSocial, onGuardar }: Props) {
@@ -77,10 +82,10 @@ export function RucFaltante({ razonSocial, onGuardar }: Props) {
           className="grid gap-2 rounded-xl border border-amber-500 bg-amber-100 px-3 py-2.5 text-[13px] text-amber-800 dark:bg-amber-950/40 dark:text-amber-200"
         >
           <p>
-            Este RUC ya es de <b>{otra.razonSocial}</b> («{ETAPA_LABELS[otra.etapa]}»). ¿Unir las dos tarjetas?
+            Este RUC ya es de <b>{otra.razonSocial}</b> («{etiquetaRelacion(otra.relacion)}»). ¿Unir las dos fichas?
           </p>
           <p className="text-slate-600 dark:text-slate-300">
-            {`El historial y los contactos de «${razonSocial}» pasan a «${otra.razonSocial}» y esta tarjeta desaparece.`}
+            {`El historial y los contactos de «${razonSocial}» pasan a «${otra.razonSocial}» y esta ficha desaparece.`}
           </p>
           <div className="flex gap-2">
             <button
@@ -90,7 +95,7 @@ export function RucFaltante({ razonSocial, onGuardar }: Props) {
               onClick={() => void guardar(true)}
               className={`${BOTON_PRIMARIO} !h-9`}
             >
-              Unir tarjetas
+              Unir fichas
             </button>
             <button type="button" onClick={noUnir} className={`${BOTON_SECUNDARIO} !h-9`}>
               No unir

@@ -2,13 +2,15 @@
 
 import { ArrowDownLeft, ArrowUpRight } from 'lucide-react';
 
-import { MEDIO_LABELS, type Interaccion, type Resultado } from '../../domain/entities';
+import { MEDIO_LABELS, type Interaccion, type Oportunidad, type Resultado } from '../../domain/entities';
 import { MEDIO_ESTILO } from './crmUi';
 import { diasEntre, formatoCorto, hoyEnZona } from './fechas';
 import type { EstadoHistorial } from './useHistorial';
 
 interface Props {
   historial: EstadoHistorial;
+  /** Deals of this empresa, to show the deal name next to each linked activity. */
+  oportunidades: Pick<Oportunidad, 'idOportunidad' | 'nombre'>[];
   onReintentar: () => void;
   ahora: Date;
 }
@@ -45,8 +47,9 @@ export function fechaDeHistorial(iso: string, ahora: Date): string {
 }
 
 /** "Historial (N)" section of the detail panel: a vertical timeline, newest first. */
-export function HistorialContactos({ historial, onReintentar, ahora }: Props) {
+export function HistorialContactos({ historial, oportunidades, onReintentar, ahora }: Props) {
   const lista = historial.estado === 'listo' ? historial.interacciones : null;
+  const nombres = new Map(oportunidades.map((o) => [o.idOportunidad, o.nombre]));
   return (
     <section className="grid gap-2">
       <h3 className={TITULO}>
@@ -105,7 +108,13 @@ export function HistorialContactos({ historial, onReintentar, ahora }: Props) {
                   <b className="text-slate-900 dark:text-slate-100">{TEXTO_RESULTADO[h.resultado]}</b>{' '}
                   <small className="text-slate-500 dark:text-slate-400">{` · ${fechaDeHistorial(h.fecha, ahora)} · ${h.nombreUsuario}`}</small>
                 </span>
-                {h.resumen && <p className="mt-0.5 text-slate-700 dark:text-slate-300">{h.resumen}</p>}
+                <span
+                  data-oportunidad={h.idOportunidad ?? ''}
+                  className="col-start-2 w-fit rounded-full border border-slate-200 bg-slate-50 px-2 py-px text-[11px] font-semibold text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300"
+                >
+                  {(h.idOportunidad && nombres.get(h.idOportunidad)) || 'General'}
+                </span>
+                {h.resumen && <p className="col-start-2 mt-0.5 text-slate-700 dark:text-slate-300">{h.resumen}</p>}
               </li>
             );
           })}

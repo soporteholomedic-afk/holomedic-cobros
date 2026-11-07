@@ -17,13 +17,17 @@ interface Resultado {
 
 /**
  * Contact history of one empresa, newest first (spec S1). It loads on mount and
- * again whenever `version` (the empresa's `updatedAt`) changes or `reintentar`
- * is called.
+ * again whenever `version` (the empresa's `updatedAt`) or `versionOportunidades`
+ * (the deals of that empresa) changes, or `reintentar` is called.
  */
-export function useHistorial(idEmpresa: string, version: string): EstadoHistorial & { reintentar: () => void } {
+export function useHistorial(
+  idEmpresa: string,
+  version: string,
+  versionOportunidades = '',
+): EstadoHistorial & { reintentar: () => void } {
   const [intento, setIntento] = useState(0);
   const [resultado, setResultado] = useState<Resultado | null>(null);
-  const clave = `${idEmpresa}|${version}|${intento}`;
+  const clave = `${idEmpresa}|${version}|${versionOportunidades}|${intento}`;
 
   useEffect(() => {
     let cancelado = false;

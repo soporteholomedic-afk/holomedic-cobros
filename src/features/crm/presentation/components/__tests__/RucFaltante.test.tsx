@@ -115,3 +115,27 @@ describe('RucFaltante — consulta SUNAT al tipear (T6, S3)', () => {
     expect(screen.queryByText(DATOS.razonSocial)).toBeNull();
   });
 });
+
+describe('RucFaltante — RUC de otra ficha (T7: nueva forma de `otra`)', () => {
+  it.each([
+    ['prospecto', '(«Prospecto»)'],
+    ['cliente', '(«Cliente»)'],
+  ])('a conflict with relacion %s renders the domain message and asks to merge the fichas', async (relacion, chip) => {
+    const onGuardar = montar(
+      vi.fn(async () => ({
+        tipo: 'conflicto' as const,
+        otra: { idEmpresa: 'e-1', razonSocial: 'Constructora Andina S.A.C.', relacion },
+      })),
+    );
+
+    escribir(RUC);
+    fireEvent.click(screen.getByRole('button', { name: 'Guardar RUC' }));
+    await flush(0);
+
+    const caja = screen.getByRole('alert');
+    expect(caja).toHaveTextContent(`Este RUC ya es de Constructora Andina S.A.C. ${chip}. ¿Unir las dos fichas?`);
+    expect(screen.getByRole('button', { name: 'Unir fichas' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'No unir' })).toBeInTheDocument();
+    expect(onGuardar).toHaveBeenCalledWith(RUC, false);
+  });
+});
