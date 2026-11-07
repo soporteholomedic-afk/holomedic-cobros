@@ -2,9 +2,13 @@ import type { ICrmEmpresaRepository } from '../domain/ports';
 import {
   ACCIONES,
   MAX_CONTACTOS,
+  MAX_NOMBRE_OPORTUNIDAD,
+  MAX_SERVICIO_OPORTUNIDAD,
   MEDIOS,
+  MONTO_MAXIMO,
   ORIGENES,
   type AccionTipo,
+  type DatosOportunidad,
   type Origen,
   type ProximaAccion,
   MOTIVO_CAMPOS,
@@ -243,4 +247,82 @@ export function validarMotivo(raw: MotivoDatos | null | undefined): Motivo {
     throw new DatosEmpresaInvalidosError(`Falta: ${campos.detalle2.label}`);
   }
   return { categoria, detalle1, detalle2, notas: lee(raw.notas, 300, 'Las notas') };
+}
+
+// ---------------------------------------------------------------------------
+// Oportunidad data (feature crm-oportunidades, S1). All helpers are pure:
+// validation reads nothing, so a rejected form stores nothing.
+// ---------------------------------------------------------------------------
+
+/** Raw oportunidad data as received from the API (not yet validated). */
+export interface DatosOportunidadEntrada {
+  nombre: unknown;
+  servicio?: unknown;
+  responsableId?: unknown;
+  responsableNombre?: unknown;
+  origen?: unknown;
+  montoEstimado?: unknown;
+}
+
+/** Deal name: required, trimmed, at most MAX_NOMBRE_OPORTUNIDAD characters. */
+export function validarNombreOportunidad(valor: unknown): string {
+  const t = typeof valor === 'string' ? valor.trim() : '';
+  if (t.length === 0) throw new DatosEmpresaInvalidosError('El nombre de la oportunidad es obligatorio');
+  if (t.length > MAX_NOMBRE_OPORTUNIDAD) {
+    throw new DatosEmpresaInvalidosError(`El nombre admite hasta ${MAX_NOMBRE_OPORTUNIDAD} caracteres.`);
+  }
+  return t;
+}
+
+/** Service of interest: optional free text, at most MAX_SERVICIO_OPORTUNIDAD characters. */
+export function validarServicioOportunidad(valor: unknown): string | null {
+  const t = opcional(typeof valor === 'string' ? valor : null);
+  if (t !== null && t.length > MAX_SERVICIO_OPORTUNIDAD) {
+    throw new DatosEmpresaInvalidosError(`El servicio admite hasta ${MAX_SERVICIO_OPORTUNIDAD} caracteres.`);
+  }
+  return t;
+}
+
+/** Estimated amount: null (empty) or a finite number > 0 up to MONTO_MAXIMO. */
+export function validarMontoEstimado(valor: unknown): number | null {
+  if (valor === undefined || valor === null || valor === '') return null;
+  if (typeof valor !== 'number' || !Number.isFinite(valor) || valor <= 0) {
+    throw new DatosEmpresaInvalidosError('El monto estimado debe ser un número mayor a 0.');
+  }
+  if (valor > MONTO_MAXIMO) {
+    throw new DatosEmpresaInvalidosError(`El monto estimado admite hasta ${MONTO_MAXIMO}.`);
+  }
+  return valor;
+}
+
+/**
+ * Responsable of the deal: usuario id + name snapshot, always together or
+ * always absent (an id without a name would render blank in the board).
+ */
+export function validarResponsable(
+  id: unknown,
+  nombre: unknown,
+): { responsableId: string | null; responsableNombre: string | null } {
+  const idTxt = opcional(typeof id === 'string' ? id : null);
+  const nombreTxt = opcional(typeof nombre === 'string' ? nombre : null);
+  if ((idTxt === null) !== (nombreTxt === null)) {
+    throw new DatosEmpresaInvalidosError('El responsable necesita id y nombre.');
+  }
+  return { responsableId: idTxt, responsableNombre: nombreTxt };
+}
+
+/**
+ * Validate the editable data of an oportunidad (create and edit share it).
+ * Pure: it reads nothing, so callers can run it BEFORE any write.
+ */
+export function validarDatosOportunidad(datos: DatosOportunidadEntrada): DatosOportunidad {
+  const { responsableId, responsableNombre } = validarResponsable(datos.responsableId, datos.responsableNombre);
+  return {
+    nombre: validarNombreOportunidad(datos.nombre),
+    responsableId,
+    responsableNombre,
+    origen: validarOrigen(datos.origen),
+    servicio: validarServicioOportunidad(datos.servicio),
+    montoEstimado: validarMontoEstimado(datos.montoEstimado),
+  };
 }

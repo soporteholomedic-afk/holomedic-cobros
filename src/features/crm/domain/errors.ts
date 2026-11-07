@@ -14,6 +14,19 @@ export class OportunidadNotFoundError extends Error {
   }
 }
 
+/** The activity names an oportunidad that belongs to another empresa. */
+export class OportunidadDeOtraEmpresaError extends Error {
+  constructor(idOportunidad: string, idEmpresa: string) {
+    super('La oportunidad no pertenece a esta empresa');
+    this.name = 'OportunidadDeOtraEmpresaError';
+    this.idOportunidad = idOportunidad;
+    this.idEmpresa = idEmpresa;
+  }
+
+  readonly idOportunidad: string;
+  readonly idEmpresa: string;
+}
+
 export class RucDuplicadoError extends Error {
   constructor(ruc: string) {
     super(`Ya existe una empresa con el RUC: ${ruc}`);

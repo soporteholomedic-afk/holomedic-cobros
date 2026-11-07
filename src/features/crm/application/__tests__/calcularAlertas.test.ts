@@ -1,41 +1,61 @@
 import { describe, expect, it } from 'vitest';
 
 import { calcularAlertas, HORAS_SIN_RESPONDER, resumenDeAlertas } from '../calcularAlertas';
-import { HOY, NOW, empresa } from './fakeRepo';
+import { HOY, NOW, empresa, makeFakeRepo, oportunidad } from './fakeRepo';
 
 const hAtras = (horas: number): string => new Date(Date.parse(NOW) - horas * 3_600_000).toISOString();
 
+const EMPRESAS = [
+  empresa(), // e-1 · Constructora Andina S.A.C.
+  empresa({ idEmpresa: 'e-2', razonSocial: 'Minera Cobre S.A.' }),
+  empresa({ idEmpresa: 'e-3', razonSocial: 'Transporte Río S.A.C.' }),
+];
+
 /** Two days overdue on a stage where follow-ups alert. */
-const VENCIDA = empresa({
+const VENCIDA = oportunidad({
   etapa: 'contactado',
   medio: 'llamada',
   proximaAccion: { tipo: 'cotizar', detalle: 'Enviar precios OBRA', fecha: '2026-10-29' },
 });
 
-/** Due today, same stage. */
-const HOY_MISMO = empresa({
+/** Due today, same stage, another empresa. */
+const HOY_MISMO = oportunidad({
+  idOportunidad: 'o-2',
   idEmpresa: 'e-2',
-  razonSocial: 'Minera Cobre S.A.',
+  nombre: 'Monitoreo cardiacos',
   etapa: 'en_seguimiento',
   medio: 'whatsapp',
   proximaAccion: { tipo: 'llamar', detalle: null, fecha: HOY },
 });
 
+/** A cotizado deal is still open: its follow-up alerts. */
+const COTIZADA = oportunidad({
+  idOportunidad: 'o-4',
+  idEmpresa: 'e-2',
+  nombre: 'Cotización pendiente',
+  etapa: 'cotizado',
+  proximaAccion: { tipo: 'info', detalle: null, fecha: '2026-10-28' },
+});
+
 /** Inbound waiting 50 h on the first-contact stage. */
-const SIN_RESPONDER = empresa({
+const SIN_RESPONDER = oportunidad({
+  idOportunidad: 'o-3',
   idEmpresa: 'e-3',
-  razonSocial: 'Transporte Río S.A.C.',
+  nombre: 'Exámenes de ingreso',
   etapa: 'por_contactar',
   faltaResponderDesde: hAtras(50),
 });
 
-describe('calcularAlertas — accion_vencida (S3)', () => {
-  it('alerts a contactado empresa whose próxima acción is overdue, with whole days late', () => {
-    const alertas = calcularAlertas([VENCIDA], HOY, new Date(NOW));
-    expect(alertas).toHaveLength(1);
-    expect(alertas[0]).toMatchObject({
+describe('calcularAlertas — accion_vencida / accion_hoy (por oportunidad)', () => {
+  it('alerts an overdue próxima acción on an open deal, naming both deal and empresa', () => {
+    const repo = makeFakeRepo(EMPRESAS, [], [VENCIDA]);
+    const alerta = calcularAlertas(repo.oportunidades, repo.rows, HOY, new Date(NOW));
+    expect(alerta).toHaveLength(1);
+    expect(alerta[0]).toMatchObject({
+      idOportunidad: 'o-1',
+      nombreOportunidad: 'Exámenes ocupacionales 2026',
       idEmpresa: 'e-1',
-      razonSocial: 'Constructora Andina S.A.C.',
+      nombreEmpresa: 'Constructora Andina S.A.C.',
       clase: 'accion_vencida',
       etapa: 'contactado',
       tipoAccion: 'cotizar',
@@ -46,34 +66,47 @@ describe('calcularAlertas — accion_vencida (S3)', () => {
   });
 
   it('alerts when the próxima acción is due today with atraso 0', () => {
-    const alertas = calcularAlertas([HOY_MISMO], HOY, new Date(NOW));
-    expect(alertas).toHaveLength(1);
-    expect(alertas[0]).toMatchObject({ idEmpresa: 'e-2', clase: 'accion_hoy', atraso: 0 });
+    const repo = makeFakeRepo(EMPRESAS, [], [HOY_MISMO]);
+    const alerta = calcularAlertas(repo.oportunidades, repo.rows, HOY, new Date(NOW));
+    expect(alerta).toHaveLength(1);
+    expect(alerta[0]).toMatchObject({ idOportunidad: 'o-2', nombreEmpresa: 'Minera Cobre S.A.', clase: 'accion_hoy', atraso: 0 });
+  });
+
+  it('Cotizado is an open stage: its follow-up alerts too', () => {
+    const repo = makeFakeRepo(EMPRESAS, [], [COTIZADA]);
+    const alerta = calcularAlertas(repo.oportunidades, repo.rows, HOY, new Date(NOW));
+    expect(alerta.map((a) => a.clase)).toEqual(['accion_vencida']);
+    expect(alerta[0]).toMatchObject({ etapa: 'cotizado', atraso: 3 });
   });
 
   it('ignores a future próxima acción', () => {
-    const futura = empresa({ ...VENCIDA, proximaAccion: { tipo: 'llamar', detalle: null, fecha: '2026-11-03' } });
-    expect(calcularAlertas([futura], HOY, new Date(NOW))).toHaveLength(0);
+    const futura = oportunidad({ ...VENCIDA, proximaAccion: { tipo: 'llamar', detalle: null, fecha: '2026-11-03' } });
+    const repo = makeFakeRepo(EMPRESAS, [], [futura]);
+    expect(calcularAlertas(repo.oportunidades, repo.rows, HOY, new Date(NOW))).toHaveLength(0);
   });
 
-  it('ignores stages outside the active pipeline (por_contactar, cliente, perdido)', () => {
-    for (const etapa of ['por_contactar', 'cliente', 'perdido'] as const) {
-      const e = empresa({ ...VENCIDA, etapa });
-      expect(calcularAlertas([e], HOY, new Date(NOW))).toHaveLength(0);
+  it('ignores closed deals and Por contactar, whatever their próxima acción', () => {
+    for (const etapa of ['por_contactar', 'ganada', 'perdida'] as const) {
+      const cerrada = oportunidad({ ...VENCIDA, etapa });
+      const repo = makeFakeRepo(EMPRESAS, [], [cerrada]);
+      expect(calcularAlertas(repo.oportunidades, repo.rows, HOY, new Date(NOW))).toHaveLength(0);
     }
   });
 
-  it('ignores an empresa with no próxima acción', () => {
-    expect(calcularAlertas([empresa({ etapa: 'en_seguimiento' })], HOY, new Date(NOW))).toHaveLength(0);
+  it('ignores a deal with no próxima acción', () => {
+    const repo = makeFakeRepo(EMPRESAS, [], [oportunidad({ etapa: 'en_seguimiento' })]);
+    expect(calcularAlertas(repo.oportunidades, repo.rows, HOY, new Date(NOW))).toHaveLength(0);
   });
 });
 
-describe('calcularAlertas — sin_responder (S3)', () => {
+describe('calcularAlertas — sin_responder (por oportunidad)', () => {
   it(`alerts after ${HORAS_SIN_RESPONDER} h waiting, even on por_contactar, with whole hours`, () => {
-    const alertas = calcularAlertas([SIN_RESPONDER], HOY, new Date(NOW));
-    expect(alertas).toHaveLength(1);
-    expect(alertas[0]).toMatchObject({
-      idEmpresa: 'e-3',
+    const repo = makeFakeRepo(EMPRESAS, [], [SIN_RESPONDER]);
+    const alerta = calcularAlertas(repo.oportunidades, repo.rows, HOY, new Date(NOW));
+    expect(alerta).toHaveLength(1);
+    expect(alerta[0]).toMatchObject({
+      idOportunidad: 'o-3',
+      nombreEmpresa: 'Transporte Río S.A.C.',
       clase: 'sin_responder',
       etapa: 'por_contactar',
       tipoAccion: null,
@@ -84,43 +117,61 @@ describe('calcularAlertas — sin_responder (S3)', () => {
   });
 
   it('stays silent just under the 48 h threshold', () => {
-    const borde = empresa({ ...SIN_RESPONDER, faltaResponderDesde: hAtras(47) });
-    expect(calcularAlertas([borde], HOY, new Date(NOW))).toHaveLength(0);
+    const borde = oportunidad({ ...SIN_RESPONDER, faltaResponderDesde: hAtras(47) });
+    const repo = makeFakeRepo(EMPRESAS, [], [borde]);
+    expect(calcularAlertas(repo.oportunidades, repo.rows, HOY, new Date(NOW))).toHaveLength(0);
   });
 
-  it('never alerts a lost (perdido) empresa waiting for a reply', () => {
-    const perdida = empresa({ ...SIN_RESPONDER, etapa: 'perdido', motivo: { categoria: 'sin_interes', detalle1: null, detalle2: null, notas: null } });
-    expect(calcularAlertas([perdida], HOY, new Date(NOW))).toHaveLength(0);
+  it('never alerts a closed deal waiting for a reply', () => {
+    for (const etapa of ['ganada', 'perdida'] as const) {
+      const cerrada = oportunidad({ ...SIN_RESPONDER, etapa });
+      const repo = makeFakeRepo(EMPRESAS, [], [cerrada]);
+      expect(calcularAlertas(repo.oportunidades, repo.rows, HOY, new Date(NOW))).toHaveLength(0);
+    }
   });
 
-  it('ignores an empresa with no pending inbound reply', () => {
-    expect(calcularAlertas([empresa({ faltaResponderDesde: null })], HOY, new Date(NOW))).toHaveLength(0);
+  it('ignores a deal with no pending inbound reply', () => {
+    const repo = makeFakeRepo(EMPRESAS, [], [oportunidad({ faltaResponderDesde: null })]);
+    expect(calcularAlertas(repo.oportunidades, repo.rows, HOY, new Date(NOW))).toHaveLength(0);
   });
 });
 
-describe('calcularAlertas — combinaciones y orden (S3)', () => {
-  it('emits both alerts when one empresa is overdue AND waiting for a reply', () => {
-    const ambas = empresa({ ...VENCIDA, faltaResponderDesde: hAtras(50) });
-    const alertas = calcularAlertas([ambas], HOY, new Date(NOW));
-    expect(alertas.map((a) => a.clase)).toEqual(['accion_vencida', 'sin_responder']);
+describe('calcularAlertas — join con empresas, combinaciones y orden', () => {
+  it('drops an alert whose empresa is missing from the list (it could not be linked)', () => {
+    const huerfana = oportunidad({ idEmpresa: 'e-fantasma', etapa: 'contactado', proximaAccion: { tipo: 'llamar', detalle: null, fecha: '2026-10-29' } });
+    expect(calcularAlertas([huerfana], EMPRESAS, HOY, new Date(NOW))).toHaveLength(0);
   });
 
-  it('orders vencidas oldest first, hoy by name, sin_responder oldest waiting first', () => {
-    const vieja = empresa({ ...VENCIDA, idEmpresa: 'e-old', razonSocial: 'A Vieja', proximaAccion: { tipo: 'llamar', detalle: null, fecha: '2026-10-25' } });
-    const hoyOtra = empresa({ idEmpresa: 'e-4', razonSocial: 'A Todavía Hoy', etapa: 'contactado', medio: 'llamada', proximaAccion: { tipo: 'info', detalle: null, fecha: HOY } });
-    const esperaLarga = empresa({ ...SIN_RESPONDER, idEmpresa: 'e-wait', faltaResponderDesde: hAtras(80) });
-    const alertas = calcularAlertas([HOY_MISMO, hoyOtra, SIN_RESPONDER, esperaLarga, VENCIDA, vieja], HOY, new Date(NOW));
-    expect(alertas.map((a) => a.idEmpresa)).toEqual(['e-old', 'e-1', 'e-4', 'e-2', 'e-wait', 'e-3']);
+  it('emits both alerts when one deal is overdue AND waiting for a reply', () => {
+    const ambas = oportunidad({ ...VENCIDA, faltaResponderDesde: hAtras(50) });
+    const repo = makeFakeRepo(EMPRESAS, [], [ambas]);
+    const alerta = calcularAlertas(repo.oportunidades, repo.rows, HOY, new Date(NOW));
+    expect(alerta.map((a) => a.clase)).toEqual(['accion_vencida', 'sin_responder']);
+  });
+
+  it('orders vencidas oldest first, hoy by empresa name, sin_responder longest wait first', () => {
+    const masEmpresas = [
+      ...EMPRESAS,
+      empresa({ idEmpresa: 'e-old', razonSocial: 'A Vieja S.A.C.' }),
+      empresa({ idEmpresa: 'e-4', razonSocial: 'A Todavía Hoy S.A.' }),
+      empresa({ idEmpresa: 'e-wait', razonSocial: 'Z Espera Larga S.A.C.' }),
+    ];
+    const vieja = oportunidad({ ...VENCIDA, idOportunidad: 'o-old', idEmpresa: 'e-old', nombre: 'Vieja', proximaAccion: { tipo: 'llamar', detalle: null, fecha: '2026-10-25' } });
+    const hoyOtra = oportunidad({ idOportunidad: 'o-5', idEmpresa: 'e-4', nombre: 'Hoy Todavía', etapa: 'contactado', medio: 'llamada', proximaAccion: { tipo: 'info', detalle: null, fecha: HOY } });
+    const esperaLarga = oportunidad({ ...SIN_RESPONDER, idOportunidad: 'o-wait', idEmpresa: 'e-wait', faltaResponderDesde: hAtras(80) });
+    const alerta = calcularAlertas([HOY_MISMO, hoyOtra, SIN_RESPONDER, esperaLarga, VENCIDA, vieja], masEmpresas, HOY, new Date(NOW));
+    expect(alerta.map((a) => a.idOportunidad)).toEqual(['o-old', 'o-1', 'o-5', 'o-2', 'o-wait', 'o-3']);
   });
 
   it('returns [] for an empty board', () => {
-    expect(calcularAlertas([], HOY, new Date(NOW))).toEqual([]);
+    expect(calcularAlertas([], [], HOY, new Date(NOW))).toEqual([]);
   });
 });
 
-describe('resumenDeAlertas (S3)', () => {
-  it('counts each clase', () => {
-    const resumen = resumenDeAlertas(calcularAlertas([VENCIDA, HOY_MISMO, SIN_RESPONDER], HOY, new Date(NOW)));
+describe('resumenDeAlertas — counts by oportunidad', () => {
+  it('counts each clase, one entry per deal in trouble', () => {
+    const repo = makeFakeRepo(EMPRESAS, [], [VENCIDA, HOY_MISMO, SIN_RESPONDER]);
+    const resumen = resumenDeAlertas(calcularAlertas(repo.oportunidades, repo.rows, HOY, new Date(NOW)));
     expect(resumen).toEqual({ vencidas: 1, hoy: 1, sinResponder: 1 });
   });
 

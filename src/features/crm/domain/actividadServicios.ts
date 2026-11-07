@@ -45,8 +45,14 @@ export function estadoActividadServicios(
   actividad: ActividadServicios,
   hoy: Date,
 ): EstadoAtencion {
-  if (relacion !== 'cliente' || actividad.ruc === null || actividad.ultimaAtencion === null) {
+  if (relacion !== 'cliente' || actividad.ruc === null) {
     return 'sin_informacion';
+  }
+  // A cliente with a known RUC but NO attention at all in SIGLA (e.g. a
+  // freshly captured client that has not sent its first worker yet) is
+  // "Pendiente de primera atención" — never "inactive" (regla S6.7).
+  if (actividad.ultimaAtencion === null) {
+    return 'pendiente_primera';
   }
   const meses = mesesEntre(new Date(`${actividad.ultimaAtencion}T00:00:00Z`), hoy);
   return meses >= UMBRAL_MESES_INACTIVIDAD ? 'sin_actividad' : 'reciente';
