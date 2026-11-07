@@ -1,10 +1,10 @@
 import { NextResponse } from 'next/server';
-import { getCrmDb } from '@/features/crm/infrastructure/getCrmDb';
+import { getCrmDb, getCrmOportunidadesDb } from '@/features/crm/infrastructure/getCrmDb';
 import { RegistrarEntranteUseCase, type RegistrarEntranteDatos } from '@/features/crm/application/registrarEntrante';
 import { hoyEnLima } from '@/features/crm/application/validar';
 import { buildError, errorDeCrm, esObjeto, esTextoOpcional, leerJson, usuarioCrm } from '../_lib/http';
 
-/** "Nos contactaron": adds the contact to the matching empresa or creates a card in Contactado. */
+/** "Nos contactaron": creates the deal on the matching ficha, or registers the ficha and its first deal. */
 export async function POST(request: Request): Promise<NextResponse> {
   try {
     const sesion = await usuarioCrm();
@@ -21,13 +21,13 @@ export async function POST(request: Request): Promise<NextResponse> {
       return buildError('Cuerpo inválido. Requiere: {razonSocial, medio, telefono o correo, proximaAccion}', 400);
     }
 
-    const repo = await getCrmDb();
-    const { empresa, existente } = await new RegistrarEntranteUseCase(repo).execute(
+    const [repo, oportunidades] = await Promise.all([getCrmDb(), getCrmOportunidadesDb()]);
+    const { empresa, oportunidad, existente } = await new RegistrarEntranteUseCase(repo, oportunidades).execute(
       body as unknown as RegistrarEntranteDatos,
       sesion.usuario,
       hoyEnLima(),
     );
-    return NextResponse.json({ success: true, empresa, existente }, { status: 201 });
+    return NextResponse.json({ success: true, empresa, oportunidad, existente }, { status: 201 });
   } catch (error) {
     return errorDeCrm(error, 'POST /api/crm/entrantes', 'Error al registrar el contacto entrante');
   }

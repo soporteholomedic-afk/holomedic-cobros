@@ -1,10 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { __setCrmDbForTests } from '@/features/crm/infrastructure/getCrmDb';
+import { __setCrmDbForTests, __setCrmOportunidadesDbForTests } from '@/features/crm/infrastructure/getCrmDb';
 import {
   FILA,
+  OPORTUNIDAD,
   createJsonRequest,
   crmSession,
   invalidJsonRequest,
+  makeMockOportunidadesRepo,
   makeMockRepo,
   sinCrmSession,
 } from '../../_lib/__tests__/fixtures';
@@ -33,21 +35,32 @@ describe('POST /api/crm/entrantes', () => {
   beforeEach(() => mockGetSession.mockResolvedValue(crmSession));
   afterEach(() => {
     __setCrmDbForTests(null);
+    __setCrmOportunidadesDbForTests(null);
     vi.restoreAllMocks();
   });
 
-  it('creates a card in Contactado and answers 201 { empresa, existente: false } with the session user on the history entry', async () => {
+  it('creates the ficha AND its first deal in Contactado, answering 201 { empresa, oportunidad, existente: false }', async () => {
     const repo = makeMockRepo();
+    const oportunidades = makeMockOportunidadesRepo({ getById: vi.fn().mockResolvedValue(OPORTUNIDAD) });
     __setCrmDbForTests(repo);
+    __setCrmOportunidadesDbForTests(oportunidades);
     const res = await POST(createJsonRequest(BODY()));
     expect(res.status).toBe(201);
     const json = await res.json();
     expect(json.existente).toBe(false);
-    expect(json.empresa).toBeDefined();
+    expect(json.empresa).toMatchObject({ idEmpresa: 'e-1', relacion: 'prospecto' });
+    // The response carries the deal re-read after the follow-up write (T4 use case).
+    expect(json.oportunidad).toMatchObject({ idEmpresa: 'e-1', etapa: 'contactado' });
+    // The ficha carries no deal state anymore; the deal is created separately.
     expect(repo.create).toHaveBeenCalledWith(
-      expect.objectContaining({ etapa: 'contactado', origen: 'referido', ruc: '20556677889', sector: null }),
+      expect.objectContaining({ ruc: '20556677889', sector: null, relacion: 'prospecto' }),
     );
-    expect(repo.updateSeguimiento).toHaveBeenCalledWith(
+    expect(repo.create.mock.calls[0]?.[0]).not.toHaveProperty('etapa');
+    expect(oportunidades.create).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({ nombre: 'Exámenes para 25 personas.', origen: 'referido', etapa: 'contactado', medio: 'whatsapp' }),
+    );
+    expect(oportunidades.updateSeguimiento).toHaveBeenCalledWith(
       expect.any(String),
       expect.objectContaining({ etapa: 'contactado', intentosSinRespuesta: 0 }),
       expect.objectContaining({
@@ -60,9 +73,11 @@ describe('POST /api/crm/entrantes', () => {
     );
   });
 
-  it('a new card takes the chosen sector, resolved to the stored name', async () => {
+  it('a new ficha takes the chosen sector, resolved to the stored name', async () => {
     const repo = makeMockRepo();
+    const oportunidades = makeMockOportunidadesRepo({ getById: vi.fn().mockResolvedValue(OPORTUNIDAD) });
     __setCrmDbForTests(repo);
+    __setCrmOportunidadesDbForTests(oportunidades);
     const res = await POST(createJsonRequest({ ...BODY(), sector: 'construcción' }));
     expect(res.status).toBe(201);
     expect(repo.create).toHaveBeenCalledWith(expect.objectContaining({ sector: 'Construcción' }));
@@ -70,29 +85,39 @@ describe('POST /api/crm/entrantes', () => {
 
   it('answers 400 "Sector desconocido" for an unknown sector and stores nothing', async () => {
     const repo = makeMockRepo();
+    const oportunidades = makeMockOportunidadesRepo();
     __setCrmDbForTests(repo);
+    __setCrmOportunidadesDbForTests(oportunidades);
     const res = await POST(createJsonRequest({ ...BODY(), sector: 'Astrología' }));
     expect(res.status).toBe(400);
     expect(await res.json()).toEqual({ success: false, error: 'Sector desconocido: Astrología' });
     expect(repo.create).not.toHaveBeenCalled();
-    expect(repo.updateSeguimiento).not.toHaveBeenCalled();
+    expect(oportunidades.create).not.toHaveBeenCalled();
   });
 
   it('answers 400 for a non-text sector', async () => {
     __setCrmDbForTests(makeMockRepo());
+    __setCrmOportunidadesDbForTests(makeMockOportunidadesRepo());
     expect((await POST(createJsonRequest({ ...BODY(), sector: 4 }))).status).toBe(400);
   });
 
-  it('adds the contact to an existing empresa and answers existente: true', async () => {
-    const repo = makeMockRepo({
-      findByRuc: vi.fn().mockResolvedValue(FILA),
-      updateSeguimiento: vi.fn().mockImplementation(async (_id, s) => ({ ...FILA, ...s })),
+  it('adds the deal to an existing ficha (existente: true) without touching its relacion', async () => {
+    const repo = makeMockRepo({ findByRuc: vi.fn().mockResolvedValue(FILA) });
+    const oportunidades = makeMockOportunidadesRepo({
+      getById: vi.fn().mockResolvedValue(OPORTUNIDAD),
+      updateSeguimiento: vi.fn().mockImplementation(async (_id, s) => ({ ...OPORTUNIDAD, ...s })),
     });
     __setCrmDbForTests(repo);
+    __setCrmOportunidadesDbForTests(oportunidades);
     const res = await POST(createJsonRequest(BODY()));
     expect(res.status).toBe(201);
-    expect(await res.json()).toMatchObject({ existente: true, empresa: { idEmpresa: 'e-1', etapa: 'contactado' } });
+    const json = await res.json();
+    expect(json.existente).toBe(true);
+    expect(json.empresa).toMatchObject({ idEmpresa: 'e-1', relacion: 'prospecto' });
+    expect(json.oportunidad).toMatchObject({ idEmpresa: 'e-1', etapa: 'contactado' });
     expect(repo.create).not.toHaveBeenCalled();
+    expect(repo.updateRelacion).not.toHaveBeenCalled();
+    expect(oportunidades.create).toHaveBeenCalledWith('e-1', expect.objectContaining({ etapa: 'contactado' }));
   });
 
   it.each([
@@ -102,16 +127,19 @@ describe('POST /api/crm/entrantes', () => {
     ['no next action', { ...BODY(), proximaAccion: undefined }, 'Elige la próxima acción.'],
   ])('answers 400 with the exact message for %s and stores nothing', async (_n, body, mensaje) => {
     const repo = makeMockRepo();
+    const oportunidades = makeMockOportunidadesRepo();
     __setCrmDbForTests(repo);
+    __setCrmOportunidadesDbForTests(oportunidades);
     const res = await POST(createJsonRequest(body));
     expect(res.status).toBe(400);
     expect(await res.json()).toEqual({ success: false, error: mensaje });
     expect(repo.create).not.toHaveBeenCalled();
-    expect(repo.updateSeguimiento).not.toHaveBeenCalled();
+    expect(oportunidades.create).not.toHaveBeenCalled();
   });
 
   it('answers 400 for a body of the wrong shape and for non-JSON', async () => {
     __setCrmDbForTests(makeMockRepo());
+    __setCrmOportunidadesDbForTests(makeMockOportunidadesRepo());
     expect((await POST(createJsonRequest({ razonSocial: 3, medio: 'correo' }))).status).toBe(400);
     expect((await POST(createJsonRequest([]))).status).toBe(400);
     expect((await POST(invalidJsonRequest())).status).toBe(400);
@@ -119,6 +147,7 @@ describe('POST /api/crm/entrantes', () => {
 
   it('answers 401 without a session and 401 without the crm permiso', async () => {
     __setCrmDbForTests(makeMockRepo());
+    __setCrmOportunidadesDbForTests(makeMockOportunidadesRepo());
     mockGetSession.mockResolvedValue(null);
     expect((await POST(createJsonRequest(BODY()))).status).toBe(401);
     mockGetSession.mockResolvedValue(sinCrmSession);
@@ -128,6 +157,7 @@ describe('POST /api/crm/entrantes', () => {
   it('answers 500 without leaking the cause when storage fails', async () => {
     vi.spyOn(console, 'error').mockImplementation(() => undefined);
     __setCrmDbForTests(makeMockRepo({ create: vi.fn().mockRejectedValue(new Error('secret')) }));
+    __setCrmOportunidadesDbForTests(makeMockOportunidadesRepo());
     const res = await POST(createJsonRequest(BODY()));
     expect(res.status).toBe(500);
     expect(await res.json()).toEqual({ success: false, error: 'Error al registrar el contacto entrante' });

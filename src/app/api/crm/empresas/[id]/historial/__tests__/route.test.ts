@@ -14,9 +14,10 @@ vi.mock('@/lib/auth', () => ({ getSession: mockGetSession }));
 import { GET } from '../route';
 
 const req = new Request('http://localhost/api/crm/empresas/e-1/historial');
-const fila = (id: number) => ({
+const fila = (id: number, idOportunidad: string | null = null) => ({
   idInteraccion: id,
   idEmpresa: 'e-1',
+  idOportunidad,
   fecha: '2026-10-31T15:00:00.000Z',
   idUsuario: 'u-1',
   nombreUsuario: 'Scott Palomino',
@@ -34,16 +35,17 @@ describe('GET /api/crm/empresas/[id]/historial', () => {
     vi.restoreAllMocks();
   });
 
-  it('answers 200 { interacciones } exactly as the repository lists them (newest first)', async () => {
+  it('answers 200 { interacciones } exactly as the repository lists them (newest first), each with its idOportunidad', async () => {
     const repo = makeMockRepo({
       getById: vi.fn().mockResolvedValue(FILA),
-      listInteracciones: vi.fn().mockResolvedValue([fila(3), fila(2), fila(1)]),
+      listInteracciones: vi.fn().mockResolvedValue([fila(3, 'o-9'), fila(2, null), fila(1, 'o-1')]),
     });
     __setCrmDbForTests(repo);
     const res = await GET(req, routeContext('e-1'));
     expect(res.status).toBe(200);
     const json = await res.json();
     expect(json.interacciones.map((i: { idInteraccion: number }) => i.idInteraccion)).toEqual([3, 2, 1]);
+    expect(json.interacciones.map((i: { idOportunidad: string | null }) => i.idOportunidad)).toEqual(['o-9', null, 'o-1']);
     expect(repo.listInteracciones).toHaveBeenCalledWith('e-1');
   });
 

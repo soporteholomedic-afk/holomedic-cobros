@@ -40,7 +40,7 @@ describe('POST /api/crm/importar', () => {
     vi.restoreAllMocks();
   });
 
-  it('stores the ok rows in "Por contactar", creates each new sector once and reports the counts', async () => {
+  it('stores the ok rows as Prospecto fichas (no deal is ever generated), creates each new sector once and reports the counts', async () => {
     const repo = repoConSectores();
     __setCrmDbForTests(repo);
     const res = await POST(multipart({ archivo: archivo(await libroXlsx([A, B, MALA])) }));
@@ -56,10 +56,9 @@ describe('POST /api/crm/importar', () => {
       direccion: null,
       contactos: [{ nombre: 'Rosa Mendoza', telefono: '987111222', correo: 'rosa@norte.pe' }],
       notas: null,
-      etapa: 'por_contactar',
-      origen: null,
+      relacion: 'prospecto',
     });
-    expect(repo.create).toHaveBeenNthCalledWith(2, expect.objectContaining({ ruc: '20601112224', sector: 'Educación', etapa: 'por_contactar', direccion: null }));
+    expect(repo.create).toHaveBeenNthCalledWith(2, expect.objectContaining({ ruc: '20601112224', sector: 'Educación', relacion: 'prospecto', direccion: null }));
   });
 
   it('reads and checks the file again on the server: a list of rows sent by the client is ignored', async () => {

@@ -30,6 +30,7 @@ export async function POST(request: Request): Promise<NextResponse> {
     }
 
     const repo = await getCrmDb();
+    // Ficha ONLY (S7.1): no etapa/origen is read here — deals live at /api/crm/oportunidades.
     const empresa = await new CrearEmpresaUseCase(repo).execute(body as CrearEmpresaDatos);
     return NextResponse.json({ success: true, empresa }, { status: 201 });
   } catch (error) {
