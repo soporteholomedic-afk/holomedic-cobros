@@ -161,6 +161,12 @@ export interface Api {
   seguimiento?: (id: string, body: Record<string, unknown>) => Respuesta;
   sugerencia?: (id: string, body: Record<string, unknown>) => Respuesta;
   sector?: (body: Record<string, unknown>) => Respuesta;
+  /** POST /api/crm/entrantes — no default: each save test states the deal it creates. */
+  entrante?: (body: Record<string, unknown>) => Respuesta;
+  /** POST /api/crm/empresas/{id}/actividades — no default: each save test states what advanced. */
+  actividades?: (id: string, body: Record<string, unknown>) => Respuesta;
+  /** POST /api/crm/oportunidades (the alta's primera oportunidad) — no default. */
+  nuevaOportunidad?: (body: Record<string, unknown>) => Respuesta;
 }
 
 /** Fake of the CRM API. Unexpected requests throw so a test cannot pass by accident. */
@@ -199,6 +205,19 @@ export function mockApi(api: Api = {}) {
           ? api.post(body)
           : { status: 201, body: { success: true, empresa: { ...empresa({ idEmpresa: 'e-9' }), ...(body as Partial<Empresa>) } } },
       );
+    }
+    if (url === '/api/crm/entrantes' && method === 'POST') {
+      if (!api.entrante) throw new Error('stub api.entrante for POST /api/crm/entrantes');
+      return json(api.entrante(body));
+    }
+    if (url === '/api/crm/oportunidades' && method === 'POST') {
+      if (!api.nuevaOportunidad) throw new Error('stub api.nuevaOportunidad for POST /api/crm/oportunidades');
+      return json(api.nuevaOportunidad(body));
+    }
+    const act = url.match(/^\/api\/crm\/empresas\/([^/]+)\/actividades$/);
+    if (act && method === 'POST') {
+      if (!api.actividades) throw new Error('stub api.actividades for POST /api/crm/empresas/[id]/actividades');
+      return json(api.actividades(act[1]!, body));
     }
     const o = url.match(/^\/api\/crm\/oportunidades\/([^/]+)(\/etapa|\/seguimiento|\/sugerencia)?$/);
     if (o) {

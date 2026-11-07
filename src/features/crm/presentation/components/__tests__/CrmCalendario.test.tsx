@@ -137,11 +137,39 @@ describe('CrmCalendario', () => {
     expect(rapidas[0]).toHaveAttribute('aria-pressed', 'false');
   });
 
-  it('marks the days with scheduled actions and tells how far the chosen day is', () => {
-    render(<Prueba inicial="2026-10-31" marcados={{ '2026-10-31': 2 }} />);
-    expect(screen.getByText(/Es mañana\. Cae en fin de semana\. Ese día ya hay 2 acciones agendadas en el CRM\./)).toBeInTheDocument();
+  it('marks the days with scheduled actions, naming the empresa and deal of each entry, and tells how far the chosen day is', () => {
+    render(
+      <Prueba
+        inicial="2026-10-31"
+        marcados={{
+          '2026-10-31': [
+            { idOportunidad: 'o-5', nombreOportunidad: 'Ergonomía para planta', nombreEmpresa: 'Agroindustrial Valle Verde' },
+            { idOportunidad: 'o-9', nombreOportunidad: 'Audiometrías', nombreEmpresa: 'Minera Cobre' },
+          ],
+        }}
+      />,
+    );
+    expect(
+      screen.getByText(
+        /Es mañana\. Cae en fin de semana\. Ese día ya hay 2 acciones agendadas en el CRM: Agroindustrial Valle Verde · Ergonomía para planta; Minera Cobre · Audiometrías\./,
+      ),
+    ).toBeInTheDocument();
     fireEvent.click(boton());
     expect(dia(/^sábado 31 de octubre, 2 acciones agendadas/)).toBeInTheDocument();
+  });
+
+  it('names the single entry of a day without pluralizing', () => {
+    render(
+      <Prueba
+        inicial="2026-11-02"
+        marcados={{
+          '2026-11-02': [{ idOportunidad: 'o-6', nombreOportunidad: 'Vigilancia epidemiológica', nombreEmpresa: 'Minera Los Tres Picos' }],
+        }}
+      />,
+    );
+    expect(
+      screen.getByText(/Ese día ya hay 1 acción agendada en el CRM: Minera Los Tres Picos · Vigilancia epidemiológica\./),
+    ).toBeInTheDocument();
   });
 
   it('exposes the invalid state', () => {

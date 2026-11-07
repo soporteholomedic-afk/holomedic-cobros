@@ -8,6 +8,7 @@ import { toast } from 'sonner';
 import {
   ETAPAS_OPORTUNIDAD,
   ETAPA_OPORTUNIDAD_LABELS,
+  ETAPAS_CERRADAS,
   MEDIO_LABELS,
   type Direccion,
   type Empresa,
@@ -100,9 +101,12 @@ export function CrmBoard() {
   // 'oculta': the create panel is mounted (draft kept) but hidden while a detail is open.
   const [alta, setAlta] = useState<'cerrada' | 'visible' | 'oculta'>('cerrada');
   const [detalleId, setDetalleId] = useState<string | null>(null);
-  // The "Registrar actividad" panel: which card, and who started the contact when it opened.
-  const [registro, setRegistro] = useState<{ id: string; direccion: Direccion } | null>(null);
+  // The "Registrar actividad" panel: the ficha it writes on, the deal it comes pre-linked to
+  // (null = "Actividad general"), and who started the contact when it opened.
+  const [registro, setRegistro] = useState<{ idEmpresa: string; idOportunidad: string | null; direccion: Direccion } | null>(null);
   const abridorRegistro = useRef<HTMLElement | null>(null);
+  /** Focus target left by cerrarRegistro: the opener, or the card id when the activity moved it. */
+  const focoPendienteRegistro = useRef<{ nodo: HTMLElement | null; id: string | null } | null>(null);
   const [entranteAbierto, setEntranteAbierto] = useState(false);
   const botonEntrante = useRef<HTMLButtonElement>(null);
   const detalleRef = useRef<DetalleHandle>(null);
@@ -241,8 +245,10 @@ export function CrmBoard() {
     if (id) enfocarTarjetaDeEmpresa(id);
   }
 
-  /** Open the activity panel for a card; the detail and the create panels step aside. */
-  function abrirRegistro(id: string, direccion: Direccion) {
+  /** Open the activity panel for a CARD (pre-linked to its deal); the detail and create panels step aside. */
+  function abrirRegistro(idOportunidad: string, direccion: Direccion) {
+    const o = oportunidades.find((x) => x.idOportunidad === idOportunidad);
+    if (!o) return;
     const opener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     conGuardia(() => {
       abridorRegistro.current = opener;
@@ -252,25 +258,64 @@ export function CrmBoard() {
         setAlta('oculta');
         toast.info('El borrador de “Nueva empresa” se conserva');
       }
-      setRegistro({ id, direccion });
+      setRegistro({ idEmpresa: o.idEmpresa, idOportunidad, direccion });
     });
   }
 
-  /** Close the activity panel and give the focus back to what opened it, or to the card when that is gone. */
-  function cerrarRegistro() {
-    const id = registro?.id;
-    const opener = abridorRegistro.current;
-    abridorRegistro.current = null;
-    setRegistro(null);
-    if (opener?.isConnected) opener.focus();
-    else if (id) document.querySelector<HTMLElement>(`[data-empresa-id="${id}"]`)?.focus();
+  /** Open the activity panel for a FICHA: linked to its first open deal when one exists, else general (S4). */
+  function abrirRegistroDeEmpresa(idEmpresa: string) {
+    const primeraAbierta = oportunidades.find((o) => o.idEmpresa === idEmpresa && !ETAPAS_CERRADAS.includes(o.etapa));
+    const opener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    conGuardia(() => {
+      abridorRegistro.current = opener;
+      setEntranteAbierto(false);
+      setDetalleId(null);
+      if (alta === 'visible') {
+        setAlta('oculta');
+        toast.info('El borrador de “Nueva empresa” se conserva');
+      }
+      setRegistro({ idEmpresa, idOportunidad: primeraAbierta?.idOportunidad ?? null, direccion: 'saliente' });
+    });
   }
 
-  function contactoGuardado(nueva: Empresa) {
-    // TODO('T8'): the activity panel will return the linked oportunidad too,
-    // so the board can move its card; for now only the ficha is refreshed.
+  /**
+   * Close the activity panel and give the focus back to what opened it — or to
+   * `idTarjetaMovida`'s card when the saved activity moved it: the opener node
+   * is replaced by the move, so the focus is restored after the commit (the
+   * layout effect below).
+   */
+  function cerrarRegistro(idTarjetaMovida?: string) {
+    const opener = abridorRegistro.current;
+    abridorRegistro.current = null;
+    focoPendienteRegistro.current = { nodo: idTarjetaMovida === undefined ? opener : null, id: idTarjetaMovida ?? null };
+    setRegistro(null);
+    // Best effort now; the layout effect re-asserts after the commit, because
+    // closing the panel or moving the card can leave the focus on <body>.
+    if (idTarjetaMovida === undefined) opener?.focus();
+  }
+
+  useLayoutEffect(() => {
+    if (registro !== null) return;
+    const pendiente = focoPendienteRegistro.current;
+    if (!pendiente) return;
+    focoPendienteRegistro.current = null;
+    if (pendiente.nodo?.isConnected) {
+      pendiente.nodo.focus();
+      return;
+    }
+    if (pendiente.id) document.querySelector<HTMLElement>(`[data-empresa-id="${pendiente.id}"]`)?.focus();
+  }, [registro]);
+
+  /** The activity came back saved: refresh the ficha and, when the deal advanced, move its card (S7.4). */
+  function contactoGuardado(nueva: Empresa, oportunidad: Oportunidad | null) {
     reemplazarEmpresa(nueva, false);
-    cerrarRegistro();
+    if (oportunidad) colocar(oportunidad);
+    cerrarRegistro(oportunidad?.idOportunidad);
+    toast.success(
+      oportunidad
+        ? `Actividad guardada en «${nueva.razonSocial} · ${oportunidad.nombre}».`
+        : `Actividad guardada en el historial de «${nueva.razonSocial}».`,
+    );
   }
 
   /** Open the "Nos contactaron" panel; the detail, contact and create panels step aside. */
@@ -292,13 +337,17 @@ export function CrmBoard() {
     botonEntrante.current?.focus();
   }
 
-  function entranteGuardado(nueva: Empresa, existente: boolean) {
-    // TODO('T8'): the inbound flow now creates the first oportunidad; the
-    // board will need the new oportunidad returned to place the card.
+  function entranteGuardado(nueva: Empresa, oportunidad: Oportunidad, existente: boolean) {
+    // S4: the inbound contact created the primera oportunidad; the deal is the card, so it travels into Contactado.
     reemplazarEmpresa(nueva, !existente);
+    colocar(oportunidad);
     setEntranteAbierto(false);
     botonEntrante.current?.focus();
-    toast.success(`${nueva.razonSocial} quedó registrada.`);
+    toast.success(
+      existente
+        ? `${nueva.razonSocial} ya estaba en el CRM. Su nueva oportunidad «${oportunidad.nombre}» está en «Contactado».`
+        : `${nueva.razonSocial} quedó registrada. Su oportunidad «${oportunidad.nombre}» está en «Contactado».`,
+    );
   }
 
   function pedirNueva() {
@@ -393,6 +442,11 @@ export function CrmBoard() {
     return 'error' in r ? { error: r.error } : r.nombre;
   }
 
+  /**
+   * Creates the FICHA only (S7.1): one POST, the board's fichas gain it, and
+   * the panel (which owns the optional primera oportunidad) closes itself on
+   * full success. A new ficha shows NO card — cards are oportunidades (S2).
+   */
   async function crearEmpresa(cuerpo: Record<string, unknown>): Promise<Empresa | { error: string }> {
     try {
       const res = await fetch('/api/crm/empresas', {
@@ -403,11 +457,31 @@ export function CrmBoard() {
       const r = await leerRespuesta(res);
       if (!r.ok || !r.empresa) return { error: r.error ?? 'No se pudo crear la empresa' };
       reemplazarEmpresa(r.empresa, true);
-      cerrarPanel();
       toast.success('Empresa creada');
       return r.empresa;
     } catch {
       return { error: 'No se pudo crear la empresa' };
+    }
+  }
+
+  /**
+   * Second POST of the alta (S4): the primera oportunidad of the ficha the
+   * panel just created. The new card lands at the top of Por contactar.
+   */
+  async function crearPrimeraOportunidad(idEmpresa: string, cuerpo: Record<string, unknown>): Promise<unknown | { error: string }> {
+    try {
+      const res = await fetch('/api/crm/oportunidades', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ idEmpresa, ...cuerpo }),
+      });
+      const r = await leerRespuesta(res);
+      if (!r.ok || !r.oportunidad) return { error: r.error ?? 'No se pudo crear la oportunidad' };
+      colocar(r.oportunidad);
+      toast.success(`Oportunidad «${r.oportunidad.nombre}» creada en «Por contactar»`);
+      return r.oportunidad;
+    } catch {
+      return { error: 'No se pudo crear la oportunidad' };
     }
   }
 
@@ -525,8 +599,10 @@ export function CrmBoard() {
   const ahora = new Date();
   const hoy = hoyEnZona(ahora);
   const detalleEmpresa = detalleId ? empresas.find((x) => x.idEmpresa === detalleId) : undefined;
-  const registroOportunidad = registro ? oportunidades.find((o) => o.idOportunidad === registro.id) : undefined;
-  const registroEmpresa = registroOportunidad ? empresaDe.get(registroOportunidad.idEmpresa) : undefined;
+  const registroOportunidad = registro?.idOportunidad
+    ? oportunidades.find((o) => o.idOportunidad === registro.idOportunidad)
+    : undefined;
+  const registroEmpresa = registro ? empresas.find((x) => x.idEmpresa === registro.idEmpresa) : undefined;
   const oportunidadDelDialogo = dialogo ? oportunidades.find((o) => o.idOportunidad === dialogo.id) : undefined;
   const empresaDelDialogo = oportunidadDelDialogo ? empresaDe.get(oportunidadDelDialogo.idEmpresa) : undefined;
 
@@ -604,8 +680,18 @@ export function CrmBoard() {
       )}
 
       {/* crm-notificaciones (S1/S5): "Tu día" above the board; every board
-          mutation bumps reloadKey, so the alerts always mirror the columns. */}
-      <PanelDia reloadKey={reloadKey} onAbrir={abrirDetalle} />
+          mutation bumps reloadKey, so the alerts always mirror the columns.
+          An alert opens its deal's card when it is on the board, else the ficha. */}
+      <PanelDia
+        reloadKey={reloadKey}
+        onAbrir={(idOportunidad, idEmpresa) => {
+          if (oportunidades.some((o) => o.idOportunidad === idOportunidad)) {
+            document.querySelector<HTMLElement>(`[data-empresa-id="${idOportunidad}"]`)?.focus();
+          } else {
+            abrirDetalle(idEmpresa);
+          }
+        }}
+      />
 
       <div
         data-testid="crm-board"
@@ -686,17 +772,14 @@ export function CrmBoard() {
           onCambiarMedio={editarMedioDe}
           onEditarMotivo={editarMotivoDe}
           onGuardarRuc={guardarRuc}
-          onRegistrar={(idEmpresa) => {
-            // T8 lets the user pick the deal; for now the flow opens with the empresa's first oportunidad.
-            const primera = oportunidades.find((o) => o.idEmpresa === idEmpresa);
-            if (primera) abrirRegistro(primera.idOportunidad, 'saliente');
-          }}
+          onRegistrar={abrirRegistroDeEmpresa}
         />
       )}
 
       {entranteAbierto && (
         <EntrantePanel
           empresas={empresas}
+          oportunidades={oportunidades}
           sectores={sectores}
           hoy={hoy}
           onCerrar={cerrarEntrante}
@@ -705,14 +788,16 @@ export function CrmBoard() {
         />
       )}
 
-      {registroOportunidad && registroEmpresa && registro && (
+      {registro && registroEmpresa && (
         <RegistrarContactoPanel
-          key={registroOportunidad.idOportunidad}
+          key={registro.idOportunidad ?? registro.idEmpresa}
           empresa={registroEmpresa}
           empresas={empresas}
+          oportunidades={oportunidades}
+          oportunidadInicial={registroOportunidad ?? null}
           direccion={registro.direccion}
           hoy={hoy}
-          onCerrar={cerrarRegistro}
+          onCerrar={() => cerrarRegistro()}
           onGuardado={contactoGuardado}
         />
       )}
@@ -724,6 +809,7 @@ export function CrmBoard() {
           onCerrar={cerrarPanel}
           onCrearSector={crearSectorPorNombre}
           onCrear={crearEmpresa}
+          onCrearOportunidad={crearPrimeraOportunidad}
         />
       )}
 

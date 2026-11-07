@@ -10,7 +10,7 @@ vi.mock('../RegistrarContactoPanel', async () => {
   const { createElement } = await import('react');
   return {
     RegistrarContactoPanel: () =>
-      createElement('aside', { role: 'dialog', 'aria-label': 'Registrar contacto' }, createElement('h2', null, 'Registrar contacto')),
+      createElement('aside', { role: 'dialog', 'aria-label': 'Registrar actividad' }, createElement('h2', null, 'Registrar actividad')),
   };
 });
 
@@ -304,21 +304,21 @@ describe('Detalle — contenido', () => {
     expect(within(items[1]!).queryByRole('button', { name: /medio/i })).toBeNull();
   });
 
-  it('the "Registrar contacto" footer is always offered, even when every deal is lost (S3/S6.4)', async () => {
+  it('the "Registrar actividad" footer is always offered, even when every deal is lost (S3/S6.4)', async () => {
     mockApi();
     render(<CrmBoard />);
     await cargado();
     const panel = abrir('Ferretería El Maestro S.R.L.');
-    expect(within(panel).getByRole('button', { name: 'Registrar contacto' })).toBeInTheDocument();
+    expect(within(panel).getByRole('button', { name: 'Registrar actividad' })).toBeInTheDocument();
   });
 
-  it('"Registrar contacto" from the ficha opens the activity flow for one of its oportunidades', async () => {
+  it('"Registrar actividad" from the ficha opens the activity flow for one of its oportunidades', async () => {
     mockApi();
     render(<CrmBoard />);
     await cargado();
     const panel = abrir(TEXTILES);
-    fireEvent.click(within(panel).getByRole('button', { name: 'Registrar contacto' }));
-    expect(await screen.findByRole('dialog', { name: 'Registrar contacto' })).toBeInTheDocument();
+    fireEvent.click(within(panel).getByRole('button', { name: 'Registrar actividad' }));
+    expect(await screen.findByRole('dialog', { name: 'Registrar actividad' })).toBeInTheDocument();
     expect(screen.queryByRole('dialog', { name: TEXTILES })).toBeNull();
   });
 

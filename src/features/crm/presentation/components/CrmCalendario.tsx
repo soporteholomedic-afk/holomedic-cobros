@@ -4,6 +4,7 @@ import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 
 import { CalendarDays, ChevronDown, ChevronLeft, ChevronRight } from 'lucide-react';
 
 import { CAMPO_ELEGIBLE, cerrarOtrosPopups, escucharCierre } from './crmUi';
+import type { EntradaAgenda } from './contactoForm';
 import {
   DIAS_SEMANA,
   diasEntre,
@@ -29,8 +30,8 @@ interface CrmCalendarioProps {
   value: string | null;
   /** Today as `YYYY-MM-DD`; the component never reads the clock. */
   hoy: string;
-  /** Number of actions already scheduled per day, for the dots and the hint. */
-  marcados?: Record<string, number>;
+  /** Scheduled actions per day, each naming its deal and empresa, for the dots and the hint. */
+  marcados?: Record<string, EntradaAgenda[]>;
   onChange: (value: string) => void;
   invalid?: boolean;
   describedBy?: string;
@@ -177,11 +178,12 @@ export function CrmCalendario({
   if (value) {
     const dif = diasEntre(hoy, value);
     const cuando = dif < 0 ? 'Ya pasó.' : dif === 0 ? 'Es hoy.' : dif === 1 ? 'Es mañana.' : `Es en ${dif} días.`;
-    const n = marcados[value] ?? 0;
+    const entradas = marcados[value] ?? [];
+    const nombres = entradas.map((e) => `${e.nombreEmpresa} · ${e.nombreOportunidad}`).join('; ');
     pista =
       cuando +
       (esFinDeSemana(value) ? ' Cae en fin de semana.' : '') +
-      (n ? ` Ese día ya hay ${acciones(n)} en el CRM.` : '');
+      (entradas.length ? ` Ese día ya hay ${acciones(entradas.length)} en el CRM: ${nombres}.` : '');
   }
 
   const estilo = invalid ? CAMPO_ELEGIBLE.invalido : value ? CAMPO_ELEGIBLE.elegido : CAMPO_ELEGIBLE.vacio;
@@ -297,7 +299,7 @@ export function CrmCalendario({
                           hoy={hoy}
                           seleccionado={dia === value}
                           tabulable={dia === tabulable}
-                          n={marcados[dia] ?? 0}
+                          n={(marcados[dia] ?? []).length}
                           onElegir={elegir}
                         />
                       </td>

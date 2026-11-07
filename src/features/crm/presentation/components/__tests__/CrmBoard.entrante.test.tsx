@@ -4,9 +4,9 @@ import { fireEvent, render, screen, waitFor, within } from '@testing-library/rea
 const toastMock = vi.hoisted(() => ({ success: vi.fn(), error: vi.fn(), info: vi.fn() }));
 vi.mock('sonner', () => ({ toast: toastMock }));
 
-import type { Empresa } from '../../../domain/entities';
+import type { Empresa, Oportunidad } from '../../../domain/entities';
 import { CrmBoard } from '../CrmBoard';
-import { empresa, llamadas, mockApi, type Api, type Respuesta } from './crmFixtures';
+import { empresa, llamadas, mockApi, oportunidad, type Api, type Respuesta } from './crmFixtures';
 
 const ANDINA = 'Constructora Andina S.A.C.';
 const TEXTILES = 'Textiles Pacífico S.A.C.';
@@ -34,12 +34,17 @@ const columna = (nombre: string) => screen.getByRole('region', { name: nombre })
 const panel = () => screen.getByRole('dialog', { name: 'Nos contactaron' });
 const boton = () => screen.getByRole('button', { name: 'Nos contactaron' });
 
-function montar(entrante?: (body: Record<string, unknown>) => Respuesta, lista: Empresa[] = BASE, extra: Api = {}) {
-  return mockApi({ lista: { status: 200, body: { success: true, empresas: lista } }, entrante, ...extra });
+function montar(entrante?: (body: Record<string, unknown>) => Respuesta, lista: Empresa[] = BASE, extra: Api = {}, oportunidadesResp?: Respuesta) {
+  return mockApi({
+    lista: { status: 200, body: { success: true, empresas: lista } },
+    ...(oportunidadesResp ? { oportunidades: oportunidadesResp } : {}),
+    entrante,
+    ...extra,
+  });
 }
 
-async function abrir() {
-  await screen.findByText(ANDINA);
+async function abrir(esperar = ANDINA) {
+  await screen.findByText(esperar);
   fireEvent.click(boton());
   return panel();
 }
@@ -54,7 +59,7 @@ function elegirOpcion(raiz: HTMLElement, boton: RegExp, opcion: string) {
   fireEvent.click(within(raiz).getByRole('option', { name: new RegExp(`^${opcion}`) }));
 }
 
-function creada(cambios: Partial<Empresa> = {}, existente = false): Respuesta {
+function creada(cambios: Partial<Empresa> = {}, existente = false, deal: Partial<Oportunidad> = {}): Respuesta {
   return {
     status: 201,
     body: {
@@ -65,13 +70,20 @@ function creada(cambios: Partial<Empresa> = {}, existente = false): Respuesta {
         razonSocial: NUEVA,
         ruc: null,
         sector: null,
-        etapa: 'contactado',
-        medio: 'whatsapp',
         contactos: [{ nombre: 'Mónica Paredes', telefono: '945 210 334', correo: null }],
-        faltaResponderDesde: AHORA,
-        proximaAccion: { tipo: 'responder', detalle: null, fecha: HOY },
         updatedAt: AHORA,
         ...cambios,
+      }),
+      // The use case derives the deal nombre from "¿Qué necesita?" with the fallback "Negocio entrante" (S4).
+      oportunidad: oportunidad({
+        idOportunidad: 'o-9',
+        idEmpresa: (cambios.idEmpresa as string | undefined) ?? 'e-9',
+        nombre: 'Negocio entrante',
+        etapa: 'contactado',
+        medio: 'whatsapp',
+        faltaResponderDesde: AHORA,
+        proximaAccion: { tipo: 'responder', detalle: null, fecha: HOY },
+        ...deal,
       }),
     },
   };
@@ -141,17 +153,17 @@ describe('CrmBoard — "Nos contactaron" (S5)', () => {
     expect(within(p).getByLabelText('¿Cuál?', { selector: '#ent-otro' })).toHaveAttribute('maxlength', '40');
   });
 
-  it('matches an existing empresa live, ignoring case and extra spaces, and says so', async () => {
+  it('matches an existing empresa live, ignoring case and extra spaces, and says a NEW deal will be created for it', async () => {
     montar();
     render(<CrmBoard />);
     const p = await abrir();
     expect(screen.queryByTestId('entrante-coincidencia')).toBeNull();
     escribir(campo(p, /^Empresa/), '  textiles   PACÍFICO s.a.c.  ');
     expect(screen.getByTestId('entrante-coincidencia')).toHaveTextContent(
-      'Ya está en el CRM: Textiles Pacífico S.A.C.. Se suma a esa tarjeta.',
+      'Ya está en el CRM: Textiles Pacífico S.A.C.. Le creamos una oportunidad nueva en «Contactado».',
     );
     expect(screen.getByTestId('entrante-previa')).toHaveTextContent(
-      'Se agrega al historial de Textiles Pacífico S.A.C. y la tarjeta muestra «Falta responder».',
+      'Se crea una oportunidad en «Contactado» para Textiles Pacífico S.A.C., con la etiqueta «Falta responder».',
     );
     escribir(campo(p, /^Empresa/), 'Textiles');
     expect(screen.queryByTestId('entrante-coincidencia')).toBeNull();
@@ -166,24 +178,33 @@ describe('CrmBoard — "Nos contactaron" (S5)', () => {
     expect(screen.getByTestId('entrante-coincidencia')).toHaveTextContent('Ya está en el CRM: Agroindustrial Valle Verde S.A.C.');
   });
 
-  it('previews a new card with and without RUC', async () => {
+  it('previews the first deal of a new ficha, with and without RUC', async () => {
     montar();
     render(<CrmBoard />);
     const p = await abrir();
     expect(screen.getByTestId('entrante-previa')).toHaveTextContent(
-      'Se crea una tarjeta en «Contactado» con la etiqueta «Falta responder» y marcada «Falta RUC».',
+      'Se registra la empresa y su primera oportunidad en «Contactado», con la etiqueta «Falta responder» y marcada «Falta RUC».',
     );
     escribir(campo(p, /^RUC/), '20111222333');
     expect(screen.getByTestId('entrante-previa')).toHaveTextContent(
-      'Se crea una tarjeta en «Contactado» con la etiqueta «Falta responder».',
+      'Se registra la empresa y su primera oportunidad en «Contactado», con la etiqueta «Falta responder».',
     );
     expect(screen.getByTestId('entrante-previa')).not.toHaveTextContent('Falta RUC');
   });
 
-  it('counts for the calendar the actions of other open cards, and not the matched card', async () => {
-    montar();
+  it('counts for the calendar the actions of deals of other empresas, and not those of the matched one', async () => {
+    montar(undefined, BASE, undefined, {
+        status: 200,
+        body: {
+          success: true,
+          oportunidades: [
+            oportunidad({ idOportunidad: 'o-3', idEmpresa: 'e-3', nombre: 'Exámenes de ingreso', etapa: 'contactado', medio: 'llamada', proximaAccion: { tipo: 'llamar', detalle: null, fecha: '2026-11-03' } }),
+            oportunidad({ idOportunidad: 'o-5', idEmpresa: 'e-4', nombre: 'Ergonomía para planta', etapa: 'en_seguimiento', medio: 'whatsapp', proximaAccion: { tipo: 'llamar', detalle: null, fecha: '2026-11-05' } }),
+          ],
+        },
+    });
     render(<CrmBoard />);
-    const p = await abrir();
+    const p = await abrir(TEXTILES);
     const abrirNoviembre = () => {
       fireEvent.click(within(proxima(p)).getByRole('button', { name: /Cuándo/ }));
       fireEvent.click(within(proxima(p)).getByRole('button', { name: 'Mes siguiente' }));
@@ -199,7 +220,7 @@ describe('CrmBoard — "Nos contactaron" (S5)', () => {
 });
 
 describe('CrmBoard — guardar un contacto entrante', () => {
-  it('posts a new empresa with a phone, adds the card first in Contactado, closes, toasts and returns the focus', async () => {
+  it('posts a new empresa with a phone, adds its primera oportunidad first in Contactado, closes, toasts and returns the focus', async () => {
     const fn = montar(() => creada());
     render(<CrmBoard />);
     const p = await abrir();
@@ -220,14 +241,16 @@ describe('CrmBoard — guardar un contacto entrante', () => {
     const contactado = columna('Contactado');
     const titulos = within(contactado).getAllByRole('heading', { level: 3 }).map((h) => h.textContent);
     expect(titulos[0]).toBe(NUEVA);
+    // The card names the deal (the "Negocio entrante" fallback) and its state (S4).
+    expect(within(card(NUEVA)).getByText('Negocio entrante')).toBeInTheDocument();
     expect(within(card(NUEVA)).getByText('Falta responder · hace un momento')).toBeInTheDocument();
     expect(within(card(NUEVA)).getByText('Falta RUC')).toBeInTheDocument();
-    expect(toastMock.success).toHaveBeenCalledWith(`${NUEVA} quedó en «Contactado» como «Falta responder».`);
+    expect(toastMock.success).toHaveBeenCalledWith(`${NUEVA} quedó registrada. Su oportunidad «Negocio entrante» está en «Contactado».`);
     expect(boton()).toHaveFocus();
   });
 
   it('splits an email into correo (no telefono) and sends every optional field, medioOtro and the origin', async () => {
-    const fn = montar(() => creada({ ruc: '20111222333' }));
+    const fn = montar(() => creada({ ruc: '20111222333' }, false, { nombre: 'Exámenes para 25 trabajadores' }));
     render(<CrmBoard />);
     const p = await abrir();
     escribir(campo(p, /^Empresa/), NUEVA);
@@ -254,19 +277,21 @@ describe('CrmBoard — guardar un contacto entrante', () => {
       origen: 'referido',
       proximaAccion: { tipo: 'cotizar', detalle: 'Plan anual', fecha: '2026-11-02' },
     });
+    // The deal nombre comes from "¿Qué necesita?"; the card shows it (S4).
+    expect(within(card(NUEVA)).getByText('Exámenes para 25 trabajadores')).toBeInTheDocument();
   });
 
-  it('inbound on an existing card updates that card instead of adding another', async () => {
+  it('inbound on an EXISTING ficha adds a new deal card instead of duplicating it', async () => {
     const fn = montar(() =>
       creada(
         {
           idEmpresa: 'e-3',
           razonSocial: TEXTILES,
           ruc: '20556677889',
-          medio: 'llamada',
           contactos: [{ nombre: 'Renzo Vargas', telefono: '998 201 456', correo: null }],
         },
         true,
+        { nombre: 'Cotización de mallas', medio: 'llamada' },
       ),
     );
     render(<CrmBoard />);
@@ -276,37 +301,41 @@ describe('CrmBoard — guardar un contacto entrante', () => {
     guardar(p);
     await waitFor(() => expect(toastMock.success).toHaveBeenCalled());
     expect(llamadas(fn, 'POST', '/api/crm/entrantes')[0]!.body).toMatchObject({ razonSocial: 'textiles pacífico s.a.c.' });
-    expect(screen.getAllByRole('heading', { level: 3, name: TEXTILES })).toHaveLength(1);
-    expect(screen.getAllByRole('heading', { level: 3 })).toHaveLength(BASE.length);
-    expect(within(card(TEXTILES)).getByText('Falta responder · hace un momento')).toBeInTheDocument();
-    expect(within(card(TEXTILES)).getByRole('button', { name: 'Responder' })).toBeInTheDocument();
-    expect(toastMock.success).toHaveBeenCalledWith(`${TEXTILES} quedó en «Contactado» como «Falta responder».`);
+    // The ficha is NOT duplicated: the fixtures already hold two Textiles deals, the new one is the third card.
+    expect(screen.getAllByRole('heading', { level: 3, name: TEXTILES })).toHaveLength(3);
+    const nueva = within(columna('Contactado')).getByText('Cotización de mallas').closest('article') as HTMLElement;
+    expect(within(nueva).getByText('Falta responder · hace un momento')).toBeInTheDocument();
+    expect(within(nueva).getByRole('button', { name: 'Responder' })).toBeInTheDocument();
+    expect(toastMock.success).toHaveBeenCalledWith(`${TEXTILES} ya estaba en el CRM. Su nueva oportunidad «Cotización de mallas» está en «Contactado».`);
   });
 
-  it('an existing card that changes column travels to the new one', async () => {
-    montar(() => creada({ idEmpresa: 'e-1', razonSocial: ANDINA, ruc: '20512345678', medio: 'whatsapp' }, true));
+  it('the new deal of an existing ficha travels into Contactado', async () => {
+    montar(() => creada({ idEmpresa: 'e-1', razonSocial: ANDINA, ruc: '20512345678' }, true, { nombre: 'Nuevo negocio', medio: 'whatsapp' }));
     render(<CrmBoard />);
     const p = await abrir();
     escribir(campo(p, /^Empresa/), ANDINA);
     escribir(campo(p, /^Teléfono o correo/), '987 654 321');
     guardar(p);
-    await waitFor(() => expect(within(columna('Contactado')).getByText(ANDINA)).toBeInTheDocument());
-    expect(within(columna('Por contactar')).queryByText(ANDINA)).toBeNull();
+    await waitFor(() => expect(within(columna('Contactado')).getByText('Nuevo negocio')).toBeInTheDocument());
+    // Andina's own deal stays in Por contactar; the new card is the new deal's.
+    expect(within(columna('Por contactar')).getByText('Equipos de protección para obra')).toBeInTheDocument();
   });
 
-  it('on a matched Cliente the next action is optional and goes as null', async () => {
-    const fn = montar(() => creada({ idEmpresa: 'e-4', razonSocial: VALLE, etapa: 'cliente', proximaAccion: null }, true));
+  it('on a matched Cliente the próxima acción is still required (the new deal waits for our reply)', async () => {
+    const fn = montar(() => creada({ idEmpresa: 'e-4', razonSocial: VALLE }, true, { nombre: 'Campaña nueva', medio: 'whatsapp' }));
     render(<CrmBoard />);
     const p = await abrir();
     escribir(campo(p, /^Empresa/), VALLE);
-    expect(within(p).getByRole('group', { name: 'Próxima acción (opcional)' })).toBeInTheDocument();
-    fireEvent.click(within(proxima(p)).getByRole('button', { name: /Qué hacer/ }));
-    expect(within(proxima(p)).getAllByRole('option')[0]).toHaveTextContent('Sin próxima acción');
-    fireEvent.click(within(proxima(p)).getAllByRole('option')[0]!);
+    expect(within(p).queryByRole('group', { name: 'Próxima acción (opcional)' })).toBeNull();
     escribir(campo(p, /^Teléfono o correo/), '936 018 552');
     guardar(p);
+    // The new deal always waits for our reply: the required action goes with it.
     await waitFor(() => expect(llamadas(fn, 'POST', '/api/crm/entrantes')).toHaveLength(1));
-    expect(llamadas(fn, 'POST', '/api/crm/entrantes')[0]!.body).toMatchObject({ proximaAccion: null });
+    expect(llamadas(fn, 'POST', '/api/crm/entrantes')[0]!.body).toMatchObject({
+      razonSocial: VALLE,
+      proximaAccion: { tipo: 'responder', fecha: HOY },
+    });
+    await waitFor(() => expect(within(columna('Contactado')).getByText('Campaña nueva')).toBeInTheDocument());
   });
 });
 
@@ -445,15 +474,18 @@ describe('CrmBoard — errores del servidor y cierre del panel "Nos contactaron"
     expect(boton()).toHaveFocus();
   });
 
-  it('opening a card detail or "Registrar contacto" replaces the panel', async () => {
+  it('opening a card detail or "Registrar actividad" replaces the panel', async () => {
     montar();
     render(<CrmBoard />);
     await abrir();
-    fireEvent.click(within(card(TEXTILES)).getByRole('button', { name: 'Registrar contacto' }));
+    // Textiles holds two deals (S2): the button lives on its Contactado card.
+    const contacto = screen.getByRole('region', { name: 'Contactado' });
+    const suTarjeta = within(contacto).getByRole('heading', { level: 3, name: TEXTILES }).closest('article') as HTMLElement;
+    fireEvent.click(within(suTarjeta).getByRole('button', { name: 'Registrar actividad' }));
     expect(screen.queryByRole('dialog', { name: 'Nos contactaron' })).toBeNull();
-    expect(screen.getByRole('dialog', { name: 'Registrar contacto' })).toBeInTheDocument();
+    expect(screen.getByRole('dialog', { name: 'Registrar actividad' })).toBeInTheDocument();
     fireEvent.click(boton());
-    expect(screen.queryByRole('dialog', { name: 'Registrar contacto' })).toBeNull();
+    expect(screen.queryByRole('dialog', { name: 'Registrar actividad' })).toBeNull();
     expect(panel()).toBeInTheDocument();
   });
 });

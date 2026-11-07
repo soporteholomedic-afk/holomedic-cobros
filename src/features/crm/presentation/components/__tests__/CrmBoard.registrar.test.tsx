@@ -4,9 +4,9 @@ import { act, fireEvent, render, screen, waitFor, within } from '@testing-librar
 const toastMock = vi.hoisted(() => ({ success: vi.fn(), error: vi.fn(), info: vi.fn() }));
 vi.mock('sonner', () => ({ toast: toastMock }));
 
-import type { Empresa } from '../../../domain/entities';
+import type { Empresa, Oportunidad } from '../../../domain/entities';
 import { CrmBoard } from '../CrmBoard';
-import { empresa, llamadas, mockApi, type Respuesta } from './crmFixtures';
+import { LISTA, empresa, llamadas, mockApi, oportunidad, type Api, type Respuesta } from './crmFixtures';
 
 const ANDINA = 'Constructora Andina S.A.C.';
 const TEXTILES = 'Textiles Pacífico S.A.C.';
@@ -17,37 +17,40 @@ const LUNES = '2026-11-02';
 
 const card = (nombre: string) => screen.getByRole('heading', { level: 3, name: nombre }).closest('article') as HTMLElement;
 const columna = (nombre: string) => screen.getByRole('region', { name: nombre });
-const panel = () => screen.getByRole('dialog', { name: 'Registrar contacto' });
-const previa = () => screen.getByTestId('contacto-previa').textContent;
+const panel = () => screen.getByRole('dialog', { name: 'Registrar actividad' });
+const previa = () => screen.getByTestId('actividad-previa').textContent;
 
-const BASE: Empresa[] = [
-  empresa({ idEmpresa: 'e-1', razonSocial: ANDINA }),
-  empresa({
-    idEmpresa: 'e-3',
-    razonSocial: TEXTILES,
-    ruc: '20556677889',
-    etapa: 'contactado',
-    medio: 'llamada',
-    contactos: [{ nombre: 'Renzo Vargas', telefono: '998 201 456', correo: null }],
-  }),
-  empresa({ idEmpresa: 'e-4', razonSocial: VALLE, ruc: '20534128790', etapa: 'cliente', medio: 'whatsapp' }),
-  empresa({
+/** One deal per fixture empresa, one stage each; FERRETERIA sits in Perdida (no "Registrar actividad" there). */
+const BASE_OPS: Oportunidad[] = [
+  oportunidad(),
+  oportunidad({ idOportunidad: 'o-3', idEmpresa: 'e-3', nombre: 'Exámenes de ingreso', etapa: 'contactado', medio: 'llamada' }),
+  oportunidad({ idOportunidad: 'o-5', idEmpresa: 'e-4', nombre: 'Ergonomía para planta', etapa: 'en_seguimiento', medio: 'whatsapp' }),
+  oportunidad({
+    idOportunidad: 'o-7',
     idEmpresa: 'e-5',
-    razonSocial: FERRETERIA,
-    ruc: '20478901234',
-    etapa: 'perdido',
+    nombre: 'Ergonomía industrial',
+    etapa: 'perdida',
     medio: 'llamada',
     motivo: { categoria: 'sin_interes', detalle1: null, detalle2: null, notas: null },
   }),
 ];
 
-function montar(lista: Empresa[] = BASE, contacto?: (id: string, body: Record<string, unknown>) => Respuesta) {
-  return mockApi({ lista: { status: 200, body: { success: true, empresas: lista } }, contacto });
+function montar(ops: Oportunidad[] = BASE_OPS, actividades?: (id: string, body: Record<string, unknown>) => Respuesta, extra: Api = {}) {
+  return mockApi({
+    lista: { status: 200, body: { success: true, empresas: LISTA } },
+    oportunidades: { status: 200, body: { success: true, oportunidades: ops } },
+    actividades,
+    ...extra,
+  });
 }
 
-async function abrir(nombre: string, boton = 'Registrar contacto') {
-  await screen.findByText(nombre);
-  fireEvent.click(within(card(nombre)).getByRole('button', { name: boton }));
+/** Opens the panel from the empresa's FIRST card (an empresa may hold several, S2). */
+async function abrir(nombre: string, boton = 'Registrar actividad') {
+  await waitFor(() => expect(screen.getByTestId('crm-board')).toHaveAttribute('aria-busy', 'false'));
+  const suTarjeta = screen
+    .getAllByRole('heading', { level: 3, name: nombre })
+    .map((h) => h.closest('article') as HTMLElement)[0]!;
+  fireEvent.click(within(suTarjeta).getByRole('button', { name: boton }));
   return panel();
 }
 
@@ -55,18 +58,34 @@ const radio = (p: HTMLElement, nombre: string | RegExp) => within(p).getByRole('
 const elegir = (p: HTMLElement, nombre: string | RegExp) => fireEvent.click(radio(p, nombre));
 const escribir = (el: HTMLElement, v: string) => fireEvent.change(el, { target: { value: v } });
 const proxima = (p: HTMLElement) => within(p).getByRole('group', { name: /Próxima acción/ });
+const selectorOportunidad = (p: HTMLElement) => within(p).getByRole('button', { name: /^Oportunidad/ });
+
+function elegirOportunidad(p: HTMLElement, nombre: string | RegExp) {
+  fireEvent.click(selectorOportunidad(p));
+  fireEvent.click(within(p).getByRole('option', { name: nombre }));
+}
 
 function elegirAccion(p: HTMLElement, nombre: string) {
   fireEvent.click(within(proxima(p)).getByRole('button', { name: /Qué hacer/ }));
   fireEvent.click(within(proxima(p)).getByRole('option', { name: new RegExp(`^${nombre}`) }));
 }
 const rapida = (p: HTMLElement, nombre: string) => fireEvent.click(within(proxima(p)).getByRole('button', { name: new RegExp(`^${nombre}`) }));
-const guardar = (p: HTMLElement) => fireEvent.click(within(p).getByRole('button', { name: 'Guardar contacto' }));
+const guardar = (p: HTMLElement) => fireEvent.click(within(p).getByRole('button', { name: 'Guardar actividad' }));
 
 const ACCION = { tipo: 'llamar', fecha: LUNES };
 
-function conRespuesta(base: Empresa, cambios: Partial<Empresa>): Respuesta {
-  return { status: 201, body: { success: true, empresa: { ...base, updatedAt: '2026-10-31T16:00:00.000Z', ...cambios }, interaccion: {} } };
+/** The 201 answer of POST /actividades: the ficha, the advanced deal and the stored row. */
+function respuestaActividad(oportunidadNueva: Oportunidad, cambiosEmpresa: Partial<Empresa> = {}): Respuesta {
+  const ficha = LISTA.find((e) => e.idEmpresa === oportunidadNueva.idEmpresa)!;
+  return {
+    status: 201,
+    body: {
+      success: true,
+      empresa: { ...ficha, updatedAt: '2026-10-31T16:00:00.000Z', ...cambiosEmpresa },
+      oportunidad: oportunidadNueva,
+      interaccion: { idInteraccion: 1, idEmpresa: ficha.idEmpresa, idOportunidad: oportunidadNueva.idOportunidad },
+    },
+  };
 }
 
 beforeEach(() => {
@@ -80,28 +99,39 @@ afterEach(() => {
 });
 
 describe('CrmBoard — botones de la tarjeta (S4)', () => {
-  it('offers "Registrar contacto" on every card except Perdido', async () => {
+  it('offers "Registrar actividad" on every card except Perdida', async () => {
     montar();
     render(<CrmBoard />);
     await screen.findByText(ANDINA);
     for (const n of [ANDINA, TEXTILES, VALLE]) {
-      expect(within(card(n)).getByRole('button', { name: 'Registrar contacto' })).toBeInTheDocument();
+      expect(within(card(n)).getByRole('button', { name: 'Registrar actividad' })).toBeInTheDocument();
     }
-    expect(within(card(FERRETERIA)).queryByRole('button', { name: 'Registrar contacto' })).toBeNull();
+    expect(within(card(FERRETERIA)).queryByRole('button', { name: 'Registrar actividad' })).toBeNull();
     expect(within(card(FERRETERIA)).queryByRole('button', { name: 'Responder' })).toBeNull();
   });
 
-  it('shows a primary "Responder" instead when the card says "Falta responder", and it opens the panel with "Contactamos"', async () => {
-    montar([empresa({ idEmpresa: 'e-1', razonSocial: ANDINA, etapa: 'contactado', medio: 'correo', faltaResponderDesde: '2026-10-31T15:30:00.000Z' })]);
+  it('shows a primary "Responder" instead when the card waits for our reply, and opens the panel PRE-LINKED to that deal', async () => {
+    montar([
+      oportunidad({
+        idOportunidad: 'o-8',
+        idEmpresa: 'e-1',
+        nombre: 'Monitoreo 2027',
+        etapa: 'contactado',
+        medio: 'correo',
+        faltaResponderDesde: '2026-10-31T15:30:00.000Z',
+      }),
+    ]);
     render(<CrmBoard />);
     await screen.findByText(ANDINA);
     const c = card(ANDINA);
-    expect(within(c).queryByRole('button', { name: 'Registrar contacto' })).toBeNull();
+    expect(within(c).queryByRole('button', { name: 'Registrar actividad' })).toBeNull();
     const boton = within(c).getByRole('button', { name: 'Responder' });
     expect(boton.className).toMatch(/from-sky-600/);
     expect(boton.querySelector('svg')).not.toBeNull();
     fireEvent.click(boton);
-    expect(radio(panel(), /^Contactamos/)).toBeChecked();
+    const p = panel();
+    expect(radio(p, /^Contactamos/)).toBeChecked();
+    expect(selectorOportunidad(p)).toHaveTextContent('Monitoreo 2027 · Contactado');
     expect(screen.queryByRole('dialog', { name: ANDINA })).toBeNull();
   });
 
@@ -112,48 +142,84 @@ describe('CrmBoard — botones de la tarjeta (S4)', () => {
     expect(screen.queryByRole('dialog', { name: ANDINA })).toBeNull();
   });
 
-  it('the detail footer offers "Registrar contacto" (not for Perdido) and opens the panel', async () => {
+  it('the detail footer "Registrar contacto" opens the flow linked to the ficha\'s first OPEN deal (S4)', async () => {
     montar();
     render(<CrmBoard />);
     await screen.findByText(ANDINA);
     fireEvent.click(within(card(FERRETERIA)).getByRole('heading', { level: 3 }));
-    expect(within(screen.getByRole('dialog', { name: FERRETERIA })).queryByRole('button', { name: 'Registrar contacto' })).toBeNull();
-    fireEvent.click(within(card(ANDINA)).getByRole('heading', { level: 3 }));
-    const detalle = screen.getByRole('dialog', { name: ANDINA });
+    const detalle = screen.getByRole('dialog', { name: FERRETERIA });
+    // Every deal of Ferretería is lost: the footer is still offered (S3/S6.4) and opens the flow in GENERAL mode.
     fireEvent.click(within(detalle).getByRole('button', { name: 'Registrar contacto' }));
-    expect(panel()).toBeInTheDocument();
+    let p = panel();
+    expect(selectorOportunidad(p)).toHaveTextContent('Actividad general (sin oportunidad)');
+    fireEvent.click(within(p).getByRole('button', { name: 'Cancelar' }));
+
+    fireEvent.click(within(card(ANDINA)).getByRole('heading', { level: 3 }));
+    const detalleAndina = screen.getByRole('dialog', { name: ANDINA });
+    fireEvent.click(within(detalleAndina).getByRole('button', { name: 'Registrar contacto' }));
+    p = panel();
+    // Andina's only deal is open (Por contactar): the flow comes linked to it.
+    expect(selectorOportunidad(p)).toHaveTextContent('Equipos de protección para obra · Por contactar');
     expect(screen.queryByRole('dialog', { name: ANDINA })).toBeNull();
   });
 });
 
-describe('CrmBoard — panel Registrar contacto (S7, S8)', () => {
-  it('shows title, subtitle with the principal contact, tiles, default medium and result', async () => {
+describe('CrmBoard — panel Registrar actividad (S4, S7)', () => {
+  it('shows title, subtitle with the principal contact, the deal selector, tiles, default medium and result', async () => {
     montar();
     render(<CrmBoard />);
-    const p = await abrir(ANDINA);
+    const p = await abrir(TEXTILES);
     expect(p.tagName).toBe('ASIDE');
     expect(p.className).toMatch(/\bfixed\b/);
-    expect(within(p).getByRole('heading', { name: 'Registrar contacto' })).toBeInTheDocument();
-    expect(within(p).getByText(`${ANDINA} · Marcela Quispe`)).toBeInTheDocument();
+    expect(within(p).getByRole('heading', { name: 'Registrar actividad' })).toBeInTheDocument();
+    expect(within(p).getByText(`${TEXTILES} · Renzo Vargas`)).toBeInTheDocument();
+    // Opened from a card: pre-linked to that deal.
+    expect(selectorOportunidad(p)).toHaveTextContent('Exámenes de ingreso · Contactado');
     expect(within(p).getByText('Llamamos o escribimos nosotros')).toBeInTheDocument();
     expect(within(p).getByText('La empresa nos llamó o escribió')).toBeInTheDocument();
     expect(radio(p, /^Contactamos/)).toBeChecked();
     expect(radio(p, 'Llamada')).toBeChecked();
     expect(radio(p, 'Conversamos')).toBeChecked();
     for (const m of ['Correo', 'WhatsApp', 'Otro', 'No contestó', 'Dejé mensaje']) expect(radio(p, m)).toBeInTheDocument();
+    expect(within(p).getByRole('button', { name: 'Guardar actividad' })).toBeInTheDocument();
     expect(radio(p, /^Contactamos/)).toHaveFocus();
   });
 
-  it('preselects the last medium used by the card, with its free text when it is "Otro"', async () => {
+  it('the selector lists the ficha\'s deals with their stage and "Actividad general" first — Perdida is never offered', async () => {
     montar([
-      empresa({ idEmpresa: 'e-4', razonSocial: VALLE, etapa: 'cliente', medio: 'whatsapp' }),
-      empresa({ idEmpresa: 'e-7', razonSocial: 'Otra S.A.', ruc: '20000000007', etapa: 'contactado', medio: 'otro', medioOtro: 'Feria Expomina' }),
+      oportunidad({ idOportunidad: 'o-3', idEmpresa: 'e-3', nombre: 'Exámenes de ingreso', etapa: 'contactado', medio: 'llamada' }),
+      oportunidad({ idOportunidad: 'o-4', idEmpresa: 'e-3', nombre: 'Campaña de vacunación', etapa: 'ganada' }),
+      oportunidad({ idOportunidad: 'o-7', idEmpresa: 'e-3', nombre: 'Ergonomía industrial', etapa: 'perdida' }),
+    ]);
+    render(<CrmBoard />);
+    const p = await abrir(TEXTILES);
+    fireEvent.click(selectorOportunidad(p));
+    const opciones = within(p).getAllByRole('option').map((o) => o.textContent);
+    expect(opciones).toEqual([
+      expect.stringContaining('Actividad general (sin oportunidad)'),
+      expect.stringContaining('Exámenes de ingreso · Contactado'),
+      expect.stringContaining('Campaña de vacunación · Ganada'),
+    ]);
+    expect(opciones.some((t) => t?.includes('Ergonomía industrial'))).toBe(false);
+  });
+
+  it('preselects the last medium used by the DEAL, with its free text when it is "Otro"', async () => {
+    montar([
+      oportunidad({ idOportunidad: 'o-5', idEmpresa: 'e-4', nombre: 'Ergonomía para planta', etapa: 'en_seguimiento', medio: 'whatsapp' }),
+      oportunidad({
+        idOportunidad: 'o-9',
+        idEmpresa: 'e-2',
+        nombre: 'Audiometrías',
+        etapa: 'cotizado',
+        medio: 'otro',
+        medioOtro: 'Feria Expomina',
+      }),
     ]);
     render(<CrmBoard />);
     let p = await abrir(VALLE);
     expect(radio(p, 'WhatsApp')).toBeChecked();
     fireEvent.click(within(p).getByRole('button', { name: 'Cancelar' }));
-    p = await abrir('Otra S.A.');
+    p = await abrir('Minera Los Tres Picos S.A.');
     expect(radio(p, 'Otro')).toBeChecked();
     expect(within(p).getByLabelText('¿Cuál?')).toHaveValue('Feria Expomina');
   });
@@ -167,6 +233,22 @@ describe('CrmBoard — panel Registrar contacto (S7, S8)', () => {
     expect(within(p).getByLabelText('¿Cuál?')).toHaveAttribute('maxlength', '40');
     elegir(p, 'Correo');
     expect(within(p).queryByLabelText('¿Cuál?')).toBeNull();
+  });
+
+  it('switching the selector re-picks the deal\'s medium and próxima acción, keeping the direction and the typed summary', async () => {
+    montar([
+      oportunidad({ idOportunidad: 'o-3', idEmpresa: 'e-3', nombre: 'Exámenes de ingreso', etapa: 'contactado', medio: 'llamada' }),
+      oportunidad({ idOportunidad: 'o-4', idEmpresa: 'e-3', nombre: 'Campaña de vacunación', etapa: 'cotizado', medio: 'whatsapp' }),
+    ]);
+    render(<CrmBoard />);
+    const p = await abrir(TEXTILES);
+    escribir(within(p).getByLabelText('Resumen de la conversación'), 'Cotización pedida');
+    elegirOportunidad(p, /^Actividad general/);
+    expect(radio(p, 'Llamada')).toBeChecked(); // general has no stored medium: the default
+    expect(within(p).getByLabelText('Resumen de la conversación')).toHaveValue('Cotización pedida');
+    elegirOportunidad(p, /Campaña de vacunación/);
+    expect(radio(p, 'WhatsApp')).toBeChecked();
+    expect(selectorOportunidad(p)).toHaveTextContent('Campaña de vacunación · Cotizado');
   });
 
   it('inbound shows "¿Ya le respondiste?" instead of the result', async () => {
@@ -196,9 +278,9 @@ describe('CrmBoard — panel Registrar contacto (S7, S8)', () => {
   });
 });
 
-describe('CrmBoard — vista previa (L8)', () => {
-  const prev = async (lista: Empresa[], nombre: string, pasos: (p: HTMLElement) => void = () => undefined) => {
-    montar(lista);
+describe('CrmBoard — vista previa (L8, por oportunidad)', () => {
+  const prev = async (ops: Oportunidad[], nombre: string, pasos: (p: HTMLElement) => void = () => undefined) => {
+    montar(ops);
     const { unmount } = render(<CrmBoard />);
     const p = await abrir(nombre);
     pasos(p);
@@ -206,80 +288,121 @@ describe('CrmBoard — vista previa (L8)', () => {
     unmount();
     return texto;
   };
-  const con = (cambios: Partial<Empresa>) => [empresa({ idEmpresa: 'e-1', razonSocial: ANDINA, ...cambios })];
 
-  it('conversation from Por contactar', async () => {
-    expect(await prev(con({}), ANDINA)).toBe('La tarjeta pasa a «Contactado» con la etiqueta «Conversamos».');
-  });
-  it('conversation in Contactado, and the counter reset', async () => {
-    expect(await prev(con({ etapa: 'contactado' }), ANDINA)).toBe('La tarjeta se queda en «Contactado» y cambia a «Conversamos».');
-    expect(await prev(con({ etapa: 'contactado', intentosSinRespuesta: 2 }), ANDINA)).toBe(
-      'La tarjeta se queda en «Contactado» y cambia a «Conversamos». El contador de intentos vuelve a cero.',
+  it('a general activity never touches the cards', async () => {
+    expect(await prev(BASE_OPS, ANDINA, (p) => elegirOportunidad(p, /^Actividad general/))).toBe(
+      'Actividad general: se guarda solo en el historial de Constructora Andina S.A.C.. Ninguna tarjeta cambia.',
     );
   });
-  it('conversation in another column', async () => {
-    expect(await prev(con({ etapa: 'en_seguimiento', intentosSinRespuesta: 1 }), ANDINA)).toBe(
-      'La tarjeta se queda en «En seguimiento» y guarda la conversación en el historial. El contador de intentos vuelve a cero.',
+
+  it('conversation from Por contactar, in Contactado and elsewhere', async () => {
+    expect(await prev(BASE_OPS, ANDINA)).toBe(
+      'La oportunidad «Equipos de protección para obra» pasa a «Contactado» con la etiqueta «Conversamos».',
     );
+    expect(
+      await prev(
+        [oportunidad({ idOportunidad: 'o-3', idEmpresa: 'e-3', nombre: 'Exámenes de ingreso', etapa: 'contactado', medio: 'llamada', intentosSinRespuesta: 2 })],
+        TEXTILES,
+      ),
+    ).toBe('La oportunidad «Exámenes de ingreso» se queda en «Contactado» y cambia a «Conversamos». El contador de intentos vuelve a cero.');
+    expect(
+      await prev(
+        [oportunidad({ idOportunidad: 'o-5', idEmpresa: 'e-4', nombre: 'Ergonomía para planta', etapa: 'en_seguimiento', medio: 'whatsapp', intentosSinRespuesta: 1 })],
+        VALLE,
+      ),
+    ).toBe('La oportunidad «Ergonomía para planta» se queda en «En seguimiento» y guarda la conversación en el historial. El contador de intentos vuelve a cero.');
   });
+
   it('failed attempt from Por contactar, in Contactado and elsewhere', async () => {
-    expect(await prev(con({}), ANDINA, (p) => elegir(p, 'No contestó'))).toBe(
-      'La tarjeta pasa a «Contactado» con la etiqueta «Sin respuesta · 1».',
+    expect(await prev(BASE_OPS, ANDINA, (p) => elegir(p, 'No contestó'))).toBe(
+      'La oportunidad «Equipos de protección para obra» pasa a «Contactado» con la etiqueta «Sin respuesta · 1».',
     );
-    expect(await prev(con({ etapa: 'contactado', intentosSinRespuesta: 1 }), ANDINA, (p) => elegir(p, 'Dejé mensaje'))).toBe(
-      'La tarjeta se queda en «Contactado» como «Sin respuesta · 2».',
-    );
-    expect(await prev(con({ etapa: 'cliente', intentosSinRespuesta: 1 }), ANDINA, (p) => elegir(p, 'No contestó'))).toBe(
-      'La tarjeta se queda en «Cliente» y suma el intento 2 sin respuesta.',
+    expect(
+      await prev(
+        [oportunidad({ idOportunidad: 'o-3', idEmpresa: 'e-3', nombre: 'Exámenes de ingreso', etapa: 'contactado', medio: 'llamada', intentosSinRespuesta: 1 })],
+        TEXTILES,
+        (p) => elegir(p, 'Dejé mensaje'),
+      ),
+    ).toBe('La oportunidad «Exámenes de ingreso» se queda en «Contactado» como «Sin respuesta · 2».');
+  });
+
+  it('adds the Perdida hint from the third failed attempt', async () => {
+    expect(
+      await prev(
+        [oportunidad({ idOportunidad: 'o-3', idEmpresa: 'e-3', nombre: 'Exámenes de ingreso', etapa: 'contactado', medio: 'llamada', intentosSinRespuesta: 2 })],
+        TEXTILES,
+        (p) => elegir(p, 'No contestó'),
+      ),
+    ).toBe(
+      'La oportunidad «Exámenes de ingreso» se queda en «Contactado» como «Sin respuesta · 3». Como son 3 o más seguidos, te sugerirá pasarla a Perdida con el motivo «No contestan».',
     );
   });
-  it('adds the Perdido hint from the third failed attempt', async () => {
-    expect(await prev(con({ etapa: 'contactado', intentosSinRespuesta: 2 }), ANDINA, (p) => elegir(p, 'No contestó'))).toBe(
-      'La tarjeta se queda en «Contactado» como «Sin respuesta · 3». Como son 3 o más seguidos, te sugerirá pasarla a Perdido con el motivo «No contestan».',
-    );
+
+  it('a conversation on a Ganada deal stays in Ganada', async () => {
+    expect(
+      await prev([oportunidad({ idOportunidad: 'o-4', idEmpresa: 'e-4', nombre: 'Campaña de vacunación', etapa: 'ganada' })], VALLE),
+    ).toBe('La oportunidad «Campaña de vacunación» se queda en «Ganada» y guarda la conversación en el historial.');
   });
+
   it('inbound answered and not answered', async () => {
-    expect(await prev(con({}), ANDINA, (p) => elegir(p, /^Nos contactaron/))).toBe(
-      'La tarjeta pasa a «Contactado» con la etiqueta «Conversamos».',
+    expect(await prev(BASE_OPS, ANDINA, (p) => elegir(p, /^Nos contactaron/))).toBe(
+      'La oportunidad «Equipos de protección para obra» pasa a «Contactado» con la etiqueta «Conversamos».',
     );
-    expect(await prev(con({}), ANDINA, (p) => (elegir(p, /^Nos contactaron/), elegir(p, 'Todavía no')))).toBe(
-      'La tarjeta pasa a «Contactado» con la etiqueta «Falta responder».',
-    );
-    expect(await prev(con({ etapa: 'en_seguimiento' }), ANDINA, (p) => (elegir(p, /^Nos contactaron/), elegir(p, 'Todavía no')))).toBe(
-      'La tarjeta se queda en «En seguimiento» con la etiqueta «Falta responder».',
+    expect(await prev(BASE_OPS, ANDINA, (p) => (elegir(p, /^Nos contactaron/), elegir(p, 'Todavía no')))).toBe(
+      'La oportunidad «Equipos de protección para obra» pasa a «Contactado» con la etiqueta «Falta responder».',
     );
   });
 });
 
-describe('CrmBoard — guardar el contacto', () => {
-  it('posts the exact payload, moves the card to Contactado, closes the panel and toasts', async () => {
-    const fn = montar(BASE, () => conRespuesta(BASE[0]!, { etapa: 'contactado', medio: 'llamada', proximaAccion: { tipo: 'llamar', detalle: null, fecha: LUNES } }));
+describe('CrmBoard — guardar la actividad (S7.4)', () => {
+  it('posts the exact payload linked to the deal, moves the card, closes the panel and toasts', async () => {
+    const fn = montar(BASE_OPS, (_id, body) =>
+      respuestaActividad({
+        ...BASE_OPS[1]!,
+        etapa: 'en_seguimiento',
+        intentosSinRespuesta: 0,
+        proximaAccion: { tipo: 'llamar', detalle: null, fecha: LUNES },
+      }),
+    );
     render(<CrmBoard />);
-    const p = await abrir(ANDINA);
+    const p = await abrir(TEXTILES);
     escribir(within(p).getByLabelText('Resumen de la conversación'), '  Pidió cotización  ');
     elegirAccion(p, 'Llamar');
     rapida(p, 'Próximo día hábil');
     guardar(p);
-    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Registrar contacto' })).toBeNull());
-    const [llamada] = llamadas(fn, 'POST', '/api/crm/empresas/e-1/contactos');
-    expect(llamada!.body).toEqual({
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Registrar actividad' })).toBeNull());
+    expect(llamadas(fn, 'POST', '/api/crm/empresas/e-3/actividades')).toHaveLength(1);
+    const llamada = llamadas(fn, 'POST', '/api/crm/empresas/e-3/actividades')[0]!;
+    expect(llamada.body).toEqual({
+      idOportunidad: 'o-3',
       direccion: 'saliente',
       medio: 'llamada',
       resultado: 'conversamos',
       resumen: 'Pidió cotización',
       proximaAccion: ACCION,
     });
-    const init = fn.mock.calls.find(([u]) => u === '/api/crm/empresas/e-1/contactos')![1]!;
+    const init = fn.mock.calls.find(([u]) => u === '/api/crm/empresas/e-3/actividades')![1]!;
     expect(init.method).toBe('POST');
     expect(init.headers).toEqual({ 'Content-Type': 'application/json' });
-    expect(within(columna('Contactado')).getByText(ANDINA)).toBeInTheDocument();
-    expect(within(columna('Por contactar')).queryByText(ANDINA)).toBeNull();
-    expect(toastMock.success).toHaveBeenCalledWith(`Contacto guardado en «${ANDINA}». Está en «Contactado» · Conversamos.`);
+    // The card advanced with its deal: it is in En seguimiento now, at the top.
+    expect(within(columna('En seguimiento')).getAllByRole('heading', { level: 3 })[0]).toHaveTextContent(TEXTILES);
+    expect(toastMock.success).toHaveBeenCalledWith(`Actividad guardada en «${TEXTILES} · Exámenes de ingreso».`);
+    // The focus lands back on the card — the node that remounted into its new column.
+    await waitFor(() => expect(document.querySelector<HTMLElement>('[data-empresa-id="o-3"]')).toHaveFocus());
   });
 
-  it('a failed attempt from Por contactar leaves the card in Contactado as "Sin respuesta · 1"', async () => {
-    const fn = montar(BASE, () =>
-      conRespuesta(BASE[0]!, { etapa: 'contactado', medio: 'correo', intentosSinRespuesta: 1, proximaAccion: { tipo: 'llamar', detalle: null, fecha: LUNES } }),
+  it('a failed attempt from Por contactar moves the card to Contactado as "Sin respuesta · 1"', async () => {
+    const fn = montar(
+      BASE_OPS,
+      (_id, body) =>
+        respuestaActividad({
+          ...BASE_OPS[0]!,
+          nombre: 'Equipos de protección para obra',
+          etapa: 'contactado',
+          medio: body.medio as never,
+          intentosSinRespuesta: 1,
+          proximaAccion: { tipo: 'llamar', detalle: null, fecha: LUNES },
+        }),
     );
     render(<CrmBoard />);
     const p = await abrir(ANDINA);
@@ -287,20 +410,25 @@ describe('CrmBoard — guardar el contacto', () => {
     elegir(p, 'No contestó');
     elegirAccion(p, 'Llamar');
     guardar(p);
-    await waitFor(() => expect(within(columna('Contactado')).getByText('Sin respuesta · 1')).toBeInTheDocument());
-    expect(llamadas(fn, 'POST', /contactos$/)[0]!.body).toEqual({
+    await waitFor(() => expect(within(columna('Contactado')).getAllByRole('heading', { level: 3 })[0]).toHaveTextContent(ANDINA));
+    expect(within(columna('Contactado')).getByText('Sin respuesta · 1')).toBeInTheDocument();
+    expect(llamadas(fn, 'POST', /actividades$/)[0]!.body).toEqual({
+      idOportunidad: 'o-1',
       direccion: 'saliente',
       medio: 'correo',
       resultado: 'no_contesto',
       proximaAccion: ACCION,
     });
-    expect(toastMock.success).toHaveBeenCalledWith(`Contacto guardado en «${ANDINA}». Está en «Contactado» · Sin respuesta · 1.`);
   });
 
   it('sends medioOtro and the free next action with its detail', async () => {
-    const fn = montar(BASE, () => conRespuesta(BASE[0]!, { etapa: 'contactado', medio: 'otro', medioOtro: 'Visita' }));
+    const OPS = [oportunidad({ idOportunidad: 'o-3', idEmpresa: 'e-3', nombre: 'Exámenes de ingreso', etapa: 'contactado', medio: 'llamada' })];
+    const fn = montar(
+      OPS,
+      (_id, body) => respuestaActividad({ ...OPS[0]!, medio: body.medio as never }),
+    );
     render(<CrmBoard />);
-    const p = await abrir(ANDINA);
+    const p = await abrir(TEXTILES);
     elegir(p, 'Otro');
     escribir(within(p).getByLabelText('¿Cuál?', { selector: '#reg-otro' }), ' Visita en persona ');
     escribir(within(p).getByLabelText('Resumen de la conversación'), 'Fuimos a verlos');
@@ -308,8 +436,9 @@ describe('CrmBoard — guardar el contacto', () => {
     escribir(within(proxima(p)).getByLabelText('¿Cuál?'), ' Enviar el contrato ');
     rapida(p, 'Hoy');
     guardar(p);
-    await waitFor(() => expect(llamadas(fn, 'POST', /contactos$/)).toHaveLength(1));
-    expect(llamadas(fn, 'POST', /contactos$/)[0]!.body).toEqual({
+    await waitFor(() => expect(llamadas(fn, 'POST', /actividades$/)).toHaveLength(1));
+    expect(llamadas(fn, 'POST', /actividades$/)[0]!.body).toEqual({
+      idOportunidad: 'o-3',
       direccion: 'saliente',
       medio: 'otro',
       medioOtro: 'Visita en persona',
@@ -319,8 +448,15 @@ describe('CrmBoard — guardar el contacto', () => {
     });
   });
 
-  it('inbound on an existing card: "Todavía no" posts pendiente without a required summary', async () => {
-    const fn = montar(BASE, () => conRespuesta(BASE[1]!, { faltaResponderDesde: '2026-10-31T16:00:00.000Z' }));
+  it('inbound on a linked deal: "Todavía no" posts pendiente without a required summary', async () => {
+    const fn = montar(BASE_OPS, (_id, body) =>
+      respuestaActividad({
+        ...BASE_OPS[1]!,
+        etapa: 'contactado',
+        faltaResponderDesde: '2026-10-31T16:00:00.000Z',
+        proximaAccion: body.proximaAccion as never,
+      }),
+    );
     render(<CrmBoard />);
     const p = await abrir(TEXTILES);
     elegir(p, /^Nos contactaron/);
@@ -328,8 +464,9 @@ describe('CrmBoard — guardar el contacto', () => {
     escribir(within(p).getByLabelText('¿Qué necesita? (opcional)'), 'Precios');
     elegirAccion(p, 'Responder');
     guardar(p);
-    await waitFor(() => expect(llamadas(fn, 'POST', /contactos$/)).toHaveLength(1));
-    expect(llamadas(fn, 'POST', /contactos$/)[0]!.body).toEqual({
+    await waitFor(() => expect(llamadas(fn, 'POST', /actividades$/)).toHaveLength(1));
+    expect(llamadas(fn, 'POST', /actividades$/)[0]!.body).toEqual({
+      idOportunidad: 'o-3',
       direccion: 'entrante',
       medio: 'llamada',
       resultado: 'pendiente',
@@ -340,80 +477,116 @@ describe('CrmBoard — guardar el contacto', () => {
     expect(within(card(TEXTILES)).getByRole('button', { name: 'Responder' })).toBeInTheDocument();
   });
 
-  it('inbound already answered posts respondido', async () => {
-    const fn = montar(BASE, () => conRespuesta(BASE[1]!, {}));
+  it('a GENERAL activity posts idOportunidad null and proximaAccion null (S7.4: general never requires it), and moves no card', async () => {
+    const fn = montar(BASE_OPS, () => ({
+      status: 201,
+      body: {
+        success: true,
+        empresa: LISTA.find((e) => e.idEmpresa === 'e-3')!,
+        oportunidad: null,
+        interaccion: { idInteraccion: 1, idEmpresa: 'e-3', idOportunidad: null },
+      },
+    }));
     render(<CrmBoard />);
     const p = await abrir(TEXTILES);
-    elegir(p, /^Nos contactaron/);
-    escribir(within(p).getByLabelText('Resumen de la conversación'), 'Ya hablamos');
-    elegirAccion(p, 'Enviar cotización');
+    elegirOportunidad(p, /^Actividad general/);
+    // "Sin próxima acción" comes pre-chosen and the calendar fields are hidden.
+    expect(within(proxima(p)).getByRole('button', { name: /Qué hacer/ })).toHaveTextContent('Sin próxima acción');
+    expect(within(proxima(p)).queryByRole('button', { name: /Cuándo/ })).toBeNull();
+    escribir(within(p).getByLabelText('Resumen de la conversación'), 'Consultó por facturación');
     guardar(p);
-    await waitFor(() => expect(llamadas(fn, 'POST', /contactos$/)).toHaveLength(1));
-    expect(llamadas(fn, 'POST', /contactos$/)[0]!.body).toMatchObject({ direccion: 'entrante', resultado: 'respondido' });
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Registrar actividad' })).toBeNull());
+    expect(llamadas(fn, 'POST', '/api/crm/empresas/e-3/actividades')[0]!.body).toEqual({
+      idOportunidad: null,
+      direccion: 'saliente',
+      medio: 'llamada',
+      resultado: 'conversamos',
+      resumen: 'Consultó por facturación',
+      proximaAccion: null,
+    });
+    expect(toastMock.success).toHaveBeenCalledWith('Actividad guardada en el historial de «Textiles Pacífico S.A.C.».');
+    // No deal advanced: the board is untouched.
+    expect(within(columna('Contactado')).getByRole('heading', { level: 3, name: TEXTILES })).toBeInTheDocument();
+    expect(within(columna('Por contactar')).getByRole('heading', { level: 3, name: ANDINA })).toBeInTheDocument();
   });
 
-  it('in Cliente the first option is "Sin próxima acción", chosen by default, and posts proximaAccion null', async () => {
-    const fn = montar(BASE, () => conRespuesta(BASE[2]!, {}));
+  it('on a Ganada deal the next action is optional: "Sin próxima acción" first and posts proximaAccion null', async () => {
+    const OPS = [oportunidad({ idOportunidad: 'o-4', idEmpresa: 'e-4', nombre: 'Campaña de vacunación', etapa: 'ganada' })];
+    const fn = montar(
+      OPS,
+      (_id, body) => respuestaActividad({ ...OPS[0]!, proximaAccion: (body.proximaAccion as never) ?? null }),
+    );
     render(<CrmBoard />);
     const p = await abrir(VALLE);
     expect(within(p).getByRole('group', { name: 'Próxima acción (opcional)' })).toBeInTheDocument();
     const boton = within(proxima(p)).getByRole('button', { name: /Qué hacer/ });
     expect(boton).toHaveTextContent('Sin próxima acción');
-    expect(within(proxima(p)).queryByRole('button', { name: /Cuándo/ })).toBeNull();
     fireEvent.click(boton);
     expect(within(proxima(p)).getAllByRole('option')[0]).toHaveTextContent('Sin próxima acción');
     fireEvent.keyDown(within(proxima(p)).getByRole('listbox'), { key: 'Escape' });
     escribir(within(p).getByLabelText('Resumen de la conversación'), 'Renovó');
     guardar(p);
-    await waitFor(() => expect(llamadas(fn, 'POST', /contactos$/)).toHaveLength(1));
-    expect(llamadas(fn, 'POST', /contactos$/)[0]!.body).toEqual({
-      direccion: 'saliente',
-      medio: 'whatsapp',
-      resultado: 'conversamos',
-      resumen: 'Renovó',
-      proximaAccion: null,
-    });
+    await waitFor(() => expect(llamadas(fn, 'POST', /actividades$/)).toHaveLength(1));
+    expect(llamadas(fn, 'POST', /actividades$/)[0]!.body).toMatchObject({ idOportunidad: 'o-4', proximaAccion: null });
   });
 
-  it('starts from the stored next action when it is not overdue, and empty when it is', async () => {
+  it('starts from the stored next action of the deal when it is not overdue, and empty when it is', async () => {
     montar([
-      empresa({ idEmpresa: 'e-1', razonSocial: ANDINA, proximaAccion: { tipo: 'cotizar', detalle: 'Plan anual', fecha: '2026-11-04' } }),
-      empresa({ idEmpresa: 'e-2', razonSocial: 'Vencida S.A.', ruc: '20000000002', proximaAccion: { tipo: 'cotizar', detalle: null, fecha: '2026-10-29' } }),
+      oportunidad({
+        idOportunidad: 'o-3',
+        idEmpresa: 'e-3',
+        nombre: 'Exámenes de ingreso',
+        etapa: 'cotizado',
+        medio: 'llamada',
+        proximaAccion: { tipo: 'cotizar', detalle: 'Plan anual', fecha: '2026-11-04' },
+      }),
+      oportunidad({
+        idOportunidad: 'o-5',
+        idEmpresa: 'e-4',
+        nombre: 'Ergonomía para planta',
+        etapa: 'en_seguimiento',
+        medio: 'whatsapp',
+        proximaAccion: { tipo: 'cotizar', detalle: null, fecha: '2026-10-29' },
+      }),
     ]);
     render(<CrmBoard />);
-    let p = await abrir(ANDINA);
+    let p = await abrir(TEXTILES);
     expect(within(proxima(p)).getByRole('button', { name: /Qué hacer/ })).toHaveTextContent('Enviar cotización');
     expect(within(proxima(p)).getByLabelText('Detalle (opcional)')).toHaveValue('Plan anual');
     expect(within(proxima(p)).getByRole('button', { name: /Cuándo/ })).toHaveTextContent('miércoles 4 de noviembre de 2026');
     fireEvent.click(within(p).getByRole('button', { name: 'Cancelar' }));
-    p = await abrir('Vencida S.A.');
+    p = await abrir(VALLE);
     expect(within(proxima(p)).getByRole('button', { name: /Qué hacer/ })).toHaveTextContent('Elige una acción');
   });
 
-  it('marks on the calendar the days with actions of OTHER open cards only', async () => {
+  it('marks on the calendar the days with actions of OTHER empresas only', async () => {
     montar([
-      empresa({ idEmpresa: 'e-1', razonSocial: ANDINA, proximaAccion: { tipo: 'llamar', detalle: null, fecha: '2026-11-05' } }),
-      empresa({ idEmpresa: 'e-2', razonSocial: 'Otra S.A.', ruc: '20000000002', proximaAccion: { tipo: 'llamar', detalle: null, fecha: '2026-11-03' } }),
-      empresa({ idEmpresa: 'e-3', razonSocial: 'Cliente S.A.', ruc: '20000000003', etapa: 'cliente', medio: 'llamada', proximaAccion: { tipo: 'llamar', detalle: null, fecha: '2026-11-06' } }),
+      oportunidad({ idOportunidad: 'o-3', idEmpresa: 'e-3', nombre: 'Exámenes de ingreso', etapa: 'contactado', medio: 'llamada', proximaAccion: { tipo: 'llamar', detalle: null, fecha: '2026-11-05' } }),
+      oportunidad({ idOportunidad: 'o-5', idEmpresa: 'e-4', nombre: 'Ergonomía para planta', etapa: 'en_seguimiento', medio: 'whatsapp', proximaAccion: { tipo: 'llamar', detalle: null, fecha: '2026-11-03' } }),
+      oportunidad({ idOportunidad: 'o-6', idEmpresa: 'e-2', nombre: 'Vigilancia epidemiológica', etapa: 'cotizado', medio: 'llamada', proximaAccion: { tipo: 'llamar', detalle: null, fecha: '2026-11-06' } }),
+      oportunidad({ idOportunidad: 'o-7', idEmpresa: 'e-5', nombre: 'Cerrada con acción', etapa: 'ganada', proximaAccion: { tipo: 'llamar', detalle: null, fecha: '2026-11-09' } }),
     ]);
     render(<CrmBoard />);
-    const p = await abrir(ANDINA);
+    const p = await abrir(TEXTILES);
     fireEvent.click(within(proxima(p)).getByRole('button', { name: /Cuándo/ }));
     const cal = within(screen.getByRole('dialog', { name: 'Elegir la fecha de la próxima acción' }));
     expect(cal.getByRole('button', { name: /martes 3 de noviembre.*1 acción agendada/ })).toBeInTheDocument();
+    expect(cal.getByRole('button', { name: /viernes 6 de noviembre.*1 acción agendada/ })).toBeInTheDocument();
+    // The panel's own empresa and a closed deal do not count.
     expect(cal.getByRole('button', { name: /jueves 5 de noviembre/ }).getAttribute('aria-label')).not.toMatch(/agendada/);
-    expect(cal.getByRole('button', { name: /viernes 6 de noviembre/ }).getAttribute('aria-label')).not.toMatch(/agendada/);
+    expect(cal.getByRole('button', { name: /lunes 9 de noviembre/ }).getAttribute('aria-label')).not.toMatch(/agendada/);
+    void p;
   });
 });
 
 describe('CrmBoard — validación (sin pedir nada al servidor)', () => {
-  async function intentar(pasos: (p: HTMLElement) => void = () => undefined, lista: Empresa[] = BASE, nombre = ANDINA) {
-    const fn = montar(lista);
+  async function intentar(pasos: (p: HTMLElement) => void = () => undefined, ops: Oportunidad[] = BASE_OPS, nombre = ANDINA) {
+    const fn = montar(ops);
     render(<CrmBoard />);
     const p = await abrir(nombre);
     pasos(p);
     guardar(p);
-    expect(llamadas(fn, 'POST', /contactos$/)).toHaveLength(0);
+    expect(llamadas(fn, 'POST', /actividades$/)).toHaveLength(0);
     return p;
   }
 
@@ -439,7 +612,7 @@ describe('CrmBoard — validación (sin pedir nada al servidor)', () => {
     enlazado(p, within(p).getByLabelText('Resumen de la conversación'), 'Escribe un resumen de la conversación.');
   });
 
-  it('no next action chosen', async () => {
+  it('no next action chosen on a linked open deal', async () => {
     const p = await intentar((q) => escribir(within(q).getByLabelText('Resumen de la conversación'), 'x'));
     enlazado(p, within(proxima(p)).getByRole('button', { name: /Qué hacer/ }), 'Elige la próxima acción.');
   });
@@ -463,16 +636,16 @@ describe('CrmBoard — validación (sin pedir nada al servidor)', () => {
 
 describe('CrmBoard — errores del servidor y cierre', () => {
   it('shows the server error as a toast and keeps the panel and what was typed', async () => {
-    montar(BASE, () => ({ status: 400, body: { success: false, error: 'No se puede registrar un contacto en una empresa en Perdido.' } }));
+    montar(BASE_OPS, () => ({ status: 400, body: { success: false, error: 'No se puede registrar una actividad en una oportunidad en Perdida.' } }));
     render(<CrmBoard />);
     const p = await abrir(ANDINA);
     escribir(within(p).getByLabelText('Resumen de la conversación'), 'Hablamos');
     elegirAccion(p, 'Llamar');
     guardar(p);
-    await waitFor(() => expect(toastMock.error).toHaveBeenCalledWith('No se puede registrar un contacto en una empresa en Perdido.'));
+    await waitFor(() => expect(toastMock.error).toHaveBeenCalledWith('No se puede registrar una actividad en una oportunidad en Perdida.'));
     expect(panel()).toBeInTheDocument();
     expect(within(p).getByLabelText('Resumen de la conversación')).toHaveValue('Hablamos');
-    expect(within(p).getByRole('button', { name: 'Guardar contacto' })).toBeEnabled();
+    expect(within(p).getByRole('button', { name: 'Guardar actividad' })).toBeEnabled();
     expect(toastMock.success).not.toHaveBeenCalled();
     expect(within(columna('Por contactar')).getByText(ANDINA)).toBeInTheDocument();
   });
@@ -480,7 +653,7 @@ describe('CrmBoard — errores del servidor y cierre', () => {
   it('a network failure shows a generic error and keeps the panel', async () => {
     const base = montar();
     global.fetch = vi.fn(async (u: string, i?: RequestInit) => {
-      if (/contactos$/.test(u)) throw new Error('offline');
+      if (/actividades$/.test(u)) throw new Error('offline');
       return base(u, i);
     }) as unknown as typeof fetch;
     render(<CrmBoard />);
@@ -488,7 +661,7 @@ describe('CrmBoard — errores del servidor y cierre', () => {
     escribir(within(p).getByLabelText('Resumen de la conversación'), 'x');
     elegirAccion(p, 'Llamar');
     guardar(p);
-    await waitFor(() => expect(toastMock.error).toHaveBeenCalledWith('No se pudo guardar el contacto'));
+    await waitFor(() => expect(toastMock.error).toHaveBeenCalledWith('No se pudo guardar la actividad'));
     expect(panel()).toBeInTheDocument();
   });
 
@@ -496,21 +669,21 @@ describe('CrmBoard — errores del servidor y cierre', () => {
     montar();
     render(<CrmBoard />);
     const p = await abrir(ANDINA);
-    const boton = within(card(ANDINA)).getByRole('button', { name: 'Registrar contacto' });
+    const boton = within(card(ANDINA)).getByRole('button', { name: 'Registrar actividad' });
     fireEvent.click(within(p).getByRole('button', { name: 'Cancelar' }));
-    expect(screen.queryByRole('dialog', { name: 'Registrar contacto' })).toBeNull();
+    expect(screen.queryByRole('dialog', { name: 'Registrar actividad' })).toBeNull();
     expect(boton).toHaveFocus();
     await abrir(ANDINA);
     act(() => {
       fireEvent.keyDown(document, { key: 'Escape' });
     });
-    expect(screen.queryByRole('dialog', { name: 'Registrar contacto' })).toBeNull();
+    expect(screen.queryByRole('dialog', { name: 'Registrar actividad' })).toBeNull();
     expect(boton).toHaveFocus();
   });
 });
 
 describe('CrmBoard — lo anterior sigue funcionando', () => {
-  it('"Nueva empresa" still creates an empresa and a card still moves between columns', async () => {
+  it('"Nueva empresa" still creates the ficha and a card still moves between columns', async () => {
     const fn = montar();
     render(<CrmBoard />);
     await screen.findByText(ANDINA);
@@ -521,15 +694,15 @@ describe('CrmBoard — lo anterior sigue funcionando', () => {
     escribir(within(alta).getByLabelText(/^Nombre/), 'Elena Mendoza');
     escribir(within(alta).getByLabelText(/^Teléfono/), '955 201 334');
     fireEvent.click(within(alta).getByRole('button', { name: /Crear empresa/ }));
-    await waitFor(() => expect(within(columna('Por contactar')).getByText('Ferretería Norte S.A.C.')).toBeInTheDocument());
+    await waitFor(() => expect(toastMock.success).toHaveBeenCalledWith('Empresa creada'));
     expect(llamadas(fn, 'POST', '/api/crm/empresas')).toHaveLength(1);
 
     const data = new Map<string, string>();
     const dataTransfer = { setData: (k: string, v: string) => data.set(k, v), getData: (k: string) => data.get(k) ?? '', effectAllowed: '' };
     fireEvent.dragStart(card(VALLE), { dataTransfer });
-    fireEvent.dragOver(columna('En seguimiento'), { dataTransfer });
-    fireEvent.drop(columna('En seguimiento'), { dataTransfer });
-    await waitFor(() => expect(within(columna('En seguimiento')).getByText(VALLE)).toBeInTheDocument());
-    expect(llamadas(fn, 'PATCH', '/api/crm/empresas/e-4/etapa')[0]!.body).toEqual({ etapa: 'en_seguimiento' });
+    fireEvent.dragOver(columna('Cotizado'), { dataTransfer });
+    fireEvent.drop(columna('Cotizado'), { dataTransfer });
+    await waitFor(() => expect(within(columna('Cotizado')).getByText(VALLE)).toBeInTheDocument());
+    expect(llamadas(fn, 'PATCH', '/api/crm/oportunidades/o-5/etapa')[0]!.body).toEqual({ etapa: 'cotizado' });
   });
 });

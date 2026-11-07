@@ -4,7 +4,7 @@ import { Info, Plus, X } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import { toast } from 'sonner';
 
-import { ORIGENES, ORIGEN_LABELS, type Empresa, type IconoSector, type Origen, type Sector } from '../../domain/entities';
+import { ORIGENES, ORIGEN_LABELS, type Empresa, type IconoSector, type Oportunidad, type Origen, type Sector } from '../../domain/entities';
 import {
   ORDEN_ENTRANTE,
   agendaDe,
@@ -33,17 +33,20 @@ import { MedioPills } from './MedioPills';
 import { NuevoSectorBox, type ResultadoSector } from './NuevoSectorBox';
 import { ProximaAccionCampos } from './ProximaAccionCampos';
 import { useEntrante } from './useEntrante';
+import type { EntradaAgenda } from './contactoForm';
 
 interface Props {
-  /** Every empresa, to recognize a name or RUC that is already in the CRM and to mark the calendar. */
+  /** Every empresa, to recognize a name or RUC that is already in the CRM and to name the calendar entries. */
   empresas: Empresa[];
+  /** Every oportunidad, to mark on the calendar the days that already have actions (S4). */
+  oportunidades: Oportunidad[];
   /** Stored sectors with their icon. */
   sectores: Sector[];
   /** Today as `YYYY-MM-DD` in the business time zone. */
   hoy: string;
   onCerrar: () => void;
-  /** The server saved the contact: the empresa as it is now, and whether it already existed. */
-  onGuardado: (empresa: Empresa, existente: boolean) => void;
+  /** The server saved the contact: the ficha as it is now, the primera oportunidad it created, and whether the ficha existed. */
+  onGuardado: (empresa: Empresa, oportunidad: Oportunidad, existente: boolean) => void;
   /** Stores a new sector with its icon (the board owns the request). */
   onCrearSector: (nombre: string, icono: IconoSector) => Promise<ResultadoSector>;
 }
@@ -109,7 +112,7 @@ const Opcional = ({ texto = '(opcional)' }: { texto?: string }) => (
  * contact: a new card in Contactado marked "Falta responder", or, when the
  * name or RUC is already in the CRM, a new entry on that card (spec S5, L8).
  */
-export function EntrantePanel({ empresas, sectores, hoy, onCerrar, onGuardado, onCrearSector }: Props) {
+export function EntrantePanel({ empresas, oportunidades, sectores, hoy, onCerrar, onGuardado, onCrearSector }: Props) {
   const [form, setForm] = useState<EntranteForm>(() => entranteInicial(hoy));
   const [fallos, setFallos] = useState<Fallos>({});
   const { guardando, registrar } = useEntrante();
@@ -120,7 +123,10 @@ export function EntrantePanel({ empresas, sectores, hoy, onCerrar, onGuardado, o
   const devolverFoco = useRef(false);
 
   const destino = useMemo(() => empresaCoincidente(empresas, form.razonSocial, form.ruc), [empresas, form.razonSocial, form.ruc]);
-  const marcados = useMemo(() => agendaDe(empresas, destino?.idEmpresa ?? null), [empresas, destino]);
+  const marcados = useMemo<Record<string, EntradaAgenda[]>>(
+    () => agendaDe(oportunidades, (id) => empresas.find((e) => e.idEmpresa === id)?.razonSocial ?? '', destino?.idEmpresa ?? null),
+    [oportunidades, empresas, destino],
+  );
 
   const mostrarCaja = cajaAbierta && !destino;
   const opcionesSector = useMemo<OpcionSelect<string>[]>(
@@ -195,7 +201,7 @@ export function EntrantePanel({ empresas, sectores, hoy, onCerrar, onGuardado, o
       document.getElementById(`${BASE}-sec-nom`)?.focus();
       return;
     }
-    const malos = validarEntrante(form, hoy, destino);
+    const malos = validarEntrante(form, hoy);
     const primero = primerFallo(malos, ORDEN_ENTRANTE);
     if (primero) {
       setFallos(malos);
@@ -204,7 +210,7 @@ export function EntrantePanel({ empresas, sectores, hoy, onCerrar, onGuardado, o
     }
     setFallos({});
     const r = await registrar(cuerpoEntrante(form, destino));
-    if (r) onGuardado(r.empresa, r.existente);
+    if (r) onGuardado(r.empresa, r.oportunidad, r.existente);
   }
 
   return (
@@ -250,7 +256,7 @@ export function EntrantePanel({ empresas, sectores, hoy, onCerrar, onGuardado, o
                 data-testid="entrante-coincidencia"
                 className="rounded-xl border border-sky-300 bg-sky-50 px-3 py-2.5 text-[13px] text-sky-800 dark:border-sky-800 dark:bg-sky-950/40 dark:text-sky-200"
               >
-                {`Ya está en el CRM: ${destino.razonSocial}. Se suma a esa tarjeta.`}
+                {`Ya está en el CRM: ${destino.razonSocial}. Le creamos una oportunidad nueva en «Contactado».`}
               </p>
             )}
             <Campo id={CAMPO.ruc} etiqueta={<>RUC <Opcional /></>} error={fallos.ruc}>
@@ -351,7 +357,7 @@ export function EntrantePanel({ empresas, sectores, hoy, onCerrar, onGuardado, o
 
           <ProximaAccionCampos
             base={BASE}
-            requerida={(destino?.etapa ?? 'contactado') !== 'cliente'}
+            requerida={true}
             valor={form.accion}
             onCambio={(accion) => cambiar({ accion })}
             hoy={hoy}

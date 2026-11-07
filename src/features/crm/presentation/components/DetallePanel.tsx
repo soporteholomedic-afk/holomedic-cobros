@@ -44,7 +44,7 @@ interface Props {
   /** Opens the reason dialog for one oportunidad of this empresa (PATCH /seguimiento). */
   onEditarMotivo: (o: Oportunidad) => void;
   onGuardarRuc: (id: string, ruc: string, unir: boolean) => Promise<ResultadoRuc>;
-  /** Opens the "Registrar contacto" panel for this empresa. */
+  /** Opens the "Registrar actividad" panel for this empresa. */
   onRegistrar: (id: string) => void;
 }
 
@@ -427,7 +427,7 @@ export function DetallePanel({
             }}
             className={BOTON_PRIMARIO}
           >
-            Registrar contacto
+            Registrar actividad
           </button>
         </div>
       )}

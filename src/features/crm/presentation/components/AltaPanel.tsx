@@ -3,8 +3,15 @@
 import { X } from 'lucide-react';
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 
-import type { Empresa } from '../../domain/entities';
+import {
+  MONTO_MAXIMO,
+  ORIGENES,
+  ORIGEN_LABELS,
+  type Empresa,
+  type Origen,
+} from '../../domain/entities';
 import { CONTACTO_VACIO, ContactoFields, type ContactoForm } from './ContactoFields';
+import { CrmSelect } from './CrmSelect';
 import { ALERTA, BOTON_PRIMARIO, BOTON_SECUNDARIO, INPUT } from './crmUi';
 import { SectorSelect } from './SectorSelect';
 import { badgeSunat, useConsultaRuc } from './useConsultaRuc';
@@ -17,18 +24,29 @@ interface Props {
   onCrearSector: (nombre: string) => Promise<string | { error: string }>;
   /** Resolves to the created empresa, or `{ error }` to show in the panel. */
   onCrear: (cuerpo: Record<string, unknown>) => Promise<Empresa | { error: string }>;
+  /**
+   * Creates the optional primera oportunidad of the JUST-CREATED empresa
+   * (spec S4/S7.1). It runs only after `onCrear` succeeded, so a failure here
+   * leaves the ficha standing for the retry affordance.
+   */
+  onCrearOportunidad: (idEmpresa: string, cuerpo: Record<string, unknown>) => Promise<unknown | { error: string }>;
 }
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const ETIQUETA = 'grid gap-1.5 text-[13px] font-semibold text-slate-800 dark:text-slate-200';
 const LEYENDA = 'mb-0.5 text-xs font-bold uppercase tracking-wider text-sky-700 dark:text-sky-400';
 
+const ORIGEN_OPCIONES: { value: Origen; label: string }[] = ORIGENES.map((o) => ({ value: o, label: ORIGEN_LABELS[o] }));
+
 /**
  * Floating "Nueva empresa" panel. It is `position: fixed`: it covers the right
  * side of the screen without changing the layout of the board behind it
- * (design comment pr6cscqf).
+ * (design comment pr6cscqf). It creates ONLY the ficha by default (S7.1); the
+ * collapsible "Primera oportunidad" section offers the optional first deal of
+ * S4 in the same flow — two POSTs, and if the second fails the ficha stays
+ * created with a retry affordance.
  */
-export function AltaPanel({ sectores, onCerrar, oculto, onCrearSector, onCrear }: Props) {
+export function AltaPanel({ sectores, onCerrar, oculto, onCrearSector, onCrear, onCrearOportunidad }: Props) {
   const [razonSocial, setRazonSocial] = useState('');
   const [ruc, setRuc] = useState('');
   const [direccion, setDireccion] = useState('');
@@ -37,6 +55,16 @@ export function AltaPanel({ sectores, onCerrar, oculto, onCrearSector, onCrear }
   const [notas, setNotas] = useState('');
   const [error, setError] = useState('');
   const [guardando, setGuardando] = useState(false);
+  // Optional primera oportunidad (S4): collapsed (unchecked) by default.
+  const [conOportunidad, setConOportunidad] = useState(false);
+  const [opNombre, setOpNombre] = useState('');
+  const [opServicio, setOpServicio] = useState('');
+  const [opOrigen, setOpOrigen] = useState<Origen | null>(null);
+  const [opResponsable, setOpResponsable] = useState('');
+  const [opMonto, setOpMonto] = useState('');
+  // The ficha already created while the deal could not be: the retry affordance works on it.
+  const [fichaCreada, setFichaCreada] = useState<Empresa | null>(null);
+  const [errorOportunidad, setErrorOportunidad] = useState('');
   // Which half of the form the user is in: 0 = empresa, 1 = contacto. It follows the focus.
   const [paso, setPaso] = useState<0 | 1>(0);
   const cerrar = useRef(onCerrar);
@@ -85,7 +113,16 @@ export function AltaPanel({ sectores, onCerrar, oculto, onCrearSector, onCrear }
     if (contacto.correo.trim() && !EMAIL_RE.test(contacto.correo.trim())) {
       return falla('El correo no es válido.', 'alta-c0-correo');
     }
+    if (conOportunidad && !opNombre.trim()) {
+      return falla('Falta el nombre de la oportunidad.', 'alta-op-nombre');
+    }
+    if (conOportunidad && opMonto.trim()) {
+      const monto = Number(opMonto);
+      if (!Number.isFinite(monto) || monto <= 0) return falla('El monto estimado debe ser un número mayor a 0.', 'alta-op-monto');
+      if (monto > MONTO_MAXIMO) return falla(`El monto estimado admite hasta ${MONTO_MAXIMO}.`, 'alta-op-monto');
+    }
     setError('');
+    setErrorOportunidad('');
     setGuardando(true);
     const principal: Record<string, string> = {
       nombre: contacto.nombre.trim(),
@@ -104,7 +141,44 @@ export function AltaPanel({ sectores, onCerrar, oculto, onCrearSector, onCrear }
     if ('error' in r) {
       setError(r.error);
       setGuardando(false);
+      return;
     }
+    // S7.1: the section off means ONE POST — the ficha alone, and the deal is left for later.
+    if (!conOportunidad) {
+      setGuardando(false);
+      cerrar.current();
+      return;
+    }
+    const ok = await crearLaOportunidad(r);
+    setGuardando(false);
+    if (ok) cerrar.current();
+    // On failure the panel stays: the ficha is created and the retry affordance shows below.
+  }
+
+  /** Second POST of the flow (S4): the deal of the ficha just created. */
+  async function crearLaOportunidad(empresa: Empresa): Promise<boolean> {
+    const cuerpo: Record<string, unknown> = { nombre: opNombre.trim() };
+    if (opServicio.trim()) cuerpo.servicio = opServicio.trim();
+    if (opOrigen) cuerpo.origen = opOrigen;
+    if (opResponsable.trim()) cuerpo.responsableNombre = opResponsable.trim();
+    if (opMonto.trim()) cuerpo.montoEstimado = Number(opMonto);
+    const r = await onCrearOportunidad(empresa.idEmpresa, cuerpo);
+    if (r && typeof r === 'object' && 'error' in r && typeof r.error === 'string') {
+      setFichaCreada(empresa);
+      setErrorOportunidad(r.error);
+      return false;
+    }
+    return true;
+  }
+
+  /** The retry affordance: the ficha is already standing, only the deal is sent again. */
+  async function reintentarOportunidad() {
+    if (!fichaCreada || guardando) return;
+    setErrorOportunidad('');
+    setGuardando(true);
+    const ok = await crearLaOportunidad(fichaCreada);
+    setGuardando(false);
+    if (ok) cerrar.current();
   }
 
   return (
@@ -121,7 +195,7 @@ export function AltaPanel({ sectores, onCerrar, oculto, onCrearSector, onCrear }
             Nueva empresa
           </h2>
           <p className="mt-1 text-[13px] text-slate-600 dark:text-slate-400">
-            Se agrega a “Por contactar”. El tablero sigue disponible.
+            Crea solo la ficha; su primera oportunidad es opcional, más abajo.
           </p>
         </div>
         <button
@@ -242,6 +316,103 @@ export function AltaPanel({ sectores, onCerrar, oculto, onCrearSector, onCrear }
             {error}
           </p>
         )}
+
+        <fieldset className="grid gap-3.5">
+          <legend className={LEYENDA}>Primera oportunidad (opcional)</legend>
+          <label className="flex items-center gap-2 text-[13px] font-semibold text-slate-800 dark:text-slate-200">
+            <input
+              id="alta-op-check"
+              type="checkbox"
+              checked={conOportunidad}
+              onChange={(ev) => {
+                setConOportunidad(ev.target.checked);
+                setErrorOportunidad('');
+              }}
+              className="h-4 w-4 accent-sky-600"
+            />
+            Crear también su primera oportunidad en “Por contactar”
+          </label>
+          {conOportunidad && (
+            <div className="grid gap-3.5">
+              <label className={ETIQUETA}>
+                <span>
+                  Nombre de la oportunidad <em className="not-italic text-red-700">*</em>
+                </span>
+                <input
+                  id="alta-op-nombre"
+                  value={opNombre}
+                  maxLength={120}
+                  onChange={(ev) => setOpNombre(ev.target.value)}
+                  placeholder="Ej. Exámenes de ingreso 2026"
+                  className={INPUT}
+                />
+              </label>
+              <label className={ETIQUETA}>
+                <span>
+                  Servicio de interés <small className="font-normal text-slate-500">(opcional)</small>
+                </span>
+                <input
+                  id="alta-op-servicio"
+                  value={opServicio}
+                  maxLength={120}
+                  onChange={(ev) => setOpServicio(ev.target.value)}
+                  placeholder="Ej. Exámenes ocupacionales"
+                  className={INPUT}
+                />
+              </label>
+              <div className="grid grid-cols-2 items-start gap-3.5">
+                <CrmSelect<Origen>
+                  id="alta-op-origen"
+                  label="¿Cómo nos conoció?"
+                  nota="(opcional)"
+                  value={opOrigen}
+                  options={ORIGEN_OPCIONES}
+                  placeholder="Elige una opción"
+                  onChange={setOpOrigen}
+                />
+                <label className={ETIQUETA}>
+                  <span>
+                    Responsable <small className="font-normal text-slate-500">(opcional)</small>
+                  </span>
+                  <input
+                    id="alta-op-responsable"
+                    value={opResponsable}
+                    onChange={(ev) => setOpResponsable(ev.target.value)}
+                    placeholder="Quién lleva el negocio"
+                    className={INPUT}
+                  />
+                </label>
+              </div>
+              <label className={ETIQUETA}>
+                <span>
+                  Monto estimado (S/) <small className="font-normal text-slate-500">(opcional)</small>
+                </span>
+                <input
+                  id="alta-op-monto"
+                  inputMode="decimal"
+                  value={opMonto}
+                  onChange={(ev) => setOpMonto(ev.target.value)}
+                  placeholder="Ej. 7500"
+                  className={INPUT}
+                />
+              </label>
+              {errorOportunidad && (
+                <div role="alert" className={`grid gap-2 ${ALERTA}`}>
+                  <span>{`La empresa «${fichaCreada?.razonSocial ?? ''}» quedó creada, pero la oportunidad no:`}</span>
+                  <span>{errorOportunidad}</span>
+                  <button
+                    type="button"
+                    onClick={() => void reintentarOportunidad()}
+                    disabled={guardando}
+                    className={`${BOTON_PRIMARIO} justify-self-start`}
+                  >
+                    {guardando ? 'Creando…' : 'Reintentar oportunidad'}
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+        </fieldset>
 
         <div
           data-pie-alta
