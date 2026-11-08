@@ -14,13 +14,32 @@ import { buildError, exigirCrm } from '../../_lib/http';
  * (regla S6.7). A SIGLA failure is 503 — the CRM itself is up, only the live
  * lookup is not.
  */
-export async function GET(): Promise<NextResponse> {
+export async function GET(request: Request): Promise<NextResponse> {
   try {
     const denegado = await exigirCrm();
     if (denegado) return denegado;
 
+    const { searchParams } = new URL(request.url);
     const [empresas, atenciones] = await Promise.all([getCrmDb(), getCrmAtenciones()]);
-    const listado = await new ListarEmpresasInactivasUseCase(empresas, atenciones).execute(hoyEnLima());
+    const useCase = new ListarEmpresasInactivasUseCase(empresas, atenciones);
+
+    // Segmento "Solo en SIGLA" (S10): clientes dormidos sin ficha en el CRM.
+    if (searchParams.get('fuente') === 'sigla') {
+      const pagina = Number(searchParams.get('pagina') ?? '1') || 1;
+      const segmento = await useCase.executeSigla(hoyEnLima(), pagina);
+      return NextResponse.json(
+        {
+          success: true,
+          filas: segmento.filas,
+          total: segmento.total,
+          pagina: segmento.pagina,
+          paginas: segmento.paginas,
+        },
+        { headers: { 'Cache-Control': 'no-store' } },
+      );
+    }
+
+    const listado = await useCase.execute(hoyEnLima());
     return NextResponse.json(
       { success: true, filas: listado.filas, sinInformacion: listado.sinInformacion },
       { headers: { 'Cache-Control': 'no-store' } },
