@@ -1,0 +1,71 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+
+
+vi.mock('../CrmBoard', () => ({ CrmBoard: () => <div>BOARD-FAKE</div> }));
+
+import { CrmVistas } from '../CrmVistas';
+import { json } from './crmFixtures';
+
+const RUTA = '/api/crm/empresas/inactivas';
+
+let base: typeof fetch;
+beforeEach(() => {
+  base = global.fetch;
+});
+afterEach(() => {
+  global.fetch = base;
+  vi.restoreAllMocks();
+});
+
+describe('CrmVistas — tab Pipeline | Inactivas dentro de /crm (S1)', () => {
+  it('renders the board first and swaps to the Inactivas list when its tab opens', async () => {
+    const fetchMock = vi.fn(async (url: string) => {
+      if (url !== RUTA) throw new Error(`ruta inesperada: ${url}`);
+      return json({ status: 200, body: { success: true, filas: [], sinInformacion: 0 } });
+    });
+    global.fetch = fetchMock as unknown as typeof fetch;
+
+    render(<CrmVistas />);
+    expect(screen.getByText('BOARD-FAKE')).toBeTruthy();
+    expect(fetchMock).not.toHaveBeenCalled(); // lazy: SIGLA only when the tab opens
+
+    fireEvent.click(screen.getByRole('tab', { name: /Inactivas/ }));
+    expect(screen.queryByText('BOARD-FAKE')).toBeNull();
+    expect(await screen.findByText('No hay empresas cliente sin actividad hace 4 meses o más.')).toBeTruthy();
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    expect(screen.getByRole('tab', { name: /Inactivas/ })).toHaveAttribute('aria-selected', 'true');
+  });
+
+  it('the Inactivas tab keeps the count as a badge after the list loads', async () => {
+    const fetchMock = vi.fn(async (url: string) => {
+      if (url !== RUTA) throw new Error(`ruta inesperada: ${url}`);
+      return json({
+        status: 200,
+        body: {
+          success: true,
+          filas: [
+            {
+              idEmpresa: 'e-a',
+              razonSocial: 'Clínica Vieja S.A.C.',
+              ruc: '20100000001',
+              sector: 'Odontología',
+              ultimaAtencion: '2026-05-01',
+              mesesSinActividad: 6,
+              estado: 'sin_actividad',
+            },
+          ],
+          sinInformacion: 0,
+        },
+      });
+    });
+    global.fetch = fetchMock as unknown as typeof fetch;
+
+    render(<CrmVistas />);
+    fireEvent.click(screen.getByRole('tab', { name: /Inactivas/ }));
+    expect(await screen.findByText('Clínica Vieja S.A.C.')).toBeTruthy();
+    // The badge lands one render after the rows (child effect notifies the parent).
+    await waitFor(() => expect(screen.getByRole('tab', { name: /Inactivas/ })).toHaveTextContent('1'));
+    expect(screen.getByRole('tab', { name: /Inactivas/ })).toHaveAttribute('aria-selected', 'true');
+  });
+});
