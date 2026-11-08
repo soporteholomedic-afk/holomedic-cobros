@@ -30,7 +30,7 @@ const MENSAJE_FALLO = 'No se pudo cargar la lista de empresas inactivas';
  * (React 19 no-sync-setState-in-effect) and is guarded by the `viva` flag.
  * The rows arrive already ordered by the endpoint — most abandoned first.
  */
-export function useEmpresasInactivas(): EstadoInactivas {
+export function useEmpresasInactivas(reloadKey = 0): EstadoInactivas {
   const [filas, setFilas] = useState<EmpresaInactiva[]>([]);
   const [sinInformacion, setSinInformacion] = useState(0);
   const [cargando, setCargando] = useState(true);
@@ -62,7 +62,7 @@ export function useEmpresasInactivas(): EstadoInactivas {
     return () => {
       viva = false;
     };
-  }, [propiaRecarga]);
+  }, [propiaRecarga, reloadKey]);
 
   return { filas, sinInformacion, cargando, error, recargar };
 }

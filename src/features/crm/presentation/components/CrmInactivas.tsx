@@ -4,12 +4,16 @@ import { useEffect } from 'react';
 
 import { ESTADO_ATENCION_LABELS } from '../../domain/actividadServicios';
 import { UMBRAL_MESES_INACTIVIDAD } from '../../domain/entities';
-import { formatoCorto } from './fechas';
+import { formatoCorto, formatoRelativo } from './fechas';
 import { useEmpresasInactivas } from './useEmpresasInactivas';
 
 export interface CrmInactivasProps {
   /** Notifies the parent (tab badge) once a list has loaded successfully. */
   onCargado?: (total: number) => void;
+  /** Bumping it refetches the list (S6: after saving a contact). */
+  reloadKey?: number;
+  /** The user asked to contact that empresa: the parent opens the registrar-contacto panel. */
+  onRegistrar: (idEmpresa: string) => void;
 }
 
 function mesesLabel(meses: number): string {
@@ -24,8 +28,8 @@ function mesesLabel(meses: number): string {
  * empty list, and the table. Contacting a empresa does NOT remove its row —
  * only a new SIGLA attention does (S6).
  */
-export function CrmInactivas({ onCargado }: CrmInactivasProps) {
-  const { filas, sinInformacion, cargando, error, recargar } = useEmpresasInactivas();
+export function CrmInactivas({ onCargado, reloadKey = 0, onRegistrar }: CrmInactivasProps) {
+  const { filas, sinInformacion, cargando, error, recargar } = useEmpresasInactivas(reloadKey);
 
   useEffect(() => {
     if (!cargando && !error) onCargado?.(filas.length);
@@ -71,6 +75,8 @@ export function CrmInactivas({ onCargado }: CrmInactivasProps) {
                     <th className="px-4 py-2.5">Sector</th>
                     <th className="px-4 py-2.5">Sin actividad</th>
                     <th className="px-4 py-2.5">Última atención</th>
+                    <th className="px-4 py-2.5">Último contacto</th>
+                    <th className="px-4 py-2.5">Acciones</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -92,6 +98,18 @@ export function CrmInactivas({ onCargado }: CrmInactivasProps) {
                       </td>
                       <td className="px-4 py-2.5 text-slate-600">
                         {fila.ultimaAtencion === null ? '—' : formatoCorto(fila.ultimaAtencion)}
+                      </td>
+                      <td className="px-4 py-2.5 text-slate-600">
+                        {fila.ultimoContactoCrm === null ? '—' : formatoRelativo(fila.ultimoContactoCrm, new Date())}
+                      </td>
+                      <td className="px-4 py-2.5">
+                        <button
+                          type="button"
+                          onClick={() => onRegistrar(fila.idEmpresa)}
+                          className="rounded-md border border-sky-300 bg-sky-50 px-3 py-1.5 text-xs font-semibold text-sky-600 hover:bg-sky-100"
+                        >
+                          Registrar contacto
+                        </button>
                       </td>
                     </tr>
                   ))}

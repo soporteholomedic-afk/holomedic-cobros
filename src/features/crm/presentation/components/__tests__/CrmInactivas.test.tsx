@@ -15,6 +15,7 @@ function fila(overrides: Partial<EmpresaInactiva> = {}): EmpresaInactiva {
     sector: 'Odontología',
     ultimaAtencion: '2026-05-01',
     mesesSinActividad: 6,
+    ultimoContactoCrm: new Date(Date.now() - 3 * 86_400_000).toISOString(), // ~3 days before now
     estado: 'sin_actividad',
     ...overrides,
   };
@@ -31,6 +32,7 @@ const LISTADO_OK = {
       sector: null,
       ultimaAtencion: null,
       mesesSinActividad: null,
+      ultimoContactoCrm: null,
       estado: 'pendiente_primera',
     }),
   ],
@@ -60,16 +62,18 @@ function fetchInactivas(secuencia: Array<{ status: number; body: unknown } | { f
   return fn;
 }
 
-describe('CrmInactivas — clientes SIGLA sin actividad 4+ meses (S2/S3)', () => {
-  it('renders the rows as received: empresa, sector, months, last attention, and the sin-RUC note', async () => {
+describe('CrmInactivas — clientes SIGLA sin actividad 4+ meses (S2/S3/S6)', () => {
+  it('renders the rows as received: empresa, sector, months, last attention, last CRM contact, and the sin-RUC note', async () => {
     const fetchMock = fetchInactivas([{ status: 200, body: LISTADO_OK }]);
     const onCargado = vi.fn();
-    render(<CrmInactivas onCargado={onCargado} />);
+    render(<CrmInactivas onCargado={onCargado} onRegistrar={vi.fn()} />);
 
     expect(await screen.findByText('Clínica Vieja S.A.C.')).toBeTruthy();
     expect(screen.getByText('Odontología')).toBeTruthy();
     expect(screen.getByText('6 meses')).toBeTruthy();
     expect(screen.getByText('vie 1 may')).toBeTruthy(); // formatoCorto del proyecto
+    expect(screen.getByText('hace 3 d')).toBeTruthy(); // último contacto CRM relativo
+    expect(screen.getAllByText('—').length).toBeGreaterThanOrEqual(2); // sector null + contacto null
     // pendiente_primera shows its own label, never a month count (S6.7)
     expect(screen.getByText('Pendiente de primera atención')).toBeTruthy();
     expect(screen.queryByText('null meses')).toBeNull();
@@ -84,7 +88,7 @@ describe('CrmInactivas — clientes SIGLA sin actividad 4+ meses (S2/S3)', () =>
       { status: 200, body: LISTADO_OK },
     ]);
     const onCargado = vi.fn();
-    render(<CrmInactivas onCargado={onCargado} />);
+    render(<CrmInactivas onCargado={onCargado} onRegistrar={vi.fn()} />);
 
     expect(await screen.findByText('No se pudo consultar la actividad en SIGLA')).toBeTruthy();
     expect(onCargado).not.toHaveBeenCalled();
@@ -96,9 +100,33 @@ describe('CrmInactivas — clientes SIGLA sin actividad 4+ meses (S2/S3)', () =>
 
   it('an empty list shows the empty state and hides the sin-RUC note', async () => {
     fetchInactivas([{ status: 200, body: { success: true, filas: [], sinInformacion: 0 } }]);
-    render(<CrmInactivas />);
+    render(<CrmInactivas onRegistrar={vi.fn()} />);
 
     expect(await screen.findByText('No hay empresas cliente sin actividad hace 4 meses o más.')).toBeTruthy();
     expect(screen.queryByText(/sin RUC/)).toBeNull();
+  });
+
+  it('offers Registrar contacto per row and notifies with the empresa id (S6)', async () => {
+    fetchInactivas([{ status: 200, body: LISTADO_OK }]);
+    const onRegistrar = vi.fn();
+    render(<CrmInactivas onRegistrar={onRegistrar} />);
+
+    await screen.findByText('Clínica Vieja S.A.C.');
+    const botones = screen.getAllByRole('button', { name: 'Registrar contacto' });
+    expect(botones).toHaveLength(2);
+    fireEvent.click(botones[0]);
+    expect(onRegistrar).toHaveBeenCalledWith('e-a');
+  });
+
+  it('reloads the list when reloadKey changes (S6: a saved contact refreshes the column, the row stays)', async () => {
+    const fetchMock = fetchInactivas([{ status: 200, body: LISTADO_OK }]);
+    const { rerender } = render(<CrmInactivas onRegistrar={vi.fn()} />);
+
+    await screen.findByText('Clínica Vieja S.A.C.');
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+
+    rerender(<CrmInactivas onRegistrar={vi.fn()} reloadKey={1} />);
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+    expect(screen.getByText('Clínica Vieja S.A.C.')).toBeTruthy(); // the row stays (S6)
   });
 });
