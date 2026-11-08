@@ -1,12 +1,14 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 
-import type { AlertaCrm } from '../../application/calcularAlertas';
+import type { AlertaCrm } from '../../../application/calcularAlertas';
 import { PanelDia } from '../PanelDia';
 
 const alerta = (parcial: Partial<AlertaCrm>): AlertaCrm => ({
-  idEmpresa: 'e-1',
-  razonSocial: 'Constructora Andina S.A.C.',
+  idOportunidad: 'o-1',
+  nombreOportunidad: 'Exámenes de ingreso',
+  idEmpresa: 'e-3',
+  nombreEmpresa: 'Textiles Pacífico S.A.C.',
   clase: 'accion_vencida',
   etapa: 'contactado',
   tipoAccion: 'cotizar',
@@ -35,14 +37,14 @@ function mockAlertas(alertas: AlertaCrm[], falla = false): ReturnType<typeof vi.
 }
 
 const VENCIDA = alerta({});
-const HOY = alerta({ idEmpresa: 'e-2', razonSocial: 'Minera Cobre S.A.', clase: 'accion_hoy', tipoAccion: 'llamar', detalle: null, fecha: '2026-10-31', atraso: 0 });
-const ESPERA = alerta({ idEmpresa: 'e-3', razonSocial: 'Transporte Río S.A.C.', clase: 'sin_responder', tipoAccion: null, detalle: null, fecha: '2026-10-29T11:00:00.000Z', atraso: 52 });
+const HOY = alerta({ idOportunidad: 'o-5', idEmpresa: 'e-4', nombreOportunidad: 'Ergonomía para planta', nombreEmpresa: 'Agroindustrial Valle Verde S.A.C.', clase: 'accion_hoy', tipoAccion: 'llamar', detalle: null, fecha: '2026-10-31', atraso: 0 });
+const ESPERA = alerta({ idOportunidad: 'o-3', idEmpresa: 'e-3', nombreOportunidad: 'Campaña de vacunación', nombreEmpresa: 'Transporte Río S.A.C.', clase: 'sin_responder', tipoAccion: null, detalle: null, fecha: '2026-10-29T11:00:00.000Z', atraso: 52 });
 
 afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-describe('PanelDia (S1, S5)', () => {
+describe('PanelDia (S1, S5; alerta por oportunidad)', () => {
   it('renders nothing when there are no pending alerts (zero noise)', async () => {
     mockAlertas([]);
     const { container } = render(<PanelDia reloadKey={0} onAbrir={() => {}} />);
@@ -50,25 +52,25 @@ describe('PanelDia (S1, S5)', () => {
     expect(container).toBeEmptyDOMElement();
   });
 
-  it('shows the three groups with counts and the overdue/today/waiting texts', async () => {
+  it('names the deal AND the empresa per alert, with the overdue/today/waiting texts', async () => {
     mockAlertas([VENCIDA, HOY, ESPERA]);
     render(<PanelDia reloadKey={0} onAbrir={() => {}} />);
     const panel = await screen.findByRole('region', { name: 'Tu día' });
     expect(panel).toHaveTextContent('Vencidas');
     expect(panel).toHaveTextContent('Vencen hoy');
     expect(panel).toHaveTextContent('Sin respuesta');
-    expect(screen.getByRole('button', { name: /Constructora Andina.*Enviar cotización.*2 días de atraso/s })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Minera Cobre.*Llamar$/s })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Transporte Río.*52 h esperando/s })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Exámenes de ingreso[\s\S]*Textiles Pacífico[\s\S]*Enviar cotización[\s\S]*2 días de atraso/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Ergonomía para planta[\s\S]*Agroindustrial Valle Verde[\s\S]*Llamar$/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Campaña de vacunación[\s\S]*Transporte Río[\s\S]*52 h esperando/ })).toBeInTheDocument();
   });
 
-  it('opens the empresa detail when an alert row is clicked', async () => {
+  it('opens the deal (its id) when an alert row is clicked', async () => {
     mockAlertas([VENCIDA, HOY, ESPERA]);
     const onAbrir = vi.fn();
     render(<PanelDia reloadKey={0} onAbrir={onAbrir} />);
     await screen.findByRole('region', { name: 'Tu día' });
-    fireEvent.click(screen.getByRole('button', { name: /Transporte Río/ }));
-    expect(onAbrir).toHaveBeenCalledWith('e-3');
+    fireEvent.click(screen.getByRole('button', { name: /Campaña de vacunación/ }));
+    expect(onAbrir).toHaveBeenCalledWith('o-3', 'e-3');
   });
 
   it('refetches when reloadKey changes', async () => {

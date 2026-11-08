@@ -307,7 +307,7 @@ describe('Importar empresas — confirmar', () => {
     expect(importaciones).toHaveLength(1);
     expect(importaciones[0][1]?.method).toBe('POST');
     expect((importaciones[0][1]?.body as FormData).get('archivo')).toBe(archivo);
-    expect(mockToast.success).toHaveBeenCalledWith('2 empresas importadas en “Por contactar” · 1 sector nuevo');
+    expect(mockToast.success).toHaveBeenCalledWith('2 empresas importadas · 1 sector nuevo');
   });
 
   it('words the notice in singular and without sectors when none were created', async () => {
@@ -319,7 +319,7 @@ describe('Importar empresas — confirmar', () => {
     await screen.findByRole('heading', { name: /Revisa y confirma/ });
     fireEvent.click(screen.getByRole('button', { name: 'Importar 1 empresa' }));
     await waitFor(() => expect(push).toHaveBeenCalled());
-    expect(mockToast.success).toHaveBeenCalledWith('1 empresa importada en “Por contactar”');
+    expect(mockToast.success).toHaveBeenCalledWith('1 empresa importada');
   });
 
   it('words several new sectors in plural', async () => {
@@ -331,7 +331,7 @@ describe('Importar empresas — confirmar', () => {
     await screen.findByRole('heading', { name: /Revisa y confirma/ });
     fireEvent.click(screen.getByRole('button', { name: 'Importar 2 empresas' }));
     await waitFor(() => expect(push).toHaveBeenCalled());
-    expect(mockToast.success).toHaveBeenCalledWith('2 empresas importadas en “Por contactar” · 3 sectores nuevos');
+    expect(mockToast.success).toHaveBeenCalledWith('2 empresas importadas · 3 sectores nuevos');
   });
 
   it('does not send the import twice on a double click and disables the button meanwhile', async () => {

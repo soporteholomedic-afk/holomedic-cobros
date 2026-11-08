@@ -103,7 +103,7 @@ export default function Sidebar() {
               Holomedic
             </span>
             <span className="block text-[10px] text-sky-400 font-semibold uppercase tracking-wider -mt-0.5">
-              Facturación
+              Suite
             </span>
           </div>
         </Link>

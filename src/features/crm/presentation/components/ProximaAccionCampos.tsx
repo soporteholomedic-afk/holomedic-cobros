@@ -3,7 +3,7 @@
 import { ACCIONES, ACCION_LABELS, type AccionTipo } from '../../domain/entities';
 import { CrmCalendario } from './CrmCalendario';
 import { CrmSelect, type OpcionSelect } from './CrmSelect';
-import type { AccionForm, Fallos } from './contactoForm';
+import type { AccionForm, EntradaAgenda, Fallos } from './contactoForm';
 import { ACCION_ESTILO, ERROR_CAMPO, ETIQUETA_CAMPO, INPUT_VALIDABLE, LEYENDA } from './crmUi';
 
 type Tipo = AccionTipo | 'ninguna';
@@ -31,8 +31,8 @@ interface Props {
   valor: AccionForm;
   onCambio: (valor: AccionForm) => void;
   hoy: string;
-  /** Scheduled actions per day, for the dots of the calendar. */
-  marcados: Record<string, number>;
+  /** Scheduled actions per day, each naming its deal and empresa, for the dots of the calendar. */
+  marcados: Record<string, EntradaAgenda[]>;
   fallos: Fallos;
 }
 

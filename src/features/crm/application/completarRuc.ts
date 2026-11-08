@@ -1,30 +1,24 @@
 import type { ICrmEmpresaRepository } from '../domain/ports';
 import { MAX_CONTACTOS, type Contacto, type Empresa } from '../domain/entities';
-import {
-  DatosEmpresaInvalidosError,
-  EmpresaNotFoundError,
-  RucDeOtraEmpresaError,
-} from '../domain/errors';
-import { seguimientoDe } from './seguimiento';
+import { DatosEmpresaInvalidosError, EmpresaNotFoundError, RucDeOtraEmpresaError } from '../domain/errors';
 import { validarRuc } from './validar';
 
 const mismoContacto = (a: Contacto, b: Contacto): boolean =>
   a.nombre === b.nombre && a.telefono === b.telefono && a.correo === b.correo;
 
 /**
- * Add the RUC to a "Falta RUC" card (S6).
+ * Add the RUC to a "Falta RUC" ficha.
  * - Free RUC: saved.
- * - RUC of another empresa and `unir` false: `RucDeOtraEmpresaError` carrying the other one.
- * - `unir` true: the card is merged INTO the other one (`fusionar`): history and
- *   contacts move, this card disappears. The destination keeps its own RUC,
- *   sector, stage, notes (the origin's are appended) and attempt counter, and
- *   inherits the pending reply and the next action only when this card had a
- *   pending reply (L8).
+ * - RUC of another empresa and `unir` false: `RucDeOtraEmpresaError` carrying
+ *   the other ficha's id, name and relacion.
+ * - `unir` true: the ficha is merged INTO the other one (`fusionar`, empresa
+ *   level): history, oportunidades and contacts move, this ficha disappears.
+ *   The destination keeps its own RUC, sector and relacion; the origin's
+ *   notes are appended. Each oportunidad keeps its own stage and follow-up
+ *   state — the merge never rewrites deals.
  *
  * The merge is rejected BEFORE writing when it would leave more than
- * MAX_CONTACTOS contacts. The inheritance is a second write after `fusionar`
- * (`fusionar` is atomic by itself, the pair is not): if it fails, the merge
- * stands and the destination simply keeps its own pending reply and action.
+ * MAX_CONTACTOS contacts.
  */
 export class CompletarRucUseCase {
   constructor(private readonly repo: ICrmEmpresaRepository) {}
@@ -49,7 +43,7 @@ export class CompletarRucUseCase {
       throw new RucDeOtraEmpresaError({
         idEmpresa: otra.idEmpresa,
         razonSocial: otra.razonSocial,
-        etapa: otra.etapa,
+        relacion: otra.relacion,
       });
     }
 
@@ -60,21 +54,6 @@ export class CompletarRucUseCase {
       );
     }
 
-    const fusionada = await this.repo.fusionar(idEmpresa, otra.idEmpresa);
-    if (actual.faltaResponderDesde === null) return fusionada;
-
-    const desde =
-      fusionada.faltaResponderDesde !== null && fusionada.faltaResponderDesde < actual.faltaResponderDesde
-        ? fusionada.faltaResponderDesde
-        : actual.faltaResponderDesde;
-    return this.repo.updateSeguimiento(
-      fusionada.idEmpresa,
-      {
-        ...seguimientoDe(fusionada),
-        faltaResponderDesde: desde,
-        proximaAccion: actual.proximaAccion ?? fusionada.proximaAccion,
-      },
-      null,
-    );
+    return this.repo.fusionar(idEmpresa, otra.idEmpresa);
   }
 }

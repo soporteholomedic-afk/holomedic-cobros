@@ -14,6 +14,7 @@ function entrada(over: Partial<Interaccion> = {}): Interaccion {
   return {
     idInteraccion: 1,
     idEmpresa: 'e-3',
+    idOportunidad: null,
     fecha: '2026-10-31T15:15:00.000Z',
     idUsuario: 'u-1',
     nombreUsuario: 'Scott Palomino',
@@ -28,7 +29,7 @@ function entrada(over: Partial<Interaccion> = {}): Interaccion {
 
 type Rutas = (url: string, method: string, body: Record<string, unknown>) => Respuesta | Promise<Respuesta> | undefined;
 
-/** The shared fake of the board plus the routes that do not exist there yet. */
+/** The shared fake of the board plus the routes that need per-test answers. */
 function conRutas(rutas: Rutas, api: Api = {}) {
   mockApi(api);
   const base = global.fetch;
@@ -44,9 +45,13 @@ function conRutas(rutas: Rutas, api: Api = {}) {
 
 const historial = (interacciones: Interaccion[]): Respuesta => ({ status: 200, body: { success: true, interacciones } });
 
+/** One empresa can hold several oportunidades; [0] is its first card in the board. */
+function tarjeta(nombre: string): HTMLElement {
+  return (screen.getAllByRole('heading', { level: 3, name: nombre }).map((h) => h.closest('article') as HTMLElement))[0]!;
+}
+
 function abrir(nombre: string): HTMLElement {
-  const card = screen.getByRole('heading', { level: 3, name: nombre }).closest('article') as HTMLElement;
-  fireEvent.click(within(card).getByRole('heading', { level: 3 }));
+  fireEvent.click(within(tarjeta(nombre)).getByRole('heading', { level: 3 }));
   return screen.getByRole('dialog', { name: nombre });
 }
 
@@ -56,6 +61,9 @@ async function cargado() {
 
 const seccion = (panel: HTMLElement) =>
   within(within(panel).getByRole('heading', { name: /^Historial/ }).closest('section') as HTMLElement);
+
+const ultimoContacto = (panel: HTMLElement) =>
+  within(within(panel).getByText('Último contacto').closest('div') as HTMLElement);
 
 beforeEach(() => {
   // 11:00 in Lima on Saturday 31 Oct 2026.
@@ -110,6 +118,15 @@ describe('Historial — carga', () => {
     expect(within(panel).getByRole('heading', { name: 'Historial (0)' })).toBeInTheDocument();
   });
 
+  it('with no history yet, the "Último contacto" row says so; with history it shows the newest date like the rows do', async () => {
+    conRutas((url) => (url === HISTORIAL_E3 ? historial([entrada({ fecha: '2026-10-31T15:15:00.000Z' })]) : undefined));
+    render(<CrmBoard />);
+    await cargado();
+    const panel = abrir(TEXTILES);
+    expect(await ultimoContacto(panel).findByText('Hoy 10:15')).toBeInTheDocument();
+    expect(within(panel).getByRole('heading', { name: 'Historial (1)' })).toBeInTheDocument();
+  });
+
   it('shows an error with "Reintentar" that loads the history again', async () => {
     let intentos = 0;
     const fn = conRutas((url) => {
@@ -158,9 +175,12 @@ describe('Historial — carga', () => {
         return historial(n === 1 ? [entrada({ resumen: 'Antes' })] : [entrada({ idInteraccion: 2, resumen: 'Nuevo' }), entrada({ resumen: 'Antes' })]);
       },
       {
-        etapa: (id) => ({
+        relacion: () => ({
           status: 200,
-          body: { success: true, empresa: empresa({ idEmpresa: id, razonSocial: TEXTILES, etapa: 'en_seguimiento', medio: 'llamada', updatedAt: '2026-10-31T15:59:00.000Z' }) },
+          body: {
+            success: true,
+            empresa: empresa({ idEmpresa: 'e-3', razonSocial: TEXTILES, relacion: 'cliente', updatedAt: '2026-10-31T15:59:00.000Z' }),
+          },
         }),
       },
     );
@@ -168,10 +188,28 @@ describe('Historial — carga', () => {
     await cargado();
     const panel = abrir(TEXTILES);
     expect(await within(panel).findByRole('heading', { name: 'Historial (1)' })).toBeInTheDocument();
-    const card = screen.getByRole('heading', { level: 3, name: TEXTILES }).closest('article') as HTMLElement;
-    fireEvent.click(within(card).getByRole('button', { name: /Mover .* a En seguimiento/ }));
+    const cabecera = panel.querySelector('header') as HTMLElement;
+    fireEvent.click(within(cabecera).getByRole('button', { name: 'Cambiar a cliente' }));
     expect(await within(panel).findByRole('heading', { name: 'Historial (2)' })).toBeInTheDocument();
     expect(within(panel).getByText('Nuevo')).toBeInTheDocument();
+    expect(llamadas(fn, 'GET', HISTORIAL_E3)).toHaveLength(2);
+  });
+
+  it('reloads when an oportunidad of the empresa changes while the panel is open (S7.5)', async () => {
+    let n = 0;
+    const fn = conRutas((url) => {
+      if (url !== HISTORIAL_E3) return undefined;
+      n++;
+      return historial(n === 1 ? [entrada({ resumen: 'Antes' })] : [entrada({ idInteraccion: 2, resumen: 'Después' }), entrada({ resumen: 'Antes' })]);
+    });
+    render(<CrmBoard />);
+    await cargado();
+    const panel = abrir(TEXTILES);
+    expect(await within(panel).findByRole('heading', { name: 'Historial (1)' })).toBeInTheDocument();
+    // Moving the deal updates the oportunidades the panel holds: the history follows.
+    fireEvent.click(within(tarjeta(TEXTILES)).getByRole('button', { name: /Mover .* a En seguimiento/ }));
+    expect(await within(panel).findByRole('heading', { name: 'Historial (2)' })).toBeInTheDocument();
+    expect(within(panel).getByText('Después')).toBeInTheDocument();
     expect(llamadas(fn, 'GET', HISTORIAL_E3)).toHaveLength(2);
   });
 });
@@ -242,6 +280,44 @@ describe('Historial — cada entrada', () => {
     expect(pie(1)).toBe(' · Ayer 22:00 · Laura Ríos');
     expect(pie(2)).toBe(' · Ayer 16:40 · Karina Soto');
     expect(pie(3)).toBe(' · mié 28 oct · 16:40 · Karina Soto');
+  });
+
+  it('labels each entry with its deal name, or "General" when it is not linked (S7.5)', async () => {
+    conRutas((url) =>
+      url === HISTORIAL_E3
+        ? historial([
+            entrada({ idInteraccion: 3, idOportunidad: 'o-3', resumen: 'De la abierta' }),
+            entrada({ idInteraccion: 2, idOportunidad: 'o-4', resumen: 'De la ganada' }),
+            entrada({ idInteraccion: 1, idOportunidad: null, resumen: 'Sin negocio' }),
+          ])
+        : undefined,
+    );
+    render(<CrmBoard />);
+    await cargado();
+    const panel = abrir(TEXTILES);
+    const items = await seccion(panel).findAllByRole('listitem');
+    expect(within(items[0]!).getByText('Exámenes de ingreso')).toBeInTheDocument();
+    expect(within(items[1]!).getByText('Campaña de vacunación 2025')).toBeInTheDocument();
+    expect(within(items[2]!).getByText('General')).toBeInTheDocument();
+    // The chips carry the link for tests and screen readers scanning the list.
+    expect(items.map((li) => li.querySelector('[data-oportunidad]')?.getAttribute('data-oportunidad'))).toEqual([
+      'o-3',
+      'o-4',
+      '',
+    ]);
+  });
+
+  it('the general history lists activities of closed deals too, open or lost alike (S3/S6.4)', async () => {
+    conRutas((url) =>
+      url === HISTORIAL_E3
+        ? historial([entrada({ idInteraccion: 2, idOportunidad: 'o-4', resumen: 'De la ganada' })])
+        : undefined,
+    );
+    render(<CrmBoard />);
+    await cargado();
+    const panel = abrir(TEXTILES);
+    expect(await seccion(panel).findByText('De la ganada')).toBeInTheDocument();
+    expect(within(panel).getByRole('heading', { name: 'Historial (1)' })).toBeInTheDocument();
   });
 
   it('shows the summary paragraph only when there is one', async () => {

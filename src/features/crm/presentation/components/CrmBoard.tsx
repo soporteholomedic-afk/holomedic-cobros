@@ -6,15 +6,18 @@ import { ArrowDownLeft, Plus, Search, Upload } from 'lucide-react';
 import { toast } from 'sonner';
 
 import {
-  ETAPAS,
-  ETAPA_LABELS,
+  ETAPAS_OPORTUNIDAD,
+  ETAPA_OPORTUNIDAD_LABELS,
+  ETAPAS_CERRADAS,
   MEDIO_LABELS,
   type Direccion,
   type Empresa,
-  type Etapa,
+  type EtapaOportunidad,
   type Medio,
   type IconoSector,
   type Motivo,
+  type Oportunidad,
+  type Relacion,
   type Sector,
 } from '../../domain/entities';
 import { AltaPanel } from './AltaPanel';
@@ -25,7 +28,6 @@ import { DetallePanel, type DetalleHandle } from './DetallePanel';
 import { MedioDialog } from './MedioDialog';
 import { MotivoDialog } from './MotivoDialog';
 import type { ResultadoSector } from './NuevoSectorBox';
-import { etiquetaDeTarjeta } from './etiquetas';
 import { hoyEnZona } from './fechas';
 import { EntrantePanel } from './EntrantePanel';
 import { PanelDia } from './PanelDia';
@@ -36,16 +38,17 @@ interface ApiResult {
   ok: boolean;
   error?: string;
   empresa?: Empresa;
+  oportunidad?: Oportunidad;
 }
 
 async function leerRespuesta(res: Response): Promise<ApiResult> {
-  let data: { error?: string; empresa?: Empresa } = {};
+  let data: { error?: string; empresa?: Empresa; oportunidad?: Oportunidad } = {};
   try {
     data = await res.json();
   } catch {
     // body is not JSON: fall through with the status only
   }
-  return { ok: res.ok, error: data.error, empresa: data.empresa };
+  return { ok: res.ok, error: data.error, empresa: data.empresa, oportunidad: data.oportunidad };
 }
 
 async function post(url: string, body: unknown): Promise<ApiResult> {
@@ -76,28 +79,34 @@ async function patch(url: string, body: unknown): Promise<ApiResult> {
 
 /** A dialog the board is showing, and what saving it should do. */
 type Dialogo =
-  | { tipo: 'medio'; id: string; modo: 'mover' | 'editar'; inicial: Medio | null; destino: Etapa }
+  | { tipo: 'medio'; id: string; modo: 'mover' | 'editar'; inicial: Medio | null; destino: EtapaOportunidad }
   | { tipo: 'motivo'; id: string; modo: 'mover' | 'editar'; inicial: Motivo | null };
 
 /**
- * Kanban board of the simple CRM: five columns, drag-and-drop or buttons to
- * move empresas. Entering Contactado asks for the contact medium and entering
- * Perdido asks for the loss reason; nothing moves until that dialog is saved.
+ * Kanban board of the CRM by oportunidades (spec S2): one card per deal, six
+ * stages, drag-and-drop or buttons to move. The empresas are joined client
+ * side for the card header (name, RUC, sector). Entering Contactado asks for
+ * the contact medium and entering Perdida asks for the loss reason; nothing
+ * moves until that dialog is saved.
  */
 export function CrmBoard() {
   const [empresas, setEmpresas] = useState<Empresa[]>([]);
+  const [oportunidades, setOportunidades] = useState<Oportunidad[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
   const [search, setSearch] = useState('');
-  const [dragOver, setDragOver] = useState<Etapa | null>(null);
+  const [dragOver, setDragOver] = useState<EtapaOportunidad | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
   const [dialogo, setDialogo] = useState<Dialogo | null>(null);
   // 'oculta': the create panel is mounted (draft kept) but hidden while a detail is open.
   const [alta, setAlta] = useState<'cerrada' | 'visible' | 'oculta'>('cerrada');
   const [detalleId, setDetalleId] = useState<string | null>(null);
-  // The "Registrar contacto" panel: which card, and who started the contact when it opened.
-  const [registro, setRegistro] = useState<{ id: string; direccion: Direccion } | null>(null);
+  // The "Registrar actividad" panel: the ficha it writes on, the deal it comes pre-linked to
+  // (null = "Actividad general"), and who started the contact when it opened.
+  const [registro, setRegistro] = useState<{ idEmpresa: string; idOportunidad: string | null; direccion: Direccion } | null>(null);
   const abridorRegistro = useRef<HTMLElement | null>(null);
+  /** Focus target left by cerrarRegistro: the opener, or the card id when the activity moved it. */
+  const focoPendienteRegistro = useRef<{ nodo: HTMLElement | null; id: string | null } | null>(null);
   const [entranteAbierto, setEntranteAbierto] = useState(false);
   const botonEntrante = useRef<HTMLButtonElement>(null);
   const detalleRef = useRef<DetalleHandle>(null);
@@ -117,10 +126,17 @@ export function CrmBoard() {
       setLoading(true);
       setLoadError(false);
       try {
-        const res = await fetch('/api/crm/empresas');
-        if (!res.ok) throw new Error('load failed');
-        const data = (await res.json()) as { empresas: Empresa[] };
-        if (!cancelled) setEmpresas(data.empresas);
+        const [resEmpresas, resOportunidades] = await Promise.all([
+          fetch('/api/crm/empresas'),
+          fetch('/api/crm/oportunidades'),
+        ]);
+        if (!resEmpresas.ok || !resOportunidades.ok) throw new Error('load failed');
+        const dataEmpresas = (await resEmpresas.json()) as { empresas: Empresa[] };
+        const dataOportunidades = (await resOportunidades.json()) as { oportunidades: Oportunidad[] };
+        if (!cancelled) {
+          setEmpresas(dataEmpresas.empresas);
+          setOportunidades(dataOportunidades.oportunidades);
+        }
       } catch {
         if (!cancelled) setLoadError(true);
       } finally {
@@ -154,7 +170,7 @@ export function CrmBoard() {
     if (!c) return;
     pendienteVuelo.current = null;
     reproducir(c, vuelos.current);
-  }, [empresas]);
+  }, [oportunidades]);
 
   useEffect(() => {
     const enVuelo = vuelos.current;
@@ -164,16 +180,41 @@ export function CrmBoard() {
     };
   }, []);
 
+  /** Fichas by id, so each card can be joined with its empresa (S2). */
+  const empresaDe = useMemo(() => new Map(empresas.map((x) => [x.idEmpresa, x])), [empresas]);
+
+  /** Deals that have their ficha on screen, joined. A missing empresa is skipped quietly. */
+  const tarjetas = useMemo(
+    () =>
+      oportunidades.flatMap((o) => {
+        const e = empresaDe.get(o.idEmpresa);
+        return e ? [{ o, e }] : [];
+      }),
+    [oportunidades, empresaDe],
+  );
+
   const visibles = useMemo(() => {
     const q = search.trim().toLowerCase();
-    if (!q) return empresas;
-    return empresas.filter((e) =>
-      [e.razonSocial, e.ruc ?? '', e.sector ?? '', e.medioOtro ?? '', ...e.contactos.flatMap((c) => [c.nombre ?? '', c.telefono ?? '', c.correo ?? ''])]
+    if (!q) return tarjetas;
+    return tarjetas.filter(({ o, e }) =>
+      [o.nombre, o.servicio ?? '', o.responsableNombre ?? '', e.razonSocial, e.ruc ?? '']
         .join(' ')
         .toLowerCase()
         .includes(q),
     );
-  }, [empresas, search]);
+  }, [tarjetas, search]);
+
+  /** Empresas matching the search with NO card on the board (e.g. migrated
+   *  clientes, S8) — the ficha stays reachable from the search (S3/S4, Caso 2:
+   *  "El comercial abre su ficha y crea una nueva oportunidad"). */
+  const fichasSinTarjeta = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return [];
+    const conTarjeta = new Set(tarjetas.map(({ e }) => e.idEmpresa));
+    return empresas.filter(
+      (e) => !conTarjeta.has(e.idEmpresa) && `${e.razonSocial} ${e.ruc ?? ''}`.toLowerCase().includes(q),
+    );
+  }, [empresas, tarjetas, search]);
 
   const cerrarDialogo = useCallback(() => {
     focoDeOrigen.current = null;
@@ -191,12 +232,12 @@ export function CrmBoard() {
     else accion();
   }
 
-  function abrirDetalle(id: string) {
-    if (id === detalleId) return;
+  function abrirDetalle(idEmpresa: string) {
+    if (idEmpresa === detalleId) return;
     conGuardia(() => {
       setRegistro(null);
       setEntranteAbierto(false);
-      setDetalleId(id);
+      setDetalleId(idEmpresa);
       if (alta === 'visible') {
         setAlta('oculta');
         toast.info('El borrador de “Nueva empresa” se conserva');
@@ -204,14 +245,22 @@ export function CrmBoard() {
     });
   }
 
+  /** Give the focus to the first card of this empresa (its oportunidades are the cards now). */
+  function enfocarTarjetaDeEmpresa(idEmpresa: string) {
+    const primera = oportunidades.find((o) => o.idEmpresa === idEmpresa);
+    if (primera) document.querySelector<HTMLElement>(`[data-empresa-id="${primera.idOportunidad}"]`)?.focus();
+  }
+
   function cerrarDetalle() {
     const id = detalleId;
     setDetalleId(null);
-    if (id) document.querySelector<HTMLElement>(`[data-empresa-id="${id}"]`)?.focus();
+    if (id) enfocarTarjetaDeEmpresa(id);
   }
 
-  /** Open the contact panel for a card; the detail and the create panels step aside. */
-  function abrirRegistro(id: string, direccion: Direccion) {
+  /** Open the activity panel for a CARD (pre-linked to its deal); the detail and create panels step aside. */
+  function abrirRegistro(idOportunidad: string, direccion: Direccion) {
+    const o = oportunidades.find((x) => x.idOportunidad === idOportunidad);
+    if (!o) return;
     const opener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     conGuardia(() => {
       abridorRegistro.current = opener;
@@ -221,34 +270,63 @@ export function CrmBoard() {
         setAlta('oculta');
         toast.info('El borrador de “Nueva empresa” se conserva');
       }
-      setRegistro({ id, direccion });
+      setRegistro({ idEmpresa: o.idEmpresa, idOportunidad, direccion });
     });
   }
 
-  /** Close the contact panel and give the focus back to what opened it, or to the card when that is gone. */
-  function cerrarRegistro() {
-    const id = registro?.id;
-    const opener = abridorRegistro.current;
-    abridorRegistro.current = null;
-    setRegistro(null);
-    if (opener?.isConnected) opener.focus();
-    else if (id) document.querySelector<HTMLElement>(`[data-empresa-id="${id}"]`)?.focus();
+  /** Open the activity panel for a FICHA: linked to its first open deal when one exists, else general (S4). */
+  function abrirRegistroDeEmpresa(idEmpresa: string) {
+    const primeraAbierta = oportunidades.find((o) => o.idEmpresa === idEmpresa && !ETAPAS_CERRADAS.includes(o.etapa));
+    const opener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    conGuardia(() => {
+      abridorRegistro.current = opener;
+      setEntranteAbierto(false);
+      setDetalleId(null);
+      if (alta === 'visible') {
+        setAlta('oculta');
+        toast.info('El borrador de “Nueva empresa” se conserva');
+      }
+      setRegistro({ idEmpresa, idOportunidad: primeraAbierta?.idOportunidad ?? null, direccion: 'saliente' });
+    });
   }
 
-  function contactoGuardado(nueva: Empresa) {
-    const antes = empresas.find((x) => x.idEmpresa === nueva.idEmpresa);
-    const etiqueta = etiquetaDeTarjeta(nueva, new Date());
+  /**
+   * Close the activity panel and give the focus back to what opened it — or to
+   * `idTarjetaMovida`'s card when the saved activity moved it: the opener node
+   * is replaced by the move, so the focus is restored after the commit (the
+   * layout effect below).
+   */
+  function cerrarRegistro(idTarjetaMovida?: string) {
+    const opener = abridorRegistro.current;
     abridorRegistro.current = null;
+    focoPendienteRegistro.current = { nodo: idTarjetaMovida === undefined ? opener : null, id: idTarjetaMovida ?? null };
     setRegistro(null);
-    if (antes && antes.etapa !== nueva.etapa) {
-      focoDeOrigen.current = { id: nueva.idEmpresa, foco: { tipo: 'tarjeta' } };
-      colocar(nueva);
-    } else {
-      reemplazar(nueva, false);
-      document.querySelector<HTMLElement>(`[data-empresa-id="${nueva.idEmpresa}"]`)?.focus();
+    // Best effort now; the layout effect re-asserts after the commit, because
+    // closing the panel or moving the card can leave the focus on <body>.
+    if (idTarjetaMovida === undefined) opener?.focus();
+  }
+
+  useLayoutEffect(() => {
+    if (registro !== null) return;
+    const pendiente = focoPendienteRegistro.current;
+    if (!pendiente) return;
+    focoPendienteRegistro.current = null;
+    if (pendiente.nodo?.isConnected) {
+      pendiente.nodo.focus();
+      return;
     }
+    if (pendiente.id) document.querySelector<HTMLElement>(`[data-empresa-id="${pendiente.id}"]`)?.focus();
+  }, [registro]);
+
+  /** The activity came back saved: refresh the ficha and, when the deal advanced, move its card (S7.4). */
+  function contactoGuardado(nueva: Empresa, oportunidad: Oportunidad | null) {
+    reemplazarEmpresa(nueva, false);
+    if (oportunidad) colocar(oportunidad);
+    cerrarRegistro(oportunidad?.idOportunidad);
     toast.success(
-      `Contacto guardado en «${nueva.razonSocial}». Está en «${ETAPA_LABELS[nueva.etapa]}»${etiqueta ? ` · ${etiqueta.texto}` : ''}.`,
+      oportunidad
+        ? `Actividad guardada en «${nueva.razonSocial} · ${oportunidad.nombre}».`
+        : `Actividad guardada en el historial de «${nueva.razonSocial}».`,
     );
   }
 
@@ -271,15 +349,16 @@ export function CrmBoard() {
     botonEntrante.current?.focus();
   }
 
-  function entranteGuardado(nueva: Empresa, existente: boolean) {
-    const antes = empresas.find((x) => x.idEmpresa === nueva.idEmpresa);
-    const etiqueta = etiquetaDeTarjeta(nueva, new Date());
+  function entranteGuardado(nueva: Empresa, oportunidad: Oportunidad, existente: boolean) {
+    // S4: the inbound contact created the primera oportunidad; the deal is the card, so it travels into Contactado.
+    reemplazarEmpresa(nueva, !existente);
+    colocar(oportunidad);
     setEntranteAbierto(false);
-    if (antes && antes.etapa !== nueva.etapa) colocar(nueva);
-    else reemplazar(nueva, !existente || !antes);
     botonEntrante.current?.focus();
     toast.success(
-      `${nueva.razonSocial} quedó en «${ETAPA_LABELS[nueva.etapa]}» como «${(etiqueta?.texto ?? 'Falta responder').split(' · ')[0]}».`,
+      existente
+        ? `${nueva.razonSocial} ya estaba en el CRM. Su nueva oportunidad «${oportunidad.nombre}» está en «Contactado».`
+        : `${nueva.razonSocial} quedó registrada. Su oportunidad «${oportunidad.nombre}» está en «Contactado».`,
     );
   }
 
@@ -296,12 +375,21 @@ export function CrmBoard() {
   async function guardarEmpresa(id: string, cuerpo: Record<string, unknown>): Promise<Empresa | { error: string }> {
     const r = await patch(`/api/crm/empresas/${id}`, cuerpo);
     if (!r.ok || !r.empresa) return { error: r.error ?? 'No se pudo guardar la empresa' };
-    reemplazar(r.empresa, false);
+    reemplazarEmpresa(r.empresa, false);
     toast.success('Cambios guardados');
     return r.empresa;
   }
 
-  /** Complete the RUC of a card. A RUC owned by another empresa comes back as a conflict to confirm. */
+  /** Manual relación change from the ficha (S6.3): a plain PATCH, never derived from a deal result. */
+  async function cambiarRelacion(id: string, relacion: Relacion): Promise<Empresa | { error: string }> {
+    const r = await patch(`/api/crm/empresas/${id}/relacion`, { relacion });
+    if (!r.ok || !r.empresa) return { error: r.error ?? 'No se pudo guardar la relación' };
+    reemplazarEmpresa(r.empresa, false);
+    toast.success(`La empresa ahora es ${relacion === 'cliente' ? 'cliente' : 'prospecto'}.`);
+    return r.empresa;
+  }
+
+  /** Complete the RUC of a ficha. A RUC owned by another empresa comes back as a conflict to confirm. */
   async function guardarRuc(id: string, ruc: string, unir: boolean): Promise<ResultadoRuc> {
     try {
       const res = await fetch(`/api/crm/empresas/${id}/ruc`, {
@@ -320,9 +408,9 @@ export function CrmBoard() {
         if (unir) {
           setEmpresas((prev) => prev.filter((x) => x.idEmpresa !== id).map((x) => (x.idEmpresa === nueva.idEmpresa ? nueva : x)));
           setDetalleId(nueva.idEmpresa);
-          toast.success(`Tarjetas unidas. El historial quedó en «${nueva.razonSocial}».`);
+          toast.success(`Fichas unidas. El historial quedó en «${nueva.razonSocial}».`);
         } else {
-          reemplazar(nueva, false);
+          reemplazarEmpresa(nueva, false);
           toast.success('RUC guardado.');
         }
         return { tipo: 'ok' };
@@ -366,6 +454,11 @@ export function CrmBoard() {
     return 'error' in r ? { error: r.error } : r.nombre;
   }
 
+  /**
+   * Creates the FICHA only (S7.1): one POST, the board's fichas gain it, and
+   * the panel (which owns the optional primera oportunidad) closes itself on
+   * full success. A new ficha shows NO card — cards are oportunidades (S2).
+   */
   async function crearEmpresa(cuerpo: Record<string, unknown>): Promise<Empresa | { error: string }> {
     try {
       const res = await fetch('/api/crm/empresas', {
@@ -375,17 +468,37 @@ export function CrmBoard() {
       });
       const r = await leerRespuesta(res);
       if (!r.ok || !r.empresa) return { error: r.error ?? 'No se pudo crear la empresa' };
-      reemplazar(r.empresa, true);
-      cerrarPanel();
-      toast.success('Empresa creada en “Por contactar”');
+      reemplazarEmpresa(r.empresa, true);
+      toast.success('Empresa creada');
       return r.empresa;
     } catch {
       return { error: 'No se pudo crear la empresa' };
     }
   }
 
-  /** Put the server's version of an empresa in the list; a move sends it to the top of its column. */
-  function reemplazar(nueva: Empresa, alFrente: boolean) {
+  /**
+   * Second POST of the alta (S4): the primera oportunidad of the ficha the
+   * panel just created. The new card lands at the top of Por contactar.
+   */
+  async function crearPrimeraOportunidad(idEmpresa: string, cuerpo: Record<string, unknown>): Promise<unknown | { error: string }> {
+    try {
+      const res = await fetch('/api/crm/oportunidades', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ idEmpresa, ...cuerpo }),
+      });
+      const r = await leerRespuesta(res);
+      if (!r.ok || !r.oportunidad) return { error: r.error ?? 'No se pudo crear la oportunidad' };
+      colocar(r.oportunidad);
+      toast.success(`Oportunidad «${r.oportunidad.nombre}» creada en «Por contactar»`);
+      return r.oportunidad;
+    } catch {
+      return { error: 'No se pudo crear la oportunidad' };
+    }
+  }
+
+  /** Put the server's version of an empresa back in the list (its cards re-join on render). */
+  function reemplazarEmpresa(nueva: Empresa, alFrente: boolean) {
     setEmpresas((prev) =>
       alFrente
         ? [nueva, ...prev.filter((x) => x.idEmpresa !== nueva.idEmpresa)]
@@ -393,34 +506,43 @@ export function CrmBoard() {
     );
   }
 
+  /** Put the server's version of an oportunidad in the list, in place. */
+  function reemplazarOportunidad(nueva: Oportunidad, alFrente: boolean) {
+    setOportunidades((prev) =>
+      alFrente
+        ? [nueva, ...prev.filter((x) => x.idOportunidad !== nueva.idOportunidad)]
+        : prev.map((x) => (x.idOportunidad === nueva.idOportunidad ? nueva : x)),
+    );
+  }
+
   /** Put a card that changed column at the top of its new column, travelling there. */
-  function colocar(nueva: Empresa) {
+  function colocar(nueva: Oportunidad) {
     // A trip still in the air ends now so its card is where it belongs before the next one starts.
     const origen = focoDeOrigen.current;
     focoDeOrigen.current = null;
-    const foco = capturar(nueva.idEmpresa, nueva.etapa, origen && origen.id === nueva.idEmpresa ? origen.foco : undefined);
+    const foco = capturar(nueva.idOportunidad, nueva.etapa, origen && origen.id === nueva.idOportunidad ? origen.foco : undefined);
     [...vuelos.current.values()].forEach((fin) => fin(false));
     pendienteVuelo.current = foco;
-    reemplazar(nueva, true);
+    reemplazarOportunidad(nueva, true);
   }
 
   async function moverSinDialogo(id: string, body: Record<string, unknown>): Promise<boolean> {
-    const r = await patch(`/api/crm/empresas/${id}/etapa`, body);
-    if (!r.ok || !r.empresa) {
-      toast.error(r.error ?? 'No se pudo mover la empresa');
+    const r = await patch(`/api/crm/oportunidades/${id}/etapa`, body);
+    if (!r.ok || !r.oportunidad) {
+      toast.error(r.error ?? 'No se pudo mover la oportunidad');
       return false;
     }
-    colocar(r.empresa);
+    colocar(r.oportunidad);
     return true;
   }
 
-  function mover(id: string, etapa: Etapa) {
-    const actual = empresas.find((x) => x.idEmpresa === id);
+  function mover(id: string, etapa: EtapaOportunidad) {
+    const actual = oportunidades.find((o) => o.idOportunidad === id);
     if (!actual || actual.etapa === etapa) return;
-    if (etapa === 'perdido' || (etapa === 'contactado' && !actual.medio)) {
+    if (etapa === 'perdida' || (etapa === 'contactado' && !actual.medio)) {
       focoDeOrigen.current = { id, foco: focoEnTarjeta(id) };
     }
-    if (etapa === 'perdido') {
+    if (etapa === 'perdida') {
       setDialogo({ tipo: 'motivo', id, modo: 'mover', inicial: null });
     } else if (etapa === 'contactado' && !actual.medio) {
       setDialogo({ tipo: 'medio', id, modo: 'mover', inicial: null, destino: etapa });
@@ -432,12 +554,12 @@ export function CrmBoard() {
   async function guardarMedio(d: Extract<Dialogo, { tipo: 'medio' }>, medio: Medio): Promise<string | null> {
     const editar = d.modo === 'editar';
     const r = await patch(
-      editar ? `/api/crm/empresas/${d.id}/seguimiento` : `/api/crm/empresas/${d.id}/etapa`,
+      editar ? `/api/crm/oportunidades/${d.id}/seguimiento` : `/api/crm/oportunidades/${d.id}/etapa`,
       editar ? { medio } : { etapa: d.destino, medio },
     );
-    if (!r.ok || !r.empresa) return r.error ?? 'No se pudo guardar el medio de contacto';
-    if (editar) reemplazar(r.empresa, false);
-    else colocar(r.empresa);
+    if (!r.ok || !r.oportunidad) return r.error ?? 'No se pudo guardar el medio de contacto';
+    if (editar) reemplazarOportunidad(r.oportunidad, false);
+    else colocar(r.oportunidad);
     setDialogo(null);
     if (editar) toast.success('Medio de contacto actualizado');
     return null;
@@ -446,28 +568,28 @@ export function CrmBoard() {
   async function guardarMotivo(d: Extract<Dialogo, { tipo: 'motivo' }>, motivo: Motivo): Promise<string | null> {
     const editar = d.modo === 'editar';
     const r = await patch(
-      editar ? `/api/crm/empresas/${d.id}/seguimiento` : `/api/crm/empresas/${d.id}/etapa`,
-      editar ? { motivo } : { etapa: 'perdido', motivo },
+      editar ? `/api/crm/oportunidades/${d.id}/seguimiento` : `/api/crm/oportunidades/${d.id}/etapa`,
+      editar ? { motivo } : { etapa: 'perdida', motivo },
     );
-    if (!r.ok || !r.empresa) return r.error ?? 'No se pudo guardar el motivo';
-    if (editar) reemplazar(r.empresa, false);
-    else colocar(r.empresa);
+    if (!r.ok || !r.oportunidad) return r.error ?? 'No se pudo guardar el motivo';
+    if (editar) reemplazarOportunidad(r.oportunidad, false);
+    else colocar(r.oportunidad);
     setDialogo(null);
     if (editar) toast.success('Motivo actualizado');
     return null;
   }
 
   async function responderSugerencia(id: string, accion: 'perder' | 'seguir') {
-    const r = await post(`/api/crm/empresas/${id}/sugerencia`, { accion });
-    if (!r.ok || !r.empresa) {
+    const r = await post(`/api/crm/oportunidades/${id}/sugerencia`, { accion });
+    if (!r.ok || !r.oportunidad) {
       toast.error(r.error ?? 'No se pudo guardar la sugerencia');
       return;
     }
-    if (accion === 'perder') colocar(r.empresa);
-    else reemplazar(r.empresa, false);
+    if (accion === 'perder') colocar(r.oportunidad);
+    else reemplazarOportunidad(r.oportunidad, false);
     toast.success(
       accion === 'perder'
-        ? `${r.empresa.razonSocial} pasó a «Perdido» con el motivo «No contestan».`
+        ? `${r.oportunidad.nombre} pasó a «Perdida» con el motivo «No contestan».`
         : 'Sugerencia ocultada. Vuelve a aparecer si suma otro intento sin respuesta.',
     );
   }
@@ -478,7 +600,7 @@ export function CrmBoard() {
     ev.dataTransfer.effectAllowed = 'move';
   }
 
-  function onDrop(ev: DragEvent<HTMLElement>, etapa: Etapa) {
+  function onDrop(ev: DragEvent<HTMLElement>, etapa: EtapaOportunidad) {
     ev.preventDefault();
     setDragOver(null);
     const id = ev.dataTransfer.getData('text/plain') || draggingId.current;
@@ -489,23 +611,37 @@ export function CrmBoard() {
   const ahora = new Date();
   const hoy = hoyEnZona(ahora);
   const detalleEmpresa = detalleId ? empresas.find((x) => x.idEmpresa === detalleId) : undefined;
-  const registroEmpresa = registro ? empresas.find((x) => x.idEmpresa === registro.id) : undefined;
-  const empresaDelDialogo = dialogo ? empresas.find((x) => x.idEmpresa === dialogo.id) : undefined;
+  const registroOportunidad = registro?.idOportunidad
+    ? oportunidades.find((o) => o.idOportunidad === registro.idOportunidad)
+    : undefined;
+  const registroEmpresa = registro ? empresas.find((x) => x.idEmpresa === registro.idEmpresa) : undefined;
+  const oportunidadDelDialogo = dialogo ? oportunidades.find((o) => o.idOportunidad === dialogo.id) : undefined;
+  const empresaDelDialogo = oportunidadDelDialogo ? empresaDe.get(oportunidadDelDialogo.idEmpresa) : undefined;
+
+  /** "Editar medio" of one oportunidad — from its card or from the ficha (both PATCH /seguimiento). */
+  function editarMedioDe(o: Oportunidad) {
+    setDialogo({ tipo: 'medio', id: o.idOportunidad, modo: 'editar', inicial: o.medio, destino: o.etapa });
+  }
+
+  /** "Editar motivo" of one oportunidad — from its card or from the ficha. */
+  function editarMotivoDe(o: Oportunidad) {
+    setDialogo({ tipo: 'motivo', id: o.idOportunidad, modo: 'editar', inicial: o.motivo });
+  }
 
   return (
     <div data-testid="crm-root" className="flex h-full flex-col px-8 py-7">
       <div className="mb-5 flex flex-wrap items-end gap-4">
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-100">CRM</h1>
-          <p className="mt-1 text-sm text-slate-600 dark:text-slate-400">Empresas a las que puedes contactar</p>
+          <p className="mt-1 text-sm text-slate-600 dark:text-slate-400">Una tarjeta por oportunidad comercial</p>
         </div>
         <div className="flex-1" />
         <label className="flex h-10 w-64 max-w-full items-center gap-2 rounded-xl border border-slate-300 bg-white px-3 text-slate-500 focus-within:border-sky-500 focus-within:ring-2 focus-within:ring-sky-500/30 dark:border-slate-700 dark:bg-slate-900">
           <Search className="h-4 w-4 shrink-0" aria-hidden="true" />
           <input
             type="search"
-            aria-label="Buscar empresa o contacto"
-            placeholder="Buscar empresa o contacto"
+            aria-label="Buscar oportunidad, empresa o responsable"
+            placeholder="Buscar oportunidad, empresa o responsable"
             value={search}
             onChange={(ev) => setSearch(ev.target.value)}
             className="min-w-0 flex-1 bg-transparent text-sm text-slate-900 outline-none placeholder:text-slate-400 dark:text-slate-100"
@@ -544,7 +680,7 @@ export function CrmBoard() {
           role="alert"
           className="mb-4 flex items-center gap-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800 dark:border-red-900 dark:bg-red-950/40 dark:text-red-200"
         >
-          <span className="flex-1">No se pudieron cargar las empresas</span>
+          <span className="flex-1">No se pudieron cargar las empresas y oportunidades</span>
           <button
             type="button"
             onClick={() => setReloadKey((k) => k + 1)}
@@ -556,20 +692,50 @@ export function CrmBoard() {
       )}
 
       {/* crm-notificaciones (S1/S5): "Tu día" above the board; every board
-          mutation bumps reloadKey, so the alerts always mirror the columns. */}
-      <PanelDia reloadKey={reloadKey} onAbrir={abrirDetalle} />
+          mutation bumps reloadKey, so the alerts always mirror the columns.
+          An alert opens its deal's card when it is on the board, else the ficha. */}
+      <PanelDia
+        reloadKey={reloadKey}
+        onAbrir={(idOportunidad, idEmpresa) => {
+          if (oportunidades.some((o) => o.idOportunidad === idOportunidad)) {
+            document.querySelector<HTMLElement>(`[data-empresa-id="${idOportunidad}"]`)?.focus();
+          } else {
+            abrirDetalle(idEmpresa);
+          }
+        }}
+      />
+
+      {fichasSinTarjeta.length > 0 && (
+        <div className="mb-3 flex flex-wrap items-center gap-2" data-testid="fichas-sin-tarjeta">
+          <span className="text-sm text-slate-500 dark:text-slate-400">Fichas sin tarjeta en el tablero:</span>
+          {fichasSinTarjeta.map((e) => (
+            <button
+              key={e.idEmpresa}
+              type="button"
+              data-testid={`ficha-${e.idEmpresa}`}
+              onClick={() => abrirDetalle(e.idEmpresa)}
+              className="inline-flex items-center gap-2 rounded-full border border-slate-300 bg-white px-3 py-1 text-sm font-medium text-slate-800 hover:border-sky-500 hover:text-sky-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:hover:border-sky-500"
+            >
+              {e.razonSocial}
+              <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-600 dark:bg-slate-800 dark:text-slate-300">
+                {e.relacion === 'cliente' ? 'Cliente' : 'Prospecto'}
+              </span>
+            </button>
+          ))}
+        </div>
+      )}
 
       <div
         data-testid="crm-board"
         aria-busy={loading}
-        className="grid min-h-0 flex-1 grid-cols-[repeat(5,minmax(200px,1fr))] gap-4 overflow-x-auto pb-1.5"
+        className="grid min-h-0 flex-1 grid-cols-[repeat(6,minmax(200px,1fr))] gap-4 overflow-x-auto pb-1.5"
       >
-        {ETAPAS.map((etapa, idx) => {
-          const tarjetas = visibles.filter((e) => e.etapa === etapa);
+        {ETAPAS_OPORTUNIDAD.map((etapa, idx) => {
+          const tarjetasEtapa = visibles.filter(({ o }) => o.etapa === etapa);
           return (
             <section
               key={etapa}
-              aria-label={ETAPA_LABELS[etapa]}
+              aria-label={ETAPA_OPORTUNIDAD_LABELS[etapa]}
               data-etapa={etapa}
               onDragOver={(ev) => {
                 ev.preventDefault();
@@ -587,30 +753,27 @@ export function CrmBoard() {
             >
               <header className="flex items-center gap-2 px-3.5 pb-2.5 pt-3.5 text-sm font-bold text-slate-900 dark:text-slate-100">
                 <span className={`h-2.5 w-2.5 rounded-full ${ETAPA_PUNTO[etapa]}`} aria-hidden="true" />
-                {ETAPA_LABELS[etapa]}
+                {ETAPA_OPORTUNIDAD_LABELS[etapa]}
                 <span className="ml-auto min-w-[26px] rounded-full border border-slate-300 bg-white px-2 py-px text-center text-xs font-bold text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200">
-                  {tarjetas.length}
+                  {tarjetasEtapa.length}
                 </span>
               </header>
               <div className="flex min-h-0 flex-1 flex-col gap-2.5 overflow-y-auto px-2.5 pb-3">
-                {tarjetas.length === 0 && !loading && (
+                {tarjetasEtapa.length === 0 && !loading && (
                   <p className="rounded-xl border border-dashed border-slate-300 px-2 py-6 text-center text-[13px] text-slate-500 dark:border-slate-700">
-                    Arrastra una empresa aquí
+                    Arrastra una oportunidad aquí
                   </p>
                 )}
-                {tarjetas.map((e) => (
+                {tarjetasEtapa.map(({ o, e }) => (
                   <CrmCard
-                    key={e.idEmpresa}
+                    key={o.idOportunidad}
                     empresa={e}
-                    anterior={ETAPAS[idx - 1]}
-                    siguiente={ETAPAS[idx + 1]}
+                    oportunidad={o}
+                    anterior={ETAPAS_OPORTUNIDAD[idx - 1]}
+                    siguiente={ETAPAS_OPORTUNIDAD[idx + 1]}
                     onMover={mover}
-                    onEditarMedio={(x) =>
-                      setDialogo({ tipo: 'medio', id: x.idEmpresa, modo: 'editar', inicial: x.medio, destino: x.etapa })
-                    }
-                    onEditarMotivo={(x) =>
-                      setDialogo({ tipo: 'motivo', id: x.idEmpresa, modo: 'editar', inicial: x.motivo })
-                    }
+                    onEditarMedio={editarMedioDe}
+                    onEditarMotivo={editarMotivoDe}
                     onAbrir={abrirDetalle}
                     seleccionada={e.idEmpresa === detalleId}
                     onDragStart={onDragStart}
@@ -631,23 +794,24 @@ export function CrmBoard() {
           key={detalleEmpresa.idEmpresa}
           empresa={detalleEmpresa}
           empresas={empresas}
+          oportunidades={oportunidades}
           sectores={nombresSector}
           controlRef={detalleRef}
           onCerrar={cerrarDetalle}
           onGuardar={guardarEmpresa}
+          onCambiarRelacion={cambiarRelacion}
           onCrearSector={crearSectorPorNombre}
-          onCambiarMedio={(x) =>
-            setDialogo({ tipo: 'medio', id: x.idEmpresa, modo: 'editar', inicial: x.medio, destino: x.etapa })
-          }
-          onEditarMotivo={(x) => setDialogo({ tipo: 'motivo', id: x.idEmpresa, modo: 'editar', inicial: x.motivo })}
+          onCambiarMedio={editarMedioDe}
+          onEditarMotivo={editarMotivoDe}
           onGuardarRuc={guardarRuc}
-          onRegistrar={(id) => abrirRegistro(id, 'saliente')}
+          onRegistrar={abrirRegistroDeEmpresa}
         />
       )}
 
       {entranteAbierto && (
         <EntrantePanel
           empresas={empresas}
+          oportunidades={oportunidades}
           sectores={sectores}
           hoy={hoy}
           onCerrar={cerrarEntrante}
@@ -656,14 +820,16 @@ export function CrmBoard() {
         />
       )}
 
-      {registroEmpresa && registro && (
+      {registro && registroEmpresa && (
         <RegistrarContactoPanel
-          key={registroEmpresa.idEmpresa}
+          key={registro.idOportunidad ?? registro.idEmpresa}
           empresa={registroEmpresa}
           empresas={empresas}
+          oportunidades={oportunidades}
+          oportunidadInicial={registroOportunidad ?? null}
           direccion={registro.direccion}
           hoy={hoy}
-          onCerrar={cerrarRegistro}
+          onCerrar={() => cerrarRegistro()}
           onGuardado={contactoGuardado}
         />
       )}
@@ -675,28 +841,31 @@ export function CrmBoard() {
           onCerrar={cerrarPanel}
           onCrearSector={crearSectorPorNombre}
           onCrear={crearEmpresa}
+          onCrearOportunidad={crearPrimeraOportunidad}
         />
       )}
 
-      {dialogo?.tipo === 'medio' && empresaDelDialogo && (
+      {dialogo?.tipo === 'medio' && oportunidadDelDialogo && empresaDelDialogo && (
         <MedioDialog
           titulo={dialogo.modo === 'mover' ? '¿Cómo lo contactaste?' : 'Editar medio de contacto'}
           subtitulo={
             dialogo.modo === 'mover'
-              ? `${empresaDelDialogo.razonSocial} pasa a “${ETAPA_LABELS.contactado}”.`
-              : `${empresaDelDialogo.razonSocial}${dialogo.inicial ? ` · ahora: ${MEDIO_LABELS[dialogo.inicial]}` : ''}`
+              ? `${oportunidadDelDialogo.nombre} · ${empresaDelDialogo.razonSocial} pasa a “${ETAPA_OPORTUNIDAD_LABELS.contactado}”.`
+              : `${empresaDelDialogo.razonSocial} · ${oportunidadDelDialogo.nombre}${
+                  dialogo.inicial ? ` · ahora: ${MEDIO_LABELS[dialogo.inicial]}` : ''
+                }`
           }
           inicial={dialogo.inicial}
           onCancelar={cerrarDialogo}
           onGuardar={(medio) => guardarMedio(dialogo, medio)}
         />
       )}
-      {dialogo?.tipo === 'motivo' && empresaDelDialogo && (
+      {dialogo?.tipo === 'motivo' && oportunidadDelDialogo && empresaDelDialogo && (
         <MotivoDialog
           subtitulo={
             dialogo.modo === 'mover'
-              ? `${empresaDelDialogo.razonSocial} pasa a “${ETAPA_LABELS.perdido}”.`
-              : empresaDelDialogo.razonSocial
+              ? `${empresaDelDialogo.razonSocial} · ${oportunidadDelDialogo.nombre} pasa a “${ETAPA_OPORTUNIDAD_LABELS.perdida}”.`
+              : `${empresaDelDialogo.razonSocial} · ${oportunidadDelDialogo.nombre}`
           }
           inicial={dialogo.inicial}
           onCancelar={cerrarDialogo}

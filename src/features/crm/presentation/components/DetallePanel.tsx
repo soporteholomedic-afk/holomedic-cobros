@@ -1,12 +1,11 @@
 'use client';
 
 import { Pencil, X } from 'lucide-react';
-import { useEffect, useId, useImperativeHandle, useRef, useState, type FormEvent, type Ref } from 'react';
+import { useEffect, useId, useImperativeHandle, useMemo, useRef, useState, type FormEvent, type Ref } from 'react';
 
-import { ETAPA_LABELS, type Empresa } from '../../domain/entities';
-import { ALERTA, BOTON_PRIMARIO, BOTON_SECUNDARIO, ETAPA_PUNTO } from './crmUi';
-import { etiquetaDeTarjeta } from './etiquetas';
-import { hoyEnZona } from './fechas';
+import { ESTADOS_ATENCION, ESTADO_ATENCION_LABELS, type EstadoAtencion } from '../../domain/actividadServicios';
+import { RELACION_LABELS, type Empresa, type Oportunidad, type Relacion } from '../../domain/entities';
+import { ALERTA, BOTON_PRIMARIO, BOTON_SECUNDARIO } from './crmUi';
 import type { ResultadoRuc } from './RucFaltante';
 import { useHistorial } from './useHistorial';
 import { DetalleForm } from './DetalleForm';
@@ -31,16 +30,71 @@ interface Props {
   empresa: Empresa;
   /** Every empresa, to reject a RUC that belongs to another one before calling the server. */
   empresas: Empresa[];
+  /** Every oportunidad of the board; the panel shows the ones of this empresa. */
+  oportunidades: Oportunidad[];
   sectores: string[];
   controlRef: Ref<DetalleHandle>;
   onCerrar: () => void;
   onGuardar: (id: string, cuerpo: Record<string, unknown>) => Promise<Empresa | { error: string }>;
+  /** Manual relación change (S6.3): never derived from a deal result. */
+  onCambiarRelacion: (id: string, relacion: Relacion) => Promise<Empresa | { error: string }>;
   onCrearSector: (nombre: string) => Promise<string | { error: string }>;
-  onCambiarMedio: (e: Empresa) => void;
-  onEditarMotivo: (e: Empresa) => void;
+  /** Opens the medium dialog for one oportunidad of this empresa (PATCH /seguimiento). */
+  onCambiarMedio: (o: Oportunidad) => void;
+  /** Opens the reason dialog for one oportunidad of this empresa (PATCH /seguimiento). */
+  onEditarMotivo: (o: Oportunidad) => void;
   onGuardarRuc: (id: string, ruc: string, unir: boolean) => Promise<ResultadoRuc>;
-  /** Opens the "Registrar contacto" panel for this empresa. */
+  /** Opens the "Registrar actividad" panel for this empresa. */
   onRegistrar: (id: string) => void;
+}
+
+const CHIP_RELACION: Record<Relacion, string> = {
+  cliente:
+    'border-emerald-300 bg-emerald-50 text-emerald-800 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-200',
+  prospecto:
+    'border-amber-300 bg-amber-50 text-amber-800 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-200',
+};
+
+interface RespuestaAtencion {
+  clave: string;
+  datos: { etiqueta: string; ultimaAtencion: string | null } | null;
+}
+
+/** Live SIGLA attention signal of the ficha (S6.6/S6.7): fetched with no-store on open. */
+function useAtencion(idEmpresa: string, version: string) {
+  const [resultado, setResultado] = useState<RespuestaAtencion | null>(null);
+  const clave = `${idEmpresa}|${version}`;
+
+  useEffect(() => {
+    let cancelado = false;
+    (async () => {
+      let datos: RespuestaAtencion['datos'] = null;
+      try {
+        const res = await fetch(`/api/crm/empresas/${idEmpresa}/atencion`, { cache: 'no-store' });
+        if (res.ok) {
+          const cuerpo = (await res.json()) as { estado?: unknown; actividad?: { ultimaAtencion?: unknown } };
+          const estado = cuerpo.estado;
+          if (typeof estado === 'string' && (ESTADOS_ATENCION as readonly string[]).includes(estado)) {
+            const ultima = cuerpo.actividad?.ultimaAtencion;
+            datos = {
+              etiqueta: ESTADO_ATENCION_LABELS[estado as EstadoAtencion],
+              ultimaAtencion: typeof ultima === 'string' ? ultima : null,
+            };
+          }
+        }
+      } catch {
+        // SIGLA unreachable or an unusable answer: the error state says so inline
+      }
+      if (!cancelado) setResultado({ clave, datos });
+    })();
+    return () => {
+      cancelado = true;
+    };
+  }, [idEmpresa, clave]);
+
+  if (!resultado || resultado.clave !== clave) return { estado: 'cargando' } as const;
+  if (!resultado.datos) return { estado: 'error' } as const;
+  return { estado: 'listo', ...resultado.datos } as const;
 }
 
 /**
@@ -51,10 +105,12 @@ interface Props {
 export function DetallePanel({
   empresa,
   empresas,
+  oportunidades,
   sectores,
   controlRef,
   onCerrar,
   onGuardar,
+  onCambiarRelacion,
   onCrearSector,
   onCambiarMedio,
   onEditarMotivo,
@@ -68,6 +124,8 @@ export function DetallePanel({
   const [guardando, setGuardando] = useState(false);
   const [confirmando, setConfirmando] = useState(false);
   const [anuncio, setAnuncio] = useState('');
+  const [guardandoRelacion, setGuardandoRelacion] = useState(false);
+  const [errorRelacion, setErrorRelacion] = useState('');
 
   const titulo = useRef<HTMLHeadingElement>(null);
   const botonEditar = useRef<HTMLButtonElement>(null);
@@ -78,9 +136,16 @@ export function DetallePanel({
   const devolverAEditar = useRef(false);
   const alEscape = useRef<() => void>(() => undefined);
 
-  const { reintentar, ...historial } = useHistorial(empresa.idEmpresa, empresa.updatedAt);
+  /** The deals of THIS empresa: the "Oportunidades" section. */
+  const misOportunidades = useMemo(
+    () => oportunidades.filter((o) => o.idEmpresa === empresa.idEmpresa),
+    [oportunidades, empresa.idEmpresa],
+  );
+  // Any change in the empresa's deals (stage, merge, follow-up) refreshes the history.
+  const versionOportunidades = misOportunidades.map((o) => `${o.idOportunidad}:${o.etapa}:${o.updatedAt}`).join('|');
+  const { reintentar, ...historial } = useHistorial(empresa.idEmpresa, empresa.updatedAt, versionOportunidades);
+  const atencion = useAtencion(empresa.idEmpresa, empresa.updatedAt);
   const ahora = new Date();
-  const etiqueta = etiquetaDeTarjeta(empresa, ahora);
 
   const editando = borrador !== null;
   const sucio = borrador !== null && estaSucio(borrador, empresa);
@@ -162,6 +227,16 @@ export function DetallePanel({
     focoPendiente.current = 'det-razon';
   }
 
+  /** Manual relation toggle (S6.3). The board PATCHes and returns the updated ficha. */
+  async function cambiarRelacion(relacion: Relacion) {
+    if (guardandoRelacion) return;
+    setErrorRelacion('');
+    setGuardandoRelacion(true);
+    const r = await onCambiarRelacion(empresa.idEmpresa, relacion);
+    setGuardandoRelacion(false);
+    if ('error' in r) setErrorRelacion(r.error);
+  }
+
   function cambiar(b: Borrador) {
     setBorrador(b);
     setError('');
@@ -231,11 +306,28 @@ export function DetallePanel({
           >
             {empresa.razonSocial}
           </h2>
-          <p className="mt-1 flex items-center gap-1.5 text-[13px] text-slate-600 dark:text-slate-400">
-            <span className={`h-2.5 w-2.5 rounded-full ${ETAPA_PUNTO[empresa.etapa]}`} aria-hidden="true" />
-            <span>{ETAPA_LABELS[empresa.etapa]}</span>
-            {etiqueta && <span>{` · ${etiqueta.texto}`}</span>}
+          <p className="mt-1.5 flex flex-wrap items-center gap-2">
+            <span
+              className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-semibold ${CHIP_RELACION[empresa.relacion]}`}
+            >
+              {RELACION_LABELS[empresa.relacion]}
+            </span>
+            {!editando && (
+              <button
+                type="button"
+                disabled={guardandoRelacion}
+                onClick={() => void cambiarRelacion(empresa.relacion === 'cliente' ? 'prospecto' : 'cliente')}
+                className="text-[13px] font-semibold text-sky-700 underline hover:brightness-110 disabled:opacity-50 dark:text-sky-300"
+              >
+                {`Cambiar a ${RELACION_LABELS[empresa.relacion === 'cliente' ? 'prospecto' : 'cliente'].toLowerCase()}`}
+              </button>
+            )}
           </p>
+          {errorRelacion && (
+            <p role="alert" className={`mt-1.5 ${ALERTA}`}>
+              {errorRelacion}
+            </p>
+          )}
         </div>
         <div className="ml-auto flex shrink-0 items-center gap-1">
           {!editando && (
@@ -312,16 +404,17 @@ export function DetallePanel({
       ) : (
         <DetalleVista
           empresa={empresa}
+          oportunidades={misOportunidades}
+          atencion={atencion}
           onCambiarMedio={onCambiarMedio}
           onEditarMotivo={onEditarMotivo}
           onGuardarRuc={(ruc, unir) => onGuardarRuc(empresa.idEmpresa, ruc, unir)}
           historial={historial}
           onReintentarHistorial={reintentar}
           ahora={ahora}
-          hoy={hoyEnZona(ahora)}
         />
       )}
-      {!editando && empresa.etapa !== 'perdido' && (
+      {!editando && (
         <div
           data-pie-detalle
           className="sticky bottom-0 mt-auto flex justify-end border-t border-slate-200 bg-white px-6 pb-4 pt-3 shadow-[0_-8px_12px_-8px_rgba(15,23,42,0.12)] dark:border-slate-800 dark:bg-slate-900"
@@ -334,7 +427,7 @@ export function DetallePanel({
             }}
             className={BOTON_PRIMARIO}
           >
-            Registrar contacto
+            Registrar actividad
           </button>
         </div>
       )}

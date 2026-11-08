@@ -1,17 +1,21 @@
 import type {
   AuditoriaConfigCrm,
   DatosEmpresa,
+  DatosOportunidad,
   DatosSunat,
   Empresa,
   EntradaConfigCrm,
-  EstadoEmpresa,
   IconoSector,
   Interaccion,
   NuevaEmpresa,
   NuevaInteraccion,
+  NuevaOportunidad,
+  Oportunidad,
+  Relacion,
   Sector,
-  SeguimientoEmpresa,
+  SeguimientoOportunidad,
 } from './entities';
+import type { ActividadServicios } from './actividadServicios';
 
 export interface ICrmEmpresaRepository {
   getById(id: string): Promise<Empresa | null>;
@@ -27,31 +31,56 @@ export interface ICrmEmpresaRepository {
    * when the new RUC belongs to another empresa.
    */
   update(id: string, datos: DatosEmpresa): Promise<Empresa>;
-  /** Write stage, medium and loss reason together. Throws `EmpresaNotFoundError`. */
-  updateEstado(id: string, estado: EstadoEmpresa): Promise<Empresa>;
-  /**
-   * Write the whole follow-up state and, when given, a new interaction in ONE
-   * transaction. Throws `EmpresaNotFoundError`.
-   */
-  updateSeguimiento(
-    id: string,
-    seguimiento: SeguimientoEmpresa,
-    interaccion: NuevaInteraccion | null,
-  ): Promise<Empresa>;
+  /** Write the commercial relationship. Throws `EmpresaNotFoundError`. */
+  updateRelacion(id: string, relacion: Relacion): Promise<Empresa>;
   addInteraccion(idEmpresa: string, interaccion: NuevaInteraccion): Promise<Interaccion>;
-  /** Contact history of an empresa, newest first. */
+  /** Activity history of an empresa, newest first. */
   listInteracciones(idEmpresa: string): Promise<Interaccion[]>;
   /**
-   * In one transaction: move the interactions and the contacts (skipping exact
-   * duplicates, keeping the destination's principal) of `idOrigen` into
-   * `idDestino` and delete the origin. Returns the destination.
-   * Throws `EmpresaNotFoundError` when either does not exist.
+   * In one transaction: move the interactions, the oportunidades and the
+   * contacts (skipping exact duplicates, keeping the destination's principal)
+   * of `idOrigen` into `idDestino` and delete the origin. Returns the
+   * destination. Throws `EmpresaNotFoundError` when either does not exist.
    */
   fusionar(idOrigen: string, idDestino: string): Promise<Empresa>;
   /** Sectors with their icon, alphabetical by name. */
   listSectores(): Promise<Sector[]>;
   /** Throws `SectorDuplicadoError` (case-insensitive). Returns the stored sector. */
   createSector(nombre: string, icono: IconoSector | null): Promise<Sector>;
+}
+
+export interface ICrmOportunidadRepository {
+  getById(idOportunidad: string): Promise<Oportunidad | null>;
+  /** All oportunidades of all empresas, newest first. */
+  list(): Promise<Oportunidad[]>;
+  /** Oportunidades of one empresa, newest first. Throws nothing for an unknown empresa (empty list). */
+  listByEmpresa(idEmpresa: string): Promise<Oportunidad[]>;
+  /** Throws `EmpresaNotFoundError` when the empresa does not exist. */
+  create(idEmpresa: string, datos: NuevaOportunidad, migrada?: boolean): Promise<Oportunidad>;
+  /**
+   * Replace the editable data of the oportunidad. Throws `OportunidadNotFoundError`.
+   */
+  updateDatos(idOportunidad: string, datos: DatosOportunidad): Promise<Oportunidad>;
+  /**
+   * Write the whole follow-up state and, when given, a new activity in ONE
+   * transaction (the activity links to this oportunidad). Throws
+   * `OportunidadNotFoundError`.
+   */
+  updateSeguimiento(
+    idOportunidad: string,
+    seguimiento: SeguimientoOportunidad,
+    interaccion: NuevaInteraccion | null,
+  ): Promise<Oportunidad>;
+}
+
+/**
+ * Port to the SIGLA production database (read-only): the date of the last
+ * performed service per empresa RUC. Winning a deal or registering a call
+ * never writes here — only real attention data answers it.
+ */
+export interface IAtencionesServicio {
+  /** Last attention date of the RUC; NULL when SIGLA has none for it. */
+  ultimaAtencion(ruc: string): Promise<string | null>;
 }
 
 // ---------------------------------------------------------------------------

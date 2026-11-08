@@ -1,10 +1,12 @@
 import {
-  ETAPA_LABELS,
+  ETAPAS_CERRADAS,
+  ETAPA_OPORTUNIDAD_LABELS,
   UMBRAL_INTENTOS,
   type AccionTipo,
   type Direccion,
   type Empresa,
   type Medio,
+  type Oportunidad,
   type Origen,
   type Resultado,
 } from '../../domain/entities';
@@ -41,13 +43,18 @@ export interface AccionForm {
   fecha: string | null;
 }
 
-/** Next action to start from: the stored one while it is not overdue, else an empty form dated the next working day. */
-export function accionInicial(e: Empresa, hoy: string, requerida: boolean): AccionForm {
-  const guardada = e.proximaAccion;
+/** Whether the panel asks for a próxima acción: a LINKED deal that is not closed needs one; a general activity never does (S6.4). */
+export function accionRequerida(o: Oportunidad | null): boolean {
+  return o !== null && !ETAPAS_CERRADAS.includes(o.etapa);
+}
+
+/** Next action to start from for one deal: the stored one while it is not overdue, else an empty form dated the next working day. */
+export function accionInicialDe(o: Oportunidad | null, hoy: string): AccionForm {
+  const guardada = o?.proximaAccion;
   if (guardada && guardada.fecha >= hoy) {
     return { tipo: guardada.tipo, detalle: guardada.detalle ?? '', fecha: guardada.fecha };
   }
-  return { tipo: requerida ? null : 'ninguna', detalle: '', fecha: sumarDiasHabiles(hoy, 1) };
+  return { tipo: accionRequerida(o) ? null : 'ninguna', detalle: '', fecha: sumarDiasHabiles(hoy, 1) };
 }
 
 /** Rejects a next action with the server's own messages; "Sin próxima acción" is always fine. */
@@ -69,19 +76,39 @@ export function accionACuerpo(a: AccionForm): Record<string, string> | null {
   return detalle ? { tipo: a.tipo, detalle, fecha: a.fecha } : { tipo: a.tipo, fecha: a.fecha };
 }
 
-/** Days with next actions of open cards other than `excluirId`, for the dots of the calendar. */
-export function agendaDe(empresas: Empresa[], excluirId: string | null): Record<string, number> {
-  const dias: Record<string, number> = {};
-  for (const e of empresas) {
-    if (e.idEmpresa === excluirId || !e.proximaAccion || e.etapa === 'cliente' || e.etapa === 'perdido') continue;
-    dias[e.proximaAccion.fecha] = (dias[e.proximaAccion.fecha] ?? 0) + 1;
+/** One scheduled acción of an open deal, with the names the calendar shows. */
+export interface EntradaAgenda {
+  idOportunidad: string;
+  nombreOportunidad: string;
+  nombreEmpresa: string;
+}
+
+/**
+ * Days with scheduled actions of open deals of OTHER empresas, each entry
+ * naming its deal and its empresa. Closed deals are skipped: their next
+ * action was cleared, and the panel's own empresa is excluded because the
+ * activity being typed may change those days.
+ */
+export function agendaDe(
+  oportunidades: Oportunidad[],
+  nombreDeEmpresa: (idEmpresa: string) => string,
+  excluirEmpresaId: string | null,
+): Record<string, EntradaAgenda[]> {
+  const dias: Record<string, EntradaAgenda[]> = {};
+  for (const o of oportunidades) {
+    if (o.idEmpresa === excluirEmpresaId || !o.proximaAccion || ETAPAS_CERRADAS.includes(o.etapa)) continue;
+    (dias[o.proximaAccion.fecha] ??= []).push({
+      idOportunidad: o.idOportunidad,
+      nombreOportunidad: o.nombre,
+      nombreEmpresa: nombreDeEmpresa(o.idEmpresa),
+    });
   }
   return dias;
 }
 
 export type ResultadoSaliente = 'conversamos' | 'no_contesto' | 'deje_mensaje';
 
-/** What the "Registrar contacto" panel holds. */
+/** What the "Registrar actividad" panel holds (S4: the old "Registrar contacto"). */
 export interface RegistroForm {
   direccion: Direccion;
   medio: Medio;
@@ -93,15 +120,15 @@ export interface RegistroForm {
   accion: AccionForm;
 }
 
-export function registroInicial(e: Empresa, direccion: Direccion, hoy: string): RegistroForm {
+export function registroInicial(o: Oportunidad | null, direccion: Direccion, hoy: string): RegistroForm {
   return {
     direccion,
-    medio: e.medio ?? 'llamada',
-    medioOtro: e.medio === 'otro' ? (e.medioOtro ?? '') : '',
+    medio: o?.medio ?? 'llamada',
+    medioOtro: o?.medio === 'otro' ? (o.medioOtro ?? '') : '',
     resultado: 'conversamos',
     respondido: true,
     resumen: '',
-    accion: accionInicial(e, hoy, e.etapa !== 'cliente'),
+    accion: accionInicialDe(o, hoy),
   };
 }
 
@@ -121,34 +148,40 @@ export function etiquetaResumen(f: RegistroForm): { texto: string; opcional: boo
   return { texto: 'Resumen', opcional: true };
 }
 
-/** One-line preview of what saving does to the card (L8, function `prever` of the artboard). */
-export function previaContacto(e: Empresa, f: Pick<RegistroForm, 'direccion' | 'resultado' | 'respondido'>): string {
-  const col = ETAPA_LABELS[e.etapa];
-  const n = e.intentosSinRespuesta + 1;
+/** One-line preview of what saving does to the linked deal, or to the history alone (L8, function `prever` of the artboard). */
+export function previaActividad(
+  empresa: Empresa,
+  o: Oportunidad | null,
+  f: Pick<RegistroForm, 'direccion' | 'resultado' | 'respondido'>,
+): string {
+  if (!o) return `Actividad general: se guarda solo en el historial de ${empresa.razonSocial}. Ninguna tarjeta cambia.`;
+  const col = ETAPA_OPORTUNIDAD_LABELS[o.etapa];
+  const n = o.intentosSinRespuesta + 1;
+  const sujeta = `La oportunidad «${o.nombre}»`;
   if (esConversacion(f)) {
-    const cero = e.intentosSinRespuesta > 0 ? ' El contador de intentos vuelve a cero.' : '';
-    if (e.etapa === 'por_contactar') return `La tarjeta pasa a «Contactado» con la etiqueta «Conversamos».${cero}`;
-    if (e.etapa === 'contactado') return `La tarjeta se queda en «Contactado» y cambia a «Conversamos».${cero}`;
-    return `La tarjeta se queda en «${col}» y guarda la conversación en el historial.${cero}`;
+    const cero = o.intentosSinRespuesta > 0 ? ' El contador de intentos vuelve a cero.' : '';
+    if (o.etapa === 'por_contactar') return `${sujeta} pasa a «Contactado» con la etiqueta «Conversamos».${cero}`;
+    if (o.etapa === 'contactado') return `${sujeta} se queda en «Contactado» y cambia a «Conversamos».${cero}`;
+    return `${sujeta} se queda en «${col}» y guarda la conversación en el historial.${cero}`;
   }
   if (f.direccion === 'entrante') {
-    return e.etapa === 'por_contactar'
-      ? 'La tarjeta pasa a «Contactado» con la etiqueta «Falta responder».'
-      : `La tarjeta se queda en «${col}» con la etiqueta «Falta responder».`;
+    return o.etapa === 'por_contactar'
+      ? `${sujeta} pasa a «Contactado» con la etiqueta «Falta responder».`
+      : `${sujeta} se queda en «${col}» con la etiqueta «Falta responder».`;
   }
   const sugerir =
     n >= UMBRAL_INTENTOS
-      ? ' Como son 3 o más seguidos, te sugerirá pasarla a Perdido con el motivo «No contestan».'
+      ? ' Como son 3 o más seguidos, te sugerirá pasarla a Perdida con el motivo «No contestan».'
       : '';
-  if (e.etapa === 'por_contactar') {
+  if (o.etapa === 'por_contactar') {
     return (
       (n === 1
-        ? 'La tarjeta pasa a «Contactado» con la etiqueta «Sin respuesta · 1».'
-        : `La tarjeta sigue en «Contactado» como «Sin respuesta · ${n}».`) + sugerir
+        ? `${sujeta} pasa a «Contactado» con la etiqueta «Sin respuesta · 1».`
+        : `${sujeta} sigue en «Contactado» como «Sin respuesta · ${n}».`) + sugerir
     );
   }
-  if (e.etapa === 'contactado') return `La tarjeta se queda en «Contactado» como «Sin respuesta · ${n}».${sugerir}`;
-  return `La tarjeta se queda en «${col}» y suma el intento ${n} sin respuesta.${sugerir}`;
+  if (o.etapa === 'contactado') return `${sujeta} se queda en «Contactado» como «Sin respuesta · ${n}».${sugerir}`;
+  return `${sujeta} se queda en «${col}» y suma el intento ${n} sin respuesta.${sugerir}`;
 }
 
 /** Medium "Otro" needs its "¿Cuál?" (S7). */
@@ -159,17 +192,24 @@ export function validarMedio(medio: Medio, medioOtro: string): Fallos {
 
 export const ORDEN_REGISTRO: readonly CampoContacto[] = ['otro', 'resumen', 'accion', 'accionDetalle', 'fecha'];
 
-export function validarRegistro(f: RegistroForm, hoy: string): Fallos {
+/**
+ * Same checks and messages as the server. The next action is required only
+ * when the activity is LINKED to a deal that is not closed — and a Perdida
+ * deal cannot even be chosen; a general activity never requires it (S6.4).
+ */
+export function validarRegistro(f: RegistroForm, o: Oportunidad | null, hoy: string): Fallos {
   const fallos: Fallos = validarMedio(f.medio, f.medioOtro);
   const resumen = mensajeDe(() => validarResumen(f.resumen, esConversacion(f)));
   if (resumen) fallos.resumen = resumen;
-  return { ...fallos, ...validarAccion(f.accion, hoy) };
+  const accion = accionRequerida(o) && f.accion.tipo === 'ninguna' ? { ...f.accion, tipo: null } : f.accion;
+  return { ...fallos, ...validarAccion(accion, hoy) };
 }
 
-/** JSON body of `POST /api/crm/empresas/[id]/contactos`. */
-export function cuerpoRegistro(f: RegistroForm): Record<string, unknown> {
+/** JSON body of `POST /api/crm/empresas/[id]/actividades` (S4). */
+export function cuerpoRegistro(f: RegistroForm, idOportunidad: string | null): Record<string, unknown> {
   const resumen = f.resumen.trim();
   return {
+    idOportunidad,
     direccion: f.direccion,
     medio: f.medio,
     ...(f.medio === 'otro' ? { medioOtro: f.medioOtro.trim() } : {}),
@@ -233,8 +273,12 @@ export function partirDato(dato: string): { telefono?: string; correo?: string }
 
 export const ORDEN_ENTRANTE: readonly CampoContacto[] = ['razon', 'ruc', 'otro', 'dato', 'accion', 'accionDetalle', 'fecha'];
 
-/** Same checks and messages as the server; `existente` relaxes the contact data (we already have it). */
-export function validarEntrante(f: EntranteForm, hoy: string, destino: Empresa | null): Fallos {
+/**
+ * Same checks and messages as the server. The inbound contact always opens a
+ * deal waiting for our reply, so its próxima acción is required even for a
+ * matched cliente — the new deal, not the ficha, carries it.
+ */
+export function validarEntrante(f: EntranteForm, hoy: string): Fallos {
   const fallos: Fallos = {};
   const razon = mensajeDe(() => opcionalObligatorio(f.razonSocial));
   if (razon) fallos.razon = razon;
@@ -245,14 +289,13 @@ export function validarEntrante(f: EntranteForm, hoy: string, destino: Empresa |
   Object.assign(fallos, validarMedio(f.medio, f.medioOtro));
   const { telefono, correo } = partirDato(f.dato);
   if (!telefono && !correo) {
-    if (!destino) fallos.dato = 'Escribe un teléfono o un correo para poder responder.';
+    fallos.dato = 'Escribe un teléfono o un correo para poder responder.';
   } else if (telefono && telefono.replace(/\D/g, '').length !== 9) {
     fallos.dato = 'El teléfono debe tener 9 dígitos.';
   } else if (correo && !isValidCorreo(correo)) {
     fallos.dato = 'El correo no es válido.';
   }
-  const requerida = (destino?.etapa ?? 'contactado') !== 'cliente';
-  const accion = requerida && f.accion.tipo === 'ninguna' ? { ...f.accion, tipo: null } : f.accion;
+  const accion = f.accion.tipo === 'ninguna' ? { ...f.accion, tipo: null } : f.accion;
   return { ...fallos, ...validarAccion(accion, hoy) };
 }
 
@@ -262,7 +305,7 @@ function opcionalObligatorio(valor: string): string {
 }
 
 /**
- * JSON body of `POST /api/crm/entrantes`. The sector goes only for a new card:
+ * JSON body of `POST /api/crm/entrantes`. The sector goes only for a new ficha:
  * when the contact lands on an existing empresa (`destino`) it keeps its own.
  */
 export function cuerpoEntrante(f: EntranteForm, destino: Empresa | null = null): Record<string, unknown> {
@@ -283,6 +326,8 @@ export function cuerpoEntrante(f: EntranteForm, destino: Empresa | null = null):
 
 /** Text under the form: what saving does (`pEntrante` of the artboard). */
 export function previaEntrante(destino: Empresa | null, ruc: string): string {
-  if (destino) return `Se agrega al historial de ${destino.razonSocial} y la tarjeta muestra «Falta responder».`;
-  return `Se crea una tarjeta en «Contactado» con la etiqueta «Falta responder»${ruc.trim() ? '' : ' y marcada «Falta RUC»'}.`;
+  if (destino) return `Se crea una oportunidad en «Contactado» para ${destino.razonSocial}, con la etiqueta «Falta responder».`;
+  return `Se registra la empresa y su primera oportunidad en «Contactado», con la etiqueta «Falta responder»${
+    ruc.trim() ? '' : ' y marcada «Falta RUC»'
+  }.`;
 }

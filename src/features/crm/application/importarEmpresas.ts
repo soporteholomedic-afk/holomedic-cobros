@@ -82,8 +82,10 @@ export async function evaluarImportacion(
 }
 
 /**
- * Import the ok rows into "Por contactar" (one principal contact each), after
- * creating the sectors they need. Rows with an error or repeated are skipped.
+ * Import the ok rows as Prospecto fichas (one principal contact each), after
+ * creating the sectors they need. No oportunidad is ever generated here
+ * (S4: imports create fichas, not fictitious deals). Rows with an error or
+ * repeated are skipped.
  */
 export class ImportarEmpresasUseCase {
   constructor(private readonly repo: ICrmEmpresaRepository) {}
@@ -113,8 +115,7 @@ export class ImportarEmpresasUseCase {
           contactos: [{ nombre: f.contacto.trim(), telefono: f.telefono.trim(), correo: opcional(f.correo) }],
           notas: null,
           direccion: null,
-          etapa: 'por_contactar',
-          origen: null,
+          relacion: 'prospecto',
         });
         importadas++;
       } catch (error) {

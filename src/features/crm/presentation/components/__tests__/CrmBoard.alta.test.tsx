@@ -5,11 +5,14 @@ const toastMock = vi.hoisted(() => ({ success: vi.fn(), error: vi.fn() }));
 vi.mock('sonner', () => ({ toast: toastMock }));
 
 import { CrmBoard } from '../CrmBoard';
-import { llamadas, mockApi } from './crmFixtures';
+import { empresa, llamadas, mockApi, oportunidad } from './crmFixtures';
 
 function columna(nombre: string): HTMLElement {
   return screen.getByRole('region', { name: nombre });
 }
+
+const LA_NUEVA = 'Ferretería Industrial Norte S.A.C.';
+const DEAL = 'Exámenes de ingreso 2026';
 
 async function cargado() {
   await screen.findByText('Constructora Andina S.A.C.');
@@ -27,13 +30,35 @@ function llenar(panel: HTMLElement, valores: Record<string, string>) {
 }
 
 const FORM_VALIDO = {
-  '^Razón social': 'Ferretería Industrial Norte S.A.C.',
+  '^Razón social': LA_NUEVA,
   '^RUC': '20123456789',
   '^Nombre': 'Elena Mendoza',
   '^Teléfono': '955 201 334',
 };
 
+/** Enables the "Primera oportunidad (opcional)" section and fills its required name. */
+function activarOportunidad(panel: HTMLElement, valores: Record<string, string> = { '^Nombre de la oportunidad': DEAL }) {
+  fireEvent.click(within(panel).getByLabelText(/Crear también su primera oportunidad/));
+  llenar(panel, valores);
+}
+
 const crear = (panel: HTMLElement) => fireEvent.click(within(panel).getByRole('button', { name: /Crear empresa/ }));
+
+const dealCreado = (body: Record<string, unknown>) => ({
+  status: 201,
+  body: {
+    success: true,
+    oportunidad: oportunidad({
+      idOportunidad: 'o-9',
+      idEmpresa: String(body.idEmpresa),
+      nombre: String(body.nombre),
+      servicio: (body.servicio as string | null) ?? null,
+      origen: (body.origen as never) ?? null,
+      responsableNombre: (body.responsableNombre as string | null) ?? null,
+      montoEstimado: (body.montoEstimado as number | null) ?? null,
+    }),
+  },
+});
 
 beforeEach(() => {
   toastMock.success.mockClear();
@@ -44,7 +69,7 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-describe('CrmBoard — panel de alta', () => {
+describe('CrmBoard — panel de alta (S7.1: la ficha sola)', () => {
   it('opens as a floating panel (fixed, so the board does not move) with the focus on the first field', async () => {
     mockApi();
     render(<CrmBoard />);
@@ -57,24 +82,134 @@ describe('CrmBoard — panel de alta', () => {
     expect(screen.getByTestId('crm-board')).toBeInTheDocument();
   });
 
-  it('creates the empresa with ONE contact, lands first in Por contactar, closes, toasts and returns the focus', async () => {
+  it('creates ONLY the ficha with ONE contact: one POST, no deal POST, no new card anywhere, closes, toasts, focus back', async () => {
     const fn = mockApi();
     render(<CrmBoard />);
     await cargado();
     const panel = abrirPanel();
     llenar(panel, FORM_VALIDO);
     crear(panel);
-    await waitFor(() => expect(within(columna('Por contactar')).getByText('Ferretería Industrial Norte S.A.C.')).toBeInTheDocument());
+    await waitFor(() => expect(toastMock.success).toHaveBeenCalledWith('Empresa creada'));
+    expect(llamadas(fn, 'POST', '/api/crm/empresas')).toHaveLength(1);
     expect(llamadas(fn, 'POST', '/api/crm/empresas')[0]?.body).toEqual({
-      razonSocial: 'Ferretería Industrial Norte S.A.C.',
+      razonSocial: LA_NUEVA,
       ruc: '20123456789',
       contactos: [{ nombre: 'Elena Mendoza', telefono: '955 201 334' }],
     });
-    const titulos = within(columna('Por contactar')).getAllByRole('heading', { level: 3 }).map((h) => h.textContent);
-    expect(titulos[0]).toBe('Ferretería Industrial Norte S.A.C.');
+    expect(llamadas(fn, 'POST', '/api/crm/oportunidades')).toHaveLength(0);
+    // S2/S7.1: the new ficha has no oportunidades, so it adds no card to any column.
+    expect(screen.queryByText(LA_NUEVA, { selector: 'h3' })).toBeNull();
     expect(screen.queryByRole('dialog', { name: /Nueva empresa/ })).toBeNull();
-    expect(toastMock.success).toHaveBeenCalledWith('Empresa creada en “Por contactar”');
     expect(screen.getByRole('button', { name: /Nueva empresa/ })).toHaveFocus();
+  });
+
+  it('keeps the "Primera oportunidad" section collapsed (unchecked) until the checkbox is ticked', async () => {
+    mockApi();
+    render(<CrmBoard />);
+    await cargado();
+    const panel = abrirPanel();
+    expect(within(panel).getByRole('group', { name: 'Primera oportunidad (opcional)' })).toBeInTheDocument();
+    expect(within(panel).getByLabelText(/Crear también su primera oportunidad/)).not.toBeChecked();
+    expect(within(panel).queryByLabelText(/^Nombre de la oportunidad/)).toBeNull();
+    fireEvent.click(within(panel).getByLabelText(/Crear también su primera oportunidad/));
+    expect(within(panel).getByLabelText(/^Nombre de la oportunidad/)).toBeInTheDocument();
+    for (const etiqueta of [/^Servicio de interés/, /^Responsable/, /^Monto estimado/]) {
+      expect(within(panel).getByLabelText(etiqueta)).toBeInTheDocument();
+    }
+    // Unticking hides the fields again.
+    fireEvent.click(within(panel).getByLabelText(/Crear también su primera oportunidad/));
+    expect(within(panel).queryByLabelText(/^Nombre de la oportunidad/)).toBeNull();
+  });
+
+  it('with the primera oportunidad enabled, POSTs the ficha and THEN the deal, and the new card lands first in Por contactar', async () => {
+    const fn = mockApi({
+      post: () => ({ status: 201, body: { success: true, empresa: empresa({ idEmpresa: 'e-9', razonSocial: LA_NUEVA, ruc: '20123456789' }) } }),
+      nuevaOportunidad: (body) => dealCreado(body),
+    });
+    render(<CrmBoard />);
+    await cargado();
+    const panel = abrirPanel();
+    llenar(panel, FORM_VALIDO);
+    activarOportunidad(panel, {
+      '^Nombre de la oportunidad': ' Exámenes de ingreso 2026 ',
+      '^Servicio de interés': ' Exámenes ocupacionales ',
+      '^Responsable': ' Luis Cárdenas ',
+      '^Monto estimado': ' 7500 ',
+    });
+    fireEvent.click(within(panel).getByRole('button', { name: /¿Cómo nos conoció\?/ }));
+    fireEvent.click(within(panel).getByRole('option', { name: /^Referido por un cliente/ }));
+    crear(panel);
+    await waitFor(() => expect(within(columna('Por contactar')).getByText(DEAL)).toBeInTheDocument());
+    expect(llamadas(fn, 'POST', '/api/crm/empresas')).toHaveLength(1);
+    const deals = llamadas(fn, 'POST', '/api/crm/oportunidades');
+    expect(deals).toHaveLength(1);
+    expect(deals[0]!.body).toEqual({
+      idEmpresa: 'e-9',
+      nombre: 'Exámenes de ingreso 2026',
+      servicio: 'Exámenes ocupacionales',
+      origen: 'referido',
+      responsableNombre: 'Luis Cárdenas',
+      montoEstimado: 7500,
+    });
+    const titulos = within(columna('Por contactar')).getAllByRole('heading', { level: 3 }).map((h) => h.textContent);
+    expect(titulos[0]).toBe(LA_NUEVA);
+    expect(toastMock.success).toHaveBeenCalledWith(`Oportunidad «${DEAL}» creada en «Por contactar»`);
+    expect(screen.queryByRole('dialog', { name: /Nueva empresa/ })).toBeNull();
+  });
+
+  it('if the deal POST fails the FICHA stays created, the panel shows the error with a retry, and retrying sends ONLY the deal', async () => {
+    let fallos = 0;
+    const fn = mockApi({
+      post: () => ({ status: 201, body: { success: true, empresa: empresa({ idEmpresa: 'e-9', razonSocial: LA_NUEVA, ruc: '20123456789' }) } }),
+      nuevaOportunidad: (body) => {
+        if (fallos === 0) {
+          fallos++;
+          return { status: 500, body: { success: false, error: 'Error al crear la oportunidad' } };
+        }
+        return dealCreado(body);
+      },
+    });
+    render(<CrmBoard />);
+    await cargado();
+    const panel = abrirPanel();
+    llenar(panel, FORM_VALIDO);
+    activarOportunidad(panel);
+    crear(panel);
+    const alerta = await within(panel).findByRole('alert');
+    expect(alerta).toHaveTextContent('quedó creada, pero la oportunidad no');
+    expect(alerta).toHaveTextContent('Error al crear la oportunidad');
+    // The ficha survived the failed second POST (batch semantics, S4).
+    expect(llamadas(fn, 'POST', '/api/crm/empresas')).toHaveLength(1);
+    expect(toastMock.success).toHaveBeenCalledWith('Empresa creada');
+    expect(screen.queryByRole('dialog', { name: /Nueva empresa/ })).toBeInTheDocument();
+
+    fireEvent.click(within(panel).getByRole('button', { name: 'Reintentar oportunidad' }));
+    await waitFor(() => expect(within(columna('Por contactar')).getByText(DEAL)).toBeInTheDocument());
+    expect(screen.queryByRole('dialog', { name: /Nueva empresa/ })).toBeNull();
+    // The retry re-sent ONLY the deal: the ficha was never created twice.
+    expect(llamadas(fn, 'POST', '/api/crm/empresas')).toHaveLength(1);
+    expect(llamadas(fn, 'POST', '/api/crm/oportunidades')).toHaveLength(2);
+    expect(toastMock.success).toHaveBeenCalledWith(`Oportunidad «${DEAL}» creada en «Por contactar»`);
+  });
+
+  it('rejects a missing deal name and a bad monto before calling anything', async () => {
+    const fn = mockApi();
+    render(<CrmBoard />);
+    await cargado();
+    let panel = abrirPanel();
+    llenar(panel, FORM_VALIDO);
+    activarOportunidad(panel, { '^Nombre de la oportunidad': '   ' });
+    crear(panel);
+    expect(within(panel).getByRole('alert')).toHaveTextContent('Falta el nombre de la oportunidad');
+    expect(within(panel).getByLabelText(/^Nombre de la oportunidad/)).toHaveFocus();
+    expect(llamadas(fn, 'POST', '/api/crm/empresas')).toHaveLength(0);
+
+    // The section stays open after the failed submit: fill it properly and try a bad monto.
+    llenar(panel, { '^Nombre de la oportunidad': DEAL, '^Monto estimado': '0' });
+    crear(panel);
+    expect(within(panel).getByRole('alert')).toHaveTextContent('El monto estimado debe ser un número mayor a 0');
+    expect(within(panel).getByLabelText(/^Monto estimado/)).toHaveFocus();
+    expect(llamadas(fn, 'POST', '/api/crm/empresas')).toHaveLength(0);
   });
 
   it('sends the optional sector, email and notes only when they are filled', async () => {
@@ -87,7 +222,7 @@ describe('CrmBoard — panel de alta', () => {
     crear(panel);
     await waitFor(() => expect(llamadas(fn, 'POST', '/api/crm/empresas')).toHaveLength(1));
     expect(llamadas(fn, 'POST', '/api/crm/empresas')[0]?.body).toEqual({
-      razonSocial: 'Ferretería Industrial Norte S.A.C.',
+      razonSocial: LA_NUEVA,
       ruc: '20123456789',
       sector: 'Construcción',
       notas: 'Llegó por referido.',
@@ -122,8 +257,8 @@ describe('CrmBoard — panel de alta', () => {
     llenar(panel, FORM_VALIDO);
     crear(panel);
     expect(await within(panel).findByRole('alert')).toHaveTextContent('Ya existe una empresa con el RUC');
-    expect(within(panel).getByLabelText(/^Razón social/)).toHaveValue('Ferretería Industrial Norte S.A.C.');
-    expect(screen.queryByText('Ferretería Industrial Norte S.A.C.', { selector: 'h3' })).toBeNull();
+    expect(within(panel).getByLabelText(/^Razón social/)).toHaveValue(LA_NUEVA);
+    expect(screen.queryByText(LA_NUEVA, { selector: 'h3' })).toBeNull();
     expect(within(panel).getByRole('button', { name: /Crear empresa/ })).toBeEnabled();
   });
 
@@ -161,7 +296,7 @@ describe('CrmBoard — panel de alta', () => {
     expect(within(panel).getByRole('button', { name: /Creando/ })).toBeDisabled();
     fireEvent.submit(panel.querySelector('form') as HTMLFormElement);
     expect(llamadas(fn, 'POST', '/api/crm/empresas')).toHaveLength(1);
-    liberar({ ok: true, status: 201, json: async () => ({ success: true, empresa: { idEmpresa: 'e-9', razonSocial: 'X', ruc: '20123456789', sector: null, contactos: [{ nombre: 'E', telefono: '1', correo: null }], notas: null, etapa: 'por_contactar', medio: null, motivo: null, createdAt: '', updatedAt: '' } }) } as Response);
+    liberar({ ok: true, status: 201, json: async () => ({ success: true, empresa: { idEmpresa: 'e-9', razonSocial: 'X', ruc: '20123456789', sector: null, direccion: null, contactos: [{ nombre: 'E', telefono: '1', correo: null }], notas: null, relacion: 'prospecto', createdAt: '', updatedAt: '' } }) } as Response);
     await waitFor(() => expect(screen.queryByRole('dialog', { name: /Nueva empresa/ })).toBeNull());
   });
 
@@ -263,7 +398,7 @@ describe('CrmBoard — sectores', () => {
     fireEvent.keyDown(within(panel).getByLabelText(/Sector nuevo/), { key: 'Escape' });
     expect(within(panel).queryByLabelText(/Sector nuevo/)).toBeNull();
     expect(screen.getByRole('dialog', { name: /Nueva empresa/ })).toBeInTheDocument();
-    expect(within(panel).getByLabelText(/^Razón social/)).toHaveValue('Ferretería Industrial Norte S.A.C.');
+    expect(within(panel).getByLabelText(/^Razón social/)).toHaveValue(LA_NUEVA);
     expect(within(panel).getByRole('button', { name: /Nuevo sector/ })).toHaveFocus();
   });
 

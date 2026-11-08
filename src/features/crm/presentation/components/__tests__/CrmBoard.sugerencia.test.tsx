@@ -3,30 +3,44 @@ import { fireEvent, render, screen, waitFor, within } from '@testing-library/rea
 
 const toastMock = vi.hoisted(() => ({ success: vi.fn(), error: vi.fn(), info: vi.fn() }));
 vi.mock('sonner', () => ({ toast: toastMock }));
+// T7/T8 own the side panels: these suites test the board and its cards only.
+vi.mock('../PanelDia', () => ({ PanelDia: () => null }));
+vi.mock('../DetallePanel', () => ({
+  DetallePanel: (props: { empresa: { razonSocial: string } }) => (
+    <aside role="dialog" aria-label={props.empresa.razonSocial} data-testid="detalle-mock" />
+  ),
+}));
+vi.mock('../EntrantePanel', () => ({ EntrantePanel: () => null }));
+vi.mock('../RegistrarContactoPanel', () => ({ RegistrarContactoPanel: () => null }));
+vi.mock('../AltaPanel', () => ({ AltaPanel: () => null }));
 
-import type { Empresa } from '../../../domain/entities';
 import { CrmBoard } from '../CrmBoard';
-import { empresa, json, mockApi, type Respuesta } from './crmFixtures';
+import { empresa, json, mockApi, oportunidad, type Respuesta } from './crmFixtures';
 
-const NOMBRE = 'Minera Los Tres Picos S.A.';
-const card = (nombre: string) => screen.getByRole('heading', { level: 3, name: nombre }).closest('article') as HTMLElement;
+const NOMBRE = 'Monitoreo ocupacional 2026';
+const card = (nombre: string) => screen.getByText(nombre).closest('article') as HTMLElement;
 
-const LISTA_3 = [
-  empresa({ idEmpresa: 'e-1', ruc: null, medioOtro: null }),
-  empresa({
+const OPORTUNIDADES_3 = [
+  oportunidad({ idOportunidad: 'o-1', idEmpresa: 'e-1', nombre: 'Equipos de protección para obra' }),
+  oportunidad({
+    idOportunidad: 'o-2',
     idEmpresa: 'e-2',
-    razonSocial: NOMBRE,
+    nombre: NOMBRE,
     etapa: 'contactado',
     medio: 'otro',
     medioOtro: 'Feria Expomina',
     intentosSinRespuesta: 3,
-    contactos: [{ nombre: 'Jorge Salazar', telefono: '954 112 308', correo: null }],
   }),
 ];
 
-/** mockApi plus the suggestion endpoint, which the shared fixture does not know yet. */
-function conSugerencia(respuesta: (accion: string) => Respuesta, lista: Empresa[] = LISTA_3) {
-  const base = mockApi({ lista: { status: 200, body: { success: true, empresas: lista } } });
+const LISTA_3 = [empresa({ idEmpresa: 'e-1', ruc: null }), empresa({ idEmpresa: 'e-2', razonSocial: 'Minera Los Tres Picos S.A.', ruc: '20601234567', sector: 'Minería y Energía' })];
+
+/** mockApi plus the suggestion endpoint wrapped for assertions. */
+function conSugerencia(respuesta: (accion: string) => Respuesta, oportunidades = OPORTUNIDADES_3) {
+  const base = mockApi({
+    lista: { status: 200, body: { success: true, empresas: LISTA_3 } },
+    oportunidades: { status: 200, body: { success: true, oportunidades } },
+  });
   const fn = vi.fn(async (url: string, init?: RequestInit) => {
     if (/\/sugerencia$/.test(url)) {
       const body = JSON.parse(String(init?.body)) as { accion: string };
@@ -48,33 +62,37 @@ beforeEach(() => {
 });
 afterEach(() => vi.restoreAllMocks());
 
-describe('CrmBoard — sugerencia de Perdido (S2)', () => {
-  it('"Pasar a Perdido" posts {accion:"perder"}, replaces the card and shows the toast', async () => {
+describe('CrmBoard — sugerencia de Perdida (S2)', () => {
+  it('"Pasar a Perdida" posts {accion:"perder"}, replaces the card and shows the toast', async () => {
     const fn = conSugerencia(() => ({
       status: 200,
       body: {
         success: true,
-        empresa: { ...LISTA_3[1], etapa: 'perdido', intentosSinRespuesta: 3, motivo: { categoria: 'no_contestan', detalle1: null, detalle2: null, notas: null } },
+        oportunidad: {
+          ...OPORTUNIDADES_3[1],
+          etapa: 'perdida',
+          intentosSinRespuesta: 3,
+          motivo: { categoria: 'no_contestan', detalle1: null, detalle2: null, notas: null },
+        },
       },
     }));
     render(<CrmBoard />);
     await screen.findByText(NOMBRE);
-    fireEvent.click(within(card(NOMBRE)).getByRole('button', { name: 'Pasar a Perdido' }));
-    await waitFor(() => expect(toastMock.success).toHaveBeenCalledWith(`${NOMBRE} pasó a «Perdido» con el motivo «No contestan».`));
+    fireEvent.click(within(card(NOMBRE)).getByRole('button', { name: 'Pasar a Perdida' }));
+    await waitFor(() => expect(toastMock.success).toHaveBeenCalledWith(`${NOMBRE} pasó a «Perdida» con el motivo «No contestan».`));
     const [p] = posts(fn);
-    expect(p.url).toBe('/api/crm/empresas/e-2/sugerencia');
+    expect(p.url).toBe('/api/crm/oportunidades/o-2/sugerencia');
     expect(p.method).toBe('POST');
     expect(p.body).toEqual({ accion: 'perder' });
     expect(p.headers).toEqual({ 'Content-Type': 'application/json' });
-    const perdido = screen.getByRole('region', { name: 'Perdido' });
-    expect(within(perdido).getByText(NOMBRE)).toBeInTheDocument();
+    expect(within(screen.getByRole('region', { name: 'Perdida' })).getByText(NOMBRE)).toBeInTheDocument();
     expect(screen.queryByRole('dialog')).toBeNull();
   });
 
   it('"Seguir intentando" posts {accion:"seguir"} and the banner disappears', async () => {
     const fn = conSugerencia(() => ({
       status: 200,
-      body: { success: true, empresa: { ...LISTA_3[1], sugerenciaDescartadaEn: 3 } },
+      body: { success: true, oportunidad: { ...OPORTUNIDADES_3[1], sugerenciaDescartadaEn: 3 } },
     }));
     render(<CrmBoard />);
     await screen.findByText(NOMBRE);
@@ -91,7 +109,7 @@ describe('CrmBoard — sugerencia de Perdido (S2)', () => {
     conSugerencia(() => ({ status: 400, body: { success: false, error: 'La sugerencia ya no corresponde a esta tarjeta.' } }));
     render(<CrmBoard />);
     await screen.findByText(NOMBRE);
-    fireEvent.click(within(card(NOMBRE)).getByRole('button', { name: 'Pasar a Perdido' }));
+    fireEvent.click(within(card(NOMBRE)).getByRole('button', { name: 'Pasar a Perdida' }));
     await waitFor(() => expect(toastMock.error).toHaveBeenCalledWith('La sugerencia ya no corresponde a esta tarjeta.'));
     expect(toastMock.success).not.toHaveBeenCalled();
     expect(within(screen.getByRole('region', { name: 'Contactado' })).getByText(NOMBRE)).toBeInTheDocument();
@@ -99,7 +117,7 @@ describe('CrmBoard — sugerencia de Perdido (S2)', () => {
   });
 
   it('a network failure shows a generic error', async () => {
-    const base = mockApi({ lista: { status: 200, body: { success: true, empresas: LISTA_3 } } });
+    const base = mockApi({ oportunidades: { status: 200, body: { success: true, oportunidades: OPORTUNIDADES_3 } } });
     global.fetch = vi.fn(async (url: string, init?: RequestInit) => {
       if (/\/sugerencia$/.test(url)) throw new Error('offline');
       return base(url, init);
@@ -111,23 +129,32 @@ describe('CrmBoard — sugerencia de Perdido (S2)', () => {
   });
 });
 
-describe('CrmBoard — tarjeta (S4, S6, S8)', () => {
-  it('shows Falta RUC and the free medium text, and the search matches the medium text', async () => {
+describe('CrmBoard — tarjeta (S2, S6, S8)', () => {
+  it('shows Falta RUC and the free medium text', async () => {
     conSugerencia(() => ({ status: 200, body: {} }));
     render(<CrmBoard />);
     await screen.findByText(NOMBRE);
-    expect(within(card('Constructora Andina S.A.C.')).getByText('Falta RUC')).toBeInTheDocument();
+    expect(within(card('Equipos de protección para obra')).getByText('Falta RUC')).toBeInTheDocument();
+    expect(within(card('Equipos de protección para obra')).queryByText(/^RUC /)).toBeNull();
     expect(within(card(NOMBRE)).getByRole('button', { name: 'Medio: Feria Expomina' })).toBeInTheDocument();
-    fireEvent.change(screen.getByRole('searchbox', { name: 'Buscar empresa o contacto' }), { target: { value: 'expomina' } });
-    expect(screen.getByText(NOMBRE)).toBeInTheDocument();
-    expect(screen.queryByText('Constructora Andina S.A.C.')).toBeNull();
   });
 
-  it('clicking the card body still opens the detail', async () => {
+  it('clicking the card body opens the ficha of its empresa', async () => {
     conSugerencia(() => ({ status: 200, body: {} }));
     render(<CrmBoard />);
     await screen.findByText(NOMBRE);
-    fireEvent.click(within(card(NOMBRE)).getByText('Jorge Salazar'));
-    expect(await screen.findByRole('dialog', { name: NOMBRE })).toBeInTheDocument();
+    fireEvent.click(within(card(NOMBRE)).getByText('Minera Los Tres Picos S.A.'));
+    expect(await screen.findByTestId('detalle-mock')).toHaveAttribute('aria-label', 'Minera Los Tres Picos S.A.');
+  });
+
+  it('an oportunidad whose empresa is missing from the list is skipped quietly', async () => {
+    conSugerencia(() => ({ status: 200, body: {} }), [
+      ...OPORTUNIDADES_3,
+      oportunidad({ idOportunidad: 'o-9', idEmpresa: 'e-404', nombre: 'Huérfana' }),
+    ]);
+    render(<CrmBoard />);
+    await screen.findByText(NOMBRE);
+    expect(screen.queryByText('Huérfana')).toBeNull();
+    expect(within(screen.getByRole('region', { name: 'Contactado' })).getByText(NOMBRE)).toBeInTheDocument();
   });
 });

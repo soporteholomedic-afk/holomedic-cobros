@@ -1,16 +1,22 @@
 import { describe, expect, it } from 'vitest';
 
+import { MAX_NOMBRE_OPORTUNIDAD, MAX_SERVICIO_OPORTUNIDAD, MONTO_MAXIMO } from '../../domain/entities';
 import type { ICrmEmpresaRepository } from '../../domain/ports';
 import { DatosEmpresaInvalidosError } from '../../domain/errors';
 import {
   hoyEnLima,
   validarDatosEmpresa,
+  validarDatosOportunidad,
   validarDireccion,
+  validarMontoEstimado,
   validarMedio,
   validarMedioContacto,
+  validarNombreOportunidad,
   validarOrigen,
   validarProximaAccion,
+  validarResponsable,
   validarResumen,
+  validarServicioOportunidad,
 } from '../validar';
 
 const mensaje = (f: () => unknown): string => {
@@ -159,5 +165,99 @@ describe('validarOrigen', () => {
     expect(validarOrigen('')).toBeNull();
     expect(mensaje(() => validarOrigen('zzz'))).toBe('Elige cómo nos conoció.');
     expect(mensaje(() => validarOrigen(4))).toBe('Elige cómo nos conoció.');
+  });
+});
+
+describe('validarNombreOportunidad (S1)', () => {
+  it('is required, trimmed, and at most 120 characters', () => {
+    expect(validarNombreOportunidad('  Venta de exámenes  ')).toBe('Venta de exámenes');
+    expect(validarNombreOportunidad('x'.repeat(MAX_NOMBRE_OPORTUNIDAD))).toHaveLength(MAX_NOMBRE_OPORTUNIDAD);
+    expect(mensaje(() => validarNombreOportunidad('   '))).toBe('El nombre de la oportunidad es obligatorio');
+    expect(mensaje(() => validarNombreOportunidad(null))).toBe('El nombre de la oportunidad es obligatorio');
+    expect(mensaje(() => validarNombreOportunidad(42))).toBe('El nombre de la oportunidad es obligatorio');
+    expect(mensaje(() => validarNombreOportunidad('x'.repeat(121)))).toBe('El nombre admite hasta 120 caracteres.');
+  });
+});
+
+describe('validarServicioOportunidad (S1)', () => {
+  it('is optional, trimmed to null when blank, and at most 120 characters', () => {
+    expect(validarServicioOportunidad('  Exámenes de ingreso  ')).toBe('Exámenes de ingreso');
+    expect(validarServicioOportunidad('  ')).toBeNull();
+    expect(validarServicioOportunidad(null)).toBeNull();
+    expect(validarServicioOportunidad(undefined)).toBeNull();
+    expect(validarServicioOportunidad('x'.repeat(MAX_SERVICIO_OPORTUNIDAD))).toHaveLength(MAX_SERVICIO_OPORTUNIDAD);
+    expect(mensaje(() => validarServicioOportunidad('x'.repeat(121)))).toBe('El servicio admite hasta 120 caracteres.');
+  });
+});
+
+describe('validarMontoEstimado (S1)', () => {
+  it('accepts a positive number up to 99999999, and empty values mean null', () => {
+    expect(validarMontoEstimado(15_000)).toBe(15_000);
+    expect(validarMontoEstimado(MONTO_MAXIMO)).toBe(MONTO_MAXIMO);
+    for (const vacio of [null, undefined, '']) {
+      expect(validarMontoEstimado(vacio)).toBeNull();
+    }
+  });
+
+  it('rejects zero, negatives, NaN and non-numbers with the same message', () => {
+    for (const malo of [0, -5, Number.NaN, Number.POSITIVE_INFINITY, '15000', true]) {
+      expect(mensaje(() => validarMontoEstimado(malo))).toBe('El monto estimado debe ser un número mayor a 0.');
+    }
+  });
+
+  it('rejects more than the maximum', () => {
+    expect(mensaje(() => validarMontoEstimado(MONTO_MAXIMO + 1))).toBe('El monto estimado admite hasta 99999999.');
+  });
+});
+
+describe('validarResponsable (S1)', () => {
+  it('needs id and nombre together, trimmed; none means nulls', () => {
+    expect(validarResponsable(' u-2 ', ' Ana Torres ')).toEqual({ responsableId: 'u-2', responsableNombre: 'Ana Torres' });
+    for (const vacio of [null, undefined, '  ']) {
+      expect(validarResponsable(vacio, vacio)).toEqual({ responsableId: null, responsableNombre: null });
+    }
+    expect(mensaje(() => validarResponsable('u-2', null))).toBe('El responsable necesita id y nombre.');
+    expect(mensaje(() => validarResponsable(null, 'Ana'))).toBe('El responsable necesita id y nombre.');
+    expect(mensaje(() => validarResponsable(7, 'Ana'))).toBe('El responsable necesita id y nombre.');
+  });
+});
+
+describe('validarDatosOportunidad — composición', () => {
+  it('builds the validated DatosOportunidad from the raw form', () => {
+    expect(
+      validarDatosOportunidad({
+        nombre: '  Venta  ',
+        servicio: ' Exámenes ',
+        responsableId: 'u-1',
+        responsableNombre: ' Ana ',
+        origen: 'internet',
+        montoEstimado: 5000,
+      }),
+    ).toEqual({
+      nombre: 'Venta',
+      servicio: 'Exámenes',
+      responsableId: 'u-1',
+      responsableNombre: 'Ana',
+      origen: 'internet',
+      montoEstimado: 5000,
+    });
+  });
+
+  it('defaults everything optional to null', () => {
+    expect(validarDatosOportunidad({ nombre: 'Venta' })).toEqual({
+      nombre: 'Venta',
+      servicio: null,
+      responsableId: null,
+      responsableNombre: null,
+      origen: null,
+      montoEstimado: null,
+    });
+  });
+
+  it('surfaces the first invalid field with its own message', () => {
+    expect(mensaje(() => validarDatosOportunidad({ nombre: ' ', montoEstimado: -1 }))).toBe(
+      'El nombre de la oportunidad es obligatorio',
+    );
+    expect(mensaje(() => validarDatosOportunidad({ nombre: 'Venta', origen: 'zzz' }))).toBe('Elige cómo nos conoció.');
   });
 });

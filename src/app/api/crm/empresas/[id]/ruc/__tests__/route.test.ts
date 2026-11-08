@@ -15,8 +15,8 @@ vi.mock('@/lib/auth', () => ({ getSession: mockGetSession }));
 
 import { PATCH } from '../route';
 
-const SIN_RUC = { ...FILA, idEmpresa: 'e-sin', razonSocial: 'Gráfica Sur', ruc: null, etapa: 'contactado' as const, medio: 'correo' as const };
-const OTRA = { ...FILA, idEmpresa: 'e-otra', razonSocial: 'Gráfica Sur S.A.C.', ruc: '20601234567', etapa: 'en_seguimiento' as const, medio: 'llamada' as const };
+const SIN_RUC = { ...FILA, idEmpresa: 'e-sin', razonSocial: 'Gráfica Sur', ruc: null, relacion: 'prospecto' as const };
+const OTRA = { ...FILA, idEmpresa: 'e-otra', razonSocial: 'Gráfica Sur S.A.C.', ruc: '20601234567', relacion: 'cliente' as const };
 
 describe('PATCH /api/crm/empresas/[id]/ruc', () => {
   beforeEach(() => mockGetSession.mockResolvedValue(crmSession));
@@ -44,8 +44,8 @@ describe('PATCH /api/crm/empresas/[id]/ruc', () => {
     expect(res.status).toBe(409);
     expect(await res.json()).toEqual({
       success: false,
-      error: 'Este RUC ya es de Gráfica Sur S.A.C. («En seguimiento»). ¿Unir las dos tarjetas?',
-      otra: { idEmpresa: 'e-otra', razonSocial: 'Gráfica Sur S.A.C.', etapa: 'en_seguimiento' },
+      error: 'Este RUC ya es de Gráfica Sur S.A.C. («Cliente»). ¿Unir las dos fichas?',
+      otra: { idEmpresa: 'e-otra', razonSocial: 'Gráfica Sur S.A.C.', relacion: 'cliente' },
     });
     expect(repo.fusionar).not.toHaveBeenCalled();
     expect(repo.update).not.toHaveBeenCalled();

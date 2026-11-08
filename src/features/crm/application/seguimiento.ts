@@ -1,15 +1,15 @@
-import type { Empresa, SeguimientoEmpresa } from '../domain/entities';
+import type { Oportunidad, SeguimientoOportunidad } from '../domain/entities';
 
-/** The whole follow-up state of an empresa as `updateSeguimiento` expects it. */
-export function seguimientoDe(e: Empresa): SeguimientoEmpresa {
+/** The whole follow-up state of an oportunidad as `updateSeguimiento` expects it. */
+export function seguimientoDe(o: Oportunidad): SeguimientoOportunidad {
   return {
-    etapa: e.etapa,
-    medio: e.medio,
-    medioOtro: e.medio === 'otro' ? e.medioOtro : null,
-    motivo: e.motivo,
-    intentosSinRespuesta: e.intentosSinRespuesta,
-    faltaResponderDesde: e.faltaResponderDesde,
-    proximaAccion: e.proximaAccion,
-    sugerenciaDescartadaEn: e.sugerenciaDescartadaEn,
+    etapa: o.etapa,
+    medio: o.medio,
+    medioOtro: o.medio === 'otro' ? o.medioOtro : null,
+    motivo: o.motivo,
+    intentosSinRespuesta: o.intentosSinRespuesta,
+    faltaResponderDesde: o.faltaResponderDesde,
+    proximaAccion: o.proximaAccion,
+    sugerenciaDescartadaEn: o.sugerenciaDescartadaEn,
   };
 }

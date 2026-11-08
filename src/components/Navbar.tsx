@@ -23,7 +23,7 @@ export default function Navbar({ onReset, hasData }: NavbarProps) {
                 Holomedic
               </span>
               <span className="block text-xs text-sky-400 font-semibold uppercase tracking-wider -mt-1">
-                Facturación & Saldos
+                Suite
               </span>
             </div>
           </Link>

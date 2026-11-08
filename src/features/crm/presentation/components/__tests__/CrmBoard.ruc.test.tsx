@@ -7,7 +7,7 @@ const toastMock = vi.hoisted(() => ({ success: vi.fn(), error: vi.fn(), info: vi
 vi.mock('sonner', () => ({ toast: toastMock }));
 
 import { CrmBoard } from '../CrmBoard';
-import { empresa, json, llamadas, mockApi, type Respuesta } from './crmFixtures';
+import { empresa, json, llamadas, mockApi, oportunidad, type Respuesta } from './crmFixtures';
 
 const SIN_RUC = 'Clínica Santa Rosa';
 const OTRA = 'Constructora Andina S.A.C.';
@@ -22,21 +22,27 @@ const LISTA_RUC = [
     razonSocial: SIN_RUC,
     ruc: null,
     sector: null,
-    etapa: 'contactado',
-    medio: 'whatsapp',
     contactos: [{ nombre: 'Mónica Paredes', telefono: '945 210 334', correo: null }],
   }),
+];
+
+/** A ficha only reaches the board through its oportunidades (S2): e-10 needs one. */
+const OPORTUNIDADES_RUC = [
+  oportunidad(),
+  oportunidad({ idOportunidad: 'o-10', idEmpresa: 'e-10', nombre: 'Consultoría de bioseguridad', etapa: 'contactado', medio: 'whatsapp' }),
 ];
 
 type Rutas = (body: Record<string, unknown>) => Respuesta;
 
 function montar(ruc: Rutas) {
-  mockApi({ lista: { status: 200, body: { success: true, empresas: LISTA_RUC } } });
+  mockApi({
+    lista: { status: 200, body: { success: true, empresas: LISTA_RUC } },
+    oportunidades: { status: 200, body: { success: true, oportunidades: OPORTUNIDADES_RUC } },
+  });
   const base = global.fetch;
   const fn = vi.fn(async (url: string, init?: RequestInit) => {
     const method = init?.method ?? 'GET';
     if (url === URL_RUC && method === 'PATCH') return json(ruc(JSON.parse(String(init?.body))));
-    if (url.endsWith('/historial')) return json({ status: 200, body: { success: true, interacciones: [] } });
     return base(url, init);
   });
   global.fetch = fn as unknown as typeof fetch;
@@ -45,13 +51,15 @@ function montar(ruc: Rutas) {
 
 /** Like `montar`, but also answers the SUNAT lookup GET /api/crm/ruc/{RUC_LIBRE}. */
 function montarConConsulta(consulta: Respuesta, rucResponde: Rutas = () => ok(RUC_LIBRE)) {
-  mockApi({ lista: { status: 200, body: { success: true, empresas: LISTA_RUC } } });
+  mockApi({
+    lista: { status: 200, body: { success: true, empresas: LISTA_RUC } },
+    oportunidades: { status: 200, body: { success: true, oportunidades: OPORTUNIDADES_RUC } },
+  });
   const base = global.fetch;
   const fn = vi.fn(async (url: string, init?: RequestInit) => {
     const method = init?.method ?? 'GET';
     if (url === URL_RUC && method === 'PATCH') return json(rucResponde(JSON.parse(String(init?.body))));
     if (url === `/api/crm/ruc/${RUC_LIBRE}` && method === 'GET') return json(consulta);
-    if (url.endsWith('/historial')) return json({ status: 200, body: { success: true, interacciones: [] } });
     return base(url, init);
   });
   global.fetch = fn as unknown as typeof fetch;
@@ -80,7 +88,11 @@ const ok = (ruc: string): Respuesta => ({
 });
 const conflicto: Respuesta = {
   status: 409,
-  body: { success: false, error: `Este RUC ya es de ${OTRA} («Por contactar»). ¿Unir las dos tarjetas?`, otra: { idEmpresa: 'e-1', razonSocial: OTRA, etapa: 'por_contactar' } },
+  body: {
+    success: false,
+    error: `Este RUC ya es de ${OTRA} («Prospecto»). ¿Unir las dos fichas?`,
+    otra: { idEmpresa: 'e-1', razonSocial: OTRA, relacion: 'prospecto' },
+  },
 };
 
 beforeEach(() => {
@@ -89,62 +101,6 @@ beforeEach(() => {
 });
 
 afterEach(() => vi.restoreAllMocks());
-
-describe('Detalle — cabecera y próxima acción', () => {
-  it('writes the follow-up label after the stage name in the subtitle', async () => {
-    mockApi({
-      lista: {
-        status: 200,
-        body: { success: true, empresas: [empresa({ etapa: 'contactado', medio: 'llamada', intentosSinRespuesta: 2 })] },
-      },
-    });
-    const base = global.fetch;
-    global.fetch = vi.fn(async (u: string, i?: RequestInit) =>
-      u.endsWith('/historial') ? json({ status: 200, body: { interacciones: [] } }) : base(u, i),
-    ) as unknown as typeof fetch;
-    render(<CrmBoard />);
-    await screen.findByText(OTRA);
-    fireEvent.click(within(tarjeta(OTRA)).getByRole('heading', { level: 3 }));
-    const cabecera = screen.getByRole('dialog', { name: OTRA }).querySelector('header') as HTMLElement;
-    expect(cabecera).toHaveTextContent('Contactado · Sin respuesta · 2');
-  });
-
-  it('shows the next action with its date, "Vencida: " when overdue, or "Sin próxima acción"', async () => {
-    vi.useFakeTimers({ toFake: ['Date'] });
-    vi.setSystemTime(new Date('2026-10-31T16:00:00.000Z'));
-    mockApi({
-      lista: {
-        status: 200,
-        body: {
-          success: true,
-          empresas: [
-            empresa({ idEmpresa: 'a', razonSocial: 'Futura S.A.', proximaAccion: { tipo: 'llamar', detalle: null, fecha: '2026-11-02' } }),
-            empresa({ idEmpresa: 'b', razonSocial: 'Vencida S.A.', ruc: '20000000002', proximaAccion: { tipo: 'cotizar', detalle: null, fecha: '2026-10-29' } }),
-            empresa({ idEmpresa: 'c', razonSocial: 'Libre S.A.', ruc: '20000000003' }),
-          ],
-        },
-      },
-    });
-    const base = global.fetch;
-    global.fetch = vi.fn(async (u: string, i?: RequestInit) =>
-      u.endsWith('/historial') ? json({ status: 200, body: { interacciones: [] } }) : base(u, i),
-    ) as unknown as typeof fetch;
-    render(<CrmBoard />);
-    await screen.findByText('Futura S.A.');
-    const abrir = (n: string) => {
-      fireEvent.click(within(tarjeta(n)).getByRole('heading', { level: 3 }));
-      return screen.getByRole('dialog', { name: n });
-    };
-    let panel = abrir('Futura S.A.');
-    expect(within(panel).getByText('Llamar · lun 2 nov')).toBeInTheDocument();
-    panel = abrir('Vencida S.A.');
-    const vencida = within(panel).getByText('Vencida: Enviar cotización · jue 29 oct');
-    expect(vencida.className).toMatch(/red/);
-    panel = abrir('Libre S.A.');
-    expect(within(panel).getByText('Sin próxima acción').className).toMatch(/slate/);
-    vi.useRealTimers();
-  });
-});
 
 describe('Detalle — completar el RUC', () => {
   it('shows "Falta RUC" with the inline field, its hidden label, numeric keypad, 11 chars and the placeholder', async () => {
@@ -214,7 +170,7 @@ describe('Detalle — completar el RUC', () => {
   });
 });
 
-describe('Detalle — RUC de otra empresa: unir tarjetas', () => {
+describe('Detalle — RUC de otra ficha: unir fichas', () => {
   async function conflictoAbierto(fn = montar((b) => (b.unir ? merged() : conflicto))) {
     render(<CrmBoard />);
     const panel = await abierto();
@@ -228,34 +184,28 @@ describe('Detalle — RUC de otra empresa: unir tarjetas', () => {
     status: 200,
     body: {
       success: true,
-      empresa: empresa({
-        intentosSinRespuesta: 0,
-        etapa: 'contactado',
-        medio: 'llamada',
-        faltaResponderDesde: '2026-10-31T15:40:00.000Z',
-        updatedAt: '2026-10-31T16:05:00.000Z',
-      }),
+      empresa: empresa({ updatedAt: '2026-10-31T16:05:00.000Z' }),
     },
   });
 
-  it('a 409 shows the question with the other empresa and its stage, the note, and the two buttons with the focus on "Unir tarjetas"', async () => {
+  it('a 409 shows the question with the other ficha and its relación, the note, and the two buttons with the focus on "Unir fichas"', async () => {
     const { panel, caja } = await conflictoAbierto();
-    expect(caja).toHaveTextContent('Este RUC ya es de Constructora Andina S.A.C. («Por contactar»). ¿Unir las dos tarjetas?');
+    expect(caja).toHaveTextContent('Este RUC ya es de Constructora Andina S.A.C. («Prospecto»). ¿Unir las dos fichas?');
     expect(within(caja).getByText(OTRA, { selector: 'b' })).toBeInTheDocument();
     expect(
       within(panel).getByText(
-        `El historial y los contactos de «${SIN_RUC}» pasan a «${OTRA}» y esta tarjeta desaparece.`,
+        `El historial y los contactos de «${SIN_RUC}» pasan a «${OTRA}» y esta ficha desaparece.`,
       ),
     ).toBeInTheDocument();
-    expect(within(panel).getByRole('button', { name: 'Unir tarjetas' })).toHaveFocus();
+    expect(within(panel).getByRole('button', { name: 'Unir fichas' })).toHaveFocus();
     expect(within(panel).getByRole('button', { name: 'No unir' })).toBeInTheDocument();
     expect(toastMock.error).not.toHaveBeenCalled();
   });
 
-  it('"No unir" goes back to the input, sends nothing more and leaves both cards unchanged', async () => {
+  it('"No unir" goes back to the input, sends nothing more and leaves both fichas unchanged', async () => {
     const { fn, panel } = await conflictoAbierto();
     fireEvent.click(within(panel).getByRole('button', { name: 'No unir' }));
-    expect(within(panel).queryByRole('button', { name: 'Unir tarjetas' })).toBeNull();
+    expect(within(panel).queryByRole('button', { name: 'Unir fichas' })).toBeNull();
     expect(campoRuc(panel)).toHaveFocus();
     expect(campoRuc(panel)).toHaveValue(RUC_DE_OTRA);
     expect(llamadas(fn, 'PATCH', /ruc$/)).toEqual([{ url: URL_RUC, body: { ruc: RUC_DE_OTRA } }]);
@@ -265,17 +215,17 @@ describe('Detalle — RUC de otra empresa: unir tarjetas', () => {
     expect(toastMock.success).not.toHaveBeenCalled();
   });
 
-  it('before confirming, both cards stay as they were', async () => {
+  it('before confirming, both fichas stay as they were', async () => {
     await conflictoAbierto();
     expect(within(tarjeta(SIN_RUC)).getByText('Falta RUC')).toBeInTheDocument();
-    expect(within(tarjeta(OTRA)).queryByText('Falta responder', { exact: false })).toBeNull();
+    expect(within(tarjeta(OTRA)).getByText(`RUC ${RUC_DE_OTRA}`)).toBeInTheDocument();
   });
 
-  it('"Unir tarjetas" repeats the PATCH with unir:true, removes this card, updates the other, keeps the panel on it and toasts', async () => {
+  it('"Unir fichas" repeats the PATCH with unir:true, removes this ficha, updates the other, keeps the panel on it and toasts', async () => {
     const { fn, panel } = await conflictoAbierto();
-    fireEvent.click(within(panel).getByRole('button', { name: 'Unir tarjetas' }));
+    fireEvent.click(within(panel).getByRole('button', { name: 'Unir fichas' }));
     await waitFor(() =>
-      expect(toastMock.success).toHaveBeenCalledWith(`Tarjetas unidas. El historial quedó en «${OTRA}».`),
+      expect(toastMock.success).toHaveBeenCalledWith(`Fichas unidas. El historial quedó en «${OTRA}».`),
     );
     expect(llamadas(fn, 'PATCH', /ruc$/)).toEqual([
       { url: URL_RUC, body: { ruc: RUC_DE_OTRA } },
@@ -283,21 +233,19 @@ describe('Detalle — RUC de otra empresa: unir tarjetas', () => {
     ]);
     expect(within(screen.getByTestId('crm-board')).queryByRole('heading', { level: 3, name: SIN_RUC })).toBeNull();
     expect(tarjetas()).toHaveLength(1);
-    // The other card now shows the merged data: moved to Contactado, waiting for a reply.
-    const col = screen.getByRole('region', { name: 'Contactado' });
+    const col = screen.getByRole('region', { name: 'Por contactar' });
     expect(within(col).getByRole('heading', { level: 3, name: OTRA })).toBeInTheDocument();
-    expect(within(col).getByText(/^Falta responder/)).toBeInTheDocument();
     expect(screen.queryByRole('dialog', { name: SIN_RUC })).toBeNull();
     const abierto = screen.getByRole('dialog', { name: OTRA });
     expect(within(abierto).getByText(RUC_DE_OTRA)).toBeInTheDocument();
     expect(within(abierto).queryByLabelText('RUC')).toBeNull();
   });
 
-  it('a failed merge shows the server message and keeps both cards', async () => {
+  it('a failed merge shows the server message and keeps both fichas', async () => {
     const { panel } = await conflictoAbierto(
       montar((b) => (b.unir ? { status: 500, body: { success: false, error: 'No se pudo unir' } } : conflicto)),
     );
-    fireEvent.click(within(panel).getByRole('button', { name: 'Unir tarjetas' }));
+    fireEvent.click(within(panel).getByRole('button', { name: 'Unir fichas' }));
     await waitFor(() => expect(toastMock.error).toHaveBeenCalledWith('No se pudo unir'));
     expect(tarjetas()).toHaveLength(2);
   });
@@ -309,11 +257,11 @@ describe('Detalle — editar una empresa sin RUC', () => {
       status: 200,
       body: { success: true, empresa: { ...LISTA_RUC[1], razonSocial: b.razonSocial, ruc: b.ruc } },
     }));
-    mockApi({ lista: { status: 200, body: { success: true, empresas: LISTA_RUC } }, put });
-    const base = global.fetch;
-    global.fetch = vi.fn(async (u: string, i?: RequestInit) =>
-      u.endsWith('/historial') ? json({ status: 200, body: { interacciones: [] } }) : base(u, i),
-    ) as unknown as typeof fetch;
+    mockApi({
+      lista: { status: 200, body: { success: true, empresas: LISTA_RUC } },
+      oportunidades: { status: 200, body: { success: true, oportunidades: OPORTUNIDADES_RUC } },
+      put,
+    });
     render(<CrmBoard />);
     const panel = await abierto();
     fireEvent.click(within(panel).getByRole('button', { name: 'Editar' }));
@@ -331,7 +279,7 @@ describe('Detalle — editar una empresa sin RUC', () => {
   });
 });
 
-describe('Detalle — consulta SUNAT al completar el RUC (T6, S3)', () => {
+describe('Detalle — consulta SUNAT al completar el RUC (S3)', () => {
   const DATOS_SUNAT: DatosSunat = {
     razonSocial: 'Clínica Santa Rosa S.A.C.',
     direccion: 'Jr. Las Palmas 456, Lima',

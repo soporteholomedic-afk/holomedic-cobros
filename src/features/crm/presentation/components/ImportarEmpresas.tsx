@@ -145,9 +145,8 @@ export function ImportarEmpresas() {
       }
       const sectores =
         sectoresNuevos > 0 ? ` · ${sectoresNuevos} ${plural(sectoresNuevos, 'sector nuevo', 'sectores nuevos')}` : '';
-      toast.success(
-        `${importadas} ${plural(importadas, 'empresa importada', 'empresas importadas')} en “Por contactar”${sectores}`,
-      );
+      // S4: the import creates fichas ONLY — no oportunidades, so nothing lands in Por contactar.
+      toast.success(`${importadas} ${plural(importadas, 'empresa importada', 'empresas importadas')}${sectores}`);
       importado = true;
       router.push('/crm');
     } finally {

@@ -1,14 +1,40 @@
-/** Board columns, in display order. The stored value is the snake_case id. */
-export const ETAPAS = ['por_contactar', 'contactado', 'en_seguimiento', 'cliente', 'perdido'] as const;
-export type Etapa = (typeof ETAPAS)[number];
+/** Oportunidad (deal) stages, in board display order. The stored value is the snake_case id. */
+export const ETAPAS_OPORTUNIDAD = [
+  'por_contactar',
+  'contactado',
+  'en_seguimiento',
+  'cotizado',
+  'ganada',
+  'perdida',
+] as const;
+export type EtapaOportunidad = (typeof ETAPAS_OPORTUNIDAD)[number];
 
-export const ETAPA_LABELS: Record<Etapa, string> = {
+export const ETAPA_OPORTUNIDAD_LABELS: Record<EtapaOportunidad, string> = {
   por_contactar: 'Por contactar',
   contactado: 'Contactado',
   en_seguimiento: 'En seguimiento',
-  cliente: 'Cliente',
-  perdido: 'Perdido',
+  cotizado: 'Cotizado',
+  ganada: 'Ganada',
+  perdida: 'Perdida',
 };
+
+/** Stages still being negotiated; their próxima acción raises day alerts. */
+export const ETAPAS_ABIERTAS: readonly EtapaOportunidad[] = ['contactado', 'en_seguimiento', 'cotizado'];
+
+/** Terminal stages: the negotiation is over (won or lost) and has no próxima acción. */
+export const ETAPAS_CERRADAS: readonly EtapaOportunidad[] = ['ganada', 'perdida'];
+
+/** Commercial relationship of an empresa with Holomedic — never a board column. */
+export const RELACIONES = ['prospecto', 'cliente'] as const;
+export type Relacion = (typeof RELACIONES)[number];
+
+export const RELACION_LABELS: Record<Relacion, string> = {
+  prospecto: 'Prospecto',
+  cliente: 'Cliente',
+};
+
+/** Months without a performed service after which a cliente shows "Sin actividad reciente". */
+export const UMBRAL_MESES_INACTIVIDAD = 4;
 
 /** How the empresa was contacted. */
 export const MEDIOS = ['llamada', 'correo', 'whatsapp', 'otro'] as const;
@@ -193,10 +219,12 @@ export interface ProximaAccion {
   fecha: string;
 }
 
-/** One entry of the contact history of an empresa. */
+/** One entry of the activity history of an empresa (its own, or of one of its oportunidades). */
 export interface Interaccion {
   idInteraccion: number;
   idEmpresa: string;
+  /** Oportunidad this activity belongs to; NULL when it is a general activity. */
+  idOportunidad: string | null;
   /** ISO timestamp. */
   fecha: string;
   idUsuario: string;
@@ -218,9 +246,12 @@ export interface NuevaInteraccion {
   medioOtro: string | null;
   resultado: Resultado;
   resumen: string | null;
+  /** Oportunidad the activity is linked to; NULL for a general activity. */
+  idOportunidad: string | null;
 }
 
-/** A company to contact. `contactos[0]` is the principal contact. */
+/** A company Holomedic keeps a commercial relationship with. A permanent ficha,
+ *  never a board card: the board shows oportunidades. */
 export interface Empresa {
   idEmpresa: string;
   razonSocial: string;
@@ -232,21 +263,8 @@ export interface Empresa {
   notas: string | null;
   /** Fiscal address (e.g. from the SUNAT lookup); NULL when unknown. */
   direccion: string | null;
-  etapa: Etapa;
-  /** Only meaningful outside "Por contactar". */
-  medio: Medio | null;
-  /** Free-text medium, only when `medio` is "otro". */
-  medioOtro: string | null;
-  /** Only present in "Perdido". */
-  motivo: Motivo | null;
-  /** Failed attempts in a row (reset by a real conversation). */
-  intentosSinRespuesta: number;
-  /** Since when an inbound contact waits for our reply; NULL when none does. */
-  faltaResponderDesde: string | null;
-  proximaAccion: ProximaAccion | null;
-  origen: Origen | null;
-  /** Attempt count at which "Seguir intentando" was pressed. */
-  sugerenciaDescartadaEn: number | null;
+  /** Prospecto or cliente. Winning or losing an oportunidad never changes it. */
+  relacion: Relacion;
   createdAt: string;
   updatedAt: string;
 }
@@ -293,26 +311,87 @@ export interface DatosEmpresa {
 }
 
 export interface NuevaEmpresa extends DatosEmpresa {
-  etapa: Etapa;
-  /** How an inbound empresa knew us; set only at creation, NULL for manual create and import. */
-  origen: Origen | null;
+  /** Prospecto or cliente. Set at creation; never derived from an oportunidad result. */
+  relacion: Relacion;
 }
 
-/** Validated follow-up state written in one step. */
-export interface EstadoEmpresa {
-  etapa: Etapa;
+// ---------------------------------------------------------------------------
+// Oportunidad — one concrete deal with an empresa. One etapa at a time; its
+// result never changes the empresa's relacion nor its other oportunidades.
+// ---------------------------------------------------------------------------
+
+/** Longest stored oportunidad name / service of interest. */
+export const MAX_NOMBRE_OPORTUNIDAD = 120;
+export const MAX_SERVICIO_OPORTUNIDAD = 120;
+/** Upper bound for the estimated amount in soles. */
+export const MONTO_MAXIMO = 99_999_999;
+
+/** Validated oportunidad data ready to be stored (what the repository receives). */
+export interface DatosOportunidad {
+  nombre: string;
+  /** Who manages the deal (usuario id + name snapshot); NULL when unassigned. */
+  responsableId: string | null;
+  responsableNombre: string | null;
+  /** How they knew us; NULL for manual creates and imports. */
+  origen: Origen | null;
+  /** Service the empresa is interested in (free text). */
+  servicio: string | null;
+  montoEstimado: number | null;
+}
+
+/** Validated data for a new oportunidad, including its initial stage. */
+export interface NuevaOportunidad extends DatosOportunidad {
+  etapa: EtapaOportunidad;
+  /** Medium of the first contact; only meaningful outside "Por contactar". */
   medio: Medio | null;
+  medioOtro: string | null;
+}
+
+/** Stage, medium and loss reason written together. */
+export interface EstadoOportunidad {
+  etapa: EtapaOportunidad;
+  medio: Medio | null;
+  medioOtro: string | null;
   motivo: Motivo | null;
 }
 
 /** Follow-up state written together with an optional new interaction. */
-export interface SeguimientoEmpresa extends EstadoEmpresa {
-  medioOtro: string | null;
+export interface SeguimientoOportunidad extends EstadoOportunidad {
   intentosSinRespuesta: number;
-  /** ISO timestamp or NULL. */
   faltaResponderDesde: string | null;
   proximaAccion: ProximaAccion | null;
   sugerenciaDescartadaEn: number | null;
+}
+
+/** One commercial deal of an empresa. A board card. */
+export interface Oportunidad {
+  idOportunidad: string;
+  idEmpresa: string;
+  nombre: string;
+  responsableId: string | null;
+  /** Snapshot of the responsable name at assignment time. */
+  responsableNombre: string | null;
+  origen: Origen | null;
+  servicio: string | null;
+  montoEstimado: number | null;
+  etapa: EtapaOportunidad;
+  /** Only meaningful outside "Por contactar". */
+  medio: Medio | null;
+  /** Free-text medium, only when `medio` is "otro". */
+  medioOtro: string | null;
+  /** Only present in "Perdida". */
+  motivo: Motivo | null;
+  /** Failed attempts in a row (reset by a real conversation). */
+  intentosSinRespuesta: number;
+  /** Since when an inbound contact waits for our reply; NULL when none does. */
+  faltaResponderDesde: string | null;
+  proximaAccion: ProximaAccion | null;
+  /** Attempt count at which "Seguir intentando" was pressed. */
+  sugerenciaDescartadaEn: number | null;
+  /** Created by the etapa→oportunidad data migration, not by a user. */
+  migrada: boolean;
+  createdAt: string;
+  updatedAt: string;
 }
 
 // ---------------------------------------------------------------------------

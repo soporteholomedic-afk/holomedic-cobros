@@ -59,7 +59,7 @@ describe('/api/crm/empresas POST', () => {
     vi.restoreAllMocks();
   });
 
-  it('creates the empresa in Por contactar with every contact and answers 201', async () => {
+  it('creates the ficha as Prospecto with every contact and answers 201', async () => {
     const create = vi.fn().mockImplementation(async (input) => ({ ...FILA, ...input }));
     __setCrmDbForTests(makeMockRepo({ create }));
     const res = await POST(createJsonRequest(VALIDO));
@@ -71,8 +71,19 @@ describe('/api/crm/empresas POST', () => {
     expect(create.mock.calls[0]?.[0]).toMatchObject({
       razonSocial: 'Minera Los Tres Picos S.A.',
       ruc: '20601234567',
-      etapa: 'por_contactar',
+      relacion: 'prospecto',
     });
+  });
+
+  it('creates the ficha ONLY: etapa/origen fields in the body are ignored and never stored (S7.1)', async () => {
+    const create = vi.fn().mockImplementation(async (input) => ({ ...FILA, ...input }));
+    __setCrmDbForTests(makeMockRepo({ create }));
+    const res = await POST(createJsonRequest({ ...VALIDO, etapa: 'cliente', origen: 'referido' }));
+    expect(res.status).toBe(201);
+    const entrada = create.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect(entrada).not.toHaveProperty('etapa');
+    expect(entrada).not.toHaveProperty('origen');
+    expect(entrada.relacion).toBe('prospecto');
   });
 
   it('returns 401 without the permiso and stores nothing', async () => {

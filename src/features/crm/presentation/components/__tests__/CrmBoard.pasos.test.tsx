@@ -57,7 +57,11 @@ describe('Edición — maquetación del diseño', () => {
   async function edicion(): Promise<HTMLElement> {
     render(<CrmBoard />);
     await screen.findByText('Constructora Andina S.A.C.');
-    const card = screen.getByRole('heading', { level: 3, name: TEXTILES }).closest('article') as HTMLElement;
+    // Textiles holds several cards (one per oportunidad, S2): open the ficha from its first one.
+    const contactado = screen.getByRole('region', { name: 'Contactado' });
+    const card = within(contactado)
+      .getByRole('heading', { level: 3, name: TEXTILES })
+      .closest('article') as HTMLElement;
     fireEvent.click(within(card).getByText(/^RUC /));
     const panel = screen.getByRole('dialog', { name: TEXTILES });
     fireEvent.click(within(panel).getByRole('button', { name: 'Editar' }));

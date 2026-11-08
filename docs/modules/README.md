@@ -18,6 +18,7 @@ Convención verificada en `envio-resultados` (`domain/ports.ts` → `SendResults
 | Módulo | Ubicación | Propósito | Rutas app principales |
 |---|---|---|---|
 | [auth](./auth.md) | `src/features/auth/` | Autenticación con sesión/permisos y CRUD de usuarios (`RUTAS_PROTEGIDAS`, `PERMISOS`) | `/auth/login`, `/auth/denegado`, `/admin/usuarios` |
+| [crm](./crm.md) | `src/features/crm/` | CRM comercial: fichas de empresa permanentes, oportunidades en Kanban (6 etapas) y actividades vinculadas; atención de servicios leída en vivo de SIGLA | `/crm` |
 | [cobranza](./cobranza.md) | `src/features/cobranza/` | Composición y envío de correos de cobranza con contactos e historial por RUC | `/cobranza` |
 | [valoraciones](./valoraciones.md) | `src/features/valoraciones/` | Reportes de valoración/facturación por empresa (PDF y Excel) y su envío | `/valoraciones` |
 | [plantillas-editor](./plantillas-editor.md) | `src/features/plantillas-editor/` | Editor de plantillas de correo por área con versiones, defaults y papelera (`dbo.templates`) | `/admin/plantillas` |

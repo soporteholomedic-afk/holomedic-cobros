@@ -6,7 +6,8 @@ import { MEDIOS, MEDIO_LABELS, type Medio } from '../../domain/entities';
 import { ALERTA, BOTON_PRIMARIO, BOTON_SECUNDARIO, MEDIO_ESTILO } from './crmUi';
 import { ModalFrame } from './ModalFrame';
 
-/** T5 replaces this dialog; until then it offers only the original three media. */
+/** A stage move only offers llamada/correo/whatsapp: "otro" needs its "¿Cuál?"
+ *  and is picked in the activity flow (MoverOportunidadUseCase). */
 const MEDIOS_DEL_DIALOGO = MEDIOS.filter((m) => m !== 'otro');
 
 interface Props {

@@ -3,25 +3,33 @@ import mssql from 'mssql';
 import {
   ACCIONES,
   DIRECCIONES,
-  ETAPAS,
+  ETAPAS_OPORTUNIDAD,
   ICONOS_INICIALES,
   ICONOS_SECTOR,
   MEDIOS,
   MOTIVO_CATEGORIAS,
   ORIGENES,
+  RELACIONES,
   RESULTADOS,
   SECTORES_INICIALES,
 } from '../../domain/entities';
 
 /**
- * SQL Server schema of the simple CRM board (features crm-simple and
- * crm-contactos):
+ * SQL Server schema of the CRM (features crm-simple, crm-contactos and
+ * crm-oportunidades):
  *
  * - `dbo.CrmSector`      sector names and their optional icon key, created from the UI (seeded).
- * - `dbo.CrmEmpresa`     one row per empresa: stage, medium, loss reason,
- *                        follow-up state. The RUC is NULL-able, unique when present.
+ * - `dbo.CrmEmpresa`     one row per empresa: the permanent ficha (RUC, sector,
+ *                        contacts, relacion prospecto/cliente, notes). The RUC is
+ *                        NULL-able, unique when present. Its etapa-era columns were
+ *                        migrated into CrmOportunidad and retired (S8).
+ * - `dbo.CrmOportunidad` one row per commercial deal — the Kanban card. Stage,
+ *                        medium, loss reason and follow-up state live here;
+ *                        `migrada` marks the rows created by the etapa→oportunidad
+ *                        data migration, never by a user.
  * - `dbo.CrmContacto`    several contacts per empresa, exactly one principal.
- * - `dbo.CrmInteraccion` contact history, one row per contact, deleted with the empresa.
+ * - `dbo.CrmInteraccion` contact history, one row per contact, deleted with the
+ *                        empresa, optionally linked to an oportunidad.
  *
  * Guarantees of the generated script (one batch):
  *
@@ -39,19 +47,42 @@ import {
  *   ("drop if wrong", then "add if missing"), so it converges from an empty
  *   database, from the first version (3ea38d5) and from any partial state.
  * - Non-destructive: it never issues DROP TABLE, DELETE or TRUNCATE. The only
- *   objects it drops are the RUC unique constraint and a `medio` CHECK that
- *   lacks 'otro', each recreated by the next guarded step.
+ *   objects it drops are the RUC unique constraint (recreated as a filtered
+ *   index by the next guarded step) and the etapa-era columns of CrmEmpresa
+ *   with their constraints (S8, after their data migrates into CrmOportunidad),
+ *   each guarded so a fresh install never had them and the steps are no-ops.
  * - Never touches the discarded `CRM_` namespace: production may still
  *   recreate those tables on startup, and SQL Server names are case-insensitive.
  *
  * The database itself guards the invariants the UI relies on: the RUC is
  * unique when present and exactly 11 digits (VARCHAR + CHECK: a CHAR(11) would
- * silently pad a shorter value with a space), `etapa`/`medio`/loss category
- * only hold known values, only "perdido" carries a loss reason,
- * "por_contactar" never has a medium, and an empresa can have at most one
- * principal contact.
+ * silently pad a shorter value with a space), `relacion` only holds
+ * prospecto/cliente, the oportunidad `etapa`/`medio`/loss category only hold
+ * known values, only "perdida" carries a loss reason, "por_contactar" never
+ * has a medium, and an empresa can have at most one principal contact.
  */
 const lista = (valores: readonly string[]): string => valores.map((v) => `'${v}'`).join(', ');
+
+/** Same list, quoted for use INSIDE an EXEC(N'...') dynamic statement. */
+const listaDinamica = (valores: readonly string[]): string => valores.map((v) => `''${v}''`).join(', ');
+
+/** Columns the etapa→oportunidad migration reads from CrmEmpresa and then drops (S8). */
+const COLUMNAS_RETIRADAS = [
+  'etapa',
+  'medio',
+  'medioOtro',
+  'motivoCategoria',
+  'motivoDetalle1',
+  'motivoDetalle2',
+  'motivoNotas',
+  'intentosSinRespuesta',
+  'faltaResponderDesde',
+  'proximaAccionTipo',
+  'proximaAccionDetalle',
+  'proximaAccionFecha',
+  'origen',
+  'sugerenciaDescartadaEn',
+];
 
 /** Guarded `ADD <columna>` on CrmEmpresa; `definicion` is everything after the column name. */
 const columnaEmpresa = (columna: string, definicion: string): string =>
@@ -108,23 +139,10 @@ BEGIN
       CONSTRAINT CK_CrmEmpresa_ruc CHECK (ruc LIKE '${'[0-9]'.repeat(11)}'),
     idSector          INT            NULL,
     notas             NVARCHAR(MAX)  NULL,
-    etapa             NVARCHAR(20)   NOT NULL DEFAULT 'por_contactar'
-      CONSTRAINT CK_CrmEmpresa_etapa CHECK (etapa IN (${lista(ETAPAS)})),
-    medio             NVARCHAR(10)   NULL
-      CONSTRAINT CK_CrmEmpresa_medio CHECK (medio IN (${lista(MEDIOS)})),
-    motivoCategoria   NVARCHAR(20)   NULL
-      CONSTRAINT CK_CrmEmpresa_motivoCategoria CHECK (motivoCategoria IN (${lista(MOTIVO_CATEGORIAS)})),
-    motivoDetalle1    NVARCHAR(200)  NULL,
-    motivoDetalle2    NVARCHAR(200)  NULL,
-    motivoNotas       NVARCHAR(300)  NULL,
     createdAt         DATETIME2(3)   NOT NULL DEFAULT SYSUTCDATETIME(),
     updatedAt         DATETIME2(3)   NOT NULL DEFAULT SYSUTCDATETIME(),
     CONSTRAINT UQ_CrmEmpresa_ruc UNIQUE (ruc),
-    CONSTRAINT FK_CrmEmpresa_sector FOREIGN KEY (idSector) REFERENCES dbo.CrmSector (idSector),
-    CONSTRAINT CK_CrmEmpresa_motivo CHECK (
-      (etapa = 'perdido' AND motivoCategoria IS NOT NULL) OR (etapa <> 'perdido' AND motivoCategoria IS NULL)
-    ),
-    CONSTRAINT CK_CrmEmpresa_medioEtapa CHECK (etapa <> 'por_contactar' OR medio IS NULL)
+    CONSTRAINT FK_CrmEmpresa_sector FOREIGN KEY (idSector) REFERENCES dbo.CrmSector (idSector)
   );
 END;
 
@@ -162,16 +180,6 @@ BEGIN
   CREATE UNIQUE INDEX UX_CrmEmpresa_ruc ON dbo.CrmEmpresa (ruc) WHERE ruc IS NOT NULL;
 END;
 
-IF EXISTS (SELECT 1 FROM sys.check_constraints WHERE name = 'CK_CrmEmpresa_medio' AND parent_object_id = OBJECT_ID('dbo.CrmEmpresa') AND definition NOT LIKE N'%''otro''%')
-BEGIN
-  ALTER TABLE dbo.CrmEmpresa DROP CONSTRAINT CK_CrmEmpresa_medio;
-END;
-
-IF NOT EXISTS (SELECT 1 FROM sys.check_constraints WHERE name = 'CK_CrmEmpresa_medio' AND parent_object_id = OBJECT_ID('dbo.CrmEmpresa'))
-BEGIN
-  ALTER TABLE dbo.CrmEmpresa ADD CONSTRAINT CK_CrmEmpresa_medio CHECK (medio IN (${lista(MEDIOS)}));
-END;
-
 -- ---- Sector icon (S12): guarded ADD, then a seed that only fills NULL icons ----
 
 IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('dbo.CrmSector') AND name = 'icono')
@@ -181,14 +189,12 @@ END;
 
 ${SEMILLA_ICONOS_SQL}
 
-${columnaEmpresa('medioOtro', 'NVARCHAR(40) NULL')}
-${columnaEmpresa('intentosSinRespuesta', 'INT NOT NULL CONSTRAINT DF_CrmEmpresa_intentosSinRespuesta DEFAULT 0')}
-${columnaEmpresa('faltaResponderDesde', 'DATETIME2(3) NULL')}
-${columnaEmpresa('proximaAccionTipo', `NVARCHAR(20) NULL CONSTRAINT CK_CrmEmpresa_proximaAccionTipo CHECK (proximaAccionTipo IN (${lista(ACCIONES)}))`)}
-${columnaEmpresa('proximaAccionDetalle', 'NVARCHAR(80) NULL')}
-${columnaEmpresa('proximaAccionFecha', 'DATE NULL')}
-${columnaEmpresa('origen', `NVARCHAR(20) NULL CONSTRAINT CK_CrmEmpresa_origen CHECK (origen IN (${lista(ORIGENES)}))`)}
-${columnaEmpresa('sugerenciaDescartadaEn', 'INT NULL')}
+-- ---- Relacion prospecto/cliente (S8): the old etapa 'cliente' becomes this ----
+
+${columnaEmpresa(
+  'relacion',
+  `NVARCHAR(20) NOT NULL CONSTRAINT DF_CrmEmpresa_relacion DEFAULT N'prospecto' CONSTRAINT CK_CrmEmpresa_relacion CHECK (relacion IN (${lista(RELACIONES)}))`,
+)}
 ${columnaEmpresa('direccion', 'NVARCHAR(300) NULL')}
 
 IF EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('dbo.CrmContacto') AND name = 'nombre' AND is_nullable = 0)
@@ -221,6 +227,161 @@ BEGIN
       REFERENCES dbo.CrmEmpresa (idEmpresa) ON DELETE CASCADE
   );
   CREATE INDEX IX_CrmInteraccion_empresa ON dbo.CrmInteraccion (idEmpresa, fecha DESC);
+END;
+
+IF NOT EXISTS (SELECT 1 FROM sys.tables WHERE name = 'CrmOportunidad' AND schema_id = SCHEMA_ID('dbo'))
+BEGIN
+  -- T2 (crm-oportunidades): one concrete deal of an empresa — the Kanban
+  -- card. The empresa stays the permanent ficha; winning or losing a deal
+  -- never changes its relacion. The migrada flag marks the rows created by the
+  -- etapa→oportunidad data migration below, never by a user.
+  CREATE TABLE dbo.CrmOportunidad (
+    idOportunidad          NVARCHAR(50)   NOT NULL PRIMARY KEY,
+    idEmpresa              NVARCHAR(50)   NOT NULL,
+    nombre                 NVARCHAR(120)  NOT NULL,
+    responsableId          NVARCHAR(50)   NULL,
+    responsableNombre      NVARCHAR(200)  NULL,
+    origen                 NVARCHAR(20)   NULL
+      CONSTRAINT CK_CrmOportunidad_origen CHECK (origen IN (${lista(ORIGENES)})),
+    servicio               NVARCHAR(120)  NULL,
+    montoEstimado          DECIMAL(12,2)  NULL
+      CONSTRAINT CK_CrmOportunidad_monto CHECK (montoEstimado > 0),
+    etapa                  NVARCHAR(20)   NOT NULL
+      CONSTRAINT DF_CrmOportunidad_etapa DEFAULT 'por_contactar'
+      CONSTRAINT CK_CrmOportunidad_etapa CHECK (etapa IN (${lista(ETAPAS_OPORTUNIDAD)})),
+    medio                  NVARCHAR(20)   NULL
+      CONSTRAINT CK_CrmOportunidad_medio CHECK (medio IN (${lista(MEDIOS)})),
+    medioOtro              NVARCHAR(80)   NULL,
+    motivoCategoria        NVARCHAR(20)   NULL
+      CONSTRAINT CK_CrmOportunidad_motivoCategoria CHECK (motivoCategoria IN (${lista(MOTIVO_CATEGORIAS)})),
+    motivoDetalle1         NVARCHAR(200)  NULL,
+    motivoDetalle2         NVARCHAR(200)  NULL,
+    motivoNotas            NVARCHAR(300)  NULL,
+    intentosSinRespuesta   INT            NOT NULL CONSTRAINT DF_CrmOportunidad_intentosSinRespuesta DEFAULT 0,
+    faltaResponderDesde    DATETIME2(3)   NULL,
+    proximaAccionTipo      NVARCHAR(20)   NULL
+      CONSTRAINT CK_CrmOportunidad_proximaAccionTipo CHECK (proximaAccionTipo IN (${lista(ACCIONES)})),
+    proximaAccionDetalle   NVARCHAR(80)   NULL,
+    proximaAccionFecha     DATE           NULL,
+    sugerenciaDescartadaEn INT            NULL,
+    migrada                BIT            NOT NULL CONSTRAINT DF_CrmOportunidad_migrada DEFAULT 0,
+    createdAt              DATETIME2(3)   NOT NULL DEFAULT SYSUTCDATETIME(),
+    updatedAt              DATETIME2(3)   NOT NULL DEFAULT SYSUTCDATETIME(),
+    CONSTRAINT FK_CrmOportunidad_empresa FOREIGN KEY (idEmpresa)
+      REFERENCES dbo.CrmEmpresa (idEmpresa) ON DELETE CASCADE,
+    CONSTRAINT CK_CrmOportunidad_motivo CHECK (
+      (etapa = 'perdida' AND motivoCategoria IS NOT NULL)
+      OR (etapa <> 'perdida' AND motivoCategoria IS NULL AND motivoDetalle1 IS NULL
+          AND motivoDetalle2 IS NULL AND motivoNotas IS NULL)
+    ),
+    CONSTRAINT CK_CrmOportunidad_medioEtapa CHECK (etapa <> 'por_contactar' OR medio IS NULL)
+  );
+  CREATE INDEX IX_CrmOportunidad_empresa ON dbo.CrmOportunidad (idEmpresa, createdAt DESC);
+END;
+
+IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('dbo.CrmInteraccion') AND name = 'idOportunidad')
+BEGIN
+  ALTER TABLE dbo.CrmInteraccion ADD idOportunidad NVARCHAR(50) NULL;
+END;
+
+IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = 'FK_CrmInteraccion_oportunidad' AND parent_object_id = OBJECT_ID('dbo.CrmInteraccion'))
+   AND EXISTS (SELECT 1 FROM sys.tables WHERE name = 'CrmOportunidad' AND schema_id = SCHEMA_ID('dbo'))
+   AND EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('dbo.CrmInteraccion') AND name = 'idOportunidad')
+BEGIN
+  -- NO ACTION on purpose: only removing the empresa removes rows here (both
+  -- FKs point at CrmEmpresa), so removing one oportunidad alone stays blocked
+  -- while activities still reference it.
+  ALTER TABLE dbo.CrmInteraccion
+    ADD CONSTRAINT FK_CrmInteraccion_oportunidad FOREIGN KEY (idOportunidad)
+      REFERENCES dbo.CrmOportunidad (idOportunidad);
+END;
+
+-- ---- S8 data migration: etapa -> oportunidad, cliente -> relacion ----
+-- Guarded on the old etapa column: a fresh database never had it, so both
+-- steps are no-ops there. The statements go through dynamic SQL because the
+-- etapa-era columns do not exist when the batch compiles on a fresh install.
+
+IF EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('dbo.CrmEmpresa') AND name = 'etapa')
+BEGIN
+  -- "Cliente" was a stage; now it is the empresa's relationship. Losing one
+  -- deal never demotes the empresa (S5/S6), so clientes keep their historial
+  -- and contacts intact and get NO synthetic card (S8).
+  EXEC(N'UPDATE dbo.CrmEmpresa SET relacion = N''cliente'' WHERE etapa = N''cliente'';');
+  -- One migrated oportunidad per empresa whose stage was an open negotiation
+  -- or a loss; idempotent via the migrada flag (a re-run never duplicates).
+  EXEC(N'INSERT INTO dbo.CrmOportunidad
+    (idOportunidad, idEmpresa, nombre, origen, medio, medioOtro,
+     motivoCategoria, motivoDetalle1, motivoDetalle2, motivoNotas,
+     intentosSinRespuesta, faltaResponderDesde,
+     proximaAccionTipo, proximaAccionDetalle, proximaAccionFecha,
+     sugerenciaDescartadaEn, etapa, migrada, createdAt, updatedAt)
+  SELECT NEWID(), e.idEmpresa, N''Gestión comercial inicial'', e.origen, e.medio, e.medioOtro,
+         e.motivoCategoria, e.motivoDetalle1, e.motivoDetalle2, e.motivoNotas,
+         e.intentosSinRespuesta, e.faltaResponderDesde,
+         e.proximaAccionTipo, e.proximaAccionDetalle, e.proximaAccionFecha,
+         e.sugerenciaDescartadaEn,
+         CASE WHEN e.etapa = N''perdido'' THEN N''perdida'' ELSE e.etapa END,
+         1, e.createdAt, e.updatedAt
+    FROM dbo.CrmEmpresa e
+   WHERE e.etapa <> N''cliente''
+     AND NOT EXISTS (SELECT 1 FROM dbo.CrmOportunidad o
+                      WHERE o.idEmpresa = e.idEmpresa AND o.migrada = 1);');
+END;
+
+-- ---- Retirement of the etapa-era columns (guarded; no-op on a fresh install) ----
+
+IF EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('dbo.CrmEmpresa') AND name = 'etapa')
+BEGIN
+  IF EXISTS (SELECT 1 FROM sys.check_constraints WHERE name = 'CK_CrmEmpresa_motivo' AND parent_object_id = OBJECT_ID('dbo.CrmEmpresa'))
+  BEGIN
+    ALTER TABLE dbo.CrmEmpresa DROP CONSTRAINT CK_CrmEmpresa_motivo;
+  END;
+  IF EXISTS (SELECT 1 FROM sys.check_constraints WHERE name = 'CK_CrmEmpresa_medioEtapa' AND parent_object_id = OBJECT_ID('dbo.CrmEmpresa'))
+  BEGIN
+    ALTER TABLE dbo.CrmEmpresa DROP CONSTRAINT CK_CrmEmpresa_medioEtapa;
+  END;
+  -- Inline constraints (named or auto-named CHECK/DEFAULT attached to the
+  -- columns) are discovered by parent_object_id + column and dropped through
+  -- dynamic SQL: SQL Server auto-names them, so they have no fixed name.
+  -- CHECK predicates are matched BOTH by parent_column_id (single-column
+  -- inline checks) and by sys.sql_expression_dependencies (table-level
+  -- multi-column checks referencing a retired column, e.g. etapa).
+  -- The constraint name is built into a VARIABLE first: EXEC('literal' +
+  -- QUOTENAME(x)) is invalid T-SQL (EXEC arguments accept only literals and
+  -- variables), and its compile error does NOT abort the outer batch — the
+  -- sweep would silently drop nothing and DROP COLUMN would fail later.
+  EXEC(N'DECLARE @constrainte sysname;
+DECLARE @sql nvarchar(600);
+DECLARE retirar CURSOR LOCAL FAST_FORWARD FOR
+  SELECT dc.name FROM sys.check_constraints dc
+   WHERE dc.parent_object_id = OBJECT_ID(''dbo.CrmEmpresa'')
+     AND (dc.parent_column_id IN (SELECT k.column_id FROM sys.columns k
+                                   WHERE k.object_id = dc.parent_object_id
+                                     AND k.name IN (${listaDinamica(COLUMNAS_RETIRADAS)}))
+       OR dc.object_id IN (SELECT d.referencing_id FROM sys.sql_expression_dependencies d
+                            WHERE d.referenced_id = OBJECT_ID(''dbo.CrmEmpresa'')
+                              AND d.referenced_minor_id IN (SELECT k.column_id FROM sys.columns k
+                                                             WHERE k.object_id = OBJECT_ID(''dbo.CrmEmpresa'')
+                                                               AND k.name IN (${listaDinamica(COLUMNAS_RETIRADAS)}))))
+  UNION ALL
+  SELECT dc.name FROM sys.default_constraints dc
+   WHERE dc.parent_object_id = OBJECT_ID(''dbo.CrmEmpresa'')
+     AND dc.parent_column_id IN (SELECT k.column_id FROM sys.columns k
+                                  WHERE k.object_id = dc.parent_object_id
+                                    AND k.name IN (${listaDinamica(COLUMNAS_RETIRADAS)}));
+OPEN retirar;
+FETCH NEXT FROM retirar INTO @constrainte;
+WHILE @@FETCH_STATUS = 0
+BEGIN
+  SET @sql = N''ALTER TABLE dbo.CrmEmpresa DROP CONSTRAINT '' + QUOTENAME(@constrainte);
+  EXEC(@sql);
+  FETCH NEXT FROM retirar INTO @constrainte;
+END;
+CLOSE retirar;
+DEALLOCATE retirar;');
+  ALTER TABLE dbo.CrmEmpresa DROP COLUMN etapa, medio, medioOtro, motivoCategoria, motivoDetalle1,
+    motivoDetalle2, motivoNotas, intentosSinRespuesta, faltaResponderDesde, proximaAccionTipo,
+    proximaAccionDetalle, proximaAccionFecha, origen, sugerenciaDescartadaEn;
 END;
 
 IF NOT EXISTS (SELECT 1 FROM sys.tables WHERE name = 'CrmConfig' AND schema_id = SCHEMA_ID('dbo'))

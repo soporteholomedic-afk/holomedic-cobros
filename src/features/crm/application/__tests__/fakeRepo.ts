@@ -1,20 +1,35 @@
-import type { ICrmEmpresaRepository } from '../../domain/ports';
-import type { Empresa, IconoSector, Interaccion, Sector } from '../../domain/entities';
-import { EmpresaNotFoundError, RucDuplicadoError } from '../../domain/errors';
+import type { ICrmEmpresaRepository, ICrmOportunidadRepository } from '../../domain/ports';
+import type {
+  Empresa,
+  IconoSector,
+  Interaccion,
+  NuevaInteraccion,
+  NuevaOportunidad,
+  Oportunidad,
+  Sector,
+  SeguimientoOportunidad,
+  DatosOportunidad,
+} from '../../domain/entities';
+import { EmpresaNotFoundError, OportunidadNotFoundError, RucDuplicadoError, SectorDuplicadoError } from '../../domain/errors';
 
 export const NOW = '2026-10-31T15:00:00.000Z';
 /** `hoy` as the callers compute it (America/Lima). */
 export const HOY = '2026-10-31';
 export const USUARIO = { sub: 'u-1', nombre: 'Scott Palomino' };
 
-export interface FakeRepo extends ICrmEmpresaRepository {
+export interface FakeRepo {
   rows: Empresa[];
+  oportunidades: Oportunidad[];
   interacciones: Interaccion[];
   sectores: Sector[];
-  /** Every call that changes storage (create, update, updateEstado, updateSeguimiento, addInteraccion, fusionar). */
+  /** Every call that changes storage, on either view. */
   escrituras: number;
-  /** Calls to `updateSeguimiento` only. */
+  /** Calls to the oportunidades `updateSeguimiento` only. */
   seguimientos: number;
+  /** View to hand to use cases expecting `ICrmEmpresaRepository`. */
+  empresaRepo: ICrmEmpresaRepository;
+  /** View to hand to use cases expecting `ICrmOportunidadRepository`. */
+  oportunidadRepo: ICrmOportunidadRepository;
 }
 
 export function empresa(parcial: Partial<Empresa> = {}): Empresa {
@@ -26,6 +41,23 @@ export function empresa(parcial: Partial<Empresa> = {}): Empresa {
     contactos: [{ nombre: 'Marcela Quispe', telefono: '987 654 321', correo: null }],
     notas: null,
     direccion: null,
+    relacion: 'prospecto',
+    createdAt: NOW,
+    updatedAt: NOW,
+    ...parcial,
+  };
+}
+
+export function oportunidad(parcial: Partial<Oportunidad> = {}): Oportunidad {
+  return {
+    idOportunidad: 'o-1',
+    idEmpresa: 'e-1',
+    nombre: 'Exámenes ocupacionales 2026',
+    responsableId: null,
+    responsableNombre: null,
+    origen: null,
+    servicio: null,
+    montoEstimado: null,
     etapa: 'por_contactar',
     medio: null,
     medioOtro: null,
@@ -33,35 +65,52 @@ export function empresa(parcial: Partial<Empresa> = {}): Empresa {
     intentosSinRespuesta: 0,
     faltaResponderDesde: null,
     proximaAccion: null,
-    origen: null,
     sugerenciaDescartadaEn: null,
+    migrada: false,
     createdAt: NOW,
     updatedAt: NOW,
     ...parcial,
   };
 }
 
-/** In-memory repository mirroring the semantics of SqlServerCrmEmpresaRepository. */
-export function makeFakeRepo(seed: Empresa[] = [], historial: Interaccion[] = []): FakeRepo {
+/** In-memory pair of repositories mirroring the semantics of the SQL adapters. */
+export function makeFakeRepo(
+  seed: Empresa[] = [],
+  historial: Interaccion[] = [],
+  seedOportunidades: Oportunidad[] = [],
+): FakeRepo {
   const rows: Empresa[] = seed.map((r) => structuredClone(r));
   const interacciones: Interaccion[] = historial.map((i) => structuredClone(i));
-  let seqEmpresa = 0;
-  let seqInteraccion = interacciones.reduce((m, i) => Math.max(m, i.idInteraccion), 0);
-  const buscar = (id: string): Empresa => {
-    const row = rows.find((r) => r.idEmpresa === id);
-    if (!row) throw new EmpresaNotFoundError(id);
-    return row;
-  };
+  const oportunidades: Oportunidad[] = seedOportunidades.map((o) => structuredClone(o));
   const sectores: Sector[] = [
     { nombre: 'Construcción', icono: 'casco' },
     { nombre: 'Comercio y Tiendas', icono: 'tienda' },
   ];
   const repo: FakeRepo = {
     rows,
+    oportunidades,
     interacciones,
     sectores,
     escrituras: 0,
     seguimientos: 0,
+    empresaRepo: {} as ICrmEmpresaRepository,
+    oportunidadRepo: {} as ICrmOportunidadRepository,
+  };
+  let seqEmpresa = 0;
+  let seqOportunidad = 0;
+  let seqInteraccion = interacciones.reduce((m, i) => Math.max(m, i.idInteraccion), 0);
+  const buscar = (id: string): Empresa => {
+    const row = rows.find((r) => r.idEmpresa === id);
+    if (!row) throw new EmpresaNotFoundError(id);
+    return row;
+  };
+  const buscarOportunidad = (id: string): Oportunidad => {
+    const row = oportunidades.find((o) => o.idOportunidad === id);
+    if (!row) throw new OportunidadNotFoundError(id);
+    return row;
+  };
+
+  const empresaRepo: ICrmEmpresaRepository = {
     async getById(id) {
       const row = rows.find((r) => r.idEmpresa === id);
       return row ? structuredClone(row) : null;
@@ -84,8 +133,7 @@ export function makeFakeRepo(seed: Empresa[] = [], historial: Interaccion[] = []
         contactos: structuredClone(input.contactos),
         notas: input.notas,
         direccion: input.direccion,
-        etapa: input.etapa,
-        origen: input.origen,
+        relacion: input.relacion,
       });
       rows.push(row);
       return structuredClone(row);
@@ -99,35 +147,28 @@ export function makeFakeRepo(seed: Empresa[] = [], historial: Interaccion[] = []
       Object.assign(row, structuredClone(datos));
       return structuredClone(row);
     },
-    async updateEstado(id, estado) {
+    async updateRelacion(id, relacion) {
       repo.escrituras++;
       const row = buscar(id);
-      row.etapa = estado.etapa;
-      row.medio = estado.medio;
-      row.motivo = estado.motivo ? { ...estado.motivo } : null;
+      row.relacion = relacion;
       return structuredClone(row);
     },
-    async updateSeguimiento(id, s, interaccion) {
+    async addInteraccion(idEmpresa, interaccion: NuevaInteraccion) {
       repo.escrituras++;
-      repo.seguimientos++;
-      const row = buscar(id);
-      row.etapa = s.etapa;
-      row.medio = s.medio;
-      row.medioOtro = s.medioOtro;
-      row.motivo = s.motivo ? { ...s.motivo } : null;
-      row.intentosSinRespuesta = s.intentosSinRespuesta;
-      row.faltaResponderDesde = s.faltaResponderDesde;
-      row.proximaAccion = s.proximaAccion ? { ...s.proximaAccion } : null;
-      row.sugerenciaDescartadaEn = s.sugerenciaDescartadaEn;
-      if (interaccion) {
-        interacciones.push({ idInteraccion: ++seqInteraccion, idEmpresa: id, fecha: NOW, ...interaccion });
-      }
-      return structuredClone(row);
-    },
-    async addInteraccion(idEmpresa, interaccion) {
-      repo.escrituras++;
-      buscar(idEmpresa);
-      const fila: Interaccion = { idInteraccion: ++seqInteraccion, idEmpresa, fecha: NOW, ...interaccion };
+      const row = buscar(idEmpresa);
+      const fila: Interaccion = {
+        idInteraccion: ++seqInteraccion,
+        idEmpresa: row.idEmpresa,
+        idOportunidad: interaccion.idOportunidad,
+        fecha: NOW,
+        idUsuario: interaccion.idUsuario,
+        nombreUsuario: interaccion.nombreUsuario,
+        direccion: interaccion.direccion,
+        medio: interaccion.medio,
+        medioOtro: interaccion.medioOtro,
+        resultado: interaccion.resultado,
+        resumen: interaccion.resumen,
+      };
       interacciones.push(fila);
       return structuredClone(fila);
     },
@@ -142,6 +183,7 @@ export function makeFakeRepo(seed: Empresa[] = [], historial: Interaccion[] = []
       const origen = buscar(idOrigen);
       const destino = buscar(idDestino);
       for (const i of interacciones) if (i.idEmpresa === idOrigen) i.idEmpresa = idDestino;
+      for (const o of oportunidades) if (o.idEmpresa === idOrigen) o.idEmpresa = idDestino;
       for (const c of origen.contactos) {
         const repetido = destino.contactos.some(
           (d) => d.nombre === c.nombre && d.telefono === c.telefono && d.correo === c.correo,
@@ -160,15 +202,103 @@ export function makeFakeRepo(seed: Empresa[] = [], historial: Interaccion[] = []
     },
     async createSector(nombre, icono: IconoSector | null) {
       repo.escrituras++;
+      if (sectores.some((s) => s.nombre.toLowerCase() === nombre.toLowerCase())) {
+        throw new SectorDuplicadoError(nombre);
+      }
       const creado: Sector = { nombre, icono };
       sectores.push(creado);
       return { ...creado };
     },
   };
+
+  const oportunidadRepo: ICrmOportunidadRepository = {
+    async getById(id) {
+      const row = oportunidades.find((o) => o.idOportunidad === id);
+      return row ? structuredClone(row) : null;
+    },
+    async list() {
+      // Newest first: the last created comes first.
+      return [...oportunidades].reverse().map((o) => structuredClone(o));
+    },
+    async listByEmpresa(idEmpresa) {
+      return oportunidades
+        .filter((o) => o.idEmpresa === idEmpresa)
+        .reverse()
+        .map((o) => structuredClone(o));
+    },
+    async create(idEmpresa, datos: NuevaOportunidad, migrada = false) {
+      repo.escrituras++;
+      const empresaRow = buscar(idEmpresa);
+      const row = oportunidad({
+        idOportunidad: `o-nueva-${++seqOportunidad}`,
+        idEmpresa: empresaRow.idEmpresa,
+        nombre: datos.nombre,
+        responsableId: datos.responsableId,
+        responsableNombre: datos.responsableNombre,
+        origen: datos.origen,
+        servicio: datos.servicio,
+        montoEstimado: datos.montoEstimado,
+        etapa: datos.etapa,
+        medio: datos.medio,
+        medioOtro: datos.medioOtro,
+        migrada,
+      });
+      oportunidades.push(row);
+      return structuredClone(row);
+    },
+    async updateDatos(id, datos: DatosOportunidad) {
+      repo.escrituras++;
+      const row = buscarOportunidad(id);
+      row.nombre = datos.nombre;
+      row.responsableId = datos.responsableId;
+      row.responsableNombre = datos.responsableNombre;
+      row.origen = datos.origen;
+      row.servicio = datos.servicio;
+      row.montoEstimado = datos.montoEstimado;
+      return structuredClone(row);
+    },
+    async updateSeguimiento(id, s: SeguimientoOportunidad, interaccion: NuevaInteraccion | null) {
+      repo.escrituras++;
+      repo.seguimientos++;
+      const row = buscarOportunidad(id);
+      row.etapa = s.etapa;
+      row.medio = s.medio;
+      row.medioOtro = s.medioOtro;
+      row.motivo = s.motivo ? { ...s.motivo } : null;
+      row.intentosSinRespuesta = s.intentosSinRespuesta;
+      row.faltaResponderDesde = s.faltaResponderDesde;
+      row.proximaAccion = s.proximaAccion ? { ...s.proximaAccion } : null;
+      row.sugerenciaDescartadaEn = s.sugerenciaDescartadaEn;
+      if (interaccion) {
+        // The caller owns `idOportunidad`: stored as given, so a use case that
+        // forgets to link the activity is visible in tests.
+        interacciones.push({
+          idInteraccion: ++seqInteraccion,
+          idEmpresa: row.idEmpresa,
+          fecha: NOW,
+          ...interaccion,
+        });
+      }
+      return structuredClone(row);
+    },
+  };
+
+  repo.empresaRepo = empresaRepo;
+  repo.oportunidadRepo = oportunidadRepo;
   return repo;
 }
 
 /** Snapshot to prove that a rejected input stored nothing. */
-export function foto(repo: FakeRepo): { rows: Empresa[]; interacciones: Interaccion[]; escrituras: number } {
-  return structuredClone({ rows: repo.rows, interacciones: repo.interacciones, escrituras: repo.escrituras });
+export function foto(repo: FakeRepo): {
+  rows: Empresa[];
+  oportunidades: Oportunidad[];
+  interacciones: Interaccion[];
+  escrituras: number;
+} {
+  return structuredClone({
+    rows: repo.rows,
+    oportunidades: repo.oportunidades,
+    interacciones: repo.interacciones,
+    escrituras: repo.escrituras,
+  });
 }

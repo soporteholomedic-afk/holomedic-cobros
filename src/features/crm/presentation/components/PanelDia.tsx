@@ -9,8 +9,8 @@ import { useAlertasDia } from './useAlertasDia';
 interface PanelDiaProps {
   /** The board bumps this after every mutation; each bump refetches. */
   reloadKey: number;
-  /** Opens the empresa detail (the panel never navigates away). */
-  onAbrir: (idEmpresa: string) => void;
+  /** Focuses the oportunidad's card, or opens the ficha when the deal is not on the board (the panel never navigates away). */
+  onAbrir: (idOportunidad: string, idEmpresa: string) => void;
 }
 
 interface Grupo {
@@ -91,13 +91,14 @@ export function PanelDia({ reloadKey, onAbrir }: PanelDiaProps) {
               </h3>
               <ul className="flex flex-col gap-1.5">
                 {deClase.map((a) => (
-                  <li key={`${a.clase}-${a.idEmpresa}`}>
+                  <li key={`${a.clase}-${a.idOportunidad}`}>
                     <button
                       type="button"
-                      onClick={() => onAbrir(a.idEmpresa)}
+                      onClick={() => onAbrir(a.idOportunidad, a.idEmpresa)}
                       className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-left text-sm hover:border-sky-400 hover:bg-sky-50 dark:border-slate-700 dark:bg-slate-800/60 dark:hover:border-sky-500 dark:hover:bg-slate-800"
                     >
-                      <span className="block truncate font-semibold text-slate-900 dark:text-slate-100">{a.razonSocial}</span>
+                      <span className="block truncate font-semibold text-slate-900 dark:text-slate-100">{a.nombreOportunidad}</span>
+                      <span className="block truncate text-xs text-slate-500 dark:text-slate-400">{a.nombreEmpresa}</span>
                       <span className="block truncate text-xs text-slate-500 dark:text-slate-400">{textoAlerta(a)}</span>
                     </button>
                   </li>
