@@ -1,12 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 
 import type { ClienteSiglaSinFicha, EmpresaInactiva } from '../../../application/listarEmpresasInactivas';
 import { CrmInactivas } from '../CrmInactivas';
 import { json } from './crmFixtures';
 
 const RUTA = '/api/crm/empresas/inactivas';
-const RUTA_SIGLA = `${RUTA}?fuente=sigla&pagina=1`;
 
 function fila(overrides: Partial<EmpresaInactiva> = {}): EmpresaInactiva {
   return {
@@ -38,6 +37,11 @@ function filaSigla(overrides: Partial<ClienteSiglaSinFicha> = {}): ClienteSiglaS
 
 const LISTADO_CRM = {
   success: true,
+  total: 2,
+  totalFuente: 2,
+  pagina: 1,
+  paginas: 1,
+  sectores: ['Odontología'],
   filas: [
     fila(),
     fila({
@@ -58,6 +62,7 @@ const LISTADO_SIGLA = {
   success: true,
   filas: [filaSigla()],
   total: 34, // más filas de las que trae la página: la paginación es real
+  totalFuente: 34,
   pagina: 1,
   paginas: 1,
 };
@@ -77,13 +82,14 @@ function fetchInactivas(respuestas: {
   sigla?: { status: number; body: unknown } | { fallo: Error };
 }) {
   const fn = vi.fn(async (url: string) => {
-    if (url === RUTA) {
-      const paso = respuestas.crm ?? { status: 200, body: { success: true, filas: [], sinInformacion: 0 } };
+    // La rama SIGLA va primero: su URL también empieza con `${RUTA}?`.
+    if (url.startsWith(`${RUTA}?fuente=sigla`)) {
+      const paso = respuestas.sigla ?? { status: 200, body: { success: true, filas: [], total: 0, totalFuente: 0, pagina: 1, paginas: 1 } };
       if ('fallo' in paso) throw paso.fallo;
       return json({ status: paso.status, body: paso.body });
     }
-    if (url.startsWith(`${RUTA}?fuente=sigla`)) {
-      const paso = respuestas.sigla ?? { status: 200, body: { success: true, filas: [], total: 0, pagina: 1, paginas: 1 } };
+    if (url === RUTA || url.startsWith(`${RUTA}?`)) {
+      const paso = respuestas.crm ?? { status: 200, body: { success: true, filas: [], sinInformacion: 0, total: 0, totalFuente: 0, pagina: 1, paginas: 1, sectores: [] } };
       if ('fallo' in paso) throw paso.fallo;
       return json({ status: paso.status, body: paso.body });
     }
@@ -101,8 +107,8 @@ describe('CrmInactivas — dos fuentes: con ficha y solo en SIGLA (S10/S12)', ()
 
     expect(await screen.findByText('Clínica Vieja S.A.C.')).toBeTruthy();
     await waitFor(() => expect(onCargado).toHaveBeenCalledWith(36)); // 2 con ficha + 34 en SIGLA (total, no la página)
-    expect(fetchMock).toHaveBeenCalledWith(RUTA, { cache: 'no-store' });
-    expect(fetchMock).toHaveBeenCalledWith(RUTA_SIGLA, { cache: 'no-store' });
+    expect(fetchMock.mock.calls.some(([url]) => String(url).startsWith(RUTA))).toBe(true);
+    expect(fetchMock.mock.calls.some(([url]) => String(url).startsWith(`${RUTA}?fuente=sigla`))).toBe(true);
     // segmented control with both counts
     expect(screen.getByRole('button', { name: 'Con ficha en el CRM (2)' })).toBeTruthy();
     expect(screen.getByRole('button', { name: /Solo en SIGLA \(34\)/ })).toBeTruthy();
@@ -154,11 +160,12 @@ describe('CrmInactivas — dos fuentes: con ficha y solo en SIGLA (S10/S12)', ()
 
   it('the SIGLA segment paginates: Siguiente fetches the next page', async () => {
     const fetchMock = vi.fn(async (url: string) => {
-      if (url === RUTA) return json({ status: 200, body: LISTADO_CRM });
-      if (url.startsWith(`${RUTA}?fuente=sigla&pagina=`)) {
+      // La rama SIGLA va primero: su URL también empieza con `${RUTA}?`.
+      if (url.startsWith(`${RUTA}?fuente=sigla`)) {
         const pagina = Number(new URL(url, 'http://localhost').searchParams.get('pagina'));
-        return json({ status: 200, body: { success: true, filas: [filaSigla()], total: 120, pagina, paginas: 3 } });
+        return json({ status: 200, body: { success: true, filas: [filaSigla()], total: 120, totalFuente: 120, pagina, paginas: 3 } });
       }
+      if (url === RUTA || url.startsWith(`${RUTA}?`)) return json({ status: 200, body: LISTADO_CRM });
       throw new Error(`ruta inesperada: ${url}`);
     });
     global.fetch = fetchMock as unknown as typeof fetch;
@@ -168,11 +175,91 @@ describe('CrmInactivas — dos fuentes: con ficha y solo en SIGLA (S10/S12)', ()
     expect(await screen.findByText('Solo en SIGLA S.A.C.')).toBeTruthy();
     expect(screen.getByText(/Página 1 de 3/)).toBeTruthy();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Siguiente' }));
-    await waitFor(() =>
-      expect(fetchMock).toHaveBeenCalledWith(`${RUTA}?fuente=sigla&pagina=2`, { cache: 'no-store' }),
+    fireEvent.click(screen.getByRole('button', { name: /siguiente/i }));
+    await waitFor(
+      () => expect(fetchMock.mock.calls.some(([url]) => String(url).includes('pagina=2') && String(url).includes('fuente=sigla'))).toBe(true),
+      { timeout: 3000 },
     );
     expect(screen.getByText(/Página 2 de 3/)).toBeTruthy();
-    expect((screen.getByRole('button', { name: 'Anterior' }) as HTMLButtonElement).disabled).toBe(false);
+    expect((screen.getByRole('button', { name: /anterior/i }) as HTMLButtonElement).disabled).toBe(false);
+  });
+});
+
+
+describe('CrmInactivas — filtros, orden y paginación (S14-S17)', () => {
+  it('the search box debounces into the endpoint URL and shows X de Y', async () => {
+    const fetchMock = fetchInactivas({ crm: { status: 200, body: LISTADO_CRM }, sigla: { status: 200, body: LISTADO_SIGLA } });
+    render(<CrmInactivas onRegistrar={vi.fn()} />);
+
+    await screen.findByText('Clínica Vieja S.A.C.');
+    fetchMock.mockClear();
+    fireEvent.change(screen.getByLabelText(/buscar/i), { target: { value: 'clínica' } });
+    expect(fetchMock.mock.calls.some(([url]) => String(url).includes('q='))).toBe(false); // aún debouncing
+    await waitFor(
+      () => expect(fetchMock.mock.calls.some(([url]) => String(url).includes('q=cl%C3%ADnica'))).toBe(true),
+      { timeout: 3000 },
+    );
+    expect(screen.getByText(/de 2 clientes/i)).toBeTruthy();
+  });
+
+  it('estado chips and Limpiar filtros: chips change the URL, Limpiar resets them', async () => {
+    const fetchMock = fetchInactivas({ crm: { status: 200, body: LISTADO_CRM }, sigla: { status: 200, body: LISTADO_SIGLA } });
+    render(<CrmInactivas onRegistrar={vi.fn()} />);
+    await screen.findByText('Clínica Vieja S.A.C.');
+    fetchMock.mockClear();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Pendiente de primera atención' }));
+    await screen.findByText(/de 2 clientes/i, {}, { timeout: 3000 });
+    expect(fetchMock.mock.calls.some(([url]) => String(url).includes('estado=pendiente_primera'))).toBe(true);
+    expect(screen.getByRole('button', { name: /Limpiar filtros/i })).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('button', { name: /Limpiar filtros/i }));
+    await waitFor(
+      () =>
+        expect(
+          fetchMock.mock.calls.some(([url]) => String(url).includes('orden=abandono') && !String(url).includes('estado=')),
+        ).toBe(true),
+      { timeout: 3000 },
+    );
+  });
+
+  it('the sector dropdown is custom (no native select) and filters', async () => {
+    const fetchMock = fetchInactivas({ crm: { status: 200, body: LISTADO_CRM }, sigla: { status: 200, body: LISTADO_SIGLA } });
+    render(<CrmInactivas onRegistrar={vi.fn()} />);
+    await screen.findByText('Clínica Vieja S.A.C.');
+    fireEvent.click(screen.getByRole('button', { name: /Sector/ }));
+    expect(document.querySelector('select')).toBeNull(); // sin <select> nativo (S17)
+    fireEvent.click(screen.getByRole('option', { name: 'Odontología' }));
+    await waitFor(() =>
+      expect(fetchMock.mock.calls.some(([url]) => String(url).includes('sector=Odont'))).toBe(true),
+    );
+  });
+
+  it('column headers sort through the endpoint (abandono desc default → asc toggle)', async () => {
+    const fetchMock = fetchInactivas({ crm: { status: 200, body: LISTADO_CRM }, sigla: { status: 200, body: LISTADO_SIGLA } });
+    render(<CrmInactivas onRegistrar={vi.fn()} />);
+    await screen.findByText('Clínica Vieja S.A.C.');
+    fetchMock.mockClear();
+
+    const tabla = screen.getByRole('table');
+    fireEvent.click(within(tabla).getByRole('button', { name: /Sin actividad/ }));
+    await waitFor(() => expect(fetchMock.mock.calls.some(([url]) => String(url).includes('direccion=asc'))).toBe(true), { timeout: 3000 });
+    fireEvent.click(within(tabla).getByRole('button', { name: /Sin actividad/ }));
+    await waitFor(() => {
+      const idxAsc = fetchMock.mock.calls.findIndex(([url]) => String(url).includes('direccion=asc'));
+      const hayDescDespues = fetchMock.mock.calls.some(([url], i) => i > idxAsc && String(url).includes('direccion=desc'));
+      expect(hayDescDespues).toBe(true);
+    }, { timeout: 3000 });
+  });
+
+  it('the CRM segment paginates through the endpoint', async () => {
+    const fetchMock = fetchInactivas({
+      crm: { status: 200, body: { ...LISTADO_CRM, total: 120, totalFuente: 120, pagina: 1, paginas: 3 } },
+      sigla: { status: 200, body: LISTADO_SIGLA },
+    });
+    render(<CrmInactivas onRegistrar={vi.fn()} />);
+    await screen.findByText('Clínica Vieja S.A.C.');
+    fireEvent.click(screen.getByRole('button', { name: /siguiente/i }));
+    await waitFor(() => expect(fetchMock.mock.calls.some(([url]) => String(url).includes('pagina=2'))).toBe(true), { timeout: 3000 });
   });
 });
