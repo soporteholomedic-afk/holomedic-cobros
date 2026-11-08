@@ -72,7 +72,7 @@
       <span class="chip">SIGLA en vivo (bulk, read-only)</span>
       <span class="chip">Umbral fijo: 4 meses</span>
       <span class="chip">Riesgo: <b>medium</b> · self-verification completa</span>
-      <span class="chip"><b>4</b> capturas anotadas (demo + producción)</span>
+      <span class="chip"><b>5</b> capturas anotadas (demo + producción)</span>
     </div>
   </div>
 </header>
@@ -126,6 +126,25 @@
       <li><b>5.</b> Crear ficha: el alta se abre prellenada con los datos de SIGLA (razón social, RUC, contacto) y la relación queda en «cliente».</li>
     </ol>
   </figure>
+
+  <figure class="cap">
+    <img src="capturas-informe/inactivas-05-filtros.png" alt="Segmento Solo en SIGLA con búsqueda aplicada y contador en vivo">
+    <figcaption>Filtros, orden y paginación — datos reales de producción</figcaption>
+    <ol class="leyenda">
+      <li><b>1.</b> Búsqueda con debounce (300 ms) sobre razón social, RUC y contacto, con × para limpiar.</li>
+      <li><b>2.</b> «Limpiar filtros» aparece solo con filtros activos.</li>
+      <li><b>3.</b> Contador en vivo: <b>18 de 3.232</b> con la búsqueda «minera» aplicada.</li>
+      <li><b>4.</b> Orden por columna con <code>aria-sort</code>: «abandono» descendente activo; segundo click invierte.</li>
+    </ol>
+  </figure>
+
+  <h3>Caja de herramientas (S14-S17), todo server-side y sin componentes nativos</h3>
+  <ul>
+    <li><b>Búsqueda</b> con debounce sobre razón social, RUC y contacto; <b>sector</b> con dropdown propio facetado; <b>estado</b> y <b>antigüedad</b> (4-6 / 6-12 / 12+) y <b>último contacto</b> como chips.</li>
+    <li><b>Orden por columna</b> con <code>aria-sort</code>: abandono (default), razón social, última atención, último contacto; segundo click invierte.</li>
+    <li><b>Paginación</b> de 50 filas (primera/anterior/siguiente/última) unificada en ambos segmentos, y contadores «X de Y» por fuente.</li>
+    <li>Los contadores de los segmentos usan <code>totalFuente</code> (sin filtrar): el tamaño del radar no cambia cuando filtrás.</li>
+  </ul>
 
   <h2>1 · Objetivo y decisiones de producto</h2>
   <p><b>Pedido original:</b> dentro de la vista CRM (hoy solo kanban con columnas «por contactar», «contactado», «cotizado», «en seguimiento», «perdida», «ganada»), poder ver exclusivamente las empresas inactivas — una vista propia, junto al kanban, dentro de la misma pestaña.</p>
