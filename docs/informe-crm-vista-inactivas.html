@@ -45,6 +45,15 @@
   .flow .arr { color: var(--muted); }
   .note { background: rgba(251, 191, 36, .08); border: 1px solid rgba(251, 191, 36, .35); border-radius: .6rem; padding: .8rem 1rem; font-size: .88rem; margin: 1rem 0; }
   .note.ok { background: rgba(52, 211, 153, .08); border-color: rgba(52, 211, 153, .35); }
+  .note { background: rgba(251, 191, 36, .08); border: 1px solid rgba(251, 191, 36, .35); border-radius: .6rem; padding: .8rem 1rem; font-size: .88rem; margin: 1rem 0; }
+  .note.ok { background: rgba(52, 211, 153, .08); border-color: rgba(52, 211, 153, .35); }
+
+  figure.cap { margin: 1.2rem 0 2rem; background: var(--panel); border: 1px solid var(--line); border-radius: .8rem; padding: .8rem; }
+  figure.cap img { width: 100%; display: block; border-radius: .5rem; border: 1px solid var(--line); }
+  figure.cap figcaption { font-weight: 600; margin: .7rem 0 .3rem; color: var(--accent); }
+  ol.leyenda { margin: .3rem 0 0 1.2rem; font-size: .88rem; }
+  ol.leyenda li { margin: .25rem 0; }
+  ol.leyenda li b { color: var(--accent); }
   footer { margin-top: 3rem; color: var(--muted); font-size: .8rem; border-top: 1px solid var(--line); padding-top: 1rem; }
 </style>
 </head>
@@ -63,11 +72,48 @@
       <span class="chip">SIGLA en vivo (bulk, read-only)</span>
       <span class="chip">Umbral fijo: 4 meses</span>
       <span class="chip">Riesgo: <b>medium</b> · self-verification completa</span>
+      <span class="chip"><b>3</b> capturas anotadas (entorno demo)</span>
     </div>
   </div>
 </header>
 
 <main class="wrap">
+
+  <h2>0 · Recorrido con capturas</h2>
+  <p class="muted">Capturas reales de la app sobre un entorno demo desechable (contenedor SQL Server local con las <b>migraciones reales del proyecto</b> + SIGLA falsa): 7 empresas demo con antigüedades 7 / 5 / 4 meses, una reciente, una nunca atendida, una sin RUC y un prospecto. Cada imagen lleva recuadros numerados; la leyenda está debajo. <b>El diagnóstico con datos de producción está en la sección 6.</b></p>
+
+  <figure class="cap">
+    <img src="capturas-informe/inactivas-01-pipeline.png" alt="Tab CRM con Pipeline activo">
+    <figcaption>/crm — el kanban queda como tab Pipeline</figcaption>
+    <ol class="leyenda">
+      <li><b>1.</b> Nuevas tabs dentro de /crm: <b>Pipeline</b> (kanban) e <b>Inactivas</b>. Pipeline es la tab por defecto.</li>
+      <li><b>2.</b> El kanban queda intacto: el pipeline comercial vive acá.</li>
+    </ol>
+  </figure>
+
+  <figure class="cap">
+    <img src="capturas-informe/inactivas-02-lista.png" alt="Vista Inactivas con la lista priorizada">
+    <figcaption>Tab Inactivas — la lista priorizada de reactivación</figcaption>
+    <ol class="leyenda">
+      <li><b>1.</b> Tab Inactivas con badge contador: baja cuando la cartera reacciona.</li>
+      <li><b>2.</b> Meses sin actividad: la más abandonada arriba (7 → 5 → 4).</li>
+      <li><b>3.</b> Última atención SIGLA y último contacto CRM (en tiempo relativo).</li>
+      <li><b>4.</b> Registrar contacto: abre el panel del board para esa empresa.</li>
+      <li><b>5.</b> Nunca atendida: «Pendiente de primera atención», jamás «inactiva».</li>
+      <li><b>6.</b> Clientes sin RUC: excluidas y contadas (no pueden cruzar a SIGLA).</li>
+    </ol>
+  </figure>
+
+  <figure class="cap">
+    <img src="capturas-informe/inactivas-03-panel.png" alt="Panel Registrar actividad abierto desde la fila">
+    <figcaption>Registrar contacto — el panel del board, reutilizado</figcaption>
+    <ol class="leyenda">
+      <li><b>1.</b> El panel se abre para la empresa de la fila (la más abandonada).</li>
+      <li><b>2.</b> «Contactamos» preseleccionado: la reactivación sale de nosotros.</li>
+      <li><b>3.</b> Medio y resultado del intento de reactivación.</li>
+      <li><b>4.</b> Guardar: refresca la lista y actualiza «último contacto»; la fila permanece.</li>
+    </ol>
+  </figure>
 
   <h2>1 · Objetivo y decisiones de producto</h2>
   <p><b>Pedido original:</b> dentro de la vista CRM (hoy solo kanban con columnas «por contactar», «contactado», «cotizado», «en seguimiento», «perdida», «ganada»), poder ver exclusivamente las empresas inactivas — una vista propia, junto al kanban, dentro de la misma pestaña.</p>
@@ -175,6 +221,14 @@
     <li><b>Umbral fijo (4 meses):</b> decisión de producto; ajustarlo requiere tocar la constante <code>UMBRAL_MESES_INACTIVIDAD</code>.</li>
     <li><b>La fila no desaparece al contactar:</b> intencional (S6). El equipo debe entender que la lista mide <i>actividad de pacientes</i>, no gestiones comerciales.</li>
     <li><b>5 fallas pre-existentes en la suite</b> (branding + page.test) siguen abiertas en <code>develop</code> — son de otro frente y quedan documentadas.</li>
+  </ul>
+  <h3>Diagnóstico real (análisis solo lectura de SIGLA, perfil explorador)</h3>
+  <p>Con datos de producción la vista sale <b>vacía</b> — y el motivo no es la vista:</p>
+  <ul>
+    <li><b>SIGLA sí tiene inactivos</b>: <b>3.232 RUCs clientes</b> (IndReg=1) con última atención de hace ≥4 meses o sin órdenes; los hay con última orden de <b>2015</b>.</li>
+    <li><b>El CRM visible en este entorno todavía no tiene empresas cargadas</b>: 0 fichas (ni prospectos ni clientes). Sin fichas con RUC y relación «cliente», la vista no tiene qué cruzar.</li>
+    <li><b>Consecuencia operativa:</b> para que la lista viva, primero hay que cargar las empresas al CRM (importador de Excel o alta manual) con su <b>RUC</b> y relación <b>«cliente»</b>. A partir de ahí la vista cruza en vivo contra SIGLA y se llena sola.</li>
+    <li>Por eso las capturas de este informe se tomaron sobre el entorno demo desechable; con la cartera cargada, la vista real se ve idéntica con nombres reales.</li>
   </ul>
 
   <h2>7 · Pendientes (decisión del usuario)</h2>

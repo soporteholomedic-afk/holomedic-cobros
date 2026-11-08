@@ -1,0 +1,26 @@
+[
+  {
+    "n": 1,
+    "texto": "Tab Inactivas con badge contador: baja cuando la cartera reacciona"
+  },
+  {
+    "n": 2,
+    "texto": "Meses sin actividad: la más abandonada arriba (7 → 5 → 4)"
+  },
+  {
+    "n": 3,
+    "texto": "Última atención SIGLA y último contacto CRM (relativo)"
+  },
+  {
+    "n": 4,
+    "texto": "Registrar contacto: abre el panel del board para esa empresa"
+  },
+  {
+    "n": 5,
+    "texto": "Nunca atendida: «Pendiente de primera atención», jamás «inactiva»"
+  },
+  {
+    "n": 6,
+    "texto": "Clientes sin RUC: excluidas y contadas (no pueden cruzar a SIGLA)"
+  }
+]
