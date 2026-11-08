@@ -81,6 +81,12 @@ export interface ICrmOportunidadRepository {
 export interface IAtencionesServicio {
   /** Last attention date of the RUC; NULL when SIGLA has none for it. */
   ultimaAtencion(ruc: string): Promise<string | null>;
+  /**
+   * Same lookup for many RUCs in bulk: one query per chunk (never one per
+   * RUC). RUCs with no `Cliente` row in SIGLA, and clientes with no orders,
+   * map to `null` — the same signal the single lookup gives (regla S6.7).
+   */
+  ultimaAtencionPorRucs(rucs: string[]): Promise<Map<string, string | null>>;
 }
 
 // ---------------------------------------------------------------------------

@@ -59,7 +59,7 @@ export function estadoActividadServicios(
 }
 
 /** Whole months elapsed from `desde` (UTC) to `hasta`. Negative when `hasta` is earlier. */
-function mesesEntre(desde: Date, hasta: Date): number {
+export function mesesEntre(desde: Date, hasta: Date): number {
   let meses =
     (hasta.getUTCFullYear() - desde.getUTCFullYear()) * 12 + (hasta.getUTCMonth() - desde.getUTCMonth());
   if (hasta.getUTCDate() < desde.getUTCDate()) meses -= 1;
