@@ -1,0 +1,18 @@
+[
+  {
+    "n": 1,
+    "texto": "«Registrar actividad» (antes Registrar contacto): permite vincularla a una oportunidad concreta o dejarla general."
+  },
+  {
+    "n": 2,
+    "texto": "La actividad avanza SOLO el negocio vinculado: «Evaluaciones preocupacionales» pasa a Contactado."
+  },
+  {
+    "n": 3,
+    "texto": "Próxima acción: exigida en negocios abiertos vinculados; opcional en actividades generales."
+  },
+  {
+    "n": 4,
+    "texto": "La ficha y el historial de la empresa registran la actividad con su vínculo."
+  }
+]

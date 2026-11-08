@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Informe · Rediseño CRM — Empresa / Oportunidad / Actividad</title>
+<style>
+  :root {
+    --bg: #0f172a; --panel: #1e293b; --panel2: #273549; --line: #334155;
+    --text: #e2e8f0; --muted: #94a3b8; --accent: #38bdf8; --green: #34d399;
+    --violet: #a78bfa; --amber: #fbbf24; --red: #f87171;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; line-height: 1.55; padding: 0 0 4rem; }
+  .wrap { max-width: 1080px; margin: 0 auto; padding: 0 1.5rem; }
+  header { background: linear-gradient(135deg, #0c4a6e 0%, #0f172a 60%); border-bottom: 1px solid var(--line); padding: 3rem 0 2.2rem; margin-bottom: 2.2rem; }
+  header h1 { font-size: 1.9rem; font-weight: 700; letter-spacing: -0.02em; }
+  header p { color: var(--muted); margin-top: .5rem; max-width: 70ch; }
+  .chips { display: flex; flex-wrap: wrap; gap: .5rem; margin-top: 1.1rem; }
+  .chip { background: var(--panel2); border: 1px solid var(--line); color: var(--text); border-radius: 999px; padding: .25rem .8rem; font-size: .8rem; }
+  .chip b { color: var(--accent); }
+  h2 { font-size: 1.25rem; margin: 2.4rem 0 1rem; padding-bottom: .4rem; border-bottom: 1px solid var(--line); color: var(--accent); }
+  h3 { font-size: 1rem; margin: 1.4rem 0 .6rem; color: var(--text); }
+  p, li { color: var(--text); }
+  .muted { color: var(--muted); font-size: .9rem; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 1rem; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: .8rem; padding: 1.1rem 1.2rem; }
+  .card h4 { font-size: .95rem; margin-bottom: .35rem; color: var(--accent); }
+  .card p { font-size: .88rem; color: var(--muted); }
+  .stat { text-align: center; }
+  .stat .num { font-size: 2rem; font-weight: 700; color: var(--green); }
+  .stat .lbl { font-size: .8rem; color: var(--muted); }
+  table { width: 100%; border-collapse: collapse; margin: .8rem 0 1.2rem; font-size: .88rem; background: var(--panel); border-radius: .6rem; overflow: hidden; }
+  th { background: var(--panel2); text-align: left; padding: .6rem .8rem; color: var(--accent); font-weight: 600; font-size: .8rem; text-transform: uppercase; letter-spacing: .04em; }
+  td { padding: .55rem .8rem; border-top: 1px solid var(--line); vertical-align: top; }
+  td code, p code, li code { background: #0b1220; border: 1px solid var(--line); border-radius: .35rem; padding: .05rem .4rem; font-family: ui-monospace, 'Cascadia Code', Consolas, monospace; font-size: .82em; color: var(--violet); }
+  .ok { color: var(--green); font-weight: 600; }
+  .warn { color: var(--amber); font-weight: 600; }
+  .before-after { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+  .stage-row { display: flex; flex-wrap: wrap; gap: .45rem; padding: .6rem 0; }
+  .stage { border-radius: .45rem; padding: .3rem .7rem; font-size: .82rem; border: 1px solid var(--line); background: var(--panel2); }
+  .stage.old-off { text-decoration: line-through; opacity: .45; }
+  .stage.new { border-color: var(--accent); color: var(--accent); }
+  .stage.won { border-color: var(--green); color: var(--green); }
+  .stage.lost { border-color: var(--red); color: var(--red); }
+  .stage.mid { border-color: var(--violet); color: var(--violet); }
+  ul { padding-left: 1.2rem; margin: .5rem 0 1rem; }
+  li { margin: .3rem 0; }
+  .flow { display: flex; align-items: center; flex-wrap: wrap; gap: .4rem; margin: .5rem 0; font-size: .85rem; }
+  .flow .step { background: var(--panel2); border: 1px solid var(--line); border-radius: .45rem; padding: .3rem .6rem; }
+  .flow .arr { color: var(--muted); }
+  .note { background: rgba(251, 191, 36, .08); border: 1px solid rgba(251, 191, 36, .35); border-radius: .6rem; padding: .8rem 1rem; font-size: .88rem; margin: 1rem 0; }
+  .note.ok { background: rgba(52, 211, 153, .08); border-color: rgba(52, 211, 153, .35); }
+
+  figure.cap { margin: 1.2rem 0 2rem; background: var(--panel); border: 1px solid var(--line); border-radius: .8rem; padding: .8rem; }
+  figure.cap img { width: 100%; display: block; border-radius: .5rem; border: 1px solid var(--line); }
+  figure.cap figcaption { font-weight: 600; margin: .7rem 0 .3rem; color: var(--accent); }
+  ol.leyenda { margin: .3rem 0 0 1.2rem; font-size: .88rem; }
+  ol.leyenda li { margin: .25rem 0; }
+  ol.leyenda li b { color: var(--accent); }
+
+  footer { margin-top: 3rem; color: var(--muted); font-size: .8rem; border-top: 1px solid var(--line); padding-top: 1rem; }
+  @media (max-width: 720px) { .before-after { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="wrap">
+    <h1>Informe de implementación · Rediseño del CRM</h1>
+    <p>Separación de <b>Empresa</b> (ficha permanente), <b>Oportunidad</b> (tarjeta del Kanban) y <b>Actividad</b> (historial vinculable), según el documento <code>docs/subidos/2026-11-07-20-06-19-Mejoras-CRM.txt</code>. Rama <code>feature/crm-oportunidades</code> — lista para promoción a <code>develop</code>.</p>
+    <div class="chips">
+      <span class="chip"><b>10</b> commits</span>
+      <span class="chip"><b>~13.300</b> líneas</span>
+      <span class="chip"><b>1058/1058</b> tests en verde</span>
+      <span class="chip"><b>73</b> archivos de prueba</span>
+      <span class="chip"><b>7/7</b> validaciones del documento</span>
+      <span class="chip">SIGLA en vivo</span>
+      <span class="chip">Migración ensayada en contenedor</span>
+    </div>
+  </div>
+</header>
+
+<main class="wrap">
+
+
+  <h2>0 · Recorrido con capturas (app corriendo con datos demo)</h2>
+  <p class="muted">Capturas reales de <code>pnpm start</code> sobre la BD demo migrada (contenedor SQL Server local): datos antiguos migrados con la regla S8, SIGLA falsa con atenciones reales y usuario con permiso <code>crm</code>. Cada imagen lleva recuadros numerados; la leyenda está debajo.</p>
+
+  <figure class="cap">
+    <img src="capturas-informe/01-tablero.png" alt="Tablero Kanban por oportunidades">
+    <figcaption>Tablero /crm — una tarjeta por oportunidad comercial</figcaption>
+    <ol class="leyenda">
+      <li><b>1.</b> Columnas nuevas: «Cotizado» y «Ganada». «Cliente» salió del tablero: ahora es la relación de la empresa.</li>
+      <li><b>2.</b> Cada tarjeta es UNA oportunidad: empresa + negocio + responsable + monto.</li>
+      <li><b>3.</b> Chip «Migrada»: negocios creados por la migración de datos (S8).</li>
+      <li><b>4.</b> «Falta RUC» con consulta SUNAT en la propia tarjeta.</li>
+      <li><b>5.</b> Sugerencia automática tras 3 intentos sin respuesta: «Pasar a Perdida» pide el motivo; la empresa no se toca.</li>
+    </ol>
+    <p class="muted">Nota: las empresas <b>cliente sin oportunidades</b> no aparecen en el tablero por diseño — se abren por el buscador (ver captura 02).</p>
+  </figure>
+
+  <figure class="cap">
+    <img src="capturas-informe/02-ficha-cliente-reciente.png" alt="Ficha de empresa cliente con actividad reciente">
+    <figcaption>Ficha de empresa — cliente con actividad de servicios reciente (SIGLA en vivo)</figcaption>
+    <ol class="leyenda">
+      <li><b>1.</b> Relación de la empresa con toggle manual: ganar o perder un negocio nunca la cambia.</li>
+      <li><b>2.</b> Los clientes sin tarjeta se abren desde el buscador (Caso 2: abrir la ficha y crear una nueva oportunidad).</li>
+      <li><b>3.</b> Actividad de servicios leída EN VIVO de SIGLA: «Actividad reciente · Última atención: 05/10/2026». Una llamada reciente no la altera.</li>
+      <li><b>4.</b> Último contacto comercial (llamadas/correos), separado de la atención de servicios.</li>
+      <li><b>5.</b> Oportunidades · N registradas: todos los negocios, abiertos, ganados o perdidos.</li>
+      <li><b>6.</b> «Registrar actividad»: puede vincularse a un negocio específico o quedar general.</li>
+    </ol>
+  </figure>
+
+  <figure class="cap">
+    <img src="capturas-informe/03-ficha-sin-actividad.png" alt="Ficha cliente inactivo en servicios">
+    <figcaption>Caso 3 — cliente inactivo en servicios sigue siendo cliente</figcaption>
+    <ol class="leyenda">
+      <li><b>1.</b> «Sin actividad de servicios reciente · Última atención: 02/06/2026»: la inactividad se calcula por SERVICIOS (4 meses), no por llamadas.</li>
+      <li><b>2.</b> Sigue siendo CLIENTE: la inactividad no la convierte en prospecto ni en perdida (Caso 3).</li>
+      <li><b>3.</b> Su ficha se abre por el buscador aunque no tenga negocios en el tablero.</li>
+    </ol>
+  </figure>
+
+  <figure class="cap">
+    <img src="capturas-informe/04-alta-primera-oportunidad.png" alt="Alta de empresa con primera oportunidad opcional">
+    <figcaption>Nueva empresa — ficha sola, o ficha + primera oportunidad</figcaption>
+    <ol class="leyenda">
+      <li><b>1.</b> «Nueva empresa» crea SOLO la ficha: nunca obliga a crear una oportunidad (S7.1).</li>
+      <li><b>2.</b> Dirección fiscal se autocompleta con SUNAT al tipear el RUC.</li>
+      <li><b>3.</b> «Primera oportunidad (opcional)»: si se marca, crea la ficha + su primer negocio en el mismo flujo (con reintento si falla el segundo paso).</li>
+      <li><b>4.</b> Un clic: la empresa queda como ficha permanente (Prospecto por defecto).</li>
+    </ol>
+  </figure>
+
+  <figure class="cap">
+    <img src="capturas-informe/05-registrar-actividad.png" alt="Registrar actividad vinculada a una oportunidad">
+    <figcaption>Registrar actividad — vinculada a un negocio o general</figcaption>
+    <ol class="leyenda">
+      <li><b>1.</b> «Registrar actividad» (antes Registrar contacto): permite vincularla a una oportunidad concreta o dejarla general.</li>
+      <li><b>2.</b> La actividad avanza SOLO el negocio vinculado: «Evaluaciones preocupacionales» pasa a Contactado.</li>
+      <li><b>3.</b> Próxima acción: exigida en negocios abiertos vinculados; opcional en actividades generales.</li>
+      <li><b>4.</b> La ficha y el historial de la empresa registran la actividad con su vínculo.</li>
+    </ol>
+  </figure>
+
+  <figure class="cap">
+    <img src="capturas-informe/06-nos-contactaron.png" alt="Nos contactaron — find or create">
+    <figcaption>Nos contactaron — primero busca la empresa</figcaption>
+    <ol class="leyenda">
+      <li><b>1.</b> Primero BUSCA la empresa: si ya existe crea una oportunidad vinculada; si no, registra la ficha + su primera oportunidad (sin duplicar).</li>
+      <li><b>2.</b> El medio de llegada queda registrado en la actividad y en el negocio.</li>
+      <li><b>3.</b> «¿Qué necesita?» se convierte en el nombre de la primera oportunidad de la empresa.</li>
+      <li><b>4.</b> El origen («¿Cómo nos conoció?») vive ahora en la oportunidad.</li>
+    </ol>
+  </figure>
+
+  <figure class="cap">
+    <img src="capturas-informe/07-motivo-perdida.png" alt="Perdida con motivo — solo se cierra esa oportunidad">
+    <figcaption>Caso 1 — la perdida cierra la oportunidad, no la empresa</figcaption>
+    <ol class="leyenda">
+      <li><b>1.</b> Al pasar a Perdida se solicita el motivo y SOLO se cierra esa oportunidad (Caso 1).</li>
+      <li><b>2.</b> Industrias Norte queda en Perdida con su motivo registrado y editable; su historial se conserva.</li>
+      <li><b>3.</b> Grupo Horizonte (migrada): el motivo del rechazo antiguo (precio, ofrecimos 7000 / esperaban 9000) se preservó en la migración.</li>
+      <li><b>4.</b> Las demás oportunidades y la empresa no se modifican.</li>
+    </ol>
+  </figure>
+
+  <h2>1 · El problema y la corrección</h2>
+  <div class="grid">
+    <div class="card"><h4>Antes</h4><p>La <code>etapa</code> de la empresa (<em>Por contactar → Contactado → En seguimiento → Cliente / Perdido</em>) era al mismo tiempo la empresa y el negocio: una sola tarjeta por organización en el embudo.</p></div>
+    <div class="card"><h4>Ahora</h4><p>La empresa es una <b>ficha permanente</b> con relación <em>Prospecto/Cliente</em>; el tablero muestra <b>oportunidades</b> (una empresa puede estar en varias columnas); las actividades pueden vincularse a un negocio o quedar generales.</p></div>
+    <div class="card"><h4>Regla clave</h4><p>Ganar o perder un negocio <b>nunca</b> cambia la relación de la empresa ni toca sus demás oportunidades. Un cliente sigue siendo cliente aunque esté inactivo en servicios.</p></div>
+  </div>
+
+  <h2>2 · Tablero Kanban: 5 → 6 etapas</h2>
+  <div class="before-after">
+    <div class="card">
+      <h4>Antes (empresa = tarjeta)</h4>
+      <div class="stage-row">
+        <span class="stage">Por contactar</span><span class="stage">Contactado</span><span class="stage">En seguimiento</span><span class="stage old-off">Cliente</span><span class="stage old-off">Perdido</span>
+      </div>
+      <p class="muted">"Cliente" era una etapa del embudo y no existía "Cotizado" ni "Ganada".</p>
+    </div>
+    <div class="card">
+      <h4>Ahora (oportunidad = tarjeta)</h4>
+      <div class="stage-row">
+        <span class="stage new">Por contactar</span><span class="stage new">Contactado</span><span class="stage new">En seguimiento</span><span class="stage mid">Cotizado</span><span class="stage won">Ganada</span><span class="stage lost">Perdida</span>
+      </div>
+      <p class="muted">"Cliente" salió del tablero (es relación de la ficha); "Cotizado" distingue propuestas presentadas; "Ganada" es el resultado del negocio.</p>
+    </div>
+  </div>
+
+  <h2>3 · Ficha de empresa (pantalla de consulta)</h2>
+  <ul>
+    <li><b>Encabezado:</b> razón social, RUC (con autocompletado SUNAT), sector y <b>relación con toggle manual</b> (<code>PATCH /api/crm/empresas/[id]/relacion</code>) — nunca derivada de un resultado comercial.</li>
+    <li><b>Actividad de servicios</b> — leída <b>en vivo de SIGLA</b> (<code>Cliente.NroRuc → Orden.CodCli → MAX(Orden.FecAte)</code>): <em>Sin información</em> · <em>Pendiente de primera atención</em> · <em>reciente</em> · <em>Sin actividad de servicios reciente</em> (umbral 4 meses por <b>servicios</b>, no por llamadas; sin datos nunca se clasifica "inactiva").</li>
+    <li><b>Último contacto</b> y <b>Oportunidades · N registradas</b> (cada una con su etapa, medio editable y motivo si está perdida).</li>
+    <li><b>Historial completo</b> — toda actividad, abierta/ganada/perdida, indicando el negocio vinculado o «General».</li>
+  </ul>
+
+  <h2>4 · Flujos adaptados (los botones que los usuarios ya conocen)</h2>
+  <table>
+    <tr><th>Acción</th><th>Nuevo comportamiento</th></tr>
+    <tr><td>Nueva empresa</td><td>Crea la ficha <b>sin</b> oportunidad obligatoria + sección opcional «Primera oportunidad» en el mismo formulario (con recuperación: si el segundo POST falla, la ficha queda y se reintenta solo el negocio).</td></tr>
+    <tr><td>Nos contactaron</td><td>Busca la empresa; si existe crea una <b>nueva oportunidad vinculada</b>; si no, registra empresa + primera oportunidad (respuesta <code>{empresa, oportunidad, existente}</code>).</td></tr>
+    <tr><td>Registrar actividad</td><td>Antes «Registrar contacto»; selector opcional de negocio; la próxima acción solo es exigida en negocios abiertos vinculados.</td></tr>
+    <tr><td>Mover tarjeta</td><td>Mueve una <b>oportunidad</b>; a Perdida exige motivo (diálogo), a Contactado exige medio, Ganada no pide nada; actualización en el lugar sin refetch.</td></tr>
+    <tr><td>Importar empresas</td><td>Crea/actualiza <b>solo fichas</b>, sin oportunidades automáticas.</td></tr>
+  </table>
+
+  <h2>5 · Migración de datos (decisión registrada)</h2>
+  <ul>
+    <li>Etapas abiertas → oportunidad con la misma etapa + <b>próxima acción y origen copiados</b>.</li>
+    <li><code>perdido</code> → oportunidad <b>Perdida conservando el motivo</b> (el rechazo no se pierde).</li>
+    <li><code>cliente</code> → solo <code>relacion='cliente'</code>, <b>sin tarjeta sintética</b>.</li>
+    <li>Todo lo migrado lleva <code>migrada = 1</code> y nombre «Gestión comercial inicial»; historial y contactos intactos.</li>
+    <li>Batch <b>idempotente</b> autoejecutado en el primer request (<code>sp_getapplock</code>, guards por <code>sys.*</code>), 14 columnas de la era-etapa retiradas con barrido dinámico por dependencias.</li>
+  </ul>
+  <div class="note ok"><b>Ensayo real:</b> la migración se ejecutó de punta a punta en un contenedor SQL Server 2022 local (upgrade con datos viejos + instalación fresca) y encontró un defecto que los tests de texto no veían: <code>EXEC('...' + QUOTENAME())</code> es T-SQL inválido y su error de compilación <b>no aborta el batch externo</b> — el barrido no eliminaba nada y <code>DROP COLUMN</code> fallaba. Corregido (statement en variable + <code>sys.sql_expression_dependencies</code>), pineado y re-ensayado <span class="ok">2/2 verde</span>.</div>
+
+  <h2>6 · Los 3 modelos de datos</h2>
+  <div class="grid">
+    <div class="card"><h4>Empresa</h4><p><code>dbo.CrmEmpresa</code> + <code>CrmContacto</code> — ficha permanente: razón social, RUC único, sector, contactos (uno principal), notas, dirección, <code>relacion</code>. Sin etapa: la ficha no se mueve.</p></div>
+    <div class="card"><h4>Oportunidad</h4><p><code>dbo.CrmOportunidad</code> — nombre, empresa, responsable (id + snapshot), origen, servicio de interés, etapa, monto estimado, próxima acción, motivo (solo Perdida), intentos, sugerencia, <code>migrada</code>.</p></div>
+    <div class="card"><h4>Actividad</h4><p><code>dbo.CrmInteraccion</code> + <code>idOportunidad</code> (NULL = general) — dirección, medio, resultado, resumen; avanza <b>solo</b> el negocio vinculado.</p></div>
+  </div>
+
+  <h2>7 · Commits (10)</h2>
+  <table>
+    <tr><th>Commit</th><th>Unidad</th><th>Verificación</th></tr>
+    <tr><td><code>4467542</code></td><td>T1+T3 · Dominio nuevo + adapter SIGLA (<code>SqlServerAtencionesRepository</code>)</td><td class="ok">4/4 tests + sondeo real SIGLA</td></tr>
+    <tr><td><code>0459f08</code></td><td>T2 · Esquema SQL + migración + repositorios</td><td class="ok">87/87</td></tr>
+    <tr><td><code>4bfb209</code></td><td>Fix del barrido de constraints (hallado en ensayo)</td><td class="ok">Ensayo contenedor 2/2 + pin</td></tr>
+    <tr><td><code>b50de28</code></td><td>T4 · Casos de uso (+ fix S6.7 <em>pendiente_primera</em>)</td><td class="ok">252/252</td></tr>
+    <tr><td><code>9c21a5b</code></td><td>T5 · API (9 rutas nuevas, 4 removidas)</td><td class="ok">224/224</td></tr>
+    <tr><td><code>77901a1</code></td><td>T6 · Kanban por oportunidades</td><td class="ok">87/87</td></tr>
+    <tr><td><code>2b49a2e</code></td><td>T7 · Ficha de empresa permanente</td><td class="ok">117/117 + diferencial 94/94</td></tr>
+    <tr><td><code>4e8789a</code></td><td>T8 · Flujos (alta/entrante/actividad/día/calendario)</td><td class="ok">193/193 + diferencial 220/220</td></tr>
+    <tr><td><code>3bebf02</code></td><td>T9+T10 · 7 validaciones + docs + pins corregidos</td><td class="ok">1058/1058 (suite completa)</td></tr>
+  </table>
+
+  <h2>8 · Las 7 validaciones del documento — <span class="ok">todas cubiertas</span></h2>
+  <table>
+    <tr><th>#</th><th>Comprobación</th><th>Prueba de aceptación</th></tr>
+    <tr><td>1</td><td>Crear empresa sin oportunidad obligatoria</td><td><code>validacionesDocumento.test.ts</code> + suites de alta</td></tr>
+    <tr><td>2</td><td>Dos oportunidades para una misma empresa</td><td>ídem + <code>crearOportunidad.test</code></td></tr>
+    <tr><td>3</td><td>Perder una oportunidad sin cambiar la empresa</td><td>ídem + <code>moverOportunidad.test</code></td></tr>
+    <tr><td>4</td><td>Actividad vinculada a un negocio específico</td><td>ídem + <code>registrarActividad.test</code> + UI</td></tr>
+    <tr><td>5</td><td>Consultar todas las actividades desde la ficha</td><td>ídem + historial API + UI (vinculadas y generales)</td></tr>
+    <tr><td>6</td><td>Ganar sin alterar otras negociaciones abiertas</td><td>ídem + <code>moverOportunidad.test</code></td></tr>
+    <tr><td>7</td><td>Cliente inactivo sin volverlo prospecto/perdido</td><td>ídem + <code>consultarAtencion.test</code> (SIGLA, 4 estados)</td></tr>
+  </table>
+
+  <h2>9 · Verificación global</h2>
+  <div class="grid">
+    <div class="card stat"><div class="num">1058</div><div class="lbl">tests en verde (73 archivos)</div></div>
+    <div class="card stat"><div class="num">2/2</div><div class="lbl">escenarios del ensayo de migración (motor real)</div></div>
+    <div class="card stat"><div class="num">4</div><div class="lbl">estados de atención SIGLA cubiertos</div></div>
+    <div class="card stat"><div class="num">7/7</div><div class="lbl">comprobaciones funcionales</div></div>
+  </div>
+  <p class="muted" style="margin-top:.8rem">Capas verificadas: dominio · aplicación (252) · infraestructura SQL (87) · API (224) · presentación tablero (87) · ficha (117) · flujos (193) · aceptación (7). La revisión nativa (RDD) quedó en <em>medio/unassessable</em> — sin candidato: la autoverificación sostiene la entrega.</p>
+
+  <div class="note"><b>Next step (decisión del usuario):</b> promoción de la rama — merge a <code>develop</code>, luego <code>master</code> según el flujo del repo, y sync al SDK de Windows (<code>.\sync-sdk.ps1</code>) <em>después</em> del merge. La migración corre automáticamente en el primer request del CRM tras el despliegue (batch idempotente, ensayado).</div>
+
+  <footer>
+    Generado por el Gentleman · Sesión crm-oportunidades · 2026-11-07 · Feature doc: <code>odd/tasks/crm-oportunidades.md</code> · Módulo: <code>docs/modules/crm.md</code>
+  </footer>
+
+</main>
+</body>
+</html>
