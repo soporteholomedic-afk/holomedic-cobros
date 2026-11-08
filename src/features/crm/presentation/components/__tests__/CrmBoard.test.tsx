@@ -437,4 +437,49 @@ describe('CrmBoard — datos', () => {
     fireEvent.click(within(tarjeta('Exámenes de ingreso')).getByText('Textiles Pacífico S.A.C.'));
     expect(await screen.findByTestId('detalle-mock')).toHaveAttribute('aria-label', 'Textiles Pacífico S.A.C.');
   });
+
+  it('the search offers the ficha of empresas without a card (cliente migrated, Caso 2)', async () => {
+    mockApi({
+      lista: {
+        status: 200,
+        body: {
+          success: true,
+          empresas: [
+            ...LISTA,
+            empresa({
+              idEmpresa: 'e-9',
+              razonSocial: 'Clínica Sin Tarjeta S.A.C.',
+              ruc: '20998887776',
+              relacion: 'cliente',
+            }),
+          ],
+        },
+      },
+    });
+    render(<CrmBoard />);
+    await cargado();
+    // e-9 es cliente y no tiene oportunidades: sin tarjeta, su ficha debe seguir
+    // consultable desde el buscador (S3/S4, Caso 2).
+    const buscar = screen.getByRole('searchbox', { name: 'Buscar oportunidad, empresa o responsable' });
+    fireEvent.change(buscar, { target: { value: 'Sin Tarjeta' } });
+    const ficha = await screen.findByTestId('ficha-e-9');
+    expect(ficha).toHaveTextContent('Clínica Sin Tarjeta S.A.C.');
+    expect(ficha).toHaveTextContent('Cliente');
+    fireEvent.click(ficha);
+    expect(await screen.findByTestId('detalle-mock')).toHaveAttribute(
+      'aria-label',
+      'Clínica Sin Tarjeta S.A.C.',
+    );
+  });
+
+  it('the ficha strip only appears when the query matches an empresa without a card', async () => {
+    mockApi();
+    render(<CrmBoard />);
+    await cargado();
+    expect(screen.queryByTestId('fichas-sin-tarjeta')).not.toBeInTheDocument();
+    const buscar = screen.getByRole('searchbox', { name: 'Buscar oportunidad, empresa o responsable' });
+    fireEvent.change(buscar, { target: { value: 'Andina' } });
+    await waitFor(() => expect(screen.getByRole('searchbox')).toHaveValue('Andina'));
+    expect(screen.queryByTestId('fichas-sin-tarjeta')).not.toBeInTheDocument();
+  });
 });

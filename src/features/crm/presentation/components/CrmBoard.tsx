@@ -204,6 +204,18 @@ export function CrmBoard() {
     );
   }, [tarjetas, search]);
 
+  /** Empresas matching the search with NO card on the board (e.g. migrated
+   *  clientes, S8) — the ficha stays reachable from the search (S3/S4, Caso 2:
+   *  "El comercial abre su ficha y crea una nueva oportunidad"). */
+  const fichasSinTarjeta = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return [];
+    const conTarjeta = new Set(tarjetas.map(({ e }) => e.idEmpresa));
+    return empresas.filter(
+      (e) => !conTarjeta.has(e.idEmpresa) && `${e.razonSocial} ${e.ruc ?? ''}`.toLowerCase().includes(q),
+    );
+  }, [empresas, tarjetas, search]);
+
   const cerrarDialogo = useCallback(() => {
     focoDeOrigen.current = null;
     setDialogo(null);
@@ -692,6 +704,26 @@ export function CrmBoard() {
           }
         }}
       />
+
+      {fichasSinTarjeta.length > 0 && (
+        <div className="mb-3 flex flex-wrap items-center gap-2" data-testid="fichas-sin-tarjeta">
+          <span className="text-sm text-slate-500 dark:text-slate-400">Fichas sin tarjeta en el tablero:</span>
+          {fichasSinTarjeta.map((e) => (
+            <button
+              key={e.idEmpresa}
+              type="button"
+              data-testid={`ficha-${e.idEmpresa}`}
+              onClick={() => abrirDetalle(e.idEmpresa)}
+              className="inline-flex items-center gap-2 rounded-full border border-slate-300 bg-white px-3 py-1 text-sm font-medium text-slate-800 hover:border-sky-500 hover:text-sky-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:hover:border-sky-500"
+            >
+              {e.razonSocial}
+              <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-600 dark:bg-slate-800 dark:text-slate-300">
+                {e.relacion === 'cliente' ? 'Cliente' : 'Prospecto'}
+              </span>
+            </button>
+          ))}
+        </div>
+      )}
 
       <div
         data-testid="crm-board"

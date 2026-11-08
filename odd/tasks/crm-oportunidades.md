@@ -74,18 +74,21 @@ pueden vincularse a una oportunidad. Basado en `docs/subidos/2026-11-07-20-06-19
 
 | ID | Specs | Route | Commit |
 |----|-------|-------|--------|
-| T1 | S1 | inline (contrato de dominio) | feat(crm): modelo dominio oportunidad |
-| T2 | S1,S6,S8 | worker | feat(crm): esquema SQL + migración de datos |
-| T3 | S3,S5,S6 | worker | feat(crm): adapter SIGLA última atención |
-| T4 | S1,S2,S4 | worker | feat(crm): casos de uso oportunidades/actividades |
-| T5 | S4 | worker | feat(crm): rutas API oportunidades + ficha |
-| T6 | S2 | worker | feat(crm): Kanban por oportunidades |
-| T7 | S3 | worker | feat(crm): ficha de empresa reorganizada |
-| T8 | S4 | worker | feat(crm): alta/entrante/actividad con oportunidad |
-| T9 | S4,S7 | inline | test(crm): 7 validaciones funcionales |
-| T10 | — | inline | docs(crm): módulo y guía actualizados |
+| T1 | S1 | inline (contrato de dominio) | `4467542` |
+| T2 | S1,S6,S8 | worker | `0459f08` + fix `4bfb209` |
+| T3 | S3,S5,S6 | worker (exploración) + inline | `4467542` |
+| T4 | S1,S2,S4 | worker | `b50de28` |
+| T5 | S4 | worker | `9c21a5b` |
+| T6 | S2 | worker | `77901a1` |
+| T7 | S3 | worker | `2b49a2e` |
+| T8 | S4 | worker | `4e8789a` |
+| T9 | S4,S7 | worker + inline | `3bebf02` |
+| T10 | — | inline | `3bebf02` |
 
 ## Log
+- L8 (slice boundary, 2026-11-07): 3 commits — 4467542 (dominio + adapter SIGLA T1/T3), 0459f08 (esquema SQL + migración + repos T2, aislado para revisión nativa por alto-riesgo 1). El tamaño de slice excede ~400 líneas por ser contrato + migración coherentes; estrategia de entrega: commits por unidad, suite completa en T9, y ensayo de migración en contenedor SQL Server local (imagen en descarga) antes de promoción — nunca contra el servidor compartido.
+- L9 (T2 verificación de campo, 2026-11-07): el ensayo en contenedor (mssql 2022 local, no el servidor compartido) encontró un defecto real — `EXEC(''literal'' + QUOTENAME(@x))` es T-SQL inválido y su error de compilación NO aborta el batch externo: el sweep no eliminaba nada y `DROP COLUMN` fallaba con checks vivos. Corregido en 4bfb209 (string en variable + predicate por `sys.sql_expression_dependencies` para checks multi-columna) con pin de regresión; ensayo 2/2 GREEN (upgrade S8 exacto + idempotencia + instalación fresca). T4 commiteado en b50de28 (34 archivos, 252/252) con la corrección de dominio `pendiente_primera` (S6.7) que T4 detectó en mi T1. Contenedor y arnés temporales eliminados; el pin estático queda en migrate.test.ts.
+- L10 (cierre, 2026-11-07): 10 commits en `feature/crm-oportunidades` (~13.300 líneas). Verificación final: suite completa CRM **73 archivos / 1058 tests** en verde (dominio, aplicación, infraestructura SQL, API, presentación). Las 7 comprobaciones del documento consolidadas en `validacionesDocumento.test.ts` (S7) con mapeo a suites preexistentes. Docs: `docs/modules/crm.md` + índice. Un worker (T8) se detuvo una vez por brecha de superficie (ProximaAccionCampos passthrough) — resuelta por el orquestador; otro intento T5 falló sin mutar el árbol y se relanzó. Pendiente para el usuario: promoción de la rama (merge a `develop` / push) bajo su política de despliegue.
 - L1 (petición original): "@docs/subidos/2026-11-07-20-06-19-Mejoras-CRM.txt contrasta e imolementa"
 - L2: contraste — hoy `CrmEmpresa.etapa` (por_contactar/contactado/en_seguimiento/cliente/perdido) es la tarjeta; no existe cotizado/ganada, responsable, servicio, monto; `CrmInteraccion` sin vínculo a negocio; CRM no lee atenciones de SIGLA; `migrate.ts` batch idempotente autoejecutado.
 - L3: usuario eligió SIGLA en vivo para última atención (S8).
