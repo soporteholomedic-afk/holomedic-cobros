@@ -47,6 +47,10 @@ describe('GET /api/crm/empresas/inactivas', () => {
     const json = await res.json();
     expect(json.success).toBe(true);
     expect(json.sinInformacion).toBe(1);
+    expect(json.total).toBe(2);          // filas tras filtros (ninguno)
+    expect(json.totalFuente).toBe(2);    // tamaño del segmento
+    expect(json.paginas).toBe(1);
+    expect(json.sectores).toContain('Odontología');
     expect(json.filas.map((f: { idEmpresa: string }) => f.idEmpresa)).toEqual(['e-vieja', 'e-nunca']);
     expect(json.filas[0]).toMatchObject({ estado: 'sin_actividad', ruc: '20100000001', sector: 'Odontología' });
     expect(json.filas[1]).toMatchObject({ estado: 'pendiente_primera', ultimaAtencion: null });
@@ -84,6 +88,36 @@ describe('GET /api/crm/empresas/inactivas', () => {
     const res = await GET(new Request('http://localhost/api/crm/empresas/inactivas'));
     expect(res.status).toBe(503);
     expect(await res.json()).toEqual({ success: false, error: 'No se pudo consultar la actividad en SIGLA' });
+  });
+
+  it('passes query filters/sort/pagination down to the use case (S14-S16)', async () => {
+    __setCrmDbForTests(makeMockRepo({ list: vi.fn().mockResolvedValue([{ ...FILA, relacion: 'cliente', sector: 'Odontología' }]) }));
+    __setCrmAtencionesForTests(makeMockAtenciones({ ultimaAtencionPorRucs: vi.fn().mockResolvedValue(new Map([[FILA.ruc, '2026-05-01']])) }));
+    const res = await GET(new Request('http://localhost/api/crm/empresas/inactivas?q=inexistente&estado=sin_actividad&mesesMin=4&mesesMax=6&sector=Odontolog%C3%ADa&contacto=sin&orden=abandono&direccion=desc&pagina=1'));
+    expect(res.status).toBe(200);
+    const json = await res.json();
+    expect(json.total).toBe(0); // la búsqueda no coincide: filtros aplicados
+    expect(json.totalFuente).toBe(1);
+    expect(json.paginas).toBe(1);
+    expect(json.sectores).toEqual(['Odontología']);
+  });
+
+  it('the SIGLA segment accepts the same filters and reports totalFuente (S10/S14)', async () => {
+    __setCrmDbForTests(makeMockRepo({ list: vi.fn().mockResolvedValue([]) }));
+    __setCrmAtencionesForTests(
+      makeMockAtenciones({
+        clientesConActividad: vi.fn().mockResolvedValue([
+          { razonSocial: 'Alpha SIGLA S.A.C.', ruc: '20100000030', telefono: null, contacto: null, correo: null, ultimaAtencion: '2026-04-10' },
+          { razonSocial: 'Beta SIGLA S.A.C.', ruc: '20100000031', telefono: null, contacto: null, correo: null, ultimaAtencion: '2026-02-01' },
+        ]),
+      }),
+    );
+    const res = await GET(new Request('http://localhost/api/crm/empresas/inactivas?fuente=sigla&pagina=1&q=alpha&orden=razonSocial&direccion=asc'));
+    expect(res.status).toBe(200);
+    const json = await res.json();
+    expect(json.total).toBe(1);
+    expect(json.totalFuente).toBe(2);
+    expect(json.filas.map((f: { razonSocial: string }) => f.razonSocial)).toEqual(['Alpha SIGLA S.A.C.']);
   });
 
   it('answers 401 without a session and without the crm permiso', async () => {
