@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 
-import type { AlertaCrm } from '../../application/calcularAlertas';
+import type { AlertaCrm } from '../../../application/calcularAlertas';
 import { PanelDia } from '../PanelDia';
 
 const alerta = (parcial: Partial<AlertaCrm>): AlertaCrm => ({
@@ -59,9 +59,9 @@ describe('PanelDia (S1, S5; alerta por oportunidad)', () => {
     expect(panel).toHaveTextContent('Vencidas');
     expect(panel).toHaveTextContent('Vencen hoy');
     expect(panel).toHaveTextContent('Sin respuesta');
-    expect(screen.getByRole('button', { name: /Exámenes de ingreso.*Textiles Pacífico.*Enviar cotización.*2 días de atraso/s })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Ergonomía para planta.*Agroindustrial Valle Verde.*Llamar$/s })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Campaña de vacunación.*Transporte Río.*52 h esperando/s })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Exámenes de ingreso[\s\S]*Textiles Pacífico[\s\S]*Enviar cotización[\s\S]*2 días de atraso/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Ergonomía para planta[\s\S]*Agroindustrial Valle Verde[\s\S]*Llamar$/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Campaña de vacunación[\s\S]*Transporte Río[\s\S]*52 h esperando/ })).toBeInTheDocument();
   });
 
   it('opens the deal (its id) when an alert row is clicked', async () => {

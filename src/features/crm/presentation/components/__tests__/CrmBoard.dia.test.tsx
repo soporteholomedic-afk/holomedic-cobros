@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 
-import type { AlertaCrm } from '../../application/calcularAlertas';
+import type { AlertaCrm } from '../../../application/calcularAlertas';
 import { CrmBoard } from '../CrmBoard';
 import { empresa, mockApi, oportunidad } from './crmFixtures';
 
@@ -33,7 +33,7 @@ describe('CrmBoard — Tu día (crm-notificaciones)', () => {
 
     const panel = screen.getByRole('region', { name: 'Tu día' });
     expect(within(panel).getByText('Sin respuesta')).toBeInTheDocument();
-    const boton = within(panel).getByRole('button', { name: /Monitoreo ocupacional 2026.*Minera Los Tres Picos/s });
+    const boton = within(panel).getByRole('button', { name: /Monitoreo ocupacional 2026[\s\S]*Minera Los Tres Picos/ });
     fireEvent.click(boton);
     expect(screen.queryByRole('dialog', { name: 'Minera Los Tres Picos S.A.' })).toBeNull();
     await waitFor(() =>

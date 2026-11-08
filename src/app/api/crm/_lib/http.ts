@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getSession } from '@/lib/auth';
 import { RucDeOtraEmpresaError } from '@/features/crm/domain/errors';
+import type { MotivoDatos } from '@/features/crm/domain/entities';
 
 interface ErrorResponse {
   success: false;
@@ -118,7 +119,13 @@ export function esNuevaOportunidad(v: unknown): boolean {
 }
 
 /** Shape check of a stage-move body; etapa/medio/motivo rules live in the use case. */
-export function esCambioEtapa(v: unknown): boolean {
+export interface CambioEtapaBody {
+  etapa: string;
+  medio?: string | null;
+  medioOtro?: string | null;
+  motivo?: MotivoDatos | null;
+}
+export function esCambioEtapa(v: unknown): v is CambioEtapaBody {
   return (
     esObjeto(v) &&
     typeof v.etapa === 'string' &&
@@ -129,7 +136,11 @@ export function esCambioEtapa(v: unknown): boolean {
 }
 
 /** Shape check of a medium/loss-reason edit: at least one of the two keys. */
-export function esCambioSeguimiento(v: unknown): boolean {
+export interface CambioSeguimientoBody {
+  medio?: string | null;
+  motivo?: MotivoDatos;
+}
+export function esCambioSeguimiento(v: unknown): v is CambioSeguimientoBody {
   if (!esObjeto(v)) return false;
   const tocaMedio = 'medio' in v;
   const tocaMotivo = 'motivo' in v;
@@ -145,7 +156,17 @@ export function esCambioSeguimiento(v: unknown): boolean {
  * only checked as an object here; its rules (date, type, detail) live in the
  * use case, and `null`/`undefined` mean "Sin próxima acción".
  */
-export function esActividad(v: unknown): boolean {
+/** Shape of an activity body (Registrar actividad); rules live in the use case. */
+export interface ActividadBody {
+  idOportunidad: string | null;
+  direccion: string;
+  medio: string;
+  resultado: string;
+  medioOtro?: string | null;
+  resumen?: string | null;
+  proximaAccion?: Record<string, unknown> | null;
+}
+export function esActividad(v: unknown): v is ActividadBody {
   return (
     esObjeto(v) &&
     (v.idOportunidad === null || typeof v.idOportunidad === 'string') &&

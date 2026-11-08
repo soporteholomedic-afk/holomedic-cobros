@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, within } from '@testing-library/react';
 
 import { CrmCalendario } from '../CrmCalendario';
+import type { EntradaAgenda } from '../contactoForm';
 
 // 2026-10-30 is a Friday.
 const HOY = '2026-10-30';
@@ -14,7 +15,7 @@ function Prueba({
 }: {
   inicial?: string | null;
   onChange?: (v: string) => void;
-  marcados?: Record<string, number>;
+  marcados?: Record<string, EntradaAgenda[]>;
 }) {
   const [v, setV] = useState<string | null>(inicial);
   return (

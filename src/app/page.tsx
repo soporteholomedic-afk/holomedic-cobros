@@ -12,9 +12,9 @@ export default function Home() {
           </div>
 
           <h1 className="text-4xl sm:text-5xl font-black text-slate-900 dark:text-white tracking-tight leading-[1.1] animate-fade-in delay-75">
-            Plataforma de Facturación <br />
+            Plataforma de Gestión Financiera <br />
             <span className="bg-gradient-to-r from-sky-500 via-blue-500 to-indigo-600 bg-clip-text text-transparent">
-              Holomedic
+              Holomedic Suite
             </span>
           </h1>
 

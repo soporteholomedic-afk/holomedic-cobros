@@ -1,5 +1,5 @@
 import mssql from 'mssql';
-import type { IAtencionesServicio } from '../domain/ports';
+import type { IAtencionesServicio } from '../../domain/ports';
 
 /**
  * Read-only SIGLA adapter: the date of the last performed service per

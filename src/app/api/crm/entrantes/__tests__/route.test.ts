@@ -55,7 +55,8 @@ describe('POST /api/crm/entrantes', () => {
     expect(repo.create).toHaveBeenCalledWith(
       expect.objectContaining({ ruc: '20556677889', sector: null, relacion: 'prospecto' }),
     );
-    expect(repo.create.mock.calls[0]?.[0]).not.toHaveProperty('etapa');
+    const cuerpoEmpresa = (repo.create as unknown as { mock: { calls: Array<[Record<string, unknown>]> } }).mock.calls[0]?.[0];
+    expect(cuerpoEmpresa).not.toHaveProperty('etapa');
     expect(oportunidades.create).toHaveBeenCalledWith(
       expect.any(String),
       expect.objectContaining({ nombre: 'Exámenes para 25 personas.', origen: 'referido', etapa: 'contactado', medio: 'whatsapp' }),

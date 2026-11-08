@@ -21,12 +21,9 @@ const BASE: Empresa[] = [
     idEmpresa: 'e-3',
     razonSocial: TEXTILES,
     ruc: '20556677889',
-    etapa: 'contactado',
-    medio: 'llamada',
     contactos: [{ nombre: 'Renzo Vargas', telefono: '998 201 456', correo: null }],
-    proximaAccion: { tipo: 'llamar', detalle: null, fecha: '2026-11-03' },
   }),
-  empresa({ idEmpresa: 'e-4', razonSocial: VALLE, ruc: '20534128790', etapa: 'cliente', medio: 'whatsapp' }),
+  empresa({ idEmpresa: 'e-4', razonSocial: VALLE, ruc: '20534128790', relacion: 'cliente' }),
 ];
 
 const card = (nombre: string) => screen.getByRole('heading', { level: 3, name: nombre }).closest('article') as HTMLElement;
@@ -59,7 +56,7 @@ function elegirOpcion(raiz: HTMLElement, boton: RegExp, opcion: string) {
   fireEvent.click(within(raiz).getByRole('option', { name: new RegExp(`^${opcion}`) }));
 }
 
-function creada(cambios: Partial<Empresa> = {}, existente = false, deal: Partial<Oportunidad> = {}): Respuesta {
+function creada(cambios: Partial<Empresa> & Record<string, unknown> = {}, existente = false, deal: Partial<Oportunidad> = {}): Respuesta {
   return {
     status: 201,
     body: {

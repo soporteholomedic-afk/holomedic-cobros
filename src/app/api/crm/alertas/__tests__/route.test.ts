@@ -23,7 +23,14 @@ describe('GET /api/crm/alertas', () => {
   });
 
   it('computes the alerts from oportunidades joined with their empresas, each carrying the deal AND the empresa', async () => {
-    const ayer = new Date(Date.now() - 86_400_000).toISOString().slice(0, 10);
+    // "Ayer" in LIMA days (the app compares against hoyEnLima): UTC arithmetic
+    // is off by one between 19:00 Lima and midnight UTC.
+    const ayer = new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'America/Lima',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    }).format(new Date(Date.now() - 86_400_000));
     const vencida: typeof OPORTUNIDAD = {
       ...OPORTUNIDAD,
       idOportunidad: 'o-2',

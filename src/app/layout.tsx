@@ -15,8 +15,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Holomedic Facturación | Gestión de Cobranza y Valoraciones",
-  description: "Plataforma de facturación, cobranza y valoraciones automatizadas para Holomedic.",
+  title: "Holomedic Suite | Gestión de Cobranza y Valoraciones",
+  description: "Suite de gestión para Holomedic: cobranza, facturación, consolidados, valoraciones, áreas y CRM en una sola plataforma.",
 };
 
 export default function RootLayout({
