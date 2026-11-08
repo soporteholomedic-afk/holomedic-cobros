@@ -1,0 +1,18 @@
+[
+  {
+    "n": 1,
+    "texto": "Al pasar a Perdida se solicita el motivo y SOLO se cierra esa oportunidad (Caso 1)."
+  },
+  {
+    "n": 2,
+    "texto": "Industrias Norte queda en Perdida con su motivo registrado y editable; su historial se conserva."
+  },
+  {
+    "n": 3,
+    "texto": "Grupo Horizonte (migrada): el motivo del rechazo antiguo (precio, ofrecimos 7000 / esperaban 9000) se preservó en la migración."
+  },
+  {
+    "n": 4,
+    "texto": "Las demás oportunidades y la empresa no se modifican."
+  }
+]

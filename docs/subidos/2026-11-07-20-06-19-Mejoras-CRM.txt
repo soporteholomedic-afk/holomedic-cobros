@@ -1,0 +1,310 @@
+La corrección que haría en Holomedic es separar la gestión de empresas de la gestión de oportunidades comerciales. Actualmente, según el manual, una empresa se representa mediante una tarjeta que avanza por las etapas Por contactar, Contactado, En seguimiento, Cliente y Perdido.
+
+El problema es que el sistema está tratando a la empresa y al negocio que estamos intentando cerrar como si fueran lo mismo.
+
+Vamos a corregir exclusivamente ese diseño, conservando lo que ya funciona.
+
+### 1\. El nuevo modelo del CRM
+
+El producto debe distinguir tres conceptos que actualmente están demasiado relacionados.
+
+Empresa
+
+Es la organización con la que Holomedic mantiene una relación comercial. Existe una sola ficha por empresa.
+
+Puede tener varias
+
+Oportunidades
+
+Negocios concretos que buscamos conseguir o cerrar.
+
+Actividades
+
+Llamadas, correos, mensajes y seguimientos realizados.
+
+Las actividades pertenecen al historial de la empresa y pueden relacionarse con una oportunidad específica.
+
+### A. Empresa: ¿Con quién tenemos una relación?
+
+La empresa deja de ser la tarjeta que movemos por el embudo. Ahora es una ficha permanente, donde conservamos:
+
+* Razón social, RUC, sector y datos generales.
+
+* Personas de contacto.
+
+* Comercial responsable.
+
+* Relación con Holomedic: Prospecto o Cliente.
+
+* Última interacción comercial.
+
+* Historial completo de actividades.
+
+* Todas sus oportunidades comerciales, actuales y anteriores.
+
+Regla principal: una empresa nunca se considera perdida únicamente porque una negociación fracasa.
+
+Por ejemplo, si una empresa solicita una cotización y rechaza la propuesta, su oportunidad se pierde, pero su ficha sigue existiendo como prospecto o cliente.
+
+También debemos distinguir entre la relación comercial y la actividad de servicios. Una empresa puede ser cliente, pero llevar cuatro meses sin enviar trabajadores. Eso no significa que dejó de ser cliente.
+
+### B. Oportunidad: ¿Qué negocio queremos cerrar?
+
+La oportunidad representa una intención comercial específica.
+
+Ejemplos:
+
+* Exámenes médicos ocupacionales para 50 trabajadores.
+
+* Evaluaciones preocupacionales para personal nuevo.
+
+* Renovación de servicios para una empresa existente.
+
+* Recuperación comercial de un cliente que dejó de utilizar la clínica.
+
+Cada oportunidad tendrá:
+
+| Campo               | ¿Para qué sirve?                                                |
+| ------------------- | --------------------------------------------------------------- |
+| Nombre              | Identificar el negocio concreto.                                |
+| Empresa             | Saber con quién estamos negociando.                             |
+| Responsable         | Saber quién gestiona esa oportunidad.                           |
+| Origen              | Identificar si nosotros contactamos o si la empresa llegó sola. |
+| Servicio de interés | Conocer qué necesita la empresa.                                |
+| Etapa comercial     | Saber en qué punto de la negociación estamos.                   |
+| Monto estimado      | Conocer su valor comercial, si está disponible.                 |
+| Próxima acción      | Saber qué debemos hacer y cuándo.                               |
+| Resultado final     | Registrar si se ganó o perdió y, en este último caso, por qué.  |
+
+Una empresa puede tener varias oportunidades simultáneamente, incluso con distintos responsables si la política comercial lo permite.
+
+### C. Actividad: ¿Qué hicimos y qué pasó?
+
+Una actividad es cada interacción o gestión realizada por el equipo comercial.
+
+Se mantiene el concepto que actualmente maneja Holomedic: llamada, correo, WhatsApp, medio utilizado, resultado, resumen y próxima acción.
+
+La diferencia es que, al registrar una actividad, el usuario podrá indicar a qué oportunidad corresponde.
+
+Por ejemplo:
+
+Empresa: Transportes del Sur
+
+Oportunidad: Exámenes médicos para 50 trabajadores
+
+Actividad: Llamada realizada el 7 de noviembre
+
+Resultado: Solicitan una propuesta económica
+
+Próxima acción: Enviar cotización el lunes
+
+Si la llamada es general y no corresponde a ningún negocio específico, se registra solamente en el historial de la empresa.
+
+### 2\. Cómo cambiaría el tablero Kanban
+
+Este es el cambio visual y funcional más importante.
+
+Actualmente: cada tarjeta representa una empresa.
+
+Nuevo diseño: cada tarjeta representa una oportunidad comercial.
+
+Mantendría una estructura visual familiar para que los comerciales no tengan que aprender un sistema completamente nuevo.
+
+Oportunidades comerciales
+
+Ejemplo
+
+Por contactar
+
+Transportes Sur
+
+Exámenes para 50 trabajadores
+
+Contactado
+
+Grupo Horizonte
+
+Evaluaciones preocupacionales
+
+En seguimiento
+
+Constructora Atlas
+
+Exámenes periódicos
+
+Cotizado
+
+Transportes Sur
+
+Renovación anual
+
+Ganada
+
+Industrias Norte
+
+Exámenes de ingreso
+
+Perdida
+
+Grupo Horizonte
+
+Servicio complementario
+
+Tablero ilustrativo. Una empresa puede aparecer en varias columnas porque tiene distintas oportunidades.
+
+### ¿Qué significaría cada etapa?
+
+| Etapa          | Criterio de uso                                                       |
+| -------------- | --------------------------------------------------------------------- |
+| Por contactar  | Se identificó una oportunidad, pero todavía no se inició el contacto. |
+| Contactado     | Se realizó el primer acercamiento o recibimos la solicitud.           |
+| En seguimiento | Existe una conversación comercial pendiente de avanzar.               |
+| Cotizado       | Ya se entregó una propuesta económica.                                |
+| Ganada         | El cliente aceptó la propuesta o confirmó el acuerdo comercial.       |
+| Perdida        | La negociación terminó sin concretarse.                               |
+
+Cambios respecto al tablero actual:
+
+El estado Cliente debe salir del Kanban y convertirse en una condición de la empresa. En su lugar tendremos Ganada, que representa el resultado de una oportunidad.
+
+Añadiría Cotizado, porque es importante distinguir las conversaciones comerciales de las propuestas económicas efectivamente presentadas.
+
+Y algo fundamental: cuando una oportunidad pasa a Perdida, solamente se cierra esa oportunidad. La empresa y sus demás oportunidades no se modifican.
+
+### 3\. Cómo sería la nueva ficha de empresa
+
+Esta sería la principal pantalla de consulta de una empresa. Mantendría la información general que ya tiene Holomedic, pero reorganizada para mostrar la relación completa.
+
+FICHA DE EMPRESA · EJEMPLO
+
+### Transportes del Sur S.A.C.
+
+RUC: 20XXXXXXXXX · Transporte
+
+Cliente
+
+Responsable
+
+Carlos Mendoza
+
+Actividad de servicios
+
+Sin actividad reciente
+
+Último contacto
+
+05/11/2026
+
+Última atención
+
+15/06/2026
+
+Oportunidades
+
+3 registradas
+
+Exámenes ocupacionales 2026
+
+Ganada
+
+Renovación de servicios
+
+En seguimiento
+
+Evaluaciones adicionales
+
+Perdida
+
+Historial de actividades
+
+* 05 nov. · Llamada comercial
+
+    Seguimiento de renovación anual.
+
+* 03 nov. · Correo enviado
+
+    Se remitió propuesta económica.
+
+El objetivo es que, al abrir cualquier empresa, el comercial tenga respuesta inmediata a tres preguntas:
+
+¿Quién es esta empresa? ¿Qué negocios tenemos con ella? ¿Qué hemos conversado o gestionado?
+
+El historial general debe conservar todas las actividades, sin importar si la oportunidad está abierta, ganada o perdida.
+
+### 4\. Cómo deben funcionar los procesos existentes
+
+No eliminaría los botones y procesos que los usuarios ya conocen. Cambiaría su comportamiento para adaptarlos al nuevo modelo.
+
+| Acción actual      | Nuevo comportamiento                                                                                                                |
+| ------------------ | ----------------------------------------------------------------------------------------------------------------------------------- |
+| Nueva empresa      | Crea la ficha empresarial. Puede ofrecer crear su primera oportunidad en el mismo proceso.                                          |
+| Nos contactaron    | Primero busca la empresa. Si ya existe, crea una oportunidad vinculada; si no existe, registra la empresa y su primera oportunidad. |
+| Registrar contacto | Pasa a llamarse Registrar actividad o Registrar gestión. Permite relacionarla con una oportunidad.                                  |
+| Mover tarjeta      | Mueve una oportunidad, no la empresa.                                                                                               |
+| Ver empresa        | Muestra información general, oportunidades, contactos personales e historial completo.                                              |
+| Importar empresas  | Crea o actualiza fichas de empresa, sin generar automáticamente oportunidades ficticias.                                            |
+
+Esto es especialmente importante para evitar duplicaciones. Si una empresa que ya trabaja con Holomedic solicita un servicio adicional, el comercial no debe crear otra empresa ni modificar su relación general. Solo debe registrar una nueva oportunidad.
+
+### 5\. Tres situaciones que el producto debe manejar correctamente
+
+Caso 1. Prospecto que rechaza una cotización
+
+Registramos a una nueva empresa y creamos una oportunidad de exámenes ocupacionales. Después de varias gestiones, la empresa rechaza el presupuesto.
+
+La oportunidad pasa a Perdida y solicita el motivo. La empresa permanece como Prospecto, con su historial disponible para futuras gestiones.
+
+Caso 2. Cliente solicita otro servicio
+
+Una empresa ya es cliente de Holomedic y solicita una cotización adicional.
+
+El comercial abre su ficha y crea una nueva oportunidad. La negociación sigue su propio recorrido, sin afectar las oportunidades anteriores ni la condición de cliente.
+
+Caso 3. Cliente que lleva cuatro meses sin enviar trabajadores
+
+La empresa continúa siendo cliente, pero se identifica como Sin actividad de servicios reciente.
+
+El comercial puede abrir una oportunidad de reactivación para registrar sus gestiones. Si la empresa acepta una propuesta, la oportunidad se marca como ganada. La condición de actividad reciente se actualiza cuando efectivamente vuelve a enviar trabajadores.
+
+Esta última separación es muy importante: ganar una negociación no es lo mismo que comprobar que el cliente volvió a utilizar los servicios.
+
+### 6\. Reglas de producto que dejaría establecidas
+
+Estas reglas evitarán inconsistencias cuando los usuarios comiencen a trabajar con el nuevo diseño.
+
+| Regla                                                                                   | Comportamiento esperado                                                                      |
+| --------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
+| Una empresa puede tener múltiples oportunidades.                                        | No duplicar fichas para registrar nuevos negocios.                                           |
+| Una oportunidad tiene una sola etapa comercial vigente.                                 | Su resultado es independiente de otras oportunidades.                                        |
+| Una empresa puede ser cliente y tener oportunidades perdidas.                           | No cambiar automáticamente su condición de cliente.                                          |
+| Una actividad puede ser general o específica.                                           | Debe quedar en el historial de la empresa y, cuando corresponda, en el de la oportunidad.    |
+| Ganar una oportunidad no implica que se realizó un servicio.                            | Diferenciar el resultado comercial de la actividad asistencial.                              |
+| La inactividad de cuatro meses se calcula por servicios, no por llamadas.               | Un correo reciente no elimina la alerta de inactividad.                                      |
+| Una empresa sin datos de atenciones no debe clasificarse automáticamente como inactiva. | Mostrar Sin información o Pendiente de primera atención, según corresponda.                  |
+| Las oportunidades perdidas conservan su historial.                                      | Si surge otra negociación, crear una oportunidad nueva en lugar de sobrescribir la anterior. |
+
+Para el concepto de Cliente, propondría considerar como tal a una empresa que ya tiene un acuerdo comercial confirmado con Holomedic. En cambio, la actividad reciente se determina por las atenciones efectivamente realizadas. Esa distinción permite manejar correctamente a un cliente recién captado que todavía no envió a su primer trabajador.
+
+### 7\. Cómo comprobar que el rediseño quedó bien
+
+Validación funcional
+
+0 de 7
+
+Crear una empresa sin crear obligatoriamente una oportunidad.
+
+Crear dos oportunidades diferentes para una misma empresa.
+
+Marcar una oportunidad como perdida sin cambiar el estado de la empresa.
+
+Registrar una actividad vinculada con una oportunidad específica.
+
+Consultar todas las actividades desde la ficha de empresa.
+
+Cerrar una oportunidad como ganada sin alterar otras negociaciones abiertas.
+
+Identificar a un cliente inactivo sin clasificarlo como prospecto o perdido.
+
+Si estas siete situaciones funcionan de forma coherente, habrás corregido el problema central del modelo comercial.
+
+Mi recomendación final: mantén el Kanban que los usuarios ya conocen, pero haz que sus tarjetas representen oportunidades. Conserva las empresas como fichas permanentes y las actividades como el historial de lo que se ha realizado. Esa es la corrección de producto que necesitas; no requiere añadir más módulos ni ampliar el alcance hacia otras integraciones.

@@ -1,0 +1,18 @@
+[
+  {
+    "n": 1,
+    "texto": "Primero BUSCA la empresa: si ya existe crea una oportunidad vinculada; si no, registra la ficha + su primera oportunidad (sin duplicar)."
+  },
+  {
+    "n": 2,
+    "texto": "El medio de llegada queda registrado en la actividad y en el negocio."
+  },
+  {
+    "n": 3,
+    "texto": "«¿Qué necesita?» se convierte en el nombre de la primera oportunidad de la empresa."
+  },
+  {
+    "n": 4,
+    "texto": "El origen («¿Cómo nos conoció?») vive ahora en la oportunidad."
+  }
+]

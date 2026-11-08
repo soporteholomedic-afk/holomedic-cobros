@@ -1,0 +1,18 @@
+[
+  {
+    "n": 1,
+    "texto": "«Nueva empresa» crea SOLO la ficha: nunca obliga a crear una oportunidad (S7.1)."
+  },
+  {
+    "n": 2,
+    "texto": "Dirección fiscal se autocompleta con SUNAT al tipear el RUC."
+  },
+  {
+    "n": 3,
+    "texto": "«Primera oportunidad (opcional)»: si se marca, crea la ficha + su primer negocio en el mismo flujo (con reintento si falla el segundo paso)."
+  },
+  {
+    "n": 4,
+    "texto": "Un clic: la empresa queda como ficha permanente (Prospecto por defecto)."
+  }
+]
