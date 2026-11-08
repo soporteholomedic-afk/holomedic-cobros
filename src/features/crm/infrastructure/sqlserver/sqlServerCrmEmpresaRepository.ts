@@ -332,6 +332,33 @@ export class SqlServerCrmEmpresaRepository implements ICrmEmpresaRepository {
     return result.recordset.map(rowToInteraccion);
   }
 
+  /** Whole ids per SQL round-trip; keeps every query under the mssql parameter cap. */
+  private static readonly CHUNK_IDS = 500;
+
+  async ultimaInteraccionPorEmpresas(ids: string[]): Promise<Map<string, string | null>> {
+    const resultado = new Map<string, string | null>();
+    const lista = [...new Set(ids.filter((id) => id.length > 0))];
+    for (let i = 0; i < lista.length; i += SqlServerCrmEmpresaRepository.CHUNK_IDS) {
+      const lote = lista.slice(i, i + SqlServerCrmEmpresaRepository.CHUNK_IDS);
+      const request = this.pool.request();
+      lote.forEach((id, idx) => request.input(`id${idx}`, mssql.NVarChar(50), id));
+      const respuesta = await request.query<{ idEmpresa: string; ultima: Date }>(
+        `SELECT idEmpresa, MAX(fecha) AS ultima
+           FROM dbo.CrmInteraccion
+          WHERE idEmpresa IN (${lote.map((_, idx) => `@id${idx}`).join(', ')})
+          GROUP BY idEmpresa`,
+      );
+      for (const fila of respuesta.recordset) {
+        resultado.set(fila.idEmpresa, fila.ultima.toISOString());
+      }
+    }
+    // An id the answer never mentions has no interaction at all.
+    for (const id of lista) {
+      if (!resultado.has(id)) resultado.set(id, null);
+    }
+    return resultado;
+  }
+
   async fusionar(idOrigen: string, idDestino: string): Promise<Empresa> {
     if (idOrigen === idDestino) {
       throw new DatosEmpresaInvalidosError('No se puede unir una tarjeta consigo misma.');

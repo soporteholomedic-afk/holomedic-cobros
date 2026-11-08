@@ -13,7 +13,6 @@ vi.mock('@/lib/auth', () => ({ getSession: mockGetSession }));
 
 import { GET } from '../route';
 
-const req = new Request('http://localhost/api/crm/empresas/inactivas');
 
 const haceDias = (dias: number): string => new Date(Date.now() - dias * 86_400_000).toISOString().slice(0, 10);
 
@@ -51,6 +50,7 @@ describe('GET /api/crm/empresas/inactivas', () => {
     expect(json.filas.map((f: { idEmpresa: string }) => f.idEmpresa)).toEqual(['e-vieja', 'e-nunca']);
     expect(json.filas[0]).toMatchObject({ estado: 'sin_actividad', ruc: '20100000001', sector: 'Odontología' });
     expect(json.filas[1]).toMatchObject({ estado: 'pendiente_primera', ultimaAtencion: null });
+    expect(json.filas[0].ultimoContactoCrm).toBeNull(); // default mock has no interactions
     expect(json.filas.some((f: { idEmpresa: string }) => f.idEmpresa === 'e-reciente')).toBe(false);
   });
 

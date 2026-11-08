@@ -12,6 +12,8 @@ export interface EmpresaInactiva {
   ultimaAtencion: string | null;
   /** Whole months since that attention; `null` when never attended. */
   mesesSinActividad: number | null;
+  /** ISO timestamp of the empresa's newest CRM interaction; `null` when never contacted from the CRM. */
+  ultimoContactoCrm: string | null;
   estado: 'sin_actividad' | 'pendiente_primera';
 }
 
@@ -58,6 +60,7 @@ export class ListarEmpresasInactivasUseCase {
         sector: cliente.sector,
         ultimaAtencion,
         mesesSinActividad: ultimaAtencion === null ? null : mesesEntre(new Date(`${ultimaAtencion}T00:00:00Z`), anclaje),
+        ultimoContactoCrm: null,
         estado,
       });
     }
@@ -71,6 +74,18 @@ export class ListarEmpresasInactivasUseCase {
       }
       return a.razonSocial.localeCompare(b.razonSocial);
     });
+
+    // Last CRM contact per listed row (S6): one bulk query for exactly the
+    // listed ids — a reciente empresa is never queried. Contacting from the
+    // CRM refreshes this column but does NOT remove the row: only a new
+    // SIGLA attention does.
+    const contactos =
+      filas.length > 0
+        ? await this.empresas.ultimaInteraccionPorEmpresas(filas.map((f) => f.idEmpresa))
+        : new Map<string, string | null>();
+    for (const fila of filas) {
+      fila.ultimoContactoCrm = contactos.get(fila.idEmpresa) ?? null;
+    }
     return { filas, sinInformacion };
   }
 }

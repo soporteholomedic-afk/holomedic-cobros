@@ -85,6 +85,7 @@ export function makeMockRepo(overrides: Partial<ICrmEmpresaRepository> = {}): IC
       ...i,
     })),
     listInteracciones: vi.fn().mockResolvedValue([]),
+    ultimaInteraccionPorEmpresas: vi.fn().mockResolvedValue(new Map<string, string | null>()),
     fusionar: vi.fn().mockImplementation(async () => FILA),
     listSectores: vi.fn().mockResolvedValue([
       { nombre: 'Construcción', icono: 'casco' },

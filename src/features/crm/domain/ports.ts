@@ -37,6 +37,12 @@ export interface ICrmEmpresaRepository {
   /** Activity history of an empresa, newest first. */
   listInteracciones(idEmpresa: string): Promise<Interaccion[]>;
   /**
+   * Bulk 'last CRM interaction' lookup: newest `fecha` per empresa id, ISO.
+   * Ids without any interaction map to `null`. One query per chunk — never
+   * one per empresa.
+   */
+  ultimaInteraccionPorEmpresas(ids: string[]): Promise<Map<string, string | null>>;
+  /**
    * In one transaction: move the interactions, the oportunidades and the
    * contacts (skipping exact duplicates, keeping the destination's principal)
    * of `idOrigen` into `idDestino` and delete the origin. Returns the

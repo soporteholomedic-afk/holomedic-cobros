@@ -94,4 +94,68 @@ describe('ListarEmpresasInactivasUseCase — clientes SIGLA sin actividad 4+ mes
     expect(r.sinInformacion).toBe(1);
     expect(r.filas.map((f) => f.idEmpresa)).toEqual(['e-ok']);
   });
+
+  it('attaches the last CRM interaction per listed row (S6), querying only the listed ids', async () => {
+    const repo = makeFakeRepo([
+      empresa({ ...cliente('e-vieja', 'Clínica Vieja', '20100000001') }),
+      empresa({ ...cliente('e-sola', 'Sin Interacciones S.A.C.', '20100000003') }),
+      empresa({ ...cliente('e-fuera', 'Reciente S.A.C.', '20100000002') }),
+    ]);
+    repo.interacciones.push(
+      {
+        idInteraccion: 1,
+        idEmpresa: 'e-vieja',
+        idOportunidad: null,
+        fecha: '2026-08-01T10:00:00.000Z',
+        idUsuario: 'u-1',
+        nombreUsuario: 'Scott Palomino',
+        direccion: 'saliente',
+        medio: 'llamada',
+        medioOtro: null,
+        resultado: 'no_contesto',
+        resumen: null,
+      },
+      {
+        idInteraccion: 2,
+        idEmpresa: 'e-vieja',
+        idOportunidad: null,
+        fecha: '2026-09-01T10:00:00.000Z',
+        idUsuario: 'u-1',
+        nombreUsuario: 'Scott Palomino',
+        direccion: 'saliente',
+        medio: 'llamada',
+        medioOtro: null,
+        resultado: 'deje_mensaje',
+        resumen: null,
+      },
+      {
+        idInteraccion: 3,
+        idEmpresa: 'e-fuera',
+        idOportunidad: null,
+        fecha: '2026-10-30T10:00:00.000Z',
+        idUsuario: 'u-1',
+        nombreUsuario: 'Scott Palomino',
+        direccion: 'entrante',
+        medio: 'whatsapp',
+        medioOtro: null,
+        resultado: 'respondido',
+        resumen: null,
+      },
+    );
+    const atenciones = fakeAtencionesBulk({ '20100000001': '2026-05-01', '20100000002': '2026-09-15', '20100000003': '2026-03-20' });
+    const consultadas: string[][] = [];
+    const original = repo.empresaRepo.ultimaInteraccionPorEmpresas.bind(repo.empresaRepo);
+    repo.empresaRepo.ultimaInteraccionPorEmpresas = async (ids) => {
+      consultadas.push(ids);
+      return original(ids);
+    };
+    const r = await new ListarEmpresasInactivasUseCase(repo.empresaRepo, atenciones).execute(HOY);
+    // e-fuera is reciente: never listed, never queried (S6)
+    // Most abandoned first: e-sola (2026-03-20, ~7 months) above e-vieja (2026-05-01, ~6 months)
+    expect(consultadas).toEqual([['e-sola', 'e-vieja']]);
+    expect(r.filas.map((f) => [f.idEmpresa, f.ultimoContactoCrm])).toEqual([
+      ['e-sola', null],
+      ['e-vieja', '2026-09-01T10:00:00.000Z'], // newest of its interactions
+    ]);
+  });
 });
