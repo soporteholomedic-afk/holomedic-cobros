@@ -72,7 +72,7 @@
       <span class="chip">SIGLA en vivo (bulk, read-only)</span>
       <span class="chip">Umbral fijo: 4 meses</span>
       <span class="chip">Riesgo: <b>medium</b> · self-verification completa</span>
-      <span class="chip"><b>3</b> capturas anotadas (entorno demo)</span>
+      <span class="chip"><b>4</b> capturas anotadas (demo + producción)</span>
     </div>
   </div>
 </header>
@@ -112,6 +112,18 @@
       <li><b>2.</b> «Contactamos» preseleccionado: la reactivación sale de nosotros.</li>
       <li><b>3.</b> Medio y resultado del intento de reactivación.</li>
       <li><b>4.</b> Guardar: refresca la lista y actualiza «último contacto»; la fila permanece.</li>
+    </ol>
+  </figure>
+
+  <figure class="cap">
+    <img src="capturas-informe/inactivas-04-solo-sigla.png" alt="Segmento Solo en SIGLA con los 3.232 clientes dormidos reales">
+    <figcaption>Segmento «Solo en SIGLA» — datos reales de producción</figcaption>
+    <ol class="leyenda">
+      <li><b>1.</b> El badge ahora muestra el total real: <b>3.232 clientes dormidos</b>.</li>
+      <li><b>2.</b> Segmentos: con ficha en el CRM (0) vs solo en SIGLA (3.232).</li>
+      <li><b>3.</b> La más abandonada: <b>135 meses</b> sin enviar pacientes (última orden de 2015).</li>
+      <li><b>4.</b> Meses sin actividad y última atención, leídos en vivo de SIGLA.</li>
+      <li><b>5.</b> Crear ficha: el alta se abre prellenada con los datos de SIGLA (razón social, RUC, contacto) y la relación queda en «cliente».</li>
     </ol>
   </figure>
 
@@ -220,6 +232,7 @@
     <li><b>Vínculo solo por RUC:</b> clientes sin RUC son inevaluables (quedan como contador). Dos empresas no pueden compartir RUC (índice único filtrado), así que no hay doble conteo.</li>
     <li><b>Umbral fijo (4 meses):</b> decisión de producto; ajustarlo requiere tocar la constante <code>UMBRAL_MESES_INACTIVIDAD</code>.</li>
     <li><b>La fila no desaparece al contactar:</b> intencional (S6). El equipo debe entender que la lista mide <i>actividad de pacientes</i>, no gestiones comerciales.</li>
+    <li><b>Diagnóstico con datos reales (análisis solo lectura, perfil explorador):</b> SIGLA tiene <b>3.232 RUCs clientes dormidos ≥4 meses</b> (los hay con última orden de 2015). El CRM visible en este entorno no tenía empresas cargadas — por eso el segmento cruzado sale vacío, y por eso se agregó el segmento «Solo en SIGLA» (sección 0, captura 4): <b>los 3.232 ya son visibles y accionables</b>, con «Crear ficha» para darlos de alta prellenada sin carga masiva de datos. La vista cruza y filtra en vivo; con la cartera cargada en el CRM, el segmento «Con ficha» se llena por su lado.</li>
     <li><b>5 fallas pre-existentes en la suite</b> (branding + page.test) siguen abiertas en <code>develop</code> — son de otro frente y quedan documentadas.</li>
   </ul>
   <h3>Diagnóstico real (análisis solo lectura de SIGLA, perfil explorador)</h3>
