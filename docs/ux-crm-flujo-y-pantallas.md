@@ -349,3 +349,16 @@ Con la cartera del CRM todavía sin cargar, la vista solo ve la parte cruzada (f
 - El badge del tab pasa a mostrar el **total** (con ficha + solo en SIGLA): el tamaño real del radar de reactivación.
 
 Regla de oro sin cambios (S6): la fila sale de la lista solo cuando SIGLA registra una nueva atención. Registrar contacto o crear ficha actualiza el estado en el CRM, no en SIGLA.
+
+### 8.2 Filtros, orden y paginación en Inactivas (S14-S17)
+
+Ambos segmentos de la vista Inactivas tienen la misma caja de herramientas, **todo server-side** (el endpoint filtra/ordena/pagina sobre las filas construidas) y **todo con componentes propios** — cero `<select>` nativos:
+
+- **Búsqueda** con debounce de 300 ms por razón social, RUC y contacto, con botón × para limpiar.
+- **Sector** (solo CRM): dropdown propio con las facetas presentes en la cartera.
+- **Estado**: chips Todos / Sin actividad / Pendiente de primera atención.
+- **Antigüedad**: chips Toda / 4 a 6 / 6 a 12 / Más de 12 meses.
+- **Último contacto** (solo CRM): dropdown Todos / Con contacto / Sin contacto.
+- **Orden** por columna con `aria-sort`: abandono (default, más abandonada arriba), razón social, última atención, último contacto; segundo click invierte.
+- **Paginación** de 50 filas con primero/anterior/siguiente/último.
+- UX: contador «X de Y clientes» por segmento, «Limpiar filtros» solo con filtros activos, estado vacío por filtro ≠ vacío real, labels accesibles y `aria-pressed`/`aria-sort`.
