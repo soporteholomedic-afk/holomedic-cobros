@@ -2,12 +2,16 @@
 
 import { useCallback, useEffect, useState } from 'react';
 
-import type { ClienteSiglaSinFicha, EmpresaInactiva } from '../../application/listarEmpresasInactivas';
+import type { ClienteSiglaSinFicha, EmpresaInactiva, OpcionesInactivas } from '../../application/listarEmpresasInactivas';
 
 interface RespuestaCrm {
   success: boolean;
   filas?: EmpresaInactiva[];
   sinInformacion?: number;
+  total?: number;
+  totalFuente?: number;
+  paginas?: number;
+  sectores?: string[];
   error?: string;
 }
 
@@ -15,59 +19,92 @@ interface RespuestaSigla {
   success: boolean;
   filas?: ClienteSiglaSinFicha[];
   total?: number;
+  totalFuente?: number;
   pagina?: number;
   paginas?: number;
   error?: string;
 }
 
-export interface EstadoSigla {
+export interface SegmentoCrm {
+  filas: EmpresaInactiva[];
+  sinInformacion: number;
+  total: number;
+  totalFuente: number;
+  paginas: number;
+  sectores: string[];
+}
+
+export interface SegmentoSigla {
   filas: ClienteSiglaSinFicha[];
   total: number;
-  pagina: number;
+  totalFuente: number;
   paginas: number;
 }
 
 export interface EstadoInactivasCompletas {
-  /** Segmento "Con ficha en el CRM". */
-  filas: EmpresaInactiva[];
-  sinInformacion: number;
+  crm: SegmentoCrm;
   cargandoCrm: boolean;
   errorCrm: string | null;
-  /** Segmento "Solo en SIGLA" (sin ficha en el CRM). */
-  sigla: EstadoSigla;
+  sigla: SegmentoSigla;
   cargandoSigla: boolean;
   errorSigla: string | null;
-  /** Refetch of the CRM segment on demand (retry button). */
+  /** Refetch of the CRM segment with its current options (retry button). */
   recargarCrm: () => void;
-  /** Refetch of the current SIGLA page on demand (retry button). */
+  /** Refetch of the SIGLA segment with its current options (retry button). */
   recargarSigla: () => void;
-  /** SIGLA pagination (in-memory paging server-side). */
-  irAPaginaSigla: (pagina: number) => void;
 }
 
 const MENSAJE_CRM = 'No se pudo cargar la lista de empresas inactivas';
 const MENSAJE_SIGLA = 'No se pudo cargar los clientes de SIGLA sin ficha.';
 
+/** Serializes options into a query string (empty values are skipped). */
+function opcionesAQuery(op: OpcionesInactivas): string {
+  const params = new URLSearchParams();
+  if (op.q) params.set('q', op.q);
+  if (op.sector) params.set('sector', op.sector);
+  if (op.estado) params.set('estado', op.estado);
+  if (op.mesesMin !== undefined) params.set('mesesMin', String(op.mesesMin));
+  if (op.mesesMax !== undefined) params.set('mesesMax', String(op.mesesMax));
+  if (op.contacto) params.set('contacto', op.contacto);
+  if (op.orden) params.set('orden', op.orden);
+  if (op.direccion) params.set('direccion', op.direccion);
+  if (op.pagina !== undefined) params.set('pagina', String(op.pagina));
+  const qs = params.toString();
+  return qs ? `?${qs}` : '';
+}
+
 /**
  * Loads BOTH sources of the Inactivas view (feature crm-vista-inactivas,
- * S10/S12): the CRM ficha segment and the SIGLA-only segment (dormant SIGLA
- * clients with no ficha), mirroring `useAlertasDia`: retry bumps a key, the
- * effects re-run, every setState happens after the fetch resolves (React 19
- * no-sync-setState-in-effect) and is guarded by the `viva` flag. `reloadKey`
- * (bumped by the parent after saving a contact) refreshes both sources; the
- * SIGLA segment also refetches when its page changes.
+ * S10/S12/S14-S16), mirroring `useAlertasDia`: retry bumps a key, the effects
+ * re-run, every setState happens after the fetch resolves (React 19
+ * no-sync-setState-in-effect) and is guarded by the `viva` flag. Options
+ * (filters/sort/page) travel serialized into the effect keys: changing any of
+ * them refetches exactly that segment. `reloadKey` (bumped by the parent
+ * after saving a contact) refreshes both.
  */
-export function useInactivasCompletas(reloadKey = 0): EstadoInactivasCompletas {
-  const [filas, setFilas] = useState<EmpresaInactiva[]>([]);
-  const [sinInformacion, setSinInformacion] = useState(0);
+export function useInactivasCompletas(
+  reloadKey: number,
+  opcionesCrm: OpcionesInactivas,
+  opcionesSigla: OpcionesInactivas,
+): EstadoInactivasCompletas {
+  const [crm, setCrm] = useState<SegmentoCrm>({
+    filas: [],
+    sinInformacion: 0,
+    total: 0,
+    totalFuente: 0,
+    paginas: 1,
+    sectores: [],
+  });
   const [cargandoCrm, setCargandoCrm] = useState(true);
   const [errorCrm, setErrorCrm] = useState<string | null>(null);
-  const [sigla, setSigla] = useState<EstadoSigla>({ filas: [], total: 0, pagina: 1, paginas: 1 });
+  const [sigla, setSigla] = useState<SegmentoSigla>({ filas: [], total: 0, totalFuente: 0, paginas: 1 });
   const [cargandoSigla, setCargandoSigla] = useState(true);
   const [errorSigla, setErrorSigla] = useState<string | null>(null);
   const [recargaCrm, setRecargaCrm] = useState(0);
   const [recargaSigla, setRecargaSigla] = useState(0);
-  const [pagina, setPagina] = useState(1);
+
+  const claveCrm = JSON.stringify(opcionesCrm);
+  const claveSigla = JSON.stringify(opcionesSigla);
 
   const recargarCrm = useCallback((): void => {
     setErrorCrm(null);
@@ -81,21 +118,22 @@ export function useInactivasCompletas(reloadKey = 0): EstadoInactivasCompletas {
     setRecargaSigla((k) => k + 1);
   }, []);
 
-  const irAPaginaSigla = useCallback((destino: number): void => {
-    setCargandoSigla(true);
-    setPagina(destino);
-  }, []);
-
   useEffect(() => {
     let viva = true;
     (async (): Promise<void> => {
       try {
-        const res = await fetch('/api/crm/empresas/inactivas', { cache: 'no-store' });
+        const res = await fetch(`/api/crm/empresas/inactivas${opcionesAQuery(opcionesCrm)}`, { cache: 'no-store' });
         const body = (await res.json()) as RespuestaCrm;
         if (!res.ok || !body.success) throw new Error(body.error ?? MENSAJE_CRM);
         if (viva) {
-          setFilas(body.filas ?? []);
-          setSinInformacion(body.sinInformacion ?? 0);
+          setCrm({
+            filas: body.filas ?? [],
+            sinInformacion: body.sinInformacion ?? 0,
+            total: body.total ?? 0,
+            totalFuente: body.totalFuente ?? 0,
+            paginas: body.paginas ?? 1,
+            sectores: body.sectores ?? [],
+          });
         }
       } catch {
         if (viva) setErrorCrm(MENSAJE_CRM);
@@ -105,20 +143,22 @@ export function useInactivasCompletas(reloadKey = 0): EstadoInactivasCompletas {
     return () => {
       viva = false;
     };
-  }, [reloadKey, recargaCrm]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [reloadKey, recargaCrm, claveCrm]);
 
   useEffect(() => {
     let viva = true;
     (async (): Promise<void> => {
       try {
-        const res = await fetch(`/api/crm/empresas/inactivas?fuente=sigla&pagina=${pagina}`, { cache: 'no-store' });
+        const qs = opcionesAQuery(opcionesSigla);
+        const res = await fetch(`/api/crm/empresas/inactivas?fuente=sigla${qs ? `&${qs}` : ''}`, { cache: 'no-store' });
         const body = (await res.json()) as RespuestaSigla;
         if (!res.ok || !body.success) throw new Error(body.error ?? MENSAJE_SIGLA);
         if (viva) {
           setSigla({
             filas: body.filas ?? [],
             total: body.total ?? 0,
-            pagina: body.pagina ?? pagina,
+            totalFuente: body.totalFuente ?? 0,
             paginas: body.paginas ?? 1,
           });
         }
@@ -130,11 +170,11 @@ export function useInactivasCompletas(reloadKey = 0): EstadoInactivasCompletas {
     return () => {
       viva = false;
     };
-  }, [reloadKey, recargaSigla, pagina]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [reloadKey, recargaSigla, claveSigla]);
 
   return {
-    filas,
-    sinInformacion,
+    crm,
     cargandoCrm,
     errorCrm,
     sigla,
@@ -142,6 +182,5 @@ export function useInactivasCompletas(reloadKey = 0): EstadoInactivasCompletas {
     errorSigla,
     recargarCrm,
     recargarSigla,
-    irAPaginaSigla,
   };
 }

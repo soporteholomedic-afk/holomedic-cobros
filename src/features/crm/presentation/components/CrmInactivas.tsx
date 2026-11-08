@@ -1,17 +1,21 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 
-import type { ClienteSiglaSinFicha } from '../../application/listarEmpresasInactivas';
+import type { ClienteSiglaSinFicha, OpcionesInactivas } from '../../application/listarEmpresasInactivas';
 import { ESTADO_ATENCION_LABELS } from '../../domain/actividadServicios';
 import { UMBRAL_MESES_INACTIVIDAD } from '../../domain/entities';
+import { FiltroDropdown } from './FiltroDropdown';
+import { BusquedaDebounced } from './BusquedaDebounced';
+import { EncabezadoOrdenable } from './EncabezadoOrdenable';
 import { formatoCorto, formatoRelativo } from './fechas';
+import { Paginador } from './Paginador';
 import { useInactivasCompletas } from './useInactivasCompletas';
 
 export interface CrmInactivasProps {
-  /** Notifies the parent (tab badge) once both sources loaded: ficha rows + SIGLA total. */
+  /** Notifies the parent (tab badge) once both sources loaded: ficha total + SIGLA total. */
   onCargado?: (total: number) => void;
-  /** Bumping it refetches both sources (S6: after saving a contact). */
+  /** Bumping it refetches both sources with their current filters (S6: after saving a contact). */
   reloadKey?: number;
   /** The user asked to contact that empresa: the parent opens the registrar-contacto panel. */
   onRegistrar: (idEmpresa: string) => void;
@@ -21,26 +25,101 @@ export interface CrmInactivasProps {
 
 type Fuente = 'crm' | 'sigla';
 
+interface Filtros {
+  q: string;
+  sector: string;
+  estado: string;
+  antiguedad: string;
+  contacto: string;
+  orden: string;
+  direccion: 'asc' | 'desc';
+}
+
+const FILTROS_INICIALES: Filtros = { q: '', sector: '', estado: '', antiguedad: '', contacto: '', orden: 'abandono', direccion: 'desc' };
+
+const ESTADOS: { valor: string; etiqueta: string }[] = [
+  { valor: '', etiqueta: 'Todos' },
+  { valor: 'sin_actividad', etiqueta: 'Sin actividad' },
+  { valor: 'pendiente_primera', etiqueta: 'Pendiente de primera atención' },
+];
+
+const ANTIGUEDADES: { valor: string; etiqueta: string; min?: number; max?: number }[] = [
+  { valor: '', etiqueta: 'Toda antigüedad' },
+  { valor: '4-6', etiqueta: '4 a 6 meses', min: 4, max: 6 },
+  { valor: '6-12', etiqueta: '6 a 12 meses', min: 6, max: 12 },
+  { valor: '12+', etiqueta: 'Más de 12 meses', min: 12 },
+];
+
+const CONTACTOS: { valor: string; etiqueta: string }[] = [
+  { valor: '', etiqueta: 'Todos' },
+  { valor: 'con', etiqueta: 'Con contacto CRM' },
+  { valor: 'sin', etiqueta: 'Sin contacto CRM' },
+];
+
 function mesesLabel(meses: number): string {
   return meses === 1 ? '1 mes' : `${meses} meses`;
 }
 
 /**
- * "Inactivas" view (feature crm-vista-inactivas, S10-S12): two sources under a
- * segmented control — "Con ficha en el CRM" (the S2-S6 table) and "Solo en
- * SIGLA" (dormant SIGLA clients with no ficha, S10), paginated. Contacting a
- * empresa does NOT remove its row: only a new SIGLA attention does (S6), the
- * same rule for both segments. Threshold stays fixed at 4 months (S4).
+ * "Inactivas" view (feature crm-vista-inactivas, S10-S17): two sources under
+ * a segmented control, with filters, column sorting and pagination — all
+ * server-side (the endpoint does the work) and all through custom controls
+ * (S17: no native selects). Contacting a empresa does NOT remove its row:
+ * only a new SIGLA attention does (S6), the same rule for both segments.
  */
 export function CrmInactivas({ onCargado, reloadKey = 0, onRegistrar, onCrearFicha }: CrmInactivasProps) {
-  const { filas, sinInformacion, cargandoCrm, errorCrm, sigla, cargandoSigla, errorSigla, recargarCrm, recargarSigla, irAPaginaSigla } =
-    useInactivasCompletas(reloadKey);
   const [fuente, setFuente] = useState<Fuente>('crm');
+  const [filtros, setFiltros] = useState<Filtros>(FILTROS_INICIALES);
+  const [paginaCrm, setPaginaCrm] = useState(1);
+  const [paginaSigla, setPaginaSigla] = useState(1);
+
+  // Every filter/sort change resets the page it applies to (handled here, in
+  // the events — never in an effect, React 19 rule).
+  const cambiarFiltros = (parcial: Partial<Filtros>) => {
+    setFiltros((f) => ({ ...f, ...parcial }));
+    setPaginaCrm(1);
+    setPaginaSigla(1);
+  };
+
+  const opcionesCrm = useMemo<OpcionesInactivas>(() => {
+    const op: OpcionesInactivas = { orden: filtros.orden as OpcionesInactivas['orden'], direccion: filtros.direccion, pagina: paginaCrm };
+    if (filtros.q.trim()) op.q = filtros.q.trim();
+    if (filtros.sector) op.sector = filtros.sector;
+    if (filtros.estado) op.estado = filtros.estado as 'sin_actividad' | 'pendiente_primera';
+    if (filtros.contacto) op.contacto = filtros.contacto as 'con' | 'sin';
+    const preset = ANTIGUEDADES.find((a) => a.valor === filtros.antiguedad);
+    if (preset?.min !== undefined) {
+      op.mesesMin = preset.min;
+      if (preset.max !== undefined) op.mesesMax = preset.max;
+    }
+    return op;
+  }, [filtros, paginaCrm]);
+
+  const opcionesSigla = useMemo<OpcionesInactivas>(
+    () => ({
+      orden: filtros.orden as OpcionesInactivas['orden'],
+      direccion: filtros.direccion,
+      pagina: paginaSigla,
+      ...(filtros.q.trim() ? { q: filtros.q.trim() } : {}),
+      ...(filtros.estado ? { estado: filtros.estado as 'sin_actividad' | 'pendiente_primera' } : {}),
+    }),
+    [filtros, paginaSigla],
+  );
+
+  const { crm, cargandoCrm, errorCrm, sigla, cargandoSigla, errorSigla, recargarCrm, recargarSigla } =
+    useInactivasCompletas(reloadKey, opcionesCrm, opcionesSigla);
+
 
   useEffect(() => {
-    if (!cargandoCrm && !errorCrm && !cargandoSigla && !errorSigla) onCargado?.(filas.length + sigla.total);
-  }, [cargandoCrm, errorCrm, cargandoSigla, errorSigla, filas, sigla, onCargado]);
+    if (!cargandoCrm && !errorCrm && !cargandoSigla && !errorSigla) {
+      onCargado?.(crm.totalFuente + sigla.totalFuente);
+    }
+  }, [cargandoCrm, errorCrm, cargandoSigla, errorSigla, crm, sigla, onCargado]);
 
+  const filtrosActivos =
+    filtros.q !== '' || filtros.sector !== '' || filtros.estado !== '' || filtros.antiguedad !== '' || filtros.contacto !== '';
+  const limpiarFiltros = () => cambiarFiltros(FILTROS_INICIALES);
+  const chipoOn = (valor: string) => (filtros.estado === valor || filtros.antiguedad === valor || filtros.contacto === valor);
   const encabezados = 'border-b border-slate-200 bg-slate-50 text-left text-xs font-semibold uppercase tracking-wide text-slate-500';
 
   return (
@@ -49,10 +128,9 @@ export function CrmInactivas({ onCargado, reloadKey = 0, onRegistrar, onCrearFic
         <h2 className="text-xl font-bold text-slate-800">Inactivas</h2>
         <p className="mt-1 text-sm text-slate-500">
           Empresas cliente que hace {UMBRAL_MESES_INACTIVIDAD} meses o más no envían pacientes a la clínica.
-          Ordenadas de la más abandonada a la menos.
         </p>
 
-        <div className="mt-4 flex gap-2" role="group" aria-label="Fuente de empresas inactivas">
+        <div className="mt-4 flex flex-wrap items-center gap-2" role="group" aria-label="Fuente de empresas inactivas">
           <button
             type="button"
             aria-pressed={fuente === 'crm' ? 'true' : 'false'}
@@ -64,7 +142,7 @@ export function CrmInactivas({ onCargado, reloadKey = 0, onRegistrar, onCrearFic
                 : 'border-slate-300 bg-white text-slate-500 hover:text-slate-700')
             }
           >
-            Con ficha en el CRM ({filas.length})
+            Con ficha en el CRM ({crm.totalFuente})
           </button>
           <button
             type="button"
@@ -77,8 +155,71 @@ export function CrmInactivas({ onCargado, reloadKey = 0, onRegistrar, onCrearFic
                 : 'border-slate-300 bg-white text-slate-500 hover:text-slate-700')
             }
           >
-            Solo en SIGLA ({sigla.total})
+            Solo en SIGLA ({sigla.totalFuente})
           </button>
+        </div>
+
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          <BusquedaDebounced valor={filtros.q} onBusca={(q) => cambiarFiltros({ q })} etiqueta="Buscar por razón social, RUC o contacto" />
+          {fuente === 'crm' && (
+            <FiltroDropdown
+              etiqueta="Sector"
+              valor={filtros.sector}
+              onCambia={(sector) => cambiarFiltros({ sector })}
+              opciones={[{ valor: '', etiqueta: 'Todos los sectores' }, ...crm.sectores.map((s) => ({ valor: s, etiqueta: s }))]}
+            />
+          )}
+          {fuente === 'crm' &&
+            ESTADOS.map((e) => (
+              <button
+                key={e.valor || 'todos-estado'}
+                type="button"
+                aria-pressed={chipoOn(e.valor) && filtros.estado === e.valor ? 'true' : 'false'}
+                onClick={() => cambiarFiltros({ estado: e.valor })}
+                className={
+                  'rounded-full border px-3 py-1.5 text-xs font-medium transition-colors ' +
+                  (filtros.estado === e.valor
+                    ? 'border-sky-500 bg-sky-50 text-sky-600'
+                    : 'border-slate-300 bg-white text-slate-500 hover:text-slate-700')
+                }
+              >
+                {e.valor === '' ? 'Todos los estados' : e.etiqueta}
+              </button>
+            ))}
+          {fuente === 'crm' &&
+            ANTIGUEDADES.map((a) => (
+              <button
+                key={a.valor || 'todas-antig'}
+                type="button"
+                aria-pressed={filtros.antiguedad === a.valor ? 'true' : 'false'}
+                onClick={() => cambiarFiltros({ antiguedad: a.valor })}
+                className={
+                  'rounded-full border px-3 py-1.5 text-xs font-medium transition-colors ' +
+                  (filtros.antiguedad === a.valor
+                    ? 'border-sky-500 bg-sky-50 text-sky-600'
+                    : 'border-slate-300 bg-white text-slate-500 hover:text-slate-700')
+                }
+              >
+                {a.valor === '' ? 'Toda antigüedad' : a.etiqueta}
+              </button>
+            ))}
+          {fuente === 'crm' && (
+            <FiltroDropdown
+              etiqueta="Último contacto"
+              valor={filtros.contacto}
+              onCambia={(contacto) => cambiarFiltros({ contacto })}
+              opciones={CONTACTOS}
+            />
+          )}
+          {filtrosActivos && (
+            <button
+              type="button"
+              onClick={limpiarFiltros}
+              className="rounded-full border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-500 hover:text-slate-700"
+            >
+              Limpiar filtros
+            </button>
+          )}
         </div>
 
         {errorCrm !== null && (
@@ -110,28 +251,33 @@ export function CrmInactivas({ onCargado, reloadKey = 0, onRegistrar, onCrearFic
           <>
             {cargandoCrm && <p className="mt-6 text-sm text-slate-500">Consultando actividad en SIGLA…</p>}
 
-            {!cargandoCrm && errorCrm === null && filas.length === 0 && (
+            {!cargandoCrm && errorCrm === null && crm.filas.length === 0 && (
               <p className="mt-6 rounded-lg border border-emerald-300 bg-emerald-50 p-4 text-sm text-emerald-700">
-                No hay empresas cliente sin actividad hace {UMBRAL_MESES_INACTIVIDAD} meses o más.
+                {crm.total === 0 && filtrosActivos
+                  ? 'No hay resultados con estos filtros.'
+                  : `No hay empresas cliente sin actividad hace ${UMBRAL_MESES_INACTIVIDAD} meses o más.`}
               </p>
             )}
 
-            {!cargandoCrm && errorCrm === null && filas.length > 0 && (
+            {!cargandoCrm && errorCrm === null && crm.filas.length > 0 && (
               <>
-                <div className="mt-4 overflow-x-auto rounded-lg border border-slate-200 bg-white">
+                <p className="mt-4 text-xs text-slate-400">
+                  {crm.total} de {crm.totalFuente} clientes
+                </p>
+                <div className="mt-2 overflow-x-auto rounded-lg border border-slate-200 bg-white">
                   <table className="min-w-full text-sm">
                     <thead>
                       <tr className={encabezados}>
-                        <th className="px-4 py-2.5">Empresa</th>
+                        <EncabezadoOrdenable etiqueta="Empresa" campo="razonSocial" orden={filtros.orden} direccion={filtros.direccion} onOrden={(campo, dir) => cambiarFiltros({ orden: campo, direccion: dir })} />
                         <th className="px-4 py-2.5">Sector</th>
-                        <th className="px-4 py-2.5">Sin actividad</th>
-                        <th className="px-4 py-2.5">Última atención</th>
-                        <th className="px-4 py-2.5">Último contacto</th>
+                        <EncabezadoOrdenable etiqueta="Sin actividad" campo="abandono" orden={filtros.orden} direccion={filtros.direccion} onOrden={(campo, dir) => cambiarFiltros({ orden: campo, direccion: dir })} />
+                        <EncabezadoOrdenable etiqueta="Última atención" campo="ultimaAtencion" orden={filtros.orden} direccion={filtros.direccion} onOrden={(campo, dir) => cambiarFiltros({ orden: campo, direccion: dir })} />
+                        <EncabezadoOrdenable etiqueta="Último contacto" campo="ultimoContacto" orden={filtros.orden} direccion={filtros.direccion} onOrden={(campo, dir) => cambiarFiltros({ orden: campo, direccion: dir })} />
                         <th className="px-4 py-2.5">Acciones</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {filas.map((fila) => (
+                      {crm.filas.map((fila) => (
                         <tr key={fila.idEmpresa} className="border-b border-slate-100 last:border-b-0 hover:bg-slate-50">
                           <td className="px-4 py-2.5">
                             <p className="font-medium text-slate-800">{fila.razonSocial}</p>
@@ -167,13 +313,14 @@ export function CrmInactivas({ onCargado, reloadKey = 0, onRegistrar, onCrearFic
                     </tbody>
                   </table>
                 </div>
-                {sinInformacion > 0 && (
+                {crm.sinInformacion > 0 && (
                   <p className="mt-3 text-xs text-slate-400">
-                    {sinInformacion === 1
+                    {crm.sinInformacion === 1
                       ? '1 empresa cliente sin RUC no se puede evaluar.'
-                      : `${sinInformacion} empresas cliente sin RUC no se pueden evaluar.`}
+                      : `${crm.sinInformacion} empresas cliente sin RUC no se pueden evaluar.`}
                   </p>
                 )}
+                {crm.paginas > 1 && <Paginador pagina={paginaCrm} paginas={crm.paginas} onPagina={setPaginaCrm} />}
               </>
             )}
           </>
@@ -185,19 +332,24 @@ export function CrmInactivas({ onCargado, reloadKey = 0, onRegistrar, onCrearFic
 
             {!cargandoSigla && errorSigla === null && sigla.filas.length === 0 && (
               <p className="mt-6 rounded-lg border border-emerald-300 bg-emerald-50 p-4 text-sm text-emerald-700">
-                No hay clientes de SIGLA sin ficha en este segmento.
+                {sigla.total === 0 && filtrosActivos
+                  ? 'No hay resultados con estos filtros.'
+                  : 'No hay clientes de SIGLA sin ficha en este segmento.'}
               </p>
             )}
 
             {!cargandoSigla && errorSigla === null && sigla.filas.length > 0 && (
               <>
-                <div className="mt-4 overflow-x-auto rounded-lg border border-slate-200 bg-white">
+                <p className="mt-4 text-xs text-slate-400">
+                  {sigla.total} de {sigla.totalFuente} clientes
+                </p>
+                <div className="mt-2 overflow-x-auto rounded-lg border border-slate-200 bg-white">
                   <table className="min-w-full text-sm">
                     <thead>
                       <tr className={encabezados}>
-                        <th className="px-4 py-2.5">Cliente en SIGLA</th>
-                        <th className="px-4 py-2.5">Sin actividad</th>
-                        <th className="px-4 py-2.5">Última atención</th>
+                        <EncabezadoOrdenable etiqueta="Cliente en SIGLA" campo="razonSocial" orden={filtros.orden} direccion={filtros.direccion} onOrden={(campo, dir) => cambiarFiltros({ orden: campo, direccion: dir })} />
+                        <EncabezadoOrdenable etiqueta="Sin actividad" campo="abandono" orden={filtros.orden} direccion={filtros.direccion} onOrden={(campo, dir) => cambiarFiltros({ orden: campo, direccion: dir })} />
+                        <EncabezadoOrdenable etiqueta="Última atención" campo="ultimaAtencion" orden={filtros.orden} direccion={filtros.direccion} onOrden={(campo, dir) => cambiarFiltros({ orden: campo, direccion: dir })} />
                         <th className="px-4 py-2.5">Acciones</th>
                       </tr>
                     </thead>
@@ -237,27 +389,7 @@ export function CrmInactivas({ onCargado, reloadKey = 0, onRegistrar, onCrearFic
                     </tbody>
                   </table>
                 </div>
-                <div className="mt-3 flex items-center gap-3 text-xs text-slate-500">
-                  <button
-                    type="button"
-                    onClick={() => irAPaginaSigla(sigla.pagina - 1)}
-                    disabled={sigla.pagina <= 1}
-                    className="rounded-md border border-slate-300 bg-white px-2.5 py-1 font-semibold text-slate-600 disabled:opacity-40"
-                  >
-                    Anterior
-                  </button>
-                  <span>
-                    Página {sigla.pagina} de {sigla.paginas} · {sigla.total} clientes
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => irAPaginaSigla(sigla.pagina + 1)}
-                    disabled={sigla.pagina >= sigla.paginas}
-                    className="rounded-md border border-slate-300 bg-white px-2.5 py-1 font-semibold text-slate-600 disabled:opacity-40"
-                  >
-                    Siguiente
-                  </button>
-                </div>
+                <Paginador pagina={paginaSigla} paginas={sigla.paginas} onPagina={setPaginaSigla} />
               </>
             )}
           </>
