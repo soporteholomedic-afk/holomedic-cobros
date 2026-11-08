@@ -305,3 +305,36 @@ Faltan 2 decisiones de producto antes del plan final:
 ---
 
 *Documento v2 (reencuadrado a CRM comercial de contacto a clientes y prospectos) — revisar y ajustar antes de derivar el plan de implementación.*
+
+---
+
+## 8. Vista implementada: tab "Inactivas" en `/crm` (feature crm-vista-inactivas)
+
+> Esta sección describe **código ya implementado** (rama `feature/crm-vista-inactivas`), no un blueprint. Convive con la propuesta de los puntos 3-7.
+
+**Qué resuelve**: detectar clientes de SIGLA que hace 4 o más meses no envían pacientes a la clínica — la lista de reactivación comercial.
+
+**Estructura**: dentro de `/crm` hay dos tabs (`CrmViewTabs`): **Pipeline** (el kanban, intacto) e **Inactivas** (nueva). El tab Inactivas muestra un badge contador cuando ya se cargó la lista.
+
+**La vista Inactivas** (`CrmInactivas`):
+
+| Columna | Contenido |
+|---|---|
+| Empresa | Razón social + RUC |
+| Sector | Sector de la ficha (o `—`) |
+| Sin actividad | Meses enteros sin atención SIGLA; la más abandonada arriba |
+| Última atención | Fecha corta del proyecto (`vie 1 may`); `—` si nunca |
+| Último contacto | Última interacción CRM en tiempo relativo (`hace 3 d`); `—` si nunca |
+| Acciones | Botón **Registrar contacto** → abre el `RegistrarContactoPanel` del board (dirección saliente) |
+
+**Reglas de negocio** (heredan S6.6/S6.7 del dominio):
+
+- La actividad se lee **en vivo de SIGLA** (`Cliente`+`Orden`, por RUC, una consulta bulk por lotes de 500) — nunca de llamadas ni correos del CRM.
+- Umbral fijo: `UMBRAL_MESES_INACTIVIDAD = 4` meses, sin UI de configuración.
+- `pendiente_primera` (RUC sin ninguna atención en SIGLA) entra **al final** de la lista con su rótulo, jamás rotulada "inactiva".
+- Clientes sin RUC no se pueden evaluar: se excluyen y se muestran como contador informativo (`N empresas cliente sin RUC no se pueden evaluar.`).
+- Registrar un contacto CRM **no saca la fila**: la empresa sale de la vista solo cuando SIGLA registre una nueva atención; el contacto refresca la columna "Último contacto" (la lista se recarga al guardar).
+- Prospectos: fuera de la vista por definición (solo clientes).
+
+**Superficie técnica**: `GET /api/crm/empresas/inactivas` (permiso crm, `Cache-Control: no-store`, 503 con mensaje claro si SIGLA no responde); use case `ListarEmpresasInactivasUseCase`; port bulk `ultimaAtencionPorRucs` (SIGLA) y `ultimaInteraccionPorEmpresas` (CRM). Estado de carga, error con **Reintentar** y lista vacía con mensaje positivo.
+
