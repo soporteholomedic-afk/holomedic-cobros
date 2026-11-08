@@ -17,6 +17,9 @@ function fakeAtenciones(respuestas: Record<string, string | null>): IAtencionesS
     async ultimaAtencionPorRucs(lista) {
       return new Map(lista.map((ruc) => [ruc, respuestas[ruc] ?? null]));
     },
+    async clientesConActividad() {
+      return [];
+    },
   };
 }
 

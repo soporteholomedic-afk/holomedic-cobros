@@ -16,6 +16,9 @@ function fakeAtencionesBulk(respuestas: Record<string, string | null>): IAtencio
       lotes.push(rucs);
       return new Map(rucs.map((ruc) => [ruc, respuestas[ruc] ?? null]));
     },
+    async clientesConActividad() {
+      return [];
+    },
   };
 }
 
@@ -157,5 +160,71 @@ describe('ListarEmpresasInactivasUseCase — clientes SIGLA sin actividad 4+ mes
       ['e-sola', null],
       ['e-vieja', '2026-09-01T10:00:00.000Z'], // newest of its interactions
     ]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Extensión SIGLA-céntrica (S10/S13): segmento "Solo en SIGLA" — clientes
+// dormidos de SIGLA sin ficha en el CRM.
+// ---------------------------------------------------------------------------
+
+const clienteSigla = (ruc: string, razonSocial: string, ultimaAtencion: string | null) => ({
+  razonSocial,
+  ruc,
+  ultimaAtencion,
+  telefono: '987 000 0000',
+  contacto: 'Contacto SIGLA',
+  correo: null as string | null,
+});
+
+describe('ListarEmpresasInactivasUseCase.executeSigla — clientes SIGLA sin ficha (S10/S13)', () => {
+  it('lists dormant SIGLA clients without CRM ficha: most abandoned first, pendiente_primera last, recent excluded', async () => {
+    const repo = makeFakeRepo([empresa({ ...cliente('e-ficha', 'Tiene Ficha S.A.C.', '20100000009') })]);
+    const atenciones = fakeAtencionesBulk({
+      '20100000009': '2026-05-01', // dormida PERO tiene ficha CRM: excluida de este segmento
+      '20100000010': '2026-03-02', // ~8 meses: entra
+      '20100000011': '2026-08-20', // reciente: excluida
+      '20100000012': null,         // sin órdenes: pendiente_primera, al final
+    });
+    atenciones.clientesConActividad = async () => [
+      clienteSigla('20100000010', 'Dormido Viejo S.A.C.', '2026-03-02'),
+      clienteSigla('20100000009', 'Tiene Ficha S.A.C.', '2026-05-01'),
+      clienteSigla('20100000012', 'Nunca Ordenó S.A.C.', null),
+      clienteSigla('20100000011', 'Reciente S.A.C.', '2026-08-20'),
+    ];
+    const r = await new ListarEmpresasInactivasUseCase(repo.empresaRepo, atenciones).executeSigla(HOY, 1);
+    expect(r.total).toBe(2);
+    expect(r.paginas).toBe(1);
+    expect(r.pagina).toBe(1);
+    expect(r.filas.map((f) => [f.razonSocial, f.mesesSinActividad, f.estado])).toEqual([
+      ['Dormido Viejo S.A.C.', 7, 'sin_actividad'],
+      ['Nunca Ordenó S.A.C.', null, 'pendiente_primera'],
+    ]);
+    expect(r.filas[0].telefono).toBe('987 000 0000'); // datos de contacto para crear la ficha
+  });
+
+  it('pages in memory at 50 rows per page with stable order (ties alphabetical)', async () => {
+    const repo = makeFakeRepo([]);
+    const dormidos = Array.from({ length: 55 }, (_, i) => {
+      const ruc = `209${String(i).padStart(8, '0')}`;
+      return clienteSigla(ruc, `Clínica ${String.fromCharCode(65 + (i % 26))}${i}`, '2026-04-15');
+    });
+    const atenciones = fakeAtencionesBulk({});
+    atenciones.clientesConActividad = async () => dormidos;
+    const useCase = new ListarEmpresasInactivasUseCase(repo.empresaRepo, atenciones);
+
+    const p1 = await useCase.executeSigla(HOY, 1);
+    expect(p1.total).toBe(55);
+    expect(p1.paginas).toBe(2);
+    expect(p1.filas).toHaveLength(50);
+
+    const p2 = await useCase.executeSigla(HOY, 2);
+    expect(p2.filas).toHaveLength(5);
+    // sin solape entre páginas
+    const ids1 = new Set(p1.filas.map((f) => f.ruc));
+    expect(p2.filas.every((f) => !ids1.has(f.ruc))).toBe(true);
+    // página fuera de rango → vacía, sin romper
+    const p9 = await useCase.executeSigla(HOY, 9);
+    expect(p9.filas).toEqual([]);
   });
 });
