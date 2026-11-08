@@ -338,3 +338,14 @@ Faltan 2 decisiones de producto antes del plan final:
 
 **Superficie técnica**: `GET /api/crm/empresas/inactivas` (permiso crm, `Cache-Control: no-store`, 503 con mensaje claro si SIGLA no responde); use case `ListarEmpresasInactivasUseCase`; port bulk `ultimaAtencionPorRucs` (SIGLA) y `ultimaInteraccionPorEmpresas` (CRM). Estado de carga, error con **Reintentar** y lista vacía con mensaje positivo.
 
+
+### 8.1 Extensión: segmento «Solo en SIGLA» (clientes dormidos sin ficha)
+
+Con la cartera del CRM todavía sin cargar, la vista solo ve la parte cruzada (ficha × SIGLA). Para que el radar alcance a **todos** los clientes dormidos de SIGLA, el tab Inactivas tiene ahora un control segmentado:
+
+- **«Con ficha en el CRM (N)»**: la tabla de S3, intacta.
+- **«Solo en SIGLA (M)»**: clientes de SIGLA con `IndReg=1` cuya última orden tiene ≥4 meses o que nunca registraron órdenes, **sin ficha en el CRM** (cruce por RUC). Orden: la más abandonada arriba; «Pendiente de primera atención» al final (S6.7). Paginado de 50 filas por página.
+- Cada fila muestra razón social (`RazSoc`), RUC, contacto (`NomCon`), meses sin actividad y última atención, con botón **«Crear ficha»**: abre el alta **prellenada** con razón social, RUC, contacto, teléfono y correo de SIGLA; al crearla, la relación queda en «cliente» automáticamente (ya envía pacientes).
+- El badge del tab pasa a mostrar el **total** (con ficha + solo en SIGLA): el tamaño real del radar de reactivación.
+
+Regla de oro sin cambios (S6): la fila sale de la lista solo cuando SIGLA registra una nueva atención. Registrar contacto o crear ficha actualiza el estado en el CRM, no en SIGLA.
