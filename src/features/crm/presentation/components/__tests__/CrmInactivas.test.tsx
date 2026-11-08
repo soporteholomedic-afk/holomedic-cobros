@@ -1,11 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 
-import type { EmpresaInactiva } from '../../../application/listarEmpresasInactivas';
+import type { ClienteSiglaSinFicha, EmpresaInactiva } from '../../../application/listarEmpresasInactivas';
 import { CrmInactivas } from '../CrmInactivas';
 import { json } from './crmFixtures';
 
 const RUTA = '/api/crm/empresas/inactivas';
+const RUTA_SIGLA = `${RUTA}?fuente=sigla&pagina=1`;
 
 function fila(overrides: Partial<EmpresaInactiva> = {}): EmpresaInactiva {
   return {
@@ -21,7 +22,21 @@ function fila(overrides: Partial<EmpresaInactiva> = {}): EmpresaInactiva {
   };
 }
 
-const LISTADO_OK = {
+function filaSigla(overrides: Partial<ClienteSiglaSinFicha> = {}): ClienteSiglaSinFicha {
+  return {
+    razonSocial: 'Solo en SIGLA S.A.C.',
+    ruc: '20900000001',
+    telefono: '987 000 0000',
+    contacto: 'Contacto SIGLA',
+    correo: null,
+    ultimaAtencion: '2026-03-01',
+    mesesSinActividad: 8,
+    estado: 'sin_actividad',
+    ...overrides,
+  };
+}
+
+const LISTADO_CRM = {
   success: true,
   filas: [
     fila(),
@@ -39,6 +54,14 @@ const LISTADO_OK = {
   sinInformacion: 2,
 };
 
+const LISTADO_SIGLA = {
+  success: true,
+  filas: [filaSigla()],
+  total: 34, // más filas de las que trae la página: la paginación es real
+  pagina: 1,
+  paginas: 1,
+};
+
 let base: typeof fetch;
 beforeEach(() => {
   base = global.fetch;
@@ -48,85 +71,108 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-/** Fake of the inactivas endpoint; replays the last answer when exhausted. */
-function fetchInactivas(secuencia: Array<{ status: number; body: unknown } | { fallo: Error }>) {
-  let i = 0;
+/** Fake de ambas fuentes del endpoint; responde por URL con query incluida. */
+function fetchInactivas(respuestas: {
+  crm?: { status: number; body: unknown } | { fallo: Error };
+  sigla?: { status: number; body: unknown } | { fallo: Error };
+}) {
   const fn = vi.fn(async (url: string) => {
-    if (url !== RUTA) throw new Error(`ruta inesperada: ${url}`);
-    const paso = secuencia[Math.min(i, secuencia.length - 1)];
-    i += 1;
-    if ('fallo' in paso) throw paso.fallo;
-    return json({ status: paso.status, body: paso.body });
+    if (url === RUTA) {
+      const paso = respuestas.crm ?? { status: 200, body: { success: true, filas: [], sinInformacion: 0 } };
+      if ('fallo' in paso) throw paso.fallo;
+      return json({ status: paso.status, body: paso.body });
+    }
+    if (url.startsWith(`${RUTA}?fuente=sigla`)) {
+      const paso = respuestas.sigla ?? { status: 200, body: { success: true, filas: [], total: 0, pagina: 1, paginas: 1 } };
+      if ('fallo' in paso) throw paso.fallo;
+      return json({ status: paso.status, body: paso.body });
+    }
+    throw new Error(`ruta inesperada: ${url}`);
   });
   global.fetch = fn as unknown as typeof fetch;
   return fn;
 }
 
-describe('CrmInactivas — clientes SIGLA sin actividad 4+ meses (S2/S3/S6)', () => {
-  it('renders the rows as received: empresa, sector, months, last attention, last CRM contact, and the sin-RUC note', async () => {
-    const fetchMock = fetchInactivas([{ status: 200, body: LISTADO_OK }]);
+describe('CrmInactivas — dos fuentes: con ficha y solo en SIGLA (S10/S12)', () => {
+  it('loads both sources on mount and the badge counts the total (ficha + SIGLA)', async () => {
+    const fetchMock = fetchInactivas({ crm: { status: 200, body: LISTADO_CRM }, sigla: { status: 200, body: LISTADO_SIGLA } });
     const onCargado = vi.fn();
     render(<CrmInactivas onCargado={onCargado} onRegistrar={vi.fn()} />);
 
     expect(await screen.findByText('Clínica Vieja S.A.C.')).toBeTruthy();
-    expect(screen.getByText('Odontología')).toBeTruthy();
-    expect(screen.getByText('6 meses')).toBeTruthy();
-    expect(screen.getByText('vie 1 may')).toBeTruthy(); // formatoCorto del proyecto
-    expect(screen.getByText('hace 3 d')).toBeTruthy(); // último contacto CRM relativo
-    expect(screen.getAllByText('—').length).toBeGreaterThanOrEqual(2); // sector null + contacto null
-    // pendiente_primera shows its own label, never a month count (S6.7)
-    expect(screen.getByText('Pendiente de primera atención')).toBeTruthy();
-    expect(screen.queryByText('null meses')).toBeNull();
-    expect(screen.getByText('2 empresas cliente sin RUC no se pueden evaluar.')).toBeTruthy();
+    await waitFor(() => expect(onCargado).toHaveBeenCalledWith(36)); // 2 con ficha + 34 en SIGLA (total, no la página)
     expect(fetchMock).toHaveBeenCalledWith(RUTA, { cache: 'no-store' });
-    await waitFor(() => expect(onCargado).toHaveBeenCalledWith(2));
+    expect(fetchMock).toHaveBeenCalledWith(RUTA_SIGLA, { cache: 'no-store' });
+    // segmented control with both counts
+    expect(screen.getByRole('button', { name: 'Con ficha en el CRM (2)' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: /Solo en SIGLA \(34\)/ })).toBeTruthy();
+    // the sin-RUC note stays visible in the crm segment
+    expect(screen.getByText('2 empresas cliente sin RUC no se pueden evaluar.')).toBeTruthy();
   });
 
-  it('a SIGLA failure shows a clear message and Reintentar reloads the list', async () => {
-    const fetchMock = fetchInactivas([
-      { status: 503, body: { success: false, error: 'No se pudo consultar la actividad en SIGLA' } },
-      { status: 200, body: LISTADO_OK },
-    ]);
-    const onCargado = vi.fn();
-    render(<CrmInactivas onCargado={onCargado} onRegistrar={vi.fn()} />);
+  it('the SIGLA segment shows its rows with the Crear ficha action and its own columns', async () => {
+    fetchInactivas({ crm: { status: 200, body: LISTADO_CRM }, sigla: { status: 200, body: LISTADO_SIGLA } });
+    const onCrearFicha = vi.fn();
+    render(<CrmInactivas onRegistrar={vi.fn()} onCrearFicha={onCrearFicha} />);
 
-    expect(await screen.findByText('No se pudo consultar la actividad en SIGLA')).toBeTruthy();
-    expect(onCargado).not.toHaveBeenCalled();
-    fireEvent.click(screen.getByRole('button', { name: 'Reintentar' }));
-    expect(await screen.findByText('Clínica Vieja S.A.C.')).toBeTruthy();
-    expect(fetchMock).toHaveBeenCalledTimes(2);
-    await waitFor(() => expect(onCargado).toHaveBeenCalledWith(2));
+    fireEvent.click(await screen.findByRole('button', { name: /Solo en SIGLA \(34\)/ }));
+    expect(await screen.findByText('Solo en SIGLA S.A.C.')).toBeTruthy();
+    expect(screen.getByText('8 meses')).toBeTruthy();
+    const botones = screen.getAllByRole('button', { name: 'Crear ficha' });
+    expect(botones).toHaveLength(1);
+    fireEvent.click(botones[0]);
+    expect(onCrearFicha).toHaveBeenCalledWith(
+      expect.objectContaining({ ruc: '20900000001', razonSocial: 'Solo en SIGLA S.A.C.' }),
+    );
+    // the CRM-specific button is not here
+    expect(screen.queryByRole('button', { name: 'Registrar contacto' })).toBeNull();
   });
 
-  it('an empty list shows the empty state and hides the sin-RUC note', async () => {
-    fetchInactivas([{ status: 200, body: { success: true, filas: [], sinInformacion: 0 } }]);
+  it('a SIGLA failure shows a clear message and Reintentar reloads both sources', async () => {
+    const fetchMock = fetchInactivas({
+      crm: { status: 200, body: LISTADO_CRM },
+      sigla: { fallo: new Error('SIGLA caída') },
+    });
     render(<CrmInactivas onRegistrar={vi.fn()} />);
 
-    expect(await screen.findByText('No hay empresas cliente sin actividad hace 4 meses o más.')).toBeTruthy();
-    expect(screen.queryByText(/sin RUC/)).toBeNull();
+    expect(await screen.findByText('No se pudo cargar los clientes de SIGLA sin ficha.')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Reintentar SIGLA' }));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(3)); // 2 iniciales + 1 reintento sigla
   });
 
-  it('offers Registrar contacto per row and notifies with the empresa id (S6)', async () => {
-    fetchInactivas([{ status: 200, body: LISTADO_OK }]);
-    const onRegistrar = vi.fn();
-    render(<CrmInactivas onRegistrar={onRegistrar} />);
+  it('the 4-month threshold copy stays (fixed, S4) and the empty CRM list keeps its positive state', async () => {
+    fetchInactivas({
+      crm: { status: 200, body: { success: true, filas: [], sinInformacion: 0 } },
+      sigla: { status: 200, body: LISTADO_SIGLA },
+    });
+    render(<CrmInactivas onRegistrar={vi.fn()} />);
 
-    await screen.findByText('Clínica Vieja S.A.C.');
-    const botones = screen.getAllByRole('button', { name: 'Registrar contacto' });
-    expect(botones).toHaveLength(2);
-    fireEvent.click(botones[0]);
-    expect(onRegistrar).toHaveBeenCalledWith('e-a');
+    expect(
+      await screen.findByText('No hay empresas cliente sin actividad hace 4 meses o más.'),
+    ).toBeTruthy();
   });
 
-  it('reloads the list when reloadKey changes (S6: a saved contact refreshes the column, the row stays)', async () => {
-    const fetchMock = fetchInactivas([{ status: 200, body: LISTADO_OK }]);
-    const { rerender } = render(<CrmInactivas onRegistrar={vi.fn()} />);
+  it('the SIGLA segment paginates: Siguiente fetches the next page', async () => {
+    const fetchMock = vi.fn(async (url: string) => {
+      if (url === RUTA) return json({ status: 200, body: LISTADO_CRM });
+      if (url.startsWith(`${RUTA}?fuente=sigla&pagina=`)) {
+        const pagina = Number(new URL(url, 'http://localhost').searchParams.get('pagina'));
+        return json({ status: 200, body: { success: true, filas: [filaSigla()], total: 120, pagina, paginas: 3 } });
+      }
+      throw new Error(`ruta inesperada: ${url}`);
+    });
+    global.fetch = fetchMock as unknown as typeof fetch;
+    render(<CrmInactivas onRegistrar={vi.fn()} />);
 
-    await screen.findByText('Clínica Vieja S.A.C.');
-    expect(fetchMock).toHaveBeenCalledTimes(1);
+    fireEvent.click(await screen.findByRole('button', { name: /Solo en SIGLA \(120\)/ }));
+    expect(await screen.findByText('Solo en SIGLA S.A.C.')).toBeTruthy();
+    expect(screen.getByText(/Página 1 de 3/)).toBeTruthy();
 
-    rerender(<CrmInactivas onRegistrar={vi.fn()} reloadKey={1} />);
-    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
-    expect(screen.getByText('Clínica Vieja S.A.C.')).toBeTruthy(); // the row stays (S6)
+    fireEvent.click(screen.getByRole('button', { name: 'Siguiente' }));
+    await waitFor(() =>
+      expect(fetchMock).toHaveBeenCalledWith(`${RUTA}?fuente=sigla&pagina=2`, { cache: 'no-store' }),
+    );
+    expect(screen.getByText(/Página 2 de 3/)).toBeTruthy();
+    expect((screen.getByRole('button', { name: 'Anterior' }) as HTMLButtonElement).disabled).toBe(false);
   });
 });

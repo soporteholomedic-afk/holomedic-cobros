@@ -28,8 +28,10 @@ afterEach(() => {
 describe('CrmVistas — tab Pipeline | Inactivas dentro de /crm (S1)', () => {
   it('renders the board first and swaps to the Inactivas list when its tab opens', async () => {
     const fetchMock = vi.fn(async (url: string) => {
-      if (url !== RUTA) throw new Error(`ruta inesperada: ${url}`);
-      return json({ status: 200, body: { success: true, filas: [], sinInformacion: 0 } });
+      if (url === RUTA) return json({ status: 200, body: { success: true, filas: [], sinInformacion: 0 } });
+      if (url === `${RUTA}?fuente=sigla&pagina=1`)
+        return json({ status: 200, body: { success: true, filas: [], total: 0, pagina: 1, paginas: 1 } });
+      throw new Error(`ruta inesperada: ${url}`);
     });
     global.fetch = fetchMock as unknown as typeof fetch;
 
@@ -40,12 +42,14 @@ describe('CrmVistas — tab Pipeline | Inactivas dentro de /crm (S1)', () => {
     fireEvent.click(screen.getByRole('tab', { name: /Inactivas/ }));
     expect(screen.queryByText('BOARD-FAKE')).toBeNull();
     expect(await screen.findByText('No hay empresas cliente sin actividad hace 4 meses o más.')).toBeTruthy();
-    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2)); // ambas fuentes al abrir el tab
     expect(screen.getByRole('tab', { name: /Inactivas/ })).toHaveAttribute('aria-selected', 'true');
   });
 
   it('the Inactivas tab keeps the count as a badge after the list loads', async () => {
     const fetchMock = vi.fn(async (url: string) => {
+      if (url === `${RUTA}?fuente=sigla&pagina=1`)
+        return json({ status: 200, body: { success: true, filas: [], total: 0, pagina: 1, paginas: 1 } });
       if (url !== RUTA) throw new Error(`ruta inesperada: ${url}`);
       return json({
         status: 200,
@@ -108,6 +112,8 @@ describe('CrmVistas — tab Pipeline | Inactivas dentro de /crm (S1)', () => {
       if (url === '/api/crm/oportunidades') {
         return json({ status: 200, body: { success: true, oportunidades: [] } });
       }
+      if (url === `${RUTA}?fuente=sigla&pagina=1`)
+        return json({ status: 200, body: { success: true, filas: [], total: 0, pagina: 1, paginas: 1 } });
       throw new Error(`ruta inesperada: ${url}`);
     });
     global.fetch = fetchMock as unknown as typeof fetch;
