@@ -46,9 +46,9 @@ afterEach(() => {
 describe('CrmVistas — tab Pipeline | Inactivas dentro de /crm (S1)', () => {
   it('renders the board first and swaps to the Inactivas list when its tab opens', async () => {
     const fetchMock = vi.fn(async (url: string) => {
-      if (url === RUTA) return json({ status: 200, body: { success: true, filas: [], sinInformacion: 0 } });
-      if (url === `${RUTA}?fuente=sigla&pagina=1`)
-        return json({ status: 200, body: { success: true, filas: [], total: 0, pagina: 1, paginas: 1 } });
+      if (url.startsWith(`${RUTA}?fuente=sigla`))
+        return json({ status: 200, body: { success: true, filas: [], total: 0, totalFuente: 0, pagina: 1, paginas: 1 } });
+      if (url === RUTA || url.startsWith(`${RUTA}?`)) return json({ status: 200, body: { success: true, filas: [], sinInformacion: 0, totalFuente: 1 } });
       throw new Error(`ruta inesperada: ${url}`);
     });
     global.fetch = fetchMock as unknown as typeof fetch;
@@ -66,9 +66,9 @@ describe('CrmVistas — tab Pipeline | Inactivas dentro de /crm (S1)', () => {
 
   it('the Inactivas tab keeps the count as a badge after the list loads', async () => {
     const fetchMock = vi.fn(async (url: string) => {
-      if (url === `${RUTA}?fuente=sigla&pagina=1`)
+      if (url.startsWith(`${RUTA}?fuente=sigla`))
         return json({ status: 200, body: { success: true, filas: [], total: 0, pagina: 1, paginas: 1 } });
-      if (url !== RUTA) throw new Error(`ruta inesperada: ${url}`);
+      if (!url.startsWith(RUTA)) throw new Error(`ruta inesperada: ${url}`);
       return json({
         status: 200,
         body: {
@@ -86,6 +86,10 @@ describe('CrmVistas — tab Pipeline | Inactivas dentro de /crm (S1)', () => {
             },
           ],
           sinInformacion: 0,
+          total: 1,
+          totalFuente: 1,
+          pagina: 1,
+          paginas: 1,
         },
       });
     });
@@ -101,8 +105,7 @@ describe('CrmVistas — tab Pipeline | Inactivas dentro de /crm (S1)', () => {
 
   it('Crear ficha opens the prefilled alta, PATCHes relation cliente and reloads (S11)', async () => {
     const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
-      if (url === RUTA) return json({ status: 200, body: { success: true, filas: [], sinInformacion: 0 } });
-      if (url === `${RUTA}?fuente=sigla&pagina=1`)
+      if (url.startsWith(`${RUTA}?fuente=sigla`))
         return json({
           status: 200,
           body: {
@@ -111,10 +114,12 @@ describe('CrmVistas — tab Pipeline | Inactivas dentro de /crm (S1)', () => {
               { razonSocial: 'Solo en SIGLA S.A.C.', ruc: '20900000001', telefono: null, contacto: null, correo: null, ultimaAtencion: '2026-05-01', mesesSinActividad: 5, estado: 'sin_actividad' },
             ],
             total: 1,
+            totalFuente: 1,
             pagina: 1,
             paginas: 1,
           },
         });
+      if (url === RUTA || url.startsWith(`${RUTA}?`)) return json({ status: 200, body: { success: true, filas: [], sinInformacion: 0 } });
       if (url === '/api/crm/sectores') return json({ status: 200, body: { success: true, sectores: [{ nombre: 'Odontología' }] } });
       if (url === '/api/crm/empresas' && (init?.method ?? 'GET') === 'POST')
         return json({ status: 200, body: { success: true, empresa: { idEmpresa: 'e-nueva', razonSocial: 'Solo en SIGLA S.A.C.' } } });
@@ -142,7 +147,9 @@ describe('CrmVistas — tab Pipeline | Inactivas dentro de /crm (S1)', () => {
   it('opens the registrar-contacto panel from a row and reloads the list after saving (S6)', async () => {
     const llamadasInactivas = { n: 0 };
     const fetchMock = vi.fn(async (url: string) => {
-      if (url === RUTA) {
+      if (url.startsWith(`${RUTA}?fuente=sigla`))
+        return json({ status: 200, body: { success: true, filas: [], total: 0, totalFuente: 0, pagina: 1, paginas: 1 } });
+      if (url === RUTA || url.startsWith(`${RUTA}?`)) {
         llamadasInactivas.n += 1;
         return json({
           status: 200,
@@ -170,8 +177,6 @@ describe('CrmVistas — tab Pipeline | Inactivas dentro de /crm (S1)', () => {
       if (url === '/api/crm/oportunidades') {
         return json({ status: 200, body: { success: true, oportunidades: [] } });
       }
-      if (url === `${RUTA}?fuente=sigla&pagina=1`)
-        return json({ status: 200, body: { success: true, filas: [], total: 0, pagina: 1, paginas: 1 } });
       throw new Error(`ruta inesperada: ${url}`);
     });
     global.fetch = fetchMock as unknown as typeof fetch;
