@@ -3,6 +3,24 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 
 
 vi.mock('../CrmBoard', () => ({ CrmBoard: () => <div>BOARD-FAKE</div> }));
+vi.mock('../AltaPanel', () => ({
+  AltaPanel: (props: {
+    inicial?: { razonSocial?: string; ruc?: string };
+    onCerrar: () => void;
+    onCrear: (cuerpo: Record<string, unknown>) => Promise<unknown>;
+  }) => (
+    <button
+      type="button"
+      onClick={() => {
+        void props.onCrear({ razonSocial: props.inicial?.razonSocial, ruc: props.inicial?.ruc, contactos: [] }).then(() =>
+          props.onCerrar(),
+        );
+      }}
+    >
+      ALTA-FAKE {props.inicial?.razonSocial}
+    </button>
+  ),
+}));
 vi.mock('../RegistrarContactoPanel', () => ({
   RegistrarContactoPanel: (props: { onGuardado: (empresa: unknown, oportunidad: unknown) => void }) => (
     <button type="button" onClick={() => props.onGuardado(null, null)}>
@@ -79,6 +97,46 @@ describe('CrmVistas — tab Pipeline | Inactivas dentro de /crm (S1)', () => {
     // The badge lands one render after the rows (child effect notifies the parent).
     await waitFor(() => expect(screen.getByRole('tab', { name: /Inactivas/ })).toHaveTextContent('1'));
     expect(screen.getByRole('tab', { name: /Inactivas/ })).toHaveAttribute('aria-selected', 'true');
+  });
+
+  it('Crear ficha opens the prefilled alta, PATCHes relation cliente and reloads (S11)', async () => {
+    const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
+      if (url === RUTA) return json({ status: 200, body: { success: true, filas: [], sinInformacion: 0 } });
+      if (url === `${RUTA}?fuente=sigla&pagina=1`)
+        return json({
+          status: 200,
+          body: {
+            success: true,
+            filas: [
+              { razonSocial: 'Solo en SIGLA S.A.C.', ruc: '20900000001', telefono: null, contacto: null, correo: null, ultimaAtencion: '2026-05-01', mesesSinActividad: 5, estado: 'sin_actividad' },
+            ],
+            total: 1,
+            pagina: 1,
+            paginas: 1,
+          },
+        });
+      if (url === '/api/crm/sectores') return json({ status: 200, body: { success: true, sectores: [{ nombre: 'Odontología' }] } });
+      if (url === '/api/crm/empresas' && (init?.method ?? 'GET') === 'POST')
+        return json({ status: 200, body: { success: true, empresa: { idEmpresa: 'e-nueva', razonSocial: 'Solo en SIGLA S.A.C.' } } });
+      if (url === '/api/crm/empresas/e-nueva/relacion' && (init?.method ?? 'GET') === 'PATCH')
+        return json({ status: 200, body: { success: true } });
+      throw new Error(`ruta inesperada: ${url}`);
+    });
+    global.fetch = fetchMock as unknown as typeof fetch;
+
+    render(<CrmVistas />);
+    fireEvent.click(screen.getByRole('tab', { name: /Inactivas/ }));
+    fireEvent.click(await screen.findByRole('button', { name: /Solo en SIGLA \(1\)/ }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Crear ficha' }));
+    expect(await screen.findByText(/ALTA-FAKE Solo en SIGLA S\.A\.C\./)).toBeTruthy(); // prellenado con la razón social de SIGLA
+    expect(fetchMock).toHaveBeenCalledWith('/api/crm/sectores', { cache: 'no-store' });
+
+    fireEvent.click(screen.getByRole('button', { name: /ALTA-FAKE/ }));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith('/api/crm/empresas', expect.objectContaining({ method: 'POST' })));
+    await waitFor(() =>
+      expect(fetchMock).toHaveBeenCalledWith('/api/crm/empresas/e-nueva/relacion', expect.objectContaining({ method: 'PATCH' })),
+    );
+    await waitFor(() => expect(screen.queryByText(/ALTA-FAKE/)).toBeNull()); // el alta se cierra sola
   });
 
   it('opens the registrar-contacto panel from a row and reloads the list after saving (S6)', async () => {
