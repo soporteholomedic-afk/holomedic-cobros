@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Informe · Feature crm-vista-inactivas — Vista de clientes SIGLA sin actividad 4+ meses</title>
+<style>
+  :root {
+    --bg: #0f172a; --panel: #1e293b; --panel2: #273549; --line: #334155;
+    --text: #e2e8f0; --muted: #94a3b8; --accent: #38bdf8; --green: #34d399;
+    --violet: #a78bfa; --amber: #fbbf24; --red: #f87171;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; line-height: 1.55; padding: 0 0 4rem; }
+  .wrap { max-width: 1080px; margin: 0 auto; padding: 0 1.5rem; }
+  header { background: linear-gradient(135deg, #0c4a6e 0%, #0f172a 60%); border-bottom: 1px solid var(--line); padding: 3rem 0 2.2rem; margin-bottom: 2.2rem; }
+  header h1 { font-size: 1.9rem; font-weight: 700; letter-spacing: -0.02em; }
+  header p { color: var(--muted); margin-top: .5rem; max-width: 75ch; }
+  .chips { display: flex; flex-wrap: wrap; gap: .5rem; margin-top: 1.1rem; }
+  .chip { background: var(--panel2); border: 1px solid var(--line); color: var(--text); border-radius: 999px; padding: .25rem .8rem; font-size: .8rem; }
+  .chip b { color: var(--accent); }
+  h2 { font-size: 1.25rem; margin: 2.4rem 0 1rem; padding-bottom: .4rem; border-bottom: 1px solid var(--line); color: var(--accent); }
+  h3 { font-size: 1rem; margin: 1.4rem 0 .6rem; color: var(--text); }
+  p, li { color: var(--text); }
+  .muted { color: var(--muted); font-size: .9rem; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 1rem; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: .8rem; padding: 1.1rem 1.2rem; }
+  .card h4 { font-size: .95rem; margin-bottom: .35rem; color: var(--accent); }
+  .card p { font-size: .88rem; color: var(--muted); }
+  .stat { text-align: center; }
+  .stat .num { font-size: 2rem; font-weight: 700; color: var(--green); }
+  .stat .lbl { font-size: .8rem; color: var(--muted); }
+  table { width: 100%; border-collapse: collapse; margin: .8rem 0 1.2rem; font-size: .88rem; background: var(--panel); border-radius: .6rem; overflow: hidden; }
+  th { background: var(--panel2); text-align: left; padding: .6rem .8rem; color: var(--accent); font-weight: 600; font-size: .8rem; text-transform: uppercase; letter-spacing: .04em; }
+  td { padding: .55rem .8rem; border-top: 1px solid var(--line); vertical-align: top; }
+  td code, p code, li code { background: #0b1220; border: 1px solid var(--line); border-radius: .35rem; padding: .05rem .4rem; font-family: ui-monospace, 'Cascadia Code', Consolas, monospace; font-size: .82em; color: var(--violet); }
+  .ok { color: var(--green); font-weight: 600; }
+  .warn { color: var(--amber); font-weight: 600; }
+  ul { padding-left: 1.2rem; margin: .5rem 0 1rem; }
+  li { margin: .3rem 0; }
+  .flow { display: flex; align-items: center; flex-wrap: wrap; gap: .4rem; margin: .5rem 0; font-size: .85rem; }
+  .flow .step { background: var(--panel2); border: 1px solid var(--line); border-radius: .45rem; padding: .3rem .6rem; }
+  .flow .step.sigla { border-color: var(--violet); color: var(--violet); }
+  .flow .step.ui { border-color: var(--accent); color: var(--accent); }
+  .flow .arr { color: var(--muted); }
+  .note { background: rgba(251, 191, 36, .08); border: 1px solid rgba(251, 191, 36, .35); border-radius: .6rem; padding: .8rem 1rem; font-size: .88rem; margin: 1rem 0; }
+  .note.ok { background: rgba(52, 211, 153, .08); border-color: rgba(52, 211, 153, .35); }
+  footer { margin-top: 3rem; color: var(--muted); font-size: .8rem; border-top: 1px solid var(--line); padding-top: 1rem; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="wrap">
+    <h1>Informe de implementación · Feature <code>crm-vista-inactivas</code></h1>
+    <p>Segunda vista (tab) dentro de <code>/crm</code>: lista priorizada de <b>empresas cliente de SIGLA que hace 4 o más meses no envían pacientes a la clínica</b>, ordenada de la más abandonada a la menos, con acción directa de registrar contacto. El kanban queda intacto como tab <b>Pipeline</b>. Trabajado en worktree <code>holomedic-cobros-worktrees/crm-vista-inactivas</code>, rama <code>feature/crm-vista-inactivas</code>, <b>mergeado a <code>develop</code> @ <code>55a3feb</code></b> (aún sin push al remoto).</p>
+    <div class="chips">
+      <span class="chip"><b>6</b> commits</span>
+      <span class="chip"><b>23</b> archivos · <b>+1213 / −7</b> líneas</span>
+      <span class="chip"><b>19</b> tests nuevos en verde</span>
+      <span class="chip"><b>5031/5036</b> suite completa</span>
+      <span class="chip"><b>0</b> regresiones (2 corridas completas)</span>
+      <span class="chip">SIGLA en vivo (bulk, read-only)</span>
+      <span class="chip">Umbral fijo: 4 meses</span>
+      <span class="chip">Riesgo: <b>medium</b> · self-verification completa</span>
+    </div>
+  </div>
+</header>
+
+<main class="wrap">
+
+  <h2>1 · Objetivo y decisiones de producto</h2>
+  <p><b>Pedido original:</b> dentro de la vista CRM (hoy solo kanban con columnas «por contactar», «contactado», «cotizado», «en seguimiento», «perdida», «ganada»), poder ver exclusivamente las empresas inactivas — una vista propia, junto al kanban, dentro de la misma pestaña.</p>
+  <div class="grid">
+    <div class="card">
+      <h4>Formato: lista priorizada</h4>
+      <p>Elegido entre tres opciones (kanban filtrado, tarjetas resumen, lista). El valor de la vista no es mover tarjetas: es responder <i>«¿a quién abandoné hace más tiempo?»</i> — una tabla ordenada por antigüedad, con acción en línea.</p>
+    </div>
+    <div class="card">
+      <h4>Alcance: clientes SIGLA</h4>
+      <p>Cuentan como inactivas las empresas <b>agregadas en SIGLA que ya son clientes</b> y hace más de 4 meses no envían pacientes. Los prospectos del CRM quedan fuera por definición.</p>
+    </div>
+    <div class="card">
+      <h4>Umbral fijo: 4 meses</h4>
+      <p>Constante de dominio <code>UMBRAL_MESES_INACTIVIDAD = 4</code> (ya existía para el estado de la ficha). Sin UI de configuración: cambiarlo es un cambio de código.</p>
+    </div>
+  </div>
+  <div class="note">
+    <b>Decisión de diseño clave (S6):</b> la inactividad la define <b>SIGLA</b>, no el CRM. Registrar un contacto refresca la columna «último contacto» y recarga la lista, pero <b>la fila permanece</b>: la empresa sale de la vista solo cuando SIGLA registre una nueva atención. Esto evita listas que «se vacían de mentira» con llamadas que no reactivaron nada.
+  </div>
+
+  <h2>2 · Definición operativa de «inactiva»</h2>
+  <p>La lista reutiliza <i>tal cual</i> la maquinaria de dominio que ya existía (<code>estadoActividadServicios</code>, reglas S6.6/S6.7) y la aplica a toda la cartera:</p>
+  <table>
+    <tr><th>Estado SIGLA del cliente</th><th>¿Entra a la lista?</th><th>Cómo se muestra</th></tr>
+    <tr><td><code>sin_actividad</code> — última atención <code>≥ 4</code> meses</td><td class="ok">Sí, primero</td><td>Meses enteros sin actividad, la más abandonada arriba</td></tr>
+    <tr><td><code>pendiente_primera</code> — RUC sin <b>ninguna</b> atención en SIGLA</td><td class="warn">Sí, al final</td><td>Rótulo «Pendiente de primera atención» — jamás se rotula «inactiva» (regla S6.7)</td></tr>
+    <tr><td><code>reciente</code> — atención dentro del umbral</td><td class="ok">No</td><td>No aparece ni se consulta de más</td></tr>
+    <tr><td>Cliente sin RUC en la ficha</td><td class="warn">No — se cuenta</td><td>«N empresas cliente sin RUC no se pueden evaluar.» (no puede llegar a SIGLA)</td></tr>
+    <tr><td>Prospecto (no cliente)</td><td class="ok">No</td><td>Fuera de la vista por definición</td></tr>
+  </table>
+  <p class="muted">El vínculo CRM ↔ SIGLA es únicamente el RUC (<code>CrmEmpresa.ruc</code> → <code>Cliente.NroRuc</code>, <code>IndReg = 1</code>); la última atención es <code>MAX(Orden.FecAte)</code> por <code>CodCli</code>.</p>
+
+  <h2>3 · Arquitectura — cómo viaja el dato</h2>
+  <div class="flow">
+    <span class="step sigla">SIGLA producción (ICCGSA · read-only)</span><span class="arr">→</span>
+    <span class="step"><code>ultimaAtencionPorRucs</code> — 1 SQL por lote de 500 RUCs</span><span class="arr">→</span>
+    <span class="step"><code>ultimaInteraccionPorEmpresas</code> — CRM SQL, solo ids listados</span><span class="arr">→</span>
+    <span class="step"><code>ListarEmpresasInactivasUseCase</code> — estados + orden + contador</span><span class="arr">→</span>
+    <span class="step"><code>GET /api/crm/empresas/inactivas</code></span><span class="arr">→</span>
+    <span class="step ui"><code>CrmVistas</code> (tabs) · <code>CrmInactivas</code></span><span class="arr">→</span>
+    <span class="step ui"><code>RegistrarContactoPanel</code> (panel del board, reutilizado)</span>
+  </div>
+  <p class="muted">Nada escribe en SIGLA: la consulta es read-only y queda limitada a los RUC de la cartera (nada de escanear toda la tabla de clientes). Las atenciones <b>no se copian</b> al CRM: se leen en vivo en cada carga de la vista.</p>
+
+  <h3>Superficie técnica por capa</h3>
+  <table>
+    <tr><th>Capa</th><th>Archivos</th><th>Commit</th></tr>
+    <tr><td>Dominio / puertos</td><td><code>ports.ts</code> (2 métodos bulk nuevos) · <code>actividadServicios.ts</code> (export <code>mesesEntre</code>)</td><td><code>aa61c91</code></td></tr>
+    <tr><td>Infraestructura SQL</td><td><code>sqlServerAtencionesRepository.ts</code> · <code>sqlServerCrmEmpresaRepository.ts</code></td><td><code>aa61c91</code> · <code>e066355</code></td></tr>
+    <tr><td>Aplicación</td><td><code>listarEmpresasInactivas.ts</code> (use case, 5 specs cubiertas)</td><td><code>aa61c91</code> · <code>e066355</code></td></tr>
+    <tr><td>API</td><td><code>api/crm/empresas/inactivas/route.ts</code> — <code>exigirCrm()</code>, <code>Cache-Control: no-store</code>, 503 sin filtrar el error del driver</td><td><code>c5650fa</code></td></tr>
+    <tr><td>Presentación</td><td><code>CrmViewTabs</code> · <code>CrmVistas</code> · <code>CrmInactivas</code> · <code>useEmpresasInactivas</code> · <code>useRegistroDesdeInactivas</code> · <code>app/crm/page.tsx</code></td><td><code>97d204d</code> · <code>86abad1</code></td></tr>
+    <tr><td>Docs / ODD</td><td><code>docs/ux-crm-flujo-y-pantallas.md</code> (sección 8) · <code>odd/tasks/crm-vista-inactivas.md</code></td><td><code>55a3feb</code></td></tr>
+    <tr><td>Tests</td><td>5 archivos nuevos + 3 fixtures de tests existentes ampliados (ports nuevos)</td><td>en cada slice</td></tr>
+  </table>
+
+  <h2>4 · La vista Inactivas</h2>
+  <p>Dentro de <code>/crm</code>, un tablist controlado (<code>CrmViewTabs</code>, patrón <code>ConsolidadosViewSwitch</code> del proyecto): <b>Pipeline</b> por defecto, <b>Inactivas</b> con badge contador — el conteo solo aparece cuando la lista ya cargó (la consulta SIGLA es <b>lazy</b>: corre únicamente al abrir el tab, nunca en cada visita al CRM).</p>
+  <table>
+    <tr><th>Columna</th><th>Contenido</th></tr>
+    <tr><td>Empresa</td><td>Razón social + RUC</td></tr>
+    <tr><td>Sector</td><td>Sector de la ficha o <code>—</code></td></tr>
+    <tr><td>Sin actividad</td><td>Meses enteros (<code>6 meses</code>); «Pendiente de primera atención» para las nunca atendidas</td></tr>
+    <tr><td>Última atención</td><td>Formato corto del proyecto (<code>vie 1 may</code>); <code>—</code> si nunca</td></tr>
+    <tr><td>Último contacto</td><td>Interacción CRM más reciente en tiempo relativo (<code>hace 3 d</code>); <code>—</code> si nunca se contactó desde el CRM</td></tr>
+    <tr><td>Acciones</td><td>Botón <b>Registrar contacto</b> → abre el <code>RegistrarContactoPanel</code> del board (dirección «saliente»), cargando empresas + oportunidades bajo demanda (<code>useRegistroDesdeInactivas</code>, toast si falla)</td></tr>
+  </table>
+  <p><b>Estados cubiertos:</b> carga («Consultando actividad en SIGLA…»), error con botón <b>Reintentar</b> (mensaje exacto del endpoint, nunca el error del driver), lista vacía con mensaje positivo, y nota informativa de clientes sin RUC. Al guardar un contacto, el panel se cierra y <code>reloadKey</code> refresca la lista: la columna «último contacto» se actualiza y la fila sigue ahí.</p>
+  <div class="note ok">
+    <b>Bucle de trabajo esperado:</b> abrir la pestaña Inactivas → recorrer de arriba hacia abajo → registrar contacto (queda trazado en el historial CRM) → la empresa deja de aparecer recién cuando vuelve a enviar pacientes. El badge del tab baja solo cuando la cartera reacciona.
+  </div>
+
+  <h2>5 · Verificación</h2>
+  <div class="grid">
+    <div class="card stat"><div class="num">19</div><div class="lbl">tests nuevos (use case 6 · ruta 3 · UI 8 · tabs 3... detalle abajo)</div></div>
+    <div class="card stat"><div class="num">5031</div><div class="lbl">de 5036 tests pasando (segunda corrida completa)</div></div>
+    <div class="card stat"><div class="num">0</div><div class="lbl">regresiones vs línea base de develop</div></div>
+    <div class="card stat"><div class="num">RED→GREEN</div><div class="lbl">observado en cada unidad (TDD)</div></div>
+  </div>
+  <h3>Desglose de tests nuevos</h3>
+  <table>
+    <tr><th>Archivo</th><th>Casos</th><th>Cubren</th></tr>
+    <tr><td><code>listarEmpresasInactivas.test.ts</code></td><td>6</td><td>Orden por abandono, umbral exacto (4 meses entra, 3 no), <code>pendiente_primera</code> al final, prospectos fuera, sin-RUC contado, bulk de atenciones y de interacciones (solo ids listados)</td></tr>
+    <tr><td><code>empresas/inactivas/__tests__/route.test.ts</code></td><td>3</td><td>200 con <code>no-store</code> + contador, 503 SIGLA sin filtrar el driver, 401 sin sesión/permiso</td></tr>
+    <tr><td><code>CrmInactivas.test.tsx</code></td><td>5</td><td>Columnas y formatos, nota sin-RUC, error + Reintentar, vacío, botón por fila con id, recarga por <code>reloadKey</code></td></tr>
+    <tr><td><code>CrmViewTabs.test.tsx</code></td><td>3</td><td>Selección/aria, notificación al padre, badge solo con carga y &gt;0</td></tr>
+    <tr><td><code>CrmVistas.test.tsx</code></td><td>3</td><td>Lazy (SIGLA solo al abrir el tab), badge, flujo completo panel → guardar → recarga → fila permanece</td></tr>
+  </table>
+  <h3>Suite completa vs línea base</h3>
+  <table>
+    <tr><th>Corrida</th><th>Fallidos</th><th>Pasando</th><th>Lectura</th></tr>
+    <tr><td>Línea base <code>develop @ 5a0e7e2</code></td><td>5</td><td>5012/5017</td><td>branding Home ×2 + Navbar + Sidebar + page.test — <b>pre-existentes</b>, sin relación con este feature</td></tr>
+    <tr><td>Branch, corrida 1 (job completo)</td><td>6</td><td>5030/5036</td><td>las 5 pre-existentes + <b>1 flaky</b> (<code>CrmBoard.detalle</code> «saves with the exact body», bajo carga)</td></tr>
+    <tr><td>Branch, corrida 2 (repetición)</td><td class="ok">5</td><td class="ok">5031/5036</td><td class="ok">exactamente la línea base — los 19 tests nuevos pasan</td></tr>
+  </table>
+  <p class="muted">El flaky de la corrida 1 pasa <b>57/57 standalone en ambas ramas</b> (develop y feature): inestabilidad de la suite grande bajo carga, agravada por el tiempo de entorno jsdom (169 s vs 41 s de la línea base), no una regresión del feature. <code>tsc --noEmit</code> limpio y <code>eslint</code> limpio en todos los archivos tocados; chequeo diferencial de <code>page.test.tsx</code> tras tocar la página: se mantuvo en su 1 falla pre-existente.</p>
+  <h3>Verificación externa</h3>
+  <p><code>gentle-ai review assess</code>: riesgo <b>medium</b>, plan de <i>writer self-verification</i> (sin verificador independiente — ningún ítem de riesgo alto escalado). La vía de revisión formal contra <code>origin/master</code> queda disponible bajo pedido.</p>
+
+  <h2>6 · Riesgos y limitaciones</h2>
+  <ul>
+    <li><b>SIGLA producción en vivo:</b> la vista consulta la base real en cada apertura del tab (read-only, por lotes de 500 RUCs con <code>IN (...)</code> index-friendly, mismo perfil de acceso que la ficha). Si SIGLA está caída, la vista degrada a 503 con Reintentar — el resto del CRM sigue funcionando.</li>
+    <li><b>Vínculo solo por RUC:</b> clientes sin RUC son inevaluables (quedan como contador). Dos empresas no pueden compartir RUC (índice único filtrado), así que no hay doble conteo.</li>
+    <li><b>Umbral fijo (4 meses):</b> decisión de producto; ajustarlo requiere tocar la constante <code>UMBRAL_MESES_INACTIVIDAD</code>.</li>
+    <li><b>La fila no desaparece al contactar:</b> intencional (S6). El equipo debe entender que la lista mide <i>actividad de pacientes</i>, no gestiones comerciales.</li>
+    <li><b>5 fallas pre-existentes en la suite</b> (branding + page.test) siguen abiertas en <code>develop</code> — son de otro frente y quedan documentadas.</li>
+  </ul>
+
+  <h2>7 · Pendientes (decisión del usuario)</h2>
+  <ul>
+    <li><b>Push de <code>develop</code></b> al remoto (política del repo: solo <code>master</code> y <code>develop</code> viven en el remoto).</li>
+    <li><b>Limpieza post-feature:</b> el worktree <code>holomedic-cobros-worktrees/crm-vista-inactivas</code> y la rama <code>feature/crm-vista-inactivas</code> ya están mergeados y pueden eliminarse.</li>
+    <li><b>Revisión formal (opcional):</b> assessment nativo del rango <code>origin/master..55a3feb</code> si se quiere una segunda mirada.</li>
+  </ul>
+
+  <footer>
+    Informe generado para la feature <code>crm-vista-inactivas</code> · rama <code>feature/crm-vista-inactivas</code> · mergeado a <code>develop @ 55a3feb</code> ·
+    documento ODD: <code>odd/tasks/crm-vista-inactivas.md</code> · doc UX: <code>docs/ux-crm-flujo-y-pantallas.md</code> §8 ·
+    convención de estilo: <code>docs/informe-crm-oportunidades.html</code>.
+  </footer>
+
+</main>
+</body>
+</html>
