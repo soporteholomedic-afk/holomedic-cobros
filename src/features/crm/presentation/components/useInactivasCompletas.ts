@@ -69,8 +69,10 @@ function opcionesAQuery(op: OpcionesInactivas): string {
   if (op.orden) params.set('orden', op.orden);
   if (op.direccion) params.set('direccion', op.direccion);
   if (op.pagina !== undefined) params.set('pagina', String(op.pagina));
-  const qs = params.toString();
-  return qs ? `?${qs}` : '';
+  // Sin el `?` inicial: los call sites ya lo agregan (el CRM lo usa directo y
+  // el segmento SIGLA lo concatena tras `?fuente=sigla` — un `?` extra rompería
+  // las claves (`&?q=` se parsea como la clave '?q').
+  return params.toString();
 }
 
 /**
@@ -122,7 +124,8 @@ export function useInactivasCompletas(
     let viva = true;
     (async (): Promise<void> => {
       try {
-        const res = await fetch(`/api/crm/empresas/inactivas${opcionesAQuery(opcionesCrm)}`, { cache: 'no-store' });
+        const qs = opcionesAQuery(opcionesCrm);
+        const res = await fetch(`/api/crm/empresas/inactivas${qs ? `?${qs}` : ''}`, { cache: 'no-store' });
         const body = (await res.json()) as RespuestaCrm;
         if (!res.ok || !body.success) throw new Error(body.error ?? MENSAJE_CRM);
         if (viva) {
