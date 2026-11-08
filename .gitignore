@@ -45,6 +45,14 @@ next-env.d.ts
 # gentle-ai local tooling (machine-local skill registry cache)
 .atl/
 
+# playwright screenshots (scripts/capturas.mjs)
+/capturas/
+
+# local scratch scripts and machine-local tooling state (may hold local credentials)
+.demo/
+.diag-pool.mjs
+.gentle-ai-default-agent.json
+
 # temporary directories and files
 temp/
 tmp/
