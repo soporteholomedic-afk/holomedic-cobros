@@ -14,6 +14,7 @@ type Respuesta = { recordset?: unknown[] };
 function makeFakePool(responder: (sql: string) => Respuesta = () => ({})) {
   const consultas: Consulta[] = [];
   const pool = {
+    connect: async () => pool,
     request: () => {
       const inputs: Record<string, unknown> = {};
       const request = {

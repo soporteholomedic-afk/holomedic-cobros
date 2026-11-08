@@ -20,6 +20,10 @@ export class SqlServerAtencionesRepository implements IAtencionesServicio {
   /** Lima calendar date (`YYYY-MM-DD`) of the last attention; `null` when none. */
   async ultimaAtencion(ruc: string): Promise<string | null> {
     const pool = await this.getPool();
+    // getPool() hands out an UNCONNECTED pool (lazy singleton, lib/db): every
+    // consumer connects explicitly — mssql v12 request() on a closed pool
+    // throws ECONNCLOSED. Connecting an already-connected pool is a no-op.
+    await pool.connect();
     const resultado = await pool
       .request()
       .input('ruc', mssql.VarChar(15), ruc)
