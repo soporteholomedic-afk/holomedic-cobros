@@ -120,6 +120,7 @@ export function makeMockAtenciones(overrides: Partial<IAtencionesServicio> = {})
   return {
     ultimaAtencion: vi.fn().mockResolvedValue(null),
     ultimaAtencionPorRucs: vi.fn().mockImplementation(async (rucs: string[]) => new Map(rucs.map((ruc) => [ruc, null]))),
+    clientesConActividad: vi.fn().mockResolvedValue([]),
     ...overrides,
   };
 }

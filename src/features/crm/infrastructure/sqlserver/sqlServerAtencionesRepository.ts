@@ -1,5 +1,5 @@
 import mssql from 'mssql';
-import type { IAtencionesServicio } from '../../domain/ports';
+import type { ClienteSiglaConActividad, IAtencionesServicio } from '../../domain/ports';
 
 /**
  * Read-only SIGLA adapter: the date of the last performed service per
@@ -71,6 +71,29 @@ export class SqlServerAtencionesRepository implements IAtencionesServicio {
       if (!resultado.has(ruc)) resultado.set(ruc, null);
     }
     return resultado;
+  }
+
+  async clientesConActividad(): Promise<ClienteSiglaConActividad[]> {
+    const pool = await this.getPool();
+    await pool.connect();
+    const respuesta = await pool.request().query(`
+      SELECT C.NroRuc, MAX(C.RazSoc) AS RazSoc, MAX(C.NomCon) AS NomCon,
+             MAX(C.NroTlf) AS NroTlf, MAX(C.CorElC) AS CorElC, MAX(O.FecAte) AS UltimaAtencion
+        FROM Cliente C
+        LEFT JOIN Orden O ON O.CodCli = C.CodCli
+       WHERE C.IndReg = 1
+       GROUP BY C.NroRuc
+    `);
+    return respuesta.recordset
+      .filter((fila) => fila.NroRuc !== null)
+      .map((fila) => ({
+        razonSocial: (fila.RazSoc as string | null) ?? '',
+        ruc: fila.NroRuc as string,
+        telefono: (fila.NroTlf as string | null) ?? null,
+        contacto: (fila.NomCon as string | null) ?? null,
+        correo: (fila.CorElC as string | null) ?? null,
+        ultimaAtencion: fila.UltimaAtencion ? fechaLima(fila.UltimaAtencion as Date) : null,
+      }));
   }
 }
 

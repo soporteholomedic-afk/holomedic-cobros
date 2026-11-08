@@ -3,9 +3,11 @@
 import { useState } from 'react';
 
 import { CrmBoard } from './CrmBoard';
+import { AltaPanel } from './AltaPanel';
 import { CrmInactivas } from './CrmInactivas';
 import { CrmViewTabs, type CrmVista } from './CrmViewTabs';
 import { RegistrarContactoPanel } from './RegistrarContactoPanel';
+import { useAltaDesdeSigla } from './useAltaDesdeSigla';
 import { useRegistroDesdeInactivas } from './useRegistroDesdeInactivas';
 
 /**
@@ -23,6 +25,7 @@ export function CrmVistas() {
   const [inactivasCount, setInactivasCount] = useState<number | null>(null);
   const [recargas, setRecargas] = useState(0);
   const registro = useRegistroDesdeInactivas(() => setRecargas((k) => k + 1));
+  const alta = useAltaDesdeSigla(() => setRecargas((k) => k + 1));
 
   return (
     <div>
@@ -38,6 +41,7 @@ export function CrmVistas() {
           onCargado={setInactivasCount}
           reloadKey={recargas}
           onRegistrar={(idEmpresa) => void registro.abrir(idEmpresa)}
+          onCrearFicha={(cliente) => void alta.abrir(cliente)}
         />
       )}
       {registro.listo && (
@@ -51,6 +55,24 @@ export function CrmVistas() {
           hoy={registro.listo.hoy}
           onCerrar={registro.cerrar}
           onGuardado={registro.guardado}
+        />
+      )}
+      {alta.fila && (
+        <AltaPanel
+          key={alta.fila.ruc}
+          sectores={alta.sectores}
+          oculto={false}
+          onCerrar={alta.cerrar}
+          onCrearSector={alta.crearSector}
+          onCrear={alta.crear}
+          onCrearOportunidad={alta.crearOportunidad}
+          inicial={{
+            razonSocial: alta.fila.razonSocial,
+            ruc: alta.fila.ruc,
+            contacto: alta.fila.contacto,
+            telefono: alta.fila.telefono,
+            correo: alta.fila.correo,
+          }}
         />
       )}
     </div>
