@@ -1,0 +1,22 @@
+[
+  {
+    "n": 1,
+    "texto": "El badge ahora muestra el total real: 3.232 clientes dormidos"
+  },
+  {
+    "n": 2,
+    "texto": "Segmentos: con ficha en el CRM (0) vs solo en SIGLA (3.232)"
+  },
+  {
+    "n": 3,
+    "texto": "La más abandonada: 135 meses sin enviar pacientes (2015)"
+  },
+  {
+    "n": 4,
+    "texto": "Meses sin actividad y última atención, leídos en vivo de SIGLA"
+  },
+  {
+    "n": 5,
+    "texto": "Crear ficha: el alta se abre prellenada con los datos de SIGLA"
+  }
+]

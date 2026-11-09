@@ -37,6 +37,12 @@ export interface ICrmEmpresaRepository {
   /** Activity history of an empresa, newest first. */
   listInteracciones(idEmpresa: string): Promise<Interaccion[]>;
   /**
+   * Bulk 'last CRM interaction' lookup: newest `fecha` per empresa id, ISO.
+   * Ids without any interaction map to `null`. One query per chunk — never
+   * one per empresa.
+   */
+  ultimaInteraccionPorEmpresas(ids: string[]): Promise<Map<string, string | null>>;
+  /**
    * In one transaction: move the interactions, the oportunidades and the
    * contacts (skipping exact duplicates, keeping the destination's principal)
    * of `idOrigen` into `idDestino` and delete the origin. Returns the
@@ -78,9 +84,33 @@ export interface ICrmOportunidadRepository {
  * performed service per empresa RUC. Winning a deal or registering a call
  * never writes here — only real attention data answers it.
  */
+export interface ClienteSiglaConActividad {
+  /** Razón social de SIGLA (`Cliente.RazSoc`). */
+  razonSocial: string;
+  ruc: string;
+  telefono: string | null;
+  contacto: string | null;
+  correo: string | null;
+  /** ISO day (Lima) of `MAX(Orden.FecAte)`; `null` when the client has no orders. */
+  ultimaAtencion: string | null;
+}
+
 export interface IAtencionesServicio {
   /** Last attention date of the RUC; NULL when SIGLA has none for it. */
   ultimaAtencion(ruc: string): Promise<string | null>;
+  /**
+   * Same lookup for many RUCs in bulk: one query per chunk (never one per
+   * RUC). RUCs with no `Cliente` row in SIGLA, and clientes with no orders,
+   * map to `null` — the same signal the single lookup gives (regla S6.7).
+   */
+  ultimaAtencionPorRucs(rucs: string[]): Promise<Map<string, string | null>>;
+  /**
+   * EVERY SIGLA client (`IndReg=1`) grouped by RUC with its last attention
+   * date and contact data — NO threshold applied here: the caller derives
+   * states with `estadoActividadServicios` so the 4-month rule keeps a
+   * single source of truth. Used by the "Solo en SIGLA" segment.
+   */
+  clientesConActividad(): Promise<ClienteSiglaConActividad[]>;
 }
 
 // ---------------------------------------------------------------------------

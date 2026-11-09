@@ -30,6 +30,12 @@ interface Props {
    * leaves the ficha standing for the retry affordance.
    */
   onCrearOportunidad: (idEmpresa: string, cuerpo: Record<string, unknown>) => Promise<unknown | { error: string }>;
+  /**
+   * Optional prefill (S11): creating a ficha for a SIGLA-only dormant client
+   * — razón social, RUC and contact data straight from SIGLA. The caller
+   * remounts the panel per client (key), so seeding the states once is enough.
+   */
+  inicial?: { razonSocial: string; ruc: string; contacto: string | null; telefono: string | null; correo: string | null };
 }
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -46,12 +52,16 @@ const ORIGEN_OPCIONES: { value: Origen; label: string }[] = ORIGENES.map((o) => 
  * S4 in the same flow — two POSTs, and if the second fails the ficha stays
  * created with a retry affordance.
  */
-export function AltaPanel({ sectores, onCerrar, oculto, onCrearSector, onCrear, onCrearOportunidad }: Props) {
-  const [razonSocial, setRazonSocial] = useState('');
-  const [ruc, setRuc] = useState('');
+export function AltaPanel({ sectores, onCerrar, oculto, onCrearSector, onCrear, onCrearOportunidad, inicial }: Props) {
+  const [razonSocial, setRazonSocial] = useState(inicial?.razonSocial ?? '');
+  const [ruc, setRuc] = useState(inicial?.ruc ?? '');
   const [direccion, setDireccion] = useState('');
   const [sector, setSector] = useState('');
-  const [contacto, setContacto] = useState<ContactoForm>(CONTACTO_VACIO);
+  const [contacto, setContacto] = useState<ContactoForm>(
+    inicial
+      ? { nombre: inicial.contacto ?? '', telefono: inicial.telefono ?? '', correo: inicial.correo ?? '' }
+      : CONTACTO_VACIO,
+  );
   const [notas, setNotas] = useState('');
   const [error, setError] = useState('');
   const [guardando, setGuardando] = useState(false);

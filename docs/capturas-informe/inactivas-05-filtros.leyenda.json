@@ -1,0 +1,18 @@
+[
+  {
+    "n": 1,
+    "texto": "Búsqueda con debounce sobre razón social, RUC y contacto, con × para limpiar"
+  },
+  {
+    "n": 2,
+    "texto": "«Limpiar filtros» aparece solo con filtros activos"
+  },
+  {
+    "n": 3,
+    "texto": "Contador en vivo: 18 de 3.232 con la búsqueda aplicada"
+  },
+  {
+    "n": 4,
+    "texto": "Orden por columna con aria-sort: abandono desc activo"
+  }
+]

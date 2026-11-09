@@ -178,6 +178,17 @@ export function makeFakeRepo(
         .sort((a, b) => b.idInteraccion - a.idInteraccion)
         .map((i) => structuredClone(i));
     },
+    async ultimaInteraccionPorEmpresas(ids) {
+      const mapa = new Map<string, string | null>();
+      for (const id of ids) {
+        const propias = interacciones
+          .filter((i) => i.idEmpresa === id)
+          .map((i) => i.fecha)
+          .sort();
+        mapa.set(id, propias.length > 0 ? propias[propias.length - 1] ?? null : null);
+      }
+      return mapa;
+    },
     async fusionar(idOrigen, idDestino) {
       repo.escrituras++;
       const origen = buscar(idOrigen);

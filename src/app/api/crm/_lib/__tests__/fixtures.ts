@@ -85,6 +85,7 @@ export function makeMockRepo(overrides: Partial<ICrmEmpresaRepository> = {}): IC
       ...i,
     })),
     listInteracciones: vi.fn().mockResolvedValue([]),
+    ultimaInteraccionPorEmpresas: vi.fn().mockResolvedValue(new Map<string, string | null>()),
     fusionar: vi.fn().mockImplementation(async () => FILA),
     listSectores: vi.fn().mockResolvedValue([
       { nombre: 'Construcción', icono: 'casco' },
@@ -118,6 +119,8 @@ export function makeMockOportunidadesRepo(
 export function makeMockAtenciones(overrides: Partial<IAtencionesServicio> = {}): IAtencionesServicio {
   return {
     ultimaAtencion: vi.fn().mockResolvedValue(null),
+    ultimaAtencionPorRucs: vi.fn().mockImplementation(async (rucs: string[]) => new Map(rucs.map((ruc) => [ruc, null]))),
+    clientesConActividad: vi.fn().mockResolvedValue([]),
     ...overrides,
   };
 }
