@@ -20,16 +20,19 @@ const KNOWN_LINUX_BROWSER_PATHS: readonly string[] = [
 ];
 
 /**
- * Resolve the browser executable: `EDGE_EXECUTABLE_PATH` env override first,
- * then the known Windows Edge paths, then common Linux Chromium paths.
- * Returns `null` when no usable browser exists — the caller maps that to a 502.
+ * Resolve the browser executable: `EDGE_EXECUTABLE_PATH` env override first
+ * (honored ONLY when the path actually exists — a stale override, e.g. a
+ * Windows path copied into a Linux `.env.local`, must fall through instead
+ * of failing every spawn), then the known Windows Edge paths, then common
+ * Linux Chromium paths. Returns `null` when no usable browser exists — the
+ * caller maps that to a 502.
  */
 export function resolveEdgeExecutablePath(
   env: Readonly<Record<string, string | undefined>> = process.env,
   exists: (filePath: string) => boolean = fs.existsSync,
 ): string | null {
   const override = env.EDGE_EXECUTABLE_PATH?.trim();
-  if (override) return override;
+  if (override && exists(override)) return override;
   return (
     KNOWN_WINDOWS_EDGE_PATHS.find(exists) ??
     KNOWN_LINUX_BROWSER_PATHS.find(exists) ??

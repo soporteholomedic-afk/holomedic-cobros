@@ -3,9 +3,28 @@ import { EdgePrinter, resolveEdgeExecutablePath } from './edgePrinter';
 import { EdgeUnavailableError, PrintError } from '../../domain/errors';
 
 describe('resolveEdgeExecutablePath', () => {
-  it('prefers the EDGE_EXECUTABLE_PATH env override', () => {
+  it('prefers the EDGE_EXECUTABLE_PATH env override when it exists', () => {
     const env: Record<string, string | undefined> = { EDGE_EXECUTABLE_PATH: '/opt/edge/msedge' };
-    expect(resolveEdgeExecutablePath(env, () => false)).toBe('/opt/edge/msedge');
+    expect(resolveEdgeExecutablePath(env, (p) => p === '/opt/edge/msedge')).toBe('/opt/edge/msedge');
+  });
+
+  it('falls through to known paths when the env override does not exist', () => {
+    // Regression: a stale override (e.g. a Windows path copied into a Linux
+    // .env.local, or a renamed Linux binary) must never be honored — the
+    // spawn would fail instantly and every PDF export would 500.
+    const env: Record<string, string | undefined> = {
+      EDGE_EXECUTABLE_PATH: '/usr/bin/chromium-browser',
+    };
+    expect(resolveEdgeExecutablePath(env, (p) => p === '/usr/bin/chromium')).toBe(
+      '/usr/bin/chromium',
+    );
+  });
+
+  it('returns null when only a stale override exists and no known path does', () => {
+    const env: Record<string, string | undefined> = {
+      EDGE_EXECUTABLE_PATH: '/usr/bin/chromium-browser',
+    };
+    expect(resolveEdgeExecutablePath(env, () => false)).toBeNull();
   });
 
   it('returns the first known Windows Edge path that exists', () => {
