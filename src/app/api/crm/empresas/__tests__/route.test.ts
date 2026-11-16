@@ -75,6 +75,15 @@ describe('/api/crm/empresas POST', () => {
     });
   });
 
+  it('creates the ficha when a contact has no telefono: stored with null, not rejected (opcional)', async () => {
+    const create = vi.fn().mockImplementation(async (input) => ({ ...FILA, ...input }));
+    __setCrmDbForTests(makeMockRepo({ create }));
+    const res = await POST(createJsonRequest({ ...VALIDO, contactos: [{ nombre: 'Jorge' }] }));
+    expect(res.status).toBe(201);
+    const entrada = create.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect(entrada.contactos).toEqual([{ nombre: 'Jorge', telefono: null, correo: null }]);
+  });
+
   it('creates the ficha ONLY: etapa/origen fields in the body are ignored and never stored (S7.1)', async () => {
     const create = vi.fn().mockImplementation(async (input) => ({ ...FILA, ...input }));
     __setCrmDbForTests(makeMockRepo({ create }));
@@ -105,7 +114,7 @@ describe('/api/crm/empresas POST', () => {
   it.each([
     ['the old single-contact shape', { razonSocial: 'A', ruc: '20601234567', contactoNombre: 'x', contactoTelefono: '9' }],
     ['contactos that is not a list', { ...VALIDO, contactos: 'Jorge' }],
-    ['a contact without telefono', { ...VALIDO, contactos: [{ nombre: 'Jorge' }] }],
+    ['a contact with a non-string telefono', { ...VALIDO, contactos: [{ nombre: 'Jorge', telefono: 123 }] }],
     ['an array instead of an object', [VALIDO]],
     ['null', null],
   ])('returns 400 for %s and stores nothing', async (_n, body) => {

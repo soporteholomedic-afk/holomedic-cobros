@@ -272,14 +272,16 @@ export interface Empresa {
 /** Raw contact as received from the API (not yet validated). */
 export interface ContactoDatos {
   nombre: string;
-  telefono: string;
+  /** Optional: absent/NULL when the contact gave no phone. */
+  telefono?: string | null;
   correo?: string | null;
 }
 
 /** Raw form data as received from the API (not yet validated). */
 export interface CrearEmpresaDatos {
   razonSocial: string;
-  ruc: string;
+  /** Optional: absent/NULL when the RUC is not known yet. */
+  ruc?: string | null;
   contactos: ContactoDatos[];
   sector?: string | null;
   notas?: string | null;

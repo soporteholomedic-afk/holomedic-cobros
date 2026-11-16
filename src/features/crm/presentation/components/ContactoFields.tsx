@@ -49,7 +49,7 @@ export function ContactoFields({ prefijo, contacto, onCambio, invalido, disposic
         </label>
         <label className={ETIQUETA}>
           <span>
-            Teléfono <em className="not-italic text-red-700">*</em>
+            Teléfono <small className="font-normal text-slate-500">(opcional)</small>
           </span>
           <input
             id={`${prefijo}-telefono`}

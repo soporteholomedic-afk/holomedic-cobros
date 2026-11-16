@@ -47,8 +47,9 @@ function validarContactos(lista: CrearEmpresaDatos['contactos']): Contacto[] {
   return lista.map((c, i) => {
     const quien = i === 0 ? 'Contacto principal' : `Contacto ${i + 1}`;
     const nombre = obligatorio(c?.nombre, `${quien}: falta el nombre`);
-    const telefono = obligatorio(c?.telefono, `${quien}: falta el teléfono`);
-    if (telefono.replace(/\D/g, '').length !== 9) {
+    // The phone is optional: NULL when the contact gave only an email; a typed one needs 9 digits.
+    const telefono = opcional(c?.telefono);
+    if (telefono !== null && telefono.replace(/\D/g, '').length !== 9) {
       throw new DatosEmpresaInvalidosError(`${quien}: el teléfono debe tener 9 dígitos`);
     }
     const correo = opcional(c?.correo);
@@ -70,8 +71,9 @@ export async function validarDatosEmpresa(
   excluirId?: string,
 ): Promise<DatosEmpresa> {
   const razonSocial = obligatorio(datos.razonSocial, 'La razón social es obligatoria');
-  const ruc = (datos.ruc ?? '').trim();
-  if (!RUC_RE.test(ruc)) throw new DatosEmpresaInvalidosError('El RUC debe tener 11 dígitos');
+  // The RUC is optional: empty means "not known yet" (NULL, RucFaltante picks it up later); a typed one needs 11 digits.
+  const ruc = opcional(datos.ruc);
+  if (ruc !== null && !RUC_RE.test(ruc)) throw new DatosEmpresaInvalidosError('El RUC debe tener 11 dígitos');
   const contactos = validarContactos(datos.contactos);
 
   let sector: string | null = null;
@@ -84,7 +86,7 @@ export async function validarDatosEmpresa(
   }
 
   const otra = await repo.findByRuc(ruc);
-  if (otra && otra.idEmpresa !== excluirId) throw new RucDuplicadoError(ruc);
+  if (otra && otra.idEmpresa !== excluirId) throw new RucDuplicadoError(ruc ?? '');
 
   return { razonSocial, ruc, sector, contactos, notas: opcional(datos.notas), direccion: validarDireccion(datos.direccion) };
 }

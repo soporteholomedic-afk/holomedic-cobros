@@ -55,15 +55,33 @@ describe('CrearEmpresaUseCase — ficha sin oportunidad (S7.1)', () => {
     expect(e.contactos[0]).toEqual({ nombre: 'Ana', telefono: '900 111 222', correo: null });
   });
 
+  it('accepts an empresa without RUC: stores ruc null (the RUC is optional)', async () => {
+    const repo = makeFakeRepo();
+    const e = await new CrearEmpresaUseCase(repo.empresaRepo).execute({ ...DATOS, ruc: '   ' });
+    expect(e.ruc).toBeNull();
+    expect(repo.escrituras).toBe(1);
+  });
+
+  it('accepts a contact without phone (and no ruc key at all): telefono stored as null', async () => {
+    const repo = makeFakeRepo();
+    const e = await new CrearEmpresaUseCase(repo.empresaRepo).execute({
+      razonSocial: 'Sin RUC S.A.C.',
+      contactos: [{ nombre: 'Ana' }],
+    });
+    expect(e.ruc).toBeNull();
+    expect(e.contactos[0]).toEqual({ nombre: 'Ana', telefono: null, correo: null });
+    expect(repo.escrituras).toBe(1);
+  });
+
   it.each([
     ['razón social vacía', { razonSocial: '  ' }, /razón social/i],
     ['RUC de 10 dígitos', { ruc: '2051234567' }, /11 dígitos/],
     ['RUC con letras', { ruc: '2051234567A' }, /11 dígitos/],
     ['sector que no existe', { sector: 'Astrología' }, /Sector desconocido/],
     ['sin contactos', { contactos: [] }, /al menos un contacto/i],
-    ['contacto sin nombre', { contactos: [{ nombre: ' ', telefono: '900111222' }] }, /Contacto principal: falta el nombre/],
-    ['contacto sin teléfono', { contactos: [{ nombre: 'A', telefono: '' }] }, /falta el teléfono/],
     ['teléfono de 8 dígitos', { contactos: [{ nombre: 'A', telefono: '9001112' }] }, /9 dígitos/],
+    ['contacto sin nombre', { contactos: [{ nombre: ' ', telefono: '900111222' }] }, /Contacto principal: falta el nombre/],
+    ['sector que no existe', { sector: 'Astrología' }, /Sector desconocido/],
     ['correo inválido', { contactos: [{ nombre: 'A', telefono: '900111222', correo: 'mal@' }] }, /correo no es válido/],
     [
       'segundo contacto inválido',

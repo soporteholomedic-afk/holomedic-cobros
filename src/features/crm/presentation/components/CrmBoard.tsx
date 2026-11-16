@@ -455,9 +455,9 @@ export function CrmBoard() {
   }
 
   /**
-   * Creates the FICHA only (S7.1): one POST, the board's fichas gain it, and
-   * the panel (which owns the optional primera oportunidad) closes itself on
-   * full success. A new ficha shows NO card — cards are oportunidades (S2).
+   * First POST of the alta: the ficha alone. The panel ALWAYS sends the
+   * primera oportunidad next (so the card lands in «Por contactar») and
+   * closes itself on full success.
    */
   async function crearEmpresa(cuerpo: Record<string, unknown>): Promise<Empresa | { error: string }> {
     try {
@@ -731,7 +731,13 @@ export function CrmBoard() {
         className="grid min-h-0 flex-1 grid-cols-[repeat(6,minmax(200px,1fr))] gap-4 overflow-x-auto pb-1.5"
       >
         {ETAPAS_OPORTUNIDAD.map((etapa, idx) => {
-          const tarjetasEtapa = visibles.filter(({ o }) => o.etapa === etapa);
+          // Column invariant: the NEWEST deal renders first in EVERY column.
+          // Stable sort by createdAt only: equal timestamps keep the API's own
+          // order (SQL breaks its ties by idOportunidad DESC), so the board
+          // never re-shuffles what the API already ordered.
+          const tarjetasEtapa = visibles
+            .filter(({ o }) => o.etapa === etapa)
+            .sort((a, b) => b.o.createdAt.localeCompare(a.o.createdAt));
           return (
             <section
               key={etapa}

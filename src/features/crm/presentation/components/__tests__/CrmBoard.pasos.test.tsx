@@ -36,7 +36,8 @@ describe('Alta — indicador de dos pasos', () => {
   it('moves to "Contacto" when the focus enters the contact fields, and back to "Empresa" when it returns', async () => {
     mockApi();
     const panel = await altaAbierta();
-    fireEvent.focus(within(panel).getByLabelText(/^Nombre/));
+    const contacto = within(within(panel).getByRole('group', { name: 'Contacto principal' }));
+    fireEvent.focus(contacto.getByLabelText(/^Nombre/));
     expect(pasos(panel)[1]).toHaveAttribute('aria-current', 'step');
     expect(pasos(panel)[0]).not.toHaveAttribute('aria-current');
     fireEvent.focus(within(panel).getByLabelText(/^RUC/));

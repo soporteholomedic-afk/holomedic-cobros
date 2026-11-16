@@ -78,10 +78,6 @@ function completarBase(): void {
   fireEvent.change(screen.getByLabelText(/^RUC/), { target: { value: RUC } });
 }
 
-function activarSeccion(): void {
-  fireEvent.click(screen.getByLabelText(/Crear también su primera oportunidad/));
-}
-
 beforeEach(() => {
   vi.useFakeTimers();
 });
@@ -227,15 +223,14 @@ describe('AltaPanel — consulta SUNAT por RUC (T5, S3/S4)', () => {
   });
 });
 
-describe('AltaPanel — primera oportunidad opcional (S4/S7.1)', () => {
-  /** Enables the section, fills the deal fields and the contact, and submits. */
+describe('AltaPanel — primera oportunidad (siempre creada)', () => {
+  /** Fills the deal fields and the contact, and submits. */
   async function crearConSeccion(
     onCrear: OnCrearMock,
     onCrearOportunidad: OnCrearOportunidadMock,
     valores: Record<string, string> = { 'Nombre de la oportunidad': 'Exámenes de ingreso 2026' },
   ): Promise<void> {
     completarBase();
-    activarSeccion();
     for (const [etiqueta, valor] of Object.entries(valores)) {
       fireEvent.change(screen.getByLabelText(new RegExp(`^${etiqueta}`)), { target: { value: valor } });
     }
@@ -244,43 +239,7 @@ describe('AltaPanel — primera oportunidad opcional (S4/S7.1)', () => {
     void onCrearOportunidad;
   }
 
-  it('the section starts collapsed: unticked checkbox, fields hidden; ticking reveals them and unticking hides them again', () => {
-    stubConsulta(200, { success: true, datos: DATOS });
-    montar();
-    expect(screen.getByRole('group', { name: 'Primera oportunidad (opcional)' })).toBeInTheDocument();
-    expect(screen.getByLabelText(/Crear también su primera oportunidad/)).not.toBeChecked();
-    expect(screen.queryByLabelText(/^Nombre de la oportunidad/)).toBeNull();
-    activarSeccion();
-    for (const etiqueta of [/^Nombre de la oportunidad/, /^Servicio de interés/, /^Responsable/, /^Monto estimado/, /¿Cómo nos conoció?/]) {
-      expect(screen.getByLabelText(etiqueta)).toBeInTheDocument();
-    }
-    activarSeccion();
-    expect(screen.queryByLabelText(/^Nombre de la oportunidad/)).toBeNull();
-  });
-
-  it('with the section off it calls ONLY onCrear and closes (S7.1: ficha without oportunidad)', async () => {
-    stubConsulta(200, { success: true, datos: DATOS });
-    const mocks = montar();
-
-    completarBase();
-    await completarContactoYCrear();
-    expect(mocks.onCrear).toHaveBeenCalledTimes(1);
-    expect(mocks.onCrearOportunidad).not.toHaveBeenCalled();
-    expect(mocks.onCerrar).toHaveBeenCalledTimes(1);
-  });
-
-  it('with the section on it requires the deal name before calling anything', async () => {
-    stubConsulta(200, { success: true, datos: DATOS });
-    const mocks = montar();
-
-    await crearConSeccion(mocks.onCrear, mocks.onCrearOportunidad, { 'Nombre de la oportunidad': '  ' });
-    expect(screen.getByRole('alert')).toHaveTextContent('Falta el nombre de la oportunidad');
-    expect(screen.getByLabelText(/^Nombre de la oportunidad/)).toHaveFocus();
-    expect(mocks.onCrear).not.toHaveBeenCalled();
-    expect(mocks.onCrearOportunidad).not.toHaveBeenCalled();
-  });
-
-  it('with the section on it calls onCrear first and then onCrearOportunidad with the returned id and trimmed fields', async () => {
+  it('calls onCrear first and then onCrearOportunidad with the returned id and trimmed fields', async () => {
     stubConsulta(200, { success: true, datos: DATOS });
     const ficha = empresa({ idEmpresa: 'e-5', razonSocial: DATOS.razonSocial });
     const onCrear = vi.fn<(cuerpo: Record<string, unknown>) => Promise<Empresa | { error: string }>>(async () => ficha);
@@ -290,7 +249,6 @@ describe('AltaPanel — primera oportunidad opcional (S4/S7.1)', () => {
     const mocks = montar(onCrear, onCrearOportunidad);
 
     completarBase();
-    activarSeccion();
     for (const [etiqueta, valor] of Object.entries({
       'Nombre de la oportunidad': ' Exámenes de ingreso 2026 ',
       'Servicio de interés': ' Exámenes ocupacionales ',
@@ -316,20 +274,13 @@ describe('AltaPanel — primera oportunidad opcional (S4/S7.1)', () => {
     const mocks = montar();
 
     completarBase();
-    activarSeccion();
     fireEvent.click(screen.getByRole('button', { name: /¿Cómo nos conoció?/ }));
     fireEvent.click(screen.getByRole('option', { name: /^Referido por un cliente/ }));
     await completarContactoYCrear();
 
-    // The name is still required even when origen was chosen.
-    expect(screen.getByRole('alert')).toHaveTextContent('Falta el nombre de la oportunidad');
-    expect(mocks.onCrear).not.toHaveBeenCalled();
-    expect(mocks.onCrearOportunidad).not.toHaveBeenCalled();
-
-    fireEvent.change(screen.getByLabelText(/^Nombre de la oportunidad/), { target: { value: 'Exámenes 2026' } });
-    await completarContactoYCrear();
+    // An empty deal name falls back to the default; origen travels along and the rest is omitted.
     const cuerpo = mocks.onCrearOportunidad.mock.calls[0]![1];
-    expect(cuerpo).toEqual({ nombre: 'Exámenes 2026', origen: 'referido' });
+    expect(cuerpo).toEqual({ nombre: 'Primer contacto', origen: 'referido' });
     expect(cuerpo).not.toHaveProperty('servicio');
     expect(cuerpo).not.toHaveProperty('montoEstimado');
     expect(mocks.onCerrar).toHaveBeenCalledTimes(1);
@@ -378,5 +329,50 @@ describe('AltaPanel — primera oportunidad opcional (S4/S7.1)', () => {
     expect(mocks.onCrearOportunidad).toHaveBeenLastCalledWith('e-5', { nombre: 'Exámenes de ingreso 2026' });
     expect(screen.queryByRole('alert')).toBeNull();
     expect(mocks.onCerrar).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('AltaPanel — RUC y teléfono opcionales; primera oportunidad siempre (regla nueva)', () => {
+  it('the deal section is always open: no checkbox, its fields visible from the start', () => {
+    montar();
+    expect(screen.queryByLabelText(/Crear también su primera oportunidad/)).toBeNull();
+    expect(screen.getByRole('group', { name: 'Primera oportunidad' })).toBeInTheDocument();
+    for (const etiqueta of [/^Nombre de la oportunidad/, /^Servicio de interés/, /^Responsable/, /^Monto estimado/]) {
+      expect(screen.getByLabelText(etiqueta)).toBeInTheDocument();
+    }
+  });
+
+  it('creates with only razón social + contact name: the payload omits ruc and telefono, and the deal «Primer contacto» is created', async () => {
+    const mocks = montar();
+    fireEvent.change(screen.getByLabelText(/^Razón social/), { target: { value: 'Solo Ficha E.I.R.L.' } });
+    const contacto = within(screen.getByRole('group', { name: 'Contacto principal' }));
+    fireEvent.change(contacto.getByLabelText(/^Nombre/), { target: { value: 'Marcela Quispe' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Crear empresa' }));
+    await flush(0);
+    expect(mocks.onCrear).toHaveBeenCalledTimes(1);
+    expect(mocks.onCrear.mock.calls[0]![0]).toEqual({
+      razonSocial: 'Solo Ficha E.I.R.L.',
+      contactos: [{ nombre: 'Marcela Quispe' }],
+    });
+    expect(mocks.onCrearOportunidad).toHaveBeenCalledWith('e-1', { nombre: 'Primer contacto' });
+    expect(mocks.onCerrar).toHaveBeenCalledTimes(1);
+  });
+
+  it('a typed bad RUC or phone is still rejected, focusing the field and storing nothing', async () => {
+    const mocks = montar();
+    completarBase();
+    escribirRuc('2051234567');
+    await completarContactoYCrear();
+    expect(screen.getByRole('alert')).toHaveTextContent('El RUC debe tener 11 dígitos');
+    expect(screen.getByLabelText(/^RUC/)).toHaveFocus();
+    expect(mocks.onCrear).not.toHaveBeenCalled();
+
+    escribirRuc(RUC);
+    const contacto = within(screen.getByRole('group', { name: 'Contacto principal' }));
+    fireEvent.change(contacto.getByLabelText(/^Teléfono/), { target: { value: '98765432' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Crear empresa' }));
+    await flush(0);
+    expect(screen.getByRole('alert')).toHaveTextContent('El teléfono debe tener 9 dígitos');
+    expect(mocks.onCrear).not.toHaveBeenCalled();
   });
 });

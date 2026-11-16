@@ -76,7 +76,9 @@ export function validar(b: Borrador, empresas: Empresa[], idActual: string): Fal
   for (const [i, c] of b.contactos.entries()) {
     const quien = i === 0 ? 'Contacto principal' : `Contacto ${i + 1}`;
     if (!c.nombre.trim()) return { mensaje: `${quien}: falta el nombre.`, campo: idCampo(c.clave, 'nombre') };
-    if (c.telefono.replace(/\D/g, '').length !== 9) {
+    // The phone is optional: only a TYPED value needs 9 digits (same rule as the server).
+    const telefono = c.telefono.replace(/\D/g, '');
+    if (telefono && telefono.length !== 9) {
       return { mensaje: `${quien}: el teléfono debe tener 9 dígitos.`, campo: idCampo(c.clave, 'telefono') };
     }
     if (c.correo.trim() && !EMAIL_RE.test(c.correo.trim())) {
