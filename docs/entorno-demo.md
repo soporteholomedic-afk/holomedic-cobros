@@ -39,14 +39,23 @@ printf "\nimport { test } from 'vitest';\ntest('bootstrap', () => {});\n" >> tem
 DEMO_SA_PASS='Demo-Inactivas-2026' DEMO_USER='soporte' pnpm exec vitest run temp/demo-inactivas.test.ts
 ```
 
-3. **Servidor en :3001** (desde el checkout de `develop`; los overrides de entorno
-   apuntan al contenedor — el `.env.local` real queda intacto):
+3. **Servidor en :3001** desde el **worktree de demo**. Dos reglas de Next 16/pnpm que
+   obligan a esto: Next bloquea dos dev servers del mismo directorio (el :3000 ya usa el
+   checkout principal), y `develop` no puede checked-out en dos worktrees — por eso el
+   worktree demo se crea **detached** en el commit de `develop` vigente. En un worktree
+   recién instalado, `pnpm exec` además tropieza con el chequeo de dependencias: se
+   invoca el binario local directamente.
 
 ```bash
+git worktree add --detach /home/sysadmin/DEV/holomedic-cobros-worktrees/holomedic-cobros-demo develop
+cd /home/sysadmin/DEV/holomedic-cobros-worktrees/holomedic-cobros-demo
+cp /home/sysadmin/DEV/holomedic-cobros/.env.local .
+pnpm install --prefer-offline
+
 setsid nohup env DB_HOST=localhost DB_PORT=14333 DB_USER=sa DB_PASSWORD='Demo-Inactivas-2026' \
   DB_NAME=SIGLA_DEMO HOLOMEDIC_DB_HOST=localhost HOLOMEDIC_DB_PORT=14333 HOLOMEDIC_DB_USER=sa \
   HOLOMEDIC_DB_PASSWORD='Demo-Inactivas-2026' HOLOMEDIC_DB_NAME=HOLO_DEMO \
-  pnpm exec next dev --hostname 0.0.0.0 --port 3001 > /tmp/dev-3001-demo.log 2>&1 < /dev/null &
+  ./node_modules/.bin/next dev --hostname 0.0.0.0 --port 3001 > /tmp/dev-3001-demo.log 2>&1 < /dev/null &
 ```
 
 ## Cómo resetearlo
