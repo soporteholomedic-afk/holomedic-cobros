@@ -25,9 +25,10 @@ interface Props {
   /** Resolves to the created empresa, or `{ error }` to show in the panel. */
   onCrear: (cuerpo: Record<string, unknown>) => Promise<Empresa | { error: string }>;
   /**
-   * Creates the optional primera oportunidad of the JUST-CREATED empresa
-   * (spec S4/S7.1). It runs only after `onCrear` succeeded, so a failure here
-   * leaves the ficha standing for the retry affordance.
+   * Creates the primera oportunidad of the JUST-CREATED empresa (always sent,
+   * so the ficha lands in «Por contactar»). It runs only after `onCrear`
+   * succeeded, so a failure here leaves the ficha standing for the retry
+   * affordance.
    */
   onCrearOportunidad: (idEmpresa: string, cuerpo: Record<string, unknown>) => Promise<unknown | { error: string }>;
   /**
@@ -39,6 +40,8 @@ interface Props {
 }
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+/** Deal name used when the user leaves it empty: the ficha must always land in «Por contactar». */
+const NOMBRE_OPORTUNIDAD_POR_DEFECTO = 'Primer contacto';
 const ETIQUETA = 'grid gap-1.5 text-[13px] font-semibold text-slate-800 dark:text-slate-200';
 const LEYENDA = 'mb-0.5 text-xs font-bold uppercase tracking-wider text-sky-700 dark:text-sky-400';
 
@@ -47,10 +50,9 @@ const ORIGEN_OPCIONES: { value: Origen; label: string }[] = ORIGENES.map((o) => 
 /**
  * Floating "Nueva empresa" panel. It is `position: fixed`: it covers the right
  * side of the screen without changing the layout of the board behind it
- * (design comment pr6cscqf). It creates ONLY the ficha by default (S7.1); the
- * collapsible "Primera oportunidad" section offers the optional first deal of
- * S4 in the same flow — two POSTs, and if the second fails the ficha stays
- * created with a retry affordance.
+ * (design comment pr6cscqf). It ALWAYS creates the ficha AND its primera
+ * oportunidad (two POSTs): the new card lands in «Por contactar». If the
+ * second POST fails, the ficha stays created with a retry affordance.
  */
 export function AltaPanel({ sectores, onCerrar, oculto, onCrearSector, onCrear, onCrearOportunidad, inicial }: Props) {
   const [razonSocial, setRazonSocial] = useState(inicial?.razonSocial ?? '');
@@ -65,8 +67,6 @@ export function AltaPanel({ sectores, onCerrar, oculto, onCrearSector, onCrear, 
   const [notas, setNotas] = useState('');
   const [error, setError] = useState('');
   const [guardando, setGuardando] = useState(false);
-  // Optional primera oportunidad (S4): collapsed (unchecked) by default.
-  const [conOportunidad, setConOportunidad] = useState(false);
   const [opNombre, setOpNombre] = useState('');
   const [opServicio, setOpServicio] = useState('');
   const [opOrigen, setOpOrigen] = useState<Origen | null>(null);
@@ -115,18 +115,18 @@ export function AltaPanel({ sectores, onCerrar, oculto, onCrearSector, onCrear, 
     e.preventDefault();
     if (guardando) return;
     if (!razonSocial.trim()) return falla('Falta la razón social.', 'alta-razon');
-    if (!/^\d{11}$/.test(ruc.trim())) return falla('El RUC debe tener 11 dígitos.', 'alta-ruc');
+    // RUC and phone are optional: only a TYPED value is format-checked.
+    const rucLimpio = ruc.trim();
+    if (rucLimpio && !/^\d{11}$/.test(rucLimpio)) return falla('El RUC debe tener 11 dígitos.', 'alta-ruc');
     if (!contacto.nombre.trim()) return falla('Falta el nombre del contacto.', 'alta-c0-nombre');
-    if (contacto.telefono.replace(/\D/g, '').length !== 9) {
+    const telefonoLimpio = contacto.telefono.trim();
+    if (telefonoLimpio && telefonoLimpio.replace(/\D/g, '').length !== 9) {
       return falla('El teléfono debe tener 9 dígitos.', 'alta-c0-telefono');
     }
     if (contacto.correo.trim() && !EMAIL_RE.test(contacto.correo.trim())) {
       return falla('El correo no es válido.', 'alta-c0-correo');
     }
-    if (conOportunidad && !opNombre.trim()) {
-      return falla('Falta el nombre de la oportunidad.', 'alta-op-nombre');
-    }
-    if (conOportunidad && opMonto.trim()) {
+    if (opMonto.trim()) {
       const monto = Number(opMonto);
       if (!Number.isFinite(monto) || monto <= 0) return falla('El monto estimado debe ser un número mayor a 0.', 'alta-op-monto');
       if (monto > MONTO_MAXIMO) return falla(`El monto estimado admite hasta ${MONTO_MAXIMO}.`, 'alta-op-monto');
@@ -134,16 +134,14 @@ export function AltaPanel({ sectores, onCerrar, oculto, onCrearSector, onCrear, 
     setError('');
     setErrorOportunidad('');
     setGuardando(true);
-    const principal: Record<string, string> = {
-      nombre: contacto.nombre.trim(),
-      telefono: contacto.telefono.trim(),
-    };
+    const principal: Record<string, string> = { nombre: contacto.nombre.trim() };
+    if (telefonoLimpio) principal.telefono = telefonoLimpio;
     if (contacto.correo.trim()) principal.correo = contacto.correo.trim();
     const cuerpo: Record<string, unknown> = {
       razonSocial: razonSocial.trim(),
-      ruc: ruc.trim(),
       contactos: [principal],
     };
+    if (rucLimpio) cuerpo.ruc = rucLimpio;
     if (sector) cuerpo.sector = sector;
     if (notas.trim()) cuerpo.notas = notas.trim();
     if (direccion.trim()) cuerpo.direccion = direccion.trim();
@@ -153,12 +151,7 @@ export function AltaPanel({ sectores, onCerrar, oculto, onCrearSector, onCrear, 
       setGuardando(false);
       return;
     }
-    // S7.1: the section off means ONE POST — the ficha alone, and the deal is left for later.
-    if (!conOportunidad) {
-      setGuardando(false);
-      cerrar.current();
-      return;
-    }
+    // The ficha always lands in «Por contactar»: its primera oportunidad POSTs right after it.
     const ok = await crearLaOportunidad(r);
     setGuardando(false);
     if (ok) cerrar.current();
@@ -167,7 +160,7 @@ export function AltaPanel({ sectores, onCerrar, oculto, onCrearSector, onCrear, 
 
   /** Second POST of the flow (S4): the deal of the ficha just created. */
   async function crearLaOportunidad(empresa: Empresa): Promise<boolean> {
-    const cuerpo: Record<string, unknown> = { nombre: opNombre.trim() };
+    const cuerpo: Record<string, unknown> = { nombre: opNombre.trim() || NOMBRE_OPORTUNIDAD_POR_DEFECTO };
     if (opServicio.trim()) cuerpo.servicio = opServicio.trim();
     if (opOrigen) cuerpo.origen = opOrigen;
     if (opResponsable.trim()) cuerpo.responsableNombre = opResponsable.trim();
@@ -205,7 +198,7 @@ export function AltaPanel({ sectores, onCerrar, oculto, onCrearSector, onCrear, 
             Nueva empresa
           </h2>
           <p className="mt-1 text-[13px] text-slate-600 dark:text-slate-400">
-            Crea solo la ficha; su primera oportunidad es opcional, más abajo.
+            Crea la ficha y su primera oportunidad queda en «Por contactar».
           </p>
         </div>
         <button
@@ -259,7 +252,7 @@ export function AltaPanel({ sectores, onCerrar, oculto, onCrearSector, onCrear, 
           <div className="grid grid-cols-2 items-start gap-3.5">
             <label className={ETIQUETA}>
               <span>
-                RUC <em className="not-italic text-red-700">*</em>
+                RUC <small className="font-normal text-slate-500">(opcional)</small>
               </span>
               <input
                 id="alta-ruc"
@@ -328,25 +321,11 @@ export function AltaPanel({ sectores, onCerrar, oculto, onCrearSector, onCrear, 
         )}
 
         <fieldset className="grid gap-3.5">
-          <legend className={LEYENDA}>Primera oportunidad (opcional)</legend>
-          <label className="flex items-center gap-2 text-[13px] font-semibold text-slate-800 dark:text-slate-200">
-            <input
-              id="alta-op-check"
-              type="checkbox"
-              checked={conOportunidad}
-              onChange={(ev) => {
-                setConOportunidad(ev.target.checked);
-                setErrorOportunidad('');
-              }}
-              className="h-4 w-4 accent-sky-600"
-            />
-            Crear también su primera oportunidad en “Por contactar”
-          </label>
-          {conOportunidad && (
-            <div className="grid gap-3.5">
+          <legend className={LEYENDA}>Primera oportunidad</legend>
+          <div className="grid gap-3.5">
               <label className={ETIQUETA}>
                 <span>
-                  Nombre de la oportunidad <em className="not-italic text-red-700">*</em>
+                  Nombre de la oportunidad <small className="font-normal text-slate-500">(opcional)</small>
                 </span>
                 <input
                   id="alta-op-nombre"
@@ -421,7 +400,6 @@ export function AltaPanel({ sectores, onCerrar, oculto, onCrearSector, onCrear, 
                 </div>
               )}
             </div>
-          )}
         </fieldset>
 
         <div

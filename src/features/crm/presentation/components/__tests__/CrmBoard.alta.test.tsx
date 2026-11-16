@@ -32,13 +32,13 @@ function llenar(panel: HTMLElement, valores: Record<string, string>) {
 const FORM_VALIDO = {
   '^Razón social': LA_NUEVA,
   '^RUC': '20123456789',
-  '^Nombre': 'Elena Mendoza',
+  // Scoped to the contact's own label: the deal section (always open) also has a "Nombre".
+  '^Nombre \\*': 'Elena Mendoza',
   '^Teléfono': '955 201 334',
 };
 
-/** Enables the "Primera oportunidad (opcional)" section and fills its required name. */
-function activarOportunidad(panel: HTMLElement, valores: Record<string, string> = { '^Nombre de la oportunidad': DEAL }) {
-  fireEvent.click(within(panel).getByLabelText(/Crear también su primera oportunidad/));
+/** Fills the always-open "Primera oportunidad" section. */
+function llenarOportunidad(panel: HTMLElement, valores: Record<string, string> = { '^Nombre de la oportunidad': DEAL }) {
   llenar(panel, valores);
 }
 
@@ -69,7 +69,7 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-describe('CrmBoard — panel de alta (S7.1: la ficha sola)', () => {
+describe('CrmBoard — panel de alta (ficha + primera oportunidad)', () => {
   it('opens as a floating panel (fixed, so the board does not move) with the focus on the first field', async () => {
     mockApi();
     render(<CrmBoard />);
@@ -82,46 +82,27 @@ describe('CrmBoard — panel de alta (S7.1: la ficha sola)', () => {
     expect(screen.getByTestId('crm-board')).toBeInTheDocument();
   });
 
-  it('creates ONLY the ficha with ONE contact: one POST, no deal POST, no new card anywhere, closes, toasts, focus back', async () => {
-    const fn = mockApi();
+  it('creates the ficha AND its primera oportunidad «Primer contacto»: two POSTs, the new card first in Por contactar', async () => {
+    const fn = mockApi({ nuevaOportunidad: (body) => dealCreado(body) });
     render(<CrmBoard />);
     await cargado();
     const panel = abrirPanel();
     llenar(panel, FORM_VALIDO);
     crear(panel);
-    await waitFor(() => expect(toastMock.success).toHaveBeenCalledWith('Empresa creada'));
+    await waitFor(() => expect(within(columna('Por contactar')).getAllByRole('heading', { level: 3 })[0]).toHaveTextContent(LA_NUEVA));
     expect(llamadas(fn, 'POST', '/api/crm/empresas')).toHaveLength(1);
     expect(llamadas(fn, 'POST', '/api/crm/empresas')[0]?.body).toEqual({
       razonSocial: LA_NUEVA,
       ruc: '20123456789',
       contactos: [{ nombre: 'Elena Mendoza', telefono: '955 201 334' }],
     });
-    expect(llamadas(fn, 'POST', '/api/crm/oportunidades')).toHaveLength(0);
-    // S2/S7.1: the new ficha has no oportunidades, so it adds no card to any column.
-    expect(screen.queryByText(LA_NUEVA, { selector: 'h3' })).toBeNull();
+    // An empty deal name falls back to the default: the ficha always lands in Por contactar.
+    expect(llamadas(fn, 'POST', '/api/crm/oportunidades')[0]?.body).toEqual({ idEmpresa: 'e-9', nombre: 'Primer contacto' });
     expect(screen.queryByRole('dialog', { name: /Nueva empresa/ })).toBeNull();
     expect(screen.getByRole('button', { name: /Nueva empresa/ })).toHaveFocus();
   });
 
-  it('keeps the "Primera oportunidad" section collapsed (unchecked) until the checkbox is ticked', async () => {
-    mockApi();
-    render(<CrmBoard />);
-    await cargado();
-    const panel = abrirPanel();
-    expect(within(panel).getByRole('group', { name: 'Primera oportunidad (opcional)' })).toBeInTheDocument();
-    expect(within(panel).getByLabelText(/Crear también su primera oportunidad/)).not.toBeChecked();
-    expect(within(panel).queryByLabelText(/^Nombre de la oportunidad/)).toBeNull();
-    fireEvent.click(within(panel).getByLabelText(/Crear también su primera oportunidad/));
-    expect(within(panel).getByLabelText(/^Nombre de la oportunidad/)).toBeInTheDocument();
-    for (const etiqueta of [/^Servicio de interés/, /^Responsable/, /^Monto estimado/]) {
-      expect(within(panel).getByLabelText(etiqueta)).toBeInTheDocument();
-    }
-    // Unticking hides the fields again.
-    fireEvent.click(within(panel).getByLabelText(/Crear también su primera oportunidad/));
-    expect(within(panel).queryByLabelText(/^Nombre de la oportunidad/)).toBeNull();
-  });
-
-  it('with the primera oportunidad enabled, POSTs the ficha and THEN the deal, and the new card lands first in Por contactar', async () => {
+  it('with deal fields filled, POSTs the ficha and THEN the deal with trimmed values, and the new card lands first in Por contactar', async () => {
     const fn = mockApi({
       post: () => ({ status: 201, body: { success: true, empresa: empresa({ idEmpresa: 'e-9', razonSocial: LA_NUEVA, ruc: '20123456789' }) } }),
       nuevaOportunidad: (body) => dealCreado(body),
@@ -130,7 +111,7 @@ describe('CrmBoard — panel de alta (S7.1: la ficha sola)', () => {
     await cargado();
     const panel = abrirPanel();
     llenar(panel, FORM_VALIDO);
-    activarOportunidad(panel, {
+    llenarOportunidad(panel, {
       '^Nombre de la oportunidad': ' Exámenes de ingreso 2026 ',
       '^Servicio de interés': ' Exámenes ocupacionales ',
       '^Responsable': ' Luis Cárdenas ',
@@ -157,6 +138,41 @@ describe('CrmBoard — panel de alta (S7.1: la ficha sola)', () => {
     expect(screen.queryByRole('dialog', { name: /Nueva empresa/ })).toBeNull();
   });
 
+  it('alta sin RUC ni teléfono: POSTs the ficha without those fields, and «Primer contacto» lands first in Por contactar', async () => {
+    const fn = mockApi({
+      post: () => ({
+        status: 201,
+        body: {
+          success: true,
+          empresa: empresa({ idEmpresa: 'e-9', razonSocial: LA_NUEVA, ruc: null, contactos: [{ nombre: 'Elena Mendoza', telefono: null, correo: null }] }),
+        },
+      }),
+      nuevaOportunidad: (body) => dealCreado(body),
+    });
+    render(<CrmBoard />);
+    await cargado();
+    const panel = abrirPanel();
+    llenar(panel, { '^Razón social': LA_NUEVA });
+    const contacto = within(within(panel).getByRole('group', { name: 'Contacto principal' }));
+    fireEvent.change(contacto.getByLabelText(/^Nombre/), { target: { value: 'Elena Mendoza' } });
+    crear(panel);
+    const titulos = await waitFor(() => {
+      const t = within(columna('Por contactar')).getAllByRole('heading', { level: 3 }).map((h) => h.textContent);
+      expect(t[0]).toBe(LA_NUEVA);
+      return t;
+    });
+    expect(titulos).toContain(LA_NUEVA);
+    expect(llamadas(fn, 'POST', '/api/crm/empresas')).toHaveLength(1);
+    expect(llamadas(fn, 'POST', '/api/crm/empresas')[0]?.body).toEqual({
+      razonSocial: LA_NUEVA,
+      contactos: [{ nombre: 'Elena Mendoza' }],
+    });
+    const deals = llamadas(fn, 'POST', '/api/crm/oportunidades');
+    expect(deals).toHaveLength(1);
+    expect(deals[0]!.body).toEqual({ idEmpresa: 'e-9', nombre: 'Primer contacto' });
+    expect(screen.queryByRole('dialog', { name: /Nueva empresa/ })).toBeNull();
+  });
+
   it('if the deal POST fails the FICHA stays created, the panel shows the error with a retry, and retrying sends ONLY the deal', async () => {
     let fallos = 0;
     const fn = mockApi({
@@ -173,7 +189,7 @@ describe('CrmBoard — panel de alta (S7.1: la ficha sola)', () => {
     await cargado();
     const panel = abrirPanel();
     llenar(panel, FORM_VALIDO);
-    activarOportunidad(panel);
+    llenarOportunidad(panel);
     crear(panel);
     const alerta = await within(panel).findByRole('alert');
     expect(alerta).toHaveTextContent('quedó creada, pero la oportunidad no');
@@ -192,24 +208,18 @@ describe('CrmBoard — panel de alta (S7.1: la ficha sola)', () => {
     expect(toastMock.success).toHaveBeenCalledWith(`Oportunidad «${DEAL}» creada en «Por contactar»`);
   });
 
-  it('rejects a missing deal name and a bad monto before calling anything', async () => {
-    const fn = mockApi();
+  it('rejects a bad monto before calling anything; an empty deal name is fine (it becomes «Primer contacto»)', async () => {
+    const fn = mockApi({ nuevaOportunidad: (body) => dealCreado(body) });
     render(<CrmBoard />);
     await cargado();
-    let panel = abrirPanel();
+    const panel = abrirPanel();
     llenar(panel, FORM_VALIDO);
-    activarOportunidad(panel, { '^Nombre de la oportunidad': '   ' });
-    crear(panel);
-    expect(within(panel).getByRole('alert')).toHaveTextContent('Falta el nombre de la oportunidad');
-    expect(within(panel).getByLabelText(/^Nombre de la oportunidad/)).toHaveFocus();
-    expect(llamadas(fn, 'POST', '/api/crm/empresas')).toHaveLength(0);
-
-    // The section stays open after the failed submit: fill it properly and try a bad monto.
-    llenar(panel, { '^Nombre de la oportunidad': DEAL, '^Monto estimado': '0' });
+    llenar(panel, { '^Monto estimado': '0' });
     crear(panel);
     expect(within(panel).getByRole('alert')).toHaveTextContent('El monto estimado debe ser un número mayor a 0');
     expect(within(panel).getByLabelText(/^Monto estimado/)).toHaveFocus();
     expect(llamadas(fn, 'POST', '/api/crm/empresas')).toHaveLength(0);
+    expect(llamadas(fn, 'POST', '/api/crm/oportunidades')).toHaveLength(0);
   });
 
   it('sends the optional sector, email and notes only when they are filled', async () => {
@@ -234,7 +244,7 @@ describe('CrmBoard — panel de alta (S7.1: la ficha sola)', () => {
     ['la razón social', { '^Razón social': '  ' }, /Falta la razón social/, /^Razón social/],
     ['un RUC de 10 dígitos', { '^RUC': '2012345678' }, /RUC debe tener 11 dígitos/, /^RUC/],
     ['un RUC con letras', { '^RUC': '2012345678A' }, /RUC debe tener 11 dígitos/, /^RUC/],
-    ['el nombre del contacto', { '^Nombre': ' ' }, /Falta el nombre del contacto/, /^Nombre/],
+    ['el nombre del contacto', { '^Nombre \\*': ' ' }, /Falta el nombre del contacto/, /^Nombre \*$/],
     ['un teléfono de 8 dígitos', { '^Teléfono': '955 201 33' }, /teléfono debe tener 9 dígitos/, /^Teléfono/],
     ['un correo inválido', { '^Correo': 'mal@' }, /correo no es válido/, /^Correo/],
   ])('rejects %s before calling the server and puts the focus on the field', async (_n, cambio, mensaje, campo) => {
@@ -278,26 +288,32 @@ describe('CrmBoard — panel de alta (S7.1: la ficha sola)', () => {
   });
 
   it('does not send twice while the first request is in flight', async () => {
-    const fn = mockApi();
+    const fn = mockApi({ nuevaOportunidad: (body) => dealCreado(body) });
     render(<CrmBoard />);
     await cargado();
     const panel = abrirPanel();
     llenar(panel, FORM_VALIDO);
     let liberar: (r: Response) => void = () => undefined;
+    // Hold ONLY the first POST: the ficha. The deal POST that follows goes to the
+    // normal mock, so the panel can close (the alta always sends both, S8).
+    let enVuelo = true;
     const original = fn.getMockImplementation();
-    fn.mockImplementation((url: string, init?: RequestInit) =>
-      (init?.method ?? 'GET') === 'POST'
-        ? new Promise<Response>((res) => {
-            liberar = res;
-          })
-        : original!(url, init),
-    );
+    fn.mockImplementation((url: string, init?: RequestInit) => {
+      if ((init?.method ?? 'GET') === 'POST' && enVuelo) {
+        enVuelo = false;
+        return new Promise<Response>((res) => {
+          liberar = res;
+        });
+      }
+      return original!(url, init);
+    });
     crear(panel);
     expect(within(panel).getByRole('button', { name: /Creando/ })).toBeDisabled();
     fireEvent.submit(panel.querySelector('form') as HTMLFormElement);
     expect(llamadas(fn, 'POST', '/api/crm/empresas')).toHaveLength(1);
     liberar({ ok: true, status: 201, json: async () => ({ success: true, empresa: { idEmpresa: 'e-9', razonSocial: 'X', ruc: '20123456789', sector: null, direccion: null, contactos: [{ nombre: 'E', telefono: '1', correo: null }], notas: null, relacion: 'prospecto', createdAt: '', updatedAt: '' } }) } as Response);
     await waitFor(() => expect(screen.queryByRole('dialog', { name: /Nueva empresa/ })).toBeNull());
+    expect(llamadas(fn, 'POST', '/api/crm/oportunidades')).toHaveLength(1);
   });
 
   it.each([

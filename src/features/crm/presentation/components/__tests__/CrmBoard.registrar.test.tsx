@@ -684,15 +684,24 @@ describe('CrmBoard — errores del servidor y cierre', () => {
 
 describe('CrmBoard — lo anterior sigue funcionando', () => {
   it('"Nueva empresa" still creates the ficha and a card still moves between columns', async () => {
-    const fn = montar();
+    const fn = montar(BASE_OPS, undefined, {
+      nuevaOportunidad: (body) => ({
+        status: 201,
+        body: {
+          success: true,
+          oportunidad: oportunidad({ idOportunidad: 'o-9', idEmpresa: String(body.idEmpresa), nombre: String(body.nombre) }),
+        },
+      }),
+    });
     render(<CrmBoard />);
     await screen.findByText(ANDINA);
     fireEvent.click(screen.getByRole('button', { name: /Nueva empresa/ }));
     const alta = screen.getByRole('dialog', { name: /Nueva empresa/ });
     escribir(within(alta).getByLabelText(/^Razón social/), 'Ferretería Norte S.A.C.');
     escribir(within(alta).getByLabelText(/^RUC/), '20123456789');
-    escribir(within(alta).getByLabelText(/^Nombre/), 'Elena Mendoza');
-    escribir(within(alta).getByLabelText(/^Teléfono/), '955 201 334');
+    const contacto = within(within(alta).getByRole('group', { name: 'Contacto principal' }));
+    escribir(contacto.getByLabelText(/^Nombre/), 'Elena Mendoza');
+    escribir(contacto.getByLabelText(/^Teléfono/), '955 201 334');
     fireEvent.click(within(alta).getByRole('button', { name: /Crear empresa/ }));
     await waitFor(() => expect(toastMock.success).toHaveBeenCalledWith('Empresa creada'));
     expect(llamadas(fn, 'POST', '/api/crm/empresas')).toHaveLength(1);
