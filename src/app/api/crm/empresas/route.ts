@@ -26,7 +26,7 @@ export async function POST(request: Request): Promise<NextResponse> {
     const body = await leerJson(request);
     if (body === undefined) return buildError('El cuerpo debe ser JSON válido', 400);
     if (!esDatosEmpresa(body)) {
-      return buildError('Cuerpo inválido. Requiere: {razonSocial, ruc, contactos: [{nombre, telefono}]}', 400);
+      return buildError('Cuerpo inválido. Requiere: {razonSocial, contactos: [{nombre}]}', 400);
     }
 
     const repo = await getCrmDb();

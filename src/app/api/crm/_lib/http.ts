@@ -80,7 +80,7 @@ function esContacto(v: unknown): boolean {
   return (
     esObjeto(v) &&
     typeof v.nombre === 'string' &&
-    typeof v.telefono === 'string' &&
+    esTextoOpcional(v.telefono) &&
     esTextoOpcional(v.correo)
   );
 }
@@ -90,7 +90,7 @@ export function esDatosEmpresa(v: unknown): boolean {
   return (
     esObjeto(v) &&
     typeof v.razonSocial === 'string' &&
-    typeof v.ruc === 'string' &&
+    esTextoOpcional(v.ruc) &&
     Array.isArray(v.contactos) &&
     v.contactos.every(esContacto) &&
     esTextoOpcional(v.sector) &&
